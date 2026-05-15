@@ -1,7 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Property, Page } from '@/App';
 import PropertyCard from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
+import { useSettings } from '@/contexts/SettingsContext';
+import ClientLeadsSection from '@/components/ClientLeadsSection';
+
+interface PublicStats { total: number; main_city: string }
 
 interface HomePageProps {
   properties: Property[];
@@ -12,12 +16,7 @@ interface HomePageProps {
   onNavigate: (page: Page) => void;
 }
 
-const STATS = [
-  { value: '1 240+', label: 'Объектов в базе', icon: 'Building2' },
-  { value: '180+', label: 'Готовых бизнесов', icon: 'Briefcase' },
-  { value: '98%', label: 'Успешных сделок', icon: 'TrendingUp' },
-  { value: '12 лет', label: 'На рынке', icon: 'Award' },
-];
+const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
 
 const CATEGORIES = [
   { icon: '🏢', label: 'Офисы', count: 320, type: 'office' },
@@ -29,9 +28,29 @@ const CATEGORIES = [
 ];
 
 export default function HomePage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare, onNavigate }: HomePageProps) {
+  const { settings } = useSettings();
   const [searchQuery, setSearchQuery] = useState('');
+  const [stats, setStats] = useState<PublicStats>({ total: 0, main_city: 'Краснодар' });
 
-  const hotProperties = properties.filter(p => p.isHot || p.isNew).slice(0, 3);
+  useEffect(() => {
+    fetch(`${LISTINGS_URL}?resource=public_stats`)
+      .then(r => r.json())
+      .then(d => setStats({ total: d.total || 0, main_city: d.main_city || 'Краснодар' }))
+      .catch(() => undefined);
+  }, []);
+
+  const mainCity = settings.main_city || stats.main_city || 'Краснодар';
+  const totalCount = stats.total || properties.length;
+
+  // Новые объекты — последние по дате
+  const newObjects = [...properties].sort((a, b) => b.id - a.id).slice(0, 6);
+
+  const STATS_VIEW = [
+    { value: `${totalCount}+`, label: 'Объектов в базе', icon: 'Building2' },
+    { value: `${properties.filter(p => p.category === 'business').length}+`, label: 'Готовых бизнесов', icon: 'Briefcase' },
+    { value: '98%', label: 'Успешных сделок', icon: 'TrendingUp' },
+    { value: '12 лет', label: 'На рынке', icon: 'Award' },
+  ];
 
   return (
     <div>
@@ -47,7 +66,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
               Коммерческая недвижимость и готовый бизнес
             </h1>
             <p className="text-white/75 text-lg md:text-xl mb-8 animate-fade-in-up stagger-2 max-w-xl">
-              Более 1 240 объектов в Москве и Подмосковье. Офисы, склады, торговые площади и работающий бизнес под ключ.
+              Более {totalCount} объектов в {mainCity}е и пригороде. Офисы, склады, торговые площади и работающий бизнес под ключ.
             </p>
 
             {/* Search bar */}
@@ -88,7 +107,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
       <section className="bg-white border-b border-border py-6">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {STATS.map((stat, i) => (
+            {STATS_VIEW.map((stat, i) => (
               <div key={stat.label} className={`flex items-center gap-3 animate-fade-in-up stagger-${i + 1}`}>
                 <div className="w-10 h-10 rounded-xl bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
                   <Icon name={stat.icon} size={20} className="text-brand-blue" />
@@ -137,13 +156,13 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
         </div>
       </section>
 
-      {/* Hot listings */}
+      {/* Новые объекты */}
       <section className="py-12 bg-muted/40">
         <div className="container mx-auto px-4">
           <div className="flex items-end justify-between mb-8">
             <div>
-              <div className="text-brand-orange text-sm font-semibold uppercase tracking-widest mb-1">🔥 Горячие предложения</div>
-              <h2 className="font-display font-800 text-2xl md:text-3xl text-foreground">Актуальные объекты</h2>
+              <div className="text-brand-orange text-sm font-semibold uppercase tracking-widest mb-1">Свежие поступления</div>
+              <h2 className="font-display font-800 text-2xl md:text-3xl text-foreground">Новые объекты</h2>
             </div>
             <button
               onClick={() => onNavigate('catalog')}
@@ -154,7 +173,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {hotProperties.map((property, i) => (
+            {newObjects.map((property, i) => (
               <PropertyCard
                 key={property.id}
                 property={property}
@@ -177,6 +196,8 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
           </div>
         </div>
       </section>
+
+      <ClientLeadsSection />
 
       {/* AI Banner */}
       <section className="py-12">

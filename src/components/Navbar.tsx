@@ -16,6 +16,7 @@ const navItems = [
   { id: 'home' as Page, label: 'Главная', icon: 'Home' },
   { id: 'catalog' as Page, label: 'Каталог', icon: 'Building2' },
   { id: 'map' as Page, label: 'Карта', icon: 'Map' },
+  { id: 'network-tenants' as Page, label: 'Сетевые', icon: 'Network' },
   { id: 'favorites' as Page, label: 'Избранное', icon: 'Heart' },
 ];
 
@@ -82,21 +83,16 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
               </button>
             )}
             {isStaff && (
-              <button onClick={onAdmin} className="hidden md:inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border-2 border-brand-blue text-brand-blue hover:bg-brand-blue hover:text-white transition">
-                <Icon name="Shield" size={15} />
-                Админка
+              <button onClick={onAdmin} title="Админка"
+                className="hidden md:inline-flex items-center justify-center w-9 h-9 rounded-lg text-brand-blue hover:bg-brand-blue/10 transition">
+                <Icon name="Shield" size={16} />
               </button>
             )}
-            {user ? (
+            {user && (
               <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted text-sm">
                 <Icon name="User" size={14} />
                 <span className="truncate max-w-[100px]">{user.name}</span>
               </div>
-            ) : (
-              <button onClick={onLogin} className="hidden md:inline-flex items-center gap-1.5 btn-orange text-white px-4 py-2 rounded-lg text-sm font-semibold font-display">
-                <Icon name="LogIn" size={15} />
-                Войти
-              </button>
             )}
             <button className="md:hidden p-2 rounded-lg hover:bg-muted transition-colors">
               <Icon name="Menu" size={22} />

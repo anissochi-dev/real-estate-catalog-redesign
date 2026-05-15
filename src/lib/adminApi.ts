@@ -1,6 +1,7 @@
 const AUTH_URL = 'https://functions.poehali.dev/e5d9d96a-a3ca-45cd-9ea3-3e2982b626f7';
 const ADMIN_URL = 'https://functions.poehali.dev/aeccc0fe-9c55-4933-b292-432cec9cc09d';
 const AI_URL = 'https://functions.poehali.dev/34bfc4a2-89b9-4c89-bcbc-d82314730aef';
+const UPLOADS_URL = 'https://functions.poehali.dev/82b9e0bc-2ffa-4045-a74b-a09985cec2b5';
 
 export type Role = 'admin' | 'editor' | 'manager' | 'client';
 
@@ -93,11 +94,53 @@ export const adminApi = {
   deleteCity: (id: number) =>
     req(`${ADMIN_URL}?resource=cities&id=${id}`, { method: 'DELETE' }),
 
+  // purposes
+  listPurposes: () => req(`${ADMIN_URL}?resource=purposes`),
+  createPurpose: (data: Record<string, unknown>) =>
+    req(`${ADMIN_URL}?resource=purposes`, { method: 'POST', body: JSON.stringify(data) }),
+  updatePurpose: (id: number, data: Record<string, unknown>) =>
+    req(`${ADMIN_URL}?resource=purposes&id=${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deletePurpose: (id: number) =>
+    req(`${ADMIN_URL}?resource=purposes&id=${id}`, { method: 'DELETE' }),
+
+  // xml feeds
+  listFeeds: () => req(`${ADMIN_URL}?resource=xml_feeds`),
+  createFeed: (data: Record<string, unknown>) =>
+    req(`${ADMIN_URL}?resource=xml_feeds`, { method: 'POST', body: JSON.stringify(data) }),
+  updateFeed: (id: number, data: Record<string, unknown>) =>
+    req(`${ADMIN_URL}?resource=xml_feeds&id=${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteFeed: (id: number) =>
+    req(`${ADMIN_URL}?resource=xml_feeds&id=${id}`, { method: 'DELETE' }),
+
+  // leads CRUD
+  createLead: (data: Record<string, unknown>) =>
+    req(`${ADMIN_URL}?resource=leads`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteLead: (id: number) =>
+    req(`${ADMIN_URL}?resource=leads&id=${id}`, { method: 'DELETE' }),
+
   // stats
   stats: () => req(`${ADMIN_URL}?resource=stats`),
 };
 
-export type AiAction = 'describe' | 'reply_lead' | 'seo' | 'moderate' | 'analytics' | 'admin' | 'add_city';
+export async function uploadFile(file: File, folder: 'photos' | 'logo' | 'watermark' = 'photos'): Promise<string> {
+  const b64 = await new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+  const token = getToken();
+  const res = await fetch(UPLOADS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(token ? { 'X-Auth-Token': token } : {}) },
+    body: JSON.stringify({ file_base64: b64, filename: file.name, folder }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Ошибка загрузки');
+  return data.url as string;
+}
+
+export type AiAction = 'describe' | 'reply_lead' | 'seo' | 'moderate' | 'analytics' | 'admin' | 'add_city' | 'auto_tags';
 
 export const aiApi = {
   ask: (action: AiAction, prompt: string, context_data?: unknown) =>

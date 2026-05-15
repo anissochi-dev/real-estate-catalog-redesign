@@ -65,15 +65,15 @@ def _can(role, resource, op):
     if role == 'admin':
         return True
     if role == 'manager':
-        if resource == 'cities':
+        if resource in ('cities', 'purposes', 'xml_feeds'):
             return op == 'read'
-        return resource in ('listings', 'leads') and op in ('read', 'create', 'update')
+        return resource in ('listings', 'leads') and op in ('read', 'create', 'update', 'delete')
     if role == 'editor':
         if resource == 'listings':
             return op in ('read', 'create', 'update')
         if resource in ('pages', 'settings'):
             return op in ('read', 'update')
-        if resource == 'cities':
+        if resource in ('cities', 'purposes', 'xml_feeds'):
             return op in ('read', 'create', 'update')
         if resource == 'leads':
             return op == 'read'
@@ -129,6 +129,10 @@ def handler(event, context):
                 return _settings(cur, conn, method, event, user)
             if resource == 'cities':
                 return _cities(cur, conn, method, rid, event, user)
+            if resource == 'purposes':
+                return _purposes(cur, conn, method, rid, event, user)
+            if resource == 'xml_feeds':
+                return _xml_feeds(cur, conn, method, rid, event, user)
             if resource == 'stats':
                 return _stats(cur)
 
@@ -153,7 +157,7 @@ def _listings(cur, conn, method, rid, event, user):
     if method == 'POST':
         sql = (
             f"INSERT INTO {SCHEMA}.listings "
-            f"(title, description, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, tags, is_hot, is_new, status, owner_name, owner_phone, price_unit, author_id) VALUES ("
+            f"(title, description, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, status, owner_name, owner_phone, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, author_id) VALUES ("
             f"{_str_or_null(body.get('title'), 255)}, {_str_or_null(body.get('description'), 5000)}, "
             f"{_str_or_null(body.get('category'), 50)}, {_str_or_null(body.get('deal'), 20)}, "
             f"{_int_or_null(body.get('price'))}, {_int_or_null(body.get('price_per_m2'))}, "
@@ -163,10 +167,16 @@ def _listings(cur, conn, method, rid, event, user):
             f"{_str_or_null(body.get('district'), 100)}, {_str_or_null(body.get('city') or 'Краснодар', 100)}, "
             f"{_int_or_null(body.get('lat'))}, "
             f"{_int_or_null(body.get('lng'))}, {_str_or_null(body.get('image'), 500)}, "
+            f"{_str_or_null(body.get('images'), 5000)}, "
             f"{_str_or_null(body.get('tags'), 1000)}, {_bool(body.get('is_hot'))}, "
             f"{_bool(body.get('is_new'))}, {_str_or_null(body.get('status') or 'active', 20)}, "
             f"{_str_or_null(body.get('owner_name'), 150)}, {_str_or_null(body.get('owner_phone'), 30)}, "
-            f"{_str_or_null(body.get('price_unit') or 'm2', 10)}, "
+            f"{_str_or_null(body.get('price_unit') or 'total', 10)}, "
+            f"{_str_or_null(body.get('purpose'), 100)}, {_str_or_null(body.get('condition'), 50)}, "
+            f"{_str_or_null(body.get('parking'), 20)}, {_str_or_null(body.get('entrance'), 20)}, "
+            f"{_str_or_null(body.get('video_url'), 500)}, {_str_or_null(body.get('video_type'), 20)}, "
+            f"{_bool(body.get('use_watermark', True))}, {_bool(body.get('export_yandex'))}, "
+            f"{_bool(body.get('export_avito'))}, {_bool(body.get('export_cian'))}, "
             f"{user['id']}) RETURNING id"
         )
         cur.execute(sql)
@@ -177,13 +187,19 @@ def _listings(cur, conn, method, rid, event, user):
     if method == 'PUT' and rid:
         fields = []
         for f, length in [('title', 255), ('description', 5000), ('category', 50), ('deal', 20),
-                          ('address', 255), ('district', 100), ('city', 100), ('image', 500), ('tags', 1000),
-                          ('status', 20), ('owner_name', 150), ('owner_phone', 30), ('price_unit', 10)]:
+                          ('address', 255), ('district', 100), ('city', 100), ('image', 500),
+                          ('images', 5000), ('tags', 1000), ('status', 20),
+                          ('owner_name', 150), ('owner_phone', 30), ('price_unit', 10),
+                          ('purpose', 100), ('condition', 50), ('parking', 20), ('entrance', 20),
+                          ('video_url', 500), ('video_type', 20)]:
             if f in body:
                 fields.append(f"{f} = {_str_or_null(body.get(f), length)}")
         for f in ('price', 'price_per_m2', 'area', 'payback', 'profit', 'floor', 'total_floors'):
             if f in body:
                 fields.append(f"{f} = {_int_or_null(body.get(f))}")
+        for f in ('use_watermark', 'export_yandex', 'export_avito', 'export_cian'):
+            if f in body:
+                fields.append(f"{f} = {_bool(body.get(f))}")
         for f in ('lat', 'lng'):
             if f in body:
                 v = body.get(f)
@@ -237,15 +253,45 @@ def _leads(cur, conn, method, rid, action, event, user):
         conn.commit()
         return _ok({'success': True})
 
+    if method == 'POST':
+        name = _safe(body.get('name') or '', 100)
+        phone = _safe(body.get('phone') or '', 30)
+        if not name or not phone:
+            return _err(400, 'Имя и телефон обязательны')
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.leads (name, phone, email, message, listing_id, status, source, "
+            f"is_network_tenant, budget, show_on_main, company) VALUES ("
+            f"'{name}', '{phone}', {_str_or_null(body.get('email'), 100)}, "
+            f"{_str_or_null(body.get('message'), 2000)}, {_int_or_null(body.get('listing_id'))}, "
+            f"{_str_or_null(body.get('status') or 'new', 20)}, "
+            f"{_str_or_null(body.get('source') or 'admin', 50)}, "
+            f"{_bool(body.get('is_network_tenant'))}, {_int_or_null(body.get('budget'))}, "
+            f"{_bool(body.get('show_on_main', True))}, {_str_or_null(body.get('company'), 200)}) RETURNING id"
+        )
+        conn.commit()
+        return _ok({'id': cur.fetchone()['id'], 'success': True})
+
     if method == 'PUT' and rid:
         fields = []
-        if 'status' in body:
-            fields.append(f"status = {_str_or_null(body['status'], 20)}")
-        if 'assigned_to' in body:
-            fields.append(f"assigned_to = {_int_or_null(body['assigned_to'])}")
+        for f, length in [('status', 20), ('email', 100), ('message', 2000), ('name', 100),
+                          ('phone', 30), ('company', 200), ('source', 50)]:
+            if f in body:
+                fields.append(f"{f} = {_str_or_null(body[f], length)}")
+        for f in ('assigned_to', 'listing_id', 'budget'):
+            if f in body:
+                fields.append(f"{f} = {_int_or_null(body[f])}")
+        for f in ('is_network_tenant', 'show_on_main'):
+            if f in body:
+                fields.append(f"{f} = {_bool(body[f])}")
         if not fields:
             return _err(400, 'Нет полей')
         cur.execute(f"UPDATE {SCHEMA}.leads SET {', '.join(fields)} WHERE id = {int(rid)}")
+        conn.commit()
+        return _ok({'success': True})
+
+    if method == 'DELETE' and rid:
+        cur.execute(f"DELETE FROM {SCHEMA}.lead_comments WHERE lead_id = {int(rid)}")
+        cur.execute(f"DELETE FROM {SCHEMA}.leads WHERE id = {int(rid)}")
         conn.commit()
         return _ok({'success': True})
 
@@ -351,9 +397,14 @@ def _settings(cur, conn, method, event, user):
         fields = []
         for f, length in [('company_name', 255), ('company_phone', 30), ('company_email', 100),
                           ('company_address', 255), ('hero_title', 500), ('hero_subtitle', 1000),
-                          ('about_text', 5000), ('logo_url', 500), ('main_city', 100)]:
+                          ('about_text', 5000), ('logo_url', 500), ('main_city', 100),
+                          ('watermark_url', 500), ('watermark_position', 20)]:
             if f in body:
                 fields.append(f"{f} = {_str_or_null(body[f], length)}")
+        if 'watermark_enabled' in body:
+            fields.append(f"watermark_enabled = {_bool(body['watermark_enabled'])}")
+        if 'watermark_opacity' in body:
+            fields.append(f"watermark_opacity = {_int_or_null(body['watermark_opacity'])}")
         if not fields:
             return _err(400, 'Нет полей')
         fields.append("updated_at = NOW()")
@@ -404,6 +455,95 @@ def _cities(cur, conn, method, rid, event, user):
 
     if method == 'DELETE' and rid:
         cur.execute(f"UPDATE {SCHEMA}.cities SET is_active = FALSE WHERE id = {int(rid)}")
+        conn.commit()
+        return _ok({'success': True})
+
+    return _err(400, 'Bad request')
+
+
+def _purposes(cur, conn, method, rid, event, user):
+    if method == 'GET':
+        cur.execute(f"SELECT * FROM {SCHEMA}.purposes ORDER BY sort_order ASC, name ASC")
+        return _ok({'purposes': [dict(r) for r in cur.fetchall()]})
+
+    body = json.loads(event.get('body') or '{}')
+
+    if method == 'POST':
+        name = _safe(body.get('name') or '', 100)
+        slug = _safe(body.get('slug') or '', 50)
+        icon = _safe(body.get('icon') or '', 50)
+        if not name or not slug:
+            return _err(400, 'Название и slug обязательны')
+        cur.execute(f"SELECT id FROM {SCHEMA}.purposes WHERE slug = '{slug}' OR name = '{name}'")
+        if cur.fetchone():
+            return _err(409, 'Назначение уже существует')
+        icon_s = "NULL" if not icon else f"'{icon}'"
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.purposes (name, slug, icon) VALUES ('{name}', '{slug}', {icon_s}) RETURNING id"
+        )
+        conn.commit()
+        return _ok({'id': cur.fetchone()['id'], 'success': True})
+
+    if method == 'PUT' and rid:
+        fields = []
+        for f, length in [('name', 100), ('slug', 50), ('icon', 50)]:
+            if f in body:
+                fields.append(f"{f} = {_str_or_null(body[f], length)}")
+        if 'is_active' in body:
+            fields.append(f"is_active = {_bool(body['is_active'])}")
+        if 'sort_order' in body:
+            fields.append(f"sort_order = {_int_or_null(body['sort_order'])}")
+        if not fields:
+            return _err(400, 'Нет полей')
+        cur.execute(f"UPDATE {SCHEMA}.purposes SET {', '.join(fields)} WHERE id = {int(rid)}")
+        conn.commit()
+        return _ok({'success': True})
+
+    if method == 'DELETE' and rid:
+        cur.execute(f"DELETE FROM {SCHEMA}.purposes WHERE id = {int(rid)}")
+        conn.commit()
+        return _ok({'success': True})
+
+    return _err(400, 'Bad request')
+
+
+def _xml_feeds(cur, conn, method, rid, event, user):
+    if method == 'GET':
+        cur.execute(f"SELECT * FROM {SCHEMA}.xml_feeds ORDER BY id ASC")
+        return _ok({'feeds': [dict(r) for r in cur.fetchall()]})
+
+    body = json.loads(event.get('body') or '{}')
+
+    if method == 'POST':
+        name = _safe(body.get('name') or '', 100)
+        platform = _safe(body.get('platform') or '', 50)
+        feed_type = _safe(body.get('feed_type') or 'export', 20)
+        url = _safe(body.get('url') or '', 500)
+        if not name or not platform:
+            return _err(400, 'Название и платформа обязательны')
+        url_s = "NULL" if not url else f"'{url}'"
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.xml_feeds (name, platform, feed_type, url) "
+            f"VALUES ('{name}', '{platform}', '{feed_type}', {url_s}) RETURNING id"
+        )
+        conn.commit()
+        return _ok({'id': cur.fetchone()['id'], 'success': True})
+
+    if method == 'PUT' and rid:
+        fields = []
+        for f, length in [('name', 100), ('platform', 50), ('feed_type', 20), ('url', 500)]:
+            if f in body:
+                fields.append(f"{f} = {_str_or_null(body[f], length)}")
+        if 'is_active' in body:
+            fields.append(f"is_active = {_bool(body['is_active'])}")
+        if not fields:
+            return _err(400, 'Нет полей')
+        cur.execute(f"UPDATE {SCHEMA}.xml_feeds SET {', '.join(fields)} WHERE id = {int(rid)}")
+        conn.commit()
+        return _ok({'success': True})
+
+    if method == 'DELETE' and rid:
+        cur.execute(f"DELETE FROM {SCHEMA}.xml_feeds WHERE id = {int(rid)}")
         conn.commit()
         return _ok({'success': True})
 

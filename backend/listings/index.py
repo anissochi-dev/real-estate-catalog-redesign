@@ -41,11 +41,60 @@ def handler(event: dict, context) -> dict:
             if params.get('resource') == 'public_settings':
                 cur.execute(
                     "SELECT company_name, company_phone, company_email, company_address, "
-                    "hero_title, hero_subtitle, about_text, logo_url, main_city "
+                    "hero_title, hero_subtitle, about_text, logo_url, main_city, "
+                    "watermark_url, watermark_enabled, watermark_position, watermark_opacity "
                     "FROM t_p71821556_real_estate_catalog_.settings ORDER BY id ASC LIMIT 1"
                 )
                 row = cur.fetchone()
                 return _ok({'settings': dict(row) if row else {}})
+
+            if params.get('resource') == 'public_purposes':
+                cur.execute(
+                    "SELECT id, name, slug, icon FROM t_p71821556_real_estate_catalog_.purposes "
+                    "WHERE is_active = TRUE ORDER BY sort_order ASC, name ASC"
+                )
+                return _ok({'purposes': [dict(r) for r in cur.fetchall()]})
+
+            if params.get('resource') == 'public_leads':
+                cur.execute(
+                    "SELECT id, name, message, budget, company, created_at "
+                    "FROM t_p71821556_real_estate_catalog_.leads "
+                    "WHERE show_on_main = TRUE AND status IN ('new','in_progress') "
+                    "ORDER BY created_at DESC LIMIT 12"
+                )
+                rows = []
+                for r in cur.fetchall():
+                    d = dict(r)
+                    if d.get('created_at') is not None:
+                        d['created_at'] = d['created_at'].isoformat()
+                    rows.append(d)
+                return _ok({'leads': rows})
+
+            if params.get('resource') == 'network_tenants':
+                cur.execute(
+                    "SELECT id, name, message, budget, company, phone, email, created_at "
+                    "FROM t_p71821556_real_estate_catalog_.leads "
+                    "WHERE is_network_tenant = TRUE "
+                    "ORDER BY created_at DESC"
+                )
+                rows = []
+                for r in cur.fetchall():
+                    d = dict(r)
+                    if d.get('created_at') is not None:
+                        d['created_at'] = d['created_at'].isoformat()
+                    rows.append(d)
+                return _ok({'tenants': rows})
+
+            if params.get('resource') == 'public_stats':
+                cur.execute(
+                    "SELECT COUNT(*) AS c FROM t_p71821556_real_estate_catalog_.listings WHERE status = 'active'"
+                )
+                total = cur.fetchone()['c']
+                cur.execute(
+                    "SELECT main_city FROM t_p71821556_real_estate_catalog_.settings ORDER BY id ASC LIMIT 1"
+                )
+                row = cur.fetchone()
+                return _ok({'total': total, 'main_city': (row['main_city'] if row else 'Краснодар')})
 
             listing_id = params.get('id')
             if listing_id:

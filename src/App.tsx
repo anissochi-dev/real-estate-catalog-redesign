@@ -6,7 +6,9 @@ import FavoritesPage from './pages/FavoritesPage';
 import ComparePage from './pages/ComparePage';
 import LoginPage from './pages/LoginPage';
 import AdminPage from './pages/AdminPage';
+import NetworkTenantsPage from './pages/NetworkTenantsPage';
 import Navbar from './components/Navbar';
+import Footer from './components/Footer';
 import CompareBar from './components/CompareBar';
 import { fetchListings } from './lib/api';
 import { useAuth } from './contexts/AuthContext';
@@ -37,7 +39,7 @@ export interface Property {
   isNew?: boolean;
 }
 
-export type Page = 'home' | 'catalog' | 'map' | 'favorites' | 'compare';
+export type Page = 'home' | 'catalog' | 'map' | 'favorites' | 'compare' | 'network-tenants';
 export type AppView = 'site' | 'login' | 'admin';
 
 export default function App() {
@@ -185,7 +187,10 @@ export default function App() {
             onNavigate={setCurrentPage}
           />
         )}
+        {currentPage === 'network-tenants' && <NetworkTenantsPage />}
       </main>
+
+      <Footer onLogin={() => setView('login')} setCurrentPage={setCurrentPage} />
 
       {compareList.length > 0 && currentPage !== 'compare' && (
         <CompareBar
