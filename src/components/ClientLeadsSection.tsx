@@ -59,13 +59,9 @@ export default function ClientLeadsSection() {
     <section className="py-12 bg-white">
       <div className="container mx-auto px-4">
         <div className="flex items-end justify-between mb-8">
-          <div>
-            <div className="text-brand-orange text-sm font-semibold uppercase tracking-widest mb-1">Запросы клиентов</div>
-            <h2 className="font-display font-800 text-2xl md:text-3xl text-foreground">Ищут объект прямо сейчас</h2>
-            <p className="text-sm text-muted-foreground mt-2 max-w-xl">
-              Есть подходящий объект? Предложите его клиенту — заявка попадёт нашему менеджеру.
-            </p>
-          </div>
+          <p className="text-sm text-muted-foreground max-w-xl">
+            Есть подходящий объект? Предложите его клиенту — заявка попадёт нашему менеджеру.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -72,7 +72,7 @@ def handler(event: dict, context) -> dict:
 
             if params.get('resource') == 'network_tenants':
                 cur.execute(
-                    "SELECT id, name, message, budget, company, phone, email, created_at "
+                    "SELECT id, name, message, budget, company, phone, email, request_category, created_at "
                     "FROM t_p71821556_real_estate_catalog_.leads "
                     "WHERE is_network_tenant = TRUE "
                     "ORDER BY created_at DESC"

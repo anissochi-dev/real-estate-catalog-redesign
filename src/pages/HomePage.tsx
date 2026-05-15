@@ -19,12 +19,12 @@ interface HomePageProps {
 const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
 
 const CATEGORIES = [
-  { icon: '🏢', label: 'Офисы', count: 320, type: 'office' },
-  { icon: '🛒', label: 'Торговля', count: 218, type: 'retail' },
-  { icon: '🏭', label: 'Склады', count: 145, type: 'warehouse' },
-  { icon: '🍽️', label: 'Рестораны', count: 89, type: 'restaurant' },
-  { icon: '💼', label: 'Готовый бизнес', count: 183, type: 'business' },
-  { icon: '⚙️', label: 'Производство', count: 74, type: 'production' },
+  { icon: 'Building2', label: 'Офисы', count: 320, type: 'office', gradient: 'from-blue-500 to-indigo-600' },
+  { icon: 'ShoppingBag', label: 'Торговля', count: 218, type: 'retail', gradient: 'from-orange-500 to-rose-500' },
+  { icon: 'Warehouse', label: 'Склады', count: 145, type: 'warehouse', gradient: 'from-slate-500 to-zinc-700' },
+  { icon: 'UtensilsCrossed', label: 'Рестораны', count: 89, type: 'restaurant', gradient: 'from-amber-500 to-red-500' },
+  { icon: 'Briefcase', label: 'Готовый бизнес', count: 183, type: 'business', gradient: 'from-violet-500 to-purple-700' },
+  { icon: 'Factory', label: 'Производство', count: 74, type: 'production', gradient: 'from-teal-500 to-emerald-700' },
 ];
 
 export default function HomePage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare, onNavigate }: HomePageProps) {
@@ -46,10 +46,10 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   const newObjects = [...properties].sort((a, b) => b.id - a.id).slice(0, 6);
 
   const STATS_VIEW = [
-    { value: `${totalCount}+`, label: 'Объектов в базе', icon: 'Building2' },
-    { value: `${properties.filter(p => p.category === 'business').length}+`, label: 'Готовых бизнесов', icon: 'Briefcase' },
-    { value: '98%', label: 'Успешных сделок', icon: 'TrendingUp' },
-    { value: '12 лет', label: 'На рынке', icon: 'Award' },
+    { value: `${totalCount}+`, label: 'Объектов в базе', icon: 'Building2', deal: 'all' as const },
+    { value: `${properties.filter(p => p.category === 'business').length}+`, label: 'Готовых бизнесов', icon: 'Briefcase', deal: 'business' as const },
+    { value: '98%', label: 'Успешных сделок', icon: 'TrendingUp', deal: null },
+    { value: 'с 2007', label: 'На рынке', icon: 'Award', deal: null },
   ];
 
   return (
@@ -107,17 +107,28 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
       <section className="bg-white border-b border-border py-6">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {STATS_VIEW.map((stat, i) => (
-              <div key={stat.label} className={`flex items-center gap-3 animate-fade-in-up stagger-${i + 1}`}>
-                <div className="w-10 h-10 rounded-xl bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
-                  <Icon name={stat.icon} size={20} className="text-brand-blue" />
-                </div>
-                <div>
-                  <div className="font-display font-800 text-2xl text-brand-blue leading-none">{stat.value}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{stat.label}</div>
-                </div>
-              </div>
-            ))}
+            {STATS_VIEW.map((stat, i) => {
+              const clickable = stat.deal !== null;
+              const Wrapper: 'button' | 'div' = clickable ? 'button' : 'div';
+              return (
+                <Wrapper
+                  key={stat.label}
+                  onClick={clickable ? () => onNavigate('catalog') : undefined}
+                  className={`flex items-center gap-3 animate-fade-in-up stagger-${i + 1} text-left ${clickable ? 'hover:bg-muted/40 -m-2 p-2 rounded-xl transition-colors cursor-pointer' : ''}`}
+                >
+                  <div className="w-10 h-10 rounded-xl bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
+                    <Icon name={stat.icon} size={20} className="text-brand-blue" />
+                  </div>
+                  <div>
+                    <div className="font-display font-800 text-2xl text-brand-blue leading-none flex items-center gap-1">
+                      {stat.value}
+                      {clickable && <Icon name="ArrowRight" size={14} className="text-brand-blue/60" />}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{stat.label}</div>
+                  </div>
+                </Wrapper>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -125,11 +136,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
       {/* Categories */}
       <section className="py-12 bg-background">
         <div className="container mx-auto px-4">
-          <div className="flex items-end justify-between mb-8">
-            <div>
-              <div className="text-brand-orange text-sm font-semibold uppercase tracking-widest mb-1">Категории</div>
-              <h2 className="font-display font-800 text-2xl md:text-3xl text-foreground">Выберите тип объекта</h2>
-            </div>
+          <div className="flex items-end justify-end mb-8">
             <button
               onClick={() => onNavigate('catalog')}
               className="hidden md:flex items-center gap-2 text-brand-blue font-semibold text-sm hover:gap-3 transition-all duration-200"
@@ -143,12 +150,15 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
               <button
                 key={cat.type}
                 onClick={() => onNavigate('catalog')}
-                className={`group flex flex-col items-center gap-3 p-5 bg-white rounded-2xl border border-border hover:border-brand-blue hover:shadow-md transition-all duration-250 animate-fade-in-up stagger-${i + 1}`}
+                className={`group relative flex flex-col items-center gap-3 p-5 bg-white rounded-2xl border border-border hover:border-transparent hover:shadow-xl hover:-translate-y-1 transition-all duration-300 animate-fade-in-up stagger-${i + 1} overflow-hidden`}
               >
-                <span className="text-3xl group-hover:scale-110 transition-transform duration-200">{cat.icon}</span>
-                <div className="text-center">
-                  <div className="font-display font-700 text-sm text-foreground">{cat.label}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{cat.count} объектов</div>
+                <div className={`absolute inset-0 bg-gradient-to-br ${cat.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
+                <div className={`relative w-14 h-14 rounded-2xl bg-gradient-to-br ${cat.gradient} flex items-center justify-center shadow-md group-hover:shadow-lg group-hover:scale-110 transition-all duration-300`}>
+                  <Icon name={cat.icon} size={26} className="text-white" />
+                </div>
+                <div className="text-center relative">
+                  <div className="font-display font-700 text-sm text-foreground group-hover:text-white transition-colors">{cat.label}</div>
+                  <div className="text-xs text-muted-foreground group-hover:text-white/80 mt-0.5 transition-colors">{cat.count} объектов</div>
                 </div>
               </button>
             ))}
@@ -159,11 +169,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
       {/* Новые объекты */}
       <section className="py-12 bg-muted/40">
         <div className="container mx-auto px-4">
-          <div className="flex items-end justify-between mb-8">
-            <div>
-              <div className="text-brand-orange text-sm font-semibold uppercase tracking-widest mb-1">Свежие поступления</div>
-              <h2 className="font-display font-800 text-2xl md:text-3xl text-foreground">Новые объекты</h2>
-            </div>
+          <div className="flex items-end justify-end mb-8">
             <button
               onClick={() => onNavigate('catalog')}
               className="hidden md:flex items-center gap-2 text-brand-blue font-semibold text-sm hover:gap-3 transition-all duration-200"

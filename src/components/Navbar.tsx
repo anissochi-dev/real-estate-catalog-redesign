@@ -44,7 +44,6 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
             )}
             <div className="flex flex-col leading-none">
               <span className="font-display font-800 text-lg text-brand-blue tracking-tight">{brandName}</span>
-              <span className="text-[10px] text-muted-foreground font-body tracking-widest uppercase">Недвижимость & Бизнес</span>
             </div>
           </button>
 

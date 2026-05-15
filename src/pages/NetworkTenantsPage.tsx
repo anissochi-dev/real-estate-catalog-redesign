@@ -12,6 +12,7 @@ interface T {
   budget: number | null;
   phone: string;
   email: string | null;
+  request_category: string | null;
 }
 
 export default function NetworkTenantsPage() {
@@ -69,23 +70,21 @@ export default function NetworkTenantsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {items.map(t => (
               <div key={t.id} className="bg-white rounded-2xl p-5 shadow-sm border border-border flex flex-col">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center">
-                      <Icon name="Network" size={18} />
-                    </div>
-                    <div>
-                      <div className="font-display font-700">{t.company || t.name}</div>
-                      <div className="text-xs text-muted-foreground">{t.name}</div>
-                    </div>
-                  </div>
+                <div className="flex items-center justify-between mb-3 gap-3">
+                  <div className="font-display font-700 text-lg truncate">{t.name}</div>
                   {t.budget && (
-                    <span className="text-xs font-semibold bg-brand-blue/10 text-brand-blue px-2 py-1 rounded-lg">
+                    <span className="text-xs font-semibold bg-brand-blue/10 text-brand-blue px-2 py-1 rounded-lg whitespace-nowrap">
                       до {t.budget.toLocaleString('ru')} ₽
                     </span>
                   )}
                 </div>
-                <div className="text-sm flex-1 mb-4 whitespace-pre-wrap line-clamp-5">
+                {t.request_category && (
+                  <div className="inline-flex self-start items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-100 text-purple-700 text-xs font-semibold mb-3">
+                    <Icon name="Tag" size={12} />
+                    {t.request_category}
+                  </div>
+                )}
+                <div className="text-sm flex-1 mb-4 whitespace-pre-wrap line-clamp-5 text-foreground/80">
                   {t.message || 'Запрос на коммерческое помещение.'}
                 </div>
                 <button onClick={() => setOffer(t)}

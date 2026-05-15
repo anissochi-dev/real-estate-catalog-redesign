@@ -9,6 +9,43 @@ interface Props {
   multiple?: boolean;
   className?: string;
   hint?: string;
+  /** Сжимать изображение до WebP 90% (макс 1920px по длинной стороне). По умолчанию true для photos. */
+  compress?: boolean;
+  /** Показывать кнопку "Скачать оригинал" над каждым фото. */
+  allowDownload?: boolean;
+}
+
+const MAX_SIDE = 1920;
+const WEBP_QUALITY = 0.9;
+
+async function compressImage(file: File): Promise<File> {
+  // Не трогаем GIF и SVG
+  if (file.type === 'image/gif' || file.type === 'image/svg+xml') return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const { width, height } = bitmap;
+    const longest = Math.max(width, height);
+    const scale = longest > MAX_SIDE ? MAX_SIDE / longest : 1;
+    const w = Math.round(width * scale);
+    const h = Math.round(height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return file;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    bitmap.close?.();
+    const blob: Blob | null = await new Promise(resolve =>
+      canvas.toBlob(resolve, 'image/webp', WEBP_QUALITY)
+    );
+    if (!blob || blob.size >= file.size) return file;
+    const newName = file.name.replace(/\.(jpe?g|png|webp|bmp|tiff?)$/i, '') + '.webp';
+    return new File([blob], newName, { type: 'image/webp', lastModified: Date.now() });
+  } catch {
+    return file;
+  }
 }
 
 export default function ImageUploader({
@@ -18,11 +55,14 @@ export default function ImageUploader({
   multiple = true,
   className = '',
   hint,
+  compress,
+  allowDownload = true,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const shouldCompress = compress ?? (folder === 'photos');
 
   const handleFiles = async (files: FileList | File[]) => {
     const arr = Array.from(files).filter(f => f.type.startsWith('image/'));
@@ -32,7 +72,8 @@ export default function ImageUploader({
     const uploaded: string[] = [];
     for (const f of arr) {
       try {
-        const url = await uploadFile(f, folder);
+        const ready = shouldCompress ? await compressImage(f) : f;
+        const url = await uploadFile(ready, folder);
         uploaded.push(url);
         setProgress(p => ({ ...p, done: p.done + 1 }));
       } catch (e: unknown) {
@@ -41,6 +82,23 @@ export default function ImageUploader({
     }
     setUploading(false);
     onChange(multiple ? [...value, ...uploaded] : uploaded.slice(0, 1));
+  };
+
+  const download = async (url: string) => {
+    try {
+      const res = await fetch(url, { mode: 'cors' });
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      const fname = url.split('/').pop() || 'photo.webp';
+      a.href = URL.createObjectURL(blob);
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    } catch {
+      window.open(url, '_blank');
+    }
   };
 
   const remove = (i: number) => onChange(value.filter((_, idx) => idx !== i));
@@ -86,6 +144,12 @@ export default function ImageUploader({
         <div className="text-xs text-muted-foreground mt-1">
           {hint || 'или нажмите для выбора с компьютера/телефона. JPG, PNG, WEBP до 10 МБ'}
         </div>
+        {shouldCompress && (
+          <div className="text-[10px] text-muted-foreground/80 mt-1 inline-flex items-center gap-1">
+            <Icon name="Zap" size={10} />
+            Авто-оптимизация: 1920px · WebP 90% (без потери качества)
+          </div>
+        )}
       </div>
 
       {value.length > 0 && (
@@ -101,17 +165,23 @@ export default function ImageUploader({
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100">
                 {multiple && i > 0 && (
                   <button type="button" onClick={() => move(i, -1)}
-                    className="bg-white rounded p-1 shadow">
+                    className="bg-white rounded p-1 shadow" title="Влево">
                     <Icon name="ChevronLeft" size={14} />
                   </button>
                 )}
+                {allowDownload && (
+                  <button type="button" onClick={() => download(url)}
+                    className="bg-white rounded p-1 shadow" title="Скачать оригинал (без логотипа)">
+                    <Icon name="Download" size={14} />
+                  </button>
+                )}
                 <button type="button" onClick={() => remove(i)}
-                  className="bg-red-500 text-white rounded p-1 shadow">
+                  className="bg-red-500 text-white rounded p-1 shadow" title="Удалить">
                   <Icon name="Trash2" size={14} />
                 </button>
                 {multiple && i < value.length - 1 && (
                   <button type="button" onClick={() => move(i, 1)}
-                    className="bg-white rounded p-1 shadow">
+                    className="bg-white rounded p-1 shadow" title="Вправо">
                     <Icon name="ChevronRight" size={14} />
                   </button>
                 )}
