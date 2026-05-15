@@ -49,9 +49,9 @@ export default function MapPage({
     [filtered],
   );
 
-  const types = ['office', 'retail', 'warehouse', 'restaurant', 'hotel', 'business', 'gab'];
-  const isFav = selected ? favorites.includes(selected.id) : false;
-  const inCompare = selected ? compareList.includes(selected.id) : false;
+  const types: string[] = ['office', 'retail', 'warehouse', 'restaurant', 'hotel', 'business', 'gab'];
+  const isFav: boolean = selected ? favorites.includes(selected.id) : false;
+  const inCompare: boolean = selected ? compareList.includes(selected.id) : false;
 
   return (
     <div className="flex flex-col" style={{ minHeight: 'calc(100vh - 64px)' }}>
