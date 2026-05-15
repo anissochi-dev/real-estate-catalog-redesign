@@ -136,7 +136,24 @@ def handler(event: dict, context) -> dict:
                     "SELECT main_city FROM t_p71821556_real_estate_catalog_.settings ORDER BY id ASC LIMIT 1"
                 )
                 row = cur.fetchone()
-                return _ok({'total': total, 'main_city': (row['main_city'] if row else 'Краснодар')})
+                cur.execute(
+                    "SELECT category, COUNT(*) AS c "
+                    "FROM t_p71821556_real_estate_catalog_.listings "
+                    "WHERE status = 'active' GROUP BY category"
+                )
+                by_cat = {r['category']: r['c'] for r in cur.fetchall()}
+                cur.execute(
+                    "SELECT deal, COUNT(*) AS c "
+                    "FROM t_p71821556_real_estate_catalog_.listings "
+                    "WHERE status = 'active' GROUP BY deal"
+                )
+                by_deal = {r['deal']: r['c'] for r in cur.fetchall()}
+                return _ok({
+                    'total': total,
+                    'main_city': (row['main_city'] if row else 'Краснодар'),
+                    'by_category': by_cat,
+                    'by_deal': by_deal,
+                })
 
             listing_id = params.get('id')
             if listing_id:

@@ -6,7 +6,12 @@ import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
 import ClientLeadsSection from '@/components/ClientLeadsSection';
 
-interface PublicStats { total: number; main_city: string }
+interface PublicStats {
+  total: number;
+  main_city: string;
+  by_category?: Record<string, number>;
+  by_deal?: Record<string, number>;
+}
 
 interface HomePageProps {
   properties: Property[];
@@ -20,13 +25,22 @@ interface HomePageProps {
 const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
 
 const CATEGORIES = [
-  { icon: 'Building2', label: 'Офисы', count: 320, type: 'office', gradient: 'from-blue-500 to-indigo-600' },
-  { icon: 'ShoppingBag', label: 'Торговля', count: 218, type: 'retail', gradient: 'from-orange-500 to-rose-500' },
-  { icon: 'Warehouse', label: 'Склады', count: 145, type: 'warehouse', gradient: 'from-slate-500 to-zinc-700' },
-  { icon: 'UtensilsCrossed', label: 'Рестораны', count: 89, type: 'restaurant', gradient: 'from-amber-500 to-red-500' },
-  { icon: 'Briefcase', label: 'Готовый бизнес', count: 183, type: 'business', gradient: 'from-violet-500 to-purple-700' },
-  { icon: 'Factory', label: 'Производство', count: 74, type: 'production', gradient: 'from-teal-500 to-emerald-700' },
+  { icon: 'Building2', label: 'Офисы', type: 'office', gradient: 'from-blue-500 to-indigo-600' },
+  { icon: 'ShoppingBag', label: 'Торговля', type: 'retail', gradient: 'from-orange-500 to-rose-500' },
+  { icon: 'Warehouse', label: 'Склады', type: 'warehouse', gradient: 'from-slate-500 to-zinc-700' },
+  { icon: 'UtensilsCrossed', label: 'Рестораны', type: 'restaurant', gradient: 'from-amber-500 to-red-500' },
+  { icon: 'Briefcase', label: 'Готовый бизнес', type: 'business', gradient: 'from-violet-500 to-purple-700' },
+  { icon: 'Factory', label: 'Производство', type: 'production', gradient: 'from-teal-500 to-emerald-700' },
 ];
+
+const declOf = (n: number) => {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 14) return 'объектов';
+  if (mod10 === 1) return 'объект';
+  if (mod10 >= 2 && mod10 <= 4) return 'объекта';
+  return 'объектов';
+};
 
 export default function HomePage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare, onNavigate }: HomePageProps) {
   const { settings } = useSettings();
@@ -37,9 +51,21 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   useEffect(() => {
     fetch(`${LISTINGS_URL}?resource=public_stats`)
       .then(r => r.json())
-      .then(d => setStats({ total: d.total || 0, main_city: d.main_city || 'Краснодар' }))
+      .then(d => setStats({
+        total: d.total || 0,
+        main_city: d.main_city || 'Краснодар',
+        by_category: d.by_category || {},
+        by_deal: d.by_deal || {},
+      }))
       .catch(() => undefined);
   }, []);
+
+  // Реальное число объектов по категории — из API, с фолбэком на текущий пропс properties
+  const categoryCount = (type: string): number => {
+    const fromStats = stats.by_category?.[type];
+    if (typeof fromStats === 'number') return fromStats;
+    return properties.filter(p => p.type === type).length;
+  };
 
   const mainCity = settings.main_city || stats.main_city || 'Краснодар';
   const totalCount = stats.total || properties.length;
@@ -164,7 +190,9 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
                 </div>
                 <div className="text-center relative">
                   <div className="font-display font-700 text-sm text-foreground group-hover:text-white transition-colors">{cat.label}</div>
-                  <div className="text-xs text-muted-foreground group-hover:text-white/80 mt-0.5 transition-colors">{cat.count} объектов</div>
+                  <div className="text-xs text-muted-foreground group-hover:text-white/80 mt-0.5 transition-colors">
+                    {categoryCount(cat.type)} {declOf(categoryCount(cat.type))}
+                  </div>
                 </div>
               </button>
             ))}
