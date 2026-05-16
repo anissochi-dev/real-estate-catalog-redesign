@@ -44,7 +44,9 @@ export default function MapPage({
         lat: p.lat,
         lng: p.lng,
         title: p.title,
-        caption: `${formatPrice(p.price, p.deal)} · ${p.area} м²`,
+        caption: `${formatPrice(p.price, p.deal)} · ${p.area} м² · ${TYPE_LABEL[p.type] || p.type}`,
+        type: String(p.type),
+        isHot: p.isHot,
       })),
     [filtered],
   );
@@ -92,7 +94,7 @@ export default function MapPage({
           </div>
           <YandexMap
             points={points}
-            center={KRASNODAR_CENTER}
+            center={points.length === 0 ? KRASNODAR_CENTER : undefined}
             zoom={11}
             height="100%"
             onPointClick={(p) => {
@@ -100,6 +102,27 @@ export default function MapPage({
               setSelected(found);
             }}
           />
+
+          {/* Легенда категорий */}
+          <div className="absolute bottom-3 left-3 z-10 bg-white/95 backdrop-blur-sm rounded-lg px-3 py-2 shadow-sm max-w-[calc(100%-1.5rem)]">
+            <div className="text-[10px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Категории</div>
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
+              {[
+                { type: 'office', color: 'bg-blue-500', label: 'Офис' },
+                { type: 'retail', color: 'bg-orange-500', label: 'Торговля' },
+                { type: 'warehouse', color: 'bg-slate-500', label: 'Склад' },
+                { type: 'restaurant', color: 'bg-red-500', label: 'Общепит' },
+                { type: 'hotel', color: 'bg-pink-500', label: 'Отель' },
+                { type: 'business', color: 'bg-violet-500', label: 'Бизнес' },
+                { type: 'gab', color: 'bg-emerald-500', label: 'ГАБ' },
+              ].map(c => (
+                <div key={c.type} className="flex items-center gap-1.5 text-[11px]">
+                  <span className={`w-2.5 h-2.5 rounded-full ${c.color} flex-shrink-0`} />
+                  <span className="text-foreground">{c.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Sidebar */}

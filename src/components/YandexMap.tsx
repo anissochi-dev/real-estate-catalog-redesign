@@ -8,6 +8,28 @@ interface MapPoint {
   title?: string;
   caption?: string;
   url?: string;
+  type?: string;
+  isHot?: boolean;
+}
+
+// Соответствие типа объекта → preset иконки Yandex Maps (со значком категории)
+// Доступные значки: Office, Shopping, Food, Hotel, Factory, Money, Education и др.
+const TYPE_PRESET: Record<string, { glyph: string; color: string }> = {
+  office: { glyph: 'Office', color: 'blue' },
+  retail: { glyph: 'Shopping', color: 'orange' },
+  warehouse: { glyph: 'Factory', color: 'grey' },
+  restaurant: { glyph: 'Food', color: 'red' },
+  hotel: { glyph: 'Hotel', color: 'pink' },
+  business: { glyph: 'Money', color: 'violet' },
+  gab: { glyph: 'Money', color: 'green' },
+  production: { glyph: 'Factory', color: 'darkOrange' },
+};
+
+function presetFor(type?: string, isHot?: boolean): string {
+  const t = type ? TYPE_PRESET[type] : undefined;
+  const color = isHot ? 'red' : (t?.color || 'blue');
+  const glyph = t?.glyph || 'Home';
+  return `islands#${color}${glyph}Icon`;
 }
 
 interface Props {
@@ -105,7 +127,7 @@ export default function YandexMap({
           balloonContentBody: p.caption || '',
           hintContent: p.title || '',
         },
-        { preset: 'islands#blueIcon' }
+        { preset: presetFor(p.type, p.isHot) }
       );
       if (onPointClick || p.url) {
         placemark.events.add('click', () => {
@@ -118,6 +140,15 @@ export default function YandexMap({
 
     if (valid.length === 1) {
       map.setCenter([valid[0].lat, valid[0].lng], Math.max(zoom, 14));
+    } else if (valid.length > 1) {
+      try {
+        const bounds = map.geoObjects.getBounds();
+        if (bounds) {
+          map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 40 });
+        }
+      } catch {
+        if (center) map.setCenter(center, zoom);
+      }
     } else if (center) {
       map.setCenter(center, zoom);
     }
