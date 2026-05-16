@@ -1,7 +1,7 @@
 """
-Business: ИИ-ассистент на DeepSeek для админки — генерация описаний объектов, аналитика, ответы на лиды, SEO, помощь по администрированию.
+Business: ИИ-ассистент на YandexGPT 5 Pro (Алиса) — генерация описаний, аналитика, ответы на лиды, SEO, публичный ИИ-подбор объектов.
 Args: event с httpMethod (POST), body {action, prompt, context_data}, headers X-Auth-Token; context
-Returns: HTTP-ответ с текстом от DeepSeek и логом в БД
+Returns: HTTP-ответ с текстом от YandexGPT и логом в БД
 """
 
 import json
@@ -12,8 +12,9 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
-DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions'
-DEEPSEEK_MODEL = 'deepseek-chat'
+YANDEX_GPT_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
+# YandexGPT 5 Pro (актуальная версия с Алисой). RC = release candidate последней Pro-модели.
+YANDEX_MODEL_NAME = 'yandexgpt/rc'
 
 SYSTEM_PROMPTS = {
     'describe': (
@@ -101,48 +102,56 @@ def _get_user(cur, token):
     return cur.fetchone()
 
 
-def _call_deepseek(system_prompt: str, user_prompt: str) -> dict:
-    api_key = os.environ.get('DEEPSEEK_API_KEY', '')
+def _call_yandex_gpt(system_prompt: str, user_prompt: str) -> dict:
+    api_key = os.environ.get('YANDEX_API_KEY', '')
+    folder_id = os.environ.get('YANDEX_FOLDER_ID', '')
     if not api_key:
-        return {'error': 'DEEPSEEK_API_KEY не настроен. Добавьте ключ в секреты проекта.'}
+        return {'error': 'YANDEX_API_KEY не настроен. Добавьте ключ в секреты проекта.'}
+    if not folder_id:
+        return {'error': 'YANDEX_FOLDER_ID не настроен. Добавьте ID каталога Yandex Cloud в секреты.'}
 
+    model_uri = f'gpt://{folder_id}/{YANDEX_MODEL_NAME}'
     payload = {
-        'model': DEEPSEEK_MODEL,
+        'modelUri': model_uri,
+        'completionOptions': {
+            'stream': False,
+            'temperature': 0.6,
+            'maxTokens': '2000',
+        },
         'messages': [
-            {'role': 'system', 'content': system_prompt},
-            {'role': 'user', 'content': user_prompt},
+            {'role': 'system', 'text': system_prompt},
+            {'role': 'user', 'text': user_prompt},
         ],
-        'temperature': 0.6,
-        'max_tokens': 800,
-        'stream': False,
     }
 
     req = urllib.request.Request(
-        DEEPSEEK_URL,
+        YANDEX_GPT_URL,
         data=json.dumps(payload).encode('utf-8'),
         headers={
-            'Authorization': f'Bearer {api_key}',
+            'Authorization': f'Api-Key {api_key}',
             'Content-Type': 'application/json',
+            'x-folder-id': folder_id,
         },
         method='POST',
     )
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
             data = json.loads(resp.read().decode('utf-8'))
-        choices = data.get('choices') or []
+        result = data.get('result') or {}
+        alternatives = result.get('alternatives') or []
         text = ''
-        if choices:
-            text = (choices[0].get('message') or {}).get('content', '') or ''
-        usage = data.get('usage') or {}
-        return {'text': text.strip(), 'tokens': int(usage.get('total_tokens', 0))}
+        if alternatives:
+            text = ((alternatives[0].get('message') or {}).get('text') or '').strip()
+        usage = result.get('usage') or {}
+        return {'text': text, 'tokens': int(usage.get('totalTokens', 0))}
     except Exception as e:
         msg = str(e)
         if hasattr(e, 'read'):
             try:
-                msg = e.read().decode('utf-8', errors='ignore')[:300]
+                msg = e.read().decode('utf-8', errors='ignore')[:400]
             except Exception:
                 pass
-        return {'error': f'Ошибка DeepSeek: {msg[:300]}'}
+        return {'error': f'Ошибка YandexGPT: {msg[:400]}'}
 
 
 def handler(event, context):
@@ -221,7 +230,7 @@ def handler(event, context):
             if ctx_data:
                 full_prompt += '\n\nДанные:\n' + json.dumps(ctx_data, ensure_ascii=False, default=str)[:6000]
 
-            result = _call_deepseek(sys_prompt, full_prompt)
+            result = _call_yandex_gpt(sys_prompt, full_prompt)
             if 'error' in result:
                 return _err(502, result['error'])
 
