@@ -202,6 +202,31 @@ def handler(event, context):
                 if user['role'] not in ('admin', 'editor', 'manager'):
                     return _err(403, 'Только для сотрудников')
 
+            # Проверка подключения к YandexGPT с переданными или сохранёнными ключами
+            if action == 'ping':
+                test_key = (body.get('api_key') or '').strip()
+                test_folder = (body.get('folder_id') or '').strip()
+                if not test_key or not test_folder:
+                    db_key, db_folder = _load_keys_from_db(cur)
+                    test_key = test_key or db_key
+                    test_folder = test_folder or db_folder
+                if not test_key or not test_folder:
+                    return _err(400, 'Укажите API-ключ и Folder ID')
+                ping_result = _call_yandex_gpt(
+                    'Ответь одним словом: ОК',
+                    'Проверка подключения',
+                    test_key,
+                    test_folder,
+                )
+                if 'error' in ping_result:
+                    return _err(502, ping_result['error'])
+                return _ok({
+                    'success': True,
+                    'message': 'Подключение успешно',
+                    'reply': ping_result.get('text', ''),
+                    'tokens': ping_result.get('tokens', 0),
+                })
+
             user_text = (body.get('prompt') or '').strip()
             ctx_data = body.get('context_data')
 

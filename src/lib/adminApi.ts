@@ -145,4 +145,6 @@ export type AiAction = 'describe' | 'reply_lead' | 'seo' | 'moderate' | 'analyti
 export const aiApi = {
   ask: (action: AiAction, prompt: string, context_data?: unknown) =>
     req(AI_URL, { method: 'POST', body: JSON.stringify({ action, prompt, context_data }) }) as Promise<{ text: string; tokens: number }>,
+  ping: (api_key?: string, folder_id?: string) =>
+    req(AI_URL, { method: 'POST', body: JSON.stringify({ action: 'ping', api_key, folder_id }) }) as Promise<{ success: boolean; message: string; reply: string; tokens: number }>,
 };

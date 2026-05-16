@@ -55,6 +55,27 @@ export default function SettingsAdmin() {
   const [cityAdding, setCityAdding] = useState(false);
   const [tab, setTab] = useState<'general' | 'watermark' | 'seo' | 'integrations' | 'cities' | 'purposes' | 'feeds'>('general');
   const [showKey, setShowKey] = useState(false);
+  const [pingState, setPingState] = useState<{ loading: boolean; status: 'idle' | 'ok' | 'err'; message: string }>({
+    loading: false, status: 'idle', message: '',
+  });
+
+  const testConnection = async () => {
+    setPingState({ loading: true, status: 'idle', message: '' });
+    try {
+      const r = await aiApi.ping(s.yandex_api_key, s.yandex_folder_id);
+      setPingState({
+        loading: false,
+        status: 'ok',
+        message: `${r.message}. Ответ модели: «${r.reply || '—'}». Токенов: ${r.tokens}`,
+      });
+    } catch (e) {
+      setPingState({
+        loading: false,
+        status: 'err',
+        message: e instanceof Error ? e.message : 'Ошибка проверки',
+      });
+    }
+  };
 
   const loadCities = () => adminApi.listCities().then(d => setCities(d.cities));
 
@@ -370,8 +391,42 @@ export default function SettingsAdmin() {
             </ol>
           </div>
 
-          <div className="flex items-center gap-3 sticky bottom-4 bg-white p-3 rounded-xl shadow z-20">
-            <button onClick={save} className="btn-blue text-white px-6 py-3 rounded-xl font-semibold">Сохранить</button>
+          {pingState.status !== 'idle' && (
+            <div className={`p-3 rounded-xl border text-sm flex items-start gap-2 ${
+              pingState.status === 'ok'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                : 'bg-red-50 border-red-200 text-red-900'
+            }`}>
+              <Icon
+                name={pingState.status === 'ok' ? 'CheckCircle2' : 'AlertCircle'}
+                size={16}
+                className="flex-shrink-0 mt-0.5"
+              />
+              <div>{pingState.message}</div>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 sticky bottom-4 bg-white p-3 rounded-xl shadow z-20 flex-wrap">
+            <button onClick={save} className="btn-blue text-white px-6 py-3 rounded-xl font-semibold">
+              Сохранить
+            </button>
+            <button
+              onClick={testConnection}
+              disabled={pingState.loading || (!s.yandex_api_key && !s.yandex_folder_id)}
+              className="px-5 py-3 rounded-xl border-2 border-brand-blue text-brand-blue font-semibold inline-flex items-center gap-2 hover:bg-brand-blue hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {pingState.loading ? (
+                <>
+                  <div className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                  Проверяем...
+                </>
+              ) : (
+                <>
+                  <Icon name="Plug" size={14} />
+                  Проверить подключение
+                </>
+              )}
+            </button>
             {saved && <span className="text-emerald-600 text-sm">Сохранено</span>}
           </div>
         </div>
