@@ -24,6 +24,11 @@ interface ApiListing {
   tags: string[];
   is_hot: boolean;
   is_new: boolean;
+  public_code?: number | null;
+  tenant_name?: string | null;
+  monthly_rent?: number | null;
+  yearly_rent?: number | null;
+  purpose?: string | null;
 }
 
 function toNum(v: unknown): number {
@@ -54,6 +59,11 @@ function mapListing(item: ApiListing): Property {
     lng: toNum(item.lng),
     isHot: item.is_hot,
     isNew: item.is_new,
+    publicCode: item.public_code ?? undefined,
+    tenantName: item.tenant_name ?? undefined,
+    monthlyRent: item.monthly_rent ?? undefined,
+    yearlyRent: item.yearly_rent ?? undefined,
+    purpose: item.purpose ?? undefined,
   };
 }
 

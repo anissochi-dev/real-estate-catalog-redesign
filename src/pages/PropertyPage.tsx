@@ -219,20 +219,59 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
             )}
 
             <div className="bg-white rounded-2xl p-5 shadow-sm">
-              <h1 className="font-display font-800 text-2xl md:text-3xl text-foreground mb-2">{item.title}</h1>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Icon name="MapPin" size={14} />
-                {[item.city || 'Краснодар', item.district, item.address].filter(Boolean).join(', ')}
+              <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
+                <h1 className="font-display font-800 text-2xl md:text-3xl text-foreground">{item.title}</h1>
+                {item.publicCode && (
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-brand-blue/10 text-brand-blue whitespace-nowrap">
+                    ID объекта: {item.publicCode}
+                  </span>
+                )}
               </div>
+              <a
+                href={`https://yandex.ru/maps/?text=${encodeURIComponent(
+                  [item.city || 'Краснодар', item.district, item.address].filter(Boolean).join(', ')
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-brand-blue transition-colors group"
+                title="Открыть на карте"
+              >
+                <Icon name="MapPin" size={14} />
+                <span className="underline decoration-dotted underline-offset-2 group-hover:decoration-solid">
+                  {[item.city || 'Краснодар', item.district, item.address].filter(Boolean).join(', ')}
+                </span>
+                <Icon name="ExternalLink" size={12} className="opacity-60 group-hover:opacity-100" />
+              </a>
             </div>
 
-            <div className="bg-white rounded-2xl p-5 shadow-sm grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Stat icon="Maximize" label="Площадь" value={`${item.area} м²`} />
-              <Stat icon="Tag" label="Цена" value={formatPrice(item.price, item.deal)} />
-              {item.pricePerM2 && <Stat icon="DollarSign" label="За м²" value={`${item.pricePerM2.toLocaleString('ru')} ₽`} />}
-              {item.floor && <Stat icon="Layers" label="Этаж" value={`${item.floor}/${item.totalFloors || '—'}`} />}
-              {item.payback && <Stat icon="TrendingUp" label="Окупаемость" value={`${item.payback} мес`} />}
-              {item.profit && <Stat icon="LineChart" label="Прибыль/мес" value={`${(item.profit / 1000).toFixed(0)} тыс ₽`} />}
+            <div className="bg-white rounded-2xl p-5 shadow-sm">
+              <div className="font-display font-700 text-lg mb-4">Параметры объекта</div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Stat icon="Maximize" label="Площадь" value={`${item.area} м²`} />
+                <Stat icon="Tag" label="Цена" value={formatPrice(item.price, item.deal)} />
+                {item.pricePerM2 ? <Stat icon="DollarSign" label="За м²" value={`${item.pricePerM2.toLocaleString('ru')} ₽`} /> : null}
+                {item.floor ? <Stat icon="Layers" label="Этаж" value={`${item.floor}${item.totalFloors ? ` из ${item.totalFloors}` : ''}`} /> : null}
+                <Stat icon="Building2" label="Тип объекта" value={typeLabel} />
+                <Stat icon="Briefcase" label="Категория сделки" value={dealLabel} />
+                {item.purpose ? <Stat icon="Target" label="Назначение" value={item.purpose} /> : null}
+                {item.payback ? (
+                  <Stat
+                    icon="TrendingUp"
+                    label="Окупаемость"
+                    value={`${item.payback} мес${item.payback >= 12 ? ` (~${(item.payback / 12).toFixed(1)} лет)` : ''}`}
+                  />
+                ) : null}
+                {item.monthlyRent ? (
+                  <Stat icon="Wallet" label="МАП (мес. арендный поток)" value={`${item.monthlyRent.toLocaleString('ru')} ₽`} />
+                ) : null}
+                {item.yearlyRent ? (
+                  <Stat icon="Coins" label="ГАП (год. арендный поток)" value={`${item.yearlyRent.toLocaleString('ru')} ₽`} />
+                ) : null}
+                {item.profit && !item.monthlyRent ? (
+                  <Stat icon="LineChart" label="Прибыль/мес" value={`${(item.profit / 1000).toFixed(0)} тыс ₽`} />
+                ) : null}
+                {item.tenantName ? <Stat icon="Users" label="Арендатор" value={item.tenantName} /> : null}
+              </div>
             </div>
 
             {item.description && (
@@ -281,10 +320,18 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
                   zoom={15}
                   height="320px"
                 />
-                <div className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                <a
+                  href={`https://yandex.ru/maps/?text=${encodeURIComponent(
+                    [item.city || 'Краснодар', item.district, item.address].filter(Boolean).join(', ')
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-muted-foreground mt-2 inline-flex items-center gap-1 hover:text-brand-blue underline decoration-dotted underline-offset-2"
+                >
                   <Icon name="MapPin" size={12} />
                   {[item.city || 'Краснодар', item.district, item.address].filter(Boolean).join(', ')}
-                </div>
+                  <Icon name="ExternalLink" size={11} className="opacity-60" />
+                </a>
               </div>
             )}
 

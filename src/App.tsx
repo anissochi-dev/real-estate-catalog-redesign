@@ -42,6 +42,11 @@ export interface Property {
   lng: number;
   isHot?: boolean;
   isNew?: boolean;
+  publicCode?: number;
+  tenantName?: string;
+  monthlyRent?: number;
+  yearlyRent?: number;
+  purpose?: string;
 }
 
 export type Page = 'home' | 'catalog' | 'map' | 'favorites' | 'compare' | 'network-tenants';

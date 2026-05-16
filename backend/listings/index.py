@@ -247,12 +247,35 @@ def _serialize(row: dict) -> dict:
         row['tags'] = [t.strip() for t in str(row['tags']).split(',') if t.strip()]
     else:
         row['tags'] = []
-    for k in ('lat', 'lng'):
+    for k in ('lat', 'lng', 'monthly_rent', 'yearly_rent'):
         if row.get(k) is not None:
-            row[k] = float(row[k])
+            try:
+                row[k] = float(row[k])
+            except (TypeError, ValueError):
+                row[k] = None
     for k in ('created_at', 'updated_at'):
         if row.get(k) is not None:
             row[k] = row[k].isoformat()
+
+    # Авто-вывод одного из арендных потоков из другого
+    mr = row.get('monthly_rent')
+    yr = row.get('yearly_rent')
+    if mr and not yr:
+        row['yearly_rent'] = round(mr * 12, 2)
+    elif yr and not mr:
+        row['monthly_rent'] = round(yr / 12, 2)
+
+    # Авто-расчёт окупаемости (месяцы), если не задана:
+    # price / (monthly_rent or profit)
+    if not row.get('payback'):
+        income = row.get('monthly_rent') or row.get('profit')
+        price = row.get('price')
+        try:
+            if income and price and float(income) > 0:
+                row['payback'] = int(round(float(price) / float(income)))
+        except (TypeError, ValueError):
+            pass
+
     return row
 
 
