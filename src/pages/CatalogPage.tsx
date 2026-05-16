@@ -27,11 +27,17 @@ const DEAL_TYPES = [
 const PROPERTY_TYPES = [
   { value: 'all', label: 'Все типы' },
   { value: 'office', label: '🏢 Офисы' },
-  { value: 'retail', label: '🛒 Торговля' },
+  { value: 'retail', label: '🛒 Торговые помещения' },
   { value: 'warehouse', label: '🏭 Склады' },
-  { value: 'restaurant', label: '🍽️ Рестораны' },
-  { value: 'business', label: '💼 Бизнес' },
-  { value: 'production', label: '⚙️ Производство' },
+  { value: 'restaurant', label: '🍽️ Общепит' },
+  { value: 'hotel', label: '🛏️ Гостиницы' },
+  { value: 'business', label: '💼 Готовый бизнес' },
+  { value: 'gab', label: '📈 ГАБ' },
+  { value: 'production', label: '⚙️ Производственные помещения' },
+  { value: 'land', label: '🌳 Земельные участки' },
+  { value: 'building', label: '🏛️ Отдельно стоящие здания' },
+  { value: 'free_purpose', label: '🔄 Свободное назначение' },
+  { value: 'car_service', label: '🔧 Автосервисы' },
 ];
 
 export default function CatalogPage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare }: CatalogPageProps) {
@@ -50,8 +56,10 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
   useEffect(() => {
     const deal = searchParams.get('deal');
     const type = searchParams.get('type');
+    const q = searchParams.get('search');
     if (deal) setDealFilter(deal);
     if (type) setTypeFilter(type);
+    if (q) setSearch(q);
   }, [searchParams]);
 
   // Синхронизируем выбранный deal в URL

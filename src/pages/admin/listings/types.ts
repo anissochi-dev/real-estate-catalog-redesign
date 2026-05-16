@@ -53,9 +53,18 @@ export interface City { id: number; name: string; is_active: boolean }
 export interface Purpose { id: number; name: string; slug: string }
 
 export const CATS = [
-  ['office', 'Офис'], ['retail', 'Торговля'], ['warehouse', 'Склад'],
-  ['restaurant', 'Общественное питание'], ['hotel', 'Отель'],
-  ['business', 'Бизнес'], ['gab', 'ГАБ'], ['production', 'Производство'],
+  ['office', 'Офис'],
+  ['retail', 'Торговое помещение'],
+  ['warehouse', 'Склад'],
+  ['restaurant', 'Общепит'],
+  ['hotel', 'Гостиница'],
+  ['business', 'Готовый бизнес'],
+  ['gab', 'ГАБ'],
+  ['production', 'Производственное помещение'],
+  ['land', 'Земельный участок'],
+  ['building', 'Отдельно стоящее здание'],
+  ['free_purpose', 'Помещение свободного назначения'],
+  ['car_service', 'Автосервис'],
 ];
 export const DEALS: [string, string, string][] = [
   ['sale', 'Продажа', 'bg-emerald-100 text-emerald-700'],

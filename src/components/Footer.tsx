@@ -41,7 +41,7 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
             <div className="font-semibold text-white mb-3">О компании</div>
             <ul className="space-y-2 text-sm">
               <li>{city}</li>
-              <li>12 лет на рынке</li>
+              <li>с 2007 года</li>
             </ul>
           </div>
         </div>

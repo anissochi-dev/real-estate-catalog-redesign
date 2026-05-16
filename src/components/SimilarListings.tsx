@@ -75,7 +75,7 @@ export default function SimilarListings({ listingId }: Props) {
         {items.map(p => (
           <Link
             key={p.id}
-            to={`/object/${listingSlug(p)}`}
+            to={`/object/${listingSlug(p.title, p.id)}`}
             className="snap-start flex-shrink-0 w-[260px] rounded-xl border border-border bg-white hover:shadow-md transition-shadow overflow-hidden group"
           >
             <div className="aspect-[16/10] bg-muted overflow-hidden">

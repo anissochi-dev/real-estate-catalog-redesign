@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '@/components/ui/icon';
 import { aiMatch, AiMatchResult } from '@/lib/api';
@@ -7,12 +7,23 @@ import { listingSlug } from '@/lib/slug';
 interface Props {
   open: boolean;
   onClose: () => void;
+  initialPrompt?: string;
+  autoSubmit?: boolean;
 }
 
 const TYPE_LABEL: Record<string, string> = {
-  office: 'Офис', retail: 'Торговля', warehouse: 'Склад',
-  restaurant: 'Общепит', business: 'Бизнес', production: 'Производство',
-  hotel: 'Отель', gab: 'ГАБ',
+  office: 'Офис',
+  retail: 'Торговое помещение',
+  warehouse: 'Склад',
+  restaurant: 'Общепит',
+  business: 'Готовый бизнес',
+  production: 'Производственное помещение',
+  hotel: 'Гостиница',
+  gab: 'ГАБ',
+  land: 'Земельный участок',
+  building: 'Отдельно стоящее здание',
+  free_purpose: 'Свободное назначение',
+  car_service: 'Автосервис',
 };
 
 const DEAL_LABEL: Record<string, string> = {
@@ -32,22 +43,21 @@ function fmtPrice(price: number, deal: string): string {
   return `${price.toLocaleString('ru')} ₽`;
 }
 
-export default function AIMatchModal({ open, onClose }: Props) {
+export default function AIMatchModal({ open, onClose, initialPrompt, autoSubmit }: Props) {
   const navigate = useNavigate();
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AiMatchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  if (!open) return null;
-
-  const submit = async () => {
-    if (!prompt.trim() || loading) return;
+  const submit = async (text?: string) => {
+    const q = (text ?? prompt).trim();
+    if (!q || loading) return;
     setLoading(true);
     setError(null);
     setResult(null);
     try {
-      const r = await aiMatch(prompt.trim());
+      const r = await aiMatch(q);
       setResult(r);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Ошибка ИИ');
@@ -55,6 +65,17 @@ export default function AIMatchModal({ open, onClose }: Props) {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!open) return;
+    if (initialPrompt !== undefined) setPrompt(initialPrompt);
+    if (autoSubmit && initialPrompt && initialPrompt.trim()) {
+      submit(initialPrompt);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialPrompt, autoSubmit]);
+
+  if (!open) return null;
 
   const reset = () => {
     setPrompt('');
@@ -232,7 +253,7 @@ export default function AIMatchModal({ open, onClose }: Props) {
                       className="px-4 py-2.5 rounded-xl border border-border text-sm font-semibold hover:bg-muted disabled:opacity-50">
                 Отмена
               </button>
-              <button onClick={submit} disabled={!prompt.trim() || loading}
+              <button onClick={() => submit()} disabled={!prompt.trim() || loading}
                       className="flex-1 btn-orange text-white px-4 py-2.5 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-50">
                 {loading ? (
                   <>

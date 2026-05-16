@@ -27,12 +27,17 @@ const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047
 
 const CATEGORIES = [
   { icon: 'Building2', label: 'Офисы', type: 'office', gradient: 'from-blue-500 to-indigo-600' },
-  { icon: 'ShoppingBag', label: 'Торговля', type: 'retail', gradient: 'from-orange-500 to-rose-500' },
+  { icon: 'ShoppingBag', label: 'Торговые помещения', type: 'retail', gradient: 'from-orange-500 to-rose-500' },
   { icon: 'Warehouse', label: 'Склады', type: 'warehouse', gradient: 'from-slate-500 to-zinc-700' },
-  { icon: 'UtensilsCrossed', label: 'Общественное питание', type: 'restaurant', gradient: 'from-amber-500 to-red-500' },
-  { icon: 'BedDouble', label: 'Отели', type: 'hotel', gradient: 'from-pink-500 to-fuchsia-600' },
+  { icon: 'UtensilsCrossed', label: 'Общепит', type: 'restaurant', gradient: 'from-amber-500 to-red-500' },
+  { icon: 'BedDouble', label: 'Гостиницы', type: 'hotel', gradient: 'from-pink-500 to-fuchsia-600' },
   { icon: 'Briefcase', label: 'Готовый бизнес', type: 'business', gradient: 'from-violet-500 to-purple-700' },
   { icon: 'TrendingUp', label: 'ГАБ', type: 'gab', gradient: 'from-emerald-500 to-teal-600' },
+  { icon: 'Factory', label: 'Производственные помещения', type: 'production', gradient: 'from-stone-500 to-neutral-700' },
+  { icon: 'Trees', label: 'Земельные участки', type: 'land', gradient: 'from-lime-500 to-green-700' },
+  { icon: 'Landmark', label: 'Отдельно стоящие здания', type: 'building', gradient: 'from-sky-500 to-blue-700' },
+  { icon: 'Shuffle', label: 'Свободное назначение', type: 'free_purpose', gradient: 'from-cyan-500 to-teal-700' },
+  { icon: 'Wrench', label: 'Автосервисы', type: 'car_service', gradient: 'from-zinc-500 to-slate-800' },
 ];
 
 export default function HomePage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare, onNavigate }: HomePageProps) {
@@ -109,23 +114,35 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
               Более {totalCount} объектов в {mainCity}е и пригороде. Подбор с ИИ за 2 минуты.
             </p>
 
-            {/* Search bar */}
-            <div className="flex gap-2 animate-fade-in-up stagger-3">
-              <div className="flex-1 flex items-center gap-2 bg-white/10 border border-white/25 rounded-xl px-3 py-2 backdrop-blur-sm">
-                <Icon name="Search" size={18} className="text-white/60 flex-shrink-0" />
+            {/* AI search bar */}
+            <form
+              onSubmit={e => {
+                e.preventDefault();
+                setAiOpen(true);
+              }}
+              className="flex gap-2 animate-fade-in-up stagger-3"
+            >
+              <div className="flex-1 flex items-center gap-2 bg-white/10 border border-white/25 rounded-xl px-3 py-2 backdrop-blur-sm focus-within:border-white/60 transition-colors">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-orange to-rose-500 flex items-center justify-center flex-shrink-0">
+                  <Icon name="Sparkles" size={14} className="text-white" />
+                </div>
                 <input
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Район, улица, тип объекта..."
-                  className="bg-transparent text-white placeholder:text-white/50 outline-none w-full text-sm"
+                  placeholder="ИИ-поиск: офис 80 м² в центре до 15 млн ₽..."
+                  className="bg-transparent text-white placeholder:text-white/55 outline-none w-full text-sm"
                 />
               </div>
               <button
-                onClick={() => navigate(`/catalog${searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ''}`)}
-                className="btn-orange text-white px-5 py-2 rounded-xl font-semibold font-display text-sm flex-shrink-0"
+                type="submit"
+                className="btn-orange text-white px-5 py-2 rounded-xl font-semibold font-display text-sm flex-shrink-0 inline-flex items-center gap-1.5"
               >
-                Найти
+                <Icon name="Sparkles" size={14} />
+                Найти с ИИ
               </button>
+            </form>
+            <div className="text-[11px] text-white/55 mt-1.5 animate-fade-in-up stagger-3">
+              Опишите задачу обычным языком — ИИ подберёт подходящие объекты
             </div>
 
             {/* Quick filters */}
@@ -276,7 +293,12 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
         </div>
       </section>
 
-      <AIMatchModal open={aiOpen} onClose={() => setAiOpen(false)} />
+      <AIMatchModal
+        open={aiOpen}
+        onClose={() => setAiOpen(false)}
+        initialPrompt={searchQuery}
+        autoSubmit={!!searchQuery.trim()}
+      />
     </div>
   );
 }

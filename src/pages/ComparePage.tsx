@@ -10,11 +10,17 @@ interface ComparePageProps {
 
 const TYPE_LABELS: Record<string, string> = {
   office: '🏢 Офис',
-  retail: '🛒 Торговля',
+  retail: '🛒 Торговое помещение',
   warehouse: '🏭 Склад',
-  restaurant: '🍽️ Ресторан',
-  business: '💼 Бизнес',
-  production: '⚙️ Производство',
+  restaurant: '🍽️ Общепит',
+  business: '💼 Готовый бизнес',
+  production: '⚙️ Производственное помещение',
+  hotel: '🛏️ Гостиница',
+  gab: '📈 ГАБ',
+  land: '🌳 Земельный участок',
+  building: '🏛️ Отдельно стоящее здание',
+  free_purpose: '🔄 Помещение свободного назначения',
+  car_service: '🔧 Автосервис',
 };
 
 const DEAL_LABELS: Record<string, string> = {
