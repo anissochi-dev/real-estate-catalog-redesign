@@ -205,7 +205,7 @@ def handler(event, context):
                 cur.execute(
                     f"SELECT id, title, category, deal, price, area, district, address, "
                     f"payback, profit, image FROM {SCHEMA}.listings "
-                    f"WHERE is_active = TRUE ORDER BY id DESC LIMIT 60"
+                    f"WHERE status = 'active' ORDER BY id DESC LIMIT 60"
                 )
                 listings = cur.fetchall()
                 matches = [dict(r) for r in listings]
