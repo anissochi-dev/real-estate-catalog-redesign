@@ -398,9 +398,15 @@ def _settings(cur, conn, method, event, user):
         for f, length in [('company_name', 255), ('company_phone', 30), ('company_email', 100),
                           ('company_address', 255), ('hero_title', 500), ('hero_subtitle', 1000),
                           ('about_text', 5000), ('logo_url', 500), ('main_city', 100),
-                          ('watermark_url', 500), ('watermark_position', 20)]:
+                          ('watermark_url', 500), ('watermark_position', 20),
+                          ('yandex_metrika_id', 50), ('google_analytics_id', 50),
+                          ('yandex_maps_api_key', 200), ('site_url', 255),
+                          ('seo_description', 1000), ('seo_keywords', 1000),
+                          ('yandex_api_key', 500), ('yandex_folder_id', 100)]:
             if f in body:
                 fields.append(f"{f} = {_str_or_null(body[f], length)}")
+        if 'company_since_year' in body:
+            fields.append(f"company_since_year = {_int_or_null(body['company_since_year'])}")
         if 'watermark_enabled' in body:
             fields.append(f"watermark_enabled = {_bool(body['watermark_enabled'])}")
         if 'watermark_opacity' in body:

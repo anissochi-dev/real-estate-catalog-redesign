@@ -102,13 +102,24 @@ def _get_user(cur, token):
     return cur.fetchone()
 
 
-def _call_yandex_gpt(system_prompt: str, user_prompt: str) -> dict:
-    api_key = os.environ.get('YANDEX_API_KEY', '')
-    folder_id = os.environ.get('YANDEX_FOLDER_ID', '')
+def _load_keys_from_db(cur) -> tuple:
+    try:
+        cur.execute(f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
+        row = cur.fetchone()
+        if row:
+            return (row.get('yandex_api_key') or '', row.get('yandex_folder_id') or '')
+    except Exception:
+        pass
+    return ('', '')
+
+
+def _call_yandex_gpt(system_prompt: str, user_prompt: str, db_key: str = '', db_folder: str = '') -> dict:
+    api_key = db_key or os.environ.get('YANDEX_API_KEY', '')
+    folder_id = db_folder or os.environ.get('YANDEX_FOLDER_ID', '')
     if not api_key:
-        return {'error': 'YANDEX_API_KEY не настроен. Добавьте ключ в секреты проекта.'}
+        return {'error': 'YandexGPT API-ключ не настроен. Добавьте его в админке: Настройки → Интеграции.'}
     if not folder_id:
-        return {'error': 'YANDEX_FOLDER_ID не настроен. Добавьте ID каталога Yandex Cloud в секреты.'}
+        return {'error': 'YandexGPT Folder ID не настроен. Добавьте его в админке: Настройки → Интеграции.'}
 
     model_uri = f'gpt://{folder_id}/{YANDEX_MODEL_NAME}'
     payload = {
@@ -230,7 +241,8 @@ def handler(event, context):
             if ctx_data:
                 full_prompt += '\n\nДанные:\n' + json.dumps(ctx_data, ensure_ascii=False, default=str)[:6000]
 
-            result = _call_yandex_gpt(sys_prompt, full_prompt)
+            db_key, db_folder = _load_keys_from_db(cur)
+            result = _call_yandex_gpt(sys_prompt, full_prompt, db_key, db_folder)
             if 'error' in result:
                 return _err(502, result['error'])
 

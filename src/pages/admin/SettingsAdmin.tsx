@@ -27,6 +27,8 @@ interface S {
   site_url: string;
   seo_keywords: string;
   seo_description: string;
+  yandex_api_key: string;
+  yandex_folder_id: string;
 }
 
 interface City {
@@ -51,7 +53,8 @@ export default function SettingsAdmin() {
   const [saved, setSaved] = useState(false);
   const [cityQuery, setCityQuery] = useState('');
   const [cityAdding, setCityAdding] = useState(false);
-  const [tab, setTab] = useState<'general' | 'watermark' | 'seo' | 'cities' | 'purposes' | 'feeds'>('general');
+  const [tab, setTab] = useState<'general' | 'watermark' | 'seo' | 'integrations' | 'cities' | 'purposes' | 'feeds'>('general');
+  const [showKey, setShowKey] = useState(false);
 
   const loadCities = () => adminApi.listCities().then(d => setCities(d.cities));
 
@@ -118,6 +121,7 @@ export default function SettingsAdmin() {
     ['general', 'Общие', 'Settings'],
     ['watermark', 'Водяной знак', 'Stamp'],
     ['seo', 'SEO и аналитика', 'BarChart3'],
+    ['integrations', 'Интеграции ИИ', 'Zap'],
     ['cities', 'Города', 'MapPin'],
     ['purposes', 'Назначения', 'Tag'],
     ['feeds', 'XML фиды', 'Rss'],
@@ -290,6 +294,80 @@ export default function SettingsAdmin() {
                 onChange={e => setS({ ...s, yandex_maps_api_key: e.target.value })} />
               <div className="text-xs text-muted-foreground mt-1">developer.tech.yandex.ru → JavaScript API и Геокодер.</div>
             </div>
+          </div>
+
+          <div className="flex items-center gap-3 sticky bottom-4 bg-white p-3 rounded-xl shadow z-20">
+            <button onClick={save} className="btn-blue text-white px-6 py-3 rounded-xl font-semibold">Сохранить</button>
+            {saved && <span className="text-emerald-600 text-sm">Сохранено</span>}
+          </div>
+        </div>
+      )}
+
+      {tab === 'integrations' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl p-6 shadow-sm space-y-3">
+            <div className="font-display font-700 text-lg flex items-center gap-2">
+              <Icon name="Sparkles" size={18} className="text-brand-blue" />
+              YandexGPT 5 Pro (Алиса)
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Ключи для работы ИИ-подбора, генерации описаний, ответов на лиды и SEO. Получить можно в Yandex Cloud Console.
+            </p>
+
+            <div>
+              <label className="text-sm font-semibold block mb-1">API-ключ YandexGPT</label>
+              <div className="flex gap-2">
+                <input
+                  className="flex-1 px-3 py-2 border rounded-lg font-mono text-sm"
+                  type={showKey ? 'text' : 'password'}
+                  placeholder="AQVN..."
+                  value={s.yandex_api_key || ''}
+                  onChange={e => setS({ ...s, yandex_api_key: e.target.value })}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowKey(!showKey)}
+                  className="px-3 py-2 rounded-lg border hover:bg-muted text-sm inline-flex items-center gap-1"
+                >
+                  <Icon name={showKey ? 'EyeOff' : 'Eye'} size={14} />
+                </button>
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                console.cloud.yandex.ru → Сервисные аккаунты → создать API-ключ с ролью <b>ai.languageModels.user</b>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-semibold block mb-1">ID каталога (Folder ID)</label>
+              <input
+                className="w-full px-3 py-2 border rounded-lg font-mono text-sm"
+                placeholder="b1g..."
+                value={s.yandex_folder_id || ''}
+                onChange={e => setS({ ...s, yandex_folder_id: e.target.value })}
+              />
+              <div className="text-xs text-muted-foreground mt-1">
+                ID каталога Yandex Cloud, в котором создан сервисный аккаунт (например, b1gtl2q...).
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-900">
+              <Icon name="Info" size={14} className="flex-shrink-0 mt-0.5" />
+              <div>
+                Ключи хранятся в защищённой БД и используются только на сервере. На фронт не передаются.
+                Если поля оставить пустыми — используются системные ключи проекта (если настроены).
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl p-6 shadow-sm">
+            <div className="font-display font-700 text-base mb-3">Как получить ключи Yandex Cloud</div>
+            <ol className="space-y-2 text-sm text-foreground list-decimal pl-5">
+              <li>Зайти в <a href="https://console.cloud.yandex.ru" target="_blank" rel="noreferrer" className="text-brand-blue underline">console.cloud.yandex.ru</a></li>
+              <li>Скопировать <b>ID каталога</b> из URL или со страницы каталога</li>
+              <li>Создать <b>сервисный аккаунт</b> и назначить ему роль <code className="bg-muted px-1 rounded">ai.languageModels.user</code></li>
+              <li>У сервисного аккаунта создать <b>API-ключ</b> (не IAM-токен)</li>
+              <li>Вставить ключ и Folder ID в поля выше → нажать «Сохранить»</li>
+            </ol>
           </div>
 
           <div className="flex items-center gap-3 sticky bottom-4 bg-white p-3 rounded-xl shadow z-20">
