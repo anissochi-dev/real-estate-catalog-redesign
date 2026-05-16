@@ -1,12 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Property, Page } from '@/App';
 import PropertyCard from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
 import ClientLeadsSection from '@/components/ClientLeadsSection';
-import YandexMap from '@/components/YandexMap';
-import { listingSlug } from '@/lib/slug';
 
 interface PublicStats {
   total: number;
@@ -66,21 +64,6 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
 
   // Новые объекты — последние по дате
   const newObjects = [...properties].sort((a, b) => b.id - a.id).slice(0, 6);
-
-  // Точки для карты на главной — все объекты с координатами
-  const mapPoints = useMemo(
-    () => properties
-      .filter(p => p.lat && p.lng && !isNaN(p.lat) && !isNaN(p.lng))
-      .map(p => ({
-        id: p.id,
-        lat: p.lat,
-        lng: p.lng,
-        title: p.title,
-        caption: `${p.area} м² · ${p.address}`,
-        url: `/object/${listingSlug(p.title, p.id)}`,
-      })),
-    [properties],
-  );
 
   const STATS_VIEW = [
     { value: `${totalCount}+`, label: 'Объектов в базе', icon: 'Building2', deal: 'all' as const },
@@ -257,35 +240,6 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
               />
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* Карта объектов */}
-      <section className="py-6 bg-background">
-        <div className="container mx-auto px-4">
-          <div className="flex items-end justify-between mb-3 gap-3">
-            <div>
-              <h2 className="font-display font-800 text-xl md:text-2xl flex items-center gap-2">
-                <Icon name="MapPin" size={20} className="text-brand-blue" />
-                Объекты на карте
-              </h2>
-              <p className="text-xs text-muted-foreground mt-1">
-                {mapPoints.length} объектов в {mainCity}е и пригороде — кликните по метке
-              </p>
-            </div>
-            <button
-              onClick={() => onNavigate('map')}
-              className="flex items-center gap-1.5 text-brand-blue font-semibold text-xs hover:gap-2 transition-all duration-200 flex-shrink-0"
-            >
-              Открыть карту <Icon name="ArrowRight" size={14} />
-            </button>
-          </div>
-          <YandexMap
-            points={mapPoints}
-            height="420px"
-            className="shadow-sm border border-border"
-            onPointClick={(p) => navigate(p.url || '/map')}
-          />
         </div>
       </section>
 
