@@ -289,6 +289,8 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
             )}
 
             <PropertyCalculators
+              title={item.title}
+              address={[item.city || 'Краснодар', item.district, item.address].filter(Boolean).join(', ')}
               price={item.price}
               area={item.area}
               deal={item.deal}

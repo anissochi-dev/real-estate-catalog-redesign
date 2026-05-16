@@ -35,7 +35,7 @@ interface FieldProps {
 
 export function NumberField({ label, value, onChange, hint, step = 1, min = 0 }: FieldProps) {
   return (
-    <div>
+    <div data-calc-input data-calc-label={label} data-calc-value={String(value)} data-calc-hint={hint || ''}>
       <label className="text-xs font-semibold block mb-1 text-foreground">{label}</label>
       <input
         type="number"
@@ -65,7 +65,13 @@ export function ResultRow({ label, value, color = 'blue', hint }: ResultProps) {
     red: 'text-red-600',
   };
   return (
-    <div className="flex items-baseline justify-between py-2 border-b border-border/50 last:border-0">
+    <div
+      data-calc-result
+      data-calc-label={label}
+      data-calc-value={value}
+      data-calc-hint={hint || ''}
+      className="flex items-baseline justify-between py-2 border-b border-border/50 last:border-0"
+    >
       <div>
         <div className="text-xs font-semibold text-foreground">{label}</div>
         {hint && <div className="text-[10px] text-muted-foreground">{hint}</div>}
