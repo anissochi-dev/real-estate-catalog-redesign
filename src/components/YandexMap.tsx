@@ -59,12 +59,13 @@ function loadYmapsScript(apiKey: string): Promise<void> {
       if (window.ymaps) {
         window.ymaps.ready(() => resolve());
       } else {
-        reject(new Error('ymaps не инициализирован'));
+        loadingPromise = null;
+        reject(new Error('NO_YMAPS'));
       }
     };
     s.onerror = () => {
       loadingPromise = null;
-      reject(new Error('Не удалось загрузить Яндекс.Карты'));
+      reject(new Error('LOAD_FAILED'));
     };
     document.head.appendChild(s);
   });
@@ -89,19 +90,34 @@ export default function YandexMap({
     const apiKey = settings.yandex_maps_api_key || '';
     let cancelled = false;
 
+    if (!apiKey) {
+      setError('INVALID_KEY');
+      return;
+    }
+    setError(null);
+
     loadYmapsScript(apiKey).then(() => {
       if (cancelled || !containerRef.current || !window.ymaps) return;
       if (!mapRef.current) {
-        const realCenter: [number, number] = center
-          || (points[0] ? [points[0].lat, points[0].lng] : KRASNODAR);
-        mapRef.current = new window.ymaps.Map(containerRef.current, {
-          center: realCenter,
-          zoom,
-          controls: ['zoomControl', 'fullscreenControl', 'geolocationControl'],
-        });
+        try {
+          const realCenter: [number, number] = center
+            || (points[0] ? [points[0].lat, points[0].lng] : KRASNODAR);
+          mapRef.current = new window.ymaps.Map(containerRef.current, {
+            center: realCenter,
+            zoom,
+            controls: ['zoomControl', 'fullscreenControl', 'geolocationControl'],
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : '';
+          if (msg.toLowerCase().includes('key') || msg.toLowerCase().includes('apikey')) {
+            setError('INVALID_KEY');
+          } else {
+            setError('INIT_FAILED');
+          }
+        }
       }
     }).catch((e: Error) => {
-      if (!cancelled) setError(e.message || 'Ошибка карты');
+      if (!cancelled) setError(e.message || 'LOAD_FAILED');
     });
 
     return () => {
@@ -169,10 +185,37 @@ export default function YandexMap({
   }, []);
 
   if (error) {
+    const isKeyError = error === 'INVALID_KEY' || !settings.yandex_maps_api_key;
     return (
-      <div className={`bg-muted rounded-xl flex items-center justify-center text-sm text-muted-foreground ${className}`}
-           style={{ height }}>
-        Карта временно недоступна
+      <div
+        className={`bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl flex flex-col items-center justify-center text-center px-6 py-8 ${className}`}
+        style={{ height }}
+      >
+        <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center mb-3">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+               strokeLinecap="round" strokeLinejoin="round" className="text-slate-400">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+            <circle cx="12" cy="10" r="3" />
+          </svg>
+        </div>
+        <div className="font-display font-700 text-base text-foreground mb-1">
+          {isKeyError ? 'Карта не настроена' : 'Карта недоступна'}
+        </div>
+        <div className="text-xs text-muted-foreground max-w-sm">
+          {isKeyError
+            ? 'Не указан или неверный API-ключ Яндекс.Карт. Добавьте его в админке: Настройки → SEO и аналитика → API-ключ Яндекс.Карт.'
+            : 'Не удалось загрузить Яндекс.Карты. Проверьте подключение к интернету.'}
+        </div>
+        {isKeyError && (
+          <a
+            href="https://developer.tech.yandex.ru/services/"
+            target="_blank"
+            rel="noreferrer"
+            className="mt-3 text-xs font-semibold text-brand-blue hover:underline"
+          >
+            Получить ключ Яндекс.Карт →
+          </a>
+        )}
       </div>
     );
   }
