@@ -43,7 +43,14 @@ export default function ListingsTable({ items, onEdit, onArchive }: Props) {
                   )}
                 </td>
                 <td className="px-3 py-3">
-                  <div className="font-semibold">{it.title}</div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="font-semibold">{it.title}</div>
+                    {it.public_code ? (
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue">
+                        ID {it.public_code}
+                      </span>
+                    ) : null}
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     {it.city || 'Краснодар'}{it.district ? ` · ${it.district}` : ''}
                   </div>

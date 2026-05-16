@@ -35,6 +35,18 @@ export interface Listing {
   slug: string | null;
   seo_title: string | null;
   seo_description: string | null;
+  public_code?: number | null;
+  tenant_name?: string | null;
+  monthly_rent?: number | null;
+  yearly_rent?: number | null;
+  finishing?: string | null;
+  ceiling_height?: number | null;
+  electricity_kw?: number | null;
+  utilities?: string | null;
+  road_line?: string | null;
+  payback?: number | null;
+  profit?: number | null;
+  price_per_m2?: number | null;
 }
 
 export interface City { id: number; name: string; is_active: boolean }
@@ -57,6 +69,22 @@ export const CONDITIONS = [
 export const PARKING = [['none', 'Нет'], ['street', 'На улице'], ['building', 'В здании']];
 export const ENTRANCE = [['street', 'С улицы'], ['yard', 'Со двора']];
 
+export const FINISHING = [
+  ['none', 'Без отделки'],
+  ['rough', 'Черновая'],
+  ['preFinish', 'Предчистовая'],
+  ['cosmetic', 'Косметический ремонт'],
+  ['euro', 'Евроремонт'],
+  ['designer', 'Дизайнерский ремонт'],
+];
+
+export const ROAD_LINES = [
+  ['1', '1-я линия (фасад на дорогу)'],
+  ['2', '2-я линия (внутри квартала)'],
+  ['3', '3-я линия и дальше'],
+  ['yard', 'Во дворе'],
+];
+
 export const empty: Partial<Listing> = {
   title: '', category: 'office', deal: 'sale', price: 0, area: 0,
   address: '', district: '', city: 'Краснодар', description: '', image: '', images: '', tags: '',
@@ -66,6 +94,9 @@ export const empty: Partial<Listing> = {
   floor: null, total_floors: null, video_url: '', video_type: '',
   use_watermark: true, export_yandex: false, export_avito: false, export_cian: false,
   slug: null, seo_title: '', seo_description: '',
+  tenant_name: '', monthly_rent: null, yearly_rent: null,
+  finishing: '', ceiling_height: null, electricity_kw: null,
+  utilities: '', road_line: '', payback: null, profit: null,
 };
 
 export const fmtDate = (s: string | null) => {
