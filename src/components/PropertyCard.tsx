@@ -211,7 +211,7 @@ export default function PropertyCard({
           </div>
 
           {/* Избранное / сравнение */}
-          <div className="absolute right-2.5 bottom-10 flex flex-col gap-1.5 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="absolute right-2.5 top-10 flex flex-col gap-1.5 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
             <button type="button" onClick={e => { e.preventDefault(); onToggleFavorite(property.id); }}
               className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md backdrop-blur-sm transition-all ${isFavorite ? 'bg-red-500 text-white' : 'bg-white/90 text-slate-400 hover:text-red-500'}`}>
               <Icon name="Heart" size={14} className={isFavorite ? 'fill-current' : ''} />
@@ -222,26 +222,33 @@ export default function PropertyCard({
             </button>
           </div>
 
-          {/* Тип + цена внизу фото */}
-          <div className="absolute left-2.5 right-2.5 bottom-2.5 flex items-end justify-between gap-2 text-white z-10">
-            <span className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-black/50 backdrop-blur-sm">
+          {/* Тип объекта — нижний левый угол */}
+          <div className="absolute left-2.5 bottom-2.5 z-10">
+            <span className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-black/55 text-white backdrop-blur-sm">
               {TYPE_LABELS[property.type] || property.type}
             </span>
-            <div className="text-right drop-shadow-md">
-              <div className="font-display font-800 text-[15px] leading-none">
-                {formatPrice(property.price, property.deal)}
-              </div>
-              {ppm2 && (
-                <div className="text-[10px] text-white/80 mt-0.5">
-                  {ppm2.toLocaleString('ru')} ₽/м²
-                </div>
-              )}
-            </div>
           </div>
         </div>
 
+        {/* ── Цена (под фото, чётко) ── */}
+        <div className="px-3 pt-3 pb-2.5 flex items-baseline justify-between gap-2 border-b border-border/40">
+          <div>
+            <div className="font-display font-800 text-[17px] text-brand-blue leading-none">
+              {formatPrice(property.price, property.deal)}
+            </div>
+            {ppm2 && (
+              <div className="text-[11px] text-muted-foreground mt-0.5">
+                {ppm2.toLocaleString('ru')} ₽/м²
+              </div>
+            )}
+          </div>
+          <span className="text-[11px] font-bold font-mono text-brand-blue/60 bg-brand-blue/8 px-2 py-0.5 rounded-full flex-shrink-0">
+            #{publicId}
+          </span>
+        </div>
+
         {/* ── Контент ── */}
-        <div className="p-3 flex flex-col flex-1 gap-1.5">
+        <div className="px-3 pt-2 pb-3 flex flex-col flex-1 gap-1.5">
 
           {/* Название */}
           <Link to={href}>
@@ -265,7 +272,7 @@ export default function PropertyCard({
           )}
 
           {/* Ключевые параметры */}
-          <div className="flex flex-wrap gap-1 mt-0.5">
+          <div className="flex flex-wrap gap-1">
             <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-foreground/70 bg-slate-100 px-1.5 py-0.5 rounded-md">
               <Icon name="Maximize" size={10} />{property.area} м²
             </span>
