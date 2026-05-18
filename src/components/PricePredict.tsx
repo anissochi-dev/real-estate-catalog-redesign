@@ -185,12 +185,13 @@ export default function PricePredict({ listingId, currentPrice, deal }: Props) {
         </div>
       </div>
 
-      {isNorms && (
-        <div className="text-[10px] text-muted-foreground/70 flex items-center gap-1 mt-1">
-          <Icon name="Info" size={10} />
-          Недостаточно аналогов — расчёт по рыночным нормативам Краснодарского края
-        </div>
-      )}
+      <div className="text-[10px] text-muted-foreground/60 flex items-start gap-1 mt-2 pt-2 border-t border-border">
+        <Icon name="Info" size={10} className="flex-shrink-0 mt-0.5" />
+        <span>
+          {isNorms ? 'Расчёт по рыночным нормативам Краснодарского края. ' : `По ${data.comparables_count} аналогам в базе. `}
+          Информация представлена в ознакомительных целях.
+        </span>
+      </div>
     </div>
   );
 }

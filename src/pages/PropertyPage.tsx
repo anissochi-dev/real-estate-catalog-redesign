@@ -320,7 +320,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
               </div>
             )}
 
-            {(item.lat && item.lng) && (
+            {(!!item.lat && !!item.lng) && (
               <div className="bg-white rounded-2xl p-5 shadow-sm">
                 <div className="font-display font-700 text-lg mb-3 flex items-center gap-2">
                   <Icon name="Map" size={18} /> Расположение на карте
