@@ -1,0 +1,36 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "GET без id — 400",
+      "method": "GET",
+      "path": "/?foo=bar",
+      "expectedStatus": 400,
+      "expectedBody": {"error": "Не передан id объекта"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "POST без площади — 400",
+      "method": "POST",
+      "path": "/",
+      "body": {"category": "office", "deal": "sale", "price": 5000000},
+      "expectedStatus": 400,
+      "expectedBody": {"error": "Не передана площадь объекта"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "POST расчёт прогноза",
+      "method": "POST",
+      "path": "/",
+      "body": {"category": "office", "deal": "sale", "area": 100, "price": 8000000, "district": "Центр"},
+      "expectedStatus": 200,
+      "expectedBody": {"demand": {}, "price_assessment": {}},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

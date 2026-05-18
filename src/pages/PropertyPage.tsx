@@ -9,6 +9,7 @@ import Breadcrumbs from '@/components/Breadcrumbs';
 import YandexMap from '@/components/YandexMap';
 import PropertyCalculators from '@/components/calculators/PropertyCalculators';
 import SimilarListings from '@/components/SimilarListings';
+import PricePredict from '@/components/PricePredict';
 
 const TYPE_LABELS: Record<string, string> = {
   office: 'Офис',
@@ -349,6 +350,12 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
                 </a>
               </div>
             )}
+
+            <PricePredict
+              listingId={item.id}
+              currentPrice={item.price}
+              deal={item.deal}
+            />
 
             <PropertyCalculators
               title={item.title}
