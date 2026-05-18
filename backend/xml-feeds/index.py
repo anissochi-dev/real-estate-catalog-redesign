@@ -7,6 +7,8 @@ Returns: XML текст для GET, JSON для POST
 import json
 import os
 import re
+import urllib.request
+import urllib.error
 import xml.etree.ElementTree as ET
 from datetime import datetime
 
@@ -380,6 +382,33 @@ def handler(event, context):
 
                 body = json.loads(event.get('body') or '{}')
                 xml_text = body.get('xml', '')
+                source_url = (body.get('url') or '').strip()
+
+                if not xml_text and source_url:
+                    if not source_url.startswith(('http://', 'https://')):
+                        return _json({'error': 'URL должен начинаться с http:// или https://'}, 400)
+                    try:
+                        req = urllib.request.Request(
+                            source_url,
+                            headers={'User-Agent': 'BIZNEST-XML-Importer/1.0'},
+                        )
+                        with urllib.request.urlopen(req, timeout=25) as resp:
+                            raw = resp.read()
+                        # Определяем кодировку из заголовка декларации
+                        head = raw[:200].decode('ascii', errors='ignore')
+                        m = re.search(r'encoding=["\']([^"\']+)["\']', head, re.IGNORECASE)
+                        enc = (m.group(1) if m else 'utf-8').lower()
+                        try:
+                            xml_text = raw.decode(enc, errors='replace')
+                        except (LookupError, UnicodeDecodeError):
+                            xml_text = raw.decode('utf-8', errors='replace')
+                    except urllib.error.HTTPError as e:
+                        return _json({'error': f'HTTP {e.code} при загрузке {source_url}'}, 400)
+                    except urllib.error.URLError as e:
+                        return _json({'error': f'Не удалось загрузить XML: {str(e.reason)[:200]}'}, 400)
+                    except Exception as e:
+                        return _json({'error': f'Ошибка загрузки: {str(e)[:200]}'}, 400)
+
                 if not xml_text:
                     return _json({'error': 'Пустой XML'}, 400)
 
