@@ -264,34 +264,6 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
 
       <ClientLeadsSection />
 
-      {/* AI Banner — компактный */}
-      <section className="py-6">
-        <div className="container mx-auto px-4">
-          <div className="bg-gradient-to-r from-brand-blue to-blue-700 rounded-2xl p-5 md:p-6 relative overflow-hidden">
-            <div className="absolute right-0 top-0 w-48 h-48 opacity-10">
-              <div className="w-full h-full rounded-full bg-white blur-3xl" />
-            </div>
-            <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div>
-                <h2 className="font-display font-800 text-lg md:text-xl text-white mb-1 flex items-center gap-2">
-                  <Icon name="Sparkles" size={18} />
-                  Подберём объект за 2 минуты с ИИ
-                </h2>
-                <p className="text-white/75 text-sm">
-                  Опишите задачу — найдём варианты и рассчитаем окупаемость.
-                </p>
-              </div>
-              <button
-                onClick={() => setAiOpen(true)}
-                className="btn-orange text-white px-5 py-2.5 rounded-xl font-semibold font-display text-sm inline-flex items-center gap-2 flex-shrink-0 hover:scale-[1.02] transition-transform"
-              >
-                <Icon name="Sparkles" size={16} />
-                Спросить ИИ
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
 
       <AIMatchModal
         open={aiOpen}
