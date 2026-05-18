@@ -50,7 +50,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
   const [minArea, setMinArea] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [page, setPage] = useState(1);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+
 
   // Читаем фильтры из URL при первом рендере
   useEffect(() => {
@@ -275,22 +275,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
           </div>
         ) : (
           <>
-            <div className="flex items-center justify-end gap-2 mb-4">
-              <button onClick={() => setViewMode('list')}
-                className={`p-2 rounded-lg ${viewMode === 'list' ? 'bg-brand-blue text-white' : 'bg-muted text-foreground'}`}
-                title="Списком">
-                <Icon name="List" size={16} />
-              </button>
-              <button onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-lg ${viewMode === 'grid' ? 'bg-brand-blue text-white' : 'bg-muted text-foreground'}`}
-                title="Плиткой">
-                <Icon name="LayoutGrid" size={16} />
-              </button>
-            </div>
-
-            <div className={viewMode === 'grid'
-              ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
-              : 'grid grid-cols-1 md:grid-cols-2 gap-4'}>
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
               {pageItems.map((property, i) => (
                 <PropertyCard
                   key={property.id}
