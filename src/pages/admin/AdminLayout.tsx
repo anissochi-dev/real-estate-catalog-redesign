@@ -1,7 +1,10 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
 import AiChat from '@/components/admin/AiChat';
+
+const IDLE_TIMEOUT_MS = 20 * 60 * 1000;
+const IDLE_WARNING_MS = 60 * 1000;
 
 export type AdminSection = 'dashboard' | 'listings' | 'leads' | 'users' | 'pages' | 'settings' | 'ai-logs';
 
@@ -25,6 +28,66 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
   const { user, logout } = useAuth();
   const [aiOpen, setAiOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [idleWarning, setIdleWarning] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(IDLE_WARNING_MS / 1000);
+  const logoutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const warningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const clearAll = () => {
+      if (logoutTimer.current) clearTimeout(logoutTimer.current);
+      if (warningTimer.current) clearTimeout(warningTimer.current);
+      if (countdownTimer.current) clearInterval(countdownTimer.current);
+    };
+
+    const resetTimers = () => {
+      clearAll();
+      setIdleWarning(false);
+      warningTimer.current = setTimeout(() => {
+        setIdleWarning(true);
+        setSecondsLeft(IDLE_WARNING_MS / 1000);
+        countdownTimer.current = setInterval(() => {
+          setSecondsLeft(s => (s > 1 ? s - 1 : 0));
+        }, 1000);
+      }, IDLE_TIMEOUT_MS - IDLE_WARNING_MS);
+      logoutTimer.current = setTimeout(() => {
+        clearAll();
+        logout();
+      }, IDLE_TIMEOUT_MS);
+    };
+
+    const onActivity = () => {
+      if (!idleWarning) resetTimers();
+    };
+
+    const events: Array<keyof WindowEventMap> = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
+    events.forEach(ev => window.addEventListener(ev, onActivity, { passive: true }));
+    resetTimers();
+
+    return () => {
+      events.forEach(ev => window.removeEventListener(ev, onActivity));
+      clearAll();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, idleWarning]);
+
+  const stayLoggedIn = () => {
+    setIdleWarning(false);
+    if (logoutTimer.current) clearTimeout(logoutTimer.current);
+    if (warningTimer.current) clearTimeout(warningTimer.current);
+    if (countdownTimer.current) clearInterval(countdownTimer.current);
+    warningTimer.current = setTimeout(() => {
+      setIdleWarning(true);
+      setSecondsLeft(IDLE_WARNING_MS / 1000);
+      countdownTimer.current = setInterval(() => {
+        setSecondsLeft(s => (s > 1 ? s - 1 : 0));
+      }, 1000);
+    }, IDLE_TIMEOUT_MS - IDLE_WARNING_MS);
+    logoutTimer.current = setTimeout(() => logout(), IDLE_TIMEOUT_MS);
+  };
 
   if (!user) return null;
   const items = NAV.filter(n => n.roles.includes(user.role));
@@ -119,6 +182,34 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
       </main>
 
       {aiOpen && <AiChat onClose={() => setAiOpen(false)} />}
+
+      {idleWarning && (
+        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 animate-fade-in-up">
+            <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-4">
+              <Icon name="Clock" size={22} className="text-amber-600" />
+            </div>
+            <h2 className="font-display font-700 text-lg mb-1">Вы здесь?</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Из-за бездействия сессия будет завершена через <span className="font-semibold text-foreground">{secondsLeft} сек</span>.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => logout()}
+                className="px-4 py-2.5 rounded-xl border border-border text-sm font-semibold hover:bg-muted"
+              >
+                Выйти
+              </button>
+              <button
+                onClick={stayLoggedIn}
+                className="flex-1 btn-blue text-white px-4 py-2.5 rounded-xl text-sm font-semibold"
+              >
+                Остаться в админке
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
