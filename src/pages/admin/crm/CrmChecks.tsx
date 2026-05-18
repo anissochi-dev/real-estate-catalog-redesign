@@ -6,9 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import func2url from '../../../../func2url.json';
-
-const CHECKS_URL = (func2url as Record<string, string>)['crm-checks'];
+import { CRM_CHECKS_URL as CHECKS_URL } from '@/lib/adminApi';
 
 const SOURCE_INFO: Record<string, { label: string; color: string; desc: string }> = {
   zachestny: { label: 'ЧестныйБизнес', color: 'bg-green-100 text-green-700', desc: 'Компании и ИП' },

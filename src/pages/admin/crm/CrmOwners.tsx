@@ -7,9 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import func2url from '../../../../func2url.json';
-
-const CRM_URL = (func2url as Record<string, string>)['crm'];
+import { CRM_URL } from '@/lib/adminApi';
 
 interface Owner {
   id: number;

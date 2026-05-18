@@ -7,10 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import func2url from '../../../../func2url.json';
-
-const PAYMENTS_URL = (func2url as Record<string, string>)['crm-payments'];
-const CRM_URL = (func2url as Record<string, string>)['crm'];
+import { CRM_PAYMENTS_URL as PAYMENTS_URL, CRM_URL } from '@/lib/adminApi';
 
 const STATUS_BADGE: Record<string, { label: string; class: string }> = {
   pending: { label: 'Ожидает', class: 'bg-amber-100 text-amber-700' },

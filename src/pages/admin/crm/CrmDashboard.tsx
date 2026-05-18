@@ -1,9 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
-import func2url from '../../../../func2url.json';
-
-const CRM_URL = (func2url as Record<string, string>)['crm'];
+import { CRM_URL } from '@/lib/adminApi';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 

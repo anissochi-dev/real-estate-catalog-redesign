@@ -3,6 +3,9 @@ const ADMIN_URL = 'https://functions.poehali.dev/aeccc0fe-9c55-4933-b292-432cec9
 const AI_URL = 'https://functions.poehali.dev/34bfc4a2-89b9-4c89-bcbc-d82314730aef';
 const UPLOADS_URL = 'https://functions.poehali.dev/82b9e0bc-2ffa-4045-a74b-a09985cec2b5';
 const REMOVE_WM_URL = 'https://functions.poehali.dev/93965724-e0d4-411d-8100-b9468a1a0627';
+export const CRM_URL = 'https://functions.poehali.dev/221e23fa-e0a4-416e-b878-c2da2914daac';
+export const CRM_CHECKS_URL = 'https://functions.poehali.dev/be6cb907-b50e-48fa-b9e2-092dd541a82a';
+export const CRM_PAYMENTS_URL = 'https://functions.poehali.dev/74ca5694-a05f-4053-992d-5e04cc5bc7a4';
 
 export type Role = 'admin' | 'editor' | 'manager' | 'client';
 
