@@ -19,7 +19,7 @@ interface Props {
 const CRM_ROLES = ['admin', 'director', 'broker', 'office_manager', 'manager'];
 
 const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; group?: string }[] = [
-  { id: 'dashboard', label: 'Дашборд', icon: 'LayoutDashboard', roles: ['admin', 'editor', 'manager'] },
+  { id: 'dashboard', label: 'CRM', icon: 'LayoutDashboard', roles: ['admin', 'editor', 'manager'] },
   { id: 'listings', label: 'Объявления', icon: 'Building2', roles: ['admin', 'editor', 'manager'] },
   { id: 'leads', label: 'Лиды', icon: 'Inbox', roles: ['admin', 'editor', 'manager'] },
   { id: 'users', label: 'Пользователи', icon: 'Users', roles: ['admin'] },
@@ -27,7 +27,6 @@ const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; gro
   { id: 'settings', label: 'Настройки', icon: 'Settings', roles: ['admin', 'editor'] },
   { id: 'crm-dashboard', label: 'CRM — Обзор', icon: 'PieChart', roles: CRM_ROLES, group: 'crm' },
   { id: 'crm-owners', label: 'Собственники', icon: 'ContactRound', roles: CRM_ROLES, group: 'crm' },
-  { id: 'crm-kanban', label: 'Воронка сделок', icon: 'KanbanSquare', roles: CRM_ROLES, group: 'crm' },
   { id: 'crm-gamification', label: 'Рейтинг команды', icon: 'Trophy', roles: CRM_ROLES, group: 'crm' },
   { id: 'crm-checks', label: 'Проверки', icon: 'ShieldCheck', roles: CRM_ROLES, group: 'crm' },
   { id: 'crm-payments', label: 'Платежи', icon: 'CreditCard', roles: CRM_ROLES, group: 'crm' },
