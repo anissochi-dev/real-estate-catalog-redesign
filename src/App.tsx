@@ -9,6 +9,7 @@ import LoginPage from './pages/LoginPage';
 import AdminPage from './pages/AdminPage';
 import NetworkTenantsPage from './pages/NetworkTenantsPage';
 import PropertyPage from './pages/PropertyPage';
+import CategoryPage from './pages/CategoryPage';
 import NotFound from './pages/NotFound';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
@@ -82,7 +83,7 @@ const VIEW_KEY = 'biznest_view';
 function loadInitialView(): AppView {
   try {
     // Публичные страницы всегда открываются как сайт, независимо от состояния сессии
-    const publicPaths = ['/object/', '/catalog', '/map', '/favorites', '/compare', '/network-tenants'];
+    const publicPaths = ['/object/', '/catalog', '/map', '/favorites', '/compare', '/network-tenants', '/catalog/'];
     if (publicPaths.some(p => window.location.pathname.startsWith(p))) return 'site';
     const v = localStorage.getItem(VIEW_KEY);
     if (v === 'admin' || v === 'login' || v === 'site') return v;
@@ -252,6 +253,15 @@ export default function App() {
               properties={compareProperties}
               onRemove={id => toggleCompare(id)}
               onNavigate={setCurrentPage}
+            />
+          } />
+          <Route path="/catalog/:type" element={
+            <CategoryPage
+              properties={properties}
+              favorites={favorites}
+              compareList={compareList}
+              onToggleFavorite={toggleFavorite}
+              onToggleCompare={toggleCompare}
             />
           } />
           <Route path="/network-tenants" element={<NetworkTenantsPage />} />

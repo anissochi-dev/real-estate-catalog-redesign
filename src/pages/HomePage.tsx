@@ -69,8 +69,8 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   const mainCity = settings.main_city || stats.main_city || 'Краснодар';
   const totalCount = stats.total || properties.length;
 
-  // Новые объекты — последние по дате
-  const newObjects = [...properties].sort((a, b) => b.id - a.id).slice(0, 6);
+  // Новые объекты — последние по дате, 20 штук (4 в строке × 5 рядов)
+  const newObjects = [...properties].sort((a, b) => b.id - a.id).slice(0, 20);
 
   const STATS_VIEW = [
     { value: `${totalCount}+`, label: 'Объектов в базе', icon: 'Building2', deal: 'all' as const },
@@ -215,7 +215,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
             {CATEGORIES.map((cat, i) => (
               <button
                 key={cat.type}
-                onClick={() => navigate(`/catalog?type=${cat.type}`)}
+                onClick={() => navigate(`/catalog/${cat.type}`)}
                 className={`group relative flex flex-col items-center gap-2 p-3 bg-white rounded-xl border border-border hover:border-transparent hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up stagger-${i + 1} overflow-hidden`}
               >
                 <div className={`absolute inset-0 bg-gradient-to-br ${cat.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
@@ -246,7 +246,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {newObjects.map((property, i) => (
               <PropertyCard
                 key={property.id}
