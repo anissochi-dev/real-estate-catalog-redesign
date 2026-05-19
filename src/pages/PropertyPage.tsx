@@ -42,6 +42,19 @@ const PARKING_LABELS: Record<string, string> = {
 const ENTRANCE_LABELS: Record<string, string> = {
   street: 'С улицы', yard: 'Со двора',
 };
+const UTILITY_ICONS: Record<string, string> = {
+  'Вода': 'Droplets',
+  'Канализация': 'Waves',
+  'Отопление': 'Flame',
+  'Газ': 'Fuel',
+  'Электричество': 'Zap',
+  'Интернет': 'Wifi',
+  'Вентиляция': 'Wind',
+  'Кондиционирование': 'Thermometer',
+  'Пожарная сигнализация': 'BellRing',
+  'Видеонаблюдение': 'Camera',
+};
+
 const ROAD_LINE_LABELS: Record<string, string> = {
   '1': '1-я линия (фасад на дорогу)',
   '2': '2-я линия (внутри квартала)',
@@ -128,12 +141,19 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
     );
   }
 
-  const imgs = item.images && item.images.length ? item.images : [item.image].filter(Boolean);
-  // Медиа-галерея: фото (индексы 0..imgs.length-1) + видео (индекс imgs.length если есть)
+  const rawImgs = item.images && item.images.length ? item.images : [item.image].filter(Boolean);
   const hasVideo = !!item.videoUrl;
+  // Порядок: 1-е фото, потом видео (если есть), потом остальные фото
+  const imgs = rawImgs.length > 1 && hasVideo
+    ? [rawImgs[0], ...rawImgs.slice(1)]   // видео вставляется как элемент между 1-м и 2-м фото
+    : rawImgs;
+  // Индекс видео = 1 (после первого фото)
+  const videoIndex = hasVideo ? 1 : -1;
   const totalMedia = imgs.length + (hasVideo ? 1 : 0);
-  const isVideoActive = hasVideo && activeImg === imgs.length;
-  const mainImg = isVideoActive ? null : (imgs[activeImg] || imgs[0]);
+  // activeImg: 0 = первое фото, 1 = видео (если есть), 2+ = фото 2,3...
+  const isVideoActive = hasVideo && activeImg === videoIndex;
+  const photoIndex = hasVideo && activeImg > videoIndex ? activeImg - 1 : activeImg;
+  const mainImg = isVideoActive ? null : (imgs[photoIndex] || imgs[0]);
   const isFav = favorites.includes(item.id);
   const inCompare = compareList.includes(item.id);
 
@@ -220,7 +240,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
               <div className="relative rounded-2xl overflow-hidden bg-muted aspect-[16/10]">
                 {isVideoActive ? (
                   <VideoEmbed url={item.videoUrl!} />
-                ) : mainImg ? (
+                ) : mainImg !== null && mainImg !== undefined ? (
                   <div className="cursor-zoom-in group w-full h-full" onClick={() => setLightbox(true)}>
                     <img src={mainImg} alt={item.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
                     <div className="absolute bottom-3 right-3 bg-black/50 text-white rounded-lg px-2 py-1 text-xs flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -261,22 +281,32 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
                 )}
               </div>
 
-              {/* Миниатюры */}
+              {/* Миниатюры: 1 фото → видео → остальные фото */}
               {totalMedia > 1 && (
                 <div className="flex gap-2 overflow-x-auto pb-1">
-                  {imgs.map((u, i) => (
-                    <button key={u + i} onClick={() => setActiveImg(i)}
-                      className={`w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all ${i === activeImg ? 'border-brand-blue' : 'border-transparent opacity-70 hover:opacity-100'}`}>
-                      <img src={u} alt="" className="w-full h-full object-cover" />
-                    </button>
-                  ))}
-                  {/* Миниатюра видео */}
+                  {/* Первое фото */}
+                  <button onClick={() => setActiveImg(0)}
+                    className={`w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all ${activeImg === 0 ? 'border-brand-blue' : 'border-transparent opacity-70 hover:opacity-100'}`}>
+                    <img src={rawImgs[0]} alt="" className="w-full h-full object-cover" />
+                  </button>
+                  {/* Видео — вторым */}
                   {hasVideo && (
-                    <button onClick={() => setActiveImg(imgs.length)}
-                      className={`w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all flex items-center justify-center bg-slate-900 ${activeImg === imgs.length ? 'border-brand-blue' : 'border-transparent opacity-70 hover:opacity-100'}`}>
-                      <Icon name="Play" size={24} className="text-white" />
+                    <button onClick={() => setActiveImg(videoIndex)}
+                      className={`w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all flex flex-col items-center justify-center bg-slate-900 gap-1 ${activeImg === videoIndex ? 'border-brand-blue' : 'border-transparent opacity-70 hover:opacity-100'}`}>
+                      <Icon name="Play" size={20} className="text-white" />
+                      <span className="text-[9px] text-white/60">Видео</span>
                     </button>
                   )}
+                  {/* Остальные фото */}
+                  {rawImgs.slice(1).map((u, i) => {
+                    const mediaIdx = i + 2; // +1 первое фото, +1 видео
+                    return (
+                      <button key={u + i} onClick={() => setActiveImg(mediaIdx)}
+                        className={`w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all ${mediaIdx === activeImg ? 'border-brand-blue' : 'border-transparent opacity-70 hover:opacity-100'}`}>
+                        <img src={u} alt="" className="w-full h-full object-cover" />
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -329,16 +359,26 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
                 {item.tenantName ? <Stat icon="Users" label="Арендатор" value={item.tenantName} /> : null}
               </div>
 
-              {/* Коммуникации отдельным блоком */}
+              {/* Коммуникации — как параметры с иконками */}
               {item.utilities && (
-                <div className="mt-4 pt-4 border-t border-border">
-                  <div className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5">
-                    <Icon name="Droplets" size={12} /> Коммуникации
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {item.utilities.split(',').map(u => u.trim()).filter(Boolean).map(u => (
-                      <span key={u} className="text-xs px-2.5 py-1 rounded-full bg-brand-blue/8 text-brand-blue border border-brand-blue/20 font-medium">{u}</span>
-                    ))}
+                <div className="mt-5 pt-4 border-t border-border">
+                  <div className="font-display font-700 text-base mb-3">Коммуникации</div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {item.utilities.split(',').map(u => u.trim()).filter(Boolean).map(u => {
+                      const [key, val] = u.includes(':') ? u.split(':').map(s => s.trim()) : [u, ''];
+                      const icon = UTILITY_ICONS[key] || 'Plug';
+                      return (
+                        <div key={u} className="flex items-start gap-2.5 bg-muted/40 rounded-xl px-3 py-2.5">
+                          <div className="w-7 h-7 rounded-lg bg-white flex items-center justify-center flex-shrink-0 shadow-sm mt-0.5">
+                            <Icon name={icon} size={14} className="text-brand-blue" />
+                          </div>
+                          <div>
+                            <div className="text-[10px] text-muted-foreground leading-tight">{key}</div>
+                            {val && <div className="font-display font-700 text-sm leading-tight mt-0.5">{val}</div>}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -432,19 +472,22 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
           {/* Правая колонка: цена + Аналитика цены */}
           <div className="space-y-4">
             {/* Цена */}
-            <div className="bg-white rounded-2xl p-5 shadow-sm sticky top-20">
-              <div className="text-xs text-muted-foreground mb-1">{dealLabel}</div>
-              <div className="font-display font-900 text-3xl text-brand-blue mb-0.5">
-                {formatPrice(item.price, item.deal)}
-              </div>
-              {item.pricePerM2 && (
-                <div className="text-sm text-muted-foreground mb-1">
-                  {item.pricePerM2.toLocaleString('ru')} ₽/м²
+            <div className="bg-white rounded-2xl shadow-sm sticky top-20 overflow-hidden">
+              <div className="p-5 pb-4">
+                <div className="font-display font-900 text-4xl text-brand-blue leading-none">
+                  {formatPrice(item.price, item.deal)}
                 </div>
-              )}
-              {item.area && (
-                <div className="text-sm text-muted-foreground">
-                  Площадь: <span className="font-semibold text-foreground">{item.area} м²</span>
+                {item.pricePerM2 && (
+                  <div className="text-sm text-muted-foreground mt-2">
+                    {item.pricePerM2.toLocaleString('ru')} ₽/м²
+                  </div>
+                )}
+              </div>
+              {item.publicCode && (
+                <div className="px-5 py-2.5 bg-muted/40 border-t border-border flex items-center gap-2">
+                  <Icon name="Hash" size={12} className="text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">ID объекта:</span>
+                  <span className="text-xs font-semibold text-foreground">{item.publicCode}</span>
                 </div>
               )}
             </div>
@@ -459,7 +502,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
                 {agents.slice(0, 1).map(agent => (
                   <div key={agent.id} className="flex items-center gap-3">
                     {agent.avatar ? (
-                      <img src={agent.avatar} alt={agent.name} className="w-12 h-12 rounded-full object-cover flex-shrink-0 border-2 border-border" />
+                      <img src={agent.avatar} alt={agent.name} referrerPolicy="no-referrer" className="w-12 h-12 rounded-full object-cover flex-shrink-0 border-2 border-border" />
                     ) : (
                       <div className="w-12 h-12 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
                         <Icon name="User" size={20} className="text-brand-blue" />

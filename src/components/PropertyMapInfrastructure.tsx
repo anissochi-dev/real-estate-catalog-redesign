@@ -119,32 +119,33 @@ export default function PropertyMapInfrastructure({ lat, lng, title, address }: 
     setLoading(true);
     const collection = new window.ymaps.GeoObjectCollection();
     const RADIUS = 800; // метров
+    const bbox: [[number, number], [number, number]] = [
+      [lat - 0.009, lng - 0.013],
+      [lat + 0.009, lng + 0.013],
+    ];
 
     Promise.all(
       layer.queries.map(q =>
-        window.ymaps.geocode(`${q} рядом с ${address || `${lat},${lng}`}`, {
-          results: 6,
-          boundedBy: [
-            [lat - 0.008, lng - 0.012],
-            [lat + 0.008, lng + 0.012],
-          ],
+        window.ymaps.search(q, {
+          results: 8,
+          boundedBy: bbox,
           strictBounds: true,
+          searchControlProvider: 'yandex#search',
         }).then((res: { geoObjects: { toArray: () => unknown[] } }) => {
           res.geoObjects.toArray().forEach((obj: unknown) => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const o = obj as any;
-            const coords = o.geometry.getCoordinates();
+            const coords = o.geometry?.getCoordinates?.();
             if (!coords) return;
 
-            // Считаем расстояние от объекта
             const dist = Math.round(
               window.ymaps.coordSystem.geo.getDistance([lat, lng], coords)
             );
-            if (dist > RADIUS * 2) return;
+            if (dist > RADIUS) return;
 
             const name = o.properties.get('name') || o.properties.get('text') || q;
             const distLabel = dist < 1000 ? `${dist} м` : `${(dist / 1000).toFixed(1)} км`;
-            const walkMin = Math.round(dist / 80); // ~80 м/мин пешком
+            const walkMin = Math.round(dist / 80);
 
             const placemark = new window.ymaps.Placemark(
               coords,
@@ -152,8 +153,8 @@ export default function PropertyMapInfrastructure({ lat, lng, title, address }: 
                 hintContent: name,
                 balloonContentHeader: `<b>${name}</b>`,
                 balloonContentBody:
-                  `<div style="font-size:12px;color:#555">` +
-                  `${layer.icon} ${layer.label}<br>` +
+                  `<div style="font-size:12px;color:#555;line-height:1.6">` +
+                  `${layer.icon} <b>${layer.label}</b><br>` +
                   `📍 ${distLabel} от объекта` +
                   (walkMin > 0 ? ` · 🚶 ${walkMin} мин` : '') +
                   `</div>`,
