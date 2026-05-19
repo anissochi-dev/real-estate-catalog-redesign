@@ -33,6 +33,45 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 
+    <!-- Защита от принудительной перезагрузки Vite HMR при потере WS-соединения -->
+    <script>
+      (function() {
+        var _nativeReload = window.location.reload.bind(window.location);
+        var _lastAllowedReload = 0;
+        var _pendingReloadTimer = null;
+
+        Object.defineProperty(window.location, 'reload', {
+          configurable: true,
+          get: function() {
+            return function(force) {
+              var now = Date.now();
+              // Vite вызывает reload при reconnect — подавляем если прошло < 60 сек
+              if (now - _lastAllowedReload < 60000) {
+                console.info('[HMR] reload подавлен — слишком частый вызов');
+                return;
+              }
+              _lastAllowedReload = now;
+              _nativeReload(force);
+            };
+          }
+        });
+
+        // Перехватываем Vite polling — он делает fetch('/@vite/client') и потом reload
+        var _nativeFetch = window.fetch;
+        window.fetch = function(input, init) {
+          var url = typeof input === 'string' ? input : (input instanceof Request ? input.url : String(input));
+          // Если Vite пытается "проверить" сервер после потери соединения — не даём reload произойти
+          if (url && (url.includes('/@vite/') || url.includes('__vite_ping'))) {
+            return _nativeFetch.apply(this, arguments).catch(function(e) {
+              // Подавляем ошибку — пусть Vite продолжает polling без reload
+              return new Response('', { status: 200 });
+            });
+          }
+          return _nativeFetch.apply(this, arguments);
+        };
+      })();
+    </script>
+
     <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS COMMENT! -->
 
     <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS COMMENT! -->
