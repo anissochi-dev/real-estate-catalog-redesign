@@ -109,8 +109,8 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
     <div className="bg-background">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productLd) }} />
 
-      <div className="container mx-auto px-4 py-6">
-        <div className="flex items-center justify-between gap-3 mb-4">
+      <div className="container mx-auto px-4 py-4">
+        <div className="flex items-center justify-between gap-3 mb-3">
           <Breadcrumbs items={[
             { label: 'Главная', to: '/' },
             { label: 'Каталог', to: '/catalog' },
@@ -122,8 +122,8 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
           </button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-5">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2 space-y-3">
             <PropertyMediaGallery
               item={item}
               rawImgs={rawImgs}

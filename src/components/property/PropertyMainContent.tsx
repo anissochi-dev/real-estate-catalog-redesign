@@ -21,13 +21,13 @@ interface Props {
 
 function ParamCard({ icon, label, value }: { icon: string; label: string; value: string }) {
   return (
-    <div className="flex items-start gap-2.5 bg-muted/40 rounded-xl px-3 py-2.5">
-      <div className="w-7 h-7 rounded-lg bg-white flex items-center justify-center flex-shrink-0 shadow-sm mt-0.5">
-        <Icon name={icon} size={14} className="text-brand-blue" />
+    <div className="flex items-center gap-2 bg-muted/40 rounded-lg px-2.5 py-2">
+      <div className="w-6 h-6 rounded-md bg-white flex items-center justify-center flex-shrink-0 shadow-sm">
+        <Icon name={icon} size={12} className="text-brand-blue" />
       </div>
       <div className="min-w-0">
-        <div className="text-[10px] text-muted-foreground leading-tight">{label}</div>
-        <div className="font-display font-700 text-sm leading-tight mt-0.5 truncate">{value}</div>
+        <div className="text-[10px] text-muted-foreground leading-none">{label}</div>
+        <div className="font-display font-700 text-xs leading-tight mt-0.5 truncate">{value}</div>
       </div>
     </div>
   );
@@ -42,23 +42,23 @@ export default function PropertyMainContent({
   return (
     <>
       {/* Название и адрес */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm">
-        <h1 className="font-display font-800 text-2xl md:text-3xl text-foreground mb-2">{item.title}</h1>
+      <div className="bg-white rounded-2xl px-4 py-3 shadow-sm">
+        <h1 className="font-display font-800 text-xl md:text-2xl text-foreground mb-1">{item.title}</h1>
         <button
           type="button"
           onClick={() => document.getElementById('property-map')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-brand-blue transition-colors group"
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-brand-blue transition-colors group"
         >
-          <Icon name="MapPin" size={14} className="flex-shrink-0 text-brand-blue" />
+          <Icon name="MapPin" size={12} className="flex-shrink-0 text-brand-blue" />
           <span className="group-hover:underline underline-offset-2">{addressStr}</span>
-          <Icon name="Map" size={11} className="opacity-0 group-hover:opacity-60 transition-opacity" />
+          <Icon name="Map" size={10} className="opacity-0 group-hover:opacity-60 transition-opacity" />
         </button>
       </div>
 
       {/* Параметры объекта */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm">
-        <div className="font-display font-700 text-lg mb-4">Параметры объекта</div>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <div className="bg-white rounded-2xl px-4 py-3 shadow-sm">
+        <div className="font-display font-700 text-base mb-3">Параметры объекта</div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           <ParamCard icon="Maximize" label="Площадь" value={`${item.area} м²`} />
           <ParamCard icon="Briefcase" label="Тип сделки" value={dealLabel} />
           <ParamCard icon="Building2" label="Тип объекта" value={typeLabel} />
@@ -86,20 +86,20 @@ export default function PropertyMainContent({
 
         {/* Коммуникации */}
         {item.utilities && (
-          <div className="mt-5 pt-4 border-t border-border">
-            <div className="font-display font-700 text-base mb-3">Коммуникации</div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div className="mt-3 pt-3 border-t border-border">
+            <div className="font-display font-700 text-sm mb-2">Коммуникации</div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               {item.utilities.split(',').map(u => u.trim()).filter(Boolean).map(u => {
                 const [key, val] = u.includes(':') ? u.split(':').map(s => s.trim()) : [u, ''];
                 const icon = UTILITY_ICONS[key] || 'Plug';
                 return (
-                  <div key={u} className="flex items-start gap-2.5 bg-muted/40 rounded-xl px-3 py-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-white flex items-center justify-center flex-shrink-0 shadow-sm mt-0.5">
-                      <Icon name={icon} size={14} className="text-brand-blue" />
+                  <div key={u} className="flex items-center gap-2 bg-muted/40 rounded-lg px-2.5 py-2">
+                    <div className="w-6 h-6 rounded-md bg-white flex items-center justify-center flex-shrink-0 shadow-sm">
+                      <Icon name={icon} size={12} className="text-brand-blue" />
                     </div>
-                    <div>
-                      <div className="text-[10px] text-muted-foreground leading-tight">{key}</div>
-                      {val && <div className="font-display font-700 text-sm leading-tight mt-0.5">{val}</div>}
+                    <div className="min-w-0">
+                      <div className="text-[10px] text-muted-foreground leading-tight truncate">{key}</div>
+                      {val && <div className="font-600 text-xs leading-tight truncate">{val}</div>}
                     </div>
                   </div>
                 );
@@ -111,29 +111,29 @@ export default function PropertyMainContent({
 
       {/* Описание */}
       {item.description && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm">
-          <div className="font-display font-700 text-lg mb-3">Описание</div>
-          <div className="text-sm whitespace-pre-wrap text-foreground/85 leading-relaxed">{item.description}</div>
+        <div className="bg-white rounded-2xl px-4 py-3 shadow-sm">
+          <div className="font-display font-700 text-base mb-2">Описание</div>
+          <div className="text-sm whitespace-pre-wrap text-foreground/80 leading-relaxed">{item.description}</div>
         </div>
       )}
 
       {/* Карта */}
       {(!!item.lat && !!item.lng) && (
-        <div id="property-map" className="bg-white rounded-2xl p-5 shadow-sm">
-          <div className="font-display font-700 text-lg mb-1 flex items-center gap-2">
-            <Icon name="Map" size={18} /> Расположение и инфраструктура
+        <div id="property-map" className="bg-white rounded-2xl px-4 py-3 shadow-sm">
+          <div className="font-display font-700 text-base mb-0.5 flex items-center gap-2">
+            <Icon name="Map" size={16} /> Расположение и инфраструктура
           </div>
-          <p className="text-xs text-muted-foreground mb-3">
-            Выберите категорию — отобразятся ближайшие объекты в радиусе 800 м
+          <p className="text-xs text-muted-foreground mb-2">
+            Выберите категорию — объекты в радиусе 800 м
           </p>
           <PropertyMapInfrastructure lat={item.lat} lng={item.lng} title={item.title} address={addressStr} />
         </div>
       )}
 
       {/* Форма заявки */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm">
-        <div className="font-display font-700 text-lg mb-4 flex items-center gap-2">
-          <Icon name="CalendarCheck" size={18} className="text-brand-blue" /> Заказать просмотр
+      <div className="bg-white rounded-2xl px-4 py-3 shadow-sm">
+        <div className="font-display font-700 text-base mb-3 flex items-center gap-2">
+          <Icon name="CalendarCheck" size={16} className="text-brand-blue" /> Заказать просмотр
         </div>
         {sent ? (
           <div className="py-4 text-center">
@@ -142,18 +142,18 @@ export default function PropertyMainContent({
             <div className="text-sm text-muted-foreground mt-1">Менеджер свяжется с вами в течение 15 минут.</div>
           </div>
         ) : (
-          <form onSubmit={onSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <form onSubmit={onSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input required placeholder="Ваше имя" value={form.name}
               onChange={e => setForm({ ...form, name: e.target.value })}
-              className="w-full px-3 py-2.5 border rounded-lg text-sm" />
+              className="w-full px-3 py-2 border rounded-lg text-sm" />
             <input required placeholder="Телефон" value={form.phone}
               onChange={e => setForm({ ...form, phone: e.target.value })}
-              className="w-full px-3 py-2.5 border rounded-lg text-sm" />
+              className="w-full px-3 py-2 border rounded-lg text-sm" />
             <textarea placeholder="Комментарий (необязательно)" rows={2}
               value={form.message} onChange={e => setForm({ ...form, message: e.target.value })}
-              className="w-full px-3 py-2.5 border rounded-lg text-sm sm:col-span-2" />
+              className="w-full px-3 py-2 border rounded-lg text-sm sm:col-span-2" />
             <button type="submit" disabled={sending}
-              className="sm:col-span-2 w-full btn-blue text-white py-3 rounded-xl font-semibold disabled:opacity-50">
+              className="sm:col-span-2 w-full btn-blue text-white py-2.5 rounded-xl font-semibold disabled:opacity-50 text-sm">
               {sending ? 'Отправка...' : 'Заказать просмотр'}
             </button>
           </form>
@@ -173,11 +173,11 @@ export default function PropertyMainContent({
 
       {/* Особенности */}
       {item.tags && item.tags.length > 0 && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm">
-          <div className="font-display font-700 text-lg mb-3">Особенности</div>
-          <div className="flex flex-wrap gap-2">
+        <div className="bg-white rounded-2xl px-4 py-3 shadow-sm">
+          <div className="font-display font-700 text-base mb-2">Особенности</div>
+          <div className="flex flex-wrap gap-1.5">
             {item.tags.map(t => (
-              <span key={t} className="text-xs px-2.5 py-1 rounded-full bg-brand-blue/10 text-brand-blue font-medium">{t}</span>
+              <span key={t} className="text-xs px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue font-medium">{t}</span>
             ))}
           </div>
         </div>
