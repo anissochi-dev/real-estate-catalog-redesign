@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { adminApi, aiApi } from '@/lib/adminApi';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
 import ListingsTable from './listings/ListingsTable';
 import ListingEditor from './listings/ListingEditor';
@@ -8,8 +9,6 @@ import ListingHistory from './listings/ListingHistory';
 import {
   Listing, City, Purpose, empty, detectVideoType, splitImages, CATS,
 } from './listings/types';
-
-const SITE_URL = window.location.origin;
 const DRAFT_KEY = 'biznest_listing_draft';
 
 function loadDraft(): { editing: Partial<Listing>; photos: string[] } | null {
@@ -38,6 +37,8 @@ const BULK_OPS = [
 
 export default function ListingsAdmin() {
   const { user } = useAuth();
+  const { settings } = useSettings();
+  const SITE_URL = (settings.site_url || '').replace(/\/$/, '');
   const isAdmin = user?.role === 'admin';
   const [photoPickListing, setPhotoPickListing] = useState<Listing | null>(null);
   const [items, setItems] = useState<Listing[]>([]);
