@@ -11,11 +11,13 @@ import NetworkTenantsPage from './pages/NetworkTenantsPage';
 import PropertyPage from './pages/PropertyPage';
 import CategoryPage from './pages/CategoryPage';
 import NotFound from './pages/NotFound';
+import DeclinedPage from './pages/DeclinedPage';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import CompareBar from './components/CompareBar';
 import AnalyticsLoader from './components/AnalyticsLoader';
 import ScrollToTop from './components/ScrollToTop';
+import ConsentBanner, { hasConsent } from './components/ConsentBanner';
 import { fetchListings } from './lib/api';
 import { useAuth } from './contexts/AuthContext';
 
@@ -98,6 +100,7 @@ export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const [view, setViewState] = useState<AppView>(() => loadInitialView());
+  const [consentGiven, setConsentGiven] = useState<boolean>(() => hasConsent());
 
   const setView = (v: AppView) => {
     setViewState(v);
@@ -273,6 +276,7 @@ export default function App() {
               onToggleCompare={toggleCompare}
             />
           } />
+          <Route path="/declined" element={<DeclinedPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
@@ -285,6 +289,10 @@ export default function App() {
           onCompare={() => setCurrentPage('compare')}
           onClear={clearCompare}
         />
+      )}
+
+      {!consentGiven && location.pathname !== '/declined' && (
+        <ConsentBanner onAccept={() => setConsentGiven(true)} />
       )}
     </div>
   );

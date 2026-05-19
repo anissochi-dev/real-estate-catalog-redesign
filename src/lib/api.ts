@@ -187,6 +187,9 @@ export interface PublicSettings {
   site_url?: string;
   seo_keywords?: string;
   seo_description?: string;
+  legal_personal_data?: string;
+  legal_privacy_policy?: string;
+  legal_marketing_consent?: string;
 }
 
 export async function fetchPublicSettings(): Promise<PublicSettings> {
