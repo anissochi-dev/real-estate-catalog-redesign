@@ -18,6 +18,7 @@ interface Props {
 }
 
 export default function PhonePickerInput({ value, onChange, onNameChange, placeholder = '+7...', className = '' }: Props) {
+  const displayValue = value || '+7';
   const [suggestions, setSuggestions] = useState<PhoneContact[]>([]);
   const [open, setOpen] = useState(false);
   const [searching, setSearching] = useState(false);
@@ -66,12 +67,19 @@ export default function PhonePickerInput({ value, onChange, onNameChange, placeh
           type="tel"
           className="w-full px-3 py-2 border rounded-lg pr-8"
           placeholder={placeholder}
-          value={value}
+          value={displayValue}
           onChange={e => {
-            onChange(e.target.value);
-            search(e.target.value);
+            let v = e.target.value;
+            if (!v.startsWith('+7')) v = '+7' + v.replace(/^\+7?/, '');
+            onChange(v);
+            search(v);
           }}
-          onFocus={() => value.length >= 2 && suggestions.length > 0 && setOpen(true)}
+          onFocus={e => {
+            if (!value) onChange('+7');
+            const len = e.target.value.length;
+            setTimeout(() => e.target.setSelectionRange(len, len), 0);
+            if (displayValue.length >= 2 && suggestions.length > 0) setOpen(true);
+          }}
           autoComplete="off"
         />
         {searching && (
