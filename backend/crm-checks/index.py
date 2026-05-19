@@ -20,8 +20,37 @@ CORS_HEADERS = {
 ALLOWED_ROLES = ('admin', 'director', 'broker', 'office_manager', 'manager')
 
 
+SCHEMA = os.environ.get('MAIN_DB_SCHEMA', 'public')
+
+
 def get_conn():
     return psycopg2.connect(os.environ['DATABASE_URL'])
+
+
+def _load_check_keys(conn):
+    """Читает API-ключи сервисов проверки из таблицы settings; fallback на os.environ."""
+    keys = {
+        'zachestny': os.environ.get('ZACHESTNY_API_KEY', ''),
+        'newdb': os.environ.get('NEWDB_API_KEY', ''),
+        'bezopasno': os.environ.get('BEZOPASNO_API_KEY', ''),
+    }
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT zachestny_api_key, newdb_api_key, bezopasno_api_key "
+            f"FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
+        )
+        row = cur.fetchone()
+        if row:
+            if row[0] and row[0].strip():
+                keys['zachestny'] = row[0].strip()
+            if row[1] and row[1].strip():
+                keys['newdb'] = row[1].strip()
+            if row[2] and row[2].strip():
+                keys['bezopasno'] = row[2].strip()
+    except Exception:
+        pass
+    return keys
 
 
 def ok(data):
@@ -135,7 +164,8 @@ def handler(event: dict, context) -> dict:
         return err('Нет доступа', 403)
 
     try:
-        result = run_check(conn, user, method, qs, body)
+        check_keys = _load_check_keys(conn)
+        result = run_check(conn, user, method, qs, body, check_keys)
         conn.commit()
         return result
     except Exception as e:
@@ -145,7 +175,7 @@ def handler(event: dict, context) -> dict:
         conn.close()
 
 
-def run_check(conn, user, method, qs, body):
+def run_check(conn, user, method, qs, body, check_keys=None):
     cur = conn.cursor()
 
     if method == 'GET' and qs.get('action') == 'quota':
@@ -187,12 +217,7 @@ def run_check(conn, user, method, qs, body):
             results[source] = {'error': 'Лимит запросов исчерпан', 'from_cache': False}
             continue
 
-        api_key_map = {
-            'zachestny': 'ZACHESTNY_API_KEY',
-            'newdb': 'NEWDB_API_KEY',
-            'bezopasno': 'BEZOPASNO_API_KEY',
-        }
-        api_key = os.environ.get(api_key_map.get(source, ''), '')
+        api_key = (check_keys or {}).get(source, '')
 
         if not api_key:
             results[source] = {'error': 'API-ключ не настроен', 'from_cache': False}

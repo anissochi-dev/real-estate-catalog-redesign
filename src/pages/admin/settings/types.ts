@@ -23,6 +23,9 @@ export interface S {
   yandex_folder_id: string;
   yookassa_shop_id: string;
   yookassa_secret_key: string;
+  zachestny_api_key: string;
+  newdb_api_key: string;
+  bezopasno_api_key: string;
   legal_personal_data: string;
   legal_privacy_policy: string;
   legal_marketing_consent: string;

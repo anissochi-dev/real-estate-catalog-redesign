@@ -230,6 +230,78 @@ export default function IntegrationsTab({
         </button>
       </div>
 
+      {/* ── Проверка безопасности ─────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="font-display font-700 text-lg flex items-center gap-2">
+          <Icon name="ShieldCheck" size={18} className="text-brand-blue" />
+          Проверка безопасности
+        </div>
+        <p className="text-sm text-muted-foreground">
+          API-ключи для проверки компаний, собственников и недвижимости во вкладке «Проверки» CRM.
+        </p>
+
+        <div className="space-y-4">
+          {/* ЧестныйБизнес */}
+          <div className="rounded-xl border border-border p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">ЧестныйБизнес</span>
+              <span className="text-xs text-muted-foreground">Проверка компаний и ИП по ИНН</span>
+            </div>
+            <input
+              className="w-full px-3 py-2 border rounded-lg font-mono text-sm"
+              type="password"
+              placeholder="Введите API-ключ zachestnyibiznesapi.ru"
+              value={s.zachestny_api_key || ''}
+              onChange={e => setS({ ...s, zachestny_api_key: e.target.value })}
+            />
+            <div className="text-xs text-muted-foreground">
+              Получить: <a href="https://zachestnyibiznesapi.ru" target="_blank" rel="noreferrer" className="text-brand-blue underline">zachestnyibiznesapi.ru</a> → Личный кабинет → API-ключ
+            </div>
+          </div>
+
+          {/* NewDB */}
+          <div className="rounded-xl border border-border p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">NewDB</span>
+              <span className="text-xs text-muted-foreground">Физлица и телефоны</span>
+            </div>
+            <input
+              className="w-full px-3 py-2 border rounded-lg font-mono text-sm"
+              type="password"
+              placeholder="Введите token newdb.net"
+              value={s.newdb_api_key || ''}
+              onChange={e => setS({ ...s, newdb_api_key: e.target.value })}
+            />
+            <div className="text-xs text-muted-foreground">
+              Получить: <a href="https://newdb.net" target="_blank" rel="noreferrer" className="text-brand-blue underline">newdb.net</a> → Регистрация → API токен
+            </div>
+          </div>
+
+          {/* Безопасно.org */}
+          <div className="rounded-xl border border-border p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">Безопасно.org</span>
+              <span className="text-xs text-muted-foreground">Комплексная проверка</span>
+            </div>
+            <input
+              className="w-full px-3 py-2 border rounded-lg font-mono text-sm"
+              type="password"
+              placeholder="Введите API-ключ bezopasno.org"
+              value={s.bezopasno_api_key || ''}
+              onChange={e => setS({ ...s, bezopasno_api_key: e.target.value })}
+            />
+            <div className="text-xs text-muted-foreground">
+              Получить: <a href="https://bezopasno.org" target="_blank" rel="noreferrer" className="text-brand-blue underline">bezopasno.org</a> → API → Ключ доступа
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-900">
+          <Icon name="Info" size={14} className="flex-shrink-0 mt-0.5" />
+          <div>Ключи хранятся в защищённой БД и используются только на сервере. Подключите хотя бы один сервис — остальные можно добавить позже.</div>
+        </div>
+      </div>
+
       {/* ── Инструкция Yandex Cloud ────────────────────────────────────── */}
       <div className="bg-white rounded-2xl p-6 shadow-sm">
         <div className="font-display font-700 text-base mb-3">Как получить ключи Yandex Cloud</div>
