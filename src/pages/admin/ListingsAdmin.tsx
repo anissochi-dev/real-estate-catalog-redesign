@@ -37,6 +37,8 @@ export default function ListingsAdmin() {
             address: data.address,
             images: imagesStr,
             image: data.images[0] || '',
+            category: data.category || 'office',
+            deal: data.deal || 'sale',
           });
           if (data.images.length > 0) s.setPhotos(data.images);
         }}

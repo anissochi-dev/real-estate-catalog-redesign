@@ -34,7 +34,16 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
     const id = extractIdFromSlug(slug || '');
     if (!id) { setLoading(false); return; }
     setLoading(true);
-    fetchListingById(id).then(d => setItem(d)).finally(() => setLoading(false));
+    fetchListingById(id).then(d => {
+      setItem(d);
+      if (d) {
+        fetch('https://functions.poehali.dev/1d84bd40-ef8c-4bd3-82c3-af294b1ec0b1', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ listing_id: d.id, event_type: 'view_site' }),
+        }).catch(() => {});
+      }
+    }).finally(() => setLoading(false));
   }, [slug]);
 
   useEffect(() => {

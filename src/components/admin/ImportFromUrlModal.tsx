@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Icon from '@/components/ui/icon';
+import { CATS, DEALS } from '@/pages/admin/listings/types';
 
 const IMPORT_URL = 'https://functions.poehali.dev/59ce84ce-c6bb-46e7-9223-5d893748615f';
 
@@ -11,6 +12,8 @@ interface ImportedListing {
   images: string[];
   address: string;
   source_url: string;
+  category?: string;
+  deal?: string;
 }
 
 interface Props {
@@ -23,6 +26,8 @@ export default function ImportFromUrlModal({ onImport, onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<ImportedListing | null>(null);
+  const [category, setCategory] = useState('office');
+  const [deal, setDeal] = useState('sale');
 
   const handleFetch = async () => {
     const trimmed = url.trim();
@@ -51,7 +56,7 @@ export default function ImportFromUrlModal({ onImport, onClose }: Props) {
 
   const handleImport = () => {
     if (preview) {
-      onImport(preview);
+      onImport({ ...preview, category, deal });
       onClose();
     }
   };
@@ -75,11 +80,29 @@ export default function ImportFromUrlModal({ onImport, onClose }: Props) {
 
         {/* Content */}
         <div className="p-5 space-y-4 overflow-y-auto flex-1">
+          {/* Категория и сделка — выбираем ДО загрузки */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground block mb-1">Категория</label>
+              <select className="w-full px-3 py-2 border rounded-lg text-sm"
+                value={category} onChange={e => setCategory(e.target.value)}>
+                {CATS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground block mb-1">Тип сделки</label>
+              <select className="w-full px-3 py-2 border rounded-lg text-sm"
+                value={deal} onChange={e => setDeal(e.target.value)}>
+                {DEALS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
+          </div>
+
           {/* URL input */}
           <div className="flex gap-2">
             <input
               className="flex-1 px-3 py-2 border rounded-lg text-sm"
-              placeholder="https://example.com/object/123"
+              placeholder="https://avito.ru/..., https://cian.ru/..."
               value={url}
               onChange={e => { setUrl(e.target.value); setError(''); setPreview(null); }}
               onKeyDown={e => e.key === 'Enter' && handleFetch()}
@@ -146,7 +169,7 @@ export default function ImportFromUrlModal({ onImport, onClose }: Props) {
               </div>
               <div className="text-[11px] text-muted-foreground flex items-center gap-1">
                 <Icon name="Info" size={12} />
-                Данные будут перенесены в форму — вы сможете отредактировать их перед сохранением
+                Данные перенесутся в форму — отредактируйте перед сохранением
               </div>
             </div>
           )}
