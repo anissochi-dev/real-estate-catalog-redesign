@@ -129,15 +129,29 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
   const meta = type ? CATEGORY_META[type] : null;
 
   useEffect(() => {
-    if (meta) {
-      document.title = `${meta.h1} | ${settings.company_name || 'BIZNEST'}`;
-      const desc = document.querySelector('meta[name="description"]');
-      if (desc) desc.setAttribute('content', meta.description);
-    }
-    return () => {
-      document.title = settings.company_name || 'BIZNEST';
+    if (!meta) return;
+    const company = settings.company_name || 'BIZNEST';
+    const title = `${meta.h1} | ${company}`;
+    document.title = title;
+
+    const setMeta = (sel: string, attr: string, val: string) => {
+      let el = document.querySelector(sel);
+      if (!el) { el = document.createElement('meta'); document.head.appendChild(el); }
+      el.setAttribute(attr, val);
     };
-  }, [meta, settings.company_name]);
+
+    setMeta('meta[name="description"]', 'content', meta.description);
+    setMeta('meta[property="og:title"]', 'content', title);
+    setMeta('meta[property="og:description"]', 'content', meta.description);
+    setMeta('meta[property="og:type"]', 'content', 'website');
+    setMeta('meta[property="og:url"]', 'content', `${settings.site_url || ''}${window.location.pathname}`);
+    setMeta('meta[name="twitter:title"]', 'content', title);
+    setMeta('meta[name="twitter:description"]', 'content', meta.description);
+
+    return () => {
+      document.title = company;
+    };
+  }, [meta, settings.company_name, settings.site_url]);
 
   const items = useMemo(() => {
     if (!type) return [];
