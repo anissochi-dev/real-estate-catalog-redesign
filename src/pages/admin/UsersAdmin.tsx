@@ -109,7 +109,16 @@ export default function UsersAdmin() {
                   )}
                 </td>
                 <td className="px-4 py-3 font-semibold">{u.name}</td>
-                <td className="px-4 py-3 text-muted-foreground">{u.phone || '—'}</td>
+                <td className="px-4 py-3">
+                  {u.phone ? (
+                    <span className="text-foreground">{u.phone}</span>
+                  ) : (
+                    <span className="text-amber-500 text-xs flex items-center gap-1">
+                      <Icon name="AlertCircle" size={12} />
+                      Не указан
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-3">{ROLES.find(r => r.id === u.role)?.label}</td>
                 <td className="px-4 py-3">
                   <span className={`text-xs px-2 py-0.5 rounded ${u.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
@@ -186,8 +195,14 @@ export default function UsersAdmin() {
               )}
               <input className="w-full px-3 py-2 border rounded-lg" placeholder="Имя и фамилия"
                 value={editing.name || ''} onChange={e => setEditing({ ...editing, name: e.target.value })} />
-              <input className="w-full px-3 py-2 border rounded-lg" placeholder="Телефон (+7...)"
-                value={editing.phone || ''} onChange={e => setEditing({ ...editing, phone: e.target.value })} />
+              <div>
+                <input className="w-full px-3 py-2 border rounded-lg" placeholder="Телефон (+7...)"
+                  value={editing.phone || ''} onChange={e => setEditing({ ...editing, phone: e.target.value })} />
+                <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
+                  <span className="text-brand-blue">★</span>
+                  Телефон отображается в карточке объекта как контакт представителя собственника
+                </p>
+              </div>
               <select className="w-full px-3 py-2 border rounded-lg" value={editing.role || 'client'}
                 onChange={e => setEditing({ ...editing, role: e.target.value as Role })}>
                 {ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
