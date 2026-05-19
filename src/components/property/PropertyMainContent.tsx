@@ -44,10 +44,16 @@ export default function PropertyMainContent({
       {/* Название и адрес */}
       <div className="bg-white rounded-2xl p-5 shadow-sm">
         <h1 className="font-display font-800 text-2xl md:text-3xl text-foreground mb-2">{item.title}</h1>
-        <div className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+        <a
+          href={`https://yandex.ru/maps/?text=${encodeURIComponent(addressStr)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-brand-blue transition-colors group"
+        >
           <Icon name="MapPin" size={14} className="flex-shrink-0 text-brand-blue" />
-          <span>{addressStr}</span>
-        </div>
+          <span className="group-hover:underline underline-offset-2">{addressStr}</span>
+          <Icon name="ExternalLink" size={11} className="opacity-0 group-hover:opacity-60 transition-opacity" />
+        </a>
       </div>
 
       {/* Параметры объекта */}

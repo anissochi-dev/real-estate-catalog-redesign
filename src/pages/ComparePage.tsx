@@ -1,6 +1,8 @@
+import { useNavigate } from 'react-router-dom';
 import { Property, Page } from '@/App';
 import { formatPrice } from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
+import { listingSlug } from '@/lib/slug';
 
 interface ComparePageProps {
   properties: Property[];
@@ -96,6 +98,7 @@ const COMPARE_ROWS: CompareRow[] = [
 ];
 
 export default function ComparePage({ properties, onRemove, onNavigate }: ComparePageProps) {
+  const navigate = useNavigate();
   if (properties.length === 0) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -219,11 +222,17 @@ export default function ComparePage({ properties, onRemove, onNavigate }: Compar
             <div className="flex gap-4 flex-1 mt-4">
               {properties.map(property => (
                 <div key={property.id} className="w-72 flex-shrink-0 flex gap-2">
-                  <button className="flex-1 btn-orange text-white py-3 rounded-xl font-semibold font-display text-sm">
-                    Связаться
+                  <button
+                    onClick={() => navigate(`/object/${listingSlug(property.title, property.id)}`)}
+                    className="flex-1 btn-orange text-white py-3 rounded-xl font-semibold font-display text-sm"
+                  >
+                    Подробнее
                   </button>
-                  <button className="px-3 py-3 rounded-xl border-2 border-brand-blue text-brand-blue hover:bg-brand-blue hover:text-white transition-all duration-200">
-                    <Icon name="Heart" size={18} />
+                  <button
+                    onClick={() => onRemove(property.id)}
+                    className="px-3 py-3 rounded-xl border-2 border-border text-muted-foreground hover:border-red-400 hover:text-red-500 transition-all duration-200"
+                  >
+                    <Icon name="X" size={18} />
                   </button>
                 </div>
               ))}

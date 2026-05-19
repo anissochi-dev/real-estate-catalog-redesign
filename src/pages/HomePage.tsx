@@ -108,7 +108,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
         <div className="container mx-auto px-4 relative z-10">
           <div className="max-w-3xl">
             <h1 className="font-display font-900 text-3xl md:text-4xl leading-tight mb-3 animate-fade-in-up stagger-1">
-              Коммерческая недвижимость и готовый бизнес
+              Коммерческая недвижимость и готовый бизнес Краснодара
             </h1>
             <p className="text-white/75 text-base mb-5 animate-fade-in-up stagger-2 max-w-xl">
               Более {totalCount} объектов в {mainCity}е и пригороде. Подбор с ИИ за 2 минуты.

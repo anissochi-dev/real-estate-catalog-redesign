@@ -9,10 +9,13 @@ interface Props {
 }
 
 export default function PropertySidebar({ item, agents }: Props) {
+  const agent = agents[0] || null;
+
   return (
     <div className="space-y-4">
-      {/* Цена */}
+      {/* Цена + агент — sticky блок */}
       <div className="bg-white rounded-2xl shadow-sm sticky top-20 overflow-hidden">
+        {/* Цена */}
         <div className="p-5 pb-4">
           <div className="text-xs text-muted-foreground mb-1 font-medium uppercase tracking-wide">
             {DEAL_LABELS[item.deal] || item.deal}
@@ -27,30 +30,26 @@ export default function PropertySidebar({ item, agents }: Props) {
             </div>
           ) : null}
         </div>
+
         {item.publicCode && (
-          <div className="px-5 py-2.5 bg-muted/40 border-t border-border flex items-center gap-2">
+          <div className="px-5 py-2 bg-muted/40 border-t border-border flex items-center gap-2">
             <Icon name="Hash" size={12} className="text-muted-foreground" />
             <span className="text-xs text-muted-foreground">ID объекта:</span>
             <span className="text-xs font-semibold text-foreground">{item.publicCode}</span>
           </div>
         )}
-      </div>
 
-      {/* Аналитика цены */}
-      <PricePredict listingId={item.id} currentPrice={item.price} deal={item.deal} />
-
-      {/* Карточка агента */}
-      {agents.length > 0 && (
-        <div className="bg-white rounded-2xl p-4 shadow-sm sticky top-20">
-          <div className="text-[10px] text-muted-foreground mb-3 uppercase tracking-widest font-semibold">Представитель собственника</div>
-          {agents.slice(0, 1).map(agent => (
-            <div key={agent.id} className="flex items-center gap-3">
+        {/* Представитель собственника — прикреплён к цене */}
+        {agent && (
+          <div className="px-5 py-4 border-t border-border">
+            <div className="text-[10px] text-muted-foreground mb-3 uppercase tracking-widest font-semibold">Представитель собственника</div>
+            <div className="flex items-center gap-3">
               {agent.avatar ? (
                 <img src={agent.avatar} alt={agent.name} referrerPolicy="no-referrer"
-                  className="w-12 h-12 rounded-full object-cover flex-shrink-0 border-2 border-border" />
+                  className="w-10 h-10 rounded-full object-cover flex-shrink-0 border-2 border-border" />
               ) : (
-                <div className="w-12 h-12 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
-                  <Icon name="User" size={20} className="text-brand-blue" />
+                <div className="w-10 h-10 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
+                  <Icon name="User" size={18} className="text-brand-blue" />
                 </div>
               )}
               <div className="flex-1 min-w-0">
@@ -64,9 +63,12 @@ export default function PropertySidebar({ item, agents }: Props) {
                 )}
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
+
+      {/* Аналитика цены */}
+      <PricePredict listingId={item.id} currentPrice={item.price} deal={item.deal} />
     </div>
   );
 }

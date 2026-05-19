@@ -21,14 +21,14 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
             <div className="font-display font-800 text-white text-lg mb-3">{company}</div>
-            <div className="text-sm">Коммерческая недвижимость и готовый бизнес в {city}е.</div>
+            <div className="text-sm">Коммерческая недвижимость и готовый бизнес {city}а.</div>
           </div>
           <div>
             <div className="font-semibold text-white mb-3">Каталог</div>
             <ul className="space-y-2 text-sm">
               <li><button onClick={() => setCurrentPage('catalog')} className="hover:text-white">Все объекты</button></li>
               <li><button onClick={() => setCurrentPage('map')} className="hover:text-white">На карте</button></li>
-              <li><button onClick={() => setCurrentPage('network-tenants')} className="hover:text-white">Сетевые арендаторы</button></li>
+              <li><button onClick={() => setCurrentPage('network-tenants')} className="hover:text-white">Заявки</button></li>
             </ul>
           </div>
           <div>
