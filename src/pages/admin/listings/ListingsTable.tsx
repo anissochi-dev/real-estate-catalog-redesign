@@ -2,6 +2,8 @@ import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import { Listing, DEALS, fmtDate, perM2, splitImages } from './types';
 
+const VIEW_KEY = 'biznest_view';
+
 interface Props {
   items: Listing[];
   onEdit: (it: Listing) => void;
@@ -22,8 +24,9 @@ function PhotoCell({ it, siteUrl, onPhotoDownload }: { it: Listing; siteUrl?: st
 
   const openSite = () => {
     const slug = it.slug || it.id;
-    const base = (siteUrl || window.location.origin).replace(/\/$/, '');
-    window.open(`${base}/object/${slug}`, '_blank');
+    // Сбрасываем view → site, чтобы SPA открыл карточку объекта, а не админку
+    try { localStorage.removeItem(VIEW_KEY); } catch { /* ignore */ }
+    window.open(`/object/${slug}`, '_blank');
   };
 
   return (
