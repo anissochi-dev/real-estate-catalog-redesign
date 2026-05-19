@@ -22,7 +22,8 @@ function PhotoCell({ it, siteUrl, onPhotoDownload }: { it: Listing; siteUrl?: st
 
   const openSite = () => {
     const slug = it.slug || it.id;
-    window.open(`${siteUrl || ''}/object/${slug}`, '_blank');
+    const base = (siteUrl || window.location.origin).replace(/\/$/, '');
+    window.open(`${base}/object/${slug}`, '_blank');
   };
 
   return (
