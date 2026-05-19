@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { adminApi, aiApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import ListingsTable from './listings/ListingsTable';
@@ -9,6 +9,20 @@ import {
 } from './listings/types';
 
 const SITE_URL = window.location.origin;
+const DRAFT_KEY = 'biznest_listing_draft';
+
+function loadDraft(): { editing: Partial<Listing>; photos: string[] } | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function saveDraft(editing: Partial<Listing>, photos: string[]) {
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ editing, photos })); } catch { /* ignore */ }
+}
+function clearDraft() {
+  try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+}
 
 type StatusFilter = 'active' | 'archived' | 'all';
 
@@ -38,6 +52,8 @@ export default function ListingsAdmin() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('');
+  const [hasDraft, setHasDraft] = useState(() => !!loadDraft());
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -51,6 +67,17 @@ export default function ListingsAdmin() {
   };
 
   useEffect(load, []);
+
+  // Автосохранение черновика для нового (несохранённого) объекта
+  useEffect(() => {
+    if (!editing || editing.id) return;
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      saveDraft(editing, photos);
+      setHasDraft(true);
+    }, 1500);
+    return () => { if (draftTimerRef.current) clearTimeout(draftTimerRef.current); };
+  }, [editing, photos]);
 
   const filtered = items.filter(it => {
     if (statusFilter !== 'all' && it.status !== statusFilter) return false;
@@ -75,8 +102,14 @@ export default function ListingsAdmin() {
       if (!imgs.length && it.image) imgs.push(it.image);
       setPhotos(imgs);
     } else {
-      setEditing({ ...empty });
-      setPhotos([]);
+      const draft = loadDraft();
+      if (draft) {
+        setEditing(draft.editing);
+        setPhotos(draft.photos);
+      } else {
+        setEditing({ ...empty });
+        setPhotos([]);
+      }
     }
   };
 
@@ -96,6 +129,8 @@ export default function ListingsAdmin() {
         const res = await adminApi.createListing(data);
         if (res.id) await adminApi.addListingHistory(res.id, 'created', {});
       }
+      clearDraft();
+      setHasDraft(false);
       setEditing(null);
       setPhotos([]);
       if (isNew) setStatusFilter('active');
@@ -233,10 +268,26 @@ export default function ListingsAdmin() {
             </button>
           ))}
         </div>
-        <button onClick={() => openEdit()}
-          className="btn-blue text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2">
-          <Icon name="Plus" size={16} /> Добавить
-        </button>
+        <div className="flex items-center gap-2">
+          {hasDraft && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg font-semibold inline-flex items-center gap-1">
+                <Icon name="FileEdit" size={12} /> Черновик сохранён
+              </span>
+              <button
+                onClick={() => { clearDraft(); setHasDraft(false); }}
+                className="text-xs text-muted-foreground hover:text-red-600"
+                title="Удалить черновик"
+              >
+                <Icon name="X" size={14} />
+              </button>
+            </div>
+          )}
+          <button onClick={() => openEdit()}
+            className="btn-blue text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2">
+            <Icon name="Plus" size={16} /> {hasDraft ? 'Продолжить черновик' : 'Добавить'}
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-2 flex-wrap">

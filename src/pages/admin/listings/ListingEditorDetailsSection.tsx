@@ -1,3 +1,4 @@
+import PhonePickerInput from '@/components/admin/PhonePickerInput';
 import { Listing, City, FINISHING, ROAD_LINES, detectVideoType } from './types';
 
 interface Props {
@@ -137,8 +138,11 @@ export default function ListingEditorDetailsSection({ editing, setEditing, citie
         </div>
         <div>
           <label className="text-xs text-muted-foreground">Телефон собственника</label>
-          <input className="w-full px-3 py-2 border rounded-lg" placeholder="+7..."
-            value={editing.owner_phone || ''} onChange={e => setEditing({ ...editing, owner_phone: e.target.value })} />
+          <PhonePickerInput
+            value={editing.owner_phone || ''}
+            onChange={(phone, name) => setEditing({ ...editing, owner_phone: phone, ...(name && !editing.owner_name ? { owner_name: name } : {}) })}
+            onNameChange={name => { if (!editing.owner_name) setEditing({ ...editing, owner_name: name }); }}
+          />
         </div>
       </div>
 

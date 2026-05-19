@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { adminApi, aiApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
+import PhonePickerInput from '@/components/admin/PhonePickerInput';
 
 interface Lead {
   id: number;
@@ -290,8 +291,14 @@ export default function LeadsAdmin() {
             <div className="p-5 space-y-3">
               <input className="w-full px-3 py-2 border rounded-lg" placeholder="Имя клиента"
                 value={editing.name || ''} onChange={e => setEditing({ ...editing, name: e.target.value })} />
-              <input className="w-full px-3 py-2 border rounded-lg" placeholder="Телефон"
-                value={editing.phone || ''} onChange={e => setEditing({ ...editing, phone: e.target.value })} />
+              <div>
+                <label className="text-xs text-muted-foreground">Телефон</label>
+                <PhonePickerInput
+                  value={editing.phone || ''}
+                  onChange={(phone, name) => setEditing({ ...editing, phone, ...(name && !editing.name ? { name } : {}) })}
+                  onNameChange={name => { if (!editing.name) setEditing({ ...editing, name }); }}
+                />
+              </div>
               <input className="w-full px-3 py-2 border rounded-lg" placeholder="Email (необязательно)"
                 value={editing.email || ''} onChange={e => setEditing({ ...editing, email: e.target.value })} />
               <input className="w-full px-3 py-2 border rounded-lg" placeholder="Компания (для сетевых)"

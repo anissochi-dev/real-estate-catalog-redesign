@@ -9,9 +9,7 @@ interface Props {
   multiple?: boolean;
   className?: string;
   hint?: string;
-  /** Сжимать изображение до WebP 90% (макс 1920px по длинной стороне). По умолчанию true для photos. */
   compress?: boolean;
-  /** Показывать кнопку "Скачать оригинал" над каждым фото. */
   allowDownload?: boolean;
 }
 
@@ -19,7 +17,6 @@ const MAX_SIDE = 1920;
 const WEBP_QUALITY = 0.9;
 
 async function compressImage(file: File): Promise<File> {
-  // Не трогаем GIF и SVG
   if (file.type === 'image/gif' || file.type === 'image/svg+xml') return file;
   try {
     const bitmap = await createImageBitmap(file);
@@ -63,6 +60,8 @@ export default function ImageUploader({
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [removingWm, setRemovingWm] = useState<number | null>(null);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const shouldCompress = compress ?? (folder === 'photos');
 
   const handleFiles = async (files: FileList | File[]) => {
@@ -129,6 +128,37 @@ export default function ImageUploader({
     onChange(next);
   };
 
+  const handleCardDragStart = (e: React.DragEvent, i: number) => {
+    setDragIdx(i);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleCardDragOver = (e: React.DragEvent, i: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverIdx(i);
+  };
+
+  const handleCardDrop = (e: React.DragEvent, i: number) => {
+    e.preventDefault();
+    if (dragIdx === null || dragIdx === i) {
+      setDragIdx(null);
+      setDragOverIdx(null);
+      return;
+    }
+    const next = [...value];
+    const [moved] = next.splice(dragIdx, 1);
+    next.splice(i, 0, moved);
+    onChange(next);
+    setDragIdx(null);
+    setDragOverIdx(null);
+  };
+
+  const handleCardDragEnd = () => {
+    setDragIdx(null);
+    setDragOverIdx(null);
+  };
+
   return (
     <div className={className}>
       <div
@@ -171,55 +201,77 @@ export default function ImageUploader({
       </div>
 
       {value.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
-          {value.map((url, i) => (
-            <div key={url + i} className="relative group rounded-lg overflow-hidden border border-border">
-              <img src={url} alt="" className="w-full h-24 object-cover" />
-              {i === 0 && (
-                <div className="absolute top-1 left-1 text-[10px] bg-brand-blue text-white px-1.5 py-0.5 rounded font-semibold">
-                  Главная
-                </div>
-              )}
-              {removingWm === i && (
-                <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-1 z-10">
-                  <Icon name="Loader2" size={20} className="text-white animate-spin" />
-                  <span className="text-white text-[10px] font-semibold">Убираем знаки...</span>
-                </div>
-              )}
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100">
-                {multiple && i > 0 && (
-                  <button type="button" onClick={() => move(i, -1)}
-                    className="bg-white rounded p-1 shadow" title="Влево">
-                    <Icon name="ChevronLeft" size={14} />
-                  </button>
-                )}
-                {folder === 'photos' && (
-                  <button type="button" onClick={() => handleRemoveWatermark(i)}
-                    disabled={removingWm !== null}
-                    className="bg-violet-600 text-white rounded p-1 shadow disabled:opacity-50" title="Убрать водяные знаки и логотипы">
-                    <Icon name="Wand2" size={14} />
-                  </button>
-                )}
-                {allowDownload && (
-                  <button type="button" onClick={() => download(url)}
-                    className="bg-white rounded p-1 shadow" title="Скачать оригинал">
-                    <Icon name="Download" size={14} />
-                  </button>
-                )}
-                <button type="button" onClick={() => remove(i)}
-                  className="bg-red-500 text-white rounded p-1 shadow" title="Удалить">
-                  <Icon name="Trash2" size={14} />
-                </button>
-                {multiple && i < value.length - 1 && (
-                  <button type="button" onClick={() => move(i, 1)}
-                    className="bg-white rounded p-1 shadow" title="Вправо">
-                    <Icon name="ChevronRight" size={14} />
-                  </button>
-                )}
-              </div>
+        <>
+          {multiple && (
+            <div className="text-[10px] text-muted-foreground mt-2 flex items-center gap-1">
+              <Icon name="GripVertical" size={11} />
+              Перетащите фото для изменения порядка. Первое фото — главное.
             </div>
-          ))}
-        </div>
+          )}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1.5">
+            {value.map((url, i) => (
+              <div
+                key={url + i}
+                draggable={multiple}
+                onDragStart={e => handleCardDragStart(e, i)}
+                onDragOver={e => handleCardDragOver(e, i)}
+                onDrop={e => handleCardDrop(e, i)}
+                onDragEnd={handleCardDragEnd}
+                className={`relative group rounded-lg overflow-hidden border transition-all ${
+                  dragIdx === i
+                    ? 'opacity-40 scale-95 border-brand-blue'
+                    : dragOverIdx === i
+                    ? 'border-brand-blue ring-2 ring-brand-blue/30 scale-105'
+                    : 'border-border'
+                } ${multiple ? 'cursor-grab active:cursor-grabbing' : ''}`}
+              >
+                <img src={url} alt="" className="w-full h-24 object-cover pointer-events-none" />
+                {i === 0 && (
+                  <div className="absolute top-1 left-1 text-[10px] bg-brand-blue text-white px-1.5 py-0.5 rounded font-semibold">
+                    Главная
+                  </div>
+                )}
+                {removingWm === i && (
+                  <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-1 z-10">
+                    <Icon name="Loader2" size={20} className="text-white animate-spin" />
+                    <span className="text-white text-[10px] font-semibold">Убираем знаки...</span>
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100">
+                  {multiple && i > 0 && (
+                    <button type="button" onClick={e => { e.stopPropagation(); move(i, -1); }}
+                      className="bg-white rounded p-1 shadow" title="Влево">
+                      <Icon name="ChevronLeft" size={14} />
+                    </button>
+                  )}
+                  {folder === 'photos' && (
+                    <button type="button" onClick={e => { e.stopPropagation(); handleRemoveWatermark(i); }}
+                      disabled={removingWm !== null}
+                      className="bg-violet-600 text-white rounded p-1 shadow disabled:opacity-50" title="Убрать водяные знаки и логотипы">
+                      <Icon name="Wand2" size={14} />
+                    </button>
+                  )}
+                  {allowDownload && (
+                    <button type="button" onClick={e => { e.stopPropagation(); download(url); }}
+                      className="bg-white rounded p-1 shadow" title="Скачать оригинал">
+                      <Icon name="Download" size={14} />
+                    </button>
+                  )}
+                  <button type="button" onClick={e => { e.stopPropagation(); remove(i); }}
+                    className="bg-red-500 text-white rounded p-1 shadow" title="Удалить">
+                    <Icon name="Trash2" size={14} />
+                  </button>
+                  {multiple && i < value.length - 1 && (
+                    <button type="button" onClick={e => { e.stopPropagation(); move(i, 1); }}
+                      className="bg-white rounded p-1 shadow" title="Вправо">
+                      <Icon name="ChevronRight" size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
