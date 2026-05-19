@@ -235,3 +235,21 @@ export async function aiMatch(prompt: string): Promise<AiMatchResult> {
     advice: data.advice || '',
   };
 }
+
+export interface Agent {
+  id: number;
+  name: string;
+  phone: string | null;
+  avatar: string | null;
+  role: string;
+}
+
+export async function fetchAgents(): Promise<Agent[]> {
+  try {
+    const res = await fetch(`${LISTINGS_URL}?resource=agents`);
+    const data = await res.json();
+    return data.agents || [];
+  } catch {
+    return [];
+  }
+}

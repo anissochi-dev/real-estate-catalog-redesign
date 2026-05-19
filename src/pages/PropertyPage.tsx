@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { fetchListingById, ListingDetail, sendLead } from '@/lib/api';
+import { fetchListingById, ListingDetail, sendLead, fetchAgents, Agent } from '@/lib/api';
 import { extractIdFromSlug } from '@/lib/slug';
 import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
@@ -67,6 +67,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   const [form, setForm] = useState({ name: '', phone: '', message: '' });
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
+  const [agents, setAgents] = useState<Agent[]>([]);
 
   useEffect(() => {
     const id = extractIdFromSlug(slug || '');
@@ -74,6 +75,10 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
     setLoading(true);
     fetchListingById(id).then(d => setItem(d)).finally(() => setLoading(false));
   }, [slug]);
+
+  useEffect(() => {
+    fetchAgents().then(setAgents).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!item) return;
@@ -383,13 +388,6 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
                     className="sm:col-span-2 w-full btn-blue text-white py-3 rounded-xl font-semibold disabled:opacity-50">
                     {sending ? 'Отправка...' : 'Заказать просмотр'}
                   </button>
-                  {settings.company_phone && (
-                    <a href={`tel:${settings.company_phone}`}
-                      className="sm:col-span-2 text-center text-brand-blue font-semibold text-sm hover:underline">
-                      <Icon name="Phone" size={14} className="inline mr-1" />
-                      {settings.company_phone}
-                    </a>
-                  )}
                 </form>
               )}
             </div>
@@ -443,6 +441,37 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
 
             {/* Аналитика цены */}
             <PricePredict listingId={item.id} currentPrice={item.price} deal={item.deal} />
+
+            {/* Карточка агента */}
+            {agents.length > 0 && (
+              <div className="bg-white rounded-2xl p-5 shadow-sm">
+                <div className="text-xs text-muted-foreground mb-3 uppercase tracking-wide font-semibold">Представитель собственника</div>
+                {agents.slice(0, 1).map(agent => (
+                  <div key={agent.id} className="flex items-center gap-3">
+                    {agent.avatar ? (
+                      <img src={agent.avatar} alt={agent.name} className="w-14 h-14 rounded-full object-cover flex-shrink-0 border-2 border-border" />
+                    ) : (
+                      <div className="w-14 h-14 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
+                        <Icon name="User" size={22} className="text-brand-blue" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-display font-700 text-base truncate">{agent.name}</div>
+                      <div className="text-xs text-muted-foreground mb-2">Специалист по коммерческой недвижимости</div>
+                      {agent.phone && (
+                        <a
+                          href={`tel:${agent.phone}`}
+                          className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-blue hover:underline"
+                        >
+                          <Icon name="Phone" size={14} />
+                          {agent.phone}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

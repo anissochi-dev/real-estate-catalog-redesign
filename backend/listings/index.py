@@ -127,6 +127,15 @@ def handler(event: dict, context) -> dict:
                     'body': xml,
                 }
 
+            if params.get('resource') == 'agents':
+                cur.execute(
+                    "SELECT id, name, phone, avatar, role "
+                    "FROM t_p71821556_real_estate_catalog_.users "
+                    "WHERE is_active = TRUE AND role IN ('admin','editor','manager','broker','director','office_manager') "
+                    "ORDER BY id ASC"
+                )
+                return _ok({'agents': [dict(r) for r in cur.fetchall()]})
+
             if params.get('resource') == 'public_stats':
                 cur.execute(
                     "SELECT COUNT(*) AS c FROM t_p71821556_real_estate_catalog_.listings WHERE status = 'active'"
