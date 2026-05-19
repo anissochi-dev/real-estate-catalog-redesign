@@ -428,7 +428,10 @@ def _settings(cur, conn, method, event, user):
                           ('yandex_metrika_id', 50), ('google_analytics_id', 50),
                           ('yandex_maps_api_key', 200), ('site_url', 255),
                           ('seo_description', 1000), ('seo_keywords', 1000),
-                          ('yandex_api_key', 500), ('yandex_folder_id', 100)]:
+                          ('yandex_api_key', 500), ('yandex_folder_id', 100),
+                          ('yookassa_shop_id', 100), ('yookassa_secret_key', 500),
+                          ('legal_personal_data', 10000), ('legal_privacy_policy', 10000),
+                          ('legal_marketing_consent', 10000)]:
             if f in body:
                 fields.append(f"{f} = {_str_or_null(body[f], length)}")
         if 'company_since_year' in body:

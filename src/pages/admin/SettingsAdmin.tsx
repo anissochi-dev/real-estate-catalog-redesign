@@ -21,10 +21,14 @@ export default function SettingsAdmin() {
   const [tab, setTab] = useState<'general' | 'watermark' | 'seo' | 'integrations' | 'cities' | 'purposes' | 'feeds' | 'legal'>('general');
   const [showKey, setShowKey] = useState(false);
   const [showMapsKey, setShowMapsKey] = useState(false);
+  const [showYkSecret, setShowYkSecret] = useState(false);
   const [pingState, setPingState] = useState<PingState>({
     loading: false, status: 'idle', message: '',
   });
   const [mapsState, setMapsState] = useState<PingState>({
+    loading: false, status: 'idle', message: '',
+  });
+  const [ykState, setYkState] = useState<PingState>({
     loading: false, status: 'idle', message: '',
   });
 
@@ -73,6 +77,35 @@ export default function SettingsAdmin() {
       setMapsState({
         loading: false,
         status: 'err',
+        message: e instanceof Error ? e.message : 'Ошибка проверки',
+      });
+    }
+  };
+
+  const testYookassa = async () => {
+    const shopId = (s.yookassa_shop_id || '').trim();
+    const secretKey = (s.yookassa_secret_key || '').trim();
+    if (!shopId || !secretKey) {
+      setYkState({ loading: false, status: 'err', message: 'Введите Shop ID и Secret Key' });
+      return;
+    }
+    setYkState({ loading: true, status: 'idle', message: '' });
+    try {
+      const { CRM_PAYMENTS_URL } = await import('@/lib/adminApi');
+      const params = new URLSearchParams({ action: 'ping', shop_id: shopId, secret_key: secretKey });
+      const r = await fetch(`${CRM_PAYMENTS_URL}/?${params}`, {
+        headers: { 'X-Auth-Token': '' },
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      const mode = d.test ? ' (тестовый режим)' : ' (боевой режим)';
+      setYkState({
+        loading: false, status: 'ok',
+        message: `Подключение успешно. Аккаунт: ${d.account_id || '—'}, статус: ${d.status || '—'}${mode}`,
+      });
+    } catch (e) {
+      setYkState({
+        loading: false, status: 'err',
         message: e instanceof Error ? e.message : 'Ошибка проверки',
       });
     }
@@ -164,8 +197,9 @@ export default function SettingsAdmin() {
           s={s} setS={setS} saved={saved} save={save}
           showKey={showKey} setShowKey={setShowKey}
           showMapsKey={showMapsKey} setShowMapsKey={setShowMapsKey}
-          pingState={pingState} mapsState={mapsState}
-          testConnection={testConnection} testMapsKey={testMapsKey}
+          showYkSecret={showYkSecret} setShowYkSecret={setShowYkSecret}
+          pingState={pingState} mapsState={mapsState} ykState={ykState}
+          testConnection={testConnection} testMapsKey={testMapsKey} testYookassa={testYookassa}
         />
       )}
 

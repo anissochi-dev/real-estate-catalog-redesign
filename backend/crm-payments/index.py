@@ -30,6 +30,27 @@ def get_conn():
     return conn
 
 
+def _load_yookassa_keys(cur):
+    """Читает ключи ЮКассы из таблицы settings; fallback на переменные окружения."""
+    try:
+        cur.execute(
+            f"SELECT yookassa_shop_id, yookassa_secret_key "
+            f"FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
+        )
+        row = cur.fetchone()
+        if row:
+            shop = (row.get('yookassa_shop_id') or '').strip()
+            key = (row.get('yookassa_secret_key') or '').strip()
+            if shop and key:
+                return shop, key
+    except Exception:
+        pass
+    return (
+        os.environ.get('YOOKASSA_SHOP_ID', ''),
+        os.environ.get('YOOKASSA_SECRET_KEY', ''),
+    )
+
+
 def ok(data, status=200):
     return {
         'statusCode': status,
@@ -106,10 +127,34 @@ def handler(event: dict, context) -> dict:
     resource_id = int(path_parts[0]) if path_parts and path_parts[0].isdigit() else None
     action = qs.get('action') or (path_parts[1] if len(path_parts) > 1 else None)
 
-    shop_id = os.environ.get('YOOKASSA_SHOP_ID', '')
-    secret_key = os.environ.get('YOOKASSA_SECRET_KEY', '')
-
     cur = conn.cursor()
+    shop_id, secret_key = _load_yookassa_keys(cur)
+
+    # ── GET /?action=ping  — проверка ключей ЮКассы ──────────────────────
+    if method == 'GET' and action == 'ping':
+        test_shop = (qs.get('shop_id') or shop_id).strip()
+        test_key = (qs.get('secret_key') or secret_key).strip()
+        if not test_shop or not test_key:
+            conn.close()
+            return err('Ключи ЮКассы не настроены')
+        try:
+            result = yk_request('GET', 'me', None, test_shop, test_key)
+            conn.close()
+            return ok({
+                'success': True,
+                'account_id': result.get('account_id'),
+                'status': result.get('status'),
+                'test': result.get('test', False),
+            })
+        except Exception as e:
+            conn.close()
+            msg = str(e)
+            if hasattr(e, 'read'):
+                try:
+                    msg = e.read().decode('utf-8', errors='ignore')[:300]
+                except Exception:
+                    pass
+            return err(f'ЮКасса: {msg[:300]}', 502)
 
     # ── GET /  — список платежей ──────────────────────────────────────────
     if method == 'GET' and not resource_id:
