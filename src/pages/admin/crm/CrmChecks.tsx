@@ -39,20 +39,24 @@ export default function CrmChecks() {
     staleTime: 60_000,
   });
 
-  const { data: quota = [] } = useQuery<{ source: string; used: number; limit: number; percent: number }[]>({
+  const { data: quota = [], isLoading: quotaLoading, isError: quotaError } = useQuery<{ source: string; used: number; limit: number; percent: number }[]>({
     queryKey: ['crm-quota'],
     queryFn: async () => {
       const r = await fetch(`${CHECKS_URL}/?action=quota`, { headers });
-      return r.json();
+      const json = await r.json();
+      if (!r.ok) throw new Error(json.error || 'Ошибка загрузки квот');
+      return Array.isArray(json) ? json : [];
     },
     enabled: tab === 'quota',
   });
 
-  const { data: history = [] } = useQuery<{ check_type: string; query_key: string; source: string; created_at: string; user?: string }[]>({
+  const { data: history = [], isLoading: historyLoading, isError: historyError } = useQuery<{ check_type: string; query_key: string; source: string; created_at: string; user?: string }[]>({
     queryKey: ['crm-checks-history'],
     queryFn: async () => {
       const r = await fetch(`${CHECKS_URL}/?action=history`, { headers });
-      return r.json();
+      const json = await r.json();
+      if (!r.ok) throw new Error(json.error || 'Ошибка загрузки истории');
+      return Array.isArray(json) ? json : [];
     },
     enabled: tab === 'history',
   });
@@ -276,59 +280,88 @@ export default function CrmChecks() {
 
       {tab === 'history' && (
         <div className="bg-white rounded-2xl border border-border overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 border-b border-border">
-              <tr>
-                <th className="text-left px-4 py-3 font-semibold">Запрос</th>
-                <th className="text-left px-4 py-3 font-semibold">Тип</th>
-                <th className="text-left px-4 py-3 font-semibold">Источник</th>
-                <th className="text-left px-4 py-3 font-semibold">Кто</th>
-                <th className="text-left px-4 py-3 font-semibold">Дата</th>
-              </tr>
-            </thead>
-            <tbody>
-              {history.length === 0 ? (
-                <tr><td colSpan={5} className="text-center py-8 text-muted-foreground">История пуста</td></tr>
-              ) : history.map((h, i) => (
-                <tr key={i} className="border-b border-border last:border-0 hover:bg-muted/20">
-                  <td className="px-4 py-3 font-mono text-xs">{h.query_key.slice(0, 12)}...</td>
-                  <td className="px-4 py-3"><Badge variant="outline">{h.check_type}</Badge></td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${SOURCE_INFO[h.source]?.color || 'bg-muted'}`}>
-                      {SOURCE_INFO[h.source]?.label || h.source}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">{h.user || '—'}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{new Date(h.created_at).toLocaleString('ru', { dateStyle: 'short', timeStyle: 'short' })}</td>
+          {historyLoading ? (
+            <div className="space-y-2 p-4">
+              {[...Array(5)].map((_, i) => <div key={i} className="h-10 bg-muted rounded-xl animate-pulse" />)}
+            </div>
+          ) : historyError ? (
+            <div className="flex items-center gap-3 p-6 text-amber-700">
+              <Icon name="AlertTriangle" size={18} />
+              <span className="text-sm">Не удалось загрузить историю. Проверьте подключение к сервису.</span>
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 border-b border-border">
+                <tr>
+                  <th className="text-left px-4 py-3 font-semibold">Запрос</th>
+                  <th className="text-left px-4 py-3 font-semibold">Тип</th>
+                  <th className="text-left px-4 py-3 font-semibold">Источник</th>
+                  <th className="text-left px-4 py-3 font-semibold">Кто</th>
+                  <th className="text-left px-4 py-3 font-semibold">Дата</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {history.length === 0 ? (
+                  <tr><td colSpan={5} className="text-center py-8 text-muted-foreground">История пуста</td></tr>
+                ) : history.map((h, i) => (
+                  <tr key={i} className="border-b border-border last:border-0 hover:bg-muted/20">
+                    <td className="px-4 py-3 font-mono text-xs">{h.query_key?.slice(0, 12)}...</td>
+                    <td className="px-4 py-3"><Badge variant="outline">{h.check_type}</Badge></td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${SOURCE_INFO[h.source]?.color || 'bg-muted'}`}>
+                        {SOURCE_INFO[h.source]?.label || h.source}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">{h.user || '—'}</td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {h.created_at ? new Date(h.created_at).toLocaleString('ru', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 
       {tab === 'quota' && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {quota.map(q => (
-            <div key={q.source} className="bg-white rounded-2xl border border-border p-5">
-              <div className="flex items-center justify-between mb-3">
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${SOURCE_INFO[q.source]?.color || 'bg-muted'}`}>
-                  {SOURCE_INFO[q.source]?.label || q.source}
-                </span>
-                <span className={`text-xs font-bold ${q.percent > 80 ? 'text-red-500' : q.percent > 50 ? 'text-amber-500' : 'text-green-600'}`}>
-                  {q.percent}%
-                </span>
+        quotaLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[...Array(3)].map((_, i) => <div key={i} className="h-28 bg-muted rounded-2xl animate-pulse" />)}
+          </div>
+        ) : quotaError ? (
+          <div className="flex items-center gap-3 p-6 bg-white rounded-2xl border border-border text-amber-700">
+            <Icon name="AlertTriangle" size={18} />
+            <span className="text-sm">Не удалось загрузить данные о квотах.</span>
+          </div>
+        ) : quota.length === 0 ? (
+          <div className="flex items-center gap-3 p-6 bg-white rounded-2xl border border-border text-muted-foreground">
+            <Icon name="Info" size={18} />
+            <span className="text-sm">Данные о квотах отсутствуют.</span>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {quota.map(q => (
+              <div key={q.source} className="bg-white rounded-2xl border border-border p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${SOURCE_INFO[q.source]?.color || 'bg-muted'}`}>
+                    {SOURCE_INFO[q.source]?.label || q.source}
+                  </span>
+                  <span className={`text-xs font-bold ${q.percent > 80 ? 'text-red-500' : q.percent > 50 ? 'text-amber-500' : 'text-green-600'}`}>
+                    {q.percent}%
+                  </span>
+                </div>
+                <div className="h-2 bg-muted rounded-full overflow-hidden mb-2">
+                  <div
+                    className={`h-full rounded-full transition-all ${q.percent > 80 ? 'bg-red-500' : q.percent > 50 ? 'bg-amber-500' : 'bg-green-500'}`}
+                    style={{ width: `${Math.min(q.percent, 100)}%` }}
+                  />
+                </div>
+                <div className="text-sm text-muted-foreground">{q.used} / {q.limit} запросов</div>
               </div>
-              <div className="h-2 bg-muted rounded-full overflow-hidden mb-2">
-                <div
-                  className={`h-full rounded-full transition-all ${q.percent > 80 ? 'bg-red-500' : q.percent > 50 ? 'bg-amber-500' : 'bg-green-500'}`}
-                  style={{ width: `${Math.min(q.percent, 100)}%` }}
-                />
-              </div>
-              <div className="text-sm text-muted-foreground">{q.used} / {q.limit} запросов</div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )
       )}
     </div>
   );
