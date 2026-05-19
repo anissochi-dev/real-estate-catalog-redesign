@@ -102,17 +102,19 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
     canon.href = window.location.origin + window.location.pathname;
   }, [item, settings.company_name]);
 
+  const imgCount = item ? (item.images && item.images.length ? item.images.length : (item.image ? 1 : 0)) : 0;
+
   // Закрытие лайтбокса по Escape
   useEffect(() => {
     if (!lightbox) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setLightbox(false);
-      if (e.key === 'ArrowRight' && item) setActiveImg(i => Math.min(i + 1, (item.images?.length || 1) - 1));
+      if (e.key === 'ArrowRight') setActiveImg(i => Math.min(i + 1, imgCount - 1));
       if (e.key === 'ArrowLeft') setActiveImg(i => Math.max(i - 1, 0));
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [lightbox, item]);
+  }, [lightbox, imgCount]);
 
   if (loading) {
     return <div className="container mx-auto px-4 py-20 text-center text-muted-foreground">Загрузка объекта...</div>;
@@ -127,7 +129,11 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   }
 
   const imgs = item.images && item.images.length ? item.images : [item.image].filter(Boolean);
-  const mainImg = imgs[activeImg] || imgs[0];
+  // Медиа-галерея: фото (индексы 0..imgs.length-1) + видео (индекс imgs.length если есть)
+  const hasVideo = !!item.videoUrl;
+  const totalMedia = imgs.length + (hasVideo ? 1 : 0);
+  const isVideoActive = hasVideo && activeImg === imgs.length;
+  const mainImg = isVideoActive ? null : (imgs[activeImg] || imgs[0]);
   const isFav = favorites.includes(item.id);
   const inCompare = compareList.includes(item.id);
 
@@ -156,7 +162,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
     <div className="bg-background">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productLd) }} />
 
-      {/* Лайтбокс */}
+      {/* Лайтбокс — только для фото */}
       {lightbox && mainImg && (
         <div
           className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center"
@@ -208,56 +214,72 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
           {/* Левая часть */}
           <div className="lg:col-span-2 space-y-5">
 
-            {/* Фото с приближением */}
-            {mainImg ? (
-              <div className="space-y-2">
-                <div
-                  className="relative rounded-2xl overflow-hidden bg-muted aspect-[16/10] cursor-zoom-in group"
-                  onClick={() => setLightbox(true)}
-                >
-                  <img src={mainImg} alt={item.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
-                  <div className="absolute top-3 left-3 flex gap-1.5">
-                    <span className="text-xs font-semibold px-2 py-1 rounded-full bg-brand-blue text-white">{dealLabel}</span>
-                    <span className="text-xs font-semibold px-2 py-1 rounded-full bg-black/40 text-white backdrop-blur-sm">{typeLabel}</span>
-                    {item.isHot && <span className="text-xs font-semibold px-2 py-1 rounded-full btn-orange text-white">🔥 Горячее</span>}
-                    {item.isExclusive && <span className="text-xs font-semibold px-2 py-1 rounded-full bg-amber-500 text-white">Эксклюзив</span>}
-                  </div>
-                  <div className="absolute top-3 right-3 flex gap-2">
-                    <button onClick={e => { e.stopPropagation(); onToggleFavorite(item.id); }}
-                      className={`w-9 h-9 rounded-full flex items-center justify-center shadow ${isFav ? 'bg-red-500 text-white' : 'bg-white'}`}>
-                      <Icon name="Heart" size={16} />
-                    </button>
-                    <button onClick={e => { e.stopPropagation(); onToggleCompare(item.id); }}
-                      className={`w-9 h-9 rounded-full flex items-center justify-center shadow ${inCompare ? 'bg-brand-orange text-white' : 'bg-white'}`}>
-                      <Icon name="GitCompare" size={16} />
-                    </button>
-                  </div>
-                  <div className="absolute bottom-3 right-3 bg-black/50 text-white rounded-lg px-2 py-1 text-xs flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Icon name="ZoomIn" size={12} /> Увеличить
-                  </div>
-                  {imgs.length > 1 && (
-                    <div className="absolute bottom-3 left-3 bg-black/50 text-white rounded-lg px-2 py-1 text-xs">
-                      {activeImg + 1} / {imgs.length}
+            {/* Медиа-галерея */}
+            <div className="space-y-2">
+              {/* Главный экран */}
+              <div className="relative rounded-2xl overflow-hidden bg-muted aspect-[16/10]">
+                {isVideoActive ? (
+                  <VideoEmbed url={item.videoUrl!} />
+                ) : mainImg ? (
+                  <div className="cursor-zoom-in group w-full h-full" onClick={() => setLightbox(true)}>
+                    <img src={mainImg} alt={item.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+                    <div className="absolute bottom-3 right-3 bg-black/50 text-white rounded-lg px-2 py-1 text-xs flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Icon name="ZoomIn" size={12} /> Увеличить
                     </div>
-                  )}
+                  </div>
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Icon name="Image" size={48} className="text-muted-foreground" />
+                  </div>
+                )}
+
+                {/* Бейджи */}
+                <div className="absolute top-3 left-3 flex gap-1.5 pointer-events-none">
+                  <span className="text-xs font-semibold px-2 py-1 rounded-full bg-brand-blue text-white">{dealLabel}</span>
+                  <span className="text-xs font-semibold px-2 py-1 rounded-full bg-black/40 text-white backdrop-blur-sm">{typeLabel}</span>
+                  {item.isHot && <span className="text-xs font-semibold px-2 py-1 rounded-full btn-orange text-white">🔥 Горячее</span>}
+                  {item.isExclusive && <span className="text-xs font-semibold px-2 py-1 rounded-full bg-amber-500 text-white">Эксклюзив</span>}
                 </div>
 
-                {imgs.length > 1 && (
-                  <div className="flex gap-2 overflow-x-auto pb-1">
-                    {imgs.map((u, i) => (
-                      <button key={u + i} onClick={() => setActiveImg(i)}
-                        className={`w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all ${i === activeImg ? 'border-brand-blue' : 'border-transparent opacity-70 hover:opacity-100'}`}>
-                        <img src={u} alt="" className="w-full h-full object-cover" />
-                      </button>
-                    ))}
+                {/* Избранное / сравнение */}
+                <div className="absolute top-3 right-3 flex gap-2">
+                  <button onClick={e => { e.stopPropagation(); onToggleFavorite(item.id); }}
+                    className={`w-9 h-9 rounded-full flex items-center justify-center shadow ${isFav ? 'bg-red-500 text-white' : 'bg-white'}`}>
+                    <Icon name="Heart" size={16} />
+                  </button>
+                  <button onClick={e => { e.stopPropagation(); onToggleCompare(item.id); }}
+                    className={`w-9 h-9 rounded-full flex items-center justify-center shadow ${inCompare ? 'bg-brand-orange text-white' : 'bg-white'}`}>
+                    <Icon name="GitCompare" size={16} />
+                  </button>
+                </div>
+
+                {/* Счётчик */}
+                {totalMedia > 1 && (
+                  <div className="absolute bottom-3 left-3 bg-black/50 text-white rounded-lg px-2 py-1 text-xs pointer-events-none">
+                    {activeImg + 1} / {totalMedia}
                   </div>
                 )}
               </div>
-            ) : (
-              <div className="aspect-[16/10] rounded-2xl bg-muted flex items-center justify-center">
-                <Icon name="Image" size={48} className="text-muted-foreground" />
-              </div>
-            )}
+
+              {/* Миниатюры */}
+              {totalMedia > 1 && (
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {imgs.map((u, i) => (
+                    <button key={u + i} onClick={() => setActiveImg(i)}
+                      className={`w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all ${i === activeImg ? 'border-brand-blue' : 'border-transparent opacity-70 hover:opacity-100'}`}>
+                      <img src={u} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                  {/* Миниатюра видео */}
+                  {hasVideo && (
+                    <button onClick={() => setActiveImg(imgs.length)}
+                      className={`w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all flex items-center justify-center bg-slate-900 ${activeImg === imgs.length ? 'border-brand-blue' : 'border-transparent opacity-70 hover:opacity-100'}`}>
+                      <Icon name="Play" size={24} className="text-white" />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Название и адрес */}
             <div className="bg-white rounded-2xl p-5 shadow-sm">
@@ -280,8 +302,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
               <div className="font-display font-700 text-lg mb-4">Параметры объекта</div>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <Stat icon="Maximize" label="Площадь" value={`${item.area} м²`} />
-                <Stat icon="Tag" label="Цена" value={formatPrice(item.price, item.deal)} highlight />
-                {item.pricePerM2 ? <Stat icon="DollarSign" label="За м²" value={`${item.pricePerM2.toLocaleString('ru')} ₽`} /> : null}
+                {item.pricePerM2 ? <Stat icon="Scaling" label="За м²" value={`${item.pricePerM2.toLocaleString('ru')} ₽`} /> : null}
                 <Stat icon="Building2" label="Тип объекта" value={typeLabel} />
                 <Stat icon="Briefcase" label="Тип сделки" value={dealLabel} />
                 {item.floor ? <Stat icon="Layers" label="Этаж" value={`${item.floor}${item.totalFloors ? ` из ${item.totalFloors}` : ''}`} /> : null}
@@ -331,18 +352,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
               </div>
             )}
 
-            {/* Видео */}
-            {item.videoUrl && (
-              <div className="bg-white rounded-2xl p-5 shadow-sm">
-                <div className="font-display font-700 text-lg mb-3 flex items-center gap-2">
-                  <Icon name="Video" size={18} /> Видео-обзор
-                </div>
-                <a href={item.videoUrl} target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-brand-blue hover:underline text-sm">
-                  Открыть видео <Icon name="ExternalLink" size={14} />
-                </a>
-              </div>
-            )}
+
 
             {/* Карта */}
             {(!!item.lat && !!item.lng) && (
@@ -442,28 +452,25 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
             {/* Аналитика цены */}
             <PricePredict listingId={item.id} currentPrice={item.price} deal={item.deal} />
 
-            {/* Карточка агента */}
+            {/* Карточка агента — sticky */}
             {agents.length > 0 && (
-              <div className="bg-white rounded-2xl p-5 shadow-sm">
-                <div className="text-xs text-muted-foreground mb-3 uppercase tracking-wide font-semibold">Представитель собственника</div>
+              <div className="bg-white rounded-2xl p-4 shadow-sm sticky top-20">
+                <div className="text-[10px] text-muted-foreground mb-3 uppercase tracking-widest font-semibold">Представитель собственника</div>
                 {agents.slice(0, 1).map(agent => (
                   <div key={agent.id} className="flex items-center gap-3">
                     {agent.avatar ? (
-                      <img src={agent.avatar} alt={agent.name} className="w-14 h-14 rounded-full object-cover flex-shrink-0 border-2 border-border" />
+                      <img src={agent.avatar} alt={agent.name} className="w-12 h-12 rounded-full object-cover flex-shrink-0 border-2 border-border" />
                     ) : (
-                      <div className="w-14 h-14 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
-                        <Icon name="User" size={22} className="text-brand-blue" />
+                      <div className="w-12 h-12 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
+                        <Icon name="User" size={20} className="text-brand-blue" />
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <div className="font-display font-700 text-base truncate">{agent.name}</div>
-                      <div className="text-xs text-muted-foreground mb-2">Специалист по коммерческой недвижимости</div>
+                      <div className="font-display font-700 text-sm truncate">{agent.name}</div>
                       {agent.phone && (
-                        <a
-                          href={`tel:${agent.phone}`}
-                          className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-blue hover:underline"
-                        >
-                          <Icon name="Phone" size={14} />
+                        <a href={`tel:${agent.phone}`}
+                          className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-blue hover:underline mt-0.5">
+                          <Icon name="Phone" size={13} />
                           {agent.phone}
                         </a>
                       )}
@@ -487,6 +494,58 @@ function Stat({ icon, label, value, highlight }: { icon: string; label: string; 
         {label}
       </div>
       <div className={`font-display font-700 text-base ${highlight ? 'text-brand-blue text-lg' : ''}`}>{value}</div>
+    </div>
+  );
+}
+
+function VideoEmbed({ url }: { url: string }) {
+  // YouTube
+  const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  if (ytMatch) {
+    return (
+      <iframe
+        className="w-full h-full"
+        src={`https://www.youtube.com/embed/${ytMatch[1]}?autoplay=0&rel=0`}
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+        title="Видео"
+      />
+    );
+  }
+  // Rutube
+  const rtMatch = url.match(/rutube\.ru\/video\/([a-zA-Z0-9]+)/);
+  if (rtMatch) {
+    return (
+      <iframe
+        className="w-full h-full"
+        src={`https://rutube.ru/play/embed/${rtMatch[1]}`}
+        allow="clipboard-write; autoplay"
+        allowFullScreen
+        title="Видео"
+      />
+    );
+  }
+  // VK
+  const vkMatch = url.match(/vk\.com\/video(-?\d+_\d+)/);
+  if (vkMatch) {
+    return (
+      <iframe
+        className="w-full h-full"
+        src={`https://vk.com/video_ext.php?oid=${vkMatch[1].split('_')[0]}&id=${vkMatch[1].split('_')[1]}`}
+        allow="autoplay; encrypted-media; fullscreen"
+        allowFullScreen
+        title="Видео"
+      />
+    );
+  }
+  // Прямая ссылка
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-slate-900">
+      <Icon name="Play" size={40} className="text-white/60" />
+      <a href={url} target="_blank" rel="noopener noreferrer"
+        className="text-white/80 text-sm hover:text-white underline flex items-center gap-1">
+        Открыть видео <Icon name="ExternalLink" size={14} />
+      </a>
     </div>
   );
 }
