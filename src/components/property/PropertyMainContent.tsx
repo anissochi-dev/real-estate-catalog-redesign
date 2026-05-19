@@ -5,7 +5,7 @@ import PropertyCalculators from '@/components/calculators/PropertyCalculators';
 import SimilarListings from '@/components/SimilarListings';
 import {
   CONDITION_LABELS, FINISHING_LABELS, PARKING_LABELS,
-  ENTRANCE_LABELS, UTILITY_ICONS, ROAD_LINE_LABELS,
+  ENTRANCE_LABELS, UTILITY_ICONS, ROAD_LINE_LABELS, PURPOSE_LABELS,
 } from './propertyLabels';
 
 interface Props {
@@ -63,7 +63,7 @@ export default function PropertyMainContent({
           <ParamCard icon="Briefcase" label="Тип сделки" value={dealLabel} />
           <ParamCard icon="Building2" label="Тип объекта" value={typeLabel} />
           {item.floor ? <ParamCard icon="Layers" label="Этаж" value={`${item.floor}${item.totalFloors ? ` из ${item.totalFloors}` : ''}`} /> : null}
-          {item.purpose ? <ParamCard icon="Target" label="Назначение" value={item.purpose} /> : null}
+          {item.purpose ? <ParamCard icon="Target" label="Назначение" value={PURPOSE_LABELS[item.purpose] || item.purpose} /> : null}
           {item.ceilingHeight ? <ParamCard icon="MoveVertical" label="Высота потолка" value={`${item.ceilingHeight} м`} /> : null}
           {item.electricityKw ? <ParamCard icon="Zap" label="Эл. мощность" value={`${item.electricityKw} кВт`} /> : null}
           {itemExt.condition ? (

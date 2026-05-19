@@ -238,12 +238,13 @@ export default function PropertyCard({
         {/* ── Цена + ID ── */}
         <div className="px-3 pt-2.5 pb-2.5 flex items-start justify-between gap-2 bg-brand-blue/[0.04] border-b border-brand-blue/10">
           <div className="min-w-0">
-            <div className="font-display font-900 text-[20px] text-brand-blue leading-none tracking-tight">
-              {formatPrice(property.price, property.deal)}
+            <div className="font-display font-900 text-[18px] text-brand-blue leading-none tracking-tight">
+              {property.price.toLocaleString('ru')} ₽{property.deal === 'rent' ? '/мес' : ''}
             </div>
             {ppm2 && (
-              <div className="text-[11px] text-muted-foreground mt-0.5 font-medium">
-                {ppm2.toLocaleString('ru')} <span className="text-muted-foreground/70">₽/м²</span>
+              <div className="text-[11px] text-muted-foreground mt-0.5 font-medium flex items-center gap-1">
+                <Icon name="Scaling" size={10} className="text-muted-foreground/60" />
+                {ppm2.toLocaleString('ru')} ₽/м²
               </div>
             )}
           </div>
@@ -253,56 +254,49 @@ export default function PropertyCard({
         </div>
 
         {/* ── Контент ── */}
-        <div className="px-3 pt-2.5 pb-3 flex flex-col flex-1 gap-2">
+        <div className="px-3 pt-2 pb-2.5 flex flex-col flex-1 gap-1.5">
 
           {/* Название */}
           <Link to={href}>
-            <h3 className="font-display font-700 text-[13px] text-foreground leading-snug line-clamp-2 group-hover:text-brand-blue transition-colors min-h-[2.4em]">
+            <h3 className="font-display font-700 text-[13px] text-foreground leading-snug line-clamp-2 group-hover:text-brand-blue transition-colors">
               {property.title}
             </h3>
           </Link>
 
-          {/* Ключевые параметры — крупно и заметно */}
-          <div className="grid grid-cols-2 gap-1.5">
-            <div className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 flex items-center gap-1.5">
-              <Icon name="Maximize" size={13} className="text-brand-blue/70 flex-shrink-0" />
-              <div>
-                <div className="font-display font-800 text-[13px] text-foreground leading-none">{property.area} м²</div>
-                <div className="text-[9px] text-muted-foreground mt-0.5">площадь</div>
-              </div>
+          {/* Ключевые параметры */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1 text-[12px] font-semibold text-foreground">
+              <Icon name="Maximize" size={11} className="text-brand-blue/60" />
+              {property.area} м²
             </div>
             {property.floor ? (
-              <div className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 flex items-center gap-1.5">
-                <Icon name="Layers" size={13} className="text-brand-blue/70 flex-shrink-0" />
-                <div>
-                  <div className="font-display font-800 text-[13px] text-foreground leading-none">
-                    {property.floor}{property.totalFloors ? `/${property.totalFloors}` : ''} эт.
-                  </div>
-                  <div className="text-[9px] text-muted-foreground mt-0.5">этаж</div>
-                </div>
+              <div className="flex items-center gap-1 text-[12px] font-semibold text-foreground">
+                <Icon name="Layers" size={11} className="text-brand-blue/60" />
+                {property.floor}{property.totalFloors ? `/${property.totalFloors}` : ''} эт.
               </div>
             ) : property.payback ? (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1.5 flex items-center gap-1.5">
-                <Icon name="TrendingUp" size={13} className="text-emerald-600 flex-shrink-0" />
-                <div>
-                  <div className="font-display font-800 text-[13px] text-emerald-700 leading-none">{property.payback} мес</div>
-                  <div className="text-[9px] text-emerald-600/70 mt-0.5">окупаемость</div>
-                </div>
+              <div className="flex items-center gap-1 text-[12px] font-semibold text-emerald-700">
+                <Icon name="TrendingUp" size={11} className="text-emerald-600" />
+                {property.payback} мес
+              </div>
+            ) : null}
+            {property.profit ? (
+              <div className="flex items-center gap-1 text-[12px] font-semibold text-emerald-700">
+                <Icon name="Wallet" size={11} className="text-emerald-600" />
+                +{(property.profit / 1000).toFixed(0)} тыс/мес
               </div>
             ) : null}
           </div>
 
-          {/* Адрес — кликабельный */}
+          {/* Адрес */}
           {addressLine && (
             <button
               type="button"
               onClick={() => setMapOpen(true)}
               className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-brand-blue transition-colors text-left w-full group/addr"
-              title="Показать на карте"
             >
-              <Icon name="MapPin" size={11} className="flex-shrink-0 text-brand-blue/50 group-hover/addr:text-brand-blue transition-colors" />
-              <span className="truncate underline decoration-dotted underline-offset-2">{addressLine}</span>
-              <Icon name="Map" size={10} className="flex-shrink-0 opacity-0 group-hover/addr:opacity-50 transition-opacity ml-auto" />
+              <Icon name="MapPin" size={10} className="flex-shrink-0 text-brand-blue/50 group-hover/addr:text-brand-blue transition-colors" />
+              <span className="truncate">{addressLine}</span>
             </button>
           )}
 
@@ -318,16 +312,10 @@ export default function PropertyCard({
           )}
 
           {/* Футер */}
-          <div className="mt-auto flex items-center justify-between gap-2 pt-2 border-t border-border/50">
-            {property.profit ? (
-              <span className="text-[10px] text-emerald-700 font-semibold">
-                +{(property.profit / 1000).toFixed(0)} тыс ₽/мес
-              </span>
-            ) : (
-              <span className="text-[10px] text-muted-foreground/60">
-                {imgs.length > 1 ? `${imgs.length} фото` : ''}
-              </span>
-            )}
+          <div className="mt-auto flex items-center justify-between gap-2 pt-1.5 border-t border-border/50">
+            <span className="text-[10px] text-muted-foreground/60">
+              {imgs.length > 1 ? `${imgs.length} фото` : ''}
+            </span>
             <Link to={href}
               className="btn-orange text-white text-[11px] font-bold font-display px-3 py-1.5 rounded-lg inline-flex items-center gap-1 flex-shrink-0">
               Подробнее <Icon name="ArrowRight" size={11} />

@@ -54,3 +54,21 @@ export const ROAD_LINE_LABELS: Record<string, string> = {
   '3': '3-я линия и дальше',
   'yard': 'Во дворе',
 };
+
+export const PURPOSE_LABELS: Record<string, string> = {
+  carwash: 'Автомойка',
+  pharmacy: 'Аптека',
+  bank: 'Банк / Финансы',
+  cafe: 'Кафе / Ресторан',
+  shop: 'Магазин',
+  medical: 'Медцентр / Клиника',
+  education: 'Образование',
+  hotel: 'Отель / Хостел',
+  office: 'Офис',
+  production: 'Производство',
+  beauty: 'Салон красоты',
+  free: 'Свободного назначения',
+  warehouse: 'Склад',
+  sto: 'СТО / Автосервис',
+  fitness: 'Фитнес / Спорт',
+};
