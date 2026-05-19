@@ -58,6 +58,8 @@ export const adminApi = {
     req(`${ADMIN_URL}?resource=listings&id=${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   archiveListing: (id: number) =>
     req(`${ADMIN_URL}?resource=listings&id=${id}`, { method: 'DELETE' }),
+  deleteListing: (id: number) =>
+    req(`${ADMIN_URL}?resource=listings&id=${id}&force=1`, { method: 'DELETE' }),
 
   // leads
   listLeads: () => req(`${ADMIN_URL}?resource=leads`),

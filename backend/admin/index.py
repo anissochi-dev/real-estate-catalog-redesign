@@ -241,7 +241,14 @@ def _listings(cur, conn, method, rid, event, user):
         return _ok({'success': True})
 
     if method == 'DELETE' and rid:
-        cur.execute(f"UPDATE {SCHEMA}.listings SET status = 'archived' WHERE id = {int(rid)}")
+        force = event.get('queryStringParameters', {}).get('force') == '1'
+        if force and user and user['role'] == 'admin':
+            cur.execute(f"DELETE FROM {SCHEMA}.listing_history WHERE listing_id = {int(rid)}")
+            cur.execute(f"DELETE FROM {SCHEMA}.listing_stats_daily WHERE listing_id = {int(rid)}")
+            cur.execute(f"DELETE FROM {SCHEMA}.listing_views WHERE listing_id = {int(rid)}")
+            cur.execute(f"DELETE FROM {SCHEMA}.listings WHERE id = {int(rid)}")
+        else:
+            cur.execute(f"UPDATE {SCHEMA}.listings SET status = 'archived' WHERE id = {int(rid)}")
         conn.commit()
         return _ok({'success': True})
 
@@ -706,6 +713,14 @@ def _listings_bulk(cur, conn, event, user):
         cur.execute(
             f"UPDATE {SCHEMA}.listings SET is_new = {val}, updated_at = NOW() WHERE id IN ({ids_sql})"
         )
+    elif op == 'delete':
+        if user['role'] != 'admin':
+            return _err(403, 'Только администратор может удалять объекты')
+        for lid in ids:
+            cur.execute(f"DELETE FROM {SCHEMA}.listing_history WHERE listing_id = {lid}")
+            cur.execute(f"DELETE FROM {SCHEMA}.listing_stats_daily WHERE listing_id = {lid}")
+            cur.execute(f"DELETE FROM {SCHEMA}.listing_views WHERE listing_id = {lid}")
+            cur.execute(f"DELETE FROM {SCHEMA}.listings WHERE id = {lid}")
     elif op == 'set_category':
         cat = _safe(body.get('value') or '', 50)
         cur.execute(

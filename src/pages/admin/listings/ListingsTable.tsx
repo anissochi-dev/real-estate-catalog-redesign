@@ -7,6 +7,7 @@ interface Props {
   onEdit: (it: Listing) => void;
   onArchive: (id: number) => void;
   onHistory: (it: Listing) => void;
+  onPhotoDownload: (it: Listing) => void;
   selected: Set<number>;
   onToggleSelect: (id: number) => void;
   onSelectAll: () => void;
@@ -14,20 +15,7 @@ interface Props {
   siteUrl?: string;
 }
 
-function downloadImage(url: string, filename: string) {
-  fetch(url)
-    .then(r => r.blob())
-    .then(blob => {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    })
-    .catch(() => window.open(url, '_blank'));
-}
-
-function PhotoCell({ it, siteUrl }: { it: Listing; siteUrl?: string }) {
+function PhotoCell({ it, siteUrl, onPhotoDownload }: { it: Listing; siteUrl?: string; onPhotoDownload: (it: Listing) => void }) {
   const [hover, setHover] = useState(false);
   const imgs = splitImages(it.images);
   const mainImg = imgs[0] || it.image;
@@ -35,12 +23,6 @@ function PhotoCell({ it, siteUrl }: { it: Listing; siteUrl?: string }) {
   const openSite = () => {
     const slug = it.slug || it.id;
     window.open(`${siteUrl || ''}/object/${slug}`, '_blank');
-  };
-
-  const handleDownload = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!mainImg) return;
-    downloadImage(mainImg, `object-${it.id}-photo.jpg`);
   };
 
   return (
@@ -65,8 +47,8 @@ function PhotoCell({ it, siteUrl }: { it: Listing; siteUrl?: string }) {
           </div>
           <button
             className="w-5 h-5 flex items-center justify-center rounded-full bg-white/90 hover:bg-white"
-            onClick={handleDownload}
-            title="Скачать фото"
+            onClick={e => { e.stopPropagation(); onPhotoDownload(it); }}
+            title="Скачать фото без логотипа"
           >
             <Icon name="Download" size={11} className="text-slate-800" />
           </button>
@@ -82,7 +64,7 @@ function PhotoCell({ it, siteUrl }: { it: Listing; siteUrl?: string }) {
 }
 
 export default function ListingsTable({
-  items, onEdit, onArchive, onHistory,
+  items, onEdit, onArchive, onHistory, onPhotoDownload,
   selected, onToggleSelect, onSelectAll, onDeselectAll,
   siteUrl,
 }: Props) {
@@ -121,7 +103,7 @@ export default function ListingsTable({
                     onChange={() => onToggleSelect(it.id)} className="rounded" />
                 </td>
                 <td className="px-3 py-3">
-                  <PhotoCell it={it} siteUrl={siteUrl} />
+                  <PhotoCell it={it} siteUrl={siteUrl} onPhotoDownload={onPhotoDownload} />
                 </td>
                 <td className="px-3 py-3">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -162,6 +144,10 @@ export default function ListingsTable({
                 <td className="px-3 py-3 text-xs whitespace-nowrap">{fmtDate(it.updated_at)}</td>
                 <td className="px-3 py-3 text-right whitespace-nowrap">
                   <div className="flex items-center gap-2 justify-end">
+                    <button onClick={() => onPhotoDownload(it)} title="Скачать фото без логотипа"
+                      className="text-muted-foreground hover:text-brand-blue">
+                      <Icon name="ImageDown" size={16} />
+                    </button>
                     <button onClick={() => onHistory(it)} title="История и статистика"
                       className="text-muted-foreground hover:text-brand-blue">
                       <Icon name="BarChart2" size={16} />
