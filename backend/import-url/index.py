@@ -92,18 +92,50 @@ class MetaParser(HTMLParser):
 
 
 def _fetch_html(url: str) -> str:
-    req = urllib.request.Request(url, headers={
-        'User-Agent': 'Mozilla/5.0 (compatible; BizNestBot/1.0)',
-        'Accept': 'text/html,application/xhtml+xml',
-        'Accept-Language': 'ru,en',
-    })
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        raw = resp.read()
-        enc = resp.headers.get_content_charset() or 'utf-8'
+    # Пробуем несколько User-Agent подряд — некоторые сайты блокируют ботов
+    user_agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+    ]
+    last_err = None
+    for ua in user_agents:
         try:
-            return raw.decode(enc, errors='replace')
-        except Exception:
-            return raw.decode('utf-8', errors='replace')
+            req = urllib.request.Request(url, headers={
+                'User-Agent': ua,
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Cache-Control': 'max-age=0',
+            })
+            import gzip as _gzip
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                raw = resp.read()
+                enc_header = resp.headers.get('Content-Encoding', '')
+                if enc_header == 'gzip':
+                    try:
+                        raw = _gzip.decompress(raw)
+                    except Exception:
+                        pass
+                enc = resp.headers.get_content_charset() or 'utf-8'
+                try:
+                    return raw.decode(enc, errors='replace')
+                except Exception:
+                    return raw.decode('utf-8', errors='replace')
+        except urllib.error.HTTPError as e:
+            last_err = e
+            if e.code not in (403, 429, 503):
+                raise
+            continue
+        except Exception as e:
+            raise
+    raise last_err
 
 
 def _clean_price(raw: str) -> int:
@@ -192,6 +224,12 @@ def handler(event: dict, context) -> dict:
     try:
         html = _fetch_html(url)
     except urllib.error.HTTPError as e:
+        if e.code == 403:
+            return _err(
+                'Сайт запрещает автоматическое чтение (HTTP 403). '
+                'Попробуйте скопировать данные вручную или использовать другую ссылку. '
+                'Авито и ЦИАН блокируют парсинг — скопируйте ссылку на фото и введите данные вручную.'
+            )
         return _err(f'Не удалось открыть страницу: HTTP {e.code}')
     except Exception as e:
         return _err(f'Не удалось открыть страницу: {str(e)[:120]}')
