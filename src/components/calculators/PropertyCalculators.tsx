@@ -168,7 +168,7 @@ export default function PropertyCalculators({
                 Меняйте любые значения — расчёт обновится мгновенно.
               </div>
             </div>
-            <div ref={calcBodyRef}>
+            <div>
               {renderCalc()}
             </div>
 
