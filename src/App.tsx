@@ -79,6 +79,9 @@ const VIEW_KEY = 'biznest_view';
 
 function loadInitialView(): AppView {
   try {
+    // Публичные страницы всегда открываются как сайт, независимо от состояния сессии
+    const publicPaths = ['/object/', '/catalog', '/map', '/favorites', '/compare', '/network-tenants'];
+    if (publicPaths.some(p => window.location.pathname.startsWith(p))) return 'site';
     const v = localStorage.getItem(VIEW_KEY);
     if (v === 'admin' || v === 'login' || v === 'site') return v;
   } catch {
