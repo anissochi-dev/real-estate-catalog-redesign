@@ -39,7 +39,7 @@ export default function CrmChecks() {
     staleTime: 60_000,
   });
 
-  const { data: quota = [], isLoading: quotaLoading, isError: quotaError } = useQuery<{ source: string; used: number; limit: number; percent: number }[]>({
+  const { data: quota = [] } = useQuery<{ source: string; used: number; limit: number; percent: number }[]>({
     queryKey: ['crm-quota'],
     queryFn: async () => {
       const r = await fetch(`${CHECKS_URL}/?action=quota`, { headers });
