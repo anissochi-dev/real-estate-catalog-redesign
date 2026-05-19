@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
 import { Page } from '@/App';
@@ -31,17 +32,24 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
             </ul>
           </div>
           <div>
+            <div className="font-semibold text-white mb-3">Категории</div>
+            <ul className="space-y-2 text-sm">
+              <li><Link to="/catalog/office" className="hover:text-white transition-colors">Офисы</Link></li>
+              <li><Link to="/catalog/retail" className="hover:text-white transition-colors">Торговые помещения</Link></li>
+              <li><Link to="/catalog/warehouse" className="hover:text-white transition-colors">Склады</Link></li>
+              <li><Link to="/catalog/business" className="hover:text-white transition-colors">Готовый бизнес</Link></li>
+              <li><Link to="/catalog/gab" className="hover:text-white transition-colors">ГАБ</Link></li>
+              <li><Link to="/catalog/restaurant" className="hover:text-white transition-colors">Общепит</Link></li>
+              <li><Link to="/catalog/production" className="hover:text-white transition-colors">Производство</Link></li>
+              <li><Link to="/catalog/land" className="hover:text-white transition-colors">Земельные участки</Link></li>
+            </ul>
+          </div>
+          <div>
             <div className="font-semibold text-white mb-3">Контакты</div>
             <ul className="space-y-2 text-sm">
               {phone && <li><a href={`tel:${phone}`} className="hover:text-white">{phone}</a></li>}
               {email && <li><a href={`mailto:${email}`} className="hover:text-white">{email}</a></li>}
-            </ul>
-          </div>
-          <div>
-            <div className="font-semibold text-white mb-3">О компании</div>
-            <ul className="space-y-2 text-sm">
-              <li>{city}</li>
-              <li>с 2007 года</li>
+              <li className="pt-1 text-white/50">{city}, с {settings.company_since_year || 2007} года</li>
             </ul>
           </div>
         </div>
