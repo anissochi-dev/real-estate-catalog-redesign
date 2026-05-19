@@ -357,7 +357,42 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
               </div>
             )}
 
-            <PricePredict listingId={item.id} currentPrice={item.price} deal={item.deal} />
+            {/* Форма заявки — после карты, перед калькулятором */}
+            <div className="bg-white rounded-2xl p-5 shadow-sm">
+              <div className="font-display font-700 text-lg mb-4 flex items-center gap-2">
+                <Icon name="CalendarCheck" size={18} className="text-brand-blue" /> Заказать просмотр
+              </div>
+              {sent ? (
+                <div className="py-4 text-center">
+                  <Icon name="CheckCircle2" size={36} className="mx-auto mb-2 text-emerald-500" />
+                  <div className="font-semibold">Заявка отправлена!</div>
+                  <div className="text-sm text-muted-foreground mt-1">Менеджер свяжется с вами в течение 15 минут.</div>
+                </div>
+              ) : (
+                <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <input required placeholder="Ваше имя" value={form.name}
+                    onChange={e => setForm({ ...form, name: e.target.value })}
+                    className="w-full px-3 py-2.5 border rounded-lg text-sm" />
+                  <input required placeholder="Телефон" value={form.phone}
+                    onChange={e => setForm({ ...form, phone: e.target.value })}
+                    className="w-full px-3 py-2.5 border rounded-lg text-sm" />
+                  <textarea placeholder="Комментарий (необязательно)" rows={2}
+                    value={form.message} onChange={e => setForm({ ...form, message: e.target.value })}
+                    className="w-full px-3 py-2.5 border rounded-lg text-sm sm:col-span-2" />
+                  <button type="submit" disabled={sending}
+                    className="sm:col-span-2 w-full btn-blue text-white py-3 rounded-xl font-semibold disabled:opacity-50">
+                    {sending ? 'Отправка...' : 'Заказать просмотр'}
+                  </button>
+                  {settings.company_phone && (
+                    <a href={`tel:${settings.company_phone}`}
+                      className="sm:col-span-2 text-center text-brand-blue font-semibold text-sm hover:underline">
+                      <Icon name="Phone" size={14} className="inline mr-1" />
+                      {settings.company_phone}
+                    </a>
+                  )}
+                </form>
+              )}
+            </div>
 
             <PropertyCalculators
               title={item.title}
@@ -386,9 +421,11 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
             <SimilarListings listingId={item.id} />
           </div>
 
-          {/* Правая часть: цена + форма */}
+          {/* Правая колонка: цена + Аналитика цены */}
           <div className="space-y-4">
+            {/* Цена */}
             <div className="bg-white rounded-2xl p-5 shadow-sm sticky top-20">
+              <div className="text-xs text-muted-foreground mb-1">{dealLabel}</div>
               <div className="font-display font-900 text-3xl text-brand-blue mb-0.5">
                 {formatPrice(item.price, item.deal)}
               </div>
@@ -398,43 +435,14 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
                 </div>
               )}
               {item.area && (
-                <div className="text-sm text-muted-foreground mb-4">
+                <div className="text-sm text-muted-foreground">
                   Площадь: <span className="font-semibold text-foreground">{item.area} м²</span>
                 </div>
               )}
-
-              {sent ? (
-                <div className="py-6 text-center">
-                  <Icon name="CheckCircle2" size={40} className="mx-auto mb-2 text-emerald-500" />
-                  <div className="font-semibold">Заявка отправлена!</div>
-                  <div className="text-sm text-muted-foreground mt-1">Менеджер свяжется с вами в течение 15 минут.</div>
-                </div>
-              ) : (
-                <form onSubmit={submit} className="space-y-3">
-                  <input required placeholder="Ваше имя" value={form.name}
-                    onChange={e => setForm({ ...form, name: e.target.value })}
-                    className="w-full px-3 py-2.5 border rounded-lg text-sm" />
-                  <input required placeholder="Телефон" value={form.phone}
-                    onChange={e => setForm({ ...form, phone: e.target.value })}
-                    className="w-full px-3 py-2.5 border rounded-lg text-sm" />
-                  <textarea placeholder="Комментарий (необязательно)" rows={3}
-                    value={form.message} onChange={e => setForm({ ...form, message: e.target.value })}
-                    className="w-full px-3 py-2.5 border rounded-lg text-sm" />
-                  <button type="submit" disabled={sending}
-                    className="w-full btn-blue text-white py-3 rounded-xl font-semibold disabled:opacity-50">
-                    {sending ? 'Отправка...' : 'Заказать просмотр'}
-                  </button>
-                </form>
-              )}
-
-              {settings.company_phone && (
-                <a href={`tel:${settings.company_phone}`}
-                  className="mt-3 w-full block text-center text-brand-blue font-semibold text-sm hover:underline">
-                  <Icon name="Phone" size={14} className="inline mr-1" />
-                  {settings.company_phone}
-                </a>
-              )}
             </div>
+
+            {/* Аналитика цены */}
+            <PricePredict listingId={item.id} currentPrice={item.price} deal={item.deal} />
           </div>
         </div>
       </div>
