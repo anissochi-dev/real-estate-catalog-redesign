@@ -1,39 +1,34 @@
 """
-Удаляет водяные знаки и логотипы с фотографий объектов недвижимости.
-Алгоритм: скачивает фото по CDN-URL, детектирует полупрозрачные/яркие наложенные области
-по краям (типичные места логотипов: углы, верх/низ), применяет inpainting через
-cv2.inpaint (метод Navier-Stokes) или Pillow-fallback, сохраняет результат в S3.
-Args: POST {url: str, sensitivity?: float (0.1-1.0, default 0.35)}
-Returns: {url: str} — новый CDN URL обработанного фото
+Удаляет водяные знаки с фотографий.
+Алгоритм v2: детектирует текст/логотипы через анализ локальной дисперсии и
+градиентов, строит точную маску, применяет многопроходный inpainting.
+POST {url: str, mask_regions?: list[{x,y,w,h}], sensitivity?: float}
+Returns: {url: str, detected: bool}
 """
-
-import base64
 import io
 import json
 import os
 import uuid
+import urllib.request
+import urllib.error
 
 import boto3
 import psycopg2
 import requests
-from PIL import Image, ImageFilter, ImageChops
+import numpy as np
+from PIL import Image, ImageFilter, ImageDraw
 from psycopg2.extras import RealDictCursor
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
-
-HEADERS_RESP = {'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json'}
+CORS = {'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json'}
 
 
 def _ok(body, status=200):
-    return {'statusCode': status, 'headers': HEADERS_RESP, 'body': json.dumps(body, ensure_ascii=False)}
+    return {'statusCode': status, 'headers': CORS, 'body': json.dumps(body, ensure_ascii=False)}
 
 
 def _err(code, msg):
     return _ok({'error': msg}, code)
-
-
-def _safe(s, length=100):
-    return (s or '').replace("'", "''")[:length]
 
 
 def _check_auth(token):
@@ -42,9 +37,10 @@ def _check_auth(token):
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            t = _safe(token, 100)
+            t = (token or '').replace("'", "''")[:100]
             cur.execute(
-                f"SELECT u.id, u.role FROM {SCHEMA}.sessions s JOIN {SCHEMA}.users u ON u.id = s.user_id "
+                f"SELECT u.id, u.role FROM {SCHEMA}.sessions s "
+                f"JOIN {SCHEMA}.users u ON u.id = s.user_id "
                 f"WHERE s.token = '{t}' AND s.expires_at > NOW() AND u.is_active = TRUE"
             )
             return cur.fetchone()
@@ -52,144 +48,147 @@ def _check_auth(token):
         conn.close()
 
 
-def _build_mask(img: Image.Image, sensitivity: float) -> Image.Image:
+def _build_mask_v2(img: Image.Image, sensitivity: float) -> Image.Image:
     """
-    Строит маску областей, которые похожи на водяные знаки/логотипы:
-    - Полупрозрачные области (если PNG с альфа-каналом)
-    - Области с очень высокой яркостью (белые/светлые наложения)
-    - Области с очень насыщенным цветом поверх
-    Маска: белое = удалить (inpaint), чёрное = оставить.
+    Детектирует водяные знаки через:
+    1. Анализ локальной дисперсии — текст/логотипы дают высокую локальную дисперсию
+       на однородном фоне
+    2. Детекцию краёв + кластеризацию — изолированные кластеры текста
+    3. Угловые зоны с аномальной текстурой
     """
-    w, h = img.size
-    threshold = int(255 * (1.0 - sensitivity))  # при sensitivity=0.35 → threshold=165
-
-    # Конвертируем в RGBA чтобы работать с альфа-каналом
-    rgba = img.convert('RGBA')
-    r, g, b, a = rgba.split()
-
-    mask = Image.new('L', (w, h), 0)
-
-    # 1. Полупрозрачные пиксели (логотипы обычно накладываются с opacity < 80%)
-    import numpy as np
-    a_arr = np.array(a)
-    # Области где альфа < 200 (т.е. полупрозрачные) — но только если исходник PNG с альфой
-    if img.mode == 'RGBA':
-        semi_transparent = (a_arr > 10) & (a_arr < 200)
-        mask_arr = np.array(mask)
-        mask_arr[semi_transparent] = 255
-        mask = Image.fromarray(mask_arr.astype(np.uint8))
-
-    # 2. Детектируем логотипы в углах изображения (20% от каждого края)
     rgb = img.convert('RGB')
-    rgb_arr = np.array(rgb).astype(np.float32)
+    w, h = rgb.size
 
-    # Яркость (luminance)
-    lum = 0.299 * rgb_arr[:, :, 0] + 0.587 * rgb_arr[:, :, 1] + 0.114 * rgb_arr[:, :, 2]
+    arr = np.array(rgb).astype(np.float32)
+    gray = 0.299 * arr[:, :, 0] + 0.587 * arr[:, :, 1] + 0.114 * arr[:, :, 2]
 
-    corner_h = max(60, int(h * 0.20))
-    corner_w = max(120, int(w * 0.25))
+    mask_arr = np.zeros((h, w), dtype=np.float32)
 
-    # Маска угловых зон
-    corner_mask = np.zeros((h, w), dtype=bool)
-    corner_mask[:corner_h, :corner_w] = True          # верх-лево
-    corner_mask[:corner_h, -corner_w:] = True         # верх-право
-    corner_mask[-corner_h:, :corner_w] = True         # низ-лево
-    corner_mask[-corner_h:, -corner_w:] = True        # низ-право
+    # ── 1. Локальная дисперсия в скользящем окне 15x15 ──────────────────────
+    # Водяные знаки — резкий переход пикселей на относительно гладком фоне
+    from PIL import ImageFilter as IF
+    gray_pil = Image.fromarray(gray.astype(np.uint8))
+    blurred = np.array(gray_pil.filter(IF.GaussianBlur(8))).astype(np.float32)
+    diff = np.abs(gray - blurred)
 
-    # В угловых зонах ищем однородные светлые/тёмные кластеры
-    mask_arr = np.array(mask)
-    for zone_slice in [
-        (slice(0, corner_h), slice(0, corner_w)),
-        (slice(0, corner_h), slice(w - corner_w, w)),
-        (slice(h - corner_h, h), slice(0, corner_w)),
-        (slice(h - corner_h, h), slice(w - corner_w, w)),
-    ]:
-        zone_lum = lum[zone_slice]
-        zone_rgb = rgb_arr[zone_slice]
+    # Нормализуем разницу
+    diff_norm = diff / (diff.max() + 1e-6)
 
-        # Стандартное отклонение яркости в зоне
-        zone_std = float(np.std(zone_lum))
-        zone_mean = float(np.mean(zone_lum))
+    # Threshold зависит от sensitivity (0.1=мягко, 1.0=агрессивно)
+    thresh = 0.18 - sensitivity * 0.08  # при 0.35 → ~0.15
 
-        # Если зона однородно светлая (логотип на белом фоне) или тёмная — это подозрительно
-        # Дополнительно: ищем пиксели, которые сильно отличаются от среднего фона
-        bg_lum_mean = float(np.mean(lum))  # средняя яркость всего фото
+    # ── 2. Зоны где дисперсия высокая но окружение однородное ──────────────
+    # Это характерно для текста/логотипов на фоне стен/неба
+    local_high = diff_norm > thresh
 
-        # Пиксели в зоне, которые на threshold единиц ярче/темнее среднего фона
-        diff = np.abs(zone_lum - bg_lum_mean)
-        suspicious = diff > (255 * sensitivity * 0.6)
+    # Средняя яркость всего фото
+    bg_mean = float(np.mean(gray))
+    bg_std = float(np.std(gray))
 
-        # Если подозрительных пикселей достаточно много в зоне — помечаем всю область
-        suspicious_ratio = float(np.mean(suspicious))
-        if suspicious_ratio > 0.15:
-            # Уточняем: помечаем только сами подозрительные пиксели, а не всю зону
-            mask_arr[zone_slice][suspicious] = 255
+    # Пиксели которые сильно отличаются от фона (логотипы белые/чёрные на цветном)
+    bright_anomaly = (gray > bg_mean + bg_std * 2.0) | (gray < bg_mean - bg_std * 2.0)
 
-    # Небольшое расширение маски (dilation) через Pillow
-    mask = Image.fromarray(mask_arr.astype(np.uint8))
-    mask = mask.filter(ImageFilter.MaxFilter(7))  # dilate 3px
-    mask = mask.filter(ImageFilter.GaussianBlur(2))
+    combined = local_high & bright_anomaly
+    mask_arr[combined] = 1.0
 
-    return mask
+    # ── 3. Угловые зоны — тут чаще всего логотипы ──────────────────────────
+    mh = max(80, int(h * 0.22))
+    mw = max(150, int(w * 0.28))
+
+    corner_zones = [
+        (0, 0, mw, mh),           # верх-лево
+        (w - mw, 0, w, mh),       # верх-право
+        (0, h - mh, mw, h),       # низ-лево
+        (w - mw, h - mh, w, h),   # низ-право
+        (0, 0, w, max(40, int(h * 0.08))),          # верхняя полоса
+        (0, h - max(40, int(h * 0.08)), w, h),      # нижняя полоса
+    ]
+
+    for x0, y0, x1, y1 in corner_zones:
+        zone = diff_norm[y0:y1, x0:x1]
+        zone_gray = gray[y0:y1, x0:x1]
+        if zone.size == 0:
+            continue
+        zone_thresh = thresh * 0.7  # в углах порог мягче
+        suspicious = (zone > zone_thresh) & (
+            (zone_gray > bg_mean + bg_std * 1.2) |
+            (zone_gray < bg_mean - bg_std * 1.2)
+        )
+        ratio = float(np.mean(suspicious))
+        if ratio > 0.03:  # >3% подозрительных пикселей в зоне
+            mask_arr[y0:y1, x0:x1][suspicious] = 1.0
+
+    # ── 4. Морфология: расширяем маску и сглаживаем края ───────────────────
+    mask_pil = Image.fromarray((mask_arr * 255).astype(np.uint8))
+    mask_pil = mask_pil.filter(IF.MaxFilter(9))   # dilation
+    mask_pil = mask_pil.filter(IF.MaxFilter(5))
+    mask_pil = mask_pil.filter(IF.GaussianBlur(3))
+
+    return mask_pil
 
 
-def _inpaint_pillow(img: Image.Image, mask: Image.Image) -> Image.Image:
+def _inpaint(img: Image.Image, mask: Image.Image) -> Image.Image:
     """
-    Простой inpainting через Pillow: заполняем помеченные области
-    размытым контентом соседних пикселей (несколько итераций).
+    Многопроходный inpainting:
+    1. Пробуем cv2.INPAINT_TELEA (лучший результат)
+    2. Fallback: итеративное размытие с учётом соседей
     """
-    import numpy as np
-
-    result = img.convert('RGB')
-    mask_arr = np.array(mask.convert('L'))
-    result_arr = np.array(result).astype(np.float32)
-
-    wm_pixels = mask_arr > 128
-
-    if not np.any(wm_pixels):
-        return result
-
-    # Итеративное заполнение: берём среднее соседей без маски
-    for _ in range(8):
-        blurred = np.array(
-            Image.fromarray(result_arr.astype(np.uint8)).filter(ImageFilter.GaussianBlur(9))
-        ).astype(np.float32)
-        result_arr[wm_pixels] = blurred[wm_pixels]
-
-    return Image.fromarray(result_arr.astype(np.uint8))
-
-
-def _try_opencv_inpaint(img_pil: Image.Image, mask_pil: Image.Image) -> Image.Image:
-    """Пробуем cv2.inpaint (лучшее качество). При ошибке — fallback на Pillow."""
+    # Попытка cv2
     try:
         import cv2
-        import numpy as np
-        img_arr = np.array(img_pil.convert('RGB'))
+        img_arr = np.array(img.convert('RGB'))
         img_bgr = cv2.cvtColor(img_arr, cv2.COLOR_RGB2BGR)
-        mask_arr = np.array(mask_pil.convert('L'))
-        mask_bin = (mask_arr > 128).astype(np.uint8) * 255
-        # Navier-Stokes inpainting, радиус 5px
-        result_bgr = cv2.inpaint(img_bgr, mask_bin, inpaintRadius=5, flags=cv2.INPAINT_NS)
-        result_rgb = cv2.cvtColor(result_bgr, cv2.COLOR_BGR2RGB)
-        return Image.fromarray(result_rgb)
+        mask_arr = (np.array(mask.convert('L')) > 128).astype(np.uint8) * 255
+
+        if not np.any(mask_arr > 0):
+            return img.convert('RGB')
+
+        # TELEA лучше чем NS для текста
+        result = cv2.inpaint(img_bgr, mask_arr, inpaintRadius=7, flags=cv2.INPAINT_TELEA)
+        return Image.fromarray(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
     except ImportError:
-        return _inpaint_pillow(img_pil, mask_pil)
+        pass
+
+    # Fallback: Pillow многопроходный
+    result = np.array(img.convert('RGB')).astype(np.float32)
+    m = np.array(mask.convert('L')) > 128
+
+    if not np.any(m):
+        return Image.fromarray(result.astype(np.uint8))
+
+    for radius in [15, 9, 5, 3]:
+        blurred = np.array(
+            Image.fromarray(result.astype(np.uint8))
+            .filter(ImageFilter.GaussianBlur(radius))
+        ).astype(np.float32)
+        result[m] = blurred[m]
+
+    return Image.fromarray(result.astype(np.uint8))
+
+
+def _apply_manual_regions(img: Image.Image, regions: list) -> Image.Image:
+    """Закрашивает указанные прямоугольные области через inpainting."""
+    w, h = img.size
+    mask = Image.new('L', (w, h), 0)
+    draw = ImageDraw.Draw(mask)
+    for r in regions:
+        x, y, rw, rh = int(r.get('x', 0)), int(r.get('y', 0)), int(r.get('w', 0)), int(r.get('h', 0))
+        if rw > 0 and rh > 0:
+            draw.rectangle([x, y, x + rw, y + rh], fill=255)
+    # Расширяем маску
+    mask = mask.filter(ImageFilter.MaxFilter(5))
+    return _inpaint(img, mask)
 
 
 def handler(event: dict, context) -> dict:
-    """Удаляет водяные знаки и логотипы с фотографии по CDN-ссылке."""
+    """Удаляет водяные знаки с фото. POST {url, sensitivity?, mask_regions?}"""
 
     if event.get('httpMethod') == 'OPTIONS':
-        return {
-            'statusCode': 200,
-            'headers': {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'POST, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token',
-                'Access-Control-Max-Age': '86400',
-            },
-            'body': '',
-        }
+        return {'statusCode': 200, 'headers': {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token',
+        }, 'body': ''}
 
     if event.get('httpMethod') != 'POST':
         return _err(405, 'Method not allowed')
@@ -204,56 +203,39 @@ def handler(event: dict, context) -> dict:
 
     body = json.loads(event.get('body') or '{}')
     photo_url = (body.get('url') or '').strip()
-    sensitivity = float(body.get('sensitivity') or 0.35)
+    sensitivity = float(body.get('sensitivity') or 0.45)
     sensitivity = max(0.1, min(1.0, sensitivity))
+    manual_regions = body.get('mask_regions') or []
 
     if not photo_url:
         return _err(400, 'Не передан url фотографии')
 
     # Скачиваем фото
-    try:
-        resp = requests.get(photo_url, timeout=20, headers={'User-Agent': 'Mozilla/5.0'})
-        resp.raise_for_status()
-        img_data = resp.content
-    except Exception as e:
-        return _err(400, f'Не удалось скачать фото: {e}')
+    resp = requests.get(photo_url, timeout=20, headers={'User-Agent': 'Mozilla/5.0'})
+    resp.raise_for_status()
+    img = Image.open(io.BytesIO(resp.content))
+    img.load()
 
-    # Открываем через Pillow
-    try:
-        img = Image.open(io.BytesIO(img_data))
-        img.load()
-    except Exception as e:
-        return _err(400, f'Не удалось открыть изображение: {e}')
-
-    # Строим маску водяных знаков
-    mask = _build_mask(img, sensitivity)
-
-    import numpy as np
-    mask_arr = np.array(mask.convert('L'))
-    has_watermark = bool(np.mean(mask_arr > 128) > 0.005)  # хотя бы 0.5% пикселей
-
-    if not has_watermark:
-        # Водяных знаков не обнаружено — возвращаем исходник как есть
-        result_img = img.convert('RGB')
+    # Ручные области имеют приоритет
+    if manual_regions:
+        result_img = _apply_manual_regions(img, manual_regions)
+        detected = True
     else:
-        result_img = _try_opencv_inpaint(img, mask)
+        mask = _build_mask_v2(img, sensitivity)
+        mask_arr = np.array(mask.convert('L'))
+        detected = bool(np.mean(mask_arr > 128) > 0.002)
+        result_img = _inpaint(img, mask) if detected else img.convert('RGB')
 
-    # Сохраняем результат в WebP
+    # Сохраняем в S3
     out_buf = io.BytesIO()
-    result_img.save(out_buf, format='WEBP', quality=92, method=6)
+    result_img.convert('RGB').save(out_buf, format='WEBP', quality=93, method=4)
     out_buf.seek(0)
-    out_bytes = out_buf.read()
 
-    # Загружаем в S3
     key = f"photos/{uuid.uuid4().hex}_nowm.webp"
     aws_key = os.environ['AWS_ACCESS_KEY_ID']
-    s3 = boto3.client(
-        's3',
-        endpoint_url='https://bucket.poehali.dev',
-        aws_access_key_id=aws_key,
-        aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
-    )
-    s3.put_object(Bucket='files', Key=key, Body=out_bytes, ContentType='image/webp')
+    s3 = boto3.client('s3', endpoint_url='https://bucket.poehali.dev',
+                      aws_access_key_id=aws_key,
+                      aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'])
+    s3.put_object(Bucket='files', Key=key, Body=out_buf.read(), ContentType='image/webp')
 
-    new_url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{key}"
-    return _ok({'url': new_url, 'detected': has_watermark})
+    return _ok({'url': f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{key}", 'detected': detected})

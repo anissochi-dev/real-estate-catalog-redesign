@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
-import { uploadFile, removeWatermark } from '@/lib/adminApi';
+import { uploadFile } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
+import WatermarkEraser from './WatermarkEraser';
 
 interface Props {
   value: string[];
@@ -60,6 +61,7 @@ export default function ImageUploader({
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [removingWm, setRemovingWm] = useState<number | null>(null);
+  const [eraserIdx, setEraserIdx] = useState<number | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const shouldCompress = compress ?? (folder === 'photos');
@@ -101,21 +103,12 @@ export default function ImageUploader({
     }
   };
 
-  const handleRemoveWatermark = async (i: number) => {
-    setRemovingWm(i);
-    try {
-      const { url, detected } = await removeWatermark(value[i]);
-      if (!detected) {
-        alert('Водяные знаки не обнаружены на этой фотографии.');
-      }
-      const next = [...value];
-      next[i] = url;
-      onChange(next);
-    } catch (e: unknown) {
-      alert('Ошибка: ' + (e instanceof Error ? e.message : ''));
-    } finally {
-      setRemovingWm(null);
-    }
+  const handleEraserDone = (newUrl: string) => {
+    if (eraserIdx === null) return;
+    const next = [...value];
+    next[eraserIdx] = newUrl;
+    onChange(next);
+    setEraserIdx(null);
   };
 
   const remove = (i: number) => onChange(value.filter((_, idx) => idx !== i));
@@ -160,6 +153,7 @@ export default function ImageUploader({
   };
 
   return (
+    <>
     <div className={className}>
       <div
         onDragOver={e => { e.preventDefault(); setDragOver(true); }}
@@ -231,12 +225,7 @@ export default function ImageUploader({
                     Главная
                   </div>
                 )}
-                {removingWm === i && (
-                  <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-1 z-10">
-                    <Icon name="Loader2" size={20} className="text-white animate-spin" />
-                    <span className="text-white text-[10px] font-semibold">Убираем знаки...</span>
-                  </div>
-                )}
+
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100">
                   {multiple && i > 0 && (
                     <button type="button" onClick={e => { e.stopPropagation(); move(i, -1); }}
@@ -245,9 +234,8 @@ export default function ImageUploader({
                     </button>
                   )}
                   {folder === 'photos' && (
-                    <button type="button" onClick={e => { e.stopPropagation(); handleRemoveWatermark(i); }}
-                      disabled={removingWm !== null}
-                      className="bg-violet-600 text-white rounded p-1 shadow disabled:opacity-50" title="Убрать водяные знаки и логотипы">
+                    <button type="button" onClick={e => { e.stopPropagation(); setEraserIdx(i); }}
+                      className="bg-violet-600 text-white rounded p-1 shadow" title="Убрать водяной знак">
                       <Icon name="Wand2" size={14} />
                     </button>
                   )}
@@ -274,5 +262,13 @@ export default function ImageUploader({
         </>
       )}
     </div>
+      {eraserIdx !== null && (
+        <WatermarkEraser
+          photoUrl={value[eraserIdx]}
+          onDone={handleEraserDone}
+          onClose={() => setEraserIdx(null)}
+        />
+      )}
+    </>
   );
 }

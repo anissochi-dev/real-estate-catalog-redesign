@@ -180,12 +180,16 @@ export async function uploadFile(file: File, folder: 'photos' | 'logo' | 'waterm
   return data.url as string;
 }
 
-export async function removeWatermark(photoUrl: string, sensitivity = 0.35): Promise<{ url: string; detected: boolean }> {
+export async function removeWatermark(
+  photoUrl: string,
+  sensitivity = 0.45,
+  maskRegions?: { x: number; y: number; w: number; h: number }[]
+): Promise<{ url: string; detected: boolean }> {
   const token = getToken();
   const res = await fetch(REMOVE_WM_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(token ? { 'X-Auth-Token': token } : {}) },
-    body: JSON.stringify({ url: photoUrl, sensitivity }),
+    body: JSON.stringify({ url: photoUrl, sensitivity, ...(maskRegions ? { mask_regions: maskRegions } : {}) }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Ошибка обработки');
