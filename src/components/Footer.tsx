@@ -30,6 +30,35 @@ function LegalModal({ title, content, onClose }: { title: string; content: strin
   );
 }
 
+const DEFAULT_CATALOG: { label: string; page?: Page; href?: string }[] = [
+  { label: 'Все объекты', page: 'catalog' },
+  { label: 'На карте', page: 'map' },
+  { label: 'Заявки', page: 'network-tenants' },
+];
+
+const DEFAULT_CATEGORIES: { label: string; href: string }[] = [
+  { label: 'Офисы', href: '/catalog/office' },
+  { label: 'Торговые помещения', href: '/catalog/retail' },
+  { label: 'Склады', href: '/catalog/warehouse' },
+  { label: 'Готовый бизнес', href: '/catalog/business' },
+  { label: 'ГАБ', href: '/catalog/gab' },
+  { label: 'Общепит', href: '/catalog/restaurant' },
+  { label: 'Производство', href: '/catalog/production' },
+  { label: 'Земельные участки', href: '/catalog/land' },
+];
+
+function parseLinks(raw: string): { label: string; href: string }[] {
+  return raw
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const [label, href] = line.split('|').map(s => s.trim());
+      return label && href ? { label, href } : null;
+    })
+    .filter(Boolean) as { label: string; href: string }[];
+}
+
 export default function Footer({ onLogin, setCurrentPage }: Props) {
   const { settings } = useSettings();
   const [modal, setModal] = useState<{ title: string; content: string } | null>(null);
@@ -38,6 +67,15 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
   const phone = settings.company_phone;
   const email = settings.company_email;
   const city = settings.main_city || 'Краснодар';
+  const description = settings.footer_description || `Коммерческая недвижимость и готовый бизнес ${city}а.`;
+
+  const catalogLinks = settings.footer_catalog_links
+    ? parseLinks(settings.footer_catalog_links)
+    : null;
+
+  const categoryLinks = settings.footer_extra_links
+    ? parseLinks(settings.footer_extra_links)
+    : null;
 
   const legalDocs = [
     settings.legal_privacy_policy
@@ -55,32 +93,49 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
     <>
       <footer className="bg-brand-blue-dark text-white/80 mt-12">
         <div className="container mx-auto px-4 py-8 md:py-10">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-6 md:gap-8">
+
+            {/* Компания */}
             <div className="col-span-2 md:col-span-1">
               <div className="font-display font-800 text-white text-lg mb-2">{company}</div>
-              <div className="text-sm">Коммерческая недвижимость и готовый бизнес {city}а.</div>
+              <div className="text-sm leading-relaxed">{description}</div>
             </div>
+
+            {/* Каталог */}
             <div>
               <div className="font-semibold text-white mb-3">Каталог</div>
               <ul className="space-y-2 text-sm">
-                <li><button onClick={() => setCurrentPage('catalog')} className="hover:text-white transition-colors">Все объекты</button></li>
-                <li><button onClick={() => setCurrentPage('map')} className="hover:text-white transition-colors">На карте</button></li>
-                <li><button onClick={() => setCurrentPage('network-tenants')} className="hover:text-white transition-colors">Заявки</button></li>
+                {catalogLinks
+                  ? catalogLinks.map(link => (
+                    <li key={link.href}>
+                      <Link to={link.href} className="hover:text-white transition-colors">{link.label}</Link>
+                    </li>
+                  ))
+                  : DEFAULT_CATALOG.map(item => (
+                    <li key={item.label}>
+                      {item.page
+                        ? <button onClick={() => setCurrentPage(item.page!)} className="hover:text-white transition-colors">{item.label}</button>
+                        : <Link to={item.href!} className="hover:text-white transition-colors">{item.label}</Link>
+                      }
+                    </li>
+                  ))
+                }
               </ul>
             </div>
-            <div>
+
+            {/* Категории — 2 столбца */}
+            <div className="col-span-2">
               <div className="font-semibold text-white mb-3">Категории</div>
-              <ul className="space-y-2 text-sm">
-                <li><Link to="/catalog/office" className="hover:text-white transition-colors">Офисы</Link></li>
-                <li><Link to="/catalog/retail" className="hover:text-white transition-colors">Торговые помещения</Link></li>
-                <li><Link to="/catalog/warehouse" className="hover:text-white transition-colors">Склады</Link></li>
-                <li><Link to="/catalog/business" className="hover:text-white transition-colors">Готовый бизнес</Link></li>
-                <li><Link to="/catalog/gab" className="hover:text-white transition-colors">ГАБ</Link></li>
-                <li><Link to="/catalog/restaurant" className="hover:text-white transition-colors">Общепит</Link></li>
-                <li><Link to="/catalog/production" className="hover:text-white transition-colors">Производство</Link></li>
-                <li><Link to="/catalog/land" className="hover:text-white transition-colors">Земельные участки</Link></li>
+              <ul className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                {(categoryLinks || DEFAULT_CATEGORIES).map(item => (
+                  <li key={item.href}>
+                    <Link to={item.href} className="hover:text-white transition-colors">{item.label}</Link>
+                  </li>
+                ))}
               </ul>
             </div>
+
+            {/* Контакты */}
             <div>
               <div className="font-semibold text-white mb-3">Контакты</div>
               <ul className="space-y-2 text-sm">

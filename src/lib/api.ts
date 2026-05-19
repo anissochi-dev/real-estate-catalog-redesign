@@ -190,6 +190,9 @@ export interface PublicSettings {
   legal_personal_data?: string;
   legal_privacy_policy?: string;
   legal_marketing_consent?: string;
+  footer_description?: string;
+  footer_catalog_links?: string;
+  footer_extra_links?: string;
 }
 
 export async function fetchPublicSettings(): Promise<PublicSettings> {

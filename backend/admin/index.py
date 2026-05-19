@@ -441,7 +441,9 @@ def _settings(cur, conn, method, event, user):
                           ('yandex_api_key', 500), ('yandex_folder_id', 100),
                           ('yookassa_shop_id', 100), ('yookassa_secret_key', 500),
                           ('legal_personal_data', 10000), ('legal_privacy_policy', 10000),
-                          ('legal_marketing_consent', 10000)]:
+                          ('legal_marketing_consent', 10000),
+                          ('footer_description', 1000), ('footer_catalog_links', 3000),
+                          ('footer_extra_links', 3000)]:
             if f in body:
                 fields.append(f"{f} = {_str_or_null(body[f], length)}")
         if 'company_since_year' in body:
