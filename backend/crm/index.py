@@ -467,4 +467,119 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
                 'points': int(r[4]), 'deals_won': int(r[5])
             } for r in rows])
 
+    # ── EVENTS (Календарь) ─────────────────────────────────────────────────────
+    if resource == 'events':
+        if method == 'GET' and not resource_id:
+            year = qs.get('year')
+            month = qs.get('month')
+            if year and month:
+                cur.execute("""
+                    SELECT e.id, e.title, e.description, e.event_type, e.starts_at, e.ends_at,
+                           e.is_done, e.deal_id, e.owner_id, e.listing_id,
+                           e.created_by, e.assigned_to, e.created_at,
+                           cb.name as creator_name, at.name as assigned_name,
+                           d.title as deal_title, o.name as owner_name,
+                           l.title as listing_title
+                    FROM crm_events e
+                    LEFT JOIN users cb ON cb.id = e.created_by
+                    LEFT JOIN users at ON at.id = e.assigned_to
+                    LEFT JOIN crm_deals d ON d.id = e.deal_id
+                    LEFT JOIN crm_owners o ON o.id = e.owner_id
+                    LEFT JOIN listings l ON l.id = e.listing_id
+                    WHERE EXTRACT(YEAR FROM e.starts_at) = %s
+                      AND EXTRACT(MONTH FROM e.starts_at) = %s
+                    ORDER BY e.starts_at ASC
+                """, (int(year), int(month)))
+            else:
+                cur.execute("""
+                    SELECT e.id, e.title, e.description, e.event_type, e.starts_at, e.ends_at,
+                           e.is_done, e.deal_id, e.owner_id, e.listing_id,
+                           e.created_by, e.assigned_to, e.created_at,
+                           cb.name as creator_name, at.name as assigned_name,
+                           d.title as deal_title, o.name as owner_name,
+                           l.title as listing_title
+                    FROM crm_events e
+                    LEFT JOIN users cb ON cb.id = e.created_by
+                    LEFT JOIN users at ON at.id = e.assigned_to
+                    LEFT JOIN crm_deals d ON d.id = e.deal_id
+                    LEFT JOIN crm_owners o ON o.id = e.owner_id
+                    LEFT JOIN listings l ON l.id = e.listing_id
+                    WHERE e.starts_at >= NOW() - INTERVAL '7 days'
+                    ORDER BY e.starts_at ASC
+                    LIMIT 100
+                """)
+            rows = cur.fetchall()
+            def row_to_event(r):
+                return {
+                    'id': r[0], 'title': r[1], 'description': r[2], 'event_type': r[3],
+                    'starts_at': r[4], 'ends_at': r[5], 'is_done': r[6],
+                    'deal_id': r[7], 'owner_id': r[8], 'listing_id': r[9],
+                    'created_by': r[10], 'assigned_to': r[11], 'created_at': r[12],
+                    'creator_name': r[13], 'assigned_name': r[14],
+                    'deal_title': r[15], 'owner_name': r[16], 'listing_title': r[17],
+                }
+            return ok([row_to_event(r) for r in rows])
+
+        if method == 'GET' and resource_id:
+            cur.execute("""
+                SELECT e.id, e.title, e.description, e.event_type, e.starts_at, e.ends_at,
+                       e.is_done, e.deal_id, e.owner_id, e.listing_id,
+                       e.created_by, e.assigned_to, e.created_at,
+                       cb.name, at.name, d.title, o.name, l.title
+                FROM crm_events e
+                LEFT JOIN users cb ON cb.id = e.created_by
+                LEFT JOIN users at ON at.id = e.assigned_to
+                LEFT JOIN crm_deals d ON d.id = e.deal_id
+                LEFT JOIN crm_owners o ON o.id = e.owner_id
+                LEFT JOIN listings l ON l.id = e.listing_id
+                WHERE e.id = %s
+            """, (resource_id,))
+            r = cur.fetchone()
+            if not r:
+                return err('Не найдено', 404)
+            return ok({
+                'id': r[0], 'title': r[1], 'description': r[2], 'event_type': r[3],
+                'starts_at': r[4], 'ends_at': r[5], 'is_done': r[6],
+                'deal_id': r[7], 'owner_id': r[8], 'listing_id': r[9],
+                'created_by': r[10], 'assigned_to': r[11], 'created_at': r[12],
+                'creator_name': r[13], 'assigned_name': r[14],
+                'deal_title': r[15], 'owner_name': r[16], 'listing_title': r[17],
+            })
+
+        if method == 'POST':
+            if not body.get('title') or not body.get('starts_at'):
+                return err('Укажите title и starts_at')
+            cur.execute("""
+                INSERT INTO crm_events
+                  (title, description, event_type, starts_at, ends_at,
+                   deal_id, owner_id, listing_id, created_by, assigned_to)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
+            """, (
+                body['title'], body.get('description'), body.get('event_type', 'note'),
+                body['starts_at'], body.get('ends_at'),
+                body.get('deal_id'), body.get('owner_id'), body.get('listing_id'),
+                user['id'], body.get('assigned_to', user['id'])
+            ))
+            new_id = cur.fetchone()[0]
+            return ok({'id': new_id}, 201)
+
+        if method == 'PUT' and resource_id:
+            fields = []
+            vals = []
+            for f in ('title', 'description', 'event_type', 'starts_at', 'ends_at',
+                      'is_done', 'deal_id', 'owner_id', 'listing_id', 'assigned_to'):
+                if f in body:
+                    fields.append(f'{f} = %s')
+                    vals.append(body[f])
+            if fields:
+                fields.append('updated_at = NOW()')
+                vals.append(resource_id)
+                cur.execute(f"UPDATE crm_events SET {', '.join(fields)} WHERE id = %s", vals)
+            return ok({'ok': True})
+
+        if method == 'DELETE' and resource_id:
+            cur.execute("UPDATE crm_events SET is_done = TRUE WHERE id = %s", (resource_id,))
+            return ok({'ok': True})
+
     return err('Неизвестный маршрут', 404)

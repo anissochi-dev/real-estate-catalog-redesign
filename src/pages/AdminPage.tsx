@@ -11,6 +11,7 @@ import CrmDashboard from './admin/crm/CrmDashboard';
 import CrmOwners from './admin/crm/CrmOwners';
 import CrmKanban from './admin/crm/CrmKanban';
 import CrmGamification from './admin/crm/CrmGamification';
+import CrmCalendar from './admin/crm/CrmCalendar';
 import CrmChecks from './admin/crm/CrmChecks';
 import CrmPayments from './admin/crm/CrmPayments';
 import PhoneBook from './admin/PhoneBook';
@@ -35,6 +36,7 @@ export default function AdminPage({ onExit }: Props) {
       {section === 'pages' && <PagesAdmin />}
       {section === 'settings' && <SettingsAdmin />}
       {section === 'crm-dashboard' && <CrmDashboard />}
+      {section === 'crm-calendar' && <CrmCalendar />}
       {section === 'crm-owners' && <CrmOwners />}
       {section === 'crm-kanban' && <CrmKanban />}
       {section === 'crm-gamification' && <CrmGamification />}
