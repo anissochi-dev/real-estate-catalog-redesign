@@ -124,6 +124,39 @@ export const adminApi = {
 
   // stats
   stats: () => req(`${ADMIN_URL}?resource=stats`),
+
+  // listing history
+  getListingHistory: (id: number) => req(`${ADMIN_URL}?resource=listing_history&id=${id}`),
+  addListingHistory: (id: number, action: string, changes?: Record<string, unknown>) =>
+    req(`${ADMIN_URL}?resource=listing_history&id=${id}`, {
+      method: 'POST',
+      body: JSON.stringify({ action, changes: changes || {} }),
+    }),
+
+  // listing stats
+  getListingStats: (id: number) => req(`${ADMIN_URL}?resource=listing_stats&id=${id}`),
+
+  // bulk operations
+  bulkListings: (ids: number[], op: string, value?: unknown) =>
+    req(`${ADMIN_URL}?resource=listings_bulk`, {
+      method: 'POST',
+      body: JSON.stringify({ ids, op, value }),
+    }),
+
+  // phones
+  listPhones: (page = 1) => req(`${ADMIN_URL}?resource=phones&page=${page}`),
+  searchPhones: (q: string) => req(`${ADMIN_URL}?resource=phones&action=search&q=${encodeURIComponent(q)}`),
+  getPhone: (id: number) => req(`${ADMIN_URL}?resource=phones&id=${id}`),
+  createPhone: (data: Record<string, unknown>) =>
+    req(`${ADMIN_URL}?resource=phones`, { method: 'POST', body: JSON.stringify(data) }),
+  updatePhone: (id: number, data: Record<string, unknown>) =>
+    req(`${ADMIN_URL}?resource=phones&id=${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  syncPhones: () =>
+    req(`${ADMIN_URL}?resource=phones&action=sync`, { method: 'POST', body: '{}' }),
+  linkPhone: (id: number, data: { listing_id?: number; lead_id?: number; role?: string }) =>
+    req(`${ADMIN_URL}?resource=phones&id=${id}&action=link`, { method: 'POST', body: JSON.stringify(data) }),
+  unlinkPhone: (id: number, data: { listing_id?: number; lead_id?: number }) =>
+    req(`${ADMIN_URL}?resource=phones&id=${id}&action=unlink`, { method: 'POST', body: JSON.stringify(data) }),
 };
 
 export async function uploadFile(file: File, folder: 'photos' | 'logo' | 'watermark' = 'photos'): Promise<string> {

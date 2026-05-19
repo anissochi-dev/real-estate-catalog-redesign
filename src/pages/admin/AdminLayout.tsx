@@ -7,7 +7,8 @@ const IDLE_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 const IDLE_WARNING_MS = 2 * 60 * 1000;
 
 export type AdminSection = 'dashboard' | 'listings' | 'leads' | 'users' | 'pages' | 'settings' | 'ai-logs'
-  | 'crm-dashboard' | 'crm-owners' | 'crm-kanban' | 'crm-gamification' | 'crm-checks' | 'crm-payments';
+  | 'crm-dashboard' | 'crm-owners' | 'crm-kanban' | 'crm-gamification' | 'crm-checks' | 'crm-payments'
+  | 'phones';
 
 interface Props {
   section: AdminSection;
@@ -25,6 +26,7 @@ const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; gro
   { id: 'users', label: 'Пользователи', icon: 'Users', roles: ['admin'] },
   { id: 'pages', label: 'Страницы', icon: 'FileText', roles: ['admin', 'editor'] },
   { id: 'settings', label: 'Настройки', icon: 'Settings', roles: ['admin', 'editor'] },
+  { id: 'phones', label: 'Телефонная база', icon: 'Phone', roles: ['admin', 'editor', 'manager'] },
   { id: 'crm-dashboard', label: 'CRM — Обзор', icon: 'PieChart', roles: CRM_ROLES, group: 'crm' },
 
   { id: 'crm-kanban', label: 'Воронка сделок', icon: 'KanbanSquare', roles: CRM_ROLES, group: 'crm' },

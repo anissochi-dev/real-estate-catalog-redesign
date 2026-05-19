@@ -144,6 +144,14 @@ def handler(event, context):
                 return _xml_feeds(cur, conn, method, rid, event, user)
             if resource == 'stats':
                 return _stats(cur)
+            if resource == 'listing_history':
+                return _listing_history(cur, method, rid, event, user)
+            if resource == 'listing_stats':
+                return _listing_stats(cur, rid)
+            if resource == 'listings_bulk':
+                return _listings_bulk(cur, conn, event, user)
+            if resource == 'phones':
+                return _phones(cur, conn, method, rid, action, event, user)
 
             return _err(400, 'Неизвестный ресурс')
     finally:
@@ -595,6 +603,339 @@ def _stats(cur):
         'by_category': by_cat,
         'leads_by_status': by_status,
     })
+
+
+def _listing_history(cur, method, rid, event, user):
+    if method == 'GET' and rid:
+        cur.execute(
+            f"SELECT lh.id, lh.listing_id, lh.user_id, lh.user_name, lh.action, lh.changes, lh.created_at "
+            f"FROM {SCHEMA}.listing_history lh "
+            f"WHERE lh.listing_id = {int(rid)} ORDER BY lh.created_at DESC LIMIT 100"
+        )
+        rows = []
+        for r in cur.fetchall():
+            d = dict(r)
+            if d.get('created_at'):
+                d['created_at'] = d['created_at'].isoformat()
+            rows.append(d)
+        return _ok({'history': rows})
+    if method == 'POST' and rid:
+        body = json.loads(event.get('body') or '{}')
+        action = _safe(body.get('action') or 'updated', 50)
+        changes = json.dumps(body.get('changes') or {}, ensure_ascii=False)
+        user_name = _safe(user['name'], 150)
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.listing_history (listing_id, user_id, user_name, action, changes) "
+            f"VALUES ({int(rid)}, {user['id']}, '{user_name}', '{action}', '{changes}')"
+        )
+        return _ok({'success': True})
+    return _err(400, 'Bad request')
+
+
+def _listing_stats(cur, rid):
+    if not rid:
+        return _err(400, 'id обязателен')
+    lid = int(rid)
+    cur.execute(
+        f"SELECT COUNT(*) AS total FROM {SCHEMA}.listing_views WHERE listing_id = {lid}"
+    )
+    total_views = cur.fetchone()['total']
+    cur.execute(
+        f"SELECT COUNT(*) AS c FROM {SCHEMA}.listing_views "
+        f"WHERE listing_id = {lid} AND viewed_at >= NOW() - INTERVAL '30 days'"
+    )
+    views_30d = cur.fetchone()['c']
+    cur.execute(
+        f"SELECT COUNT(*) AS c FROM {SCHEMA}.listing_views "
+        f"WHERE listing_id = {lid} AND viewed_at >= NOW() - INTERVAL '7 days'"
+    )
+    views_7d = cur.fetchone()['c']
+    cur.execute(
+        f"SELECT COUNT(*) AS c FROM {SCHEMA}.leads WHERE listing_id = {lid}"
+    )
+    leads_total = cur.fetchone()['c']
+    cur.execute(
+        f"SELECT COUNT(*) AS c FROM {SCHEMA}.leads "
+        f"WHERE listing_id = {lid} AND created_at >= NOW() - INTERVAL '30 days'"
+    )
+    leads_30d = cur.fetchone()['c']
+    cur.execute(
+        f"SELECT stat_date::text, views_count, leads_count FROM {SCHEMA}.listing_stats_daily "
+        f"WHERE listing_id = {lid} ORDER BY stat_date DESC LIMIT 30"
+    )
+    daily = [dict(r) for r in cur.fetchall()]
+    return _ok({
+        'total_views': total_views,
+        'views_30d': views_30d,
+        'views_7d': views_7d,
+        'leads_total': leads_total,
+        'leads_30d': leads_30d,
+        'daily': daily,
+    })
+
+
+def _listings_bulk(cur, conn, event, user):
+    body = json.loads(event.get('body') or '{}')
+    ids = [int(i) for i in (body.get('ids') or []) if str(i).isdigit()]
+    op = body.get('op')
+    if not ids or not op:
+        return _err(400, 'ids и op обязательны')
+    ids_sql = ', '.join(str(i) for i in ids)
+    if op == 'archive':
+        cur.execute(
+            f"UPDATE {SCHEMA}.listings SET status = 'archived', updated_at = NOW() WHERE id IN ({ids_sql})"
+        )
+        for lid in ids:
+            _write_history(cur, lid, user, 'archived', {})
+    elif op == 'activate':
+        cur.execute(
+            f"UPDATE {SCHEMA}.listings SET status = 'active', updated_at = NOW() WHERE id IN ({ids_sql})"
+        )
+        for lid in ids:
+            _write_history(cur, lid, user, 'restored', {})
+    elif op == 'set_hot':
+        val = _bool(body.get('value', True))
+        cur.execute(
+            f"UPDATE {SCHEMA}.listings SET is_hot = {val}, updated_at = NOW() WHERE id IN ({ids_sql})"
+        )
+    elif op == 'set_new':
+        val = _bool(body.get('value', True))
+        cur.execute(
+            f"UPDATE {SCHEMA}.listings SET is_new = {val}, updated_at = NOW() WHERE id IN ({ids_sql})"
+        )
+    elif op == 'set_category':
+        cat = _safe(body.get('value') or '', 50)
+        cur.execute(
+            f"UPDATE {SCHEMA}.listings SET category = '{cat}', updated_at = NOW() WHERE id IN ({ids_sql})"
+        )
+    elif op == 'set_city':
+        city = _safe(body.get('value') or '', 100)
+        cur.execute(
+            f"UPDATE {SCHEMA}.listings SET city = '{city}', updated_at = NOW() WHERE id IN ({ids_sql})"
+        )
+    else:
+        return _err(400, f'Неизвестная операция: {op}')
+    conn.commit()
+    return _ok({'success': True, 'affected': len(ids)})
+
+
+def _write_history(cur, listing_id, user, action, changes):
+    user_name = _safe(user['name'], 150)
+    changes_json = json.dumps(changes, ensure_ascii=False).replace("'", "''")
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.listing_history (listing_id, user_id, user_name, action, changes) "
+        f"VALUES ({listing_id}, {user['id']}, '{user_name}', '{action}', '{changes_json}')"
+    )
+
+
+def _normalize_phone(phone):
+    import re
+    digits = re.sub(r'\D', '', phone or '')
+    if len(digits) == 11 and digits.startswith('8'):
+        digits = '7' + digits[1:]
+    return digits
+
+
+def _phones(cur, conn, method, rid, action, event, user):
+    if method == 'GET':
+        if action == 'search':
+            params = event.get('queryStringParameters') or {}
+            q = _safe(params.get('q') or '', 100)
+            q_norm = _normalize_phone(q)
+            cur.execute(
+                f"SELECT pc.*, "
+                f"  (SELECT json_agg(json_build_object('id', l.id, 'title', l.title, 'status', l.status, 'role', pll.role)) "
+                f"   FROM {SCHEMA}.phone_listing_links pll JOIN {SCHEMA}.listings l ON l.id = pll.listing_id "
+                f"   WHERE pll.phone_contact_id = pc.id) AS linked_listings, "
+                f"  (SELECT json_agg(json_build_object('id', ld.id, 'name', ld.name, 'status', ld.status, 'created_at', ld.created_at)) "
+                f"   FROM {SCHEMA}.phone_lead_links pldl JOIN {SCHEMA}.leads ld ON ld.id = pldl.lead_id "
+                f"   WHERE pldl.phone_contact_id = pc.id) AS linked_leads "
+                f"FROM {SCHEMA}.phone_contacts pc "
+                f"WHERE pc.phone_normalized LIKE '%{q_norm}%' OR pc.name ILIKE '%{_safe(q, 100)}%' "
+                f"ORDER BY pc.updated_at DESC LIMIT 50"
+            )
+            rows = [_ser_phone(dict(r)) for r in cur.fetchall()]
+            return _ok({'contacts': rows})
+
+        if rid:
+            cur.execute(
+                f"SELECT pc.*, "
+                f"  (SELECT json_agg(json_build_object('id', l.id, 'title', l.title, 'status', l.status, 'role', pll.role, 'image', l.image)) "
+                f"   FROM {SCHEMA}.phone_listing_links pll JOIN {SCHEMA}.listings l ON l.id = pll.listing_id "
+                f"   WHERE pll.phone_contact_id = pc.id) AS linked_listings, "
+                f"  (SELECT json_agg(json_build_object('id', ld.id, 'name', ld.name, 'status', ld.status, 'created_at', ld.created_at)) "
+                f"   FROM {SCHEMA}.phone_lead_links pldl JOIN {SCHEMA}.leads ld ON ld.id = pldl.lead_id "
+                f"   WHERE pldl.phone_contact_id = pc.id) AS linked_leads "
+                f"FROM {SCHEMA}.phone_contacts pc WHERE pc.id = {int(rid)}"
+            )
+            row = cur.fetchone()
+            if not row:
+                return _err(404, 'Не найдено')
+            return _ok({'contact': _ser_phone(dict(row))})
+
+        params = event.get('queryStringParameters') or {}
+        page = max(1, int(params.get('page') or 1))
+        limit = 50
+        offset = (page - 1) * limit
+        cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.phone_contacts")
+        total = cur.fetchone()['c']
+        cur.execute(
+            f"SELECT pc.id, pc.phone, pc.phone_normalized, pc.name, pc.company, pc.notes, pc.tags, pc.created_at, pc.updated_at, "
+            f"  (SELECT COUNT(*) FROM {SCHEMA}.phone_listing_links WHERE phone_contact_id = pc.id) AS listings_count, "
+            f"  (SELECT COUNT(*) FROM {SCHEMA}.phone_lead_links WHERE phone_contact_id = pc.id) AS leads_count "
+            f"FROM {SCHEMA}.phone_contacts pc ORDER BY pc.updated_at DESC LIMIT {limit} OFFSET {offset}"
+        )
+        rows = [_ser_phone(dict(r)) for r in cur.fetchall()]
+        return _ok({'contacts': rows, 'total': total, 'page': page, 'pages': (total + limit - 1) // limit})
+
+    body = json.loads(event.get('body') or '{}')
+
+    if method == 'POST' and action == 'sync':
+        synced = _sync_phones(cur, conn)
+        return _ok({'success': True, 'synced': synced})
+
+    if method == 'POST' and action == 'link':
+        cid = int(rid)
+        listing_id = body.get('listing_id')
+        lead_id = body.get('lead_id')
+        role = _safe(body.get('role') or 'owner', 50)
+        if listing_id:
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.phone_listing_links (phone_contact_id, listing_id, role) "
+                f"VALUES ({cid}, {int(listing_id)}, '{role}') ON CONFLICT DO NOTHING"
+            )
+        if lead_id:
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.phone_lead_links (phone_contact_id, lead_id) "
+                f"VALUES ({cid}, {int(lead_id)}) ON CONFLICT DO NOTHING"
+            )
+        conn.commit()
+        return _ok({'success': True})
+
+    if method == 'POST' and action == 'unlink':
+        cid = int(rid)
+        listing_id = body.get('listing_id')
+        lead_id = body.get('lead_id')
+        if listing_id:
+            cur.execute(
+                f"UPDATE {SCHEMA}.phone_listing_links SET role = role "
+                f"WHERE phone_contact_id = {cid} AND listing_id = {int(listing_id)}"
+            )
+            cur.execute(
+                f"DELETE FROM {SCHEMA}.phone_listing_links "
+                f"WHERE phone_contact_id = {cid} AND listing_id = {int(listing_id)}"
+            )
+        if lead_id:
+            cur.execute(
+                f"DELETE FROM {SCHEMA}.phone_lead_links "
+                f"WHERE phone_contact_id = {cid} AND lead_id = {int(lead_id)}"
+            )
+        conn.commit()
+        return _ok({'success': True})
+
+    if method == 'POST':
+        phone = _safe(body.get('phone') or '', 30)
+        if not phone:
+            return _err(400, 'Телефон обязателен')
+        norm = _normalize_phone(phone)
+        cur.execute(f"SELECT id FROM {SCHEMA}.phone_contacts WHERE phone_normalized = '{norm}'")
+        existing = cur.fetchone()
+        if existing:
+            return _err(409, f'Номер уже существует с id={existing["id"]}')
+        name = _safe(body.get('name') or '', 200)
+        company = _safe(body.get('company') or '', 200)
+        notes = _safe(body.get('notes') or '', 2000)
+        tags = _safe(body.get('tags') or '', 500)
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.phone_contacts (phone, phone_normalized, name, company, notes, tags, created_by) "
+            f"VALUES ('{_safe(phone, 30)}', '{norm}', '{name}', '{company}', '{notes}', '{tags}', {user['id']}) RETURNING id"
+        )
+        new_id = cur.fetchone()['id']
+        conn.commit()
+        return _ok({'id': new_id, 'success': True})
+
+    if method == 'PUT' and rid:
+        fields = []
+        for f, length in [('name', 200), ('company', 200), ('notes', 2000), ('tags', 500)]:
+            if f in body:
+                fields.append(f"{f} = {_str_or_null(body[f], length)}")
+        if 'phone' in body:
+            new_phone = _safe(body['phone'], 30)
+            new_norm = _normalize_phone(new_phone)
+            fields.append(f"phone = '{new_phone}'")
+            fields.append(f"phone_normalized = '{new_norm}'")
+        if not fields:
+            return _err(400, 'Нет полей')
+        fields.append("updated_at = NOW()")
+        cur.execute(f"UPDATE {SCHEMA}.phone_contacts SET {', '.join(fields)} WHERE id = {int(rid)}")
+        conn.commit()
+        return _ok({'success': True})
+
+    return _err(400, 'Bad request')
+
+
+def _sync_phones(cur, conn):
+    synced = 0
+    cur.execute(
+        f"SELECT id, owner_phone, owner_name FROM {SCHEMA}.listings "
+        f"WHERE owner_phone IS NOT NULL AND owner_phone != ''"
+    )
+    listings = cur.fetchall()
+    for row in listings:
+        phone = row['owner_phone']
+        norm = _normalize_phone(phone)
+        if not norm:
+            continue
+        name = row['owner_name'] or ''
+        cur.execute(f"SELECT id FROM {SCHEMA}.phone_contacts WHERE phone_normalized = '{norm}'")
+        existing = cur.fetchone()
+        if existing:
+            cid = existing['id']
+        else:
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.phone_contacts (phone, phone_normalized, name) "
+                f"VALUES ('{_safe(phone, 30)}', '{norm}', '{_safe(name, 200)}') RETURNING id"
+            )
+            cid = cur.fetchone()['id']
+            synced += 1
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.phone_listing_links (phone_contact_id, listing_id, role) "
+            f"VALUES ({cid}, {row['id']}, 'owner') ON CONFLICT DO NOTHING"
+        )
+    cur.execute(
+        f"SELECT id, phone, name FROM {SCHEMA}.leads WHERE phone IS NOT NULL AND phone != ''"
+    )
+    leads = cur.fetchall()
+    for row in leads:
+        phone = row['phone']
+        norm = _normalize_phone(phone)
+        if not norm:
+            continue
+        name = row['name'] or ''
+        cur.execute(f"SELECT id FROM {SCHEMA}.phone_contacts WHERE phone_normalized = '{norm}'")
+        existing = cur.fetchone()
+        if existing:
+            cid = existing['id']
+        else:
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.phone_contacts (phone, phone_normalized, name) "
+                f"VALUES ('{_safe(phone, 30)}', '{norm}', '{_safe(name, 200)}') RETURNING id"
+            )
+            cid = cur.fetchone()['id']
+            synced += 1
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.phone_lead_links (phone_contact_id, lead_id) "
+            f"VALUES ({cid}, {row['id']}) ON CONFLICT DO NOTHING"
+        )
+    conn.commit()
+    return synced
+
+
+def _ser_phone(row):
+    for k in ('created_at', 'updated_at'):
+        if row.get(k) is not None:
+            row[k] = row[k].isoformat()
+    return row
 
 
 def _ser(row):

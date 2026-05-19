@@ -13,6 +13,7 @@ import CrmKanban from './admin/crm/CrmKanban';
 import CrmGamification from './admin/crm/CrmGamification';
 import CrmChecks from './admin/crm/CrmChecks';
 import CrmPayments from './admin/crm/CrmPayments';
+import PhoneBook from './admin/PhoneBook';
 
 const CRM_ROLES = ['admin', 'director', 'broker', 'office_manager', 'manager'];
 
@@ -39,6 +40,7 @@ export default function AdminPage({ onExit }: Props) {
       {section === 'crm-gamification' && <CrmGamification />}
       {section === 'crm-checks' && <CrmChecks />}
       {section === 'crm-payments' && <CrmPayments />}
+      {section === 'phones' && <PhoneBook />}
     </AdminLayout>
   );
 }
