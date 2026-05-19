@@ -30,6 +30,15 @@ export default function CrmChecks() {
 
   const headers = { 'Content-Type': 'application/json', 'X-Auth-Token': token || '' };
 
+  const { data: serviceStatus = {} } = useQuery<Record<string, boolean>>({
+    queryKey: ['crm-checks-status'],
+    queryFn: async () => {
+      const r = await fetch(`${CHECKS_URL}/?action=status`, { headers });
+      return r.json();
+    },
+    staleTime: 60_000,
+  });
+
   const { data: quota = [] } = useQuery<{ source: string; used: number; limit: number; percent: number }[]>({
     queryKey: ['crm-quota'],
     queryFn: async () => {
@@ -102,12 +111,48 @@ export default function CrmChecks() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="text-2xl font-display font-700">Проверка безопасности</h2>
           <p className="text-sm text-muted-foreground">Проверка через внешние API с кэшированием на 30 дней</p>
         </div>
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(SOURCE_INFO).map(([src, info]) => {
+            const connected = serviceStatus[src];
+            return (
+              <div
+                key={src}
+                title={connected ? 'API-ключ настроен' : 'API-ключ не настроен — перейдите в Настройки → Интеграции ИИ'}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition ${
+                  connected
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                    : 'border-border bg-muted/50 text-muted-foreground'
+                }`}
+              >
+                <Icon
+                  name={connected ? 'CheckCircle2' : 'CircleDashed'}
+                  size={13}
+                  className={connected ? 'text-emerald-500' : 'text-muted-foreground'}
+                />
+                {info.label}
+              </div>
+            );
+          })}
+        </div>
       </div>
+
+      {Object.values(serviceStatus).length > 0 && Object.values(serviceStatus).every(v => !v) && (
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
+          <Icon name="AlertTriangle" size={18} className="shrink-0 mt-0.5 text-amber-600" />
+          <div className="text-sm">
+            <div className="font-semibold mb-0.5">Ни один сервис не подключён</div>
+            <div className="text-amber-800">
+              Добавьте API-ключи в{' '}
+              <span className="font-semibold">Настройки → Интеграции ИИ → Проверка безопасности</span>.
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-1 bg-muted rounded-xl p-1 w-fit">
         {(['search', 'history', 'quota'] as const).map(t => (
@@ -144,19 +189,35 @@ export default function CrmChecks() {
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Источники</label>
                 <div className="flex flex-col gap-2 mt-2">
-                  {Object.entries(SOURCE_INFO).map(([src, info]) => (
-                    <button
-                      key={src}
-                      onClick={() => toggleSource(src)}
-                      className={`flex items-center justify-between p-2.5 rounded-xl border text-sm transition ${selectedSources.includes(src) ? 'border-brand-blue bg-brand-blue/5' : 'border-border opacity-50'}`}
-                    >
-                      <div>
-                        <div className={`text-xs font-semibold px-2 py-0.5 rounded-full inline-block ${info.color}`}>{info.label}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">{info.desc}</div>
-                      </div>
-                      <Icon name={selectedSources.includes(src) ? 'CheckCircle2' : 'Circle'} size={16} className={selectedSources.includes(src) ? 'text-brand-blue' : 'text-muted-foreground'} />
-                    </button>
-                  ))}
+                  {Object.entries(SOURCE_INFO).map(([src, info]) => {
+                    const connected = serviceStatus[src];
+                    const selected = selectedSources.includes(src);
+                    return (
+                      <button
+                        key={src}
+                        onClick={() => toggleSource(src)}
+                        className={`flex items-center justify-between p-2.5 rounded-xl border text-sm transition ${selected ? 'border-brand-blue bg-brand-blue/5' : 'border-border opacity-60'}`}
+                      >
+                        <div className="text-left">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full inline-block ${info.color}`}>{info.label}</span>
+                            {connected === true && (
+                              <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-0.5">
+                                <Icon name="Wifi" size={10} />подключён
+                              </span>
+                            )}
+                            {connected === false && (
+                              <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                                <Icon name="WifiOff" size={10} />нет ключа
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">{info.desc}</div>
+                        </div>
+                        <Icon name={selected ? 'CheckCircle2' : 'Circle'} size={16} className={selected ? 'text-brand-blue' : 'text-muted-foreground'} />
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>

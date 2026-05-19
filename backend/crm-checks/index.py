@@ -178,6 +178,13 @@ def handler(event: dict, context) -> dict:
 def run_check(conn, user, method, qs, body, check_keys=None):
     cur = conn.cursor()
 
+    if method == 'GET' and qs.get('action') == 'status':
+        return ok({
+            'zachestny': bool((check_keys or {}).get('zachestny')),
+            'newdb': bool((check_keys or {}).get('newdb')),
+            'bezopasno': bool((check_keys or {}).get('bezopasno')),
+        })
+
     if method == 'GET' and qs.get('action') == 'quota':
         cur.execute("SELECT source, requests_used, requests_limit FROM crm_api_quota ORDER BY source")
         rows = cur.fetchall()
