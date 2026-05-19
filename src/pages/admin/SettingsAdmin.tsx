@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { adminApi, aiApi } from '@/lib/adminApi';
+import { adminApi, aiApi, CRM_PAYMENTS_URL, getToken } from '@/lib/adminApi';
 import { useSettings } from '@/contexts/SettingsContext';
 import PurposesAdmin from './PurposesAdmin';
 import XmlFeedsAdmin from './XmlFeedsAdmin';
@@ -91,10 +91,9 @@ export default function SettingsAdmin() {
     }
     setYkState({ loading: true, status: 'idle', message: '' });
     try {
-      const { CRM_PAYMENTS_URL } = await import('@/lib/adminApi');
       const params = new URLSearchParams({ action: 'ping', shop_id: shopId, secret_key: secretKey });
       const r = await fetch(`${CRM_PAYMENTS_URL}/?${params}`, {
-        headers: { 'X-Auth-Token': '' },
+        headers: { 'X-Auth-Token': getToken() },
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);

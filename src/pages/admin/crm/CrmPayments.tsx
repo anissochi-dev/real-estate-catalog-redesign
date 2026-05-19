@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { CRM_PAYMENTS_URL as PAYMENTS_URL, CRM_URL } from '@/lib/adminApi';
+import { CRM_PAYMENTS_URL as PAYMENTS_URL, CRM_URL, adminApi } from '@/lib/adminApi';
 import { Payment, CreateForm, EMPTY_FORM, STATUS_INFO } from './paymentTypes';
 import PaymentCreateModal from './PaymentCreateModal';
 import PaymentTable from './PaymentTable';
@@ -107,12 +107,44 @@ export default function CrmPayments() {
     toast.success('Ссылка скопирована в буфер');
   };
 
+  const { data: settings } = useQuery({
+    queryKey: ['settings-yk-check'],
+    queryFn: () => adminApi.getSettings(),
+    staleTime: 60_000,
+  });
+  const ykConfigured = !!(settings?.settings?.yookassa_shop_id && settings?.settings?.yookassa_secret_key);
+
   const payments: Payment[] = data?.payments || [];
   const total: number = data?.total || 0;
   const totalPages = data?.pages || 1;
 
   return (
     <div className="space-y-5">
+      {/* ЮКасса не настроена — предупреждение */}
+      {settings && !ykConfigured && (
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
+          <Icon name="AlertTriangle" size={18} className="flex-shrink-0 mt-0.5 text-amber-600" />
+          <div className="flex-1 text-sm">
+            <div className="font-semibold mb-0.5">ЮКасса не настроена</div>
+            <div className="text-amber-800">
+              Платёжные ссылки не будут генерироваться. Добавьте Shop ID и Secret Key в{' '}
+              <span className="font-semibold">Настройки → Интеграции ИИ → ЮКасса</span>.
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-amber-300 text-amber-800 hover:bg-amber-100 shrink-0"
+            onClick={() => {
+              const event = new CustomEvent('navigate-admin', { detail: { tab: 'settings', subtab: 'integrations' } });
+              window.dispatchEvent(event);
+            }}
+          >
+            Настроить
+          </Button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>

@@ -106,7 +106,7 @@ export default function PaymentCreateModal({
               >
                 <option value="">— Не привязывать —</option>
                 {owners.map(o => (
-                  <option key={o.id} value={o.id}>{o.name}</option>
+                  <option key={o.id} value={String(o.id)}>{o.name}</option>
                 ))}
               </select>
             </div>
@@ -119,7 +119,7 @@ export default function PaymentCreateModal({
               >
                 <option value="">— Не привязывать —</option>
                 {deals.map(d => (
-                  <option key={d.id} value={d.id}>{d.title}</option>
+                  <option key={d.id} value={String(d.id)}>{d.title}</option>
                 ))}
               </select>
             </div>
