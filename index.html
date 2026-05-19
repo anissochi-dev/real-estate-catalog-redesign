@@ -72,6 +72,56 @@
       })();
     </script>
 
+    <!-- Защита контента -->
+    <script>
+      (function() {
+        // 1. Блокируем ПКМ на изображениях
+        document.addEventListener('contextmenu', function(e) {
+          if (e.target && (e.target.tagName === 'IMG' || e.target.closest?.('img'))) {
+            e.preventDefault();
+            return false;
+          }
+        }, true);
+
+        // 2. Блокируем drag изображений
+        document.addEventListener('dragstart', function(e) {
+          if (e.target && e.target.tagName === 'IMG') {
+            e.preventDefault();
+            return false;
+          }
+        }, true);
+
+        // 3. Блокируем копирование текста (Ctrl/Cmd+C) вне полей ввода
+        document.addEventListener('copy', function(e) {
+          var tag = document.activeElement && document.activeElement.tagName;
+          if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+          e.preventDefault();
+          return false;
+        }, true);
+
+        // 4. Горячие клавиши: Ctrl+U (просмотр кода), Ctrl+S (сохранение), Ctrl+P (печать), F12
+        document.addEventListener('keydown', function(e) {
+          var ctrl = e.ctrlKey || e.metaKey;
+          var tag = document.activeElement && document.activeElement.tagName;
+          var inField = tag === 'INPUT' || tag === 'TEXTAREA';
+
+          if (e.key === 'F12') { e.preventDefault(); return false; }
+          if (ctrl && e.shiftKey && ['i','j','c','k'].indexOf(e.key.toLowerCase()) !== -1) {
+            e.preventDefault(); return false;
+          }
+          if (ctrl && !inField && ['u','s','p'].indexOf(e.key.toLowerCase()) !== -1) {
+            e.preventDefault(); return false;
+          }
+        }, true);
+
+        // 5. Блокируем печать страницы
+        window.addEventListener('beforeprint', function(e) {
+          e.preventDefault();
+          return false;
+        });
+      })();
+    </script>
+
     <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS COMMENT! -->
 
     <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS COMMENT! -->

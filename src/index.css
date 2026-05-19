@@ -53,6 +53,41 @@
   }
 }
 
+/* ── Защита контента от копирования ─────────────────────────────────────── */
+
+/* Запрет выделения текста на публичных страницах */
+body {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Разрешаем выделение в полях ввода и текстовых блоках */
+input,
+textarea,
+select,
+[contenteditable] {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  user-select: text;
+}
+
+/* Защита изображений: запрет перетаскивания */
+img {
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  user-drag: none;
+}
+
+/* Защита от скриншотов через CSS print (не абсолютная, но создаёт барьер) */
+@media print {
+  body {
+    display: none !important;
+  }
+}
+
 @layer base {
   * {
     @apply border-border;
