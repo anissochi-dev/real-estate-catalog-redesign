@@ -86,10 +86,16 @@ export function useListingsState() {
     return true;
   });
 
-  const openEdit = (it?: Listing) => {
-    if (it) {
-      setEditing(it);
-      const imgs = splitImages(it.images);
+  const openEdit = (it?: Listing | Partial<Listing>) => {
+    if (it && (it as Listing).id) {
+      const full = it as Listing;
+      setEditing(full);
+      const imgs = splitImages(full.images);
+      if (!imgs.length && full.image) imgs.push(full.image);
+      setPhotos(imgs);
+    } else if (it) {
+      setEditing({ ...empty, ...it });
+      const imgs = splitImages((it as Listing).images || '');
       if (!imgs.length && it.image) imgs.push(it.image);
       setPhotos(imgs);
     } else {

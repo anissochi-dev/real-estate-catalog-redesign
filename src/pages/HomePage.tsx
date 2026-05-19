@@ -27,12 +27,12 @@ const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047
 
 const CATEGORIES = [
   { icon: 'Building2', label: 'Офисы', type: 'office', gradient: 'from-blue-500 to-indigo-600' },
-  { icon: 'ShoppingBag', label: 'Торговые помещения', type: 'retail', gradient: 'from-orange-500 to-rose-500' },
+  { icon: 'ShoppingBag', label: 'Магазин, торговое помещение', type: 'retail', gradient: 'from-orange-500 to-rose-500' },
   { icon: 'Warehouse', label: 'Склады', type: 'warehouse', gradient: 'from-slate-500 to-zinc-700' },
-  { icon: 'UtensilsCrossed', label: 'Общепит', type: 'restaurant', gradient: 'from-amber-500 to-red-500' },
+  { icon: 'UtensilsCrossed', label: 'Общепит, кафе, ресторан', type: 'restaurant', gradient: 'from-amber-500 to-red-500' },
   { icon: 'BedDouble', label: 'Гостиницы', type: 'hotel', gradient: 'from-pink-500 to-fuchsia-600' },
   { icon: 'Briefcase', label: 'Готовый бизнес', type: 'business', gradient: 'from-violet-500 to-purple-700' },
-  { icon: 'TrendingUp', label: 'ГАБ', type: 'gab', gradient: 'from-emerald-500 to-teal-600' },
+  { icon: 'TrendingUp', label: 'Готовый арендный бизнес (ГАБ)', type: 'gab', gradient: 'from-emerald-500 to-teal-600' },
   { icon: 'Factory', label: 'Производственные помещения', type: 'production', gradient: 'from-stone-500 to-neutral-700' },
   { icon: 'Trees', label: 'Земельные участки', type: 'land', gradient: 'from-lime-500 to-green-700' },
   { icon: 'Landmark', label: 'Отдельно стоящие здания', type: 'building', gradient: 'from-sky-500 to-blue-700' },

@@ -38,13 +38,17 @@ const DEFAULT_CATALOG: { label: string; page?: Page; href?: string }[] = [
 
 const DEFAULT_CATEGORIES: { label: string; href: string }[] = [
   { label: 'Офисы', href: '/catalog/office' },
-  { label: 'Торговые помещения', href: '/catalog/retail' },
+  { label: 'Магазин, торговое помещение', href: '/catalog/retail' },
   { label: 'Склады', href: '/catalog/warehouse' },
+  { label: 'Общепит, кафе, ресторан', href: '/catalog/restaurant' },
+  { label: 'Гостиницы', href: '/catalog/hotel' },
   { label: 'Готовый бизнес', href: '/catalog/business' },
-  { label: 'ГАБ', href: '/catalog/gab' },
-  { label: 'Общепит', href: '/catalog/restaurant' },
-  { label: 'Производство', href: '/catalog/production' },
-  { label: 'Земельные участки', href: '/catalog/land' },
+  { label: 'Готовый арендный бизнес (ГАБ)', href: '/catalog/gab' },
+  { label: 'Производственное помещение', href: '/catalog/production' },
+  { label: 'Земельный участок', href: '/catalog/land' },
+  { label: 'Отдельно стоящее здание', href: '/catalog/building' },
+  { label: 'Свободное назначение', href: '/catalog/free_purpose' },
+  { label: 'Автосервис', href: '/catalog/car_service' },
 ];
 
 function parseLinks(raw: string): { label: string; href: string }[] {

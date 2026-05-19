@@ -18,7 +18,7 @@ interface PropertyCardProps {
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  office: 'Офис', retail: 'Торговое', warehouse: 'Склад',
+  office: 'Офис', retail: 'Магазин/торговое', warehouse: 'Склад',
   restaurant: 'Общепит', business: 'Готовый бизнес', production: 'Производство',
   hotel: 'Гостиница', gab: 'ГАБ', land: 'Земля', building: 'Здание',
   free_purpose: 'Своб. назнач.', car_service: 'Автосервис',
@@ -236,21 +236,21 @@ export default function PropertyCard({
         </div>
 
         {/* ── Цена + ID ── */}
-        <div className="px-3 pt-2.5 pb-2.5 flex items-start justify-between gap-2 bg-brand-blue/[0.04] border-b border-brand-blue/10">
-          <div className="min-w-0">
-            <div className="font-display font-900 text-[18px] text-brand-blue leading-none tracking-tight">
+        <div className="px-3 pt-2.5 pb-2.5 bg-brand-blue/[0.04] border-b border-brand-blue/10">
+          <div className="flex items-start justify-between gap-1 min-w-0">
+            <div className="font-display font-900 text-base sm:text-[18px] text-brand-blue leading-none tracking-tight truncate">
               {property.price.toLocaleString('ru')} ₽{property.deal === 'rent' ? '/мес' : ''}
             </div>
-            {ppm2 && (
-              <div className="text-[11px] text-muted-foreground mt-0.5 font-medium flex items-center gap-1">
-                <Icon name="Scaling" size={10} className="text-muted-foreground/60" />
-                {ppm2.toLocaleString('ru')} ₽/м²
-              </div>
-            )}
+            <span className="text-[10px] font-mono text-slate-400 shrink-0 mt-0.5 select-none whitespace-nowrap">
+              #{publicId}
+            </span>
           </div>
-          <span className="text-[11px] font-mono text-slate-400 flex-shrink-0 mt-0.5 select-none">
-            #{publicId}
-          </span>
+          {ppm2 && (
+            <div className="text-[11px] text-muted-foreground mt-0.5 font-medium flex items-center gap-1">
+              <Icon name="Scaling" size={10} className="text-muted-foreground/60" />
+              {ppm2.toLocaleString('ru')} ₽/м²
+            </div>
+          )}
         </div>
 
         {/* ── Контент ── */}

@@ -1,6 +1,18 @@
+import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import { CATS } from './types';
 import { StatusFilter, clearDraft } from './useListingsState';
+import ImportFromUrlModal from '@/components/admin/ImportFromUrlModal';
+
+interface ImportedListing {
+  title: string;
+  description: string;
+  price: number;
+  area: number;
+  images: string[];
+  address: string;
+  source_url: string;
+}
 
 interface Props {
   statusFilter: StatusFilter;
@@ -13,6 +25,7 @@ interface Props {
   hasDraft: boolean;
   setHasDraft: (v: boolean) => void;
   onAdd: () => void;
+  onImport: (data: ImportedListing) => void;
   activeCount: number;
   archivedCount: number;
   totalCount: number;
@@ -22,9 +35,11 @@ interface Props {
 export default function ListingsToolbar({
   statusFilter, setStatusFilter, setSelected,
   search, setSearch, catFilter, setCatFilter,
-  hasDraft, setHasDraft, onAdd,
+  hasDraft, setHasDraft, onAdd, onImport,
   activeCount, archivedCount, totalCount, filteredCount,
 }: Props) {
+  const [importOpen, setImportOpen] = useState(false);
+
   return (
     <>
       <div className="flex flex-wrap justify-between items-center gap-3">
@@ -56,6 +71,12 @@ export default function ListingsToolbar({
               </button>
             </div>
           )}
+          <button
+            onClick={() => setImportOpen(true)}
+            className="border border-border text-foreground px-3 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2 hover:bg-muted transition-colors"
+          >
+            <Icon name="Link" size={15} /> Импорт по ссылке
+          </button>
           <button onClick={onAdd}
             className="btn-blue text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2">
             <Icon name="Plus" size={16} /> {hasDraft ? 'Продолжить черновик' : 'Добавить'}
@@ -86,6 +107,13 @@ export default function ListingsToolbar({
       <div className="text-xs text-muted-foreground">
         Показано: {filteredCount} из {totalCount}
       </div>
+
+      {importOpen && (
+        <ImportFromUrlModal
+          onImport={onImport}
+          onClose={() => setImportOpen(false)}
+        />
+      )}
     </>
   );
 }

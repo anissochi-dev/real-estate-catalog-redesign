@@ -16,7 +16,7 @@ interface MapPageProps {
 }
 
 const TYPE_LABEL: Record<string, string> = {
-  office: 'Офис', retail: 'Торговля', warehouse: 'Склад',
+  office: 'Офис', retail: 'Магазин/торговое', warehouse: 'Склад',
   restaurant: 'Общепит', business: 'Бизнес', production: 'Производство',
   hotel: 'Отель', gab: 'ГАБ',
 };
@@ -109,7 +109,7 @@ export default function MapPage({
             <div className="flex flex-wrap gap-x-3 gap-y-1">
               {[
                 { type: 'office', color: 'bg-blue-500', label: 'Офис' },
-                { type: 'retail', color: 'bg-orange-500', label: 'Торговля' },
+                { type: 'retail', color: 'bg-orange-500', label: 'Магазин/торговое' },
                 { type: 'warehouse', color: 'bg-slate-500', label: 'Склад' },
                 { type: 'restaurant', color: 'bg-red-500', label: 'Общепит' },
                 { type: 'hotel', color: 'bg-pink-500', label: 'Отель' },

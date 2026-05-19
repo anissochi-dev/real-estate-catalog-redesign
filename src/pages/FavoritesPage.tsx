@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { Property } from '@/App';
 import PropertyCard from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
@@ -11,9 +12,19 @@ interface FavoritesPageProps {
 }
 
 export default function FavoritesPage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare }: FavoritesPageProps) {
+  const navigate = useNavigate();
+
+  const goToCatalog = () => {
+    if (properties.length > 0) {
+      const types = [...new Set(properties.map(p => p.type))];
+      navigate(`/catalog?type=${types[0]}`);
+    } else {
+      navigate('/catalog');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <div className="bg-white border-b border-border py-6">
         <div className="container mx-auto px-4">
           <div className="flex items-center gap-3">
@@ -33,9 +44,13 @@ export default function FavoritesPage({ properties, favorites, compareList, onTo
           <div className="text-center py-24 animate-fade-in">
             <div className="text-7xl mb-6">❤️</div>
             <h2 className="font-display font-700 text-2xl text-foreground mb-3">Нет избранных объектов</h2>
-            <p className="text-muted-foreground max-w-sm mx-auto">
+            <p className="text-muted-foreground max-w-sm mx-auto mb-6">
               Нажимайте на сердечко в карточке объекта, чтобы сохранить понравившиеся предложения
             </p>
+            <button onClick={() => navigate('/catalog')}
+              className="btn-blue text-white px-6 py-3 rounded-xl font-semibold">
+              Перейти в каталог
+            </button>
           </div>
         ) : (
           <>
@@ -76,7 +91,10 @@ export default function FavoritesPage({ properties, favorites, compareList, onTo
                   На основе избранного мы подготовили персональные рекомендации и рассчитали среднюю доходность
                 </div>
               </div>
-              <button className="btn-orange text-white px-5 py-2.5 rounded-xl text-sm font-semibold font-display flex-shrink-0">
+              <button
+                onClick={goToCatalog}
+                className="btn-orange text-white px-5 py-2.5 rounded-xl text-sm font-semibold font-display flex-shrink-0"
+              >
                 Смотреть рекомендации
               </button>
             </div>

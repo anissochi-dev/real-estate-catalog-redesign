@@ -58,12 +58,12 @@ export interface Purpose { id: number; name: string; slug: string }
 
 export const CATS = [
   ['office', 'Офис'],
-  ['retail', 'Торговое помещение'],
+  ['retail', 'Магазин, торговое помещение'],
   ['warehouse', 'Склад'],
-  ['restaurant', 'Общепит'],
+  ['restaurant', 'Общепит, кафе, ресторан'],
   ['hotel', 'Гостиница'],
   ['business', 'Готовый бизнес'],
-  ['gab', 'ГАБ'],
+  ['gab', 'Готовый арендный бизнес (ГАБ)'],
   ['production', 'Производственное помещение'],
   ['land', 'Земельный участок'],
   ['building', 'Отдельно стоящее здание'],

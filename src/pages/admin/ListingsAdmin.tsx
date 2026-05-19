@@ -27,6 +27,19 @@ export default function ListingsAdmin() {
         hasDraft={s.hasDraft}
         setHasDraft={s.setHasDraft}
         onAdd={() => s.openEdit()}
+        onImport={data => {
+          const imagesStr = data.images.join('|');
+          s.openEdit({
+            title: data.title,
+            description: data.description,
+            price: data.price || 0,
+            area: data.area || 0,
+            address: data.address,
+            images: imagesStr,
+            image: data.images[0] || '',
+          });
+          if (data.images.length > 0) s.setPhotos(data.images);
+        }}
         activeCount={activeCount}
         archivedCount={archivedCount}
         totalCount={s.items.length}
