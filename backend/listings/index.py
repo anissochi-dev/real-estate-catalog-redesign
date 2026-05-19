@@ -44,7 +44,8 @@ def handler(event: dict, context) -> dict:
                     "hero_title, hero_subtitle, about_text, logo_url, main_city, "
                     "watermark_url, watermark_enabled, watermark_position, watermark_opacity, "
                     "yandex_maps_api_key, yandex_metrika_id, google_analytics_id, "
-                    "company_since_year, site_url, seo_keywords, seo_description "
+                    "company_since_year, site_url, seo_keywords, seo_description, "
+                    "legal_personal_data, legal_privacy_policy, legal_marketing_consent "
                     "FROM t_p71821556_real_estate_catalog_.settings ORDER BY id ASC LIMIT 1"
                 )
                 row = cur.fetchone()
