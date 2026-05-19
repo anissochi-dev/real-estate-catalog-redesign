@@ -58,8 +58,17 @@ export default function ListingEditor({
         </div>
 
         <div className="p-5 space-y-4">
-          <input className="w-full px-3 py-2 border rounded-lg" placeholder="Название"
-            value={editing.title || ''} onChange={e => setEditing({ ...editing, title: e.target.value })} />
+          <div className="relative">
+            <input className="w-full px-3 py-2 border rounded-lg pr-16" placeholder="Название"
+              maxLength={60}
+              value={editing.title || ''}
+              onChange={e => setEditing({ ...editing, title: e.target.value })} />
+            <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs tabular-nums ${
+              (editing.title?.length || 0) >= 55 ? 'text-red-500' : 'text-muted-foreground'
+            }`}>
+              {editing.title?.length || 0}/60
+            </span>
+          </div>
 
           <div>
             <label className="text-sm font-semibold block mb-1">Фотографии</label>

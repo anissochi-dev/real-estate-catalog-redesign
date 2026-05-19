@@ -37,9 +37,20 @@ export default function SeoTab({ s, setS, saved, save }: Props) {
         </div>
         <div>
           <label className="text-sm font-semibold block mb-1">Адрес сайта</label>
-          <input className="w-full px-3 py-2 border rounded-lg" placeholder="https://example.ru"
-            value={s.site_url || ''}
-            onChange={e => setS({ ...s, site_url: e.target.value })} />
+          <div className="flex gap-2">
+            <input className="flex-1 px-3 py-2 border rounded-lg" placeholder="https://example.ru"
+              value={s.site_url || ''}
+              onChange={e => setS({ ...s, site_url: e.target.value })} />
+            {!s.site_url && (
+              <button
+                type="button"
+                onClick={() => setS({ ...s, site_url: window.location.origin })}
+                className="px-3 py-2 rounded-lg border border-brand-blue text-brand-blue text-sm font-semibold hover:bg-brand-blue/5 whitespace-nowrap"
+              >
+                Заполнить автоматически
+              </button>
+            )}
+          </div>
           <div className="text-xs text-muted-foreground mt-1">Используется в sitemap.xml и Open Graph.</div>
         </div>
         <div>

@@ -2,6 +2,16 @@ import { useEffect, useState } from 'react';
 import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 
+function toSlug(str: string) {
+  return str
+    .toLowerCase()
+    .replace(/[а-яё]/g, c => ({ а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'yo',ж:'zh',з:'z',и:'i',й:'j',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'ts',ч:'ch',ш:'sh',щ:'shch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya' }[c] ?? c))
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 60);
+}
+
 interface P {
   id: number;
   slug: string;
@@ -71,12 +81,32 @@ export default function PagesAdmin() {
               <button onClick={() => setEditing(null)}><Icon name="X" size={20} /></button>
             </div>
             <div className="p-5 space-y-3">
+              <div className="relative">
+                <input className="w-full px-3 py-2 border rounded-lg pr-16" placeholder="Заголовок"
+                  maxLength={60}
+                  value={editing.title || ''}
+                  onChange={e => {
+                    const title = e.target.value;
+                    setEditing(prev => ({
+                      ...prev!,
+                      title,
+                      ...(!prev!.id && { slug: toSlug(title) }),
+                    }));
+                  }} />
+                <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs tabular-nums ${
+                  (editing.title?.length || 0) >= 55 ? 'text-red-500' : 'text-muted-foreground'
+                }`}>
+                  {editing.title?.length || 0}/60
+                </span>
+              </div>
               {!editing.id && (
-                <input className="w-full px-3 py-2 border rounded-lg" placeholder="URL slug (например, about)"
-                  value={editing.slug || ''} onChange={e => setEditing({ ...editing, slug: e.target.value })} />
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">URL страницы</label>
+                  <input className="w-full px-3 py-2 border rounded-lg font-mono text-sm" placeholder="about"
+                    value={editing.slug || ''} onChange={e => setEditing({ ...editing, slug: e.target.value })} />
+                  <div className="text-xs text-muted-foreground mt-1">Генерируется автоматически из заголовка. Можно изменить вручную.</div>
+                </div>
               )}
-              <input className="w-full px-3 py-2 border rounded-lg" placeholder="Заголовок"
-                value={editing.title || ''} onChange={e => setEditing({ ...editing, title: e.target.value })} />
               <textarea className="w-full px-3 py-2 border rounded-lg" rows={2} placeholder="Meta description"
                 value={editing.meta_description || ''} onChange={e => setEditing({ ...editing, meta_description: e.target.value })} />
               <textarea className="w-full px-3 py-2 border rounded-lg" rows={12} placeholder="Контент страницы"

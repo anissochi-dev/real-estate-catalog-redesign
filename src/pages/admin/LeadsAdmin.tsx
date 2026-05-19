@@ -289,8 +289,17 @@ export default function LeadsAdmin() {
               <button onClick={() => setEditing(null)}><Icon name="X" size={20} /></button>
             </div>
             <div className="p-5 space-y-3">
-              <input className="w-full px-3 py-2 border rounded-lg" placeholder="Имя клиента"
-                value={editing.name || ''} onChange={e => setEditing({ ...editing, name: e.target.value })} />
+              <div className="relative">
+                <input className="w-full px-3 py-2 border rounded-lg pr-16" placeholder="Имя клиента"
+                  maxLength={60}
+                  value={editing.name || ''}
+                  onChange={e => setEditing({ ...editing, name: e.target.value })} />
+                <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs tabular-nums ${
+                  (editing.name?.length || 0) >= 55 ? 'text-red-500' : 'text-muted-foreground'
+                }`}>
+                  {editing.name?.length || 0}/60
+                </span>
+              </div>
               <div>
                 <label className="text-xs text-muted-foreground">Телефон</label>
                 <PhonePickerInput
