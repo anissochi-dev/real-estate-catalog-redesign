@@ -44,16 +44,15 @@ export default function PropertyMainContent({
       {/* Название и адрес */}
       <div className="bg-white rounded-2xl p-5 shadow-sm">
         <h1 className="font-display font-800 text-2xl md:text-3xl text-foreground mb-2">{item.title}</h1>
-        <a
-          href={`https://yandex.ru/maps/?text=${encodeURIComponent(addressStr)}`}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          type="button"
+          onClick={() => document.getElementById('property-map')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-brand-blue transition-colors group"
         >
           <Icon name="MapPin" size={14} className="flex-shrink-0 text-brand-blue" />
           <span className="group-hover:underline underline-offset-2">{addressStr}</span>
-          <Icon name="ExternalLink" size={11} className="opacity-0 group-hover:opacity-60 transition-opacity" />
-        </a>
+          <Icon name="Map" size={11} className="opacity-0 group-hover:opacity-60 transition-opacity" />
+        </button>
       </div>
 
       {/* Параметры объекта */}
@@ -120,7 +119,7 @@ export default function PropertyMainContent({
 
       {/* Карта */}
       {(!!item.lat && !!item.lng) && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm">
+        <div id="property-map" className="bg-white rounded-2xl p-5 shadow-sm">
           <div className="font-display font-700 text-lg mb-1 flex items-center gap-2">
             <Icon name="Map" size={18} /> Расположение и инфраструктура
           </div>
