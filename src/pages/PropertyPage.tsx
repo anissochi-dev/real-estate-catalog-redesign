@@ -28,6 +28,26 @@ const TYPE_LABELS: Record<string, string> = {
 const DEAL_LABELS: Record<string, string> = {
   sale: 'Продажа', rent: 'Аренда', business: 'Готовый бизнес',
 };
+const CONDITION_LABELS: Record<string, string> = {
+  new: 'Новое', euro: 'Евроремонт', good: 'Хорошее',
+  cosmetic: 'Требуется косметика', rough: 'Без отделки', shellcore: 'Черновая (Shell&Core)',
+};
+const FINISHING_LABELS: Record<string, string> = {
+  none: 'Без отделки', rough: 'Черновая', pre_finish: 'Предчистовая',
+  cosmetic: 'Косметический ремонт', euro: 'Евроремонт', designer: 'Дизайнерский ремонт',
+};
+const PARKING_LABELS: Record<string, string> = {
+  none: 'Нет', street: 'На улице', building: 'В здании',
+};
+const ENTRANCE_LABELS: Record<string, string> = {
+  street: 'С улицы', yard: 'Со двора',
+};
+const ROAD_LINE_LABELS: Record<string, string> = {
+  '1': '1-я линия (фасад на дорогу)',
+  '2': '2-я линия (внутри квартала)',
+  '3': '3-я линия и дальше',
+  'yard': 'Во дворе',
+};
 
 interface Props {
   onToggleFavorite: (id: number) => void;
@@ -43,6 +63,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   const [item, setItem] = useState<ListingDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeImg, setActiveImg] = useState(0);
+  const [lightbox, setLightbox] = useState(false);
   const [form, setForm] = useState({ name: '', phone: '', message: '' });
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
@@ -54,7 +75,6 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
     fetchListingById(id).then(d => setItem(d)).finally(() => setLoading(false));
   }, [slug]);
 
-  // SEO meta + canonical + Open Graph
   useEffect(() => {
     if (!item) return;
     const title = item.seoTitle || `${item.title} — ${item.city || 'Краснодар'} | ${settings.company_name || 'BIZNEST'}`;
@@ -63,55 +83,31 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
 
     const setMeta = (selector: string, create: () => HTMLMetaElement, content: string) => {
       let el = document.querySelector(selector) as HTMLMetaElement | null;
-      if (!el) {
-        el = create();
-        document.head.appendChild(el);
-      }
+      if (!el) { el = create(); document.head.appendChild(el); }
       el.content = content;
     };
-
-    setMeta('meta[name="description"]', () => {
-      const m = document.createElement('meta');
-      m.name = 'description';
-      return m;
-    }, desc);
-
-    setMeta('meta[property="og:title"]', () => {
-      const m = document.createElement('meta');
-      m.setAttribute('property', 'og:title');
-      return m;
-    }, title);
-
-    setMeta('meta[property="og:description"]', () => {
-      const m = document.createElement('meta');
-      m.setAttribute('property', 'og:description');
-      return m;
-    }, desc);
-
-    setMeta('meta[property="og:type"]', () => {
-      const m = document.createElement('meta');
-      m.setAttribute('property', 'og:type');
-      return m;
-    }, 'product');
-
+    setMeta('meta[name="description"]', () => Object.assign(document.createElement('meta'), { name: 'description' }), desc);
+    setMeta('meta[property="og:title"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:title'); return m; }, title);
+    setMeta('meta[property="og:description"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:description'); return m; }, desc);
+    setMeta('meta[property="og:type"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:type'); return m; }, 'product');
     const mainImage = (item.images && item.images[0]) || item.image;
-    if (mainImage) {
-      setMeta('meta[property="og:image"]', () => {
-        const m = document.createElement('meta');
-        m.setAttribute('property', 'og:image');
-        return m;
-      }, mainImage);
-    }
-
-    // canonical
+    if (mainImage) setMeta('meta[property="og:image"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:image'); return m; }, mainImage);
     let canon = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
-    if (!canon) {
-      canon = document.createElement('link');
-      canon.rel = 'canonical';
-      document.head.appendChild(canon);
-    }
+    if (!canon) { canon = document.createElement('link'); canon.rel = 'canonical'; document.head.appendChild(canon); }
     canon.href = window.location.origin + window.location.pathname;
   }, [item, settings.company_name]);
+
+  // Закрытие лайтбокса по Escape
+  useEffect(() => {
+    if (!lightbox) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightbox(false);
+      if (e.key === 'ArrowRight' && item) setActiveImg(i => Math.min(i + 1, (item.images?.length || 1) - 1));
+      if (e.key === 'ArrowLeft') setActiveImg(i => Math.max(i - 1, 0));
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [lightbox, item]);
 
   if (loading) {
     return <div className="container mx-auto px-4 py-20 text-center text-muted-foreground">Загрузка объекта...</div>;
@@ -134,10 +130,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
     e.preventDefault();
     setSending(true);
     try {
-      await sendLead({
-        name: form.name, phone: form.phone, message: form.message,
-        listing_id: item.id, source: 'property-page',
-      });
+      await sendLead({ name: form.name, phone: form.phone, message: form.message, listing_id: item.id, source: 'property-page' });
       setSent(true);
     } finally {
       setSending(false);
@@ -146,32 +139,53 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
 
   const dealLabel = DEAL_LABELS[item.deal] || item.deal;
   const typeLabel = TYPE_LABELS[item.type] || item.type;
+
   const productLd: Record<string, unknown> = {
-    '@context': 'https://schema.org',
-    '@type': 'Product',
-    name: item.title,
-    description: (item.description || '').slice(0, 5000),
-    image: imgs,
-    category: typeLabel,
-    offers: {
-      '@type': 'Offer',
-      priceCurrency: 'RUB',
-      price: item.price,
-      availability: 'https://schema.org/InStock',
-      url: typeof window !== 'undefined' ? window.location.href : '',
-      seller: {
-        '@type': 'Organization',
-        name: settings.company_name || 'BIZNEST',
-      },
-    },
+    '@context': 'https://schema.org', '@type': 'Product',
+    name: item.title, description: (item.description || '').slice(0, 5000),
+    image: imgs, category: typeLabel,
+    offers: { '@type': 'Offer', priceCurrency: 'RUB', price: item.price, availability: 'https://schema.org/InStock', url: typeof window !== 'undefined' ? window.location.href : '', seller: { '@type': 'Organization', name: settings.company_name || 'BIZNEST' } },
   };
 
   return (
     <div className="bg-background">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(productLd) }}
-      />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productLd) }} />
+
+      {/* Лайтбокс */}
+      {lightbox && mainImg && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center"
+          onClick={() => setLightbox(false)}
+        >
+          <button className="absolute top-4 right-4 text-white/70 hover:text-white" onClick={() => setLightbox(false)}>
+            <Icon name="X" size={28} />
+          </button>
+          {imgs.length > 1 && (
+            <>
+              <button
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-white/10 rounded-full p-2"
+                onClick={e => { e.stopPropagation(); setActiveImg(i => Math.max(i - 1, 0)); }}
+              >
+                <Icon name="ChevronLeft" size={24} />
+              </button>
+              <button
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-white/10 rounded-full p-2"
+                onClick={e => { e.stopPropagation(); setActiveImg(i => Math.min(i + 1, imgs.length - 1)); }}
+              >
+                <Icon name="ChevronRight" size={24} />
+              </button>
+            </>
+          )}
+          <img
+            src={mainImg}
+            alt={item.title}
+            className="max-h-[90vh] max-w-[90vw] object-contain rounded-xl"
+            onClick={e => e.stopPropagation()}
+          />
+          <div className="absolute bottom-4 text-white/50 text-sm">{activeImg + 1} / {imgs.length}</div>
+        </div>
+      )}
+
       <div className="container mx-auto px-4 py-6">
         <div className="flex items-center justify-between gap-3 mb-4">
           <Breadcrumbs items={[
@@ -180,37 +194,59 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
             { label: `${typeLabel} · ${dealLabel}`, to: `/catalog?type=${item.type}&deal=${item.deal}` },
             { label: item.title },
           ]} />
-          <button onClick={() => navigate(-1)}
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground whitespace-nowrap">
+          <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground whitespace-nowrap">
             <Icon name="ArrowLeft" size={14} /> Назад
           </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Левая часть: фото + описание */}
+          {/* Левая часть */}
           <div className="lg:col-span-2 space-y-5">
+
+            {/* Фото с приближением */}
             {mainImg ? (
-              <div className="relative rounded-2xl overflow-hidden bg-muted aspect-[16/10]">
-                <img src={mainImg} alt={item.title} className="w-full h-full object-cover" />
-                <div className="absolute top-3 left-3 flex gap-1.5">
-                  <span className="text-xs font-semibold px-2 py-1 rounded-full bg-brand-blue text-white">
-                    {DEAL_LABELS[item.deal] || item.deal}
-                  </span>
-                  <span className="text-xs font-semibold px-2 py-1 rounded-full bg-black/40 text-white backdrop-blur-sm">
-                    {TYPE_LABELS[item.type] || item.type}
-                  </span>
-                  {item.isHot && <span className="text-xs font-semibold px-2 py-1 rounded-full btn-orange text-white">🔥 Горячее</span>}
+              <div className="space-y-2">
+                <div
+                  className="relative rounded-2xl overflow-hidden bg-muted aspect-[16/10] cursor-zoom-in group"
+                  onClick={() => setLightbox(true)}
+                >
+                  <img src={mainImg} alt={item.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+                  <div className="absolute top-3 left-3 flex gap-1.5">
+                    <span className="text-xs font-semibold px-2 py-1 rounded-full bg-brand-blue text-white">{dealLabel}</span>
+                    <span className="text-xs font-semibold px-2 py-1 rounded-full bg-black/40 text-white backdrop-blur-sm">{typeLabel}</span>
+                    {item.isHot && <span className="text-xs font-semibold px-2 py-1 rounded-full btn-orange text-white">🔥 Горячее</span>}
+                    {item.isExclusive && <span className="text-xs font-semibold px-2 py-1 rounded-full bg-amber-500 text-white">Эксклюзив</span>}
+                  </div>
+                  <div className="absolute top-3 right-3 flex gap-2">
+                    <button onClick={e => { e.stopPropagation(); onToggleFavorite(item.id); }}
+                      className={`w-9 h-9 rounded-full flex items-center justify-center shadow ${isFav ? 'bg-red-500 text-white' : 'bg-white'}`}>
+                      <Icon name="Heart" size={16} />
+                    </button>
+                    <button onClick={e => { e.stopPropagation(); onToggleCompare(item.id); }}
+                      className={`w-9 h-9 rounded-full flex items-center justify-center shadow ${inCompare ? 'bg-brand-orange text-white' : 'bg-white'}`}>
+                      <Icon name="GitCompare" size={16} />
+                    </button>
+                  </div>
+                  <div className="absolute bottom-3 right-3 bg-black/50 text-white rounded-lg px-2 py-1 text-xs flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Icon name="ZoomIn" size={12} /> Увеличить
+                  </div>
+                  {imgs.length > 1 && (
+                    <div className="absolute bottom-3 left-3 bg-black/50 text-white rounded-lg px-2 py-1 text-xs">
+                      {activeImg + 1} / {imgs.length}
+                    </div>
+                  )}
                 </div>
-                <div className="absolute top-3 right-3 flex gap-2">
-                  <button onClick={() => onToggleFavorite(item.id)}
-                    className={`w-9 h-9 rounded-full flex items-center justify-center shadow ${isFav ? 'bg-red-500 text-white' : 'bg-white'}`}>
-                    <Icon name="Heart" size={16} />
-                  </button>
-                  <button onClick={() => onToggleCompare(item.id)}
-                    className={`w-9 h-9 rounded-full flex items-center justify-center shadow ${inCompare ? 'bg-brand-orange text-white' : 'bg-white'}`}>
-                    <Icon name="GitCompare" size={16} />
-                  </button>
-                </div>
+
+                {imgs.length > 1 && (
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {imgs.map((u, i) => (
+                      <button key={u + i} onClick={() => setActiveImg(i)}
+                        className={`w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all ${i === activeImg ? 'border-brand-blue' : 'border-transparent opacity-70 hover:opacity-100'}`}>
+                        <img src={u} alt="" className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="aspect-[16/10] rounded-2xl bg-muted flex items-center justify-center">
@@ -218,78 +254,71 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
               </div>
             )}
 
-            {imgs.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {imgs.map((u, i) => (
-                  <button key={u + i} onClick={() => setActiveImg(i)}
-                    className={`w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 ${i === activeImg ? 'border-brand-blue' : 'border-transparent'}`}>
-                    <img src={u} alt="" className="w-full h-full object-cover" />
-                  </button>
-                ))}
-              </div>
-            )}
-
+            {/* Название и адрес */}
             <div className="bg-white rounded-2xl p-5 shadow-sm">
               <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
                 <h1 className="font-display font-800 text-2xl md:text-3xl text-foreground">{item.title}</h1>
                 {item.publicCode && (
                   <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-brand-blue/10 text-brand-blue whitespace-nowrap">
-                    ID объекта: {item.publicCode}
+                    ID: {item.publicCode}
                   </span>
                 )}
               </div>
-              <a
-                href={`https://yandex.ru/maps/?text=${encodeURIComponent(
-                  [item.city || 'Краснодар', item.district, item.address].filter(Boolean).join(', ')
-                )}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-brand-blue transition-colors group"
-                title="Открыть на карте"
-              >
-                <Icon name="MapPin" size={14} />
-                <span className="underline decoration-dotted underline-offset-2 group-hover:decoration-solid">
-                  {[item.city || 'Краснодар', item.district, item.address].filter(Boolean).join(', ')}
-                </span>
-                <Icon name="ExternalLink" size={12} className="opacity-60 group-hover:opacity-100" />
-              </a>
-            </div>
-
-            <div className="bg-white rounded-2xl p-5 shadow-sm">
-              <div className="font-display font-700 text-lg mb-4">Параметры объекта</div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Stat icon="Maximize" label="Площадь" value={`${item.area} м²`} />
-                <Stat icon="Tag" label="Цена" value={formatPrice(item.price, item.deal)} />
-                {item.pricePerM2 ? <Stat icon="DollarSign" label="За м²" value={`${item.pricePerM2.toLocaleString('ru')} ₽`} /> : null}
-                {item.floor ? <Stat icon="Layers" label="Этаж" value={`${item.floor}${item.totalFloors ? ` из ${item.totalFloors}` : ''}`} /> : null}
-                <Stat icon="Building2" label="Тип объекта" value={typeLabel} />
-                <Stat icon="Briefcase" label="Категория сделки" value={dealLabel} />
-                {item.purpose ? <Stat icon="Target" label="Назначение" value={item.purpose} /> : null}
-                {item.payback ? (
-                  <Stat
-                    icon="TrendingUp"
-                    label="Окупаемость"
-                    value={`${item.payback} мес${item.payback >= 12 ? ` (~${(item.payback / 12).toFixed(1)} лет)` : ''}`}
-                  />
-                ) : null}
-                {item.monthlyRent ? (
-                  <Stat icon="Wallet" label="МАП (мес. арендный поток)" value={`${item.monthlyRent.toLocaleString('ru')} ₽`} />
-                ) : null}
-                {item.yearlyRent ? (
-                  <Stat icon="Coins" label="ГАП (год. арендный поток)" value={`${item.yearlyRent.toLocaleString('ru')} ₽`} />
-                ) : null}
-                {item.profit && !item.monthlyRent ? (
-                  <Stat icon="LineChart" label="Прибыль/мес" value={`${(item.profit / 1000).toFixed(0)} тыс ₽`} />
-                ) : null}
-                {item.tenantName ? <Stat icon="Users" label="Арендатор" value={item.tenantName} /> : null}
-                {item.finishing ? <Stat icon="Paintbrush" label="Отделка" value={item.finishing} /> : null}
-                {item.ceilingHeight ? <Stat icon="MoveVertical" label="Высота потолка" value={`${item.ceilingHeight} м`} /> : null}
-                {item.electricityKw ? <Stat icon="Zap" label="Эл. мощность" value={`${item.electricityKw} кВт`} /> : null}
-                {item.utilities ? <Stat icon="Droplets" label="Коммуникации" value={item.utilities} /> : null}
-                {item.roadLine ? <Stat icon="Milestone" label="Линия расположения" value={item.roadLine} /> : null}
+              <div className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+                <Icon name="MapPin" size={14} className="flex-shrink-0" />
+                <span>{[item.city || 'Краснодар', item.district, item.address].filter(Boolean).join(', ')}</span>
               </div>
             </div>
 
+            {/* Параметры объекта */}
+            <div className="bg-white rounded-2xl p-5 shadow-sm">
+              <div className="font-display font-700 text-lg mb-4">Параметры объекта</div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <Stat icon="Maximize" label="Площадь" value={`${item.area} м²`} />
+                <Stat icon="Tag" label="Цена" value={formatPrice(item.price, item.deal)} highlight />
+                {item.pricePerM2 ? <Stat icon="DollarSign" label="За м²" value={`${item.pricePerM2.toLocaleString('ru')} ₽`} /> : null}
+                <Stat icon="Building2" label="Тип объекта" value={typeLabel} />
+                <Stat icon="Briefcase" label="Тип сделки" value={dealLabel} />
+                {item.floor ? <Stat icon="Layers" label="Этаж" value={`${item.floor}${item.totalFloors ? ` из ${item.totalFloors}` : ''}`} /> : null}
+                {item.purpose ? <Stat icon="Target" label="Назначение" value={item.purpose} /> : null}
+                {item.ceilingHeight ? <Stat icon="MoveVertical" label="Высота потолка" value={`${item.ceilingHeight} м`} /> : null}
+                {item.electricityKw ? <Stat icon="Zap" label="Эл. мощность" value={`${item.electricityKw} кВт`} /> : null}
+                {(item as ListingDetail & { condition?: string }).condition ? (
+                  <Stat icon="Star" label="Состояние" value={CONDITION_LABELS[(item as ListingDetail & { condition?: string }).condition!] || (item as ListingDetail & { condition?: string }).condition!} />
+                ) : null}
+                {item.finishing ? <Stat icon="Paintbrush" label="Отделка" value={FINISHING_LABELS[item.finishing] || item.finishing} /> : null}
+                {(item as ListingDetail & { parking?: string }).parking && (item as ListingDetail & { parking?: string }).parking !== 'none' ? (
+                  <Stat icon="ParkingSquare" label="Парковка" value={PARKING_LABELS[(item as ListingDetail & { parking?: string }).parking!] || (item as ListingDetail & { parking?: string }).parking!} />
+                ) : null}
+                {(item as ListingDetail & { entrance?: string }).entrance ? (
+                  <Stat icon="DoorOpen" label="Вход" value={ENTRANCE_LABELS[(item as ListingDetail & { entrance?: string }).entrance!] || (item as ListingDetail & { entrance?: string }).entrance!} />
+                ) : null}
+                {item.roadLine ? <Stat icon="Milestone" label="Линия расположения" value={ROAD_LINE_LABELS[item.roadLine] || item.roadLine} /> : null}
+                {item.payback ? (
+                  <Stat icon="TrendingUp" label="Окупаемость" value={`${item.payback} мес${item.payback >= 12 ? ` (~${(item.payback / 12).toFixed(1)} лет)` : ''}`} />
+                ) : null}
+                {item.monthlyRent ? <Stat icon="Wallet" label="МАП (мес. аренд. поток)" value={`${item.monthlyRent.toLocaleString('ru')} ₽`} /> : null}
+                {item.yearlyRent ? <Stat icon="Coins" label="ГАП (год. аренд. поток)" value={`${item.yearlyRent.toLocaleString('ru')} ₽`} /> : null}
+                {item.profit && !item.monthlyRent ? <Stat icon="LineChart" label="Прибыль/мес" value={`${(item.profit / 1000).toFixed(0)} тыс ₽`} /> : null}
+                {item.tenantName ? <Stat icon="Users" label="Арендатор" value={item.tenantName} /> : null}
+              </div>
+
+              {/* Коммуникации отдельным блоком */}
+              {item.utilities && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <div className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <Icon name="Droplets" size={12} /> Коммуникации
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {item.utilities.split(',').map(u => u.trim()).filter(Boolean).map(u => (
+                      <span key={u} className="text-xs px-2.5 py-1 rounded-full bg-brand-blue/8 text-brand-blue border border-brand-blue/20 font-medium">{u}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Описание */}
             {item.description && (
               <div className="bg-white rounded-2xl p-5 shadow-sm">
                 <div className="font-display font-700 text-lg mb-3">Описание</div>
@@ -297,17 +326,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
               </div>
             )}
 
-            {item.tags && item.tags.length > 0 && (
-              <div className="bg-white rounded-2xl p-5 shadow-sm">
-                <div className="font-display font-700 text-lg mb-3">Особенности</div>
-                <div className="flex flex-wrap gap-2">
-                  {item.tags.map(t => (
-                    <span key={t} className="text-xs px-2.5 py-1 rounded-full bg-brand-blue/10 text-brand-blue font-medium">{t}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-
+            {/* Видео */}
             {item.videoUrl && (
               <div className="bg-white rounded-2xl p-5 shadow-sm">
                 <div className="font-display font-700 text-lg mb-3 flex items-center gap-2">
@@ -320,6 +339,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
               </div>
             )}
 
+            {/* Карта */}
             {(!!item.lat && !!item.lng) && (
               <div className="bg-white rounded-2xl p-5 shadow-sm">
                 <div className="font-display font-700 text-lg mb-1 flex items-center gap-2">
@@ -334,26 +354,10 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
                   title={item.title}
                   address={[item.city || 'Краснодар', item.district, item.address].filter(Boolean).join(', ')}
                 />
-                <a
-                  href={`https://yandex.ru/maps/?text=${encodeURIComponent(
-                    [item.city || 'Краснодар', item.district, item.address].filter(Boolean).join(', ')
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-muted-foreground mt-2 inline-flex items-center gap-1 hover:text-brand-blue underline decoration-dotted underline-offset-2"
-                >
-                  <Icon name="MapPin" size={12} />
-                  {[item.city || 'Краснодар', item.district, item.address].filter(Boolean).join(', ')}
-                  <Icon name="ExternalLink" size={11} className="opacity-60" />
-                </a>
               </div>
             )}
 
-            <PricePredict
-              listingId={item.id}
-              currentPrice={item.price}
-              deal={item.deal}
-            />
+            <PricePredict listingId={item.id} currentPrice={item.price} deal={item.deal} />
 
             <PropertyCalculators
               title={item.title}
@@ -367,18 +371,35 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
               pricePerM2={item.pricePerM2}
             />
 
+            {/* Особенности — внизу */}
+            {item.tags && item.tags.length > 0 && (
+              <div className="bg-white rounded-2xl p-5 shadow-sm">
+                <div className="font-display font-700 text-lg mb-3">Особенности</div>
+                <div className="flex flex-wrap gap-2">
+                  {item.tags.map(t => (
+                    <span key={t} className="text-xs px-2.5 py-1 rounded-full bg-brand-blue/10 text-brand-blue font-medium">{t}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <SimilarListings listingId={item.id} />
           </div>
 
           {/* Правая часть: цена + форма */}
           <div className="space-y-4">
             <div className="bg-white rounded-2xl p-5 shadow-sm sticky top-20">
-              <div className="font-display font-900 text-3xl text-brand-blue mb-1">
+              <div className="font-display font-900 text-3xl text-brand-blue mb-0.5">
                 {formatPrice(item.price, item.deal)}
               </div>
               {item.pricePerM2 && (
-                <div className="text-sm text-muted-foreground mb-4">
+                <div className="text-sm text-muted-foreground mb-1">
                   {item.pricePerM2.toLocaleString('ru')} ₽/м²
+                </div>
+              )}
+              {item.area && (
+                <div className="text-sm text-muted-foreground mb-4">
+                  Площадь: <span className="font-semibold text-foreground">{item.area} м²</span>
                 </div>
               )}
 
@@ -392,13 +413,13 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
                 <form onSubmit={submit} className="space-y-3">
                   <input required placeholder="Ваше имя" value={form.name}
                     onChange={e => setForm({ ...form, name: e.target.value })}
-                    className="w-full px-3 py-2.5 border rounded-lg" />
+                    className="w-full px-3 py-2.5 border rounded-lg text-sm" />
                   <input required placeholder="Телефон" value={form.phone}
                     onChange={e => setForm({ ...form, phone: e.target.value })}
-                    className="w-full px-3 py-2.5 border rounded-lg" />
+                    className="w-full px-3 py-2.5 border rounded-lg text-sm" />
                   <textarea placeholder="Комментарий (необязательно)" rows={3}
                     value={form.message} onChange={e => setForm({ ...form, message: e.target.value })}
-                    className="w-full px-3 py-2.5 border rounded-lg" />
+                    className="w-full px-3 py-2.5 border rounded-lg text-sm" />
                   <button type="submit" disabled={sending}
                     className="w-full btn-blue text-white py-3 rounded-xl font-semibold disabled:opacity-50">
                     {sending ? 'Отправка...' : 'Заказать просмотр'}
@@ -421,14 +442,14 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   );
 }
 
-function Stat({ icon, label, value }: { icon: string; label: string; value: string }) {
+function Stat({ icon, label, value, highlight }: { icon: string; label: string; value: string; highlight?: boolean }) {
   return (
-    <div>
+    <div className={highlight ? 'col-span-1' : ''}>
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
         <Icon name={icon} size={12} />
         {label}
       </div>
-      <div className="font-display font-700 text-base">{value}</div>
+      <div className={`font-display font-700 text-base ${highlight ? 'text-brand-blue text-lg' : ''}`}>{value}</div>
     </div>
   );
 }

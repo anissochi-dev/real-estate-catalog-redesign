@@ -35,11 +35,15 @@ const DEAL_COLORS: Record<string, string> = {
 };
 
 export function formatPrice(price: number, deal: string): string {
+  const fmtMln = (v: number) => {
+    const n = v / 1000000;
+    return Number.isInteger(n) || n % 1 === 0 ? `${n.toFixed(0)}` : `${parseFloat(n.toFixed(1))}`;
+  };
   if (deal === 'rent') {
-    if (price >= 1000000) return `${(price / 1000000).toFixed(1)} млн ₽/мес`;
+    if (price >= 1000000) return `${fmtMln(price)} млн ₽/мес`;
     return `${(price / 1000).toFixed(0)} тыс ₽/мес`;
   }
-  if (price >= 1000000) return `${(price / 1000000).toFixed(1)} млн ₽`;
+  if (price >= 1000000) return `${fmtMln(price)} млн ₽`;
   return `${(price / 1000).toFixed(0)} тыс ₽`;
 }
 

@@ -55,7 +55,7 @@ export default function PropertyCalculators({
 
   const activeTabLabel = TABS.find(t => t.key === active)?.label || 'Расчёт';
 
-  const handleSavePdf = () => {
+  const handleSavePdf = async () => {
     if (saving) return;
     setSaving(true);
     try {
@@ -69,7 +69,7 @@ export default function PropertyCalculators({
         }));
       const inputs = collect('[data-calc-input]');
       const results = collect('[data-calc-result]');
-      saveCalcAsPdf({
+      await saveCalcAsPdf({
         calcTitle: activeTabLabel,
         propertyTitle: title || 'Объект',
         propertyAddress: address,
@@ -80,7 +80,7 @@ export default function PropertyCalculators({
         companyPhone: settings.company_phone || '',
       });
     } finally {
-      setTimeout(() => setSaving(false), 600);
+      setSaving(false);
     }
   };
 
