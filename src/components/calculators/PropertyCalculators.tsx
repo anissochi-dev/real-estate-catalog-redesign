@@ -1,7 +1,5 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo } from 'react';
 import Icon from '@/components/ui/icon';
-import { useSettings } from '@/contexts/SettingsContext';
-import { saveCalcAsPdf, CalcRow } from './saveAsPdf';
 import CashflowCalc from './CashflowCalc';
 import DcfCalc from './DcfCalc';
 import MultiplesCalc from './MultiplesCalc';
@@ -15,14 +13,12 @@ import TaxCalc from './TaxCalc';
 import MortgageCalc from './MortgageCalc';
 
 interface Props {
-  title?: string;
-  address?: string;
   price: number;
   area: number;
-  deal: string; // 'sale' | 'rent' | 'business'
+  deal: string;
   type: string;
-  payback?: number; // месяцев
-  profit?: number; // месячная прибыль (ГАБ/бизнес)
+  payback?: number;
+  profit?: number;
   pricePerM2?: number;
 }
 
@@ -45,44 +41,10 @@ const TABS: { key: CalcKey; label: string; icon: string; group: string }[] = [
 ];
 
 export default function PropertyCalculators({
-  title, address, price, area, deal, type, payback, profit, pricePerM2,
+  price, area, deal, type, payback, profit, pricePerM2,
 }: Props) {
-  const { settings } = useSettings();
   const [active, setActive] = useState<CalcKey>('cashflow');
   const [open, setOpen] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const calcBodyRef = useRef<HTMLDivElement | null>(null);
-
-  const activeTabLabel = TABS.find(t => t.key === active)?.label || 'Расчёт';
-
-  const handleSavePdf = () => {
-    if (saving) return;
-    setSaving(true);
-    try {
-      const root = calcBodyRef.current;
-      if (!root) return;
-      const collect = (selector: string): CalcRow[] =>
-        Array.from(root.querySelectorAll<HTMLElement>(selector)).map(el => ({
-          label: el.dataset.calcLabel || '',
-          value: el.dataset.calcValue || '',
-          hint: el.dataset.calcHint || undefined,
-        }));
-      const inputs = collect('[data-calc-input]');
-      const results = collect('[data-calc-result]');
-      saveCalcAsPdf({
-        calcTitle: activeTabLabel,
-        propertyTitle: title || 'Объект',
-        propertyAddress: address,
-        propertyPrice: price,
-        inputs,
-        results,
-        companyName: settings.company_name || 'BIZNEST',
-        companyPhone: settings.company_phone || '',
-      });
-    } finally {
-      setTimeout(() => setSaving(false), 800);
-    }
-  };
 
   // Автозаполнение известных полей из карточки объекта
   const auto = useMemo(() => {
@@ -210,29 +172,7 @@ export default function PropertyCalculators({
               {renderCalc()}
             </div>
 
-            <div className="mt-5 pt-4 border-t border-border flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={handleSavePdf}
-                disabled={saving}
-                className="btn-blue text-white px-4 py-2.5 rounded-xl text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50"
-              >
-                {saving ? (
-                  <>
-                    <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                    Сохраняем...
-                  </>
-                ) : (
-                  <>
-                    <Icon name="Download" size={14} />
-                    Скачать расчёт в PDF
-                  </>
-                )}
-              </button>
-              <span className="text-xs text-muted-foreground">
-                Файл с текущими значениями и результатами выбранного калькулятора.
-              </span>
-            </div>
+
           </div>
         </div>
       )}

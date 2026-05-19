@@ -1,0 +1,1 @@
+UPDATE t_p71821556_real_estate_catalog_.users SET phone = NULL WHERE phone LIKE '%@%';

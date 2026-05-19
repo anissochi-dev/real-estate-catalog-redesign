@@ -433,8 +433,6 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
             </div>
 
             <PropertyCalculators
-              title={item.title}
-              address={[item.city || 'Краснодар', item.district, item.address].filter(Boolean).join(', ')}
               price={item.price}
               area={item.area}
               deal={item.deal}
@@ -464,13 +462,16 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
             {/* Цена */}
             <div className="bg-white rounded-2xl shadow-sm sticky top-20 overflow-hidden">
               <div className="p-5 pb-4">
-                <div className="font-display font-900 text-4xl text-brand-blue leading-none">
-                  {formatPrice(item.price, item.deal)}
+                <div className="text-xs text-muted-foreground mb-1 font-medium uppercase tracking-wide">
+                  {DEAL_LABELS[item.deal] || item.deal}
+                </div>
+                <div className="font-display font-900 text-3xl text-brand-blue leading-none tracking-tight">
+                  {item.price.toLocaleString('ru')} ₽{item.deal === 'rent' ? '/мес' : ''}
                 </div>
                 {item.pricePerM2 ? (
-                  <div className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 bg-muted rounded-lg">
+                  <div className="flex items-center gap-1.5 mt-2">
                     <Icon name="Scaling" size={12} className="text-muted-foreground" />
-                    <span className="text-sm text-foreground font-semibold">{item.pricePerM2.toLocaleString('ru')} ₽/м²</span>
+                    <span className="text-sm text-muted-foreground">{item.pricePerM2.toLocaleString('ru')} ₽/м²</span>
                   </div>
                 ) : null}
               </div>
