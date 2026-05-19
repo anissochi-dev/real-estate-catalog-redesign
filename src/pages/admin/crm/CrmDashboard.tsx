@@ -27,9 +27,9 @@ export default function CrmDashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-display font-700">CRM — Обзор</h2>
-        <p className="text-sm text-muted-foreground">Сводная статистика по сделкам и команде</p>
+      <div className="flex items-center gap-2">
+        <Icon name="PieChart" size={16} className="text-brand-blue" />
+        <span className="font-display font-700 text-lg">CRM — Сделки и команда</span>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

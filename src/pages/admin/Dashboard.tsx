@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
+import CrmDashboard from './crm/CrmDashboard';
 
 interface Stats {
   listings_active: number;
@@ -93,6 +94,7 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <CrmDashboard />
     </div>
   );
 }
