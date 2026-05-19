@@ -313,16 +313,9 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
 
             {/* Название и адрес */}
             <div className="bg-white rounded-2xl p-5 shadow-sm">
-              <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
-                <h1 className="font-display font-800 text-2xl md:text-3xl text-foreground">{item.title}</h1>
-                {item.publicCode && (
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-brand-blue/10 text-brand-blue whitespace-nowrap">
-                    ID: {item.publicCode}
-                  </span>
-                )}
-              </div>
+              <h1 className="font-display font-800 text-2xl md:text-3xl text-foreground mb-2">{item.title}</h1>
               <div className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-                <Icon name="MapPin" size={14} className="flex-shrink-0" />
+                <Icon name="MapPin" size={14} className="flex-shrink-0 text-brand-blue" />
                 <span>{[item.city || 'Краснодар', item.district, item.address].filter(Boolean).join(', ')}</span>
               </div>
             </div>
@@ -330,33 +323,30 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
             {/* Параметры объекта */}
             <div className="bg-white rounded-2xl p-5 shadow-sm">
               <div className="font-display font-700 text-lg mb-4">Параметры объекта</div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <Stat icon="Maximize" label="Площадь" value={`${item.area} м²`} />
-                {item.pricePerM2 ? <Stat icon="Scaling" label="За м²" value={`${item.pricePerM2.toLocaleString('ru')} ₽`} /> : null}
-                <Stat icon="Building2" label="Тип объекта" value={typeLabel} />
-                <Stat icon="Briefcase" label="Тип сделки" value={dealLabel} />
-                {item.floor ? <Stat icon="Layers" label="Этаж" value={`${item.floor}${item.totalFloors ? ` из ${item.totalFloors}` : ''}`} /> : null}
-                {item.purpose ? <Stat icon="Target" label="Назначение" value={item.purpose} /> : null}
-                {item.ceilingHeight ? <Stat icon="MoveVertical" label="Высота потолка" value={`${item.ceilingHeight} м`} /> : null}
-                {item.electricityKw ? <Stat icon="Zap" label="Эл. мощность" value={`${item.electricityKw} кВт`} /> : null}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <ParamCard icon="Maximize" label="Площадь" value={`${item.area} м²`} />
+                <ParamCard icon="Briefcase" label="Тип сделки" value={dealLabel} />
+                <ParamCard icon="Building2" label="Тип объекта" value={typeLabel} />
+                {item.floor ? <ParamCard icon="Layers" label="Этаж" value={`${item.floor}${item.totalFloors ? ` из ${item.totalFloors}` : ''}`} /> : null}
+                {item.purpose ? <ParamCard icon="Target" label="Назначение" value={item.purpose} /> : null}
+                {item.ceilingHeight ? <ParamCard icon="MoveVertical" label="Высота потолка" value={`${item.ceilingHeight} м`} /> : null}
+                {item.electricityKw ? <ParamCard icon="Zap" label="Эл. мощность" value={`${item.electricityKw} кВт`} /> : null}
                 {(item as ListingDetail & { condition?: string }).condition ? (
-                  <Stat icon="Star" label="Состояние" value={CONDITION_LABELS[(item as ListingDetail & { condition?: string }).condition!] || (item as ListingDetail & { condition?: string }).condition!} />
+                  <ParamCard icon="CheckCircle2" label="Состояние" value={CONDITION_LABELS[(item as ListingDetail & { condition?: string }).condition!] || (item as ListingDetail & { condition?: string }).condition!} />
                 ) : null}
-                {item.finishing ? <Stat icon="Paintbrush" label="Отделка" value={FINISHING_LABELS[item.finishing] || item.finishing} /> : null}
+                {item.finishing ? <ParamCard icon="Paintbrush" label="Отделка" value={FINISHING_LABELS[item.finishing] || item.finishing} /> : null}
                 {(item as ListingDetail & { parking?: string }).parking && (item as ListingDetail & { parking?: string }).parking !== 'none' ? (
-                  <Stat icon="ParkingSquare" label="Парковка" value={PARKING_LABELS[(item as ListingDetail & { parking?: string }).parking!] || (item as ListingDetail & { parking?: string }).parking!} />
+                  <ParamCard icon="ParkingSquare" label="Парковка" value={PARKING_LABELS[(item as ListingDetail & { parking?: string }).parking!] || (item as ListingDetail & { parking?: string }).parking!} />
                 ) : null}
                 {(item as ListingDetail & { entrance?: string }).entrance ? (
-                  <Stat icon="DoorOpen" label="Вход" value={ENTRANCE_LABELS[(item as ListingDetail & { entrance?: string }).entrance!] || (item as ListingDetail & { entrance?: string }).entrance!} />
+                  <ParamCard icon="DoorOpen" label="Вход" value={ENTRANCE_LABELS[(item as ListingDetail & { entrance?: string }).entrance!] || (item as ListingDetail & { entrance?: string }).entrance!} />
                 ) : null}
-                {item.roadLine ? <Stat icon="Milestone" label="Линия расположения" value={ROAD_LINE_LABELS[item.roadLine] || item.roadLine} /> : null}
-                {item.payback ? (
-                  <Stat icon="TrendingUp" label="Окупаемость" value={`${item.payback} мес${item.payback >= 12 ? ` (~${(item.payback / 12).toFixed(1)} лет)` : ''}`} />
-                ) : null}
-                {item.monthlyRent ? <Stat icon="Wallet" label="МАП (мес. аренд. поток)" value={`${item.monthlyRent.toLocaleString('ru')} ₽`} /> : null}
-                {item.yearlyRent ? <Stat icon="Coins" label="ГАП (год. аренд. поток)" value={`${item.yearlyRent.toLocaleString('ru')} ₽`} /> : null}
-                {item.profit && !item.monthlyRent ? <Stat icon="LineChart" label="Прибыль/мес" value={`${(item.profit / 1000).toFixed(0)} тыс ₽`} /> : null}
-                {item.tenantName ? <Stat icon="Users" label="Арендатор" value={item.tenantName} /> : null}
+                {item.roadLine ? <ParamCard icon="Milestone" label="Линия расположения" value={ROAD_LINE_LABELS[item.roadLine] || item.roadLine} /> : null}
+                {item.payback ? <ParamCard icon="TrendingUp" label="Окупаемость" value={`${item.payback} мес${item.payback >= 12 ? ` (~${(item.payback / 12).toFixed(1)} лет)` : ''}`} /> : null}
+                {item.monthlyRent ? <ParamCard icon="Wallet" label="Арендный поток/мес" value={`${item.monthlyRent.toLocaleString('ru')} ₽`} /> : null}
+                {item.yearlyRent ? <ParamCard icon="Coins" label="Арендный поток/год" value={`${item.yearlyRent.toLocaleString('ru')} ₽`} /> : null}
+                {item.profit && !item.monthlyRent ? <ParamCard icon="LineChart" label="Прибыль/мес" value={`${(item.profit / 1000).toFixed(0)} тыс ₽`} /> : null}
+                {item.tenantName ? <ParamCard icon="Users" label="Арендатор" value={item.tenantName} /> : null}
               </div>
 
               {/* Коммуникации — как параметры с иконками */}
@@ -477,11 +467,12 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
                 <div className="font-display font-900 text-4xl text-brand-blue leading-none">
                   {formatPrice(item.price, item.deal)}
                 </div>
-                {item.pricePerM2 && (
-                  <div className="text-sm text-muted-foreground mt-2">
-                    {item.pricePerM2.toLocaleString('ru')} ₽/м²
+                {item.pricePerM2 ? (
+                  <div className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 bg-muted rounded-lg">
+                    <Icon name="Scaling" size={12} className="text-muted-foreground" />
+                    <span className="text-sm text-foreground font-semibold">{item.pricePerM2.toLocaleString('ru')} ₽/м²</span>
                   </div>
-                )}
+                ) : null}
               </div>
               {item.publicCode && (
                 <div className="px-5 py-2.5 bg-muted/40 border-t border-border flex items-center gap-2">
@@ -529,14 +520,16 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   );
 }
 
-function Stat({ icon, label, value, highlight }: { icon: string; label: string; value: string; highlight?: boolean }) {
+function ParamCard({ icon, label, value }: { icon: string; label: string; value: string }) {
   return (
-    <div className={highlight ? 'col-span-1' : ''}>
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-        <Icon name={icon} size={12} />
-        {label}
+    <div className="flex items-start gap-2.5 bg-muted/40 rounded-xl px-3 py-2.5">
+      <div className="w-7 h-7 rounded-lg bg-white flex items-center justify-center flex-shrink-0 shadow-sm mt-0.5">
+        <Icon name={icon} size={14} className="text-brand-blue" />
       </div>
-      <div className={`font-display font-700 text-base ${highlight ? 'text-brand-blue text-lg' : ''}`}>{value}</div>
+      <div className="min-w-0">
+        <div className="text-[10px] text-muted-foreground leading-tight">{label}</div>
+        <div className="font-display font-700 text-sm leading-tight mt-0.5 truncate">{value}</div>
+      </div>
     </div>
   );
 }

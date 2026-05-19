@@ -347,6 +347,8 @@ def _users(cur, conn, method, rid, event, user):
         for f, length in [('name', 150), ('phone', 30), ('role', 20)]:
             if f in body:
                 fields.append(f"{f} = {_str_or_null(body[f], length)}")
+        if 'avatar' in body:
+            fields.append(f"avatar = {_str_or_null(body['avatar'], 500)}")
         if 'is_active' in body:
             fields.append(f"is_active = {_bool(body['is_active'])}")
         if 'password' in body and body['password']:

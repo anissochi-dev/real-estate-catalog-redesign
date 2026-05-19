@@ -60,16 +60,39 @@ export default function ListingEditor({
 
         <div className="p-5 space-y-4">
           {/* 1. Название */}
-          <div className="relative">
-            <input className="w-full px-3 py-2 border rounded-lg pr-16" placeholder="Название"
-              maxLength={60}
-              value={editing.title || ''}
-              onChange={e => setEditing({ ...editing, title: e.target.value })} />
-            <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs tabular-nums ${
-              (editing.title?.length || 0) >= 55 ? 'text-red-500' : 'text-muted-foreground'
-            }`}>
-              {editing.title?.length || 0}/60
-            </span>
+          <div className="space-y-1.5">
+            <div className="relative">
+              <input className="w-full px-3 py-2 border rounded-lg pr-16" placeholder="Название объекта"
+                maxLength={120}
+                value={editing.title || ''}
+                onChange={e => setEditing({ ...editing, title: e.target.value })} />
+              <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs tabular-nums ${
+                (editing.title?.length || 0) >= 110 ? 'text-red-500' : 'text-muted-foreground'
+              }`}>
+                {editing.title?.length || 0}/120
+              </span>
+            </div>
+            {/* Автодобавление типа сделки */}
+            {editing.deal && editing.category && (() => {
+              const dealLabels: Record<string, string> = { sale: 'Продажа', rent: 'Аренда', business: 'Готовый бизнес' };
+              const catLabels: Record<string, string> = {
+                office: 'офиса', retail: 'торгового помещения', warehouse: 'склада',
+                restaurant: 'помещения под общепит', hotel: 'гостиницы', business: 'готового бизнеса',
+                gab: 'ГАБ', production: 'производственного помещения', land: 'земельного участка',
+                building: 'отдельно стоящего здания', free_purpose: 'помещения свободного назначения',
+                car_service: 'автосервиса',
+              };
+              const suggestion = `${dealLabels[editing.deal] || editing.deal} ${catLabels[editing.category] || editing.category}`;
+              const hasIt = (editing.title || '').toLowerCase().includes(dealLabels[editing.deal]?.toLowerCase() || '');
+              if (hasIt) return null;
+              return (
+                <button type="button"
+                  onClick={() => setEditing({ ...editing, title: `${suggestion}${editing.title ? ' — ' + editing.title : ''}` })}
+                  className="text-xs text-brand-blue hover:underline flex items-center gap-1">
+                  <span>+ Добавить в начало: «{suggestion}»</span>
+                </button>
+              );
+            })()}
           </div>
 
           {/* 2. Собственник */}

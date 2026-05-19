@@ -90,7 +90,6 @@ export default function UsersAdmin() {
             <tr>
               <th className="px-4 py-3">Фото</th>
               <th className="px-4 py-3">Имя</th>
-              <th className="px-4 py-3">Email</th>
               <th className="px-4 py-3">Телефон</th>
               <th className="px-4 py-3">Роль</th>
               <th className="px-4 py-3">Статус</th>
@@ -110,7 +109,6 @@ export default function UsersAdmin() {
                   )}
                 </td>
                 <td className="px-4 py-3 font-semibold">{u.name}</td>
-                <td className="px-4 py-3 text-muted-foreground">{u.email}</td>
                 <td className="px-4 py-3 text-muted-foreground">{u.phone || '—'}</td>
                 <td className="px-4 py-3">{ROLES.find(r => r.id === u.role)?.label}</td>
                 <td className="px-4 py-3">
