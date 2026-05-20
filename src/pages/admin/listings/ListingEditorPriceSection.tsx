@@ -58,9 +58,12 @@ function usePriceHint(category: string, deal: string, area: number, price: numbe
 interface Props {
   editing: Partial<Listing>;
   setEditing: (l: Partial<Listing>) => void;
+  errors?: Record<string, boolean>;
+  setErrors?: (fn: (prev: Record<string, boolean>) => Record<string, boolean>) => void;
 }
 
-export default function ListingEditorPriceSection({ editing, setEditing }: Props) {
+export default function ListingEditorPriceSection({ editing, setEditing, errors = {}, setErrors }: Props) {
+  const err = (field: string) => errors[field] ? 'border-red-400 bg-red-50' : '';
   const { hint, loading: hintLoading } = usePriceHint(
     editing.category || '',
     editing.deal || '',
@@ -73,14 +76,14 @@ export default function ListingEditorPriceSection({ editing, setEditing }: Props
     <>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div>
-          <label className="text-xs text-muted-foreground">Цена, ₽</label>
-          <input type="number" className="w-full px-3 py-2 border rounded-lg"
-            value={editing.price || ''} onChange={e => setEditing({ ...editing, price: +e.target.value })} />
+          <label className="text-xs text-muted-foreground">Цена, ₽ *</label>
+          <input type="number" className={`w-full px-3 py-2 border rounded-lg ${err('price')}`}
+            value={editing.price || ''} onChange={e => { setEditing({ ...editing, price: +e.target.value }); setErrors?.(v => ({ ...v, price: false })); }} />
         </div>
         <div>
-          <label className="text-xs text-muted-foreground">Площадь, м²</label>
-          <input type="number" className="w-full px-3 py-2 border rounded-lg"
-            value={editing.area || ''} onChange={e => setEditing({ ...editing, area: +e.target.value })} />
+          <label className="text-xs text-muted-foreground">Площадь, м² *</label>
+          <input type="number" className={`w-full px-3 py-2 border rounded-lg ${err('area')}`}
+            value={editing.area || ''} onChange={e => { setEditing({ ...editing, area: +e.target.value }); setErrors?.(v => ({ ...v, area: false })); }} />
         </div>
         <div>
           <label className="text-xs text-muted-foreground">Единица цены</label>
@@ -150,14 +153,14 @@ export default function ListingEditorPriceSection({ editing, setEditing }: Props
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div>
-          <label className="text-xs text-muted-foreground">Этаж</label>
-          <input type="number" className="w-full px-3 py-2 border rounded-lg"
-            value={editing.floor ?? ''} onChange={e => setEditing({ ...editing, floor: e.target.value === '' ? null : +e.target.value })} />
+          <label className="text-xs text-muted-foreground">Этаж *</label>
+          <input type="number" className={`w-full px-3 py-2 border rounded-lg ${err('floor')}`}
+            value={editing.floor ?? ''} onChange={e => { setEditing({ ...editing, floor: e.target.value === '' ? null : +e.target.value }); setErrors?.(v => ({ ...v, floor: false })); }} />
         </div>
         <div>
-          <label className="text-xs text-muted-foreground">Этажность</label>
-          <input type="number" className="w-full px-3 py-2 border rounded-lg"
-            value={editing.total_floors ?? ''} onChange={e => setEditing({ ...editing, total_floors: e.target.value === '' ? null : +e.target.value })} />
+          <label className="text-xs text-muted-foreground">Этажность *</label>
+          <input type="number" className={`w-full px-3 py-2 border rounded-lg ${err('total_floors')}`}
+            value={editing.total_floors ?? ''} onChange={e => { setEditing({ ...editing, total_floors: e.target.value === '' ? null : +e.target.value }); setErrors?.(v => ({ ...v, total_floors: false })); }} />
         </div>
         <div></div>
         <div>

@@ -65,7 +65,11 @@ export default function PropertyMainContent({
           <ParamCard icon="Briefcase" label="Тип сделки" value={dealLabel} />
           <ParamCard icon="Building2" label="Тип объекта" value={typeLabel} />
           {item.floor ? <ParamCard icon="Layers" label="Этаж" value={`${item.floor}${item.totalFloors ? ` из ${item.totalFloors}` : ''}`} /> : null}
-          {item.purpose ? <ParamCard icon="Target" label="Назначение" value={PURPOSE_LABELS[item.purpose] || item.purpose} /> : null}
+          {item.purpose ? <ParamCard icon="Target" label="Назначение" value={
+            item.purpose.includes('|')
+              ? item.purpose.split('|').map(s => s.trim()).filter(Boolean).join(', ')
+              : (PURPOSE_LABELS[item.purpose] || item.purpose)
+          } /> : null}
           {item.ceilingHeight ? <ParamCard icon="MoveVertical" label="Высота потолка" value={`${item.ceilingHeight} м`} /> : null}
           {item.electricityKw ? <ParamCard icon="Zap" label="Эл. мощность" value={`${item.electricityKw} кВт`} /> : null}
           {itemExt.condition ? (
@@ -155,6 +159,10 @@ export default function PropertyMainContent({
               <CharCount as="textarea" placeholder="Комментарий (необязательно)" rows={2} max={500} warnAt={400}
                 value={form.message} onChange={e => setForm({ ...form, message: (e.target as HTMLTextAreaElement).value })}
                 className="text-sm" />
+            </div>
+            <div className="sm:col-span-2 flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
+              <Icon name="Link" size={12} className="flex-shrink-0 text-brand-blue" />
+              <span className="truncate">Объект: <span className="text-foreground font-medium">{typeof window !== 'undefined' ? window.location.href : ''}</span></span>
             </div>
             <button type="submit" disabled={sending}
               className="sm:col-span-2 w-full btn-blue text-white py-2.5 rounded-xl font-semibold disabled:opacity-50 text-sm">

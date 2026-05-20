@@ -20,7 +20,7 @@ import ScrollToTop from './components/ScrollToTop';
 import ConsentBanner, { hasConsent } from './components/ConsentBanner';
 import { fetchListings } from './lib/api';
 import { useAuth } from './contexts/AuthContext';
-import ChatbotWidget from './components/ChatbotWidget';
+
 
 export type PropertyType = 'office' | 'retail' | 'warehouse' | 'restaurant' | 'business' | 'production' | 'hotel' | 'gab';
 export type DealType = 'sale' | 'rent' | 'business';
@@ -325,7 +325,6 @@ export default function App() {
         <ConsentBanner onAccept={() => setConsentGiven(true)} />
       )}
 
-      <ChatbotWidget />
     </div>
   );
 }

@@ -32,7 +32,7 @@ export default function AiChatInput({ input, setInput, action, loading, onSend }
         />
         <button
           onClick={onSend}
-          disabled={loading || !input.trim()}
+          disabled={loading}
           className="btn-blue text-white px-4 rounded-xl disabled:opacity-50"
         >
           <Icon name="Send" size={18} />

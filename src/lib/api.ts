@@ -163,6 +163,7 @@ export interface LeadInput {
   message?: string;
   listing_id?: number;
   source?: string;
+  object_url?: string;
 }
 
 export async function sendLead(payload: LeadInput): Promise<{ success: boolean; id?: number; error?: string }> {

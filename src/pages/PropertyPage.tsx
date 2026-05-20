@@ -102,7 +102,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
     e.preventDefault();
     setSending(true);
     try {
-      await sendLead({ name: form.name, phone: form.phone, message: form.message, listing_id: item.id, source: 'property-page' });
+      await sendLead({ name: form.name, phone: form.phone, message: form.message, listing_id: item.id, source: 'property-page', object_url: window.location.href });
       setSent(true);
     } finally {
       setSending(false);

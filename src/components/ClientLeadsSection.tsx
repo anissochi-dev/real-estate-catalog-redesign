@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
+import SmartCaptcha, { CaptchaResult } from '@/components/SmartCaptcha';
 
 const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
 const LEADS_URL = 'https://functions.poehali.dev/45673fe4-a39d-4193-b529-174d4c8c8f97';
@@ -19,6 +20,8 @@ export default function ClientLeadsSection() {
   const [form, setForm] = useState({ name: '', phone: '', message: '' });
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [captcha, setCaptcha] = useState<CaptchaResult | null>(null);
+  const [captchaKey, setCaptchaKey] = useState(0);
 
   useEffect(() => {
     fetch(`${LISTINGS_URL}?resource=public_leads`)
@@ -29,7 +32,7 @@ export default function ClientLeadsSection() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!offerLead) return;
+    if (!offerLead || !captcha?.passed) return;
     setSending(true);
     try {
       await fetch(LEADS_URL, {
@@ -47,6 +50,8 @@ export default function ClientLeadsSection() {
         setOfferLead(null);
         setSent(false);
         setForm({ name: '', phone: '', message: '' });
+        setCaptcha(null);
+        setCaptchaKey(k => k + 1);
       }, 1500);
     } finally {
       setSending(false);
@@ -121,7 +126,8 @@ export default function ClientLeadsSection() {
                 <textarea placeholder="Описание вашего объекта (адрес, площадь, цена)" rows={3}
                   value={form.message} onChange={e => setForm({ ...form, message: e.target.value })}
                   className="w-full px-3 py-2 border rounded-lg" />
-                <button type="submit" disabled={sending}
+                <SmartCaptcha key={captchaKey} fieldCount={3} onVerify={setCaptcha} />
+                <button type="submit" disabled={sending || !captcha?.passed}
                   className="w-full btn-blue text-white py-3 rounded-xl font-semibold disabled:opacity-50">
                   {sending ? 'Отправка...' : 'Отправить предложение'}
                 </button>

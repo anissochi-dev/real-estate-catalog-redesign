@@ -48,7 +48,10 @@ export function usePushNotifications() {
       return;
     }
 
+    const timeout = setTimeout(() => setState('unsubscribed'), 5000);
+
     navigator.serviceWorker.ready.then(reg => {
+      clearTimeout(timeout);
       reg.pushManager.getSubscription().then(sub => {
         if (sub) {
           setSubscription(sub);
@@ -56,8 +59,8 @@ export function usePushNotifications() {
         } else {
           setState('unsubscribed');
         }
-      });
-    }).catch(() => setState('unsubscribed'));
+      }).catch(() => setState('unsubscribed'));
+    }).catch(() => { clearTimeout(timeout); setState('unsubscribed'); });
   }, []);
 
   const subscribe = useCallback(async () => {

@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import ImageUploader from '@/components/admin/ImageUploader';
 import Icon from '@/components/ui/icon';
 import PhonePickerInput from '@/components/admin/PhonePickerInput';
 import {
   Listing, City, Purpose,
-  CATS, DEALS, CONDITIONS,
+  CATS, DEALS, CONDITIONS, PURPOSE_LIST,
 } from './types';
 import ListingEditorPriceSection from './ListingEditorPriceSection';
 import ListingEditorDetailsSection from './ListingEditorDetailsSection';
@@ -33,6 +34,46 @@ export default function ListingEditor({
   aiLoading, aiTagsLoading, aiSeoLoading, aiAllLoading,
   onDescribe, onGenerateTags, onGenerateSeo, onGenerateAll, onClose, onSave,
 }: Props) {
+  const [errors, setErrors] = useState<Record<string, boolean>>({});
+  const [purposeOpen, setPurposeOpen] = useState(false);
+
+  const selectedPurposes: string[] = editing.purpose
+    ? editing.purpose.split('|').map(s => s.trim()).filter(Boolean)
+    : [];
+
+  const togglePurpose = (name: string) => {
+    const cur = selectedPurposes.includes(name)
+      ? selectedPurposes.filter(p => p !== name)
+      : [...selectedPurposes, name];
+    setEditing({ ...editing, purpose: cur.join('|') });
+  };
+
+  const validate = (): boolean => {
+    const e: Record<string, boolean> = {};
+    if (!editing.title?.trim()) e.title = true;
+    if (!editing.owner_phone?.trim()) e.owner_phone = true;
+    if (!editing.owner_name?.trim()) e.owner_name = true;
+    if (!photos.length) e.photos = true;
+    if (!editing.category) e.category = true;
+    if (!editing.deal) e.deal = true;
+    if (!editing.condition) e.condition = true;
+    if (!editing.price) e.price = true;
+    if (!editing.area) e.area = true;
+    if (editing.floor == null) e.floor = true;
+    if (editing.total_floors == null) e.total_floors = true;
+    if (!editing.address?.trim() && !editing.district?.trim()) e.address = true;
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSave = () => {
+    if (validate()) onSave();
+  };
+
+  const err = (field: string) => errors[field]
+    ? 'border-red-400 bg-red-50'
+    : '';
+
   return (
     <div className="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
@@ -59,13 +100,20 @@ export default function ListingEditor({
         </div>
 
         <div className="p-5 space-y-4">
+          {Object.keys(errors).length > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700 flex items-start gap-2">
+              <Icon name="AlertCircle" size={16} className="mt-0.5 flex-shrink-0" />
+              Заполните все обязательные поля, выделенные красным.
+            </div>
+          )}
+
           {/* 1. Название */}
           <div className="space-y-1.5">
             <div className="relative">
-              <input className="w-full px-3 py-2 border rounded-lg pr-16" placeholder="Название объекта"
+              <input className={`w-full px-3 py-2 border rounded-lg pr-16 ${err('title')}`} placeholder="Название объекта *"
                 maxLength={120}
                 value={editing.title || ''}
-                onChange={e => setEditing({ ...editing, title: e.target.value })} />
+                onChange={e => { setEditing({ ...editing, title: e.target.value }); setErrors(v => ({ ...v, title: false })); }} />
               <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs tabular-nums ${
                 (editing.title?.length || 0) >= 110 ? 'text-red-500' : 'text-muted-foreground'
               }`}>
@@ -98,16 +146,16 @@ export default function ListingEditor({
           {/* 2. Собственник */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-border pt-4">
             <div>
-              <label className="text-xs text-muted-foreground">Имя собственника</label>
-              <input className="w-full px-3 py-2 border rounded-lg"
+              <label className="text-xs text-muted-foreground">Имя собственника *</label>
+              <input className={`w-full px-3 py-2 border rounded-lg ${err('owner_name')}`}
                 value={editing.owner_name || ''}
-                onChange={e => setEditing({ ...editing, owner_name: e.target.value })} />
+                onChange={e => { setEditing({ ...editing, owner_name: e.target.value }); setErrors(v => ({ ...v, owner_name: false })); }} />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground">Телефон собственника</label>
+              <label className="text-xs text-muted-foreground">Телефон собственника *</label>
               <PhonePickerInput
                 value={editing.owner_phone || ''}
-                onChange={(phone, name) => setEditing({ ...editing, owner_phone: phone, ...(name && !editing.owner_name ? { owner_name: name } : {}) })}
+                onChange={(phone, name) => { setEditing({ ...editing, owner_phone: phone, ...(name && !editing.owner_name ? { owner_name: name } : {}) }); setErrors(v => ({ ...v, owner_phone: false })); }}
                 onNameChange={name => { if (!editing.owner_name) setEditing({ ...editing, owner_name: name }); }}
               />
             </div>
@@ -124,46 +172,90 @@ export default function ListingEditor({
 
           {/* 3. Фотографии */}
           <div className="border-t border-border pt-4">
-            <label className="text-sm font-semibold block mb-1">Фотографии</label>
-            <ImageUploader value={photos} onChange={setPhotos} folder="photos" multiple />
+            <label className={`text-sm font-semibold block mb-1 ${errors.photos ? 'text-red-600' : ''}`}>
+              Фотографии *{errors.photos && <span className="ml-2 text-xs font-normal text-red-500">Добавьте хотя бы одно фото</span>}
+            </label>
+            <ImageUploader value={photos} onChange={p => { setPhotos(p); setErrors(v => ({ ...v, photos: false })); }} folder="photos" multiple />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-muted-foreground">Категория</label>
-              <select className="w-full px-3 py-2 border rounded-lg" value={editing.category}
-                onChange={e => setEditing({ ...editing, category: e.target.value })}>
+              <label className="text-xs text-muted-foreground">Категория *</label>
+              <select className={`w-full px-3 py-2 border rounded-lg ${err('category')}`} value={editing.category}
+                onChange={e => { setEditing({ ...editing, category: e.target.value }); setErrors(v => ({ ...v, category: false })); }}>
                 {CATS.map(c => <option key={c[0]} value={c[0]}>{c[1]}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs text-muted-foreground">Тип сделки</label>
-              <select className="w-full px-3 py-2 border rounded-lg" value={editing.deal}
-                onChange={e => setEditing({ ...editing, deal: e.target.value })}>
+              <label className="text-xs text-muted-foreground">Тип сделки *</label>
+              <select className={`w-full px-3 py-2 border rounded-lg ${err('deal')}`} value={editing.deal}
+                onChange={e => { setEditing({ ...editing, deal: e.target.value }); setErrors(v => ({ ...v, deal: false })); }}>
                 {DEALS.map(d => <option key={d[0]} value={d[0]}>{d[1]}</option>)}
               </select>
             </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Назначение</label>
-              <select className="w-full px-3 py-2 border rounded-lg" value={editing.purpose || ''}
-                onChange={e => setEditing({ ...editing, purpose: e.target.value })}>
-                <option value="">— Не выбрано —</option>
-                {purposes.map(p => <option key={p.id} value={p.slug}>{p.name}</option>)}
-              </select>
+            <div className="col-span-2">
+              <label className="text-xs text-muted-foreground">Назначение (можно выбрать несколько)</label>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setPurposeOpen(o => !o)}
+                  className="w-full px-3 py-2 border rounded-lg text-left text-sm flex items-center justify-between gap-2"
+                >
+                  <span className="truncate text-foreground">
+                    {selectedPurposes.length > 0
+                      ? selectedPurposes.slice(0, 3).join(', ') + (selectedPurposes.length > 3 ? ` +${selectedPurposes.length - 3}` : '')
+                      : '— Не выбрано —'}
+                  </span>
+                  <Icon name={purposeOpen ? 'ChevronUp' : 'ChevronDown'} size={14} className="flex-shrink-0 text-muted-foreground" />
+                </button>
+                {purposeOpen && (
+                  <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-border rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                    {PURPOSE_LIST.map(name => (
+                      <label key={name} className="flex items-center gap-2 px-3 py-2 hover:bg-muted cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selectedPurposes.includes(name)}
+                          onChange={() => togglePurpose(name)}
+                          className="accent-brand-blue"
+                        />
+                        {name}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {selectedPurposes.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {selectedPurposes.map(name => (
+                    <span key={name} className="inline-flex items-center gap-1 text-xs bg-brand-blue/10 text-brand-blue px-2 py-0.5 rounded-full">
+                      {name}
+                      <button type="button" onClick={() => togglePurpose(name)} className="hover:text-red-500">
+                        <Icon name="X" size={10} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             <div>
-              <label className="text-xs text-muted-foreground">Состояние</label>
-              <select className="w-full px-3 py-2 border rounded-lg" value={editing.condition || ''}
-                onChange={e => setEditing({ ...editing, condition: e.target.value })}>
+              <label className="text-xs text-muted-foreground">Состояние *</label>
+              <select className={`w-full px-3 py-2 border rounded-lg ${err('condition')}`} value={editing.condition || ''}
+                onChange={e => { setEditing({ ...editing, condition: e.target.value }); setErrors(v => ({ ...v, condition: false })); }}>
                 <option value="">— Не выбрано —</option>
                 {CONDITIONS.map(c => <option key={c[0]} value={c[0]}>{c[1]}</option>)}
               </select>
             </div>
           </div>
 
-          <ListingEditorPriceSection editing={editing} setEditing={setEditing} />
+          <ListingEditorPriceSection editing={editing} setEditing={setEditing} errors={errors} setErrors={setErrors} />
 
-          <ListingEditorDetailsSection editing={editing} setEditing={setEditing} cities={cities} />
+          <ListingEditorDetailsSection editing={editing} setEditing={(l) => { setEditing(l); setErrors(v => ({ ...v, address: false })); }} cities={cities} />
+          {errors.address && (
+            <div className="text-xs text-red-600 flex items-center gap-1.5 -mt-2">
+              <Icon name="AlertCircle" size={13} />
+              Укажите расположение объекта (адрес или район) *
+            </div>
+          )}
 
           <ListingEditorContentSection
             editing={editing}
@@ -179,7 +271,7 @@ export default function ListingEditor({
 
         <div className="p-5 border-t border-border flex justify-end gap-3 sticky bottom-0 bg-white">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm">Отмена</button>
-          <button onClick={onSave} className="btn-blue text-white px-5 py-2 rounded-xl text-sm font-semibold">
+          <button onClick={handleSave} className="btn-blue text-white px-5 py-2 rounded-xl text-sm font-semibold">
             Сохранить
           </button>
         </div>
