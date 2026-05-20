@@ -52,6 +52,9 @@ export default function AiChat({
   const [opsInput, setOpsInput] = useState('');
   const [opsLoading, setOpsLoading] = useState(false);
   const [opsPendingText, setOpsPendingText] = useState<string | null>(null); // ожидает РАЗРЕШАЮ
+  const [showMemory, setShowMemory] = useState(false);
+  const [memoryData, setMemoryData] = useState<{ persona: string; interaction_count: string; learned_facts: string[]; tech_decisions: { date: string; q: string; a: string }[]; mood: string } | null>(null);
+  const [memoryLoading, setMemoryLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const opsScrollRef = useRef<HTMLDivElement>(null);
 
@@ -67,6 +70,20 @@ export default function AiChat({
       opsScrollRef.current.scrollTop = opsScrollRef.current.scrollHeight;
     }
   }, [opsMessages]);
+
+  const loadMemory = async () => {
+    setMemoryLoading(true);
+    try {
+      const data = await aiApi.getMemory();
+      setMemoryData(data);
+      setShowMemory(true);
+    } catch {
+      setShowMemory(true);
+      setMemoryData(null);
+    } finally {
+      setMemoryLoading(false);
+    }
+  };
 
   // Отправка в режиме Администрирование: требует явного подтверждения «РАЗРЕШАЮ»
   const sendOps = async (text?: string, skipConfirm = false) => {
@@ -268,6 +285,16 @@ export default function AiChat({
                 <Icon name="Trash2" size={18} />
               </button>
             )}
+            {chatTab === 'admin_ops' && (
+              <button
+                onClick={loadMemory}
+                disabled={memoryLoading}
+                title="Память Мелании"
+                className="hover:bg-white/10 rounded-lg p-1.5 flex items-center gap-1 text-xs"
+              >
+                {memoryLoading ? <Icon name="Loader2" size={16} className="animate-spin" /> : <Icon name="Brain" size={16} />}
+              </button>
+            )}
             <button onClick={onClose} className="hover:bg-white/10 rounded-lg p-1.5">
               <Icon name="X" size={20} />
             </button>
@@ -385,6 +412,57 @@ export default function AiChat({
                 <strong>Режим администрирования.</strong> Консультации — сразу. Изменения в системе — только после вашего «РАЗРЕШАЮ».
               </div>
             </div>
+
+            {/* Панель памяти */}
+            {showMemory && (
+              <div className="mx-3 mt-2 shrink-0 bg-white border border-red-200 rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2.5 bg-red-50 border-b border-red-100">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-red-800">
+                    <Icon name="Brain" size={15} />
+                    Память Мелании
+                  </div>
+                  <button onClick={() => setShowMemory(false)} className="text-red-400 hover:text-red-700">
+                    <Icon name="X" size={15} />
+                  </button>
+                </div>
+                {!memoryData ? (
+                  <div className="px-4 py-3 text-xs text-muted-foreground">Не удалось загрузить память</div>
+                ) : (
+                  <div className="px-4 py-3 space-y-3 max-h-64 overflow-y-auto">
+                    <div className="text-xs text-muted-foreground">
+                      Взаимодействий: <strong>{memoryData.interaction_count}</strong> · Настроение: <strong>{memoryData.mood}</strong>
+                    </div>
+                    {memoryData.learned_facts.length > 0 && (
+                      <div>
+                        <div className="text-xs font-semibold text-foreground mb-1.5">Важные факты</div>
+                        <div className="space-y-1">
+                          {memoryData.learned_facts.map((f, i) => (
+                            <div key={i} className="text-xs bg-muted/40 rounded-lg px-3 py-1.5">{f}</div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {memoryData.tech_decisions.length > 0 && (
+                      <div>
+                        <div className="text-xs font-semibold text-foreground mb-1.5">Технические решения</div>
+                        <div className="space-y-2">
+                          {memoryData.tech_decisions.map((d, i) => (
+                            <div key={i} className="text-xs border border-red-100 rounded-lg px-3 py-2">
+                              <div className="text-muted-foreground mb-0.5">{d.date}</div>
+                              <div className="font-medium text-foreground mb-1">❓ {d.q}</div>
+                              <div className="text-muted-foreground">💡 {d.a.slice(0, 200)}{d.a.length > 200 ? '...' : ''}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {memoryData.learned_facts.length === 0 && memoryData.tech_decisions.length === 0 && (
+                      <div className="text-xs text-muted-foreground">Память пока пуста — начни общаться!</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Сообщения */}
             <div ref={opsScrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">

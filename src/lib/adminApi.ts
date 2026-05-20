@@ -204,7 +204,7 @@ export async function removeWatermark(
   return { url: data.url as string, detected: Boolean(data.detected) };
 }
 
-export type AiAction = 'describe' | 'reply_lead' | 'seo' | 'moderate' | 'analytics' | 'admin' | 'admin_ops' | 'add_city' | 'auto_tags' | 'agent' | 'security' | 'marketing' | 'analytics_full' | 'modernize' | 'db_check' | 'seo_listing';
+export type AiAction = 'describe' | 'reply_lead' | 'seo' | 'moderate' | 'analytics' | 'admin' | 'admin_ops' | 'add_city' | 'auto_tags' | 'agent' | 'security' | 'marketing' | 'analytics_full' | 'modernize' | 'db_check' | 'seo_listing' | 'get_memory';
 
 export interface AgentAction {
   type: string;
@@ -234,4 +234,12 @@ export const aiApi = {
     req(AI_URL, { method: 'POST', body: JSON.stringify({ action: 'agent', prompt, context_data }) }) as Promise<AgentResponse>,
   execute: (actions: AgentAction[]) =>
     req(AI_URL, { method: 'POST', body: JSON.stringify({ action: 'execute', actions }) }) as Promise<{ results: ExecuteResult[] }>,
+  getMemory: () =>
+    req(AI_URL, { method: 'POST', body: JSON.stringify({ action: 'get_memory', prompt: '' }) }) as Promise<{
+      persona: string;
+      interaction_count: string;
+      learned_facts: string[];
+      tech_decisions: { date: string; q: string; a: string }[];
+      mood: string;
+    }>,
 };

@@ -283,7 +283,7 @@ def _increment_interaction(cur, conn):
 
 
 def _save_learned_fact(cur, conn, fact: str):
-    """Сохраняет новый факт в память Алисы (до 20 фактов, FIFO)."""
+    """Сохраняет новый факт в память Мелании (до 20 фактов, FIFO)."""
     try:
         cur.execute(f"SELECT value FROM {SCHEMA}.ai_memory WHERE key = 'learned_facts'")
         row = cur.fetchone()
@@ -307,20 +307,58 @@ def _save_learned_fact(cur, conn, fact: str):
             pass
 
 
+def _save_tech_decision(cur, conn, question: str, answer: str):
+    """Сохраняет принятое техническое решение в отдельную память (до 15 записей, FIFO)."""
+    try:
+        from datetime import datetime as _dt
+        cur.execute(f"SELECT value FROM {SCHEMA}.ai_memory WHERE key = 'tech_decisions'")
+        row = cur.fetchone()
+        decisions = json.loads(row['value']) if row else []
+        if not isinstance(decisions, list):
+            decisions = []
+        entry = {
+            'date': _dt.utcnow().strftime('%Y-%m-%d'),
+            'q': question.strip()[:150],
+            'a': answer.strip()[:300],
+        }
+        decisions.append(entry)
+        if len(decisions) > 15:
+            decisions = decisions[-15:]
+        cur.execute(
+            f"UPDATE {SCHEMA}.ai_memory SET value = '{_safe(json.dumps(decisions, ensure_ascii=False), 8000)}', "
+            f"updated_at = NOW() WHERE key = 'tech_decisions'"
+        )
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+
 def _build_memory_context(memory: dict) -> str:
-    """Формирует блок контекста с памятью для системного промпта."""
+    """Формирует блок контекста с памятью Мелании для системного промпта."""
     persona = memory.get('persona', '')
     facts_raw = memory.get('learned_facts', '[]')
+    decisions_raw = memory.get('tech_decisions', '[]')
     count = memory.get('interaction_count', '0')
     try:
         facts = json.loads(facts_raw)
     except Exception:
         facts = []
+    try:
+        decisions = json.loads(decisions_raw)
+    except Exception:
+        decisions = []
     lines = [f'[ПАМЯТЬ МЕЛАНИИ] Я общалась {count} раз(а). {persona}']
     if facts:
         lines.append('Что я помню из прошлых разговоров:')
         for f in facts[-10:]:
             lines.append(f'- {f}')
+    if decisions:
+        lines.append('Принятые технические решения по администрированию сайта:')
+        for d in decisions[-8:]:
+            lines.append(f'- [{d.get("date","")}] Вопрос: {d.get("q","")} → Решение: {d.get("a","")[:150]}')
     return '\n'.join(lines)
 
 
@@ -569,6 +607,25 @@ def handler(event, context):
                     'tokens': ping_result.get('tokens', 0),
                 })
 
+            # Получение памяти Мелании (для отображения в интерфейсе)
+            if action == 'get_memory':
+                mem = _load_ai_memory(cur)
+                try:
+                    facts = json.loads(mem.get('learned_facts', '[]'))
+                except Exception:
+                    facts = []
+                try:
+                    decisions = json.loads(mem.get('tech_decisions', '[]'))
+                except Exception:
+                    decisions = []
+                return _ok({
+                    'persona': mem.get('persona', ''),
+                    'interaction_count': mem.get('interaction_count', '0'),
+                    'learned_facts': facts,
+                    'tech_decisions': decisions,
+                    'mood': mem.get('mood', 'хорошее'),
+                })
+
             # Выполнение действий, предложенных агентом, после подтверждения админом
             if action == 'execute':
                 actions_to_run = body.get('actions') or []
@@ -703,11 +760,22 @@ def handler(event, context):
             )
             conn.commit()
 
-            # Самообучение: для admin / admin_ops запоминаем важные факты из запроса пользователя
-            if action in ('admin', 'admin_ops') and user_text:
-                keywords = ['зовут', 'называй', 'запомни', 'всегда', 'никогда', 'предпочит', 'любим', 'важно', 'разрешаю', 'подключи', 'настрой']
+            # Самообучение для admin: запоминаем важные факты из запроса
+            if action == 'admin' and user_text:
+                keywords = ['зовут', 'называй', 'запомни', 'всегда', 'никогда', 'предпочит', 'любим', 'важно']
                 if any(kw in user_text.lower() for kw in keywords):
                     _save_learned_fact(cur, conn, user_text[:200])
+
+            # Самообучение для admin_ops: сохраняем технические решения
+            # Записываем каждый завершённый диалог по администрированию (вопрос + краткий ответ ИИ)
+            if action == 'admin_ops' and user_text and result.get('text'):
+                ai_answer = result['text']
+                # Сохраняем как факт (короткий)
+                fact_keywords = ['зовут', 'называй', 'запомни', 'разрешаю', 'подключи', 'настрой']
+                if any(kw in user_text.lower() for kw in fact_keywords):
+                    _save_learned_fact(cur, conn, user_text[:200])
+                # Всегда сохраняем техническое решение в отдельную память
+                _save_tech_decision(cur, conn, user_text, ai_answer)
 
             return _ok({'text': result['text'], 'tokens': result.get('tokens', 0)})
     finally:
