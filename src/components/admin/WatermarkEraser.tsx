@@ -19,6 +19,7 @@ export default function WatermarkEraser({ photoUrl, onDone, onClose }: Props) {
   const [current, setCurrent] = useState<Rect | null>(null);
   const [loading, setLoading] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const [sensitivity, setSensitivity] = useState(0.45);
   const [autoMode, setAutoMode] = useState(false);
 
@@ -27,12 +28,25 @@ export default function WatermarkEraser({ photoUrl, onDone, onClose }: Props) {
   const [naturalSize, setNaturalSize] = useState({ w: 0, h: 0 });
 
   useEffect(() => {
+    setImgLoaded(false);
+    setImgError(false);
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
       imgRef.current = img;
       setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
       setImgLoaded(true);
+    };
+    img.onerror = () => {
+      // Пробуем без crossOrigin (некоторые CDN не поддерживают CORS)
+      const img2 = new Image();
+      img2.onload = () => {
+        imgRef.current = img2;
+        setNaturalSize({ w: img2.naturalWidth, h: img2.naturalHeight });
+        setImgLoaded(true);
+      };
+      img2.onerror = () => setImgError(true);
+      img2.src = photoUrl;
     };
     img.src = photoUrl;
   }, [photoUrl]);
@@ -155,20 +169,18 @@ export default function WatermarkEraser({ photoUrl, onDone, onClose }: Props) {
 
         {/* Canvas */}
         <div className="flex-1 overflow-auto p-4 flex items-center justify-center min-h-0">
-          {!imgLoaded ? (
+          {imgError ? (
+            <div className="text-center text-red-500 text-sm p-4">
+              <Icon name="AlertCircle" size={24} className="mx-auto mb-2" />
+              Не удалось загрузить изображение.<br />
+              <span className="text-xs text-muted-foreground">Возможно, источник не поддерживает загрузку.</span>
+            </div>
+          ) : !imgLoaded ? (
             <div className="flex items-center gap-2 text-muted-foreground">
               <Icon name="Loader2" size={20} className="animate-spin" /> Загрузка фото...
             </div>
           ) : (
             <canvas
-              ref={canvasRef}
-              width={canvasSize.w || 700}
-              height={canvasSize.h || 400}
-              className={`rounded-lg border border-border max-w-full max-h-[55vh] object-contain ${!autoMode ? 'cursor-crosshair' : 'cursor-default'}`}
-              style={{ display: 'block' }}
-              onMouseDown={!autoMode ? onMouseDown : undefined}
-              onMouseMove={!autoMode ? onMouseMove : undefined}
-              onMouseUp={!autoMode ? onMouseUp : undefined}
               ref={el => {
                 (canvasRef as React.MutableRefObject<HTMLCanvasElement | null>).current = el;
                 if (el && imgRef.current && !canvasSize.w) {
@@ -181,6 +193,13 @@ export default function WatermarkEraser({ photoUrl, onDone, onClose }: Props) {
                   el.height = h;
                 }
               }}
+              width={canvasSize.w || 700}
+              height={canvasSize.h || 400}
+              className={`rounded-lg border border-border max-w-full max-h-[55vh] object-contain ${!autoMode ? 'cursor-crosshair' : 'cursor-default'}`}
+              style={{ display: 'block' }}
+              onMouseDown={!autoMode ? onMouseDown : undefined}
+              onMouseMove={!autoMode ? onMouseMove : undefined}
+              onMouseUp={!autoMode ? onMouseUp : undefined}
             />
           )}
         </div>

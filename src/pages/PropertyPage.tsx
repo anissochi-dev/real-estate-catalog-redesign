@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchListingById, ListingDetail, sendLead, fetchAgents, Agent } from '@/lib/api';
+import { recordView } from '@/components/RecentlyViewed';
 import { extractIdFromSlug } from '@/lib/slug';
 import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
@@ -37,6 +38,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
     fetchListingById(id).then(d => {
       setItem(d);
       if (d) {
+        recordView(d);
         fetch('https://functions.poehali.dev/1d84bd40-ef8c-4bd3-82c3-af294b1ec0b1', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

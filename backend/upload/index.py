@@ -1,14 +1,17 @@
 """
 Business: Загрузка фото/логотипа/водяного знака в S3 через base64. Опционально накладывает водяной знак на фото объектов.
-Args: event с httpMethod POST, body {file_base64, filename, kind (photo/logo/watermark), apply_watermark}, headers X-Auth-Token
+Также поддерживает публичную загрузку (kind=public) с защитой по magic bytes, rate limit и сканированием кода.
+Args: event с httpMethod POST, body {file_base64, filename, kind (photo/logo/watermark/public), apply_watermark}, headers X-Auth-Token
 Returns: HTTP-ответ с url загруженного файла на CDN
 """
 
 import base64
+import hashlib
 import json
 import os
 import secrets
 import io
+import time
 
 import boto3
 import psycopg2
@@ -42,6 +45,66 @@ def _get_user(cur, token):
         f"WHERE s.token = '{t}' AND s.expires_at > NOW() AND u.is_active = TRUE"
     )
     return cur.fetchone()
+
+
+PUBLIC_ALLOWED = {
+    bytes([0xFF, 0xD8, 0xFF]): ('image/jpeg', '.jpg'),
+    bytes([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]): ('image/png', '.png'),
+    b'GIF87a': ('image/gif', '.gif'),
+    b'GIF89a': ('image/gif', '.gif'),
+    b'RIFF': ('image/webp', '.webp'),
+    b'%PDF': ('application/pdf', '.pdf'),
+}
+PUBLIC_MAX = 20 * 1024 * 1024
+PUBLIC_DANGEROUS = [b'<script', b'<?php', b'javascript:', b'eval(', b'exec(', b'system(']
+PUBLIC_RATE = 10
+
+
+def _detect_public(data):
+    for magic, info in PUBLIC_ALLOWED.items():
+        if data[:len(magic)] == magic:
+            if magic == b'RIFF' and data[8:12] != b'WEBP':
+                return None
+            return info
+    return None
+
+
+def _safe_public(data, mime):
+    lower = data[:4096].lower()
+    for pat in PUBLIC_DANGEROUS:
+        if pat in lower:
+            return False
+    if mime == 'image/png':
+        pos = 8
+        while pos + 12 < min(len(data), 32768):
+            try:
+                ln = int.from_bytes(data[pos:pos+4], 'big')
+                ct = data[pos+4:pos+8]
+                if ct in (b'tEXt', b'iTXt', b'zTXt'):
+                    chunk = data[pos+8:pos+8+min(ln, 512)].lower()
+                    if b'<script' in chunk or b'javascript' in chunk:
+                        return False
+                pos += 12 + ln
+            except Exception:
+                break
+    return True
+
+
+def _rate_key_public(ip):
+    return f"ratelimit/{hashlib.md5(ip.encode()).hexdigest()}_{int(time.time()) // 3600}.txt"
+
+
+def _check_rate_public(s3, ip):
+    key = _rate_key_public(ip)
+    try:
+        obj = s3.get_object(Bucket='files', Key=key)
+        count = int(obj['Body'].read().decode())
+    except Exception:
+        count = 0
+    if count >= PUBLIC_RATE:
+        return False
+    s3.put_object(Bucket='files', Key=key, Body=str(count + 1).encode(), ContentType='text/plain')
+    return True
 
 
 def _apply_watermark(image_bytes, settings):
@@ -111,6 +174,50 @@ def handler(event, context):
 
     if method != 'POST':
         return _err(405, 'Method not allowed')
+
+    # Публичная загрузка (без авторизации) — строгая валидация
+    body_raw = event.get('body') or ''
+    if event.get('isBase64Encoded'):
+        body_raw = base64.b64decode(body_raw).decode('utf-8', errors='replace')
+    try:
+        body_peek = json.loads(body_raw)
+    except Exception:
+        body_peek = {}
+
+    if body_peek.get('kind') == 'public':
+        ip = ((event.get('requestContext') or {}).get('identity') or {}).get('sourceIp') or 'unknown'
+        file_b64 = body_peek.get('file', '') or body_peek.get('file_base64', '')
+        if not file_b64:
+            return _err(400, 'Файл не передан')
+        try:
+            if ',' in file_b64 and file_b64.startswith('data:'):
+                file_b64 = file_b64.split(',', 1)[1]
+            file_data = base64.b64decode(file_b64)
+        except Exception:
+            return _err(400, 'Не удалось декодировать файл')
+        if len(file_data) > PUBLIC_MAX:
+            return _err(413, f'Файл слишком большой (макс. {PUBLIC_MAX // 1024 // 1024} МБ)')
+        if len(file_data) < 16:
+            return _err(400, 'Файл слишком маленький или повреждён')
+        detected = _detect_public(file_data)
+        if not detected:
+            return _err(415, 'Тип файла не поддерживается. Разрешены: JPEG, PNG, GIF, WebP, PDF')
+        pub_mime, pub_ext = detected
+        if not _safe_public(file_data, pub_mime):
+            return _err(400, 'Файл отклонён: обнаружен потенциально опасный код')
+        s3_pub = boto3.client(
+            's3',
+            endpoint_url='https://bucket.poehali.dev',
+            aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+            aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+        )
+        if not _check_rate_public(s3_pub, ip):
+            return _err(429, 'Превышен лимит загрузок (10 в час). Попробуйте позже.')
+        fhash = hashlib.sha256(file_data).hexdigest()[:16]
+        fname = f'public/{int(time.time())}_{fhash}{pub_ext}'
+        s3_pub.put_object(Bucket='files', Key=fname, Body=file_data, ContentType=pub_mime)
+        cdn = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{fname}"
+        return _ok({'success': True, 'url': cdn, 'mime': pub_mime, 'size': len(file_data)})
 
     headers = event.get('headers') or {}
     token = headers.get('X-Auth-Token') or headers.get('x-auth-token') or ''

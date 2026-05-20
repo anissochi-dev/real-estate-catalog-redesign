@@ -1,0 +1,27 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Пустой запрос",
+      "method": "POST",
+      "path": "/",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": { "error": "Файл не передан" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Неверный тип файла",
+      "method": "POST",
+      "path": "/",
+      "body": { "file": "dGVzdA==" },
+      "expectedStatus": 415,
+      "bodyMatcher": "partial"
+    }
+  ]
+}
