@@ -145,6 +145,26 @@ function SearchDropdown({ label, icon, colorClass, value, selectedId, onSelect, 
   );
 }
 
+/* ── Хук поиска лидов ── */
+function useLeadsSearch(token: string, q: string) {
+  return useQuery<SearchItem[]>({
+    queryKey: ['leads-search', q],
+    queryFn: async () => {
+      if (q.length < 2) return [];
+      const data = await fetch(`${CRM_URL}/leads?search=${encodeURIComponent(q)}&limit=8`, {
+        headers: { 'X-Auth-Token': token },
+      }).then(r => r.json()).catch(() => ({}));
+      return (data.leads || []).map((l: { id: number; name: string; phone?: string }) => ({
+        id: l.id,
+        label: l.name,
+        sub: l.phone,
+      }));
+    },
+    enabled: q.length >= 2,
+    staleTime: 30_000,
+  });
+}
+
 /* ── Модалка событий ── */
 interface Props {
   editing: CrmEvent | null;
@@ -163,9 +183,11 @@ export default function CalendarEventModal({
 }: Props) {
   const [form, setForm]   = useState<EventFormState>(initialForm);
   const [links, setLinks] = useState<LinkField>(initialLinks);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [dealQ,    setDealQ]    = useState(initialLinks.deal_label);
   const [ownerQ,   setOwnerQ]   = useState(initialLinks.owner_label);
   const [listingQ, setListingQ] = useState(initialLinks.listing_label);
+  const [leadQ, setLeadQ] = useState('');
 
   useEffect(() => {
     setForm(initialForm);
@@ -179,6 +201,19 @@ export default function CalendarEventModal({
   const { data: dealResults = [],    isFetching: dealFetching    } = useDealsSearch(token, dealQ);
   const { data: ownerResults = [],   isFetching: ownerFetching   } = useOwnersSearch(token, ownerQ);
   const { data: listingResults = [], isFetching: listingFetching } = useListingsSearchReal(listingQ);
+  const { data: leadResults = [],    isFetching: leadFetching    } = useLeadsSearch(token, leadQ);
+
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!form.title.trim()) e.title = 'Введите название события';
+    if (!form.starts_at) e.starts_at = 'Укажите дату и время начала';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSubmit = () => {
+    if (validate()) onSubmit(form, links);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 overflow-y-auto">
@@ -212,9 +247,13 @@ export default function CalendarEventModal({
 
         {/* Название */}
         <div>
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Название</label>
-          <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-            placeholder="Звонок клиенту, показ квартиры..." autoFocus />
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1">
+            Название <span className="text-red-500">*</span>
+          </label>
+          <Input value={form.title} onChange={e => { setForm(f => ({ ...f, title: e.target.value })); setErrors(er => ({ ...er, title: '' })); }}
+            placeholder="Звонок клиенту, показ квартиры..." autoFocus
+            className={errors.title ? 'border-red-400' : ''} />
+          {errors.title && <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><Icon name="AlertCircle" size={11} />{errors.title}</p>}
         </div>
 
         {/* Описание */}
@@ -229,10 +268,13 @@ export default function CalendarEventModal({
         {/* Дата/время */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Начало</label>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1">
+              Начало <span className="text-red-500">*</span>
+            </label>
             <input type="datetime-local" value={form.starts_at}
-              onChange={e => setForm(f => ({ ...f, starts_at: e.target.value }))}
-              className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30" />
+              onChange={e => { setForm(f => ({ ...f, starts_at: e.target.value })); setErrors(er => ({ ...er, starts_at: '' })); }}
+              className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30 ${errors.starts_at ? 'border-red-400' : ''}`} />
+            {errors.starts_at && <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><Icon name="AlertCircle" size={11} />{errors.starts_at}</p>}
           </div>
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Конец</label>
@@ -260,7 +302,7 @@ export default function CalendarEventModal({
               placeholder="Начните вводить название сделки..."
             />
             <SearchDropdown
-              label="Собственник / Лид"
+              label="Собственник"
               icon="User"
               colorClass="text-purple-700"
               value={ownerQ}
@@ -271,6 +313,19 @@ export default function CalendarEventModal({
               loading={ownerFetching}
               onSearch={setOwnerQ}
               placeholder="Имя или телефон..."
+            />
+            <SearchDropdown
+              label="Лид (заявка)"
+              icon="Inbox"
+              colorClass="text-orange-700"
+              value={leadQ}
+              selectedId={links.lead_id ?? null}
+              onSelect={(id, label) => { setLinks(l => ({ ...l, lead_id: id, lead_label: label })); setLeadQ(label); }}
+              onClear={() => { setLinks(l => ({ ...l, lead_id: null, lead_label: '' })); setLeadQ(''); }}
+              items={leadResults}
+              loading={leadFetching}
+              onSearch={setLeadQ}
+              placeholder="Имя клиента или телефон..."
             />
             <SearchDropdown
               label="Объект недвижимости"
@@ -289,7 +344,7 @@ export default function CalendarEventModal({
         </div>
 
         <div className="flex gap-2 pt-1">
-          <Button className="flex-1 bg-brand-blue text-white" onClick={() => onSubmit(form, links)} disabled={isPending}>
+          <Button className="flex-1 bg-brand-blue text-white" onClick={handleSubmit} disabled={isPending}>
             {isPending ? <Icon name="Loader2" size={15} className="animate-spin" /> : editing ? 'Сохранить' : 'Создать'}
           </Button>
           <Button variant="outline" onClick={onClose}>Отмена</Button>

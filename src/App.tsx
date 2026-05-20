@@ -155,8 +155,16 @@ export default function App() {
 
   const ADMIN_ROLES = ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'];
 
+  // Авто-переход: как только user появился в контексте и мы на экране логина — редиректим
+  useEffect(() => {
+    if (view === 'login' && user && !authLoading) {
+      setView(ADMIN_ROLES.includes(user.role) ? 'admin' : 'site');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, authLoading]);
+
   if (view === 'login') {
-    return <LoginPage onSuccess={() => setView(user && ADMIN_ROLES.includes(user.role) ? 'admin' : 'site')} onBack={() => setView('site')} />;
+    return <LoginPage onSuccess={() => { /* переход сработает через useEffect выше */ }} onBack={() => setView('site')} />;
   }
 
   if (view === 'admin') {

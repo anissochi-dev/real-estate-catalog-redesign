@@ -552,13 +552,14 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
             cur.execute("""
                 INSERT INTO crm_events
                   (title, description, event_type, starts_at, ends_at,
-                   deal_id, owner_id, listing_id, created_by, assigned_to)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                   deal_id, owner_id, listing_id, lead_id, created_by, assigned_to)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 RETURNING id
             """, (
                 body['title'], body.get('description'), body.get('event_type', 'note'),
                 body['starts_at'], body.get('ends_at'),
                 body.get('deal_id'), body.get('owner_id'), body.get('listing_id'),
+                body.get('lead_id'),
                 user['id'], body.get('assigned_to', user['id'])
             ))
             new_id = cur.fetchone()[0]
@@ -568,7 +569,7 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
             fields = []
             vals = []
             for f in ('title', 'description', 'event_type', 'starts_at', 'ends_at',
-                      'is_done', 'deal_id', 'owner_id', 'listing_id', 'assigned_to'):
+                      'is_done', 'deal_id', 'owner_id', 'listing_id', 'lead_id', 'assigned_to'):
                 if f in body:
                     fields.append(f'{f} = %s')
                     vals.append(body[f])
@@ -581,5 +582,25 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
         if method == 'DELETE' and resource_id:
             cur.execute("UPDATE crm_events SET is_done = TRUE WHERE id = %s", (resource_id,))
             return ok({'ok': True})
+
+    # ── LEADS SEARCH (для связки с событиями) ──────────────────────────────────
+    if resource == 'leads':
+        if method == 'GET':
+            search = qs.get('search', '')
+            limit = min(int(qs.get('limit', 8)), 20)
+            if search:
+                q_s = search.replace("'", "''")[:100]
+                cur.execute(
+                    f"SELECT id, name, phone, status FROM t_p71821556_real_estate_catalog_.leads "
+                    f"WHERE (name ILIKE '%{q_s}%' OR phone ILIKE '%{q_s}%') "
+                    f"ORDER BY created_at DESC LIMIT {limit}"
+                )
+            else:
+                cur.execute(
+                    f"SELECT id, name, phone, status FROM t_p71821556_real_estate_catalog_.leads "
+                    f"ORDER BY created_at DESC LIMIT {limit}"
+                )
+            rows = [{'id': r[0], 'name': r[1], 'phone': r[2], 'status': r[3]} for r in cur.fetchall()]
+            return ok({'leads': rows})
 
     return err('Неизвестный маршрут', 404)

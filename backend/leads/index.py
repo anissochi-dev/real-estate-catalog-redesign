@@ -58,10 +58,15 @@ def handler(event: dict, context) -> dict:
             listing_s = "NULL"
     source_s = source.replace("'", "''")[:50]
 
+    # Лиды с сайта проходят модерацию: статус 'pending'
+    # Внутренние лиды (created_by_admin, crm и др.) сразу 'new'
+    SITE_SOURCES = ('site', 'property-page', 'offer-to-lead', 'callback', 'hero', 'catalog')
+    initial_status = 'pending' if source in SITE_SOURCES else 'new'
+
     sql = (
         "INSERT INTO t_p71821556_real_estate_catalog_.leads "
-        "(name, phone, email, message, listing_id, source) VALUES ("
-        f"'{name_s}', '{phone_s}', {email_s}, {msg_s}, {listing_s}, '{source_s}'"
+        "(name, phone, email, message, listing_id, source, status) VALUES ("
+        f"'{name_s}', '{phone_s}', {email_s}, {msg_s}, {listing_s}, '{source_s}', '{initial_status}'"
         ") RETURNING id"
     )
 

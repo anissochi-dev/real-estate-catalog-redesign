@@ -23,6 +23,7 @@ interface Comment { id: number; author_name: string; comment: string; created_at
 interface Listing { id: number; title: string }
 
 const STATUSES: [string, string, string, string][] = [
+  ['pending', 'На модерации', 'bg-orange-400', 'border-l-orange-400'],
   ['new', 'Новый', 'bg-emerald-500', 'border-l-emerald-500'],
   ['in_progress', 'В работе', 'bg-amber-500', 'border-l-amber-500'],
   ['done', 'Закрыт', 'bg-blue-500', 'border-l-blue-500'],
@@ -206,6 +207,25 @@ export default function LeadsAdmin() {
                 </div>
                 {active.message && (
                   <div className="mt-4 p-3 bg-muted/50 rounded-xl text-sm">{active.message}</div>
+                )}
+
+                {active.status === 'pending' && (
+                  <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-xl flex items-center justify-between gap-3 flex-wrap">
+                    <div className="text-sm text-orange-800 flex items-center gap-2">
+                      <Icon name="ShieldAlert" size={16} />
+                      <span>Лид с сайта — требует модерации</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => update({ status: 'new' })}
+                        className="px-3 py-1.5 bg-emerald-500 text-white text-xs rounded-lg font-semibold inline-flex items-center gap-1.5">
+                        <Icon name="CheckCircle2" size={13} /> Одобрить
+                      </button>
+                      <button onClick={() => update({ status: 'rejected' })}
+                        className="px-3 py-1.5 bg-red-500 text-white text-xs rounded-lg font-semibold inline-flex items-center gap-1.5">
+                        <Icon name="XCircle" size={13} /> Отклонить
+                      </button>
+                    </div>
+                  </div>
                 )}
 
                 <div className="mt-4 flex flex-wrap gap-2">
