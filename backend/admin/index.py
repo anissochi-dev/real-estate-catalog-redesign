@@ -187,12 +187,22 @@ def handler(event, context):
 def _listings(cur, conn, method, rid, event, user):
     if method == 'GET':
         if rid:
-            cur.execute(f"SELECT * FROM {SCHEMA}.listings WHERE id = {int(rid)}")
+            cur.execute(
+                f"SELECT l.*, u.name AS broker_name, u.id AS broker_user_id "
+                f"FROM {SCHEMA}.listings l "
+                f"LEFT JOIN {SCHEMA}.users u ON u.id = COALESCE(l.broker_id, l.author_id) "
+                f"WHERE l.id = {int(rid)}"
+            )
             row = cur.fetchone()
             if not row:
                 return _err(404, 'Не найдено')
             return _ok({'listing': _ser(dict(row))})
-        cur.execute(f"SELECT * FROM {SCHEMA}.listings ORDER BY created_at DESC")
+        cur.execute(
+            f"SELECT l.*, u.name AS broker_name "
+            f"FROM {SCHEMA}.listings l "
+            f"LEFT JOIN {SCHEMA}.users u ON u.id = COALESCE(l.broker_id, l.author_id) "
+            f"ORDER BY l.created_at DESC"
+        )
         return _ok({'listings': [_ser(dict(r)) for r in cur.fetchall()]})
 
     body = json.loads(event.get('body') or '{}')
@@ -261,6 +271,9 @@ def _listings(cur, conn, method, rid, event, user):
         for f in ('is_hot', 'is_new', 'is_exclusive', 'is_urgent'):
             if f in body:
                 fields.append(f"{f} = {_bool(body.get(f))}")
+        if 'broker_id' in body:
+            v = body.get('broker_id')
+            fields.append(f"broker_id = " + ('NULL' if v is None else str(int(v))))
         if not fields:
             return _err(400, 'Нет полей для обновления')
         fields.append("updated_at = NOW()")

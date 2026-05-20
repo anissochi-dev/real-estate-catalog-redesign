@@ -301,7 +301,6 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
               <div className="flex flex-wrap gap-2">
                 {Object.entries(CATEGORY_META)
                   .filter(([k]) => k !== type)
-                  .slice(0, 6)
                   .map(([k, v]) => (
                     <button
                       key={k}

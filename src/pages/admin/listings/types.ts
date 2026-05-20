@@ -52,6 +52,9 @@ export interface Listing {
   is_urgent?: boolean;
   lat?: number | null;
   lng?: number | null;
+  author_id?: number | null;
+  broker_id?: number | null;
+  broker_name?: string | null;
 }
 
 export interface City { id: number; name: string; is_active: boolean }

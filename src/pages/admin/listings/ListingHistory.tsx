@@ -43,6 +43,26 @@ const ACTION_LABELS: Record<string, { label: string; icon: string; color: string
   restored: { label: 'Восстановлен', icon: 'RotateCcw', color: 'text-violet-600 bg-violet-50' },
   photo_added: { label: 'Фото добавлено', icon: 'Image', color: 'text-sky-600 bg-sky-50' },
   photo_removed: { label: 'Фото удалено', icon: 'ImageOff', color: 'text-red-600 bg-red-50' },
+  price_changed: { label: 'Цена изменена', icon: 'TrendingDown', color: 'text-amber-600 bg-amber-50' },
+  status_changed: { label: 'Статус изменён', icon: 'RefreshCw', color: 'text-violet-600 bg-violet-50' },
+  broker_changed: { label: 'Брокер изменён', icon: 'UserCheck', color: 'text-indigo-600 bg-indigo-50' },
+};
+
+const FIELD_LABELS: Record<string, string> = {
+  title: 'Название', description: 'Описание', category: 'Категория', deal: 'Тип сделки',
+  price: 'Цена', area: 'Площадь', address: 'Адрес', district: 'Район', city: 'Город',
+  status: 'Статус', owner_name: 'Имя собственника', owner_phone: 'Телефон собственника',
+  owner_phone2: 'Доп. телефон', purpose: 'Назначение', condition: 'Состояние',
+  floor: 'Этаж', total_floors: 'Этажей всего', parking: 'Парковка', entrance: 'Вход',
+  video_url: 'Видео', is_hot: 'Горячее', is_new: 'Новинка', is_exclusive: 'Эксклюзив',
+  is_urgent: 'Срочно', use_watermark: 'Водяной знак', export_yandex: 'Яндекс',
+  export_avito: 'Авито', export_cian: 'ЦИАН', tenant_name: 'Арендатор',
+  monthly_rent: 'Аренда в мес.', yearly_rent: 'Аренда в год', finishing: 'Отделка',
+  ceiling_height: 'Высота потолков', electricity_kw: 'Электричество',
+  utilities: 'Коммунальные', road_line: 'Линия', payback: 'Окупаемость', profit: 'Прибыль',
+  price_per_m2: 'Цена за м²', slug: 'Слаг', seo_title: 'SEO заголовок',
+  seo_description: 'SEO описание', image: 'Фото', images: 'Фотографии', tags: 'Теги',
+  lat: 'Широта', lng: 'Долгота', broker_id: 'Брокер',
 };
 
 const SOURCES = [
@@ -358,7 +378,7 @@ export default function ListingHistory({ listingId, listingTitle, onClose }: Pro
                           <div className="mt-1 text-xs text-muted-foreground space-y-0.5">
                             {Object.entries(h.changes).slice(0, 5).map(([field, [oldV, newV]]) => (
                               <div key={field}>
-                                <span className="font-medium">{field}:</span>{' '}
+                                <span className="font-medium">{FIELD_LABELS[field] || field}:</span>{' '}
                                 <span className="line-through opacity-60">{String(oldV)}</span>
                                 {' → '}
                                 <span>{String(newV)}</span>

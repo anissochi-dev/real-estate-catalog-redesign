@@ -1,13 +1,16 @@
+import { useState } from 'react';
 import ListingsTable from './listings/ListingsTable';
 import ListingEditor from './listings/ListingEditor';
 import ListingHistory from './listings/ListingHistory';
 import ListingsToolbar from './listings/ListingsToolbar';
 import ListingsBulkBar from './listings/ListingsBulkBar';
 import PhotoPickModal from './listings/PhotoPickModal';
+import ListingInternalCard from './listings/ListingInternalCard';
 import { useListingsState } from './listings/useListingsState';
 
 export default function ListingsAdmin() {
   const s = useListingsState();
+  const [internalCardId, setInternalCardId] = useState<number | null>(null);
 
   if (s.loading) return <div>Загрузка...</div>;
 
@@ -63,6 +66,7 @@ export default function ListingsAdmin() {
         onArchive={s.archive}
         onHistory={it => s.setHistoryListing(it)}
         onPhotoDownload={it => s.setPhotoPickListing(it)}
+        onInternalCard={it => setInternalCardId(it.id)}
         selected={s.selected}
         onToggleSelect={s.toggleSelect}
         onSelectAll={() => s.setSelected(new Set(s.filtered.map(i => i.id)))}
@@ -103,6 +107,14 @@ export default function ListingsAdmin() {
         <PhotoPickModal
           listing={s.photoPickListing}
           onClose={() => s.setPhotoPickListing(null)}
+        />
+      )}
+
+      {internalCardId !== null && (
+        <ListingInternalCard
+          listingId={internalCardId}
+          onClose={() => setInternalCardId(null)}
+          onBrokerChanged={() => { setInternalCardId(null); /* listings reload is not needed since broker_name is loaded fresh each open */ }}
         />
       )}
     </div>

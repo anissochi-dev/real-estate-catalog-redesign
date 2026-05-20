@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Icon from '@/components/ui/icon';
+import { useAuth } from '@/contexts/AuthContext';
 import { Listing, DEALS, fmtDate, perM2, splitImages } from './types';
 
 const VIEW_KEY = 'biznest_view';
@@ -10,6 +11,7 @@ interface Props {
   onArchive: (id: number) => void;
   onHistory: (it: Listing) => void;
   onPhotoDownload: (it: Listing) => void;
+  onInternalCard?: (it: Listing) => void;
   selected: Set<number>;
   onToggleSelect: (id: number) => void;
   onSelectAll: () => void;
@@ -68,10 +70,12 @@ function PhotoCell({ it, siteUrl, onPhotoDownload }: { it: Listing; siteUrl?: st
 }
 
 export default function ListingsTable({
-  items, onEdit, onArchive, onHistory, onPhotoDownload,
+  items, onEdit, onArchive, onHistory, onPhotoDownload, onInternalCard,
   selected, onToggleSelect, onSelectAll, onDeselectAll,
   siteUrl,
 }: Props) {
+  const { user } = useAuth();
+  const canSeeFullDetails = user?.role && ['admin', 'director', 'broker', 'office_manager'].includes(user.role);
   const dealMeta = (d: string) => DEALS.find(x => x[0] === d);
   const allSelected = items.length > 0 && items.every(i => selected.has(i.id));
 
@@ -111,7 +115,17 @@ export default function ListingsTable({
                 </td>
                 <td className="px-3 py-3">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <div className="font-semibold">{it.title}</div>
+                    {onInternalCard ? (
+                      <button
+                        onClick={() => onInternalCard(it)}
+                        className="font-semibold text-left hover:text-brand-blue hover:underline transition-colors"
+                        title="Открыть карточку брокера"
+                      >
+                        {it.title}
+                      </button>
+                    ) : (
+                      <div className="font-semibold">{it.title}</div>
+                    )}
                     {it.public_code ? (
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue">
                         ID {it.public_code}
@@ -125,6 +139,7 @@ export default function ListingsTable({
                   </div>
                   <div className="text-xs text-muted-foreground">
                     {it.city || 'Краснодар'}{it.district ? ` · ${it.district}` : ''}
+                    {canSeeFullDetails && it.address ? <div>{it.address}</div> : null}
                   </div>
                   <div className="text-xs text-muted-foreground">{it.area} м²</div>
                 </td>
@@ -139,9 +154,14 @@ export default function ListingsTable({
                 </td>
                 <td className="px-3 py-3 text-xs">
                   {it.owner_name && <div>{it.owner_name}</div>}
-                  {it.owner_phone && (
-                    <a href={`tel:${it.owner_phone}`} className="text-brand-blue hover:underline">{it.owner_phone}</a>
-                  )}
+                  {it.owner_phone && (() => {
+                    const isAdminOrDirector = user?.role && ['admin', 'director'].includes(user.role);
+                    const isBrokerAuthor = user?.role === 'broker' && (it.author_id === user?.id || it.broker_id === user?.id);
+                    const showPhone = isAdminOrDirector || isBrokerAuthor;
+                    return showPhone
+                      ? <a href={`tel:${it.owner_phone}`} className="text-brand-blue hover:underline">{it.owner_phone}</a>
+                      : <span className="text-muted-foreground">+7 ***</span>;
+                  })()}
                   {!it.owner_name && !it.owner_phone && <span className="text-muted-foreground">—</span>}
                 </td>
                 <td className="px-3 py-3 text-xs whitespace-nowrap">{fmtDate(it.created_at)}</td>

@@ -15,11 +15,17 @@ interface Stats {
 
 const CAT_LABELS: Record<string, string> = {
   office: 'Офисы',
-  retail: 'Торговля',
+  retail: 'Торговые помещения',
   warehouse: 'Склады',
-  restaurant: 'Рестораны',
-  business: 'Бизнес',
+  restaurant: 'Общепит',
+  business: 'Готовый бизнес',
   production: 'Производство',
+  hotel: 'Гостиницы',
+  gab: 'ГАБ',
+  land: 'Земельные участки',
+  building: 'Здания',
+  free_purpose: 'Своб. назначение',
+  car_service: 'Автосервисы',
 };
 
 const STATUS_LABELS: Record<string, string> = {
