@@ -1,14 +1,22 @@
 """
 Автоматическая SEO-оптимизация объектов недвижимости.
-Режимы: run (запустить пакетную оптимизацию), status (статистика), preview (превью без записи).
-Использует YandexGPT для генерации seo_title и seo_description.
-Args: POST {action: run|status|preview, limit?, listing_id?}, headers X-Auth-Token
-Returns: {processed, skipped, errors} или {status}
+Режимы:
+  status       — статистика + настройки расписания + последние логи
+  run          — запустить оптимизацию немедленно (вручную)
+  preview      — предпросмотр без записи в БД
+  schedule_get — получить настройки расписания
+  schedule_set — сохранить настройки расписания
+  cron         — вызывается автоматически (без авторизации, проверяет токен cron)
+  log          — история запусков
+
+Args: POST {action, limit?, listing_id?, ...}, headers X-Auth-Token
+Returns: {processed, skipped, errors} или {status} или {schedule} и т.д.
 """
 
 import json
 import os
 import urllib.request
+from datetime import datetime, timezone
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -88,7 +96,11 @@ def _gpt(system: str, user_text: str, api_key: str, folder_id: str) -> dict:
     req = urllib.request.Request(
         YANDEX_GPT_URL,
         data=json.dumps(payload).encode(),
-        headers={'Authorization': f'Api-Key {api_key}', 'Content-Type': 'application/json', 'x-folder-id': folder_id},
+        headers={
+            'Authorization': f'Api-Key {api_key}',
+            'Content-Type': 'application/json',
+            'x-folder-id': folder_id,
+        },
         method='POST',
     )
     try:
@@ -160,8 +172,112 @@ def _process_listing(cur, conn, listing: dict, api_key: str, folder_id: str, dry
     return {'id': lid, 'status': 'ok', 'seo_title': seo_title, 'seo_description': seo_desc}
 
 
+def _run_batch(cur, conn, api_key: str, folder_id: str, limit: int, dry_run: bool,
+               listing_id=None, triggered_by: str = 'manual') -> dict:
+    """Запускает пакетную оптимизацию, пишет лог в БД."""
+    started = datetime.now(timezone.utc)
+
+    # Создаём запись лога
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.seo_run_log (triggered_by, dry_run, started_at) "
+        f"VALUES ('{_safe(triggered_by, 50)}', {'TRUE' if dry_run else 'FALSE'}, NOW()) "
+        f"RETURNING id"
+    )
+    log_id = cur.fetchone()['id']
+    conn.commit()
+
+    if listing_id:
+        cur.execute(
+            f"SELECT id, title, category, deal, price, area, district, city, description "
+            f"FROM {SCHEMA}.listings WHERE id = {int(listing_id)} AND status = 'active'"
+        )
+    else:
+        cur.execute(
+            f"SELECT id, title, category, deal, price, area, district, city, description "
+            f"FROM {SCHEMA}.listings WHERE status = 'active' "
+            f"AND (seo_title IS NULL OR seo_title = '') "
+            f"ORDER BY id DESC LIMIT {limit}"
+        )
+
+    listings = [dict(r) for r in cur.fetchall()]
+
+    if not listings:
+        cur.execute(
+            f"UPDATE {SCHEMA}.seo_run_log SET processed=0, errors=0, total=0, "
+            f"finished_at=NOW() WHERE id={log_id}"
+        )
+        conn.commit()
+        return {'processed': 0, 'errors': 0, 'total': 0, 'results': [], 'log_id': log_id,
+                'message': 'Все активные объекты уже имеют SEO-данные'}
+
+    results = []
+    processed = 0
+    errors = 0
+    for lst in listings:
+        r = _process_listing(cur, conn, lst, api_key, folder_id, dry_run)
+        results.append(r)
+        if r['status'] == 'ok':
+            processed += 1
+        else:
+            errors += 1
+
+    # Обновляем лог
+    details_json = _safe(json.dumps(results[:20], ensure_ascii=False), 5000)
+    cur.execute(
+        f"UPDATE {SCHEMA}.seo_run_log SET processed={processed}, errors={errors}, "
+        f"total={len(listings)}, finished_at=NOW(), "
+        f"details='{details_json}' WHERE id={log_id}"
+    )
+    # Обновляем расписание
+    if not dry_run:
+        cur.execute(
+            f"UPDATE {SCHEMA}.seo_schedule SET last_run_at=NOW(), "
+            f"last_run_processed={processed}, last_run_errors={errors} "
+            f"WHERE id=1"
+        )
+    conn.commit()
+
+    return {
+        'processed': processed,
+        'errors': errors,
+        'total': len(listings),
+        'dry_run': dry_run,
+        'log_id': log_id,
+        'results': results,
+    }
+
+
+def _should_run_now(schedule: dict) -> bool:
+    """Проверяет, нужно ли запустить SEO сейчас по расписанию."""
+    if not schedule.get('is_enabled'):
+        return False
+
+    now = datetime.now(timezone.utc)
+    run_hour = schedule.get('run_hour', 3)
+
+    # Запускаем только в указанный час UTC
+    if now.hour != run_hour:
+        return False
+
+    last_run = schedule.get('last_run_at')
+    if last_run:
+        if isinstance(last_run, str):
+            from datetime import datetime as dt
+            try:
+                last_run = dt.fromisoformat(last_run.replace('Z', '+00:00'))
+            except Exception:
+                last_run = None
+        if last_run:
+            # Не запускать чаще раза в 23 часа
+            diff = now - last_run.replace(tzinfo=timezone.utc) if last_run.tzinfo is None else now - last_run
+            if diff.total_seconds() < 23 * 3600:
+                return False
+
+    return True
+
+
 def handler(event: dict, context) -> dict:
-    method = event.get('httpMethod', 'POST')
+    method = event.get('httpMethod', 'GET')
 
     if method == 'OPTIONS':
         return {
@@ -169,7 +285,7 @@ def handler(event: dict, context) -> dict:
             'headers': {
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token',
+                'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token, X-Cron-Token',
                 'Access-Control-Max-Age': '86400',
             },
             'body': '',
@@ -177,6 +293,7 @@ def handler(event: dict, context) -> dict:
 
     headers = event.get('headers') or {}
     token = headers.get('X-Auth-Token') or headers.get('x-auth-token') or ''
+    cron_token = headers.get('X-Cron-Token') or headers.get('x-cron-token') or ''
 
     body = {}
     if event.get('body'):
@@ -192,6 +309,33 @@ def handler(event: dict, context) -> dict:
     conn = psycopg2.connect(dsn)
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Cron-режим: запускается внешним планировщиком
+            if action == 'cron':
+                expected_cron_token = os.environ.get('CRON_SECRET', '')
+                if not expected_cron_token or cron_token != expected_cron_token:
+                    # Fallback: проверяем авторизацию пользователя
+                    user = _get_user(cur, token)
+                    if not user or user['role'] not in ('admin', 'editor'):
+                        return _err(403, 'Нет доступа')
+
+                cur.execute(f"SELECT * FROM {SCHEMA}.seo_schedule ORDER BY id ASC LIMIT 1")
+                schedule = cur.fetchone()
+                if not schedule:
+                    return _ok({'skipped': True, 'reason': 'Расписание не настроено'})
+
+                schedule = dict(schedule)
+                if not _should_run_now(schedule):
+                    return _ok({'skipped': True, 'reason': 'Не время запуска или расписание отключено'})
+
+                api_key, folder_id = _load_keys(cur)
+                if not api_key or not folder_id:
+                    return _err(503, 'YandexGPT не настроен')
+
+                limit = schedule.get('batch_limit', 20)
+                result = _run_batch(cur, conn, api_key, folder_id, limit, dry_run=False, triggered_by='schedule')
+                return _ok({**result, 'triggered_by': 'schedule'})
+
+            # Все остальные действия — требуют авторизации
             user = _get_user(cur, token)
             if not user:
                 return _err(401, 'Требуется авторизация')
@@ -210,53 +354,71 @@ def handler(event: dict, context) -> dict:
                     f"FROM {SCHEMA}.listings"
                 )
                 row = dict(cur.fetchone())
-                return _ok({'status': row, 'gpt_configured': bool(api_key and folder_id)})
+
+                # Расписание
+                cur.execute(f"SELECT * FROM {SCHEMA}.seo_schedule ORDER BY id ASC LIMIT 1")
+                schedule_row = cur.fetchone()
+                schedule = dict(schedule_row) if schedule_row else {}
+
+                # Последние 5 запусков
+                cur.execute(
+                    f"SELECT id, triggered_by, processed, errors, total, dry_run, started_at, finished_at "
+                    f"FROM {SCHEMA}.seo_run_log ORDER BY started_at DESC LIMIT 5"
+                )
+                logs = [dict(r) for r in cur.fetchall()]
+
+                return _ok({
+                    'status': row,
+                    'schedule': schedule,
+                    'recent_logs': logs,
+                    'gpt_configured': bool(api_key and folder_id),
+                })
+
+            if action == 'schedule_get':
+                cur.execute(f"SELECT * FROM {SCHEMA}.seo_schedule ORDER BY id ASC LIMIT 1")
+                row = cur.fetchone()
+                return _ok({'schedule': dict(row) if row else {}})
+
+            if action == 'schedule_set':
+                is_enabled = bool(body.get('is_enabled', True))
+                run_hour = max(0, min(23, int(body.get('run_hour', 3))))
+                batch_limit = max(1, min(50, int(body.get('batch_limit', 20))))
+                cur.execute(
+                    f"UPDATE {SCHEMA}.seo_schedule SET "
+                    f"is_enabled={'TRUE' if is_enabled else 'FALSE'}, "
+                    f"run_hour={run_hour}, batch_limit={batch_limit}, "
+                    f"updated_at=NOW() WHERE id=1"
+                )
+                conn.commit()
+                return _ok({'ok': True, 'message': 'Расписание сохранено'})
+
+            if action == 'log':
+                limit_log = min(int(body.get('limit') or qs.get('limit') or 20), 100)
+                cur.execute(
+                    f"SELECT id, triggered_by, processed, errors, total, dry_run, started_at, finished_at "
+                    f"FROM {SCHEMA}.seo_run_log ORDER BY started_at DESC LIMIT {limit_log}"
+                )
+                logs = [dict(r) for r in cur.fetchall()]
+                return _ok({'logs': logs})
 
             if action in ('run', 'preview'):
                 dry_run = action == 'preview'
                 limit = min(int(body.get('limit') or qs.get('limit') or 10), 50)
                 listing_id = body.get('listing_id') or qs.get('listing_id')
 
-                if listing_id:
-                    cur.execute(
-                        f"SELECT id, title, category, deal, price, area, district, city, description "
-                        f"FROM {SCHEMA}.listings WHERE id = {int(listing_id)} AND status = 'active'"
-                    )
-                else:
-                    # Приоритет: объекты без seo_title
-                    cur.execute(
-                        f"SELECT id, title, category, deal, price, area, district, city, description "
-                        f"FROM {SCHEMA}.listings WHERE status = 'active' "
-                        f"AND (seo_title IS NULL OR seo_title = '') "
-                        f"ORDER BY id DESC LIMIT {limit}"
-                    )
-
-                listings = [dict(r) for r in cur.fetchall()]
-
-                if not listings:
-                    return _ok({'message': 'Все активные объекты уже имеют SEO-данные', 'processed': 0, 'results': []})
-
                 if not api_key or not folder_id:
                     return _err(503, 'YandexGPT не настроен. Добавьте ключи в Настройки → Интеграции.')
 
-                results = []
-                processed = 0
-                errors = 0
-                for lst in listings:
-                    r = _process_listing(cur, conn, lst, api_key, folder_id, dry_run)
-                    results.append(r)
-                    if r['status'] == 'ok':
-                        processed += 1
-                    else:
-                        errors += 1
+                triggered_by = 'preview' if dry_run else 'manual'
+                result = _run_batch(
+                    cur, conn, api_key, folder_id, limit, dry_run,
+                    listing_id=listing_id, triggered_by=triggered_by
+                )
 
-                return _ok({
-                    'processed': processed,
-                    'errors': errors,
-                    'total': len(listings),
-                    'dry_run': dry_run,
-                    'results': results,
-                })
+                if 'message' in result:
+                    return _ok(result)
+
+                return _ok(result)
 
     finally:
         conn.close()
