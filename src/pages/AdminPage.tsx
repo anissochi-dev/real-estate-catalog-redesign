@@ -20,7 +20,6 @@ interface Props {
 }
 
 export default function AdminPage({ onExit }: Props) {
-  const { user } = useAuth();
   const [section, setSection] = useState<AdminSection>('dashboard');
 
   return (
