@@ -117,6 +117,7 @@ export interface ListingDetail extends Property {
   ownerPhone?: string;
   seoTitle?: string;
   seoDescription?: string;
+  rooms?: number | null;
 }
 
 export async function fetchListingById(id: number): Promise<ListingDetail | null> {
@@ -150,6 +151,7 @@ export async function fetchListingById(id: number): Promise<ListingDetail | null
       ownerPhone: it.owner_phone,
       seoTitle: it.seo_title,
       seoDescription: it.seo_description,
+      rooms: it.rooms ?? null,
     };
   } catch {
     return null;
@@ -198,6 +200,10 @@ export interface PublicSettings {
   footer_description?: string;
   footer_catalog_links?: string;
   footer_extra_links?: string;
+  watermark_url?: string;
+  watermark_enabled?: boolean;
+  watermark_position?: string;
+  watermark_opacity?: number;
 }
 
 export async function fetchPublicSettings(): Promise<PublicSettings> {

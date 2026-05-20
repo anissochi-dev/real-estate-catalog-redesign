@@ -1,4 +1,7 @@
+import { useRef, useState } from 'react';
 import ImageUploader from '@/components/admin/ImageUploader';
+import Icon from '@/components/ui/icon';
+import { applyWatermarkClient } from '@/lib/applyWatermark';
 import { S, City, WM_POS } from './types';
 
 interface Props {
@@ -11,6 +14,26 @@ interface Props {
 }
 
 export default function GeneralTab({ tab, s, setS, cities, saved, save }: Props) {
+  const previewInputRef = useRef<HTMLInputElement>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+
+  const previewWatermark = async (file: File) => {
+    if (!s.watermark_url) { alert('Сначала загрузите изображение водяного знака'); return; }
+    setPreviewing(true);
+    try {
+      const result = await applyWatermarkClient(file, {
+        watermark_enabled: true,
+        watermark_url: s.watermark_url,
+        watermark_position: s.watermark_position || 'bottom-right',
+        watermark_opacity: s.watermark_opacity ?? 50,
+      });
+      const url = URL.createObjectURL(result);
+      setPreviewUrl(url);
+    } finally {
+      setPreviewing(false);
+    }
+  };
   const field = (key: keyof S, label: string, multiline = false) => (
     <div>
       <label className="text-sm font-semibold block mb-1">{label}</label>
@@ -102,8 +125,36 @@ export default function GeneralTab({ tab, s, setS, cities, saved, save }: Props)
               onChange={e => setS({ ...s, watermark_opacity: +e.target.value })} />
           </div>
         </div>
+        <div>
+          <div className="text-sm font-semibold mb-2">Предпросмотр</div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={() => previewInputRef.current?.click()}
+              disabled={!s.watermark_url || previewing}
+              className="inline-flex items-center gap-2 px-4 py-2 border border-border rounded-xl text-sm hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Icon name={previewing ? 'Loader2' : 'ImagePlus'} size={15} className={previewing ? 'animate-spin' : ''} />
+              {previewing ? 'Обработка...' : 'Загрузить фото для теста'}
+            </button>
+            {previewUrl && (
+              <button onClick={() => { URL.revokeObjectURL(previewUrl); setPreviewUrl(null); }}
+                className="text-xs text-muted-foreground hover:text-red-500 inline-flex items-center gap-1">
+                <Icon name="X" size={12} /> Очистить
+              </button>
+            )}
+          </div>
+          <input ref={previewInputRef} type="file" className="hidden" accept="image/*"
+            onChange={e => { const f = e.target.files?.[0]; if (f) previewWatermark(f); e.target.value = ''; }} />
+          {previewUrl && (
+            <div className="mt-3">
+              <img src={previewUrl} alt="Предпросмотр" className="rounded-xl max-w-full max-h-64 object-contain border border-border shadow" />
+              <div className="text-xs text-muted-foreground mt-1">Так будет выглядеть фото с водяным знаком</div>
+            </div>
+          )}
+        </div>
         <div className="text-xs text-muted-foreground">
           На уровне отдельного объявления можно отключить водяной знак — галочкой «Использовать водяной знак».
+          Наложение происходит в браузере при загрузке фото объекта.
         </div>
       </div>
       <div className="flex items-center gap-3">

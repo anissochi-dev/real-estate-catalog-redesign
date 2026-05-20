@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react';
 import { uploadFile } from '@/lib/adminApi';
+import { useSettings } from '@/contexts/SettingsContext';
+import { applyWatermarkClient } from '@/lib/applyWatermark';
 import Icon from '@/components/ui/icon';
 import WatermarkEraser from './WatermarkEraser';
 
@@ -58,6 +60,7 @@ export default function ImageUploader({
   allowDownload = true,
   applyWatermark = false,
 }: Props) {
+  const { settings } = useSettings();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -76,8 +79,11 @@ export default function ImageUploader({
     const uploaded: string[] = [];
     for (const f of arr) {
       try {
-        const ready = shouldCompress ? await compressImage(f) : f;
-        const url = await uploadFile(ready, folder, applyWatermark);
+        let ready = shouldCompress ? await compressImage(f) : f;
+        if (applyWatermark && settings.watermark_enabled && settings.watermark_url) {
+          ready = await applyWatermarkClient(ready, settings);
+        }
+        const url = await uploadFile(ready, folder, false);
         uploaded.push(url);
         setProgress(p => ({ ...p, done: p.done + 1 }));
       } catch (e: unknown) {

@@ -65,6 +65,7 @@ export default function PropertyMainContent({
           <ParamCard icon="Briefcase" label="Тип сделки" value={dealLabel} />
           <ParamCard icon="Building2" label="Тип объекта" value={typeLabel} />
           {item.floor ? <ParamCard icon="Layers" label="Этаж" value={`${item.floor}${item.totalFloors ? ` из ${item.totalFloors}` : ''}`} /> : null}
+          {(item as ListingDetail).rooms ? <ParamCard icon="LayoutGrid" label="Комнат" value={String((item as ListingDetail).rooms)} /> : null}
           {item.purpose ? <ParamCard icon="Target" label="Назначение" value={
             item.purpose.includes('|')
               ? item.purpose.split('|').map(s => s.trim()).filter(Boolean).join(', ')
