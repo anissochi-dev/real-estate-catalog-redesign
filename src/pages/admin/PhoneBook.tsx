@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import PhoneCardModal from '@/components/admin/PhoneCardModal';
+import ListingInternalCard from './listings/ListingInternalCard';
 
 interface PhoneContact {
   id: number;
@@ -92,6 +93,7 @@ export default function PhoneBook() {
   const [syncing, setSyncing] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
+  const [openListingId, setOpenListingId] = useState<number | null>(null);
 
   const load = useCallback((p = 1, q = '') => {
     setLoading(true);
@@ -225,6 +227,15 @@ export default function PhoneBook() {
           contactId={selectedId}
           onClose={() => setSelectedId(null)}
           onUpdate={() => load(page, search)}
+          onOpenListing={id => { setSelectedId(null); setOpenListingId(id); }}
+          onOpenLead={() => { setSelectedId(null); }}
+        />
+      )}
+
+      {openListingId !== null && (
+        <ListingInternalCard
+          listingId={openListingId}
+          onClose={() => setOpenListingId(null)}
         />
       )}
 
