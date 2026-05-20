@@ -57,6 +57,8 @@ export interface Property {
   electricityKw?: number;
   utilities?: string;
   roadLine?: string;
+  updatedAt?: string;
+  createdAt?: string;
 }
 
 export type Page = 'home' | 'catalog' | 'map' | 'favorites' | 'compare' | 'network-tenants';

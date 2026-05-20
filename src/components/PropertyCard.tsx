@@ -130,6 +130,14 @@ export default function PropertyCard({
   const mapQuery = [property.district, property.address].filter(Boolean).join(', ');
   const hasCoords = !!(property.lat && property.lng);
 
+  const isAutoNew = (() => {
+    const dateStr = property.createdAt;
+    if (!dateStr) return false;
+    const created = new Date(dateStr).getTime();
+    return (Date.now() - created) < 5 * 24 * 60 * 60 * 1000;
+  })();
+  const showNew = property.isNew || isAutoNew;
+
   return (
     <>
       <div
@@ -202,7 +210,7 @@ export default function PropertyCard({
             {property.isHot && (
               <span className="text-[10px] font-bold font-display px-2 py-0.5 rounded-full bg-brand-orange text-white shadow-sm">🔥 Горячее</span>
             )}
-            {property.isNew && (
+            {showNew && (
               <span className="text-[10px] font-bold font-display px-2 py-0.5 rounded-full bg-emerald-500 text-white shadow-sm">Новое</span>
             )}
             {property.isExclusive && (

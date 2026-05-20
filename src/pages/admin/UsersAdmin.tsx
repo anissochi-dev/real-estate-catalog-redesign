@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { adminApi, Role, uploadFile } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface U {
   id: number;
@@ -23,13 +24,38 @@ const ROLES: { id: Role; label: string }[] = [
   { id: 'client', label: 'Клиент' },
 ];
 
+const ROLE_COLORS: Record<string, string> = {
+  admin: 'bg-violet-100 text-violet-700',
+  director: 'bg-blue-100 text-blue-700',
+  editor: 'bg-sky-100 text-sky-700',
+  manager: 'bg-emerald-100 text-emerald-700',
+  broker: 'bg-amber-100 text-amber-700',
+  office_manager: 'bg-orange-100 text-orange-700',
+  client: 'bg-slate-100 text-slate-600',
+};
+
 export default function UsersAdmin() {
+  const { user: me } = useAuth();
+  const isAdmin = me?.role === 'admin';
   const [users, setUsers] = useState<U[]>([]);
   const [editing, setEditing] = useState<(Partial<U> & { password?: string }) | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [roleChanging, setRoleChanging] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = () => adminApi.listUsers().then(d => setUsers(d.users));
+
+  const handleRoleChange = async (userId: number, newRole: Role) => {
+    setRoleChanging(userId);
+    try {
+      await adminApi.updateUser(userId, { role: newRole });
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+    } catch {
+      alert('Ошибка изменения роли');
+    } finally {
+      setRoleChanging(null);
+    }
+  };
   useEffect(() => { load(); }, []);
 
   const save = async () => {
@@ -119,7 +145,29 @@ export default function UsersAdmin() {
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-3">{ROLES.find(r => r.id === u.role)?.label}</td>
+                <td className="px-4 py-3">
+                  {isAdmin ? (
+                    <div className="relative inline-block">
+                      {roleChanging === u.id ? (
+                        <span className="text-xs text-muted-foreground">Сохранение...</span>
+                      ) : (
+                        <select
+                          value={u.role}
+                          onChange={e => handleRoleChange(u.id, e.target.value as Role)}
+                          className={`text-xs font-semibold px-2 py-1 rounded-full border-0 outline-none cursor-pointer appearance-none pr-5 ${ROLE_COLORS[u.role] ?? 'bg-slate-100 text-slate-600'}`}
+                        >
+                          {ROLES.map(r => (
+                            <option key={r.id} value={r.id}>{r.label}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  ) : (
+                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${ROLE_COLORS[u.role] ?? 'bg-slate-100 text-slate-600'}`}>
+                      {ROLES.find(r => r.id === u.role)?.label}
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-3">
                   <span className={`text-xs px-2 py-0.5 rounded ${u.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
                     {u.is_active ? 'Активен' : 'Отключён'}

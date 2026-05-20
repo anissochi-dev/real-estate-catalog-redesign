@@ -92,7 +92,13 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
       case 'price_asc': result.sort((a, b) => a.price - b.price); break;
       case 'price_desc': result.sort((a, b) => b.price - a.price); break;
       case 'area_asc': result.sort((a, b) => a.area - b.area); break;
-      case 'newest': result.sort((a, b) => (b.isNew ? 1 : 0) - (a.isNew ? 1 : 0)); break;
+      case 'newest':
+        result.sort((a, b) => {
+          const ta = a.updatedAt ? new Date(a.updatedAt).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+          const tb = b.updatedAt ? new Date(b.updatedAt).getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+          return tb - ta;
+        });
+        break;
     }
 
     return result;
@@ -149,7 +155,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
               onChange={e => setSortBy(e.target.value as SortOption)}
               className="px-4 py-2.5 rounded-xl border-2 border-border bg-white text-sm font-medium text-foreground outline-none cursor-pointer hover:border-brand-blue transition-colors"
             >
-              <option value="newest">Сначала новые</option>
+              <option value="newest">Сначала свежие</option>
               <option value="price_asc">Цена: по возрастанию</option>
               <option value="price_desc">Цена: по убыванию</option>
               <option value="area_asc">Площадь: по возрастанию</option>

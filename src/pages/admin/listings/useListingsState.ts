@@ -70,21 +70,27 @@ export function useListingsState() {
     return () => { if (draftTimerRef.current) clearTimeout(draftTimerRef.current); };
   }, [editing, photos]);
 
-  const filtered = items.filter(it => {
-    if (statusFilter !== 'all' && it.status !== statusFilter) return false;
-    if (catFilter && it.category !== catFilter) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return (
-        it.title?.toLowerCase().includes(q) ||
-        it.address?.toLowerCase().includes(q) ||
-        it.owner_name?.toLowerCase().includes(q) ||
-        it.owner_phone?.includes(q) ||
-        String(it.public_code || '').includes(q)
-      );
-    }
-    return true;
-  });
+  const filtered = items
+    .filter(it => {
+      if (statusFilter !== 'all' && it.status !== statusFilter) return false;
+      if (catFilter && it.category !== catFilter) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        return (
+          it.title?.toLowerCase().includes(q) ||
+          it.address?.toLowerCase().includes(q) ||
+          it.owner_name?.toLowerCase().includes(q) ||
+          it.owner_phone?.includes(q) ||
+          String(it.public_code || '').includes(q)
+        );
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const ta = a.updated_at ? new Date(a.updated_at).getTime() : (a.created_at ? new Date(a.created_at).getTime() : 0);
+      const tb = b.updated_at ? new Date(b.updated_at).getTime() : (b.created_at ? new Date(b.created_at).getTime() : 0);
+      return tb - ta;
+    });
 
   const openEdit = (it?: Listing | Partial<Listing>) => {
     if (it && (it as Listing).id) {
