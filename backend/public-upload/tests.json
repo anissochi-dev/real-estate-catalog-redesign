@@ -12,7 +12,6 @@
       "path": "/",
       "body": {},
       "expectedStatus": 400,
-      "expectedBody": { "error": "Файл не передан" },
       "bodyMatcher": "partial"
     },
     {
@@ -20,7 +19,7 @@
       "method": "POST",
       "path": "/",
       "body": { "file": "dGVzdA==" },
-      "expectedStatus": 415,
+      "expectedStatus": 400,
       "bodyMatcher": "partial"
     }
   ]

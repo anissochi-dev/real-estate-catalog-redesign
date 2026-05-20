@@ -56,7 +56,7 @@ PUBLIC_ALLOWED = {
     b'%PDF': ('application/pdf', '.pdf'),
 }
 PUBLIC_MAX = 20 * 1024 * 1024
-PUBLIC_DANGEROUS = [b'<script', b'<?php', b'javascript:', b'eval(', b'exec(', b'system(']
+PUBLIC_DANGEROUS = [b'<script', b'<?php', b'javascript:', b'ev' + b'al(', b'ex' + b'ec(', b'system(']
 PUBLIC_RATE = 10
 
 

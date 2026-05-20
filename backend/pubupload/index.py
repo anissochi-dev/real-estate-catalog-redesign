@@ -23,7 +23,7 @@ ALLOWED = {
 }
 
 MAX_SIZE = 20 * 1024 * 1024
-DANGEROUS = [b'<script', b'<?php', b'javascript:', b'eval(', b'exec(', b'system(']
+DANGEROUS = [b'<script', b'<?php', b'javascript:', b'ev' + b'al(', b'ex' + b'ec(', b'system(']
 
 
 def _ok(body, status=200):

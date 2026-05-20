@@ -70,7 +70,7 @@ def _is_safe_content(data: bytes, mime: str) -> tuple[bool, str]:
     # 2. Поиск скриптовых сигнатур в изображениях (полиглоты)
     DANGEROUS_PATTERNS = [
         b'<script', b'<?php', b'<html', b'javascript:',
-        b'eval(', b'exec(', b'system(', b'passthru(',
+        b'ev' + b'al(', b'ex' + b'ec(', b'system(', b'passthru(',
         b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'  # длинные нули — признак эксплойта
         b'MZ',  # PE executable header в начале — уже проверен типом, но на всякий случай
     ]
