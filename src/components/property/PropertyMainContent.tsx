@@ -115,6 +115,26 @@ export default function PropertyMainContent({
         )}
       </div>
 
+      {/* Назначение — отдельный блок */}
+      {item.purpose && (
+        <div className="bg-white rounded-2xl px-4 py-3 shadow-sm">
+          <div className="font-display font-700 text-base mb-3 flex items-center gap-2">
+            <Icon name="Target" size={16} className="text-brand-blue" /> Подходящее назначение
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(item.purpose.includes('|')
+              ? item.purpose.split('|').map(s => s.trim()).filter(Boolean)
+              : [PURPOSE_LABELS[item.purpose] || item.purpose]
+            ).map(name => (
+              <span key={name} className="inline-flex items-center gap-1.5 text-sm bg-brand-blue/8 text-brand-blue border border-brand-blue/20 px-3 py-1.5 rounded-xl font-medium">
+                <Icon name="CheckCircle2" size={13} />
+                {name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Описание */}
       {item.description && (
         <div className="bg-white rounded-2xl px-4 py-3 shadow-sm">
@@ -159,10 +179,6 @@ export default function PropertyMainContent({
               <CharCount as="textarea" placeholder="Комментарий (необязательно)" rows={2} max={500} warnAt={400}
                 value={form.message} onChange={e => setForm({ ...form, message: (e.target as HTMLTextAreaElement).value })}
                 className="text-sm" />
-            </div>
-            <div className="sm:col-span-2 flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
-              <Icon name="Link" size={12} className="flex-shrink-0 text-brand-blue" />
-              <span className="truncate">Объект: <span className="text-foreground font-medium">{typeof window !== 'undefined' ? window.location.href : ''}</span></span>
             </div>
             <button type="submit" disabled={sending}
               className="sm:col-span-2 w-full btn-blue text-white py-2.5 rounded-xl font-semibold disabled:opacity-50 text-sm">

@@ -10,7 +10,7 @@ import AdminPage from './pages/AdminPage';
 import NetworkTenantsPage from './pages/NetworkTenantsPage';
 import PropertyPage from './pages/PropertyPage';
 import CategoryPage from './pages/CategoryPage';
-import NotFound from './pages/NotFound';
+import NotFoundPage from './pages/NotFoundPage';
 import DeclinedPage from './pages/DeclinedPage';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
@@ -307,7 +307,7 @@ export default function App() {
             />
           } />
           <Route path="/declined" element={<DeclinedPage />} />
-          <Route path="*" element={<NotFound />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>
 

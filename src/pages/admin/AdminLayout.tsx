@@ -8,7 +8,7 @@ import { usePushNotifications } from '@/hooks/usePushNotifications';
 const IDLE_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 const IDLE_WARNING_MS = 2 * 60 * 1000;
 
-export type AdminSection = 'dashboard' | 'listings' | 'leads' | 'users' | 'pages' | 'settings' | 'ai-logs'
+export type AdminSection = 'dashboard' | 'listings' | 'leads' | 'network-tenants' | 'users' | 'pages' | 'settings' | 'ai-logs'
   | 'crm-owners' | 'crm-kanban' | 'crm-gamification' | 'crm-checks' | 'crm-payments'
   | 'phones';
 
@@ -24,7 +24,8 @@ const CRM_ROLES = ['admin', 'director', 'broker', 'office_manager', 'manager'];
 const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; group?: string }[] = [
   { id: 'dashboard', label: 'Дашборд', icon: 'LayoutDashboard', roles: ['admin', 'editor', 'manager'] },
   { id: 'listings', label: 'Объекты', icon: 'Building2', roles: ['admin', 'editor', 'manager'] },
-  { id: 'leads', label: 'Лиды', icon: 'Inbox', roles: ['admin', 'editor', 'manager'] },
+  { id: 'leads', label: 'Заявки', icon: 'Inbox', roles: ['admin', 'editor', 'manager'] },
+  { id: 'network-tenants', label: 'Сетевики', icon: 'Network', roles: ['admin', 'editor', 'manager'] },
   { id: 'users', label: 'Пользователи', icon: 'Users', roles: ['admin'] },
   { id: 'pages', label: 'Страницы', icon: 'FileText', roles: ['admin', 'editor'] },
   { id: 'settings', label: 'Настройки', icon: 'Settings', roles: ['admin', 'editor'] },
@@ -245,13 +246,22 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
                   )}
                 </button>
                 {/* Тултип */}
-                <div className="absolute right-0 top-full mt-2 w-56 bg-gray-900 text-white text-xs rounded-xl px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
-                  {pushState === 'subscribed'
-                    ? 'Уведомления включены. Нажмите чтобы отключить.'
-                    : pushState === 'denied'
-                    ? 'Уведомления заблокированы в браузере. Разрешите в настройках.'
-                    : 'Включить уведомления о новых заявках на модерации'}
-                  <div className="mt-1 text-gray-400">Ключи генерируются автоматически</div>
+                <div className="absolute right-0 top-full mt-2 w-64 bg-gray-900 text-white text-xs rounded-xl px-3 py-2.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
+                  {pushState === 'subscribed' && (
+                    <><div className="font-semibold text-emerald-400 mb-1">✓ Уведомления включены</div>
+                    <div className="text-gray-300">Вы будете получать уведомления о новых заявках. Нажмите чтобы отключить.</div></>
+                  )}
+                  {pushState === 'denied' && (
+                    <><div className="font-semibold text-red-400 mb-1">✗ Уведомления заблокированы</div>
+                    <div className="text-gray-300">Браузер запретил уведомления. Разрешите их: откройте настройки браузера → Конфиденциальность → Уведомления → найдите этот сайт и разрешите.</div></>
+                  )}
+                  {pushState === 'unsubscribed' && (
+                    <><div className="font-semibold text-gray-200 mb-1">Уведомления отключены</div>
+                    <div className="text-gray-300">Нажмите чтобы получать уведомления о новых заявках с сайта.</div></>
+                  )}
+                  {pushState === 'loading' && (
+                    <div className="text-gray-300">Проверка статуса уведомлений...</div>
+                  )}
                 </div>
               </div>
             )}

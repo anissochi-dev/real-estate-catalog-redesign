@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { adminApi, aiApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import PhonePickerInput from '@/components/admin/PhonePickerInput';
@@ -18,6 +18,7 @@ interface Lead {
   company: string | null;
   is_network_tenant: boolean;
   show_on_main: boolean;
+  object_url?: string | null;
 }
 
 interface Comment { id: number; author_name: string; comment: string; created_at: string }
@@ -30,6 +31,15 @@ const STATUSES: [string, string, string, string][] = [
   ['done', 'Закрыт', 'bg-blue-500', 'border-l-blue-500'],
   ['rejected', 'Отказ', 'bg-red-500', 'border-l-red-500'],
 ];
+
+const SOURCE_LABELS: Record<string, string> = {
+  'property-page': 'Страница объекта',
+  'offer-to-lead': 'Предложение объекта',
+  'network-tenant': 'Сетевой арендатор',
+  'catalog': 'Каталог',
+  'homepage': 'Главная страница',
+  'manual': 'Добавлен вручную',
+};
 
 const empty: Partial<Lead> = {
   name: '', phone: '', email: '', message: '', status: 'new',
@@ -46,6 +56,25 @@ export default function LeadsAdmin() {
   const [aiLoading, setAiLoading] = useState(false);
   const [editing, setEditing] = useState<Partial<Lead> | null>(null);
   const [filter, setFilter] = useState<'all' | 'network' | string>('all');
+  const [listingSearch, setListingSearch] = useState('');
+  const [listingDropOpen, setListingDropOpen] = useState(false);
+  const listingDropRef = useRef<HTMLDivElement>(null);
+
+  const filteredListings = listings.filter(l =>
+    listingSearch.length < 1 ? true :
+    l.title.toLowerCase().includes(listingSearch.toLowerCase()) ||
+    String(l.id).includes(listingSearch)
+  ).slice(0, 10);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (listingDropRef.current && !listingDropRef.current.contains(e.target as Node)) {
+        setListingDropOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const load = () =>
     Promise.all([adminApi.listLeads(), adminApi.listListings()]).then(([l, lg]) => {
@@ -196,6 +225,20 @@ export default function LeadsAdmin() {
                     </div>
                     {active.company && <div className="text-xs text-muted-foreground mt-1">Компания: {active.company}</div>}
                     {active.budget && <div className="text-xs text-muted-foreground">Бюджет: {active.budget.toLocaleString('ru')} ₽</div>}
+                    {active.object_url && (
+                      <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Icon name="Link" size={12} className="text-brand-blue flex-shrink-0" />
+                        <a href={active.object_url} target="_blank" rel="noopener noreferrer"
+                          className="text-brand-blue hover:underline truncate max-w-xs">
+                          {active.object_url.replace(/^https?:\/\/[^/]+/, '')}
+                        </a>
+                      </div>
+                    )}
+                    {active.source && (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Источник: <span className="font-medium">{SOURCE_LABELS[active.source] || active.source}</span>
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => setEditing(active)} className="text-brand-blue p-2 rounded-lg hover:bg-muted">
@@ -301,15 +344,15 @@ export default function LeadsAdmin() {
       </div>
 
       {editing && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-5 border-b border-border flex justify-between items-center sticky top-0 bg-white">
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) setEditing(null); }}>
+          <div className="bg-white rounded-2xl max-w-lg w-full flex flex-col" style={{ maxHeight: '90vh' }}>
+            <div className="p-5 border-b border-border flex justify-between items-center flex-shrink-0 bg-white rounded-t-2xl">
               <div className="font-display font-700 text-lg">
                 {editing.id ? 'Редактировать лид' : 'Новый лид'}
               </div>
               <button onClick={() => setEditing(null)}><Icon name="X" size={20} /></button>
             </div>
-            <div className="p-5 space-y-3">
+            <div className="p-5 space-y-3 overflow-y-auto flex-1">
               <div className="relative">
                 <input className="w-full px-3 py-2 border rounded-lg pr-16" placeholder="Имя клиента"
                   maxLength={60}
@@ -338,13 +381,50 @@ export default function LeadsAdmin() {
               <CharCount as="textarea" rows={5} max={1500} warnAt={1300} placeholder="Текст запроса"
                 value={editing.message || ''} onChange={e => setEditing({ ...editing, message: (e.target as HTMLTextAreaElement).value })} />
 
-              <div>
+              <div ref={listingDropRef} className="relative">
                 <label className="text-xs text-muted-foreground">Привязка к объекту (необязательно)</label>
-                <select className="w-full px-3 py-2 border rounded-lg" value={editing.listing_id ?? ''}
-                  onChange={e => setEditing({ ...editing, listing_id: e.target.value === '' ? null : +e.target.value })}>
-                  <option value="">— Без привязки —</option>
-                  {listings.map(l => <option key={l.id} value={l.id}>#{l.id} {l.title}</option>)}
-                </select>
+                {editing.listing_id ? (
+                  <div className="flex items-center justify-between px-3 py-2 border border-brand-blue/40 rounded-lg bg-brand-blue/5 text-sm">
+                    <span className="text-brand-blue font-medium truncate">
+                      {listings.find(l => l.id === editing.listing_id)
+                        ? `#${editing.listing_id} ${listings.find(l => l.id === editing.listing_id)?.title}`
+                        : `#${editing.listing_id}`}
+                    </span>
+                    <button type="button" onClick={() => { setEditing({ ...editing, listing_id: null }); setListingSearch(''); }}
+                      className="ml-2 shrink-0 text-muted-foreground hover:text-red-500">
+                      <Icon name="X" size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <input
+                      value={listingSearch}
+                      onChange={e => { setListingSearch(e.target.value); setListingDropOpen(true); }}
+                      onFocus={() => setListingDropOpen(true)}
+                      placeholder="Поиск объекта по названию или ID..."
+                      className="w-full px-3 py-2 border rounded-lg text-sm pr-8"
+                    />
+                    <Icon name="Search" size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    {listingDropOpen && listingSearch.length >= 1 && (
+                      <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-border rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                        <button type="button" className="w-full text-left px-3 py-2 hover:bg-muted text-sm text-muted-foreground"
+                          onMouseDown={() => { setEditing({ ...editing, listing_id: null }); setListingDropOpen(false); setListingSearch(''); }}>
+                          — Без привязки —
+                        </button>
+                        {filteredListings.map(l => (
+                          <button key={l.id} type="button"
+                            className="w-full text-left px-3 py-2 hover:bg-muted text-sm"
+                            onMouseDown={() => { setEditing({ ...editing, listing_id: l.id }); setListingDropOpen(false); setListingSearch(''); }}>
+                            <span className="text-muted-foreground text-xs mr-1">#{l.id}</span>{l.title}
+                          </button>
+                        ))}
+                        {filteredListings.length === 0 && (
+                          <div className="px-3 py-2 text-sm text-muted-foreground">Не найдено</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">Статус</label>
@@ -364,7 +444,7 @@ export default function LeadsAdmin() {
                 Показывать на главной странице
               </label>
             </div>
-            <div className="p-5 border-t border-border flex justify-end gap-3 sticky bottom-0 bg-white">
+            <div className="p-5 border-t border-border flex justify-end gap-3 flex-shrink-0 bg-white rounded-b-2xl">
               <button onClick={() => setEditing(null)} className="px-4 py-2 rounded-xl text-sm">Отмена</button>
               <button onClick={save} className="btn-blue text-white px-5 py-2 rounded-xl text-sm font-semibold">
                 Сохранить

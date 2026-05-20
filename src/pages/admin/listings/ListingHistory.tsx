@@ -62,6 +62,13 @@ const EVENT_TYPES = [
   { value: 'manual', label: 'Прочее' },
 ];
 
+const EVENT_LABELS_FALLBACK: Record<string, string> = {
+  view_avito: 'Просмотры', view_cian: 'Просмотры', view_yandex: 'Просмотры',
+  view_domclick: 'Просмотры', view_xml: 'Просмотры', view_site: 'Просмотры сайта',
+  view_other: 'Просмотры', call: 'Звонки', lead: 'Заявки',
+  favorite: 'В избранном', manual: 'Прочее',
+};
+
 function fmtDt(s: string) {
   return new Date(s).toLocaleString('ru', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
@@ -245,7 +252,7 @@ export default function ListingHistory({ listingId, listingTitle, onClose }: Pro
                     {hasData && (
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         {Object.entries(data).map(([ev, val]) => (
-                          <MiniStat key={ev} label={multiStats?.event_labels?.[ev] || ev} value={val} />
+                          <MiniStat key={ev} label={multiStats?.event_labels?.[ev] || EVENT_LABELS_FALLBACK[ev] || ev} value={val} />
                         ))}
                       </div>
                     )}
@@ -313,8 +320,8 @@ export default function ListingHistory({ listingId, listingTitle, onClose }: Pro
                     {multiStats.history.filter(h => h.event_type !== 'view_site').slice(0, 20).map(h => (
                       <div key={h.id} className="flex items-center justify-between text-xs px-3 py-2 rounded-lg bg-muted/40">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-semibold">{multiStats.source_labels?.[h.source] || h.source}</span>
-                          <span className="text-muted-foreground">{multiStats.event_labels?.[h.event_type] || h.event_type}</span>
+                          <span className="font-semibold">{multiStats.source_labels?.[h.source] || SOURCES.find(s => s.value === h.source)?.label || h.source}</span>
+                          <span className="text-muted-foreground">{multiStats.event_labels?.[h.event_type] || EVENT_LABELS_FALLBACK[h.event_type] || h.event_type}</span>
                           {h.note && <span className="text-muted-foreground truncate">— {h.note}</span>}
                         </div>
                         <div className="flex items-center gap-2 shrink-0 ml-2">

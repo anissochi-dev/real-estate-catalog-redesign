@@ -12,6 +12,7 @@ import CrmGamification from './admin/crm/CrmGamification';
 import CrmChecks from './admin/crm/CrmChecks';
 import CrmPayments from './admin/crm/CrmPayments';
 import PhoneBook from './admin/PhoneBook';
+import NetworkTenantsAdmin from './admin/NetworkTenantsAdmin';
 
 interface Props {
   onExit: () => void;
@@ -34,6 +35,7 @@ export default function AdminPage({ onExit }: Props) {
       {section === 'crm-checks' && <CrmChecks />}
       {section === 'crm-payments' && <CrmPayments />}
       {section === 'phones' && <PhoneBook />}
+      {section === 'network-tenants' && <NetworkTenantsAdmin />}
     </AdminLayout>
   );
 }

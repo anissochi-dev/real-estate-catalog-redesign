@@ -36,6 +36,7 @@ export default function ListingEditor({
 }: Props) {
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [purposeOpen, setPurposeOpen] = useState(false);
+  const [purposeSearch, setPurposeSearch] = useState('');
 
   const selectedPurposes: string[] = editing.purpose
     ? editing.purpose.split('|').map(s => s.trim()).filter(Boolean)
@@ -196,31 +197,39 @@ export default function ListingEditor({
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Назначение (можно выбрать несколько)</label>
               <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setPurposeOpen(o => !o)}
-                  className="w-full px-3 py-2 border rounded-lg text-left text-sm flex items-center justify-between gap-2"
-                >
-                  <span className="truncate text-foreground">
-                    {selectedPurposes.length > 0
-                      ? selectedPurposes.slice(0, 3).join(', ') + (selectedPurposes.length > 3 ? ` +${selectedPurposes.length - 3}` : '')
-                      : '— Не выбрано —'}
-                  </span>
-                  <Icon name={purposeOpen ? 'ChevronUp' : 'ChevronDown'} size={14} className="flex-shrink-0 text-muted-foreground" />
-                </button>
+                <div className="flex items-center border rounded-lg overflow-hidden">
+                  <Icon name="Search" size={14} className="ml-3 text-muted-foreground flex-shrink-0" />
+                  <input
+                    value={purposeSearch}
+                    onChange={e => { setPurposeSearch(e.target.value); setPurposeOpen(true); }}
+                    onFocus={() => setPurposeOpen(true)}
+                    placeholder="Поиск назначения..."
+                    className="flex-1 px-2 py-2 text-sm outline-none"
+                  />
+                  {selectedPurposes.length > 0 && (
+                    <span className="mr-2 text-xs bg-brand-blue text-white px-1.5 py-0.5 rounded-full flex-shrink-0">
+                      {selectedPurposes.length}
+                    </span>
+                  )}
+                </div>
                 {purposeOpen && (
-                  <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-border rounded-xl shadow-lg max-h-60 overflow-y-auto">
-                    {PURPOSE_LIST.map(name => (
-                      <label key={name} className="flex items-center gap-2 px-3 py-2 hover:bg-muted cursor-pointer text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedPurposes.includes(name)}
-                          onChange={() => togglePurpose(name)}
-                          className="accent-brand-blue"
-                        />
-                        {name}
-                      </label>
-                    ))}
+                  <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-border rounded-xl shadow-lg max-h-52 overflow-y-auto">
+                    {PURPOSE_LIST
+                      .filter(name => !purposeSearch || name.toLowerCase().includes(purposeSearch.toLowerCase()))
+                      .map(name => (
+                        <label key={name} className="flex items-center gap-2 px-3 py-2 hover:bg-muted cursor-pointer text-sm">
+                          <input
+                            type="checkbox"
+                            checked={selectedPurposes.includes(name)}
+                            onChange={() => togglePurpose(name)}
+                            className="accent-brand-blue"
+                          />
+                          {name}
+                        </label>
+                      ))}
+                    {PURPOSE_LIST.filter(n => !purposeSearch || n.toLowerCase().includes(purposeSearch.toLowerCase())).length === 0 && (
+                      <div className="px-3 py-2 text-sm text-muted-foreground">Не найдено</div>
+                    )}
                   </div>
                 )}
               </div>
