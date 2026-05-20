@@ -31,8 +31,6 @@ export interface LinkField {
   owner_label: string;
   listing_id: number | null;
   listing_label: string;
-  lead_id?: number | null;
-  lead_label?: string;
 }
 
 export interface EventFormState {

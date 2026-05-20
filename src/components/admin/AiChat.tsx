@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { aiApi, AiAction } from '@/lib/adminApi';
+import Icon from '@/components/ui/icon';
 import {
-  Msg, Suggestion, QuickCmd,
-  HISTORY_KEY,
+  Msg, Suggestion, AgentActionState, QuickCmd,
+  QUICK_CMDS, HISTORY_KEY,
   detectSuggestion, loadHistory, saveHistory,
 } from './AiChatTypes';
-import AiChatHeader from './AiChatHeader';
-import AiChatMainTab from './AiChatMainTab';
-import AiChatAdminOpsTab, { MemoryData } from './AiChatAdminOpsTab';
+import AiChatMessage from './AiChatMessage';
+import AiChatInput from './AiChatInput';
 
 interface Props {
   onClose: () => void;
@@ -34,17 +34,7 @@ export default function AiChat({
   const [input, setInput] = useState(initialPrompt);
   const [messages, setMessages] = useState<Msg[]>(() => loadHistory());
   const [loading, setLoading] = useState(false);
-  const [chatTab, setChatTab] = useState<'main' | 'admin_ops'>('main');
-  // Режим «Администрирование»: история отдельная, требует подтверждения перед каждым запросом
-  const [opsMessages, setOpsMessages] = useState<Msg[]>([]);
-  const [opsInput, setOpsInput] = useState('');
-  const [opsLoading, setOpsLoading] = useState(false);
-  const [opsPendingText, setOpsPendingText] = useState<string | null>(null); // ожидает РАЗРЕШАЮ
-  const [showMemory, setShowMemory] = useState(false);
-  const [memoryData, setMemoryData] = useState<MemoryData | null>(null);
-  const [memoryLoading, setMemoryLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const opsScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     saveHistory(messages);
@@ -52,75 +42,6 @@ export default function AiChat({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
-
-  useEffect(() => {
-    if (opsScrollRef.current) {
-      opsScrollRef.current.scrollTop = opsScrollRef.current.scrollHeight;
-    }
-  }, [opsMessages]);
-
-  const loadMemory = async () => {
-    setMemoryLoading(true);
-    try {
-      const data = await aiApi.getMemory();
-      setMemoryData(data);
-      setShowMemory(true);
-    } catch {
-      setShowMemory(true);
-      setMemoryData(null);
-    } finally {
-      setMemoryLoading(false);
-    }
-  };
-
-  // Отправка в режиме Администрирование: требует явного подтверждения «РАЗРЕШАЮ»
-  const sendOps = async (text?: string, skipConfirm = false) => {
-    const msg = (text ?? opsInput).trim();
-    if (!msg || opsLoading) return;
-
-    // Если это подтверждение «РАЗРЕШАЮ» — выполняем отложенный запрос
-    if (!skipConfirm && opsPendingText && msg.toUpperCase().includes('РАЗРЕШАЮ')) {
-      setOpsMessages(m => [...m, { role: 'user', text: '✅ РАЗРЕШАЮ', ts: Date.now() }]);
-      setOpsInput('');
-      setOpsPendingText(null);
-      await _doOpsRequest(opsPendingText);
-      return;
-    }
-
-    setOpsMessages(m => [...m, { role: 'user', text: msg, ts: Date.now() }]);
-    setOpsInput('');
-
-    // Консультационные запросы — выполняем сразу
-    const directKeywords = ['как', 'что', 'почему', 'объясни', 'расскажи', 'помоги', 'подскажи', 'покажи', 'проанализируй', 'аудит', 'проконсультируй'];
-    const isDirectQuery = directKeywords.some(k => msg.toLowerCase().includes(k));
-    if (isDirectQuery || skipConfirm) {
-      await _doOpsRequest(msg);
-    } else {
-      // Потенциально деструктивный — требует подтверждения
-      setOpsPendingText(msg);
-      setOpsMessages(m => [...m, {
-        role: 'ai',
-        text: `⚠️ Этот запрос касается изменений в системе.\n\nЗапрос: «${msg.slice(0, 100)}»\n\nДля выполнения введите: РАЗРЕШАЮ\nДля отмены введите что угодно другое.`,
-        ts: Date.now(),
-      }]);
-    }
-  };
-
-  const _doOpsRequest = async (msg: string) => {
-    setOpsLoading(true);
-    try {
-      const r = await aiApi.ask('admin_ops', msg);
-      setOpsMessages(m => [...m, { role: 'ai', text: r.text, ts: Date.now() }]);
-    } catch (e: unknown) {
-      setOpsMessages(m => [...m, {
-        role: 'ai',
-        text: 'Ошибка: ' + (e instanceof Error ? e.message : 'неизвестно'),
-        ts: Date.now(),
-      }]);
-    } finally {
-      setOpsLoading(false);
-    }
-  };
 
   const send = async (overrideText?: string, overrideAction?: AiAction) => {
     const text = (overrideText ?? input).trim();
@@ -252,50 +173,95 @@ export default function AiChat({
         aria-label="Закрыть"
       />
       <aside className="w-full sm:max-w-md md:max-w-lg lg:max-w-xl h-full bg-white shadow-2xl flex flex-col animate-slide-in-right">
-        <AiChatHeader
-          chatTab={chatTab}
-          setChatTab={setChatTab}
-          title={title}
-          memoryLoading={memoryLoading}
-          onClearHistory={clearHistory}
-          onLoadMemory={loadMemory}
-          onClose={onClose}
+        <header className="px-5 py-4 border-b border-border flex items-center justify-between bg-gradient-to-r from-brand-blue to-brand-blue-dark text-white">
+          <div className="flex items-center gap-2 min-w-0">
+            <Icon name="Sparkles" size={20} />
+            <div className="min-w-0">
+              <div className="font-display font-700 truncate">{title || 'ИИ-ассистент'}</div>
+              <div className="text-xs opacity-80">YandexGPT · BIZNEST</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={clearHistory}
+              title="Очистить историю"
+              className="hover:bg-white/10 rounded-lg p-1.5"
+            >
+              <Icon name="Trash2" size={18} />
+            </button>
+            <button onClick={onClose} className="hover:bg-white/10 rounded-lg p-1.5">
+              <Icon name="X" size={20} />
+            </button>
+          </div>
+        </header>
+
+        <div className="px-3 py-2 border-b border-border overflow-x-auto bg-muted/30">
+          <div className="flex gap-2">
+            {QUICK_CMDS.map(q => (
+              <button
+                key={q.id}
+                onClick={() => runQuick(q)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs whitespace-nowrap transition shrink-0 ${
+                  action === q.action ? 'bg-brand-blue text-white' : 'bg-white hover:bg-muted border border-border'
+                }`}
+              >
+                <Icon name={q.icon} size={14} />
+                {q.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+          {messages.length === 0 && (
+            <div className="text-center text-muted-foreground text-sm py-8">
+              <Icon name="Bot" size={40} className="mx-auto mb-3 opacity-50" />
+              <div className="font-semibold mb-2">Привет! Я твой ИИ-ассистент.</div>
+              <div className="text-xs space-y-1">
+                <div>Нажми <span className="font-semibold text-brand-blue">«Агент»</span> — и я сам предложу действия, которые надо выполнить.</div>
+                <div>Каждое решение ты подтверждаешь вручную.</div>
+              </div>
+              <div className="mt-4 space-y-1.5 text-xs text-left max-w-xs mx-auto">
+                <div className="px-3 py-2 bg-muted/50 rounded-lg">«Найди объекты без описания и допиши их»</div>
+                <div className="px-3 py-2 bg-muted/50 rounded-lg">«Что делать с новыми лидами?»</div>
+                <div className="px-3 py-2 bg-muted/50 rounded-lg">«Архивируй старые неактуальные объекты»</div>
+              </div>
+            </div>
+          )}
+
+          {messages.map((m, i) => (
+            <AiChatMessage
+              key={i}
+              msg={m}
+              idx={i}
+              formatTime={formatTime}
+              onApplySuggestion={applySuggestion}
+              onRejectSuggestion={rejectSuggestion}
+              onRequestEdit={requestEdit}
+              onConfirmAgentAction={confirmAgentAction}
+              onRejectAgentAction={rejectAgentAction}
+              onConfirmAllAgentActions={confirmAllAgentActions}
+            />
+          ))}
+
+          {loading && (
+            <div className="flex justify-start">
+              <div className="bg-muted px-4 py-3 rounded-2xl flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="w-2 h-2 rounded-full bg-brand-blue animate-pulse" />
+                <div className="w-2 h-2 rounded-full bg-brand-blue animate-pulse [animation-delay:0.2s]" />
+                <div className="w-2 h-2 rounded-full bg-brand-blue animate-pulse [animation-delay:0.4s]" />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <AiChatInput
+          input={input}
+          setInput={setInput}
+          action={action}
+          loading={loading}
+          onSend={send}
         />
-
-        {chatTab === 'main' && (
-          <AiChatMainTab
-            scrollRef={scrollRef}
-            messages={messages}
-            loading={loading}
-            action={action}
-            input={input}
-            setInput={setInput}
-            onSend={send}
-            onRunQuick={runQuick}
-            onApplySuggestion={applySuggestion}
-            onRejectSuggestion={rejectSuggestion}
-            onRequestEdit={requestEdit}
-            onConfirmAgentAction={confirmAgentAction}
-            onRejectAgentAction={rejectAgentAction}
-            onConfirmAllAgentActions={confirmAllAgentActions}
-            formatTime={formatTime}
-          />
-        )}
-
-        {chatTab === 'admin_ops' && (
-          <AiChatAdminOpsTab
-            opsScrollRef={opsScrollRef}
-            opsMessages={opsMessages}
-            opsLoading={opsLoading}
-            opsInput={opsInput}
-            setOpsInput={setOpsInput}
-            opsPendingText={opsPendingText}
-            showMemory={showMemory}
-            memoryData={memoryData}
-            onSendOps={sendOps}
-            onCloseMemory={() => setShowMemory(false)}
-          />
-        )}
       </aside>
     </div>
   );

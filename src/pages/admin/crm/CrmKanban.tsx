@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
@@ -47,10 +47,6 @@ export default function CrmKanban() {
   const [newActivity, setNewActivity] = useState('');
   const [activityType, setActivityType] = useState('note');
   const [form, setForm] = useState({ title: '', owner_id: '', listing_id: '', amount: '', commission: '', source: '', notes: '' });
-  const [ownerSearch, setOwnerSearch] = useState('');
-  const [ownerLabel, setOwnerLabel] = useState('');
-  const [ownerDropOpen, setOwnerDropOpen] = useState(false);
-  const ownerDropRef = useRef<HTMLDivElement>(null);
   const [dragDeal, setDragDeal] = useState<Deal | null>(null);
 
   const headers = { 'Content-Type': 'application/json', 'X-Auth-Token': token || '' };
@@ -80,27 +76,14 @@ export default function CrmKanban() {
     enabled: !!detailId,
   });
 
-  const { data: ownerResults = [], isFetching: ownerFetching } = useQuery<{ id: number; name: string; phone: string }[]>({
-    queryKey: ['crm-owners-search', ownerSearch],
+  const { data: owners = [] } = useQuery<{ id: number; name: string; phone: string }[]>({
+    queryKey: ['crm-owners-list'],
     queryFn: async () => {
-      if (ownerSearch.length < 1) return [];
-      const r = await fetch(`${CRM_URL}/owners?search=${encodeURIComponent(ownerSearch)}&limit=10`, { headers });
+      const r = await fetch(`${CRM_URL}/owners?limit=100`, { headers });
       const d = await r.json();
       return d.owners || [];
     },
-    enabled: ownerSearch.length >= 1,
-    staleTime: 20_000,
   });
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ownerDropRef.current && !ownerDropRef.current.contains(e.target as Node)) {
-        setOwnerDropOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
 
   const moveMutation = useMutation({
     mutationFn: async ({ dealId, stageId }: { dealId: number; stageId: number }) => {
@@ -272,51 +255,18 @@ export default function CrmKanban() {
               <label className="text-xs text-muted-foreground">Название *</label>
               <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="Аренда офиса 150 м²" />
             </div>
-            <div ref={ownerDropRef} className="relative">
+            <div>
               <label className="text-xs text-muted-foreground">Собственник</label>
-              {form.owner_id ? (
-                <div className="flex items-center justify-between px-3 py-2 border border-brand-blue/40 rounded-xl bg-brand-blue/5 text-sm">
-                  <span className="font-medium text-brand-blue truncate">{ownerLabel}</span>
-                  <button type="button" onClick={() => { setForm(f => ({ ...f, owner_id: '' })); setOwnerLabel(''); setOwnerSearch(''); }}
-                    className="ml-2 shrink-0 text-muted-foreground hover:text-red-500">
-                    <Icon name="X" size={14} />
-                  </button>
-                </div>
-              ) : (
-                <div className="relative">
-                  <Input
-                    value={ownerSearch}
-                    onChange={e => { setOwnerSearch(e.target.value); setOwnerDropOpen(true); }}
-                    onFocus={() => setOwnerDropOpen(true)}
-                    placeholder="Введите имя или телефон..."
-                    className="pr-8"
-                  />
-                  {ownerFetching && (
-                    <Icon name="Loader2" size={13} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />
-                  )}
-                  {ownerDropOpen && ownerResults.length > 0 && (
-                    <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-border rounded-xl shadow-lg overflow-hidden max-h-48 overflow-y-auto">
-                      {ownerResults.map(o => (
-                        <button key={o.id} type="button"
-                          className="w-full text-left px-3 py-2 hover:bg-muted transition text-sm"
-                          onMouseDown={() => {
-                            setForm(f => ({ ...f, owner_id: String(o.id) }));
-                            setOwnerLabel(`${o.name} (${o.phone})`);
-                            setOwnerDropOpen(false);
-                          }}>
-                          <div className="font-medium">{o.name}</div>
-                          {o.phone && <div className="text-xs text-muted-foreground">{o.phone}</div>}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {ownerDropOpen && !ownerFetching && ownerSearch.length >= 1 && ownerResults.length === 0 && (
-                    <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-border rounded-xl shadow-lg px-3 py-2 text-sm text-muted-foreground">
-                      Не найдено
-                    </div>
-                  )}
-                </div>
-              )}
+              <select
+                value={form.owner_id}
+                onChange={e => setForm(f => ({ ...f, owner_id: e.target.value }))}
+                className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+              >
+                <option value="">— Не выбран —</option>
+                {(owners as { id: number; name: string; phone: string }[]).map(o => (
+                  <option key={o.id} value={o.id}>{o.name} ({o.phone})</option>
+                ))}
+              </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

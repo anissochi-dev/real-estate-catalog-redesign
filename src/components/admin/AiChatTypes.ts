@@ -32,17 +32,14 @@ export interface QuickCmd {
 
 export const QUICK_CMDS: QuickCmd[] = [
   { id: 'agent', label: 'Агент', icon: 'Bot', action: 'agent', prompt: 'Проанализируй текущее состояние каталога и лидов. Предложи самые важные действия, которые нужно выполнить прямо сейчас.' },
-  { id: 'analytics_full', label: 'Полная аналитика', icon: 'BarChart3', action: 'analytics_full', prompt: 'Проведи полный анализ системы: объекты, лиды, конверсия, тренды. Дай структурированный отчёт.' },
-  { id: 'security', label: 'Безопасность', icon: 'ShieldCheck', action: 'security', prompt: 'Проверь данные системы на XSS-инъекции, подозрительные паттерны и угрозы безопасности.' },
-  { id: 'marketing', label: 'Маркетинг', icon: 'TrendingUp', action: 'marketing', prompt: 'Дай маркетинговые рекомендации по каталогу: конверсия, ЦА, ценообразование, позиционирование.' },
-  { id: 'modernize', label: 'Оптимизация', icon: 'Zap', action: 'modernize', prompt: 'Предложи план улучшений контента каталога для повышения конверсии и SEO.' },
-  { id: 'db_check', label: 'Проверка БД', icon: 'Database', action: 'db_check', prompt: 'Найди проблемы в данных: дубли, пустые поля, некорректные значения, устаревшие статусы.' },
   { id: 'help', label: 'Помощь', icon: 'MessageCircle', action: 'admin', prompt: '' },
-  { id: 'desc', label: 'Описание', icon: 'PenLine', action: 'describe', prompt: '' },
+  { id: 'desc', label: 'Описание объекта', icon: 'PenLine', action: 'describe', prompt: '' },
   { id: 'reply', label: 'Ответ клиенту', icon: 'Mail', action: 'reply_lead', prompt: '' },
   { id: 'seo', label: 'SEO meta', icon: 'Search', action: 'seo', prompt: '' },
   { id: 'tags', label: 'Авто-теги', icon: 'Tags', action: 'auto_tags', prompt: '' },
   { id: 'moderate', label: 'Модерация', icon: 'CheckCircle2', action: 'moderate', prompt: '' },
+  { id: 'analytics', label: 'Сводка', icon: 'BarChart3', action: 'analytics', prompt: 'Дай краткую сводку и 2-3 рекомендации по работе с каталогом.' },
+  { id: 'seo-audit', label: 'SEO-аудит', icon: 'Gauge', action: 'admin', prompt: 'Проведи SEO-аудит: проверь, какие моменты в каталоге могут влиять на индексацию (мета-теги, alt-теги, дубли заголовков). Дай чек-лист исправлений.' },
 ];
 
 export const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
@@ -51,13 +48,7 @@ export const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
   delete_listing: { label: 'Удалить объект', icon: 'Trash2' },
   reply_lead: { label: 'Ответить клиенту', icon: 'Send' },
   close_lead: { label: 'Закрыть лид', icon: 'CheckCircle2' },
-  approve_lead: { label: 'Одобрить лид', icon: 'CheckCircle2' },
   generate_description: { label: 'Переписать описание', icon: 'PenLine' },
-  seo_optimize: { label: 'Улучшить SEO', icon: 'Search' },
-  bulk_update_status: { label: 'Массовый статус', icon: 'Layers' },
-  security_check: { label: 'Проверка безопасности', icon: 'ShieldCheck' },
-  analytics_report: { label: 'Аналитика', icon: 'BarChart3' },
-  marketing_tips: { label: 'Маркетинг', icon: 'TrendingUp' },
   note: { label: 'Совет', icon: 'Lightbulb' },
 };
 

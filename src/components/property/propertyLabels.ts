@@ -19,7 +19,7 @@ export const DEAL_LABELS: Record<string, string> = {
 
 export const CONDITION_LABELS: Record<string, string> = {
   new: 'Новое', euro: 'Евроремонт', good: 'Хорошее',
-  cosmetic: 'Требуется косметика', rough: 'Без отделки', shellcore: 'Черновая отделка',
+  cosmetic: 'Требуется косметика', rough: 'Без отделки', shellcore: 'Черновая (Shell&Core)',
 };
 
 export const FINISHING_LABELS: Record<string, string> = {

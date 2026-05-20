@@ -1,7 +1,4 @@
 {
-  "migration": "https://functions.poehali.dev/35b499c9-243a-43e1-ac7b-2d6e84453233",
-  "push": "https://functions.poehali.dev/0ec4537a-eb53-4f31-b9a4-19afa2eff83a",
-  "auto-seo": "https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d",
   "listing-stats": "https://functions.poehali.dev/1d84bd40-ef8c-4bd3-82c3-af294b1ec0b1",
   "import-url": "https://functions.poehali.dev/59ce84ce-c6bb-46e7-9223-5d893748615f",
   "crm": "https://functions.poehali.dev/221e23fa-e0a4-416e-b878-c2da2914daac",
