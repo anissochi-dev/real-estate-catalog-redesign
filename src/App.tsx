@@ -122,6 +122,25 @@ export default function App() {
   const currentPage: Page = pageFromPath(location.pathname);
   const setCurrentPage = (p: Page) => navigate(PATH_BY_PAGE[p]);
 
+  // Тихий cron-пинг: при каждой загрузке сайта проверяем, не пора ли запустить SEO-оптимизацию.
+  // Throttle на стороне клиента — не чаще раза в 60 мин. Сервер дополнительно проверяет расписание.
+  useEffect(() => {
+    const SEO_CRON_URL = 'https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d';
+    const THROTTLE_KEY = 'seo_cron_last_ping';
+    const THROTTLE_MS = 60 * 60 * 1000; // 1 час
+    try {
+      const last = parseInt(localStorage.getItem(THROTTLE_KEY) || '0', 10);
+      if (Date.now() - last > THROTTLE_MS) {
+        localStorage.setItem(THROTTLE_KEY, String(Date.now()));
+        fetch(SEO_CRON_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'ping' }),
+        }).catch(() => {}); // тихо игнорируем ошибки
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   useEffect(() => {
     setLoading(true);
     fetchListings()
@@ -155,8 +174,16 @@ export default function App() {
 
   const ADMIN_ROLES = ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'];
 
+  // Авто-переход: как только user появился в контексте и мы на экране логина — редиректим
+  useEffect(() => {
+    if (view === 'login' && user && !authLoading) {
+      setView(ADMIN_ROLES.includes(user.role) ? 'admin' : 'site');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, authLoading]);
+
   if (view === 'login') {
-    return <LoginPage onSuccess={() => setView(user && ADMIN_ROLES.includes(user.role) ? 'admin' : 'site')} onBack={() => setView('site')} />;
+    return <LoginPage onSuccess={() => { /* переход сработает через useEffect выше */ }} onBack={() => setView('site')} />;
   }
 
   if (view === 'admin') {

@@ -65,7 +65,7 @@ export default function ClientLeadsSection() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {leads.map(l => (
+          {leads.slice(0, 6).map(l => (
             <div key={l.id} className="bg-muted/30 rounded-2xl p-5 border border-border hover:shadow-md transition flex flex-col">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">

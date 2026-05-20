@@ -1,4 +1,5 @@
 import Icon from '@/components/ui/icon';
+import CharCount from '@/components/ui/CharCount';
 import { Listing, fmtDate } from './types';
 
 interface Props {
@@ -28,8 +29,8 @@ export default function ListingEditorContentSection({
             {aiLoading ? 'Генерация...' : 'Сгенерировать ИИ'}
           </button>
         </div>
-        <textarea className="w-full px-3 py-2 border rounded-lg" rows={4}
-          value={editing.description || ''} onChange={e => setEditing({ ...editing, description: e.target.value })} />
+        <CharCount as="textarea" rows={4} max={3000} warnAt={2500}
+          value={editing.description || ''} onChange={e => setEditing({ ...editing, description: (e.target as HTMLTextAreaElement).value })} />
       </div>
 
       <div>
@@ -110,25 +111,17 @@ export default function ListingEditorContentSection({
         </div>
         <div>
           <label className="text-xs text-muted-foreground">SEO Title (до 70 символов)</label>
-          <input className="w-full px-3 py-2 border rounded-lg"
-            maxLength={120}
+          <CharCount as="input" max={70} warnAt={60}
             placeholder="Аренда офиса 120 м² в центре Краснодара | BIZNEST"
             value={editing.seo_title || ''}
-            onChange={e => setEditing({ ...editing, seo_title: e.target.value })} />
-          <div className="text-[11px] text-muted-foreground mt-0.5">
-            {(editing.seo_title || '').length}/70 символов
-          </div>
+            onChange={e => setEditing({ ...editing, seo_title: (e.target as HTMLInputElement).value })} />
         </div>
         <div>
           <label className="text-xs text-muted-foreground">SEO Description (до 160 символов)</label>
-          <textarea rows={2} className="w-full px-3 py-2 border rounded-lg"
-            maxLength={250}
+          <CharCount as="textarea" rows={2} max={160} warnAt={140}
             placeholder="Светлый офис 120 м² с евроремонтом в БЦ на ул. Красной. Парковка, охрана 24/7..."
             value={editing.seo_description || ''}
-            onChange={e => setEditing({ ...editing, seo_description: e.target.value })} />
-          <div className="text-[11px] text-muted-foreground mt-0.5">
-            {(editing.seo_description || '').length}/160 символов
-          </div>
+            onChange={e => setEditing({ ...editing, seo_description: (e.target as HTMLTextAreaElement).value })} />
         </div>
         <div className="text-[11px] text-muted-foreground">
           Если поля пустые — поисковики возьмут текст из названия и описания объекта.

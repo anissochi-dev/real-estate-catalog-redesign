@@ -17,6 +17,7 @@ export interface Listing {
   is_new: boolean;
   owner_name: string | null;
   owner_phone: string | null;
+  owner_phone2?: string | null;
   price_unit: 'm2' | 'sotka' | 'total' | string;
   purpose: string | null;
   condition: string | null;
@@ -77,7 +78,7 @@ export const DEALS: [string, string, string][] = [
 ];
 export const CONDITIONS = [
   ['new', 'Новое'], ['euro', 'Евроремонт'], ['good', 'Хорошее'],
-  ['cosmetic', 'Требуется косметика'], ['rough', 'Без отделки'], ['shellcore', 'Черновая отделка (Shell&Core)'],
+  ['cosmetic', 'Требуется косметика'], ['rough', 'Без отделки'], ['shellcore', 'Черновая отделка'],
 ];
 export const PARKING = [['none', 'Нет'], ['street', 'На улице'], ['building', 'В здании']];
 export const ENTRANCE = [['street', 'С улицы'], ['yard', 'Со двора']];
@@ -102,7 +103,7 @@ export const empty: Partial<Listing> = {
   title: '', category: 'office', deal: 'sale', price: 0, area: 0,
   address: '', district: '', city: 'Краснодар', description: '', image: '', images: '', tags: '',
   status: 'active', is_hot: false, is_new: false,
-  owner_name: '', owner_phone: '', price_unit: 'total',
+  owner_name: '', owner_phone: '', owner_phone2: '', price_unit: 'total',
   purpose: '', condition: '', parking: 'none', entrance: 'street',
   floor: null, total_floors: null, video_url: '', video_type: '',
   use_watermark: true, export_yandex: false, export_avito: false, export_cian: false,

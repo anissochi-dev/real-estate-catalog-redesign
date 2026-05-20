@@ -3,6 +3,9 @@ import { adminApi, aiApi, CRM_PAYMENTS_URL, getToken } from '@/lib/adminApi';
 import { useSettings } from '@/contexts/SettingsContext';
 import PurposesAdmin from './PurposesAdmin';
 import XmlFeedsAdmin from './XmlFeedsAdmin';
+import SeoAdmin from './SeoAdmin';
+import RolesAdmin from './RolesAdmin';
+import MigrationTab from './settings/MigrationTab';
 import Icon from '@/components/ui/icon';
 import { S, City, PingState } from './settings/types';
 import GeneralTab from './settings/GeneralTab';
@@ -19,7 +22,7 @@ export default function SettingsAdmin() {
   const [saved, setSaved] = useState(false);
   const [cityQuery, setCityQuery] = useState('');
   const [cityAdding, setCityAdding] = useState(false);
-  const [tab, setTab] = useState<'general' | 'watermark' | 'seo' | 'integrations' | 'cities' | 'purposes' | 'feeds' | 'legal' | 'footer'>('general');
+  const [tab, setTab] = useState<'general' | 'watermark' | 'seo' | 'integrations' | 'cities' | 'purposes' | 'feeds' | 'legal' | 'footer' | 'seo-ai' | 'roles' | 'migration'>('general');
   const [showKey, setShowKey] = useState(false);
   const [showMapsKey, setShowMapsKey] = useState(false);
   const [showYkSecret, setShowYkSecret] = useState(false);
@@ -169,13 +172,16 @@ export default function SettingsAdmin() {
   const TABS: [typeof tab, string, string][] = [
     ['general', 'Общие', 'Settings'],
     ['watermark', 'Водяной знак', 'Stamp'],
-    ['seo', 'SEO и аналитика', 'BarChart3'],
-    ['integrations', 'Интеграции ИИ', 'Zap'],
+    ['seo', 'SEO сайта', 'BarChart3'],
+    ['integrations', 'Интеграции', 'Zap'],
     ['cities', 'Города', 'MapPin'],
     ['purposes', 'Назначения', 'Tag'],
     ['feeds', 'XML фиды', 'Rss'],
-    ['legal', 'Правовые документы', 'Scale'],
-    ['footer', 'Подвал сайта', 'PanelBottom'],
+    ['legal', 'Правовые', 'Scale'],
+    ['footer', 'Подвал', 'PanelBottom'],
+    ['seo-ai', 'SEO-оптимизация', 'TrendingUp'],
+    ['roles', 'Роли и доступы', 'ShieldHalf'],
+    ['migration', 'Миграция', 'DatabaseBackup'],
   ];
 
   return (
@@ -225,6 +231,9 @@ export default function SettingsAdmin() {
       {tab === 'feeds' && <XmlFeedsAdmin />}
       {tab === 'legal' && <LegalTab s={s} setS={setS} saved={saved} save={save} />}
       {tab === 'footer' && <FooterTab s={s} setS={setS} saved={saved} save={save} />}
+      {tab === 'seo-ai' && <SeoAdmin />}
+      {tab === 'roles' && <RolesAdmin />}
+      {tab === 'migration' && <MigrationTab />}
     </div>
   );
 }

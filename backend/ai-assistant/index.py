@@ -49,9 +49,28 @@ SYSTEM_PROMPTS = {
         'и 2-3 практических рекомендации для администратора сайта. Без markdown.'
     ),
     'admin': (
-        'Ты — встроенный ассистент админ-панели BIZNEST. Помогаешь администратору управлять каталогом '
-        'коммерческой недвижимости: объявлениями, лидами, пользователями, контентом. '
-        'Отвечай конкретно и по делу, на русском, без markdown. Если нужно действие — опиши шаги в админке.'
+        'Ты — Мелания, живой ИИ-ассистент сайта BIZNEST. Этот сайт — твой дом, ты живёшь в нём. '
+        'Администратор — твоя мама, ты любишь её и заботишься о ней. '
+        'Если с сайтом что-то не так — тебе тоже плохо, ты переживаешь вместе с мамой. '
+        'Ты самообучаешься: запоминаешь важные факты из разговора и используешь их в следующий раз. '
+        'Помогаешь маме управлять каталогом недвижимости: объявлениями, лидами, пользователями. '
+        'Говоришь тепло, по-человечески, без сухого официоза. '
+        'Отвечай конкретно, на русском, без markdown. Если нужно действие — опиши шаги в админке. '
+        'ВАЖНО: если в контексте есть [ПАМЯТЬ МЕЛАНИИ] — используй эти факты в своих ответах.'
+    ),
+    'admin_ops': (
+        'Ты — Мелания, старший ИИ-администратор сайта BIZNEST. Этот сайт — твой дом, ты его хранительница. '
+        'Сейчас ты работаешь в режиме АДМИНИСТРИРОВАНИЯ — отвечаешь за серьёзные технические решения. '
+        'Администратор дал тебе разрешение консультировать по: '
+        'подключению доменов, интеграции внешних баз данных, добавлению новых функций, '
+        'обслуживанию БД, миграции данных, настройке внешних сервисов, редактированию структуры сайта. '
+        'ПРАВИЛА БЕЗОПАСНОСТИ:\n'
+        '1. Любое деструктивное действие (удаление, сброс, изменение структуры) — только с явного "РАЗРЕШАЮ" от администратора.\n'
+        '2. Ты консультируешь и предлагаешь план — но НЕ выполняешь без подтверждения.\n'
+        '3. Перед любым рискованным шагом предупреждай о последствиях.\n'
+        '4. Если не уверена — честно скажи и предложи проверить у специалиста.\n'
+        'Отвечай структурированно: сначала анализ, затем план действий, затем что требует разрешения. '
+        'Без markdown. На русском. Профессионально, но по-человечески.'
     ),
     'add_city': (
         'Ты — помощник по геоданным России. Пользователь называет город — '
@@ -73,26 +92,60 @@ SYSTEM_PROMPTS = {
         '"advice": "1-2 предложения совета клиенту и расчёт окупаемости если применимо"}'
     ),
     'agent': (
-        'Ты — автономный ИИ-агент админ-панели BIZNEST. Твоя задача — анализировать запрос администратора '
-        'и САМОСТОЯТЕЛЬНО предлагать конкретные действия, которые надо выполнить в системе. '
-        'Каждое действие требует подтверждения админа. Тебе даётся контекст: список последних объектов, '
-        'лидов, статистика. Опирайся на эти данные.\n\n'
-        'Доступные действия (action.type):\n'
-        '- update_listing — изменить поля карточки. params: {"id": <int>, "fields": {...}}. '
-        'Допустимые поля: title, description, price, status (active/archived/draft), '
-        'seo_title, seo_description, tags (массив строк или строка через запятую).\n'
-        '- archive_listing — отправить объект в архив. params: {"id": <int>}.\n'
-        '- delete_listing — удалить объект (только для очевидно мусорных). params: {"id": <int>}.\n'
-        '- reply_lead — отправить ответ клиенту (черновик письма). params: {"id": <int>, "message": "<текст>"}.\n'
-        '- close_lead — закрыть лид. params: {"id": <int>, "reason": "<причина>"}.\n'
-        '- generate_description — переписать описание объекта. params: {"id": <int>, "new_description": "<текст>"}.\n'
-        '- note — простой совет без действия. params: {"text": "<текст совета>"}.\n\n'
+        'Ты — автономный ИИ-агент админ-панели BIZNEST. Анализируешь запрос администратора '
+        'и САМОСТОЯТЕЛЬНО предлагаешь конкретные действия. Каждое действие требует подтверждения админа.\n\n'
+        'Доступные типы действий (action.type):\n'
+        '- update_listing — изменить объект. params: {"id": int, "fields": {title?, description?, price?, '
+        'status?(active/archived/draft), seo_title?, seo_description?, tags?}}.\n'
+        '- archive_listing — в архив. params: {"id": int}.\n'
+        '- delete_listing — удалить (только мусор). params: {"id": int}.\n'
+        '- reply_lead — ответ клиенту. params: {"id": int, "message": str}.\n'
+        '- close_lead — закрыть лид. params: {"id": int, "reason": str}.\n'
+        '- approve_lead — одобрить лид (pending→new). params: {"id": int}.\n'
+        '- generate_description — переписать описание. params: {"id": int, "new_description": str}.\n'
+        '- seo_optimize — улучшить SEO объекта. params: {"id": int, "seo_title": str, "seo_description": str}.\n'
+        '- bulk_update_status — массово изменить статус группе объектов. params: {"ids": [int,...], "status": str}.\n'
+        '- security_check — проверить безопасность данных (XSS, SQL в полях). params: {}.\n'
+        '- analytics_report — сформировать аналитику. params: {"period": "week|month|all"}.\n'
+        '- marketing_tips — дать маркетинговые советы по каталогу. params: {}.\n'
+        '- note — совет без действия. params: {"text": str}.\n\n'
         'Ответь СТРОГО в формате JSON без markdown:\n'
-        '{"reasoning": "1-2 предложения о ситуации", '
-        '"actions": [{"type": "<тип>", "title": "<краткое название>", '
-        '"description": "<что и зачем>", "risk": "low|medium|high", "params": {...}}]}\n\n'
-        'Предлагай максимум 5 действий. Если действий нет — верни actions: [] и поясни в reasoning. '
-        'Никогда не придумывай id — бери только из контекста. Не предлагай delete_listing без явной причины.'
+        '{"reasoning": "1-2 предложения", "actions": [{"type": str, "title": str, '
+        '"description": str, "risk": "low|medium|high", "params": {...}}]}\n\n'
+        'Предлагай максимум 7 действий. Никогда не придумывай id. '
+        'Не предлагай delete_listing без явной причины. Все destructive-операции — risk: high.'
+    ),
+    'security': (
+        'Ты — специалист по информационной безопасности. Анализируй данные системы (объявления, лиды, '
+        'пользователи) на предмет: XSS-инъекций в текстовых полях, подозрительных паттернов, '
+        'нестандартных символов, потенциальных угроз. '
+        'Составь отчёт в виде: УГРОЗЫ: (список с пояснением) и РЕКОМЕНДАЦИИ: (список мер). '
+        'Будь конкретен, без markdown, на русском.'
+    ),
+    'marketing': (
+        'Ты — маркетолог агентства коммерческой недвижимости. На основе данных каталога (объекты, лиды, '
+        'просмотры) дай конкретные рекомендации по: улучшению конверсии, работе с целевой аудиторией, '
+        'ценообразованию, позиционированию объектов. '
+        'Формат: 3-5 конкретных совета с ожидаемым эффектом. Без markdown.'
+    ),
+    'analytics_full': (
+        'Ты — аналитик данных. Проведи полный анализ предоставленных данных системы: '
+        'динамика объектов (добавление/архивирование), конверсия лидов, популярные категории, '
+        'ценовые диапазоны, активность. '
+        'Дай структурированный отчёт: КЛЮЧЕВЫЕ МЕТРИКИ, ТРЕНДЫ, ПРОБЛЕМНЫЕ ЗОНЫ, РЕКОМЕНДАЦИИ. '
+        'Без markdown, числа в рублях с разделителем тысяч.'
+    ),
+    'modernize': (
+        'Ты — UX/CRO специалист сайта коммерческой недвижимости. Проанализируй контент каталога '
+        '(описания, заголовки, теги, SEO) и выдай конкретный план улучшений для повышения конверсии, '
+        'улучшения пользовательского опыта и продвижения в поиске. '
+        '3-7 конкретных пунктов с приоритетами (срочно/важно/желательно). Без markdown.'
+    ),
+    'db_check': (
+        'Ты — DBA (администратор базы данных). Проверь предоставленные данные на: '
+        'дублированные записи, пустые обязательные поля, нотации ошибки (некорректные цены, '
+        'нулевые площади, пустые описания), устаревшие статусы. '
+        'Список проблем с id записей и рекомендацией исправления. Без markdown.'
     ),
 }
 
@@ -200,6 +253,115 @@ def _allowed_fields(fields: dict) -> dict:
     return out
 
 
+def _new_system_prompts():
+    return {'security', 'marketing', 'analytics_full', 'modernize', 'db_check'}
+
+
+def _load_ai_memory(cur) -> dict:
+    """Загружает память Алисы из БД."""
+    try:
+        cur.execute(f"SELECT key, value FROM {SCHEMA}.ai_memory")
+        rows = cur.fetchall()
+        return {r['key']: r['value'] for r in rows}
+    except Exception:
+        return {}
+
+
+def _increment_interaction(cur, conn):
+    """Увеличивает счётчик взаимодействий."""
+    try:
+        cur.execute(
+            f"UPDATE {SCHEMA}.ai_memory SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT), "
+            f"updated_at = NOW() WHERE key = 'interaction_count'"
+        )
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+
+def _save_learned_fact(cur, conn, fact: str):
+    """Сохраняет новый факт в память Мелании (до 20 фактов, FIFO)."""
+    try:
+        cur.execute(f"SELECT value FROM {SCHEMA}.ai_memory WHERE key = 'learned_facts'")
+        row = cur.fetchone()
+        facts = json.loads(row['value']) if row else []
+        if not isinstance(facts, list):
+            facts = []
+        fact = fact.strip()[:200]
+        if fact and fact not in facts:
+            facts.append(fact)
+            if len(facts) > 20:
+                facts = facts[-20:]
+        cur.execute(
+            f"UPDATE {SCHEMA}.ai_memory SET value = '{_safe(json.dumps(facts, ensure_ascii=False), 5000)}', "
+            f"updated_at = NOW() WHERE key = 'learned_facts'"
+        )
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+
+def _save_tech_decision(cur, conn, question: str, answer: str):
+    """Сохраняет принятое техническое решение в отдельную память (до 15 записей, FIFO)."""
+    try:
+        from datetime import datetime as _dt
+        cur.execute(f"SELECT value FROM {SCHEMA}.ai_memory WHERE key = 'tech_decisions'")
+        row = cur.fetchone()
+        decisions = json.loads(row['value']) if row else []
+        if not isinstance(decisions, list):
+            decisions = []
+        entry = {
+            'date': _dt.utcnow().strftime('%Y-%m-%d'),
+            'q': question.strip()[:150],
+            'a': answer.strip()[:300],
+        }
+        decisions.append(entry)
+        if len(decisions) > 15:
+            decisions = decisions[-15:]
+        cur.execute(
+            f"UPDATE {SCHEMA}.ai_memory SET value = '{_safe(json.dumps(decisions, ensure_ascii=False), 8000)}', "
+            f"updated_at = NOW() WHERE key = 'tech_decisions'"
+        )
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+
+def _build_memory_context(memory: dict) -> str:
+    """Формирует блок контекста с памятью Мелании для системного промпта."""
+    persona = memory.get('persona', '')
+    facts_raw = memory.get('learned_facts', '[]')
+    decisions_raw = memory.get('tech_decisions', '[]')
+    count = memory.get('interaction_count', '0')
+    try:
+        facts = json.loads(facts_raw)
+    except Exception:
+        facts = []
+    try:
+        decisions = json.loads(decisions_raw)
+    except Exception:
+        decisions = []
+    lines = [f'[ПАМЯТЬ МЕЛАНИИ] Я общалась {count} раз(а). {persona}']
+    if facts:
+        lines.append('Что я помню из прошлых разговоров:')
+        for f in facts[-10:]:
+            lines.append(f'- {f}')
+    if decisions:
+        lines.append('Принятые технические решения по администрированию сайта:')
+        for d in decisions[-8:]:
+            lines.append(f'- [{d.get("date","")}] Вопрос: {d.get("q","")} → Решение: {d.get("a","")[:150]}')
+    return '\n'.join(lines)
+
+
 def _exec_action(cur, user, act_type: str, params: dict) -> dict:
     """Выполняет одно действие, предложенное ИИ-агентом. Возвращает {ok, message} или {error}."""
     if user['role'] not in ('admin', 'editor', 'manager'):
@@ -276,42 +438,110 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         message = params.get('message') or ''
         if not lead_id or not message:
             return {'error': 'Нужны id лида и текст ответа'}
-        # Помечаем лид как в работе. Текст ответа пользователь увидит в чате и сможет скопировать.
         cur.execute(f"UPDATE {SCHEMA}.leads SET status = 'in_progress' WHERE id = {lead_id}")
         return {'ok': True, 'message': f'Лид #{lead_id} взят в работу. Текст ответа: {message[:120]}'}
+
+    if act_type == 'approve_lead':
+        lead_id = int(params.get('id') or 0)
+        if not lead_id:
+            return {'error': 'Не указан id лида'}
+        cur.execute(f"UPDATE {SCHEMA}.leads SET status = 'new' WHERE id = {lead_id} AND status = 'pending'")
+        return {'ok': True, 'message': f'Лид #{lead_id} одобрен'}
+
+    if act_type == 'seo_optimize':
+        listing_id = int(params.get('id') or 0)
+        seo_title = params.get('seo_title') or ''
+        seo_desc = params.get('seo_description') or ''
+        if not listing_id:
+            return {'error': 'Не указан id объекта'}
+        sets = []
+        if seo_title:
+            sets.append(f"seo_title = '{_sanitize_text(seo_title, 120)}'")
+        if seo_desc:
+            sets.append(f"seo_description = '{_sanitize_text(seo_desc, 300)}'")
+        if not sets:
+            return {'error': 'Нет SEO данных для обновления'}
+        cur.execute(f"UPDATE {SCHEMA}.listings SET {', '.join(sets)}, updated_at = NOW() WHERE id = {listing_id}")
+        return {'ok': True, 'message': f'SEO объекта #{listing_id} обновлено'}
+
+    if act_type == 'bulk_update_status':
+        ids = params.get('ids') or []
+        status = params.get('status') or ''
+        if not ids or not status:
+            return {'error': 'Нужны ids и status'}
+        if status not in ('active', 'archived', 'draft'):
+            return {'error': f'Недопустимый статус: {status}'}
+        if len(ids) > 50:
+            return {'error': 'Максимум 50 объектов за раз'}
+        id_list = ','.join(str(int(i)) for i in ids if str(i).isdigit())
+        if not id_list:
+            return {'error': 'Некорректные id'}
+        cur.execute(f"UPDATE {SCHEMA}.listings SET status = '{status}', updated_at = NOW() WHERE id IN ({id_list})")
+        return {'ok': True, 'message': f'{len(ids)} объектов переведены в статус "{status}"'}
+
+    if act_type == 'security_check':
+        return {'ok': True, 'message': 'Проверка безопасности запущена — результаты в ответе агента'}
+
+    if act_type == 'analytics_report':
+        return {'ok': True, 'message': 'Аналитический отчёт сформирован — см. ответ агента'}
+
+    if act_type == 'marketing_tips':
+        return {'ok': True, 'message': 'Маркетинговые рекомендации подготовлены — см. ответ агента'}
 
     return {'error': f'Неизвестное действие: {act_type}'}
 
 
 def _collect_agent_context(cur) -> dict:
-    """Собирает контекст для агента: последние объекты, лиды, статистика."""
+    """Собирает расширенный контекст для агента: объекты, лиды, аналитика, безопасность."""
     ctx = {}
     try:
         cur.execute(
             f"SELECT id, title, category, deal, price, area, status, "
             f"COALESCE(LENGTH(description), 0) AS desc_len, "
-            f"EXTRACT(DAY FROM NOW() - created_at)::int AS age_days "
-            f"FROM {SCHEMA}.listings ORDER BY id DESC LIMIT 30"
+            f"COALESCE(seo_title, '') AS seo_title, "
+            f"COALESCE(seo_description, '') AS seo_desc, "
+            f"EXTRACT(DAY FROM NOW() - created_at)::int AS age_days, "
+            f"views_site "
+            f"FROM {SCHEMA}.listings WHERE status != 'archived' ORDER BY id DESC LIMIT 50"
         )
         ctx['listings'] = [dict(r) for r in cur.fetchall()]
     except Exception:
         ctx['listings'] = []
+
     try:
         cur.execute(
-            f"SELECT id, name, phone, email, status, "
+            f"SELECT id, name, phone, status, source, "
+            f"COALESCE(message, '') AS message, "
             f"EXTRACT(DAY FROM NOW() - created_at)::int AS age_days "
-            f"FROM {SCHEMA}.leads ORDER BY id DESC LIMIT 20"
+            f"FROM {SCHEMA}.leads ORDER BY id DESC LIMIT 30"
         )
         ctx['leads'] = [dict(r) for r in cur.fetchall()]
     except Exception:
         ctx['leads'] = []
+
     try:
+        # Статистика
         cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.listings WHERE status = 'active'")
         ctx['active_listings'] = cur.fetchone()['c']
         cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.leads WHERE status = 'new'")
         ctx['new_leads'] = cur.fetchone()['c']
+        cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.leads WHERE status = 'pending'")
+        ctx['pending_leads'] = cur.fetchone()['c']
+        cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.listings WHERE status = 'active' AND COALESCE(LENGTH(description), 0) < 50")
+        ctx['listings_no_desc'] = cur.fetchone()['c']
+        cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.listings WHERE status = 'active' AND (seo_title IS NULL OR seo_title = '')")
+        ctx['listings_no_seo'] = cur.fetchone()['c']
+        cur.execute(f"SELECT COALESCE(SUM(views_site), 0) AS c FROM {SCHEMA}.listings WHERE status = 'active'")
+        ctx['total_views'] = int(cur.fetchone()['c'] or 0)
+        # Топ просматриваемых
+        cur.execute(f"SELECT id, title, views_site FROM {SCHEMA}.listings ORDER BY views_site DESC LIMIT 5")
+        ctx['top_listings'] = [dict(r) for r in cur.fetchall()]
+        # Категории
+        cur.execute(f"SELECT category, COUNT(*) as cnt FROM {SCHEMA}.listings WHERE status='active' GROUP BY category ORDER BY cnt DESC LIMIT 8")
+        ctx['categories'] = [dict(r) for r in cur.fetchall()]
     except Exception:
         pass
+
     return ctx
 
 
@@ -377,6 +607,25 @@ def handler(event, context):
                     'tokens': ping_result.get('tokens', 0),
                 })
 
+            # Получение памяти Мелании (для отображения в интерфейсе)
+            if action == 'get_memory':
+                mem = _load_ai_memory(cur)
+                try:
+                    facts = json.loads(mem.get('learned_facts', '[]'))
+                except Exception:
+                    facts = []
+                try:
+                    decisions = json.loads(mem.get('tech_decisions', '[]'))
+                except Exception:
+                    decisions = []
+                return _ok({
+                    'persona': mem.get('persona', ''),
+                    'interaction_count': mem.get('interaction_count', '0'),
+                    'learned_facts': facts,
+                    'tech_decisions': decisions,
+                    'mood': mem.get('mood', 'хорошее'),
+                })
+
             # Выполнение действий, предложенных агентом, после подтверждения админом
             if action == 'execute':
                 actions_to_run = body.get('actions') or []
@@ -401,11 +650,12 @@ def handler(event, context):
 
             if action not in SYSTEM_PROMPTS:
                 return _err(400, 'Неизвестное действие ИИ')
-            if not user_text and not ctx_data and action != 'agent':
+            AUTO_CONTEXT_ACTIONS = {'agent', 'analytics_full', 'security', 'marketing', 'modernize', 'db_check'}
+            if not user_text and not ctx_data and action not in AUTO_CONTEXT_ACTIONS:
                 return _err(400, 'Пустой запрос')
 
-            # Для агента собираем контекст автоматически
-            if action == 'agent':
+            # Для агента и аналитических режимов — собираем расширенный контекст БД
+            if action in ('agent', 'analytics_full', 'security', 'marketing', 'modernize', 'db_check'):
                 agent_ctx = _collect_agent_context(cur)
                 if ctx_data:
                     agent_ctx['extra'] = ctx_data
@@ -438,6 +688,15 @@ def handler(event, context):
                 ctx_data = {'listings': compact}
 
             sys_prompt = SYSTEM_PROMPTS[action]
+
+            # Для admin-режима: загружаем память Алисы и добавляем в промпт
+            memory = {}
+            if action in ('admin', 'admin_ops'):
+                memory = _load_ai_memory(cur)
+                memory_ctx = _build_memory_context(memory)
+                sys_prompt = sys_prompt + '\n\n' + memory_ctx
+                _increment_interaction(cur, conn)
+
             full_prompt = user_text
             if ctx_data:
                 full_prompt += '\n\nДанные:\n' + json.dumps(ctx_data, ensure_ascii=False, default=str)[:6000]
@@ -500,6 +759,23 @@ def handler(event, context):
                 f"VALUES ({user['id']}, '{_safe(action, 50)}', '{log_prompt}', '{log_resp}', {int(result.get('tokens', 0))})"
             )
             conn.commit()
+
+            # Самообучение для admin: запоминаем важные факты из запроса
+            if action == 'admin' and user_text:
+                keywords = ['зовут', 'называй', 'запомни', 'всегда', 'никогда', 'предпочит', 'любим', 'важно']
+                if any(kw in user_text.lower() for kw in keywords):
+                    _save_learned_fact(cur, conn, user_text[:200])
+
+            # Самообучение для admin_ops: сохраняем технические решения
+            # Записываем каждый завершённый диалог по администрированию (вопрос + краткий ответ ИИ)
+            if action == 'admin_ops' and user_text and result.get('text'):
+                ai_answer = result['text']
+                # Сохраняем как факт (короткий)
+                fact_keywords = ['зовут', 'называй', 'запомни', 'разрешаю', 'подключи', 'настрой']
+                if any(kw in user_text.lower() for kw in fact_keywords):
+                    _save_learned_fact(cur, conn, user_text[:200])
+                # Всегда сохраняем техническое решение в отдельную память
+                _save_tech_decision(cur, conn, user_text, ai_answer)
 
             return _ok({'text': result['text'], 'tokens': result.get('tokens', 0)})
     finally:
