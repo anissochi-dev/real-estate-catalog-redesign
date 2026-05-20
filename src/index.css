@@ -81,6 +81,20 @@ img {
   user-drag: none;
 }
 
+/* Дополнительный слой защиты: псевдоэлемент поверх изображений на публичных страницах */
+.photo-protected {
+  position: relative;
+  display: inline-block;
+}
+.photo-protected::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  pointer-events: none;
+  z-index: 1;
+}
+
 /* Защита от скриншотов через CSS print (не абсолютная, но создаёт барьер) */
 @media print {
   body {

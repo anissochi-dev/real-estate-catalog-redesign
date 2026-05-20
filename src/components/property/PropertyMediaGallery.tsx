@@ -103,7 +103,8 @@ export default function PropertyMediaGallery({
           )}
           <img src={mainImg} alt={item.title}
             className="max-h-[90vh] max-w-[90vw] object-contain rounded-xl"
-            onClick={e => e.stopPropagation()} />
+            onClick={e => e.stopPropagation()}
+            onContextMenu={e => e.preventDefault()} />
           <div className="absolute bottom-4 text-white/50 text-sm">{activeImg + 1} / {imgs.length}</div>
         </div>
       )}
@@ -114,8 +115,11 @@ export default function PropertyMediaGallery({
           {isVideoActive ? (
             <VideoEmbed url={item.videoUrl!} />
           ) : mainImg !== null && mainImg !== undefined ? (
-            <div className="cursor-zoom-in group w-full h-full" onClick={() => setLightbox(true)}>
-              <img src={mainImg} alt={item.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+            <div className="cursor-zoom-in group w-full h-full photo-protected" onClick={() => setLightbox(true)}>
+              <img src={mainImg} alt={item.title}
+                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                onContextMenu={e => e.preventDefault()}
+                draggable={false} />
               <div className="absolute bottom-3 right-3 bg-black/50 text-white rounded-lg px-2 py-1 text-xs flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <Icon name="ZoomIn" size={12} /> Увеличить
               </div>
@@ -155,7 +159,7 @@ export default function PropertyMediaGallery({
           <div className="flex gap-2 overflow-x-auto pb-1">
             <button onClick={() => setActiveImg(0)}
               className={`w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all ${activeImg === 0 ? 'border-brand-blue' : 'border-transparent opacity-70 hover:opacity-100'}`}>
-              <img src={rawImgs[0]} alt="" className="w-full h-full object-cover" />
+              <img src={rawImgs[0]} alt="" className="w-full h-full object-cover" onContextMenu={e => e.preventDefault()} />
             </button>
             {hasVideo && (
               <button onClick={() => setActiveImg(videoIndex)}
@@ -169,7 +173,7 @@ export default function PropertyMediaGallery({
               return (
                 <button key={u + i} onClick={() => setActiveImg(mediaIdx)}
                   className={`w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all ${mediaIdx === activeImg ? 'border-brand-blue' : 'border-transparent opacity-70 hover:opacity-100'}`}>
-                  <img src={u} alt="" className="w-full h-full object-cover" />
+                  <img src={u} alt="" className="w-full h-full object-cover" onContextMenu={e => e.preventDefault()} />
                 </button>
               );
             })}

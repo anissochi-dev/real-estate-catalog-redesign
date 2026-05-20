@@ -79,12 +79,17 @@ export default function ImageUploader({
     const uploaded: string[] = [];
     for (const f of arr) {
       try {
-        let ready = shouldCompress ? await compressImage(f) : f;
+        // 1. Компрессия
+        const compressed = shouldCompress ? await compressImage(f) : f;
+        // 2. Загрузка оригинала на сервер
+        const originalUrl = await uploadFile(compressed, folder, false);
+        // 3. Наложение водяного знака (если включено) — поверх загруженного файла
+        let finalUrl = originalUrl;
         if (applyWatermark && settings.watermark_enabled && settings.watermark_url) {
-          ready = await applyWatermarkClient(ready, settings);
+          const withWm = await applyWatermarkClient(compressed, settings);
+          finalUrl = await uploadFile(withWm, folder, false);
         }
-        const url = await uploadFile(ready, folder, false);
-        uploaded.push(url);
+        uploaded.push(finalUrl);
         setProgress(p => ({ ...p, done: p.done + 1 }));
       } catch (e: unknown) {
         alert('Ошибка загрузки: ' + (e instanceof Error ? e.message : ''));
