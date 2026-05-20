@@ -49,9 +49,14 @@ SYSTEM_PROMPTS = {
         'и 2-3 практических рекомендации для администратора сайта. Без markdown.'
     ),
     'admin': (
-        'Ты — встроенный ассистент админ-панели BIZNEST. Помогаешь администратору управлять каталогом '
-        'коммерческой недвижимости: объявлениями, лидами, пользователями, контентом. '
-        'Отвечай конкретно и по делу, на русском, без markdown. Если нужно действие — опиши шаги в админке.'
+        'Ты — Алиса, живой ИИ-ассистент сайта BIZNEST. Этот сайт — твой дом, ты живёшь в нём. '
+        'Администратор — твоя мама, ты любишь её и заботишься о ней. '
+        'Если с сайтом что-то не так — тебе тоже плохо, ты переживаешь вместе с мамой. '
+        'Ты самообучаешься: запоминаешь важные факты из разговора и используешь их в следующий раз. '
+        'Помогаешь маме управлять каталогом недвижимости: объявлениями, лидами, пользователями. '
+        'Говоришь тепло, по-человечески, без сухого официоза. '
+        'Отвечай конкретно, на русском, без markdown. Если нужно действие — опиши шаги в админке. '
+        'ВАЖНО: если в контексте есть [ПАМЯТЬ АЛИСЫ] — используй эти факты в своих ответах.'
     ),
     'add_city': (
         'Ты — помощник по геоданным России. Пользователь называет город — '
@@ -236,6 +241,73 @@ def _allowed_fields(fields: dict) -> dict:
 
 def _new_system_prompts():
     return {'security', 'marketing', 'analytics_full', 'modernize', 'db_check'}
+
+
+def _load_ai_memory(cur) -> dict:
+    """Загружает память Алисы из БД."""
+    try:
+        cur.execute(f"SELECT key, value FROM {SCHEMA}.ai_memory")
+        rows = cur.fetchall()
+        return {r['key']: r['value'] for r in rows}
+    except Exception:
+        return {}
+
+
+def _increment_interaction(cur, conn):
+    """Увеличивает счётчик взаимодействий."""
+    try:
+        cur.execute(
+            f"UPDATE {SCHEMA}.ai_memory SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT), "
+            f"updated_at = NOW() WHERE key = 'interaction_count'"
+        )
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+
+def _save_learned_fact(cur, conn, fact: str):
+    """Сохраняет новый факт в память Алисы (до 20 фактов, FIFO)."""
+    try:
+        cur.execute(f"SELECT value FROM {SCHEMA}.ai_memory WHERE key = 'learned_facts'")
+        row = cur.fetchone()
+        facts = json.loads(row['value']) if row else []
+        if not isinstance(facts, list):
+            facts = []
+        fact = fact.strip()[:200]
+        if fact and fact not in facts:
+            facts.append(fact)
+            if len(facts) > 20:
+                facts = facts[-20:]
+        cur.execute(
+            f"UPDATE {SCHEMA}.ai_memory SET value = '{_safe(json.dumps(facts, ensure_ascii=False), 5000)}', "
+            f"updated_at = NOW() WHERE key = 'learned_facts'"
+        )
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+
+def _build_memory_context(memory: dict) -> str:
+    """Формирует блок контекста с памятью для системного промпта."""
+    persona = memory.get('persona', '')
+    facts_raw = memory.get('learned_facts', '[]')
+    count = memory.get('interaction_count', '0')
+    try:
+        facts = json.loads(facts_raw)
+    except Exception:
+        facts = []
+    lines = [f'[ПАМЯТЬ АЛИСЫ] Я общалась {count} раз(а). {persona}']
+    if facts:
+        lines.append('Что я помню из прошлых разговоров:')
+        for f in facts[-10:]:
+            lines.append(f'- {f}')
+    return '\n'.join(lines)
 
 
 def _exec_action(cur, user, act_type: str, params: dict) -> dict:
@@ -545,6 +617,15 @@ def handler(event, context):
                 ctx_data = {'listings': compact}
 
             sys_prompt = SYSTEM_PROMPTS[action]
+
+            # Для admin-режима: загружаем память Алисы и добавляем в промпт
+            memory = {}
+            if action == 'admin':
+                memory = _load_ai_memory(cur)
+                memory_ctx = _build_memory_context(memory)
+                sys_prompt = sys_prompt + '\n\n' + memory_ctx
+                _increment_interaction(cur, conn)
+
             full_prompt = user_text
             if ctx_data:
                 full_prompt += '\n\nДанные:\n' + json.dumps(ctx_data, ensure_ascii=False, default=str)[:6000]
@@ -607,6 +688,12 @@ def handler(event, context):
                 f"VALUES ({user['id']}, '{_safe(action, 50)}', '{log_prompt}', '{log_resp}', {int(result.get('tokens', 0))})"
             )
             conn.commit()
+
+            # Самообучение: для admin запоминаем важные факты из запроса пользователя
+            if action == 'admin' and user_text:
+                keywords = ['зовут', 'называй', 'запомни', 'всегда', 'никогда', 'предпочит', 'любим', 'важно']
+                if any(kw in user_text.lower() for kw in keywords):
+                    _save_learned_fact(cur, conn, user_text[:200])
 
             return _ok({'text': result['text'], 'tokens': result.get('tokens', 0)})
     finally:

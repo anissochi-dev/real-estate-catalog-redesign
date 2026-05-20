@@ -12,8 +12,6 @@ import CrmGamification from './admin/crm/CrmGamification';
 import CrmChecks from './admin/crm/CrmChecks';
 import CrmPayments from './admin/crm/CrmPayments';
 import PhoneBook from './admin/PhoneBook';
-import RolesAdmin from './admin/RolesAdmin';
-import SeoAdmin from './admin/SeoAdmin';
 
 interface Props {
   onExit: () => void;
@@ -36,8 +34,6 @@ export default function AdminPage({ onExit }: Props) {
       {section === 'crm-checks' && <CrmChecks />}
       {section === 'crm-payments' && <CrmPayments />}
       {section === 'phones' && <PhoneBook />}
-      {section === 'roles' && <RolesAdmin />}
-      {section === 'seo' && <SeoAdmin />}
     </AdminLayout>
   );
 }

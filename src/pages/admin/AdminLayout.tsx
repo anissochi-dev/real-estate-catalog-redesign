@@ -10,7 +10,7 @@ const IDLE_WARNING_MS = 2 * 60 * 1000;
 
 export type AdminSection = 'dashboard' | 'listings' | 'leads' | 'users' | 'pages' | 'settings' | 'ai-logs'
   | 'crm-owners' | 'crm-kanban' | 'crm-gamification' | 'crm-checks' | 'crm-payments'
-  | 'phones' | 'roles' | 'seo';
+  | 'phones';
 
 interface Props {
   section: AdminSection;
@@ -26,11 +26,9 @@ const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; gro
   { id: 'listings', label: 'Объекты', icon: 'Building2', roles: ['admin', 'editor', 'manager'] },
   { id: 'leads', label: 'Лиды', icon: 'Inbox', roles: ['admin', 'editor', 'manager'] },
   { id: 'users', label: 'Пользователи', icon: 'Users', roles: ['admin'] },
-  { id: 'roles', label: 'Роли и доступы', icon: 'ShieldHalf', roles: ['admin'] },
   { id: 'pages', label: 'Страницы', icon: 'FileText', roles: ['admin', 'editor'] },
   { id: 'settings', label: 'Настройки', icon: 'Settings', roles: ['admin', 'editor'] },
   { id: 'phones', label: 'Телефонная база', icon: 'Phone', roles: ['admin', 'editor', 'manager'] },
-  { id: 'seo', label: 'SEO-оптимизация', icon: 'TrendingUp', roles: ['admin', 'editor'] },
   { id: 'crm-kanban', label: 'Воронка сделок', icon: 'KanbanSquare', roles: CRM_ROLES, group: 'crm' },
   { id: 'crm-gamification', label: 'Рейтинг команды', icon: 'Trophy', roles: CRM_ROLES, group: 'crm' },
   { id: 'crm-checks', label: 'Проверки', icon: 'ShieldCheck', roles: CRM_ROLES, group: 'crm' },

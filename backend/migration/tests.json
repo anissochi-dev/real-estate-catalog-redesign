@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Без авторизации",
+      "method": "GET",
+      "path": "/?action=stats",
+      "expectedStatus": 401
+    }
+  ]
+}
