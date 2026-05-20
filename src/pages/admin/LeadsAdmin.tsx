@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { adminApi, aiApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import PhonePickerInput from '@/components/admin/PhonePickerInput';
+import CharCount from '@/components/ui/CharCount';
 
 interface Lead {
   id: number;
@@ -334,8 +335,8 @@ export default function LeadsAdmin() {
                 value={editing.company || ''} onChange={e => setEditing({ ...editing, company: e.target.value })} />
               <input type="number" className="w-full px-3 py-2 border rounded-lg" placeholder="Бюджет, ₽"
                 value={editing.budget ?? ''} onChange={e => setEditing({ ...editing, budget: e.target.value === '' ? null : +e.target.value })} />
-              <textarea className="w-full px-3 py-2 border rounded-lg" rows={3} placeholder="Текст запроса"
-                value={editing.message || ''} onChange={e => setEditing({ ...editing, message: e.target.value })} />
+              <CharCount as="textarea" rows={3} max={1000} warnAt={800} placeholder="Текст запроса"
+                value={editing.message || ''} onChange={e => setEditing({ ...editing, message: (e.target as HTMLTextAreaElement).value })} />
 
               <div>
                 <label className="text-xs text-muted-foreground">Привязка к объекту (необязательно)</label>

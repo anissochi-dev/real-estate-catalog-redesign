@@ -3,6 +3,7 @@ import Icon from '@/components/ui/icon';
 import PropertyMapInfrastructure from '@/components/PropertyMapInfrastructure';
 import PropertyCalculators from '@/components/calculators/PropertyCalculators';
 import SimilarListings from '@/components/SimilarListings';
+import CharCount from '@/components/ui/CharCount';
 import RecentlyViewed from '@/components/RecentlyViewed';
 import {
   CONDITION_LABELS, FINISHING_LABELS, PARKING_LABELS,
@@ -150,9 +151,11 @@ export default function PropertyMainContent({
             <input required placeholder="Телефон" value={form.phone}
               onChange={e => setForm({ ...form, phone: e.target.value })}
               className="w-full px-3 py-2 border rounded-lg text-sm" />
-            <textarea placeholder="Комментарий (необязательно)" rows={2}
-              value={form.message} onChange={e => setForm({ ...form, message: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg text-sm sm:col-span-2" />
+            <div className="sm:col-span-2">
+              <CharCount as="textarea" placeholder="Комментарий (необязательно)" rows={2} max={500} warnAt={400}
+                value={form.message} onChange={e => setForm({ ...form, message: (e.target as HTMLTextAreaElement).value })}
+                className="text-sm" />
+            </div>
             <button type="submit" disabled={sending}
               className="sm:col-span-2 w-full btn-blue text-white py-2.5 rounded-xl font-semibold disabled:opacity-50 text-sm">
               {sending ? 'Отправка...' : 'Заказать просмотр'}

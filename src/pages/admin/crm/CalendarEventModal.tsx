@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import Icon from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import CharCount from '@/components/ui/CharCount';
 import { CRM_URL, adminApi } from '@/lib/adminApi';
 import {
   CrmEvent, EventType, EventFormState, LinkField, SearchItem,
@@ -259,9 +260,10 @@ export default function CalendarEventModal({
         {/* Описание */}
         <div>
           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Описание</label>
-          <textarea rows={2} value={form.description}
-            onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-            className="w-full px-3 py-2 border rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+          <CharCount as="textarea" rows={2} max={500} warnAt={400}
+            value={form.description}
+            onChange={e => setForm(f => ({ ...f, description: (e.target as HTMLTextAreaElement).value }))}
+            className="text-sm"
             placeholder="Дополнительные детали..." />
         </div>
 
