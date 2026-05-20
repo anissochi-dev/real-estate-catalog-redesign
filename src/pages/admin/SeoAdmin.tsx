@@ -399,23 +399,20 @@ export default function SeoAdmin() {
                   : <><Icon name="Save" size={14} /> {scheduleChanged ? 'Сохранить расписание' : 'Сохранено'}</>}
               </button>
 
-              {/* Инструкция по внешнему cron */}
-              <div className="bg-muted/40 rounded-xl p-4 space-y-2">
-                <div className="font-semibold text-sm flex items-center gap-2">
-                  <Icon name="Terminal" size={14} /> Внешний планировщик (cron)
+              {/* Как работает встроенный автозапуск */}
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-2">
+                <div className="font-semibold text-sm flex items-center gap-2 text-emerald-800">
+                  <Icon name="CheckCircle2" size={14} /> Автозапуск встроен в сайт — ничего не нужно настраивать
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Для надёжной работы по расписанию настрой вызов этого эндпоинта через внешний cron-сервис
-                  (например, cron-job.org — бесплатно):
+                <p className="text-xs text-emerald-700">
+                  При каждом открытии сайта посетителем браузер автоматически отправляет тихий ping-запрос на сервер.
+                  Сервер проверяет: включено ли расписание, наступил ли нужный час и прошло ли 23 часа с последнего запуска.
+                  Если всё совпало — запускает оптимизацию. Никаких сторонних сервисов.
                 </p>
-                <div className="bg-white rounded-lg px-3 py-2 text-xs font-mono text-foreground break-all border border-border">
-                  POST https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d<br />
-                  Header: X-Cron-Token: &lt;CRON_SECRET&gt;<br />
-                  Body: {'{'}  "action": "cron"  {'}'}
+                <div className="flex items-center gap-2 text-xs text-emerald-700">
+                  <Icon name="Activity" size={12} />
+                  Ping отправляется раз в час с каждого устройства. Чем больше посетителей — тем точнее расписание.
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Интервал: каждый час. Функция сама проверит — пора ли запускать по расписанию.
-                </p>
               </div>
             </div>
           )}

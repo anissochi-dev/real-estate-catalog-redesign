@@ -309,11 +309,30 @@ def handler(event: dict, context) -> dict:
     conn = psycopg2.connect(dsn)
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # Cron-режим: запускается внешним планировщиком
+            # Ping-режим: вызывается с сайта при каждом открытии страницы.
+            # Публичный — без авторизации. Сам проверяет расписание и запускает если пора.
+            # Защита от флуда: запуск не чаще раза в 23 часа (проверяется через last_run_at).
+            if action == 'ping':
+                cur.execute(f"SELECT * FROM {SCHEMA}.seo_schedule ORDER BY id ASC LIMIT 1")
+                schedule_row = cur.fetchone()
+                if not schedule_row:
+                    return _ok({'skipped': True, 'reason': 'no_schedule'})
+                schedule = dict(schedule_row)
+                if not _should_run_now(schedule):
+                    return _ok({'skipped': True, 'reason': 'not_time'})
+                api_key, folder_id = _load_keys(cur)
+                if not api_key or not folder_id:
+                    return _ok({'skipped': True, 'reason': 'no_gpt'})
+                limit_val = schedule.get('batch_limit', 20)
+                result = _run_batch(cur, conn, api_key, folder_id, limit_val, dry_run=False, triggered_by='schedule')
+                return _ok({**result, 'triggered': True})
+
+            # Cron-режим: запускается внешним планировщиком (с токеном) или вручную авторизованным
             if action == 'cron':
                 expected_cron_token = os.environ.get('CRON_SECRET', '')
-                if not expected_cron_token or cron_token != expected_cron_token:
-                    # Fallback: проверяем авторизацию пользователя
+                if expected_cron_token and cron_token == expected_cron_token:
+                    pass  # токен верный
+                else:
                     user = _get_user(cur, token)
                     if not user or user['role'] not in ('admin', 'editor'):
                         return _err(403, 'Нет доступа')
