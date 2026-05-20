@@ -26,7 +26,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
   const { settings } = useSettings();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const isStaff = user && ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'].includes(user.role);
-  const brandName = settings.company_name || 'BIZNEST';
+  const brandName = settings.company_name || 'Бизнес. Маркетинг. Недвижимость.';
   const logoUrl = settings.logo_url;
 
   const handleNav = (page: Page) => {

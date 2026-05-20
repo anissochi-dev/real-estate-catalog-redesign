@@ -7,7 +7,7 @@ export default function DeclinedPage() {
   const { settings } = useSettings();
   const phone = settings.company_phone;
   const email = settings.company_email;
-  const company = settings.company_name || 'BIZNEST';
+  const company = settings.company_name || 'Бизнес. Маркетинг. Недвижимость.';
 
   const handleRetry = () => {
     try {

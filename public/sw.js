@@ -1,5 +1,5 @@
-// Service Worker для push-уведомлений BIZNEST
-const CACHE_NAME = 'biznest-v1';
+// Service Worker для push-уведомлений
+const CACHE_NAME = 'bmn-v1';
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -16,10 +16,10 @@ self.addEventListener('push', (event) => {
   try {
     data = event.data.json();
   } catch {
-    data = { title: 'BIZNEST', body: event.data.text() };
+    data = { title: 'Бизнес. Маркетинг. Недвижимость.', body: event.data.text() };
   }
 
-  const title = data.title || 'BIZNEST';
+  const title = data.title || 'Бизнес. Маркетинг. Недвижимость.';
   const options = {
     body: data.body || '',
     icon: data.icon || '/favicon.ico',

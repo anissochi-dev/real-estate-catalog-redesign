@@ -112,9 +112,8 @@ export default function ListingEditor({
               />
             </div>
             <div className="sm:col-start-2">
-              <label className="text-xs text-muted-foreground flex items-center gap-1">
+              <label className="text-xs text-muted-foreground">
                 Дополнительный телефон
-                <span className="w-4 h-4 rounded-full bg-emerald-500 text-white text-[9px] flex items-center justify-center font-bold">+</span>
               </label>
               <PhonePickerInput
                 value={(editing as Record<string, unknown>).owner_phone2 as string || ''}

@@ -67,7 +67,7 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
   const { settings } = useSettings();
   const [modal, setModal] = useState<{ title: string; content: string } | null>(null);
 
-  const company = settings.company_name || 'BIZNEST';
+  const company = settings.company_name || 'Бизнес. Маркетинг. Недвижимость.';
   const phone = settings.company_phone;
   const email = settings.company_email;
   const city = settings.main_city || 'Краснодар';
