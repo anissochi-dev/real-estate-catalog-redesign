@@ -49,9 +49,11 @@ interface Props {
   contactId: number;
   onClose: () => void;
   onUpdate?: () => void;
+  onOpenListing?: (listingId: number) => void;
+  onOpenLead?: (leadId: number) => void;
 }
 
-export default function PhoneCardModal({ contactId, onClose, onUpdate }: Props) {
+export default function PhoneCardModal({ contactId, onClose, onUpdate, onOpenListing, onOpenLead }: Props) {
   const { user } = useAuth();
   const [contact, setContact] = useState<PhoneContact | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -309,6 +311,12 @@ export default function PhoneCardModal({ contactId, onClose, onUpdate }: Props) 
                             {LISTING_ROLE_LABELS[l.role] || l.role} · {l.status === 'active' ? 'Активен' : 'Архив'}
                           </div>
                         </div>
+                        {onOpenListing && (
+                          <button onClick={() => { onOpenListing(l.id); onClose(); }}
+                            className="text-brand-blue hover:opacity-70 p-1 shrink-0" title="Открыть объект">
+                            <Icon name="ExternalLink" size={14} />
+                          </button>
+                        )}
                         <button onClick={() => unlink('listing', l.id)}
                           className="text-red-500 hover:text-red-700 p-1 shrink-0" title="Отвязать">
                           <Icon name="Unlink" size={14} />
@@ -336,6 +344,12 @@ export default function PhoneCardModal({ contactId, onClose, onUpdate }: Props) 
                             {LEAD_STATUS_LABELS[l.status] || l.status} · {fmtDt(l.created_at)}
                           </div>
                         </div>
+                        {onOpenLead && (
+                          <button onClick={() => { onOpenLead(l.id); onClose(); }}
+                            className="text-brand-blue hover:opacity-70 p-1 shrink-0" title="Открыть лид">
+                            <Icon name="ExternalLink" size={14} />
+                          </button>
+                        )}
                         <button onClick={() => unlink('lead', l.id)}
                           className="text-red-500 hover:text-red-700 p-1 shrink-0" title="Отвязать">
                           <Icon name="Unlink" size={14} />

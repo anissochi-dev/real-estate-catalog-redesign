@@ -29,6 +29,7 @@ const CAT_LABELS: Record<string, string> = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
+  pending: 'На модерации',
   new: 'Новые',
   in_progress: 'В работе',
   done: 'Закрыты',

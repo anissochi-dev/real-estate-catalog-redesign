@@ -103,6 +103,7 @@ export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const [view, setViewState] = useState<AppView>(() => loadInitialView());
+  const [adminInitialSection, setAdminInitialSection] = useState<string | undefined>();
   const [consentGiven, setConsentGiven] = useState<boolean>(() => hasConsent());
 
   const setView = (v: AppView) => {
@@ -197,7 +198,7 @@ export default function App() {
     if (!ADMIN_ROLES.includes(user.role)) {
       return <LoginPage onSuccess={() => setView('admin')} onBack={() => setView('site')} />;
     }
-    return <AdminPage onExit={() => setView('site')} />;
+    return <AdminPage onExit={() => { setView('site'); setAdminInitialSection(undefined); }} initialSection={adminInitialSection as string | undefined} />;
   }
 
   if (loading) {
@@ -240,6 +241,7 @@ export default function App() {
         compareCount={compareList.length}
         onLogin={() => setView('login')}
         onAdmin={() => setView('admin')}
+        onAdminLeads={() => { setAdminInitialSection('leads'); setView('admin'); }}
       />
 
       <main>

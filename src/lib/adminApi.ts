@@ -163,6 +163,22 @@ export const adminApi = {
   deletePhone: (id: number) =>
     req(`${ADMIN_URL}?resource=phones&id=${id}`, { method: 'DELETE', body: '{}' }),
 
+  // listing documents
+  getListingDocuments: (listingId: number) => req(`${ADMIN_URL}?resource=listing_documents&listing_id=${listingId}`),
+  addListingDocument: (listingId: number, name: string, url: string) =>
+    req(`${ADMIN_URL}?resource=listing_documents&listing_id=${listingId}`, { method: 'POST', body: JSON.stringify({ name, url }) }),
+  renameListingDocument: (docId: number, name: string) =>
+    req(`${ADMIN_URL}?resource=listing_documents&id=${docId}`, { method: 'PUT', body: JSON.stringify({ name }) }),
+  deleteListingDocument: (docId: number) =>
+    req(`${ADMIN_URL}?resource=listing_documents&id=${docId}`, { method: 'DELETE', body: '{}' }),
+
+  // listing comments
+  getListingComments: (listingId: number) => req(`${ADMIN_URL}?resource=listing_comments&listing_id=${listingId}`),
+  addListingComment: (listingId: number, comment: string, isAi = false) =>
+    req(`${ADMIN_URL}?resource=listing_comments&listing_id=${listingId}`, { method: 'POST', body: JSON.stringify({ comment, is_ai: isAi }) }),
+  deleteListingComment: (commentId: number) =>
+    req(`${ADMIN_URL}?resource=listing_comments&id=${commentId}`, { method: 'DELETE', body: '{}' }),
+
   // role permissions
   getRolePermissions: () => req(`${ADMIN_URL}?resource=role_permissions`),
   updateRolePermissions: (permissions: Record<string, unknown>) =>

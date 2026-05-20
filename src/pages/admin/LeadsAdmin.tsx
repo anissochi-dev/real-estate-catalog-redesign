@@ -13,6 +13,7 @@ interface Lead {
   listing_id: number | null;
   status: string;
   source: string;
+  lead_type: string | null;
   created_at: string;
   budget: number | null;
   company: string | null;
@@ -20,6 +21,13 @@ interface Lead {
   show_on_main: boolean;
   object_url?: string | null;
 }
+
+const LEAD_TYPES: [string, string, string][] = [
+  ['view', 'Просмотр', 'bg-sky-100 text-sky-700'],
+  ['offer', 'Предложить', 'bg-violet-100 text-violet-700'],
+  ['callback', 'Перезвонить', 'bg-amber-100 text-amber-700'],
+  ['manual', 'Ручная', 'bg-muted text-muted-foreground'],
+];
 
 interface Comment { id: number; author_name: string; comment: string; created_at: string }
 interface Listing { id: number; title: string }
@@ -183,24 +191,35 @@ export default function LeadsAdmin() {
             {filtered.length === 0 && <div className="p-8 text-center text-muted-foreground text-sm">Нет лидов</div>}
             {filtered.map(l => {
               const st = statusOf(l.status);
+              const lt = LEAD_TYPES.find(x => x[0] === (l.lead_type || 'view'));
+              const fmtCreated = (s: string) => new Date(s).toLocaleDateString('ru', { day: '2-digit', month: '2-digit', year: '2-digit' });
               return (
                 <button key={l.id} onClick={() => openLead(l)}
-                  className={`w-full text-left p-4 border-b border-border border-l-4 hover:bg-muted/40 transition ${
+                  className={`w-full text-left px-4 py-3 border-b border-border border-l-4 hover:bg-muted/40 transition ${
                     st?.[3] || ''
                   } ${active?.id === l.id ? 'bg-brand-blue/5' : ''}`}>
                   <div className="flex justify-between items-start gap-2">
-                    <div className="font-semibold text-sm">{l.name}</div>
-                    <span className={`text-[10px] text-white px-1.5 py-0.5 rounded ${st?.[2] || 'bg-muted'}`}>
-                      {st?.[1] || l.status}
-                    </span>
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-1">{l.phone}</div>
-                  {l.is_network_tenant && (
-                    <div className="text-[10px] text-purple-700 bg-purple-50 inline-block px-1.5 py-0.5 rounded mt-1">
-                      Сетевой арендатор
+                    <div className="font-semibold text-sm truncate">{l.name}</div>
+                    <div className="flex gap-1 shrink-0">
+                      {lt && <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${lt[2]}`}>{lt[1]}</span>}
+                      <span className={`text-[10px] text-white px-1.5 py-0.5 rounded ${st?.[2] || 'bg-muted'}`}>{st?.[1] || l.status}</span>
                     </div>
-                  )}
-                  {l.message && <div className="text-xs mt-2 line-clamp-2">{l.message}</div>}
+                  </div>
+                  <div className="text-xs text-brand-blue font-mono mt-0.5">{l.phone}</div>
+                  {l.message && <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{l.message}</div>}
+                  <div className="flex items-center justify-between mt-1.5 gap-2">
+                    <div className="flex items-center gap-1.5">
+                      {l.object_url && (
+                        <span className="text-[10px] text-brand-blue flex items-center gap-0.5">
+                          <Icon name="Link" size={9} />{SOURCE_LABELS[l.source] || l.source || 'Источник'}
+                        </span>
+                      )}
+                      {l.is_network_tenant && (
+                        <span className="text-[10px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">Сетевой</span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">{fmtCreated(l.created_at)}</span>
+                  </div>
                 </button>
               );
             })}
@@ -281,16 +300,30 @@ export default function LeadsAdmin() {
                   </div>
                 )}
 
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {STATUSES.map(s => (
-                    <button key={s[0]} onClick={() => update({ status: s[0] })}
-                      className={`text-xs px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 transition ${
-                        active.status === s[0] ? `${s[2]} text-white` : 'bg-muted hover:bg-muted/70'
-                      }`}>
-                      <span className={`w-2 h-2 rounded-full ${active.status === s[0] ? 'bg-white' : s[2]}`} />
-                      {s[1]}
-                    </button>
-                  ))}
+                <div className="mt-4">
+                  <div className="text-xs text-muted-foreground mb-1.5">Тип заявки:</div>
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {LEAD_TYPES.map(t => (
+                      <button key={t[0]} onClick={() => update({ lead_type: t[0] })}
+                        className={`text-xs px-3 py-1.5 rounded-lg font-medium transition ${
+                          (active.lead_type || 'view') === t[0] ? t[2] + ' ring-1 ring-inset ring-current' : 'bg-muted hover:bg-muted/70'
+                        }`}>
+                        {t[1]}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="text-xs text-muted-foreground mb-1.5">Статус:</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {STATUSES.map(s => (
+                      <button key={s[0]} onClick={() => update({ status: s[0] })}
+                        className={`text-xs px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 transition ${
+                          active.status === s[0] ? `${s[2]} text-white` : 'bg-muted hover:bg-muted/70'
+                        }`}>
+                        <span className={`w-2 h-2 rounded-full ${active.status === s[0] ? 'bg-white' : s[2]}`} />
+                        {s[1]}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-4 text-sm">

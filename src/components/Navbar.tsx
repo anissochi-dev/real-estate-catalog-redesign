@@ -11,6 +11,7 @@ interface NavbarProps {
   compareCount: number;
   onLogin: () => void;
   onAdmin: () => void;
+  onAdminLeads?: () => void;
 }
 
 const navItems = [
@@ -21,7 +22,7 @@ const navItems = [
   { id: 'favorites' as Page, label: 'Избранное', icon: 'Heart' },
 ];
 
-export default function Navbar({ currentPage, setCurrentPage, favoritesCount, compareCount, onLogin, onAdmin }: NavbarProps) {
+export default function Navbar({ currentPage, setCurrentPage, favoritesCount, compareCount, onLogin, onAdmin, onAdminLeads }: NavbarProps) {
   const { user } = useAuth();
   const { settings } = useSettings();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -30,6 +31,11 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
   const logoUrl = settings.logo_url;
 
   const handleNav = (page: Page) => {
+    if (page === 'network-tenants' && isStaff && onAdminLeads) {
+      onAdminLeads();
+      setDrawerOpen(false);
+      return;
+    }
     setCurrentPage(page);
     setDrawerOpen(false);
   };

@@ -16,10 +16,11 @@ import NetworkTenantsAdmin from './admin/NetworkTenantsAdmin';
 
 interface Props {
   onExit: () => void;
+  initialSection?: string;
 }
 
-export default function AdminPage({ onExit }: Props) {
-  const [section, setSection] = useState<AdminSection>('dashboard');
+export default function AdminPage({ onExit, initialSection }: Props) {
+  const [section, setSection] = useState<AdminSection>((initialSection as AdminSection) || 'dashboard');
 
   return (
     <AdminLayout section={section} setSection={setSection} onExit={onExit}>

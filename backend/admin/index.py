@@ -178,6 +178,10 @@ def handler(event, context):
                 return _phones(cur, conn, method, rid, action, event, user)
             if resource == 'role_permissions':
                 return _role_permissions(cur, conn, method, event, user, permissions)
+            if resource == 'listing_documents':
+                return _listing_documents(cur, conn, method, rid, action, event, user)
+            if resource == 'listing_comments':
+                return _listing_comments(cur, conn, method, rid, event, user)
 
             return _err(400, 'Неизвестный ресурс')
     finally:
@@ -334,13 +338,14 @@ def _leads(cur, conn, method, rid, action, event, user):
             return _err(400, 'Имя и телефон обязательны')
         cur.execute(
             f"INSERT INTO {SCHEMA}.leads (name, phone, email, message, listing_id, status, source, "
-            f"is_network_tenant, budget, show_on_main, company) VALUES ("
+            f"is_network_tenant, budget, show_on_main, company, lead_type) VALUES ("
             f"'{name}', '{phone}', {_str_or_null(body.get('email'), 100)}, "
             f"{_str_or_null(body.get('message'), 2000)}, {_int_or_null(body.get('listing_id'))}, "
             f"{_str_or_null(body.get('status') or 'new', 20)}, "
             f"{_str_or_null(body.get('source') or 'admin', 50)}, "
             f"{_bool(body.get('is_network_tenant'))}, {_int_or_null(body.get('budget'))}, "
-            f"{_bool(body.get('show_on_main', True))}, {_str_or_null(body.get('company'), 200)}) RETURNING id"
+            f"{_bool(body.get('show_on_main', True))}, {_str_or_null(body.get('company'), 200)}, "
+            f"{_str_or_null(body.get('lead_type') or 'view', 20)}) RETURNING id"
         )
         conn.commit()
         return _ok({'id': cur.fetchone()['id'], 'success': True})
@@ -348,7 +353,7 @@ def _leads(cur, conn, method, rid, action, event, user):
     if method == 'PUT' and rid:
         fields = []
         for f, length in [('status', 20), ('email', 100), ('message', 2000), ('name', 100),
-                          ('phone', 30), ('company', 200), ('source', 50)]:
+                          ('phone', 30), ('company', 200), ('source', 50), ('lead_type', 20)]:
             if f in body:
                 fields.append(f"{f} = {_str_or_null(body[f], length)}")
         for f in ('assigned_to', 'listing_id', 'budget'):
@@ -1088,3 +1093,117 @@ def _ser(row):
         if row.get(k) is not None:
             row[k] = row[k].isoformat()
     return row
+
+
+def _listing_documents(cur, conn, method, rid, action, event, user):
+    ALLOWED = ('admin', 'director', 'broker', 'office_manager', 'manager')
+    if user['role'] not in ALLOWED:
+        return _err(403, 'Нет прав')
+    qs = event.get('queryStringParameters') or {}
+    listing_id = qs.get('listing_id') or (rid and str(rid))
+    if not listing_id:
+        return _err(400, 'Не указан listing_id')
+    lid = int(listing_id)
+
+    if method == 'GET':
+        cur.execute(
+            f"SELECT d.id, d.listing_id, d.name, d.url, d.created_at, u.name AS uploader_name "
+            f"FROM {SCHEMA}.listing_documents d "
+            f"LEFT JOIN {SCHEMA}.users u ON u.id = d.uploaded_by "
+            f"WHERE d.listing_id = {lid} ORDER BY d.created_at DESC"
+        )
+        docs = []
+        for r in cur.fetchall():
+            d = dict(r)
+            d['created_at'] = d['created_at'].isoformat() if d.get('created_at') else None
+            docs.append(d)
+        return _ok({'documents': docs})
+
+    body = json.loads(event.get('body') or '{}')
+
+    if method == 'POST':
+        name = _safe(body.get('name') or '', 255)
+        url = _safe(body.get('url') or '', 1000)
+        if not name or not url:
+            return _err(400, 'Имя и URL обязательны')
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.listing_documents (listing_id, uploaded_by, name, url) "
+            f"VALUES ({lid}, {user['id']}, '{name}', '{url}') RETURNING id"
+        )
+        new_id = cur.fetchone()['id']
+        conn.commit()
+        return _ok({'id': new_id, 'success': True})
+
+    if method == 'DELETE' and rid:
+        cur.execute(f"SELECT id, uploaded_by FROM {SCHEMA}.listing_documents WHERE id = {int(rid)}")
+        doc = cur.fetchone()
+        if not doc:
+            return _err(404, 'Документ не найден')
+        if user['role'] not in ('admin', 'director') and doc['uploaded_by'] != user['id']:
+            return _err(403, 'Нельзя удалить чужой документ')
+        cur.execute(f"UPDATE {SCHEMA}.listing_documents SET url = url WHERE id = {int(rid)}")
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.listing_documents (listing_id, uploaded_by, name, url) "
+            f"SELECT listing_id, uploaded_by, '[УДАЛЁН] ' || name, url FROM {SCHEMA}.listing_documents WHERE id = {int(rid)}"
+        )
+        cur.execute(f"DELETE FROM {SCHEMA}.listing_documents WHERE id = {int(rid)}")
+        conn.commit()
+        return _ok({'success': True})
+
+    if method == 'PUT' and rid:
+        name = _safe(body.get('name') or '', 255)
+        if name:
+            cur.execute(f"UPDATE {SCHEMA}.listing_documents SET name = '{name}' WHERE id = {int(rid)}")
+            conn.commit()
+        return _ok({'success': True})
+
+    return _err(400, 'Bad request')
+
+
+def _listing_comments(cur, conn, method, rid, event, user):
+    qs = event.get('queryStringParameters') or {}
+    listing_id = qs.get('listing_id') or (rid and str(rid))
+    if not listing_id:
+        return _err(400, 'Не указан listing_id')
+    lid = int(listing_id)
+
+    if method == 'GET':
+        cur.execute(
+            f"SELECT c.id, c.listing_id, c.user_id, c.user_name, c.comment, c.is_ai, c.created_at "
+            f"FROM {SCHEMA}.listing_comments c WHERE c.listing_id = {lid} ORDER BY c.created_at ASC"
+        )
+        comments = []
+        for r in cur.fetchall():
+            d = dict(r)
+            d['created_at'] = d['created_at'].isoformat() if d.get('created_at') else None
+            comments.append(d)
+        return _ok({'comments': comments})
+
+    body = json.loads(event.get('body') or '{}')
+
+    if method == 'POST':
+        comment = _safe(body.get('comment') or '', 3000)
+        if not comment:
+            return _err(400, 'Пустой комментарий')
+        is_ai = bool(body.get('is_ai', False))
+        uname = _safe(user['name'], 150)
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.listing_comments (listing_id, user_id, user_name, comment, is_ai) "
+            f"VALUES ({lid}, {user['id']}, '{uname}', '{comment}', {str(is_ai).upper()}) RETURNING id"
+        )
+        new_id = cur.fetchone()['id']
+        conn.commit()
+        return _ok({'id': new_id, 'success': True})
+
+    if method == 'DELETE' and rid:
+        cur.execute(f"SELECT user_id FROM {SCHEMA}.listing_comments WHERE id = {int(rid)}")
+        c = cur.fetchone()
+        if not c:
+            return _err(404, 'Не найдено')
+        if user['role'] not in ('admin', 'director') and c['user_id'] != user['id']:
+            return _err(403, 'Нельзя удалить чужой комментарий')
+        cur.execute(f"DELETE FROM {SCHEMA}.listing_comments WHERE id = {int(rid)}")
+        conn.commit()
+        return _ok({'success': True})
+
+    return _err(400, 'Bad request')
