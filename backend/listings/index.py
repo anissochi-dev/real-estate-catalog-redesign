@@ -215,6 +215,7 @@ def handler(event: dict, context) -> dict:
                 cur.execute(
                     "SELECT * FROM t_p71821556_real_estate_catalog_.listings WHERE id = "
                     + str(int(listing_id))
+                    + " AND (is_visible IS NULL OR is_visible = TRUE)"
                 )
                 row = cur.fetchone()
                 if not row:
@@ -226,7 +227,7 @@ def handler(event: dict, context) -> dict:
                 item = _serialize(dict(row))
                 return _ok({'listing': item})
 
-            where = ["status = 'active'"]
+            where = ["status = 'active'", "(is_visible IS NULL OR is_visible = TRUE)"]
             category = params.get('category')
             deal = params.get('deal')
             search = params.get('search')

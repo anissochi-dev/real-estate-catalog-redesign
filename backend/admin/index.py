@@ -182,6 +182,8 @@ def handler(event, context):
                 return _listing_documents(cur, conn, method, rid, action, event, user)
             if resource == 'listing_comments':
                 return _listing_comments(cur, conn, method, rid, event, user)
+            if resource == 'ad_platform_keys':
+                return _ad_platform_keys(cur, conn, method, rid, event, user)
 
             return _err(400, 'Неизвестный ресурс')
     finally:
@@ -214,7 +216,7 @@ def _listings(cur, conn, method, rid, event, user):
     if method == 'POST':
         sql = (
             f"INSERT INTO {SCHEMA}.listings "
-            f"(title, description, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id) VALUES ("
+            f"(title, description, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, is_visible, rooms, broker_commission) VALUES ("
             f"{_str_or_null(body.get('title'), 255)}, {_str_or_null(body.get('description'), 5000)}, "
             f"{_str_or_null(body.get('category'), 50)}, {_str_or_null(body.get('deal'), 20)}, "
             f"{_int_or_null(body.get('price'))}, {_int_or_null(body.get('price_per_m2'))}, "
@@ -241,7 +243,8 @@ def _listings(cur, conn, method, rid, event, user):
             f"{_str_or_null(body.get('finishing'), 100)}, "
             f"{_num_or_null(body.get('ceiling_height'))}, {_num_or_null(body.get('electricity_kw'))}, "
             f"{_str_or_null(body.get('utilities'), 500)}, {_str_or_null(body.get('road_line'), 50)}, "
-            f"{user['id']}) RETURNING id"
+            f"{user['id']}, {_bool(body.get('is_visible', True))}, {_int_or_null(body.get('rooms'))}, "
+            f"{_str_or_null(body.get('broker_commission'), 100)}) RETURNING id"
         )
         cur.execute(sql)
         new_id = cur.fetchone()['id']
@@ -272,9 +275,13 @@ def _listings(cur, conn, method, rid, event, user):
             if f in body:
                 v = body.get(f)
                 fields.append(f"{f} = " + ('NULL' if v is None or v == '' else str(float(v))))
-        for f in ('is_hot', 'is_new', 'is_exclusive', 'is_urgent'):
+        for f in ('is_hot', 'is_new', 'is_exclusive', 'is_urgent', 'is_visible'):
             if f in body:
                 fields.append(f"{f} = {_bool(body.get(f))}")
+        if 'rooms' in body:
+            fields.append(f"rooms = {_int_or_null(body.get('rooms'))}")
+        if 'broker_commission' in body:
+            fields.append(f"broker_commission = {_str_or_null(body.get('broker_commission'), 100)}")
         if 'broker_id' in body:
             v = body.get('broker_id')
             fields.append(f"broker_id = " + ('NULL' if v is None else str(int(v))))
@@ -1203,6 +1210,44 @@ def _listing_comments(cur, conn, method, rid, event, user):
         if user['role'] not in ('admin', 'director') and c['user_id'] != user['id']:
             return _err(403, 'Нельзя удалить чужой комментарий')
         cur.execute(f"DELETE FROM {SCHEMA}.listing_comments WHERE id = {int(rid)}")
+        conn.commit()
+        return _ok({'success': True})
+
+    return _err(400, 'Bad request')
+
+
+def _ad_platform_keys(cur, conn, method, rid, event, user):
+    if user['role'] not in ('admin', 'director'):
+        return _err(403, 'Нет прав')
+
+    if method == 'GET':
+        cur.execute(
+            f"SELECT id, platform, api_key, api_secret, extra, is_active, updated_at "
+            f"FROM {SCHEMA}.ad_platform_keys ORDER BY platform ASC"
+        )
+        rows = []
+        for r in cur.fetchall():
+            d = dict(r)
+            d['updated_at'] = d['updated_at'].isoformat() if d.get('updated_at') else None
+            rows.append(d)
+        return _ok({'platforms': rows})
+
+    body = json.loads(event.get('body') or '{}')
+
+    if method == 'PUT' and rid:
+        fields = []
+        if 'api_key' in body:
+            fields.append(f"api_key = {_str_or_null(body.get('api_key'), 2000)}")
+        if 'api_secret' in body:
+            fields.append(f"api_secret = {_str_or_null(body.get('api_secret'), 2000)}")
+        if 'is_active' in body:
+            fields.append(f"is_active = {_bool(body.get('is_active'))}")
+        if 'extra' in body:
+            import json as _json
+            extra_json = _json.dumps(body.get('extra') or {}).replace("'", "''")
+            fields.append(f"extra = '{extra_json}'::jsonb")
+        fields.append("updated_at = NOW()")
+        cur.execute(f"UPDATE {SCHEMA}.ad_platform_keys SET {', '.join(fields)} WHERE id = {int(rid)}")
         conn.commit()
         return _ok({'success': True})
 

@@ -229,7 +229,7 @@ def handler(event, context):
             user = _get_user(cur, token)
             if not user:
                 return _err(401, 'Требуется авторизация')
-            if user['role'] not in ('admin', 'editor', 'manager'):
+            if user['role'] not in ('admin', 'editor', 'manager', 'director', 'broker', 'office_manager'):
                 return _err(403, 'Нет прав')
 
             body = json.loads(event.get('body') or '{}')

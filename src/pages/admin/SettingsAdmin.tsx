@@ -14,6 +14,7 @@ import IntegrationsTab from './settings/IntegrationsTab';
 import CitiesTab from './settings/CitiesTab';
 import LegalTab from './settings/LegalTab';
 import FooterTab from './settings/FooterTab';
+import AdPlatformsTab from './settings/AdPlatformsTab';
 
 export default function SettingsAdmin() {
   const { reload } = useSettings();
@@ -22,7 +23,7 @@ export default function SettingsAdmin() {
   const [saved, setSaved] = useState(false);
   const [cityQuery, setCityQuery] = useState('');
   const [cityAdding, setCityAdding] = useState(false);
-  const [tab, setTab] = useState<'general' | 'watermark' | 'seo' | 'integrations' | 'cities' | 'purposes' | 'feeds' | 'legal' | 'footer' | 'seo-ai' | 'roles' | 'migration'>('general');
+  const [tab, setTab] = useState<'general' | 'watermark' | 'seo' | 'integrations' | 'ad-platforms' | 'cities' | 'purposes' | 'feeds' | 'legal' | 'footer' | 'seo-ai' | 'roles' | 'migration'>('general');
   const [showKey, setShowKey] = useState(false);
   const [showMapsKey, setShowMapsKey] = useState(false);
   const [showYkSecret, setShowYkSecret] = useState(false);
@@ -174,6 +175,7 @@ export default function SettingsAdmin() {
     ['watermark', 'Водяной знак', 'Stamp'],
     ['seo', 'SEO сайта', 'BarChart3'],
     ['integrations', 'Интеграции', 'Zap'],
+    ['ad-platforms', 'Доски объявлений', 'Globe'],
     ['cities', 'Города', 'MapPin'],
     ['purposes', 'Назначения', 'Tag'],
     ['feeds', 'XML фиды', 'Rss'],
@@ -227,6 +229,7 @@ export default function SettingsAdmin() {
         />
       )}
 
+      {tab === 'ad-platforms' && <AdPlatformsTab />}
       {tab === 'purposes' && <PurposesAdmin />}
       {tab === 'feeds' && <XmlFeedsAdmin />}
       {tab === 'legal' && <LegalTab s={s} setS={setS} saved={saved} save={save} />}

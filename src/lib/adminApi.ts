@@ -179,6 +179,11 @@ export const adminApi = {
   deleteListingComment: (commentId: number) =>
     req(`${ADMIN_URL}?resource=listing_comments&id=${commentId}`, { method: 'DELETE', body: '{}' }),
 
+  // ad platform keys (integration hub)
+  getAdPlatformKeys: () => req(`${ADMIN_URL}?resource=ad_platform_keys`),
+  updateAdPlatformKey: (id: number, data: Record<string, unknown>) =>
+    req(`${ADMIN_URL}?resource=ad_platform_keys&id=${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
   // role permissions
   getRolePermissions: () => req(`${ADMIN_URL}?resource=role_permissions`),
   updateRolePermissions: (permissions: Record<string, unknown>) =>

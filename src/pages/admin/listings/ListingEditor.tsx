@@ -90,7 +90,18 @@ export default function ListingEditor({
               </span>
             ) : null}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <button type="button"
+              onClick={() => setEditing({ ...editing, is_visible: !(editing.is_visible !== false) })}
+              title={editing.is_visible !== false ? 'Объект виден на сайте' : 'Объект скрыт с сайта'}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                editing.is_visible !== false
+                  ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                  : 'bg-red-100 text-red-700 hover:bg-red-200'
+              }`}>
+              <Icon name={editing.is_visible !== false ? 'Eye' : 'EyeOff'} size={13} />
+              {editing.is_visible !== false ? 'Виден на сайте' : 'Скрыт с сайта'}
+            </button>
             <button type="button" onClick={onGenerateAll} disabled={aiAllLoading}
               title="Сгенерировать описание, теги и SEO одним кликом"
               className="btn-orange text-white px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 disabled:opacity-60">

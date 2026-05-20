@@ -162,7 +162,13 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
           <input type="number" className={`w-full px-3 py-2 border rounded-lg ${err('total_floors')}`}
             value={editing.total_floors ?? ''} onChange={e => { setEditing({ ...editing, total_floors: e.target.value === '' ? null : +e.target.value }); setErrors?.(v => ({ ...v, total_floors: false })); }} />
         </div>
-        <div></div>
+        <div>
+          <label className="text-xs text-muted-foreground">Комнат</label>
+          <input type="number" min={0} max={99} className="w-full px-3 py-2 border rounded-lg"
+            placeholder="—"
+            value={(editing as Record<string,unknown>).rooms != null ? String((editing as Record<string,unknown>).rooms) : ''}
+            onChange={e => setEditing({ ...editing, rooms: e.target.value === '' ? null : +e.target.value } as typeof editing)} />
+        </div>
         <div>
           <label className="text-xs text-muted-foreground">Парковка</label>
           <select className="w-full px-3 py-2 border rounded-lg" value={editing.parking || 'none'}
@@ -176,6 +182,13 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
             onChange={e => setEditing({ ...editing, entrance: e.target.value })}>
             {ENTRANCE.map(p => <option key={p[0]} value={p[0]}>{p[1]}</option>)}
           </select>
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">Комиссия брокера</label>
+          <input type="text" className="w-full px-3 py-2 border rounded-lg"
+            placeholder="напр. 3% или 50 000 ₽"
+            value={(editing as Record<string,unknown>).broker_commission as string || ''}
+            onChange={e => setEditing({ ...editing, broker_commission: e.target.value } as typeof editing)} />
         </div>
       </div>
     </>

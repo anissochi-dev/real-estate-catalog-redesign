@@ -105,7 +105,7 @@ export default function ListingsTable({
             const m2 = perM2(it.price, it.area);
             return (
               <tr key={it.id}
-                className={`border-t border-border hover:bg-muted/30 align-top ${selected.has(it.id) ? 'bg-brand-blue/5' : ''}`}>
+                className={`border-t border-border hover:bg-muted/30 align-top ${selected.has(it.id) ? 'bg-brand-blue/5' : ''} ${it.is_visible === false ? 'bg-red-50/60' : ''}`}>
                 <td className="px-3 py-3">
                   <input type="checkbox" checked={selected.has(it.id)}
                     onChange={() => onToggleSelect(it.id)} className="rounded" />
@@ -131,6 +131,11 @@ export default function ListingsTable({
                         ID {it.public_code}
                       </span>
                     ) : null}
+                    {it.is_visible === false && (
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-700 inline-flex items-center gap-0.5">
+                        <Icon name="EyeOff" size={10} /> Скрыт
+                      </span>
+                    )}
                     {it.status === 'archived' && (
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">
                         Архив

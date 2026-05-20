@@ -55,6 +55,9 @@ export interface Listing {
   author_id?: number | null;
   broker_id?: number | null;
   broker_name?: string | null;
+  is_visible?: boolean;
+  rooms?: number | null;
+  broker_commission?: string | null;
 }
 
 export interface City { id: number; name: string; is_active: boolean }
@@ -130,7 +133,7 @@ export const ROAD_LINES = [
 export const empty: Partial<Listing> = {
   title: '', category: 'office', deal: 'sale', price: 0, area: 0,
   address: '', district: '', city: 'Краснодар', description: '', image: '', images: '', tags: '',
-  status: 'active', is_hot: false, is_new: false,
+  status: 'active', is_hot: false, is_new: false, is_visible: true,
   owner_name: '', owner_phone: '', owner_phone2: '', price_unit: 'total',
   purpose: '', condition: '', parking: 'none', entrance: 'street',
   floor: null, total_floors: null, video_url: '', video_type: '',
