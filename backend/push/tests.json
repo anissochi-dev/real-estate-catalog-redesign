@@ -7,12 +7,12 @@
       "expectedStatus": 200
     },
     {
-      "name": "Получить VAPID публичный ключ",
+      "name": "Получить VAPID публичный ключ (автогенерация)",
       "method": "POST",
       "path": "/",
       "body": { "action": "vapid_public" },
       "expectedStatus": 200,
-      "expectedBody": { "vapid_public_key": "" },
+      "expectedBody": { "auto_generated": true },
       "bodyMatcher": "partial"
     },
     {

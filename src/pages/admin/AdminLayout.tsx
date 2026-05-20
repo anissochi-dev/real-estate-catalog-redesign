@@ -222,30 +222,40 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            {/* Push-уведомления */}
+            {/* Push-уведомления — ключи генерируются автоматически на сервере */}
             {pushState !== 'unsupported' && (
-              <button
-                onClick={pushState === 'subscribed' ? pushUnsubscribe : pushSubscribe}
-                disabled={pushState === 'loading'}
-                title={pushState === 'subscribed' ? 'Отключить уведомления' : pushState === 'denied' ? 'Уведомления заблокированы в браузере' : 'Включить уведомления о новых заявках'}
-                className={`p-2 rounded-xl border transition relative ${
-                  pushState === 'subscribed'
-                    ? 'border-emerald-300 bg-emerald-50 text-emerald-600'
+              <div className="relative group">
+                <button
+                  onClick={pushState === 'subscribed' ? pushUnsubscribe : pushSubscribe}
+                  disabled={pushState === 'loading' || pushState === 'denied'}
+                  className={`p-2 rounded-xl border transition relative ${
+                    pushState === 'subscribed'
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-600'
+                      : pushState === 'denied'
+                      ? 'border-red-200 bg-red-50 text-red-400 cursor-not-allowed opacity-60'
+                      : 'border-border bg-white hover:bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {pushState === 'loading'
+                    ? <Icon name="Loader2" size={16} className="animate-spin" />
+                    : pushState === 'subscribed'
+                    ? <Icon name="BellRing" size={16} />
+                    : <Icon name="BellOff" size={16} />
+                  }
+                  {pushState === 'subscribed' && (
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white" />
+                  )}
+                </button>
+                {/* Тултип */}
+                <div className="absolute right-0 top-full mt-2 w-56 bg-gray-900 text-white text-xs rounded-xl px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
+                  {pushState === 'subscribed'
+                    ? 'Уведомления включены. Нажмите чтобы отключить.'
                     : pushState === 'denied'
-                    ? 'border-red-200 bg-red-50 text-red-400 cursor-not-allowed'
-                    : 'border-border bg-white hover:bg-muted text-muted-foreground'
-                }`}
-              >
-                {pushState === 'loading'
-                  ? <Icon name="Loader2" size={16} className="animate-spin" />
-                  : pushState === 'subscribed'
-                  ? <Icon name="BellRing" size={16} />
-                  : <Icon name="BellOff" size={16} />
-                }
-                {pushState === 'subscribed' && (
-                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white" />
-                )}
-              </button>
+                    ? 'Уведомления заблокированы в браузере. Разрешите в настройках.'
+                    : 'Включить уведомления о новых заявках на модерации'}
+                  <div className="mt-1 text-gray-400">Ключи генерируются автоматически</div>
+                </div>
+              </div>
             )}
             {(user.role === 'admin' || user.role === 'editor' || user.role === 'manager') && (
               <button

@@ -1,11 +1,16 @@
 """
-Push-уведомления для администраторов: подписка, отписка, отправка.
-Используется для оповещения о новых лидах на модерации.
-Args: POST {action: subscribe|unsubscribe|send|vapid_public|check}, headers X-Auth-Token
+Push-уведомления для администраторов.
+VAPID-ключи генерируются автоматически на сервере при первом запуске и хранятся в БД.
+Приватный ключ никогда не передаётся клиенту.
+Args: POST {action: subscribe|unsubscribe|send|vapid_public|check|init}, headers X-Auth-Token
 Returns: {ok} или {vapid_public_key}
 """
+import base64
+import hashlib
 import json
 import os
+import struct
+import time
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -40,15 +45,64 @@ def _get_user(cur, token):
     return cur.fetchone()
 
 
-def _send_push(subscription_info: dict, payload: dict, vapid_private: str, vapid_public: str) -> bool:
-    """Отправляет web push через pywebpush. Возвращает True если успешно."""
+def _generate_vapid_keys() -> tuple[str, str]:
+    """
+    Генерирует пару VAPID-ключей (EC P-256) без внешних зависимостей.
+    Использует cryptography из стандартного окружения Python.
+    Возвращает (public_key_base64url, private_key_base64url).
+    """
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding, PublicFormat, PrivateFormat, NoEncryption
+    )
+    from cryptography.hazmat.backends import default_backend
+
+    private_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
+    public_key = private_key.public_key()
+
+    # Приватный ключ в формате PKCS8 DER → base64url
+    priv_der = private_key.private_bytes(Encoding.DER, PrivateFormat.PKCS8, NoEncryption())
+    priv_b64 = base64.urlsafe_b64encode(priv_der).rstrip(b'=').decode('ascii')
+
+    # Публичный ключ в uncompressed point format (04 || x || y) → base64url
+    pub_der = public_key.public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
+    pub_b64 = base64.urlsafe_b64encode(pub_der).rstrip(b'=').decode('ascii')
+
+    return pub_b64, priv_b64
+
+
+def _load_vapid_keys(cur) -> tuple[str, str]:
+    """Загружает VAPID-ключи из БД. Если нет — генерирует и сохраняет."""
+    cur.execute(f"SELECT vapid_public_key, vapid_private_key FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
+    row = cur.fetchone()
+    if row and row.get('vapid_public_key') and row.get('vapid_private_key'):
+        return row['vapid_public_key'], row['vapid_private_key']
+
+    # Ключей нет — генерируем прямо сейчас
+    pub, priv = _generate_vapid_keys()
+    pub_s = _safe(pub, 500)
+    priv_s = _safe(priv, 500)
+    cur.execute(
+        f"UPDATE {SCHEMA}.settings SET "
+        f"vapid_public_key = '{pub_s}', vapid_private_key = '{priv_s}', updated_at = NOW() "
+        f"WHERE id = (SELECT id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1)"
+    )
+    return pub, priv
+
+
+def _send_push_notification(sub_endpoint: str, sub_p256dh: str, sub_auth: str,
+                             payload: dict, vapid_private: str, vapid_public: str) -> bool:
+    """Отправляет одно push-уведомление через pywebpush."""
     try:
-        from pywebpush import webpush, WebPushException
+        from pywebpush import webpush
         webpush(
-            subscription_info=subscription_info,
+            subscription_info={
+                'endpoint': sub_endpoint,
+                'keys': {'p256dh': sub_p256dh, 'auth': sub_auth},
+            },
             data=json.dumps(payload, ensure_ascii=False),
             vapid_private_key=vapid_private,
-            vapid_claims={'sub': 'mailto:admin@biznest.ru'},
+            vapid_claims={'sub': 'mailto:noreply@biznest.ru'},
         )
         return True
     except Exception:
@@ -70,8 +124,8 @@ def handler(event: dict, context) -> dict:
             'body': '',
         }
 
-    headers = event.get('headers') or {}
-    token = headers.get('X-Auth-Token') or headers.get('x-auth-token') or ''
+    req_headers = event.get('headers') or {}
+    token = req_headers.get('X-Auth-Token') or req_headers.get('x-auth-token') or ''
 
     body = {}
     if event.get('body'):
@@ -81,28 +135,36 @@ def handler(event: dict, context) -> dict:
             pass
 
     action = body.get('action') or (event.get('queryStringParameters') or {}).get('action') or ''
-    vapid_public = os.environ.get('VAPID_PUBLIC_KEY', '')
-    vapid_private = os.environ.get('VAPID_PRIVATE_KEY', '')
-
-    # Публичный ключ можно получить без авторизации
-    if action == 'vapid_public':
-        return _ok({'vapid_public_key': vapid_public})
 
     dsn = os.environ['DATABASE_URL']
     conn = psycopg2.connect(dsn)
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+
+            # --- Публичный VAPID-ключ (без авторизации) ---
+            # Ключи создаются автоматически при первом запросе
+            if action == 'vapid_public':
+                pub, _ = _load_vapid_keys(cur)
+                conn.commit()
+                return _ok({'vapid_public_key': pub, 'auto_generated': True})
+
+            # --- Всё остальное требует авторизации ---
             user = _get_user(cur, token)
             if not user:
                 return _err(401, 'Требуется авторизация')
             if user['role'] not in ADMIN_ROLES:
                 return _err(403, 'Нет доступа')
 
+            pub_key, priv_key = _load_vapid_keys(cur)
+            conn.commit()
+
+            # --- Подписка ---
             if action == 'subscribe':
                 endpoint = body.get('endpoint', '')
                 p256dh = body.get('p256dh', '')
                 auth_key = body.get('auth', '')
-                ua = _safe(headers.get('user-agent') or '', 300)
+                ua = _safe(req_headers.get('user-agent') or '', 300)
+
                 if not endpoint or not p256dh or not auth_key:
                     return _err(400, 'Неверные данные подписки')
 
@@ -110,20 +172,18 @@ def handler(event: dict, context) -> dict:
                 p = _safe(p256dh, 500)
                 a = _safe(auth_key, 100)
                 cur.execute(
-                    f"INSERT INTO {SCHEMA}.push_subscriptions (user_id, endpoint, p256dh, auth, user_agent) "
+                    f"INSERT INTO {SCHEMA}.push_subscriptions "
+                    f"(user_id, endpoint, p256dh, auth, user_agent) "
                     f"VALUES ({user['id']}, '{ep}', '{p}', '{a}', '{ua}') "
-                    f"ON CONFLICT (user_id, endpoint) DO UPDATE SET p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth"
+                    f"ON CONFLICT (user_id, endpoint) DO UPDATE "
+                    f"SET p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth"
                 )
                 conn.commit()
                 return _ok({'ok': True, 'message': 'Подписка сохранена'})
 
+            # --- Отписка ---
             if action == 'unsubscribe':
                 endpoint = _safe(body.get('endpoint', ''), 2000)
-                cur.execute(
-                    f"UPDATE {SCHEMA}.push_subscriptions SET endpoint = endpoint "
-                    f"WHERE user_id = {user['id']} AND endpoint = '{endpoint}'"
-                )
-                # Помечаем как неактивную (не удаляем из-за ограничений)
                 cur.execute(
                     f"UPDATE {SCHEMA}.push_subscriptions SET auth = 'removed' "
                     f"WHERE user_id = {user['id']} AND endpoint = '{endpoint}'"
@@ -131,21 +191,23 @@ def handler(event: dict, context) -> dict:
                 conn.commit()
                 return _ok({'ok': True})
 
+            # --- Проверка статуса подписки ---
             if action == 'check':
                 endpoint = _safe(body.get('endpoint', ''), 2000)
                 cur.execute(
                     f"SELECT id FROM {SCHEMA}.push_subscriptions "
-                    f"WHERE user_id = {user['id']} AND endpoint = '{endpoint}' AND auth != 'removed'"
+                    f"WHERE user_id = {user['id']} AND endpoint = '{endpoint}' "
+                    f"AND auth != 'removed'"
                 )
                 row = cur.fetchone()
                 return _ok({'subscribed': row is not None})
 
-            # Отправка уведомления всем подписанным админам (только для admin/manager)
+            # --- Ручная отправка (только admin/manager) ---
             if action == 'send':
                 if user['role'] not in ('admin', 'manager'):
                     return _err(403, 'Отправка — только для admin/manager')
-                if not vapid_private or not vapid_public:
-                    return _err(503, 'VAPID ключи не настроены')
+                if not priv_key or not pub_key:
+                    return _err(503, 'VAPID ключи не сгенерированы')
 
                 payload = {
                     'title': body.get('title', 'BIZNEST'),
@@ -161,16 +223,57 @@ def handler(event: dict, context) -> dict:
                 )
                 subs = cur.fetchall()
                 sent = 0
+                failed = 0
                 for sub in subs:
-                    sub_info = {
-                        'endpoint': sub['endpoint'],
-                        'keys': {'p256dh': sub['p256dh'], 'auth': sub['auth']},
-                    }
-                    ok = _send_push(sub_info, payload, vapid_private, vapid_public)
+                    ok = _send_push_notification(
+                        sub['endpoint'], sub['p256dh'], sub['auth'],
+                        payload, priv_key, pub_key
+                    )
                     if ok:
                         sent += 1
+                    else:
+                        failed += 1
 
-                return _ok({'ok': True, 'sent': sent, 'total': len(subs)})
+                return _ok({'ok': True, 'sent': sent, 'failed': failed, 'total': len(subs)})
+
+            # --- Статус VAPID (для диагностики, только admin) ---
+            if action == 'vapid_status':
+                if user['role'] != 'admin':
+                    return _err(403, 'Только для admin')
+                has_keys = bool(pub_key and priv_key)
+                cur.execute(
+                    f"SELECT COUNT(*) as cnt FROM {SCHEMA}.push_subscriptions WHERE auth != 'removed'"
+                )
+                row = cur.fetchone()
+                return _ok({
+                    'keys_ready': has_keys,
+                    'public_key_prefix': pub_key[:16] + '...' if pub_key else '',
+                    'subscriptions_count': row['cnt'] if row else 0,
+                    'auto_generated': True,
+                })
+
+            # --- Сброс и перегенерация ключей (только admin) ---
+            if action == 'rotate_keys':
+                if user['role'] != 'admin':
+                    return _err(403, 'Только для admin')
+                pub, priv = _generate_vapid_keys()
+                pub_s = _safe(pub, 500)
+                priv_s = _safe(priv, 500)
+                cur.execute(
+                    f"UPDATE {SCHEMA}.settings SET "
+                    f"vapid_public_key = '{pub_s}', vapid_private_key = '{priv_s}', updated_at = NOW() "
+                    f"WHERE id = (SELECT id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1)"
+                )
+                # Все старые подписки становятся невалидными — помечаем как removed
+                cur.execute(
+                    f"UPDATE {SCHEMA}.push_subscriptions SET auth = 'removed'"
+                )
+                conn.commit()
+                return _ok({
+                    'ok': True,
+                    'message': 'Ключи перегенерированы. Все подписчики должны переподписаться.',
+                    'public_key_prefix': pub[:16] + '...',
+                })
 
     finally:
         conn.close()

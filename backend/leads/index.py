@@ -101,18 +101,29 @@ def handler(event: dict, context) -> dict:
 
 
 def _notify_admins(name: str, phone: str, lead_id: int, dsn: str):
-    """Отправляет push всем подписанным администраторам о новом лиде на модерации."""
-    vapid_private = os.environ.get('VAPID_PRIVATE_KEY', '')
-    vapid_public = os.environ.get('VAPID_PUBLIC_KEY', '')
-    if not vapid_private or not vapid_public:
-        return
+    """
+    Отправляет push всем подписанным администраторам о новом лиде на модерации.
+    VAPID-ключи берёт из БД (они генерируются автоматически при первом запросе push).
+    """
+    SCHEMA = 't_p71821556_real_estate_catalog_'
 
     conn2 = psycopg2.connect(dsn)
     try:
         with conn2.cursor() as cur2:
+            # Загружаем VAPID-ключи из БД
             cur2.execute(
-                "SELECT endpoint, p256dh, auth FROM t_p71821556_real_estate_catalog_.push_subscriptions "
-                "WHERE auth != 'removed'"
+                f"SELECT vapid_public_key, vapid_private_key FROM {SCHEMA}.settings "
+                f"ORDER BY id ASC LIMIT 1"
+            )
+            row = cur2.fetchone()
+            if not row or not row[0] or not row[1]:
+                return  # Ключи ещё не сгенерированы — тихо выходим
+            vapid_public = row[0]
+            vapid_private = row[1]
+
+            cur2.execute(
+                f"SELECT endpoint, p256dh, auth FROM {SCHEMA}.push_subscriptions "
+                f"WHERE auth != 'removed'"
             )
             subs = cur2.fetchall()
     finally:
@@ -136,7 +147,7 @@ def _notify_admins(name: str, phone: str, lead_id: int, dsn: str):
                     subscription_info={'endpoint': endpoint, 'keys': {'p256dh': p256dh, 'auth': auth_key}},
                     data=payload,
                     vapid_private_key=vapid_private,
-                    vapid_claims={'sub': 'mailto:admin@biznest.ru'},
+                    vapid_claims={'sub': 'mailto:noreply@biznest.ru'},
                 )
             except Exception:
                 pass
