@@ -146,7 +146,7 @@ export default function PropertyCard({
         style={style}
       >
         {/* ── Фотослайдер ── */}
-        <div className="relative aspect-[4/3] overflow-hidden bg-muted select-none">
+        <div className="relative aspect-[4/3] overflow-hidden bg-muted">
 
           {/* Картинки */}
           {imgs.length > 0 ? (

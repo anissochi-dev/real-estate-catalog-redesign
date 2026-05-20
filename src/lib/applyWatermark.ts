@@ -10,14 +10,28 @@ export interface WatermarkSettings {
   watermark_opacity?: number;
 }
 
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
-  });
+async function loadImage(src: string): Promise<HTMLImageElement> {
+  // Пробуем через fetch чтобы обойти CORS-ограничения CDN
+  try {
+    const res = await fetch(src, { mode: 'cors' });
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    return await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => { URL.revokeObjectURL(objectUrl); resolve(img); };
+      img.onerror = reject;
+      img.src = objectUrl;
+    });
+  } catch {
+    // Fallback: прямая загрузка через img tag
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+  }
 }
 
 function fileToDataUrl(file: File): Promise<string> {
