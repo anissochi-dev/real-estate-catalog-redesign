@@ -70,9 +70,32 @@ def _get_user(cur, token):
     return cur.fetchone()
 
 
-def _can(role, resource, op):
+def _load_permissions(cur):
+    """Загружает role_permissions из settings как dict {role: {section: {op: bool}}}"""
+    try:
+        cur.execute(f"SELECT role_permissions FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
+        row = cur.fetchone()
+        if row and row['role_permissions']:
+            return json.loads(row['role_permissions'])
+    except Exception:
+        pass
+    return None
+
+
+def _can(role, resource, op, permissions=None):
     if role == 'admin':
         return True
+    # Проверка через кастомные права из БД
+    if permissions and role in permissions:
+        role_perms = permissions[role]
+        if resource in role_perms:
+            return bool(role_perms[resource].get(op, False))
+        # Проверяем по группе (crm-kanban → crm)
+        section_key = resource.split('-')[0] if '-' in resource else resource
+        if section_key in role_perms:
+            return bool(role_perms[section_key].get(op, False))
+        return False
+    # Fallback — встроенные права
     if role == 'manager':
         if resource in ('cities', 'purposes', 'xml_feeds'):
             return op == 'read'
@@ -122,8 +145,9 @@ def handler(event, context):
             if not user:
                 return _err(401, 'Требуется авторизация')
 
+            permissions = _load_permissions(cur)
             op = {'GET': 'read', 'POST': 'create', 'PUT': 'update', 'DELETE': 'delete'}.get(method, 'read')
-            if not _can(user['role'], resource, op):
+            if not _can(user['role'], resource, op, permissions):
                 return _err(403, 'Недостаточно прав')
 
             if resource == 'listings':
@@ -152,6 +176,8 @@ def handler(event, context):
                 return _listings_bulk(cur, conn, event, user)
             if resource == 'phones':
                 return _phones(cur, conn, method, rid, action, event, user)
+            if resource == 'role_permissions':
+                return _role_permissions(cur, conn, method, event, user, permissions)
 
             return _err(400, 'Неизвестный ресурс')
     finally:
@@ -452,6 +478,10 @@ def _settings(cur, conn, method, event, user):
             fields.append(f"watermark_enabled = {_bool(body['watermark_enabled'])}")
         if 'watermark_opacity' in body:
             fields.append(f"watermark_opacity = {_int_or_null(body['watermark_opacity'])}")
+        if 'role_permissions' in body:
+            rp = body['role_permissions']
+            rp_json = _safe(json.dumps(rp, ensure_ascii=False), 50000)
+            fields.append(f"role_permissions = '{rp_json}'")
         if not fields:
             return _err(400, 'Нет полей')
         fields.append("updated_at = NOW()")
@@ -459,6 +489,25 @@ def _settings(cur, conn, method, event, user):
         conn.commit()
         return _ok({'success': True})
 
+    return _err(400, 'Bad request')
+
+
+def _role_permissions(cur, conn, method, event, user, permissions):
+    """CRUD для настроек прав ролей"""
+    if user['role'] != 'admin':
+        return _err(403, 'Только администратор может управлять правами')
+    if method == 'GET':
+        return _ok({'permissions': permissions or {}})
+    if method == 'PUT':
+        body = json.loads(event.get('body') or '{}')
+        new_perms = body.get('permissions', {})
+        rp_json = _safe(json.dumps(new_perms, ensure_ascii=False), 50000)
+        cur.execute(
+            f"UPDATE {SCHEMA}.settings SET role_permissions = '{rp_json}', updated_at = NOW() "
+            f"WHERE id = (SELECT id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1)"
+        )
+        conn.commit()
+        return _ok({'success': True})
     return _err(400, 'Bad request')
 
 

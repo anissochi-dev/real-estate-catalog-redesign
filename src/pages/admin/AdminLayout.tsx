@@ -2,13 +2,14 @@ import { ReactNode, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
 import AiChat from '@/components/admin/AiChat';
+import { adminApi } from '@/lib/adminApi';
 
 const IDLE_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 const IDLE_WARNING_MS = 2 * 60 * 1000;
 
 export type AdminSection = 'dashboard' | 'listings' | 'leads' | 'users' | 'pages' | 'settings' | 'ai-logs'
   | 'crm-owners' | 'crm-kanban' | 'crm-gamification' | 'crm-checks' | 'crm-payments'
-  | 'phones';
+  | 'phones' | 'roles';
 
 interface Props {
   section: AdminSection;
@@ -24,6 +25,7 @@ const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; gro
   { id: 'listings', label: 'Объекты', icon: 'Building2', roles: ['admin', 'editor', 'manager'] },
   { id: 'leads', label: 'Лиды', icon: 'Inbox', roles: ['admin', 'editor', 'manager'] },
   { id: 'users', label: 'Пользователи', icon: 'Users', roles: ['admin'] },
+  { id: 'roles', label: 'Роли и доступы', icon: 'ShieldHalf', roles: ['admin'] },
   { id: 'pages', label: 'Страницы', icon: 'FileText', roles: ['admin', 'editor'] },
   { id: 'settings', label: 'Настройки', icon: 'Settings', roles: ['admin', 'editor'] },
   { id: 'phones', label: 'Телефонная база', icon: 'Phone', roles: ['admin', 'editor', 'manager'] },
@@ -39,6 +41,14 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [idleWarning, setIdleWarning] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(IDLE_WARNING_MS / 1000);
+  const [rolePerms, setRolePerms] = useState<Record<string, Record<string, boolean>> | null>(null);
+
+  useEffect(() => {
+    if (!user || user.role === 'admin') return;
+    adminApi.getRolePermissions()
+      .then(d => { if (d.permissions) setRolePerms(d.permissions); })
+      .catch(() => {});
+  }, [user]);
   const logoutTimer = useRef<number | null>(null);
   const warningTimer = useRef<number | null>(null);
   const countdownTimer = useRef<number | null>(null);
@@ -104,7 +114,16 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
   };
 
   if (!user) return null;
-  const items = NAV.filter(n => n.roles.includes(user.role));
+  const items = NAV.filter(n => {
+    if (!n.roles.includes(user.role)) return false;
+    if (user.role === 'admin') return true;
+    if (!rolePerms || !rolePerms[user.role]) return true;
+    const sectionPerms = rolePerms[user.role][n.id];
+    if (sectionPerms === undefined) return true;
+    return !!(typeof sectionPerms === 'object'
+      ? Object.values(sectionPerms as Record<string, boolean>).some(Boolean)
+      : sectionPerms);
+  });
 
   const roleLabel: Record<string, string> = {
     admin: 'Администратор',

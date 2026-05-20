@@ -160,6 +160,14 @@ export const adminApi = {
   unlinkPhone: (id: number, data: { listing_id?: number; lead_id?: number }) =>
     req(`${ADMIN_URL}?resource=phones&id=${id}&action=unlink`, { method: 'POST', body: JSON.stringify(data) }),
   getPhoneHistory: (id: number) => req(`${ADMIN_URL}?resource=phones&id=${id}&action=history`),
+
+  // role permissions
+  getRolePermissions: () => req(`${ADMIN_URL}?resource=role_permissions`),
+  updateRolePermissions: (permissions: Record<string, unknown>) =>
+    req(`${ADMIN_URL}?resource=role_permissions`, {
+      method: 'PUT',
+      body: JSON.stringify({ permissions }),
+    }),
 };
 
 export async function uploadFile(file: File, folder: 'photos' | 'logo' | 'watermark' = 'photos'): Promise<string> {
