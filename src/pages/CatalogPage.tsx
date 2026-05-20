@@ -78,8 +78,8 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
       const q = search.toLowerCase();
       result = result.filter(p =>
         p.title.toLowerCase().includes(q) ||
-        p.address.toLowerCase().includes(q) ||
-        p.district.toLowerCase().includes(q)
+        (p.address || '').toLowerCase().includes(q) ||
+        (p.district || '').toLowerCase().includes(q)
       );
     }
 
