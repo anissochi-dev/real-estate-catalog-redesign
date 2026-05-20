@@ -18,8 +18,16 @@ CORS_HEADERS = {
 }
 
 
+SCHEMA = 't_p71821556_real_estate_catalog_'
+
+
 def get_conn():
-    return psycopg2.connect(os.environ['DATABASE_URL'])
+    dsn = os.environ['DATABASE_URL']
+    if 'options=' not in dsn and '?' not in dsn:
+        dsn += f'?options=-csearch_path%3D{SCHEMA}'
+    elif '?' in dsn and 'options=' not in dsn:
+        dsn += f'&options=-csearch_path%3D{SCHEMA}'
+    return psycopg2.connect(dsn)
 
 
 def ok(data, status=200):

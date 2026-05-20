@@ -50,7 +50,7 @@ def handler(event: dict, context) -> dict:
     name_s = name.replace("'", "''")[:100]
     phone_s = phone.replace("'", "''")[:30]
     email_s = "NULL" if email is None else "'" + email.replace("'", "''")[:100] + "'"
-    msg_s = "NULL" if message is None else "'" + message.replace("'", "''") + "'"
+    msg_s = "NULL" if message is None else "'" + message.replace("'", "''")[:1500] + "'"
     listing_s = "NULL"
     if listing_id is not None:
         try:

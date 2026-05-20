@@ -53,7 +53,7 @@ export default function NetworkTenantsPage() {
     <div className="min-h-screen bg-background">
       <section className="bg-gradient-to-r from-brand-blue to-brand-blue-dark text-white py-14">
         <div className="container mx-auto px-4">
-          <h1 className="font-display font-900 text-3xl md:text-5xl mb-3">Заявки на аренду/продажу</h1>
+          <h1 className="font-display font-900 text-3xl md:text-5xl mb-3">Заявки на аренду/покупку</h1>
           <p className="text-white/80 max-w-2xl">
             Федеральные, региональные сети, местные компании и частные лица, готовые арендовать или купить ваш объект недвижимости, офис, гостиницу, склад, магазин, базу, готовый бизнес, готовый арендный бизнес, общепит.
             Подходящий объект — отправьте предложение в один клик.

@@ -335,7 +335,7 @@ export default function LeadsAdmin() {
                 value={editing.company || ''} onChange={e => setEditing({ ...editing, company: e.target.value })} />
               <input type="number" className="w-full px-3 py-2 border rounded-lg" placeholder="Бюджет, ₽"
                 value={editing.budget ?? ''} onChange={e => setEditing({ ...editing, budget: e.target.value === '' ? null : +e.target.value })} />
-              <CharCount as="textarea" rows={3} max={1000} warnAt={800} placeholder="Текст запроса"
+              <CharCount as="textarea" rows={5} max={1500} warnAt={1300} placeholder="Текст запроса"
                 value={editing.message || ''} onChange={e => setEditing({ ...editing, message: (e.target as HTMLTextAreaElement).value })} />
 
               <div>
