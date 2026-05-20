@@ -1,6 +1,6 @@
 """
 CRM-система: управление собственниками, сделками, этапами воронки, активностями и геймификацией.
-Доступ: admin, director, broker, office_manager.
+Доступ: admin, director, broker, office_manager, manager.
 """
 import json
 import os
