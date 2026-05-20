@@ -3,13 +3,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
 import AiChat from '@/components/admin/AiChat';
 import { adminApi } from '@/lib/adminApi';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 const IDLE_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 const IDLE_WARNING_MS = 2 * 60 * 1000;
 
 export type AdminSection = 'dashboard' | 'listings' | 'leads' | 'users' | 'pages' | 'settings' | 'ai-logs'
   | 'crm-owners' | 'crm-kanban' | 'crm-gamification' | 'crm-checks' | 'crm-payments'
-  | 'phones' | 'roles';
+  | 'phones' | 'roles' | 'seo';
 
 interface Props {
   section: AdminSection;
@@ -29,6 +30,7 @@ const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; gro
   { id: 'pages', label: 'Страницы', icon: 'FileText', roles: ['admin', 'editor'] },
   { id: 'settings', label: 'Настройки', icon: 'Settings', roles: ['admin', 'editor'] },
   { id: 'phones', label: 'Телефонная база', icon: 'Phone', roles: ['admin', 'editor', 'manager'] },
+  { id: 'seo', label: 'SEO-оптимизация', icon: 'TrendingUp', roles: ['admin', 'editor'] },
   { id: 'crm-kanban', label: 'Воронка сделок', icon: 'KanbanSquare', roles: CRM_ROLES, group: 'crm' },
   { id: 'crm-gamification', label: 'Рейтинг команды', icon: 'Trophy', roles: CRM_ROLES, group: 'crm' },
   { id: 'crm-checks', label: 'Проверки', icon: 'ShieldCheck', roles: CRM_ROLES, group: 'crm' },
@@ -38,6 +40,7 @@ const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; gro
 export default function AdminLayout({ section, setSection, onExit, children }: Props) {
   const { user, logout } = useAuth();
   const [aiOpen, setAiOpen] = useState(false);
+  const { state: pushState, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePushNotifications();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [idleWarning, setIdleWarning] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(IDLE_WARNING_MS / 1000);
@@ -218,15 +221,42 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
               {items.find(n => n.id === section)?.label || 'Админ-панель'}
             </h1>
           </div>
-          {(user.role === 'admin' || user.role === 'editor' || user.role === 'manager') && (
-            <button
-              onClick={() => setAiOpen(true)}
-              className="btn-orange text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2"
-            >
-              <Icon name="Sparkles" size={16} />
-              <span className="hidden sm:inline">ИИ-ассистент</span>
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Push-уведомления */}
+            {pushState !== 'unsupported' && (
+              <button
+                onClick={pushState === 'subscribed' ? pushUnsubscribe : pushSubscribe}
+                disabled={pushState === 'loading'}
+                title={pushState === 'subscribed' ? 'Отключить уведомления' : pushState === 'denied' ? 'Уведомления заблокированы в браузере' : 'Включить уведомления о новых заявках'}
+                className={`p-2 rounded-xl border transition relative ${
+                  pushState === 'subscribed'
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-600'
+                    : pushState === 'denied'
+                    ? 'border-red-200 bg-red-50 text-red-400 cursor-not-allowed'
+                    : 'border-border bg-white hover:bg-muted text-muted-foreground'
+                }`}
+              >
+                {pushState === 'loading'
+                  ? <Icon name="Loader2" size={16} className="animate-spin" />
+                  : pushState === 'subscribed'
+                  ? <Icon name="BellRing" size={16} />
+                  : <Icon name="BellOff" size={16} />
+                }
+                {pushState === 'subscribed' && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white" />
+                )}
+              </button>
+            )}
+            {(user.role === 'admin' || user.role === 'editor' || user.role === 'manager') && (
+              <button
+                onClick={() => setAiOpen(true)}
+                className="btn-orange text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2"
+              >
+                <Icon name="Sparkles" size={16} />
+                <span className="hidden sm:inline">ИИ-ассистент</span>
+              </button>
+            )}
+          </div>
         </header>
         <div className="p-4 lg:p-8">{children}</div>
       </main>

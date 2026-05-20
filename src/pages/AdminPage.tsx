@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
 import AdminLayout, { AdminSection } from './admin/AdminLayout';
 import Dashboard from './admin/Dashboard';
 import ListingsAdmin from './admin/ListingsAdmin';
@@ -14,6 +13,7 @@ import CrmChecks from './admin/crm/CrmChecks';
 import CrmPayments from './admin/crm/CrmPayments';
 import PhoneBook from './admin/PhoneBook';
 import RolesAdmin from './admin/RolesAdmin';
+import SeoAdmin from './admin/SeoAdmin';
 
 interface Props {
   onExit: () => void;
@@ -38,6 +38,7 @@ export default function AdminPage({ onExit }: Props) {
       {section === 'crm-payments' && <CrmPayments />}
       {section === 'phones' && <PhoneBook />}
       {section === 'roles' && <RolesAdmin />}
+      {section === 'seo' && <SeoAdmin />}
     </AdminLayout>
   );
 }

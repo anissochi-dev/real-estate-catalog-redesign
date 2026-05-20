@@ -6,6 +6,7 @@ Returns: HTTP-ответ с id созданной заявки или ошибк
 
 import json
 import os
+import threading
 import psycopg2
 
 
@@ -80,6 +81,15 @@ def handler(event: dict, context) -> dict:
     finally:
         conn.close()
 
+    # Асинхронно отправляем push всем подписанным администраторам
+    if initial_status == 'pending':
+        def _send_push_notifications():
+            try:
+                _notify_admins(name, phone, lead_id, dsn)
+            except Exception:
+                pass
+        threading.Thread(target=_send_push_notifications, daemon=True).start()
+
     return {
         'statusCode': 200,
         'headers': {
@@ -88,6 +98,50 @@ def handler(event: dict, context) -> dict:
         },
         'body': json.dumps({'success': True, 'id': lead_id}),
     }
+
+
+def _notify_admins(name: str, phone: str, lead_id: int, dsn: str):
+    """Отправляет push всем подписанным администраторам о новом лиде на модерации."""
+    vapid_private = os.environ.get('VAPID_PRIVATE_KEY', '')
+    vapid_public = os.environ.get('VAPID_PUBLIC_KEY', '')
+    if not vapid_private or not vapid_public:
+        return
+
+    conn2 = psycopg2.connect(dsn)
+    try:
+        with conn2.cursor() as cur2:
+            cur2.execute(
+                "SELECT endpoint, p256dh, auth FROM t_p71821556_real_estate_catalog_.push_subscriptions "
+                "WHERE auth != 'removed'"
+            )
+            subs = cur2.fetchall()
+    finally:
+        conn2.close()
+
+    if not subs:
+        return
+
+    try:
+        from pywebpush import webpush
+        payload = json.dumps({
+            'title': '🔔 Новая заявка на модерации',
+            'body': f'{name} · {phone}',
+            'url': '/?admin=leads',
+            'tag': f'lead-{lead_id}',
+            'requireInteraction': True,
+        }, ensure_ascii=False)
+        for endpoint, p256dh, auth_key in subs:
+            try:
+                webpush(
+                    subscription_info={'endpoint': endpoint, 'keys': {'p256dh': p256dh, 'auth': auth_key}},
+                    data=payload,
+                    vapid_private_key=vapid_private,
+                    vapid_claims={'sub': 'mailto:admin@biznest.ru'},
+                )
+            except Exception:
+                pass
+    except ImportError:
+        pass
 
 
 def _err(code: int, msg: str) -> dict:

@@ -1,0 +1,27 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Получить VAPID публичный ключ",
+      "method": "POST",
+      "path": "/",
+      "body": { "action": "vapid_public" },
+      "expectedStatus": 200,
+      "expectedBody": { "vapid_public_key": "" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Без авторизации",
+      "method": "POST",
+      "path": "/",
+      "body": { "action": "subscribe", "endpoint": "https://test.com", "p256dh": "abc", "auth": "xyz" },
+      "expectedStatus": 401,
+      "bodyMatcher": "partial"
+    }
+  ]
+}
