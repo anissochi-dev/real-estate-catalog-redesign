@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { adminApi, uploadFile } from '@/lib/adminApi';
+import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
 
 interface PhoneContact {
@@ -51,6 +52,7 @@ interface Props {
 }
 
 export default function PhoneCardModal({ contactId, onClose, onUpdate }: Props) {
+  const { user } = useAuth();
   const [contact, setContact] = useState<PhoneContact | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [tab, setTab] = useState<Tab>('info');
@@ -115,6 +117,13 @@ export default function PhoneCardModal({ contactId, onClose, onUpdate }: Props) 
     onUpdate?.();
   };
 
+  const deleteContact = async () => {
+    if (!confirm('Удалить этот номер из базы? Действие необратимо.')) return;
+    await adminApi.deletePhone(contactId);
+    onUpdate?.();
+    onClose();
+  };
+
   if (!contact) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -148,6 +157,12 @@ export default function PhoneCardModal({ contactId, onClose, onUpdate }: Props) 
               Добавлен {fmtDt(contact.created_at)}
             </div>
           </div>
+          {user?.role && ['admin', 'director'].includes(user.role) && (
+            <button onClick={deleteContact} title="Удалить из базы"
+              className="p-2 rounded-lg hover:bg-red-50 text-red-500 shrink-0">
+              <Icon name="Trash2" size={16} />
+            </button>
+          )}
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted shrink-0">
             <Icon name="X" size={18} />
           </button>

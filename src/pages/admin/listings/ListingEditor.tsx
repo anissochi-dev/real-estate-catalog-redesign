@@ -179,7 +179,7 @@ export default function ListingEditor({
             <label className={`text-sm font-semibold block mb-1 ${errors.photos ? 'text-red-600' : ''}`}>
               Фотографии *{errors.photos && <span className="ml-2 text-xs font-normal text-red-500">Добавьте хотя бы одно фото</span>}
             </label>
-            <ImageUploader value={photos} onChange={p => { setPhotos(p); setErrors(v => ({ ...v, photos: false })); }} folder="photos" multiple />
+            <ImageUploader value={photos} onChange={p => { setPhotos(p); setErrors(v => ({ ...v, photos: false })); }} folder="photos" multiple applyWatermark={!!editing.use_watermark} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">

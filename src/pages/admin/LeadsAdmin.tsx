@@ -235,8 +235,17 @@ export default function LeadsAdmin() {
                       </div>
                     )}
                     {active.source && (
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        Источник: <span className="font-medium">{SOURCE_LABELS[active.source] || active.source}</span>
+                      <div className="mt-1 text-xs text-muted-foreground flex items-center gap-1">
+                        Источник:{' '}
+                        {active.object_url ? (
+                          <a href={active.object_url} target="_blank" rel="noopener noreferrer"
+                            className="font-medium text-brand-blue hover:underline flex items-center gap-0.5">
+                            {SOURCE_LABELS[active.source] || active.source}
+                            <Icon name="ExternalLink" size={11} />
+                          </a>
+                        ) : (
+                          <span className="font-medium">{SOURCE_LABELS[active.source] || active.source}</span>
+                        )}
                       </div>
                     )}
                   </div>

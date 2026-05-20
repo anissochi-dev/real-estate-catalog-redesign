@@ -1,6 +1,7 @@
 """
 CRM-система: управление собственниками, сделками, этапами воронки, активностями и геймификацией.
 Доступ: admin, director, broker, office_manager, manager.
+Использует DSN-параметр для search_path вместо SET search_path.
 """
 import json
 import os

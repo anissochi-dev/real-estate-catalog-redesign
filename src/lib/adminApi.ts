@@ -160,6 +160,8 @@ export const adminApi = {
   unlinkPhone: (id: number, data: { listing_id?: number; lead_id?: number }) =>
     req(`${ADMIN_URL}?resource=phones&id=${id}&action=unlink`, { method: 'POST', body: JSON.stringify(data) }),
   getPhoneHistory: (id: number) => req(`${ADMIN_URL}?resource=phones&id=${id}&action=history`),
+  deletePhone: (id: number) =>
+    req(`${ADMIN_URL}?resource=phones&id=${id}`, { method: 'DELETE', body: '{}' }),
 
   // role permissions
   getRolePermissions: () => req(`${ADMIN_URL}?resource=role_permissions`),
@@ -170,7 +172,11 @@ export const adminApi = {
     }),
 };
 
-export async function uploadFile(file: File, folder: 'photos' | 'logo' | 'watermark' = 'photos'): Promise<string> {
+export async function uploadFile(
+  file: File,
+  folder: 'photos' | 'logo' | 'watermark' = 'photos',
+  applyWatermark = false,
+): Promise<string> {
   const b64 = await new Promise<string>((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(String(r.result));
@@ -178,10 +184,11 @@ export async function uploadFile(file: File, folder: 'photos' | 'logo' | 'waterm
     r.readAsDataURL(file);
   });
   const token = getToken();
+  const kind = folder === 'photos' ? 'photo' : folder === 'logo' ? 'logo' : 'watermark';
   const res = await fetch(UPLOADS_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(token ? { 'X-Auth-Token': token } : {}) },
-    body: JSON.stringify({ file_base64: b64, filename: file.name, folder }),
+    body: JSON.stringify({ file_base64: b64, filename: file.name, folder, kind, apply_watermark: applyWatermark }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Ошибка загрузки');

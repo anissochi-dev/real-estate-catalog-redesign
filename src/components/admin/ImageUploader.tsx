@@ -12,6 +12,7 @@ interface Props {
   hint?: string;
   compress?: boolean;
   allowDownload?: boolean;
+  applyWatermark?: boolean;
 }
 
 const MAX_SIDE = 1920;
@@ -55,6 +56,7 @@ export default function ImageUploader({
   hint,
   compress,
   allowDownload = true,
+  applyWatermark = false,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -75,7 +77,7 @@ export default function ImageUploader({
     for (const f of arr) {
       try {
         const ready = shouldCompress ? await compressImage(f) : f;
-        const url = await uploadFile(ready, folder);
+        const url = await uploadFile(ready, folder, applyWatermark);
         uploaded.push(url);
         setProgress(p => ({ ...p, done: p.done + 1 }));
       } catch (e: unknown) {

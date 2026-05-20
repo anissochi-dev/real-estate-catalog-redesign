@@ -1,5 +1,5 @@
 """
-Business: Админ API — CRUD объявлений, управление лидами, пользователями, страницами и настройками сайта с проверкой ролей.
+Business: Админ API — CRUD объявлений, управление лидами, пользователями, страницами, настройками сайта и телефонной базой с проверкой ролей.
 Args: event с httpMethod, queryStringParameters {resource, id, action}, body, headers X-Auth-Token; context
 Returns: HTTP-ответ с данными ресурса или ошибкой прав
 """
@@ -941,6 +941,17 @@ def _phones(cur, conn, method, rid, action, event, user):
         new_id = cur.fetchone()['id']
         conn.commit()
         return _ok({'id': new_id, 'success': True})
+
+    if method == 'DELETE' and rid:
+        if user['role'] not in ('admin', 'director'):
+            return _err(403, 'Нет прав на удаление')
+        cid = int(rid)
+        cur.execute(f"DELETE FROM {SCHEMA}.phone_lead_links WHERE phone_contact_id = {cid}")
+        cur.execute(f"DELETE FROM {SCHEMA}.phone_listing_links WHERE phone_contact_id = {cid}")
+        cur.execute(f"DELETE FROM {SCHEMA}.phone_contact_history WHERE phone_contact_id = {cid}")
+        cur.execute(f"DELETE FROM {SCHEMA}.phone_contacts WHERE id = {cid}")
+        conn.commit()
+        return _ok({'success': True})
 
     if method == 'PUT' and rid:
         cid = int(rid)
