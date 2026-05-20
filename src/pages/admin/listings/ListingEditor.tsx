@@ -42,7 +42,10 @@ export default function ListingEditor({
     ? editing.purpose.split('|').map(s => s.trim()).filter(Boolean)
     : [];
 
+  const MAX_PURPOSES = 10;
+
   const togglePurpose = (name: string) => {
+    if (!selectedPurposes.includes(name) && selectedPurposes.length >= MAX_PURPOSES) return;
     const cur = selectedPurposes.includes(name)
       ? selectedPurposes.filter(p => p !== name)
       : [...selectedPurposes, name];
@@ -195,7 +198,12 @@ export default function ListingEditor({
               </select>
             </div>
             <div className="col-span-2">
-              <label className="text-xs text-muted-foreground">Назначение (можно выбрать несколько)</label>
+              <label className="text-xs text-muted-foreground">
+                Назначение (можно выбрать несколько, максимум {MAX_PURPOSES})
+                {selectedPurposes.length >= MAX_PURPOSES && (
+                  <span className="ml-2 text-amber-600 font-medium">— достигнут лимит</span>
+                )}
+              </label>
               <div className="relative">
                 <div className="flex items-center border rounded-lg overflow-hidden">
                   <Icon name="Search" size={14} className="ml-3 text-muted-foreground flex-shrink-0" />
@@ -216,17 +224,22 @@ export default function ListingEditor({
                   <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-border rounded-xl shadow-lg max-h-52 overflow-y-auto">
                     {PURPOSE_LIST
                       .filter(name => !purposeSearch || name.toLowerCase().includes(purposeSearch.toLowerCase()))
-                      .map(name => (
-                        <label key={name} className="flex items-center gap-2 px-3 py-2 hover:bg-muted cursor-pointer text-sm">
-                          <input
-                            type="checkbox"
-                            checked={selectedPurposes.includes(name)}
-                            onChange={() => togglePurpose(name)}
-                            className="accent-brand-blue"
-                          />
-                          {name}
-                        </label>
-                      ))}
+                      .map(name => {
+                        const isChecked = selectedPurposes.includes(name);
+                        const isDisabled = !isChecked && selectedPurposes.length >= MAX_PURPOSES;
+                        return (
+                          <label key={name} className={`flex items-center gap-2 px-3 py-2 text-sm ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted cursor-pointer'}`}>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => togglePurpose(name)}
+                              disabled={isDisabled}
+                              className="accent-brand-blue"
+                            />
+                            {name}
+                          </label>
+                        );
+                      })}
                     {PURPOSE_LIST.filter(n => !purposeSearch || n.toLowerCase().includes(purposeSearch.toLowerCase())).length === 0 && (
                       <div className="px-3 py-2 text-sm text-muted-foreground">Не найдено</div>
                     )}
