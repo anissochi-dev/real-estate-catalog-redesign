@@ -4,6 +4,7 @@ import PropertyMapInfrastructure from '@/components/PropertyMapInfrastructure';
 import PropertyCalculators from '@/components/calculators/PropertyCalculators';
 import SimilarListings from '@/components/SimilarListings';
 import RecentlyViewed from '@/components/RecentlyViewed';
+import CharCount from '@/components/ui/CharCount';
 import {
   CONDITION_LABELS, FINISHING_LABELS, PARKING_LABELS,
   ENTRANCE_LABELS, UTILITY_ICONS, ROAD_LINE_LABELS, PURPOSE_LABELS,
