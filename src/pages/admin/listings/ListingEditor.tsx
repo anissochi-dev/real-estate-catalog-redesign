@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ImageUploader from '@/components/admin/ImageUploader';
 import Icon from '@/components/ui/icon';
 import PhonePickerInput from '@/components/admin/PhonePickerInput';
@@ -37,6 +37,18 @@ export default function ListingEditor({
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [purposeOpen, setPurposeOpen] = useState(false);
   const [purposeSearch, setPurposeSearch] = useState('');
+  const purposeRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!purposeOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (purposeRef.current && !purposeRef.current.contains(e.target as Node)) {
+        setPurposeOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [purposeOpen]);
 
   const selectedPurposes: string[] = editing.purpose
     ? editing.purpose.split('|').map(s => s.trim()).filter(Boolean)
@@ -215,7 +227,7 @@ export default function ListingEditor({
                   <span className="ml-2 text-amber-600 font-medium">— достигнут лимит</span>
                 )}
               </label>
-              <div className="relative">
+              <div className="relative" ref={purposeRef}>
                 <div className="flex items-center border rounded-lg overflow-hidden">
                   <Icon name="Search" size={14} className="ml-3 text-muted-foreground flex-shrink-0" />
                   <input

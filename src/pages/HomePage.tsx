@@ -6,6 +6,7 @@ import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
 import ClientLeadsSection from '@/components/ClientLeadsSection';
 import AIMatchModal from '@/components/AIMatchModal';
+import { NEWS_URL } from '@/lib/adminApi';
 
 interface PublicStats {
   total: number;
@@ -40,12 +41,25 @@ const CATEGORIES = [
   { icon: 'Wrench', label: 'Автосервисы', type: 'car_service', gradient: 'from-zinc-500 to-slate-800' },
 ];
 
+interface NewsPreview {
+  id: number; title: string; slug: string; summary?: string;
+  image_url?: string; published_at?: string; created_at: string;
+}
+
 export default function HomePage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare, onNavigate }: HomePageProps) {
   const { settings } = useSettings();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [stats, setStats] = useState<PublicStats>({ total: 0, main_city: 'Краснодар' });
   const [aiOpen, setAiOpen] = useState(false);
+  const [latestNews, setLatestNews] = useState<NewsPreview[]>([]);
+
+  useEffect(() => {
+    fetch(`${NEWS_URL}?action=list&limit=3`)
+      .then(r => r.json())
+      .then(d => setLatestNews(d.news || []))
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     fetch(`${LISTINGS_URL}?resource=public_stats`)
@@ -264,6 +278,51 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
 
       <ClientLeadsSection />
 
+      {/* Блок новостей */}
+      {latestNews.length > 0 && (
+        <section className="py-10 bg-white">
+          <div className="container mx-auto px-4">
+            <div className="flex items-end justify-between mb-6">
+              <div>
+                <h2 className="font-display font-800 text-2xl text-foreground">Новости коммерческой недвижимости</h2>
+                <p className="text-muted-foreground text-sm mt-1">Аналитика рынка Краснодара и Краснодарского края</p>
+              </div>
+              <button
+                onClick={() => navigate('/news')}
+                className="flex items-center gap-1.5 text-brand-blue font-semibold text-sm hover:gap-2 transition-all duration-200 shrink-0"
+              >
+                Все новости <Icon name="ArrowRight" size={14} />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {latestNews.map(n => (
+                <article
+                  key={n.id}
+                  onClick={() => navigate(`/news/${n.slug}`)}
+                  className="group cursor-pointer bg-muted/30 rounded-2xl overflow-hidden border border-border hover:shadow-md hover:-translate-y-1 transition-all duration-200"
+                >
+                  <div className="h-36 bg-gradient-to-br from-brand-blue/10 to-brand-blue/20 relative overflow-hidden">
+                    {n.image_url ? (
+                      <img src={n.image_url} alt={n.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Icon name="Newspaper" size={32} className="text-brand-blue/30" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <h3 className="font-semibold text-sm leading-snug line-clamp-2 group-hover:text-brand-blue transition-colors mb-2">{n.title}</h3>
+                    {n.summary && <p className="text-xs text-muted-foreground line-clamp-2">{n.summary}</p>}
+                    <div className="text-xs text-muted-foreground mt-2">
+                      {new Date(n.published_at || n.created_at).toLocaleDateString('ru', { day: 'numeric', month: 'long' })}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <AIMatchModal
         open={aiOpen}

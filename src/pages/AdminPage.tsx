@@ -13,6 +13,7 @@ import CrmChecks from './admin/crm/CrmChecks';
 import CrmPayments from './admin/crm/CrmPayments';
 import PhoneBook from './admin/PhoneBook';
 import NetworkTenantsAdmin from './admin/NetworkTenantsAdmin';
+import NewsAdmin from './admin/NewsAdmin';
 
 interface Props {
   onExit: () => void;
@@ -37,6 +38,7 @@ export default function AdminPage({ onExit, initialSection }: Props) {
       {section === 'crm-payments' && <CrmPayments />}
       {section === 'phones' && <PhoneBook />}
       {section === 'network-tenants' && <NetworkTenantsAdmin />}
+      {section === 'news' && <NewsAdmin />}
     </AdminLayout>
   );
 }

@@ -239,12 +239,7 @@ export default function ImageUploader({
                       <Icon name="ChevronLeft" size={14} />
                     </button>
                   )}
-                  {folder === 'photos' && (
-                    <button type="button" onClick={e => { e.stopPropagation(); setEraserIdx(i); }}
-                      className="bg-violet-600 text-white rounded p-1 shadow" title="Убрать водяной знак">
-                      <Icon name="Wand2" size={14} />
-                    </button>
-                  )}
+
                   {allowDownload && (
                     <button type="button" onClick={e => { e.stopPropagation(); download(url); }}
                       className="bg-white rounded p-1 shadow" title="Скачать оригинал">

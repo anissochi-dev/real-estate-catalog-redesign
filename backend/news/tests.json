@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "name": "Публичный список новостей",
+      "method": "GET",
+      "path": "/?action=list",
+      "expectedStatus": 200,
+      "expectedBody": {"news": []},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Без авторизации — ошибка",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "admin_list"},
+      "expectedStatus": 403,
+      "expectedBody": {"error": "Нет доступа"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

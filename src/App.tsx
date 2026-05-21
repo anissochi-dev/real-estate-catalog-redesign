@@ -12,6 +12,7 @@ import PropertyPage from './pages/PropertyPage';
 import CategoryPage from './pages/CategoryPage';
 import NotFoundPage from './pages/NotFoundPage';
 import DeclinedPage from './pages/DeclinedPage';
+import { NewsListPage, NewsArticlePage } from './pages/NewsPage';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import CompareBar from './components/CompareBar';
@@ -62,7 +63,7 @@ export interface Property {
   createdAt?: string;
 }
 
-export type Page = 'home' | 'catalog' | 'map' | 'favorites' | 'compare' | 'network-tenants';
+export type Page = 'home' | 'catalog' | 'map' | 'favorites' | 'compare' | 'network-tenants' | 'news';
 export type AppView = 'site' | 'login' | 'admin';
 
 const PATH_BY_PAGE: Record<Page, string> = {
@@ -72,6 +73,7 @@ const PATH_BY_PAGE: Record<Page, string> = {
   favorites: '/favorites',
   compare: '/compare',
   'network-tenants': '/network-tenants',
+  news: '/news',
 };
 
 function pageFromPath(pathname: string): Page {
@@ -80,6 +82,7 @@ function pageFromPath(pathname: string): Page {
   if (pathname.startsWith('/favorites')) return 'favorites';
   if (pathname.startsWith('/compare')) return 'compare';
   if (pathname.startsWith('/network-tenants')) return 'network-tenants';
+  if (pathname.startsWith('/news')) return 'news';
   return 'home';
 }
 
@@ -88,7 +91,7 @@ const VIEW_KEY = 'biznest_view';
 function loadInitialView(): AppView {
   try {
     // Публичные страницы всегда открываются как сайт, независимо от состояния сессии
-    const publicPaths = ['/object/', '/catalog', '/map', '/favorites', '/compare', '/network-tenants', '/catalog/'];
+    const publicPaths = ['/object/', '/catalog', '/map', '/favorites', '/compare', '/network-tenants', '/catalog/', '/news'];
     if (publicPaths.some(p => window.location.pathname.startsWith(p))) return 'site';
     const v = localStorage.getItem(VIEW_KEY);
     if (v === 'admin' || v === 'login' || v === 'site') return v;
@@ -128,17 +131,18 @@ export default function App() {
   // Throttle на стороне клиента — не чаще раза в 60 мин. Сервер дополнительно проверяет расписание.
   useEffect(() => {
     const SEO_CRON_URL = 'https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d';
-    const THROTTLE_KEY = 'seo_cron_last_ping';
+    const NEWS_CRON_URL = 'https://functions.poehali.dev/984cad3a-0783-4408-a614-52ed36f8c77f';
     const THROTTLE_MS = 60 * 60 * 1000; // 1 час
     try {
-      const last = parseInt(localStorage.getItem(THROTTLE_KEY) || '0', 10);
-      if (Date.now() - last > THROTTLE_MS) {
-        localStorage.setItem(THROTTLE_KEY, String(Date.now()));
-        fetch(SEO_CRON_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'ping' }),
-        }).catch(() => {}); // тихо игнорируем ошибки
+      const seoLast = parseInt(localStorage.getItem('seo_cron_last_ping') || '0', 10);
+      if (Date.now() - seoLast > THROTTLE_MS) {
+        localStorage.setItem('seo_cron_last_ping', String(Date.now()));
+        fetch(SEO_CRON_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ping' }) }).catch(() => {});
+      }
+      const newsLast = parseInt(localStorage.getItem('news_cron_last_ping') || '0', 10);
+      if (Date.now() - newsLast > THROTTLE_MS) {
+        localStorage.setItem('news_cron_last_ping', String(Date.now()));
+        fetch(`${NEWS_CRON_URL}?action=ping_cron`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {});
       }
     } catch { /* ignore */ }
   }, []);
@@ -308,6 +312,8 @@ export default function App() {
               onToggleCompare={toggleCompare}
             />
           } />
+          <Route path="/news" element={<NewsListPage />} />
+          <Route path="/news/:slug" element={<NewsArticlePage />} />
           <Route path="/declined" element={<DeclinedPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

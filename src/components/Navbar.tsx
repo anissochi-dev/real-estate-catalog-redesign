@@ -18,6 +18,7 @@ const navItems = [
   { id: 'home' as Page, label: 'Главная', icon: 'Home' },
   { id: 'catalog' as Page, label: 'Каталог', icon: 'Building2' },
   { id: 'map' as Page, label: 'Карта', icon: 'Map' },
+  { id: 'news' as Page, label: 'Новости', icon: 'Newspaper' },
   { id: 'favorites' as Page, label: 'Избранное', icon: 'Heart' },
 ];
 
