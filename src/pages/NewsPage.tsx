@@ -8,10 +8,10 @@ interface NewsItem {
   id: number;
   title: string;
   slug: string;
-  summary: string;
+  summary?: string;
   image_url?: string;
   source_name?: string;
-  category: string;
+  category?: string;
   published_at?: string;
   created_at: string;
   content?: string;
