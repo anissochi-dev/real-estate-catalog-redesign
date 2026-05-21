@@ -190,10 +190,12 @@ def _load_keys_from_db(cur) -> tuple:
         cur.execute(f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
         row = cur.fetchone()
         if row:
-            return (row.get('yandex_api_key') or '', row.get('yandex_folder_id') or '')
-    except Exception:
-        pass
-    return ('', '')
+            key = (row.get('yandex_api_key') or '').strip()
+            folder = (row.get('yandex_folder_id') or '').strip()
+            return (key, folder)
+    except Exception as e:
+        print(f'[ai-assistant] _load_keys_from_db error: {e}')
+    return (os.environ.get('YANDEX_API_KEY', ''), os.environ.get('YANDEX_FOLDER_ID', ''))
 
 
 def _call_yandex_gpt(system_prompt: str, user_prompt: str, db_key: str = '', db_folder: str = '') -> dict:

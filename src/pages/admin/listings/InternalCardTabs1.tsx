@@ -13,7 +13,7 @@ export function Spinner() {
   );
 }
 
-function translate(value: string | null | undefined, map: string[][]): string {
+function translate(value: string | null | undefined, map: readonly (readonly string[])[]): string {
   if (!value) return '—';
   const found = map.find(([key]) => key === value);
   return found ? found[1] : value;
