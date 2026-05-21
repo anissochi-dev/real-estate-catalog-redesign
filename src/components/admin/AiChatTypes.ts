@@ -32,7 +32,9 @@ export interface QuickCmd {
 
 export const QUICK_CMDS: QuickCmd[] = [
   { id: 'agent', label: 'Агент', icon: 'Bot', action: 'agent', prompt: 'Проанализируй текущее состояние каталога и лидов. Предложи самые важные действия, которые нужно выполнить прямо сейчас.' },
+  { id: 'edit_site', label: 'Редактировать сайт', icon: 'Pencil', action: 'agent', prompt: 'Ты имеешь полный доступ к редактированию сайта. Проанализируй объекты каталога и предложи конкретные улучшения: обнови устаревшие описания, исправь SEO, обнови цены если нужно. Предложи действия через агента.' },
   { id: 'analytics_full', label: 'Полная аналитика', icon: 'BarChart3', action: 'analytics_full', prompt: 'Проведи полный анализ системы: объекты, лиды, конверсия, тренды. Дай структурированный отчёт.' },
+  { id: 'improve_listings', label: 'Улучшить объекты', icon: 'Sparkles', action: 'agent', prompt: 'Найди объекты с пустыми описаниями, плохим SEO или некорректными данными. Предложи конкретные изменения для каждого — обнови через агента.' },
   { id: 'security', label: 'Безопасность', icon: 'ShieldCheck', action: 'security', prompt: 'Проверь данные системы на XSS-инъекции, подозрительные паттерны и угрозы безопасности.' },
   { id: 'marketing', label: 'Маркетинг', icon: 'TrendingUp', action: 'marketing', prompt: 'Дай маркетинговые рекомендации по каталогу: конверсия, ЦА, ценообразование, позиционирование.' },
   { id: 'modernize', label: 'Оптимизация', icon: 'Zap', action: 'modernize', prompt: 'Предложи план улучшений контента каталога для повышения конверсии и SEO.' },
@@ -58,6 +60,8 @@ export const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
   security_check: { label: 'Проверка безопасности', icon: 'ShieldCheck' },
   analytics_report: { label: 'Аналитика', icon: 'BarChart3' },
   marketing_tips: { label: 'Маркетинг', icon: 'TrendingUp' },
+  update_settings: { label: 'Обновить настройки', icon: 'Settings' },
+  create_listing: { label: 'Создать объект', icon: 'PlusCircle' },
   note: { label: 'Совет', icon: 'Lightbulb' },
 };
 

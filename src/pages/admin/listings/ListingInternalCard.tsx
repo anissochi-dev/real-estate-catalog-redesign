@@ -20,6 +20,7 @@ export default function ListingInternalCard({ listingId, onClose, onBrokerChange
   const [tab, setTab] = useState<TabId>('overview');
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -33,6 +34,12 @@ export default function ListingInternalCard({ listingId, onClose, onBrokerChange
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  const copyId = (id: number) => {
+    navigator.clipboard?.writeText(String(id)).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
 
   if (loading || !listing) {
     return (
@@ -58,9 +65,24 @@ export default function ListingInternalCard({ listingId, onClose, onBrokerChange
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-display font-700 text-base truncate">{listing.title}</span>
               {listing.public_code && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue font-semibold shrink-0">
+                <button
+                  onClick={() => copyId(listing.public_code!)}
+                  title="Нажмите, чтобы скопировать ID"
+                  className="text-xs px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue font-semibold shrink-0 hover:bg-brand-blue/20 transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  {copied ? <Icon name="Check" size={10} /> : <Icon name="Copy" size={10} />}
                   ID {listing.public_code}
-                </span>
+                </button>
+              )}
+              {!listing.public_code && (
+                <button
+                  onClick={() => copyId(listing.id)}
+                  title="Нажмите, чтобы скопировать ID"
+                  className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-semibold shrink-0 hover:bg-muted/80 transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  {copied ? <Icon name="Check" size={10} /> : <Icon name="Copy" size={10} />}
+                  #{listing.id}
+                </button>
               )}
               {listing.is_hot && <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-semibold shrink-0">Горячее</span>}
               {listing.is_new && <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold shrink-0">Новинка</span>}
@@ -93,6 +115,7 @@ export default function ListingInternalCard({ listingId, onClose, onBrokerChange
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
           {tab === 'overview' && <TabOverview listing={listing} siteUrl={settings.site_url} />}
+          {tab === 'comments' && <TabComments listingId={listingId} />}
           {tab === 'price_history' && <TabPriceHistory listingId={listingId} />}
           {tab === 'stats' && <TabStats listingId={listingId} listing={listing} />}
           {tab === 'leads' && <TabLeads listingId={listingId} />}
