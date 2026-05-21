@@ -154,7 +154,7 @@ export default function GeneralTab({ tab, s, setS, cities, saved, save }: Props)
         </div>
         <div className="text-xs text-muted-foreground">
           На уровне отдельного объявления можно отключить водяной знак — галочкой «Использовать водяной знак».
-          Наложение происходит в браузере при загрузке фото объекта.
+          Наложение происходит на сервере при загрузке фото объекта.
         </div>
       </div>
       <div className="flex items-center gap-3">

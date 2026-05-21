@@ -64,7 +64,6 @@ export default function ImageUploader({
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
-  const [removingWm, setRemovingWm] = useState<number | null>(null);
   const [eraserIdx, setEraserIdx] = useState<number | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
