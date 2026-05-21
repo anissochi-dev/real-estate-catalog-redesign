@@ -18,7 +18,6 @@ interface Props {
   photos: string[];
   setPhotos: (p: string[]) => void;
   cities: City[];
-  purposes: Purpose[];
   aiLoading: boolean;
   aiTagsLoading: boolean;
   aiSeoLoading: boolean;
@@ -32,7 +31,7 @@ interface Props {
 }
 
 export default function ListingEditor({
-  editing, setEditing, photos, setPhotos, cities, purposes,
+  editing, setEditing, photos, setPhotos, cities,
   aiLoading, aiTagsLoading, aiSeoLoading, aiAllLoading,
   onDescribe, onGenerateTags, onGenerateSeo, onGenerateAll, onClose, onSave,
 }: Props) {

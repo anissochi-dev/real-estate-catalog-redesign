@@ -22,7 +22,7 @@ const PLATFORM_META: Record<string, { label: string; icon: string; color: string
   linkedin:   { label: 'LinkedIn',      icon: 'Linkedin',      color: 'text-blue-700',   has_api: false, hint_token: '',                                                             hint_extra: '' },
   yandex_zen: { label: 'Яндекс Дзен',  icon: 'BookOpen',      color: 'text-yellow-600', has_api: false, hint_token: '',                                                             hint_extra: '' },
   tenchat:    { label: 'TenChat',       icon: 'Users',         color: 'text-emerald-600',has_api: false, hint_token: '',                                                             hint_extra: '' },
-  mak:        { label: 'МАК',           icon: 'Building2',     color: 'text-purple-600', has_api: false, hint_token: '',                                                             hint_extra: '' },
+  max:        { label: 'Макс',          icon: 'MessageCircle', color: 'text-violet-600', has_api: false, hint_token: '',                                                             hint_extra: '' },
   dvizhenie:  { label: 'dvizhenie.ru',  icon: 'TrendingUp',    color: 'text-orange-600', has_api: false, hint_token: '',                                                             hint_extra: '' },
 };
 
@@ -33,7 +33,7 @@ const DEFAULT_TEMPLATES: Record<string, string> = {
   linkedin:   '{title}\n\n{price} · {area}\n📍 {address}\n\n{description}\n\n{url}',
   yandex_zen: '{title}\n\n{description}\n\nСсылка: {url}',
   tenchat:    '🏢 {title}\n💰 {price} · {area}\n📍 {address}\n\n{description}\n\n{url}',
-  mak:        '{title} | {price} | {area} | {address}\n\n{url}',
+  max:        '🏢 {title}\n💰 {price} · 📐 {area}\n📍 {address}\n\n{description}\n\n🔗 {url}',
   dvizhenie:  '{title}\n{price} · {area} · {address}\n\n{url}',
 };
 

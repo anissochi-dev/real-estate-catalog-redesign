@@ -8,6 +8,7 @@ export const CRM_CHECKS_URL = 'https://functions.poehali.dev/be6cb907-b50e-48fa-
 export const CRM_PAYMENTS_URL = 'https://functions.poehali.dev/74ca5694-a05f-4053-992d-5e04cc5bc7a4';
 export const NEWS_URL = 'https://functions.poehali.dev/984cad3a-0783-4408-a614-52ed36f8c77f';
 export const SOCIAL_POST_URL = 'https://functions.poehali.dev/2f8f20f3-5dba-4a58-a1f6-aa6e886f4e5e';
+export const CONTRACT_BOT_URL = 'https://functions.poehali.dev/3128fdf1-b90c-44a3-b580-3d5481d79a68';
 
 export type Role = 'admin' | 'editor' | 'manager' | 'client' | 'broker' | 'director' | 'office_manager';
 

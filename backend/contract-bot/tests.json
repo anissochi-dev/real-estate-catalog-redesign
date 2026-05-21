@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "name": "Без авторизации — 403",
+      "method": "GET",
+      "path": "/?action=sessions",
+      "expectedStatus": 403,
+      "expectedBody": {"error": "Нет доступа"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

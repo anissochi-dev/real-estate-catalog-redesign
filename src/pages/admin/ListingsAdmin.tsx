@@ -81,7 +81,6 @@ export default function ListingsAdmin() {
           photos={s.photos}
           setPhotos={s.setPhotos}
           cities={s.cities}
-          purposes={s.purposes}
           aiLoading={s.aiLoading}
           aiTagsLoading={s.aiTagsLoading}
           aiSeoLoading={s.aiSeoLoading}

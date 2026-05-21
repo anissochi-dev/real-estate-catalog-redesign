@@ -30,6 +30,24 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const shareNetworks = [
+    { label: 'ВКонтакте', color: 'bg-blue-600', href: `https://vk.com/share.php?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(item?.title || '')}`, icon: '🔵' },
+    { label: 'Telegram',  color: 'bg-sky-500',  href: `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent((item?.title || '') + '\n')}`, icon: '✈️' },
+    { label: 'WhatsApp',  color: 'bg-green-500',href: `https://wa.me/?text=${encodeURIComponent((item?.title || '') + '\n' + shareUrl)}`, icon: '💬' },
+    { label: 'Макс',      color: 'bg-violet-600',href: `https://max.ru/share?url=${encodeURIComponent(shareUrl)}`, icon: '💜' },
+  ];
 
   useEffect(() => {
     const id = extractIdFromSlug(slug || '');
@@ -136,9 +154,41 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
             { label: `${typeLabel} · ${dealLabel}`, to: `/catalog?type=${item.type}&deal=${item.deal}` },
             { label: item.title },
           ]} />
-          <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground whitespace-nowrap">
-            <Icon name="ArrowLeft" size={14} /> Назад
-          </button>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <button
+                onClick={() => setShareOpen(v => !v)}
+                className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-border hover:bg-muted transition whitespace-nowrap"
+              >
+                <Icon name="Share2" size={13} /> Поделиться
+              </button>
+              {shareOpen && (
+                <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-border rounded-2xl shadow-xl p-3 min-w-[220px]">
+                  <div className="text-xs font-semibold text-muted-foreground mb-2 px-1">Поделиться объектом</div>
+                  {shareNetworks.map(n => (
+                    <a key={n.label} href={n.href} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-muted transition text-sm"
+                      onClick={() => setShareOpen(false)}
+                    >
+                      <span className="text-base">{n.icon}</span>
+                      <span>{n.label}</span>
+                    </a>
+                  ))}
+                  <div className="border-t border-border mt-2 pt-2">
+                    <button onClick={copyLink}
+                      className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-muted transition text-sm w-full text-left">
+                      <Icon name={copied ? 'Check' : 'Copy'} size={14} className={copied ? 'text-emerald-600' : ''} />
+                      {copied ? 'Ссылка скопирована!' : 'Скопировать ссылку'}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {shareOpen && <div className="fixed inset-0 z-40" onClick={() => setShareOpen(false)} />}
+            </div>
+            <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground whitespace-nowrap">
+              <Icon name="ArrowLeft" size={14} /> Назад
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
