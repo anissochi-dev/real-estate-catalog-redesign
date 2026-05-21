@@ -85,9 +85,11 @@ export default function ListingsAdmin() {
           aiLoading={s.aiLoading}
           aiTagsLoading={s.aiTagsLoading}
           aiSeoLoading={s.aiSeoLoading}
+          aiAllLoading={s.aiAllLoading}
           onDescribe={s.aiDescribe}
           onGenerateTags={s.generateTags}
           onGenerateSeo={s.generateSeo}
+          onGenerateAll={s.generateAll}
           onClose={() => { s.setEditing(null); s.setPhotos([]); }}
           onSave={s.save}
         />

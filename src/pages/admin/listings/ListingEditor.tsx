@@ -22,17 +22,19 @@ interface Props {
   aiLoading: boolean;
   aiTagsLoading: boolean;
   aiSeoLoading: boolean;
+  aiAllLoading: boolean;
   onDescribe: () => void;
   onGenerateTags: () => void;
   onGenerateSeo: () => void;
+  onGenerateAll: () => void;
   onClose: () => void;
   onSave: () => void;
 }
 
 export default function ListingEditor({
   editing, setEditing, photos, setPhotos, cities, purposes,
-  aiLoading, aiTagsLoading, aiSeoLoading,
-  onDescribe, onGenerateTags, onGenerateSeo, onClose, onSave,
+  aiLoading, aiTagsLoading, aiSeoLoading, aiAllLoading,
+  onDescribe, onGenerateTags, onGenerateSeo, onGenerateAll, onClose, onSave,
 }: Props) {
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [purposeOpen, setPurposeOpen] = useState(false);
