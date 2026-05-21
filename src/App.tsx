@@ -127,6 +127,17 @@ export default function App() {
   const currentPage: Page = pageFromPath(location.pathname);
   const setCurrentPage = (p: Page) => navigate(PATH_BY_PAGE[p]);
 
+  // SPA redirect: восстанавливаем путь после 404.html редиректа
+  useEffect(() => {
+    try {
+      const redirect = sessionStorage.getItem('spa_redirect');
+      if (redirect && redirect !== '/') {
+        sessionStorage.removeItem('spa_redirect');
+        navigate(redirect, { replace: true });
+      }
+    } catch { /* ignore */ }
+  }, [navigate]);
+
   // Тихий cron-пинг: при каждой загрузке сайта проверяем, не пора ли запустить SEO-оптимизацию.
   // Throttle на стороне клиента — не чаще раза в 60 мин. Сервер дополнительно проверяет расписание.
   useEffect(() => {

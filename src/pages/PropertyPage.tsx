@@ -43,10 +43,10 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   };
 
   const shareNetworks = [
-    { label: 'ВКонтакте', color: 'bg-blue-600', href: `https://vk.com/share.php?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(item?.title || '')}`, icon: '🔵' },
-    { label: 'Telegram',  color: 'bg-sky-500',  href: `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent((item?.title || '') + '\n')}`, icon: '✈️' },
-    { label: 'WhatsApp',  color: 'bg-green-500',href: `https://wa.me/?text=${encodeURIComponent((item?.title || '') + '\n' + shareUrl)}`, icon: '💬' },
-    { label: 'Макс',      color: 'bg-violet-600',href: `https://max.ru/share?url=${encodeURIComponent(shareUrl)}`, icon: '💜' },
+    { label: 'ВКонтакте', href: `https://vk.com/share.php?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(item?.title || '')}`, icon: '🔵' },
+    { label: 'Telegram',  href: `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent((item?.title || '') + '\n')}`, icon: '✈️' },
+    { label: 'WhatsApp',  href: `https://wa.me/?text=${encodeURIComponent((item?.title || '') + '\n' + shareUrl)}`, icon: '💬' },
+    { label: 'Макс',      href: `https://max.ru/share?url=${encodeURIComponent(shareUrl)}`, icon: '💜' },
   ];
 
   useEffect(() => {

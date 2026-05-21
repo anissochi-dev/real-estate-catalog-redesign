@@ -13,6 +13,7 @@ GET  /?action=download&id=  — скачать готовый договор (pl
 import json
 import os
 import base64
+import io
 import urllib.request
 import urllib.parse
 from datetime import datetime, timezone
@@ -41,6 +42,125 @@ CONTRACT_TYPES = {
     'intent': 'Соглашение о намерениях',
     'custom': 'Произвольный договор',
 }
+
+
+def _generate_docx(text: str, title: str) -> bytes:
+    """Генерирует DOCX файл из текста договора."""
+    from docx import Document
+    from docx.shared import Pt, Cm
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    doc = Document()
+
+    # Поля страницы
+    section = doc.sections[0]
+    section.left_margin = Cm(3)
+    section.right_margin = Cm(1.5)
+    section.top_margin = Cm(2)
+    section.bottom_margin = Cm(2)
+
+    # Заголовок
+    heading = doc.add_paragraph()
+    heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = heading.add_run(title)
+    run.bold = True
+    run.font.size = Pt(14)
+
+    doc.add_paragraph()
+
+    # Текст договора — разбиваем на абзацы
+    paragraphs = text.split('\n')
+    for para_text in paragraphs:
+        p = doc.add_paragraph()
+        stripped = para_text.strip()
+        if not stripped:
+            continue
+        # Заголовки разделов (полностью заглавные или с номером)
+        if stripped.isupper() or (len(stripped) < 80 and stripped.endswith(':')):
+            run = p.add_run(stripped)
+            run.bold = True
+            run.font.size = Pt(12)
+        else:
+            run = p.add_run(stripped)
+            run.font.size = Pt(12)
+        p.paragraph_format.first_line_indent = Cm(1.25)
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def _generate_pdf(text: str, title: str) -> bytes:
+    """Генерирует PDF файл из текста договора."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    import urllib.request as ur
+
+    buf = io.BytesIO()
+
+    # Загружаем шрифт с поддержкой кириллицы
+    font_url = 'https://cdn.jsdelivr.net/npm/@fontsource/pt-serif@5.0.8/files/pt-serif-latin-ext-400-normal.woff2'
+    # Используем встроенный шрифт Helvetica с транслитерацией — или подгружаем через URL
+    # Простой подход: используем reportlab с кодировкой cp1251
+    try:
+        font_resp = ur.urlopen(
+            'https://fonts.gstatic.com/s/ptserif/v18/EJRVQgYoZZY2vCFuvDFR.ttf',
+            timeout=5
+        )
+        font_data = font_resp.read()
+        pdfmetrics.registerFont(TTFont('PTSerif', io.BytesIO(font_data)))
+        body_font = 'PTSerif'
+    except Exception:
+        body_font = 'Helvetica'
+
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=3*cm, rightMargin=1.5*cm,
+        topMargin=2*cm, bottomMargin=2*cm,
+    )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'ContractTitle', parent=styles['Normal'],
+        fontName=body_font, fontSize=14, leading=18,
+        alignment=TA_CENTER, spaceAfter=12, spaceBefore=6,
+        fontWeight='bold' if body_font == 'Helvetica' else 'normal',
+    )
+    body_style = ParagraphStyle(
+        'ContractBody', parent=styles['Normal'],
+        fontName=body_font, fontSize=11, leading=16,
+        alignment=TA_JUSTIFY, spaceAfter=4,
+        firstLineIndent=1.25*cm,
+    )
+    bold_style = ParagraphStyle(
+        'ContractBold', parent=styles['Normal'],
+        fontName=body_font + '-Bold' if body_font == 'Helvetica' else body_font,
+        fontSize=12, leading=16,
+        spaceAfter=4, spaceBefore=8,
+    )
+
+    story = []
+    story.append(Paragraph(title.replace('&', '&amp;').replace('<', '&lt;'), title_style))
+    story.append(Spacer(1, 0.3*cm))
+
+    for line in text.split('\n'):
+        stripped = line.strip()
+        if not stripped:
+            story.append(Spacer(1, 0.2*cm))
+            continue
+        safe = stripped.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        if stripped.isupper() or (len(stripped) < 80 and stripped.endswith(':')):
+            story.append(Paragraph(safe, bold_style))
+        else:
+            story.append(Paragraph(safe, body_style))
+
+    doc.build(story)
+    return buf.getvalue()
 
 
 def _ok(body, status=200):
@@ -366,7 +486,7 @@ def handler(event: dict, context) -> dict:
                 conn.commit()
                 return _ok({'ok': True, 'filled_contract': filled, 'result_url': result_url})
 
-            # ── СКАЧАТЬ ДОГОВОР ───────────────────────────────────────
+            # ── СКАЧАТЬ ДОГОВОР (TXT) ─────────────────────────────────
             if action == 'download' and method == 'GET':
                 sid = int(qs.get('id', 0))
                 cur.execute(
@@ -385,6 +505,52 @@ def handler(event: dict, context) -> dict:
                     },
                     'body': row['filled_contract'],
                 }
+
+            # ── СКАЧАТЬ ДОГОВОР В ФОРМАТЕ (DOCX/PDF) ─────────────────
+            if action == 'download_format':
+                sid = int(body.get('session_id', 0))
+                fmt = (body.get('format') or 'docx').lower()
+                if fmt not in ('docx', 'doc', 'pdf'):
+                    return _err('Формат должен быть docx, doc или pdf')
+                cur.execute(
+                    f"SELECT title, filled_contract FROM {SCHEMA}.contract_sessions "
+                    f"WHERE id = {sid} AND user_id = {uid}"
+                )
+                row = cur.fetchone()
+                if not row or not row['filled_contract']:
+                    return _err('Договор ещё не заполнен', 404)
+
+                text = row['filled_contract']
+                title = row['title'] or f'Договор #{sid}'
+
+                try:
+                    if fmt in ('docx', 'doc'):
+                        file_bytes = _generate_docx(text, title)
+                        content_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                        ext = 'docx'
+                    else:
+                        file_bytes = _generate_pdf(text, title)
+                        content_type = 'application/pdf'
+                        ext = 'pdf'
+                except Exception as e:
+                    return _err(f'Ошибка генерации файла: {str(e)[:200]}')
+
+                # Сохраняем в S3
+                s3 = _s3()
+                key = f"contracts/{uid}/{sid}/contract_{sid}.{ext}"
+                s3.put_object(Bucket='files', Key=key, Body=file_bytes, ContentType=content_type)
+                file_url = _cdn_url(key)
+
+                # Возвращаем base64 для скачивания в браузере
+                b64 = base64.b64encode(file_bytes).decode('utf-8')
+                safe_title = title.replace(' ', '_').replace('/', '_')[:40]
+                return _ok({
+                    'ok': True,
+                    'file_base64': b64,
+                    'file_url': file_url,
+                    'content_type': content_type,
+                    'filename': f'{safe_title}.{ext}',
+                })
 
             return _err('Неизвестный action', 404)
     finally:

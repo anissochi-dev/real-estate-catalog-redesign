@@ -46,6 +46,7 @@ export default function ContractBotAdmin() {
   const [filling, setFilling] = useState(false);
   const [uploadDocType, setUploadDocType] = useState('party1');
   const [shareOpen, setShareOpen] = useState(false);
+  const [downloading, setDownloading] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const loadSessions = () => {
@@ -158,6 +159,32 @@ export default function ContractBotAdmin() {
     a.download = `contract_${current.id}.txt`;
     a.click();
     URL.revokeObjectURL(a.href);
+  };
+
+  const downloadFormat = async (fmt: 'docx' | 'pdf') => {
+    if (!current?.filled_contract || !current?.id) return;
+    setDownloading(fmt);
+    try {
+      const r = await fetch(CONTRACT_BOT_URL, {
+        method: 'POST', headers: H,
+        body: JSON.stringify({ action: 'download_format', session_id: current.id, format: fmt }),
+      });
+      const d = await r.json();
+      if (d.error) { toast.error(d.error); return; }
+      const b64 = d.file_base64;
+      const binary = atob(b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: d.content_type });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = d.filename || `contract_${current.id}.${fmt}`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success(`Договор скачан в формате ${fmt.toUpperCase()}`);
+    } finally {
+      setDownloading(null);
+    }
   };
 
   const copyContractText = () => {
@@ -371,32 +398,49 @@ export default function ContractBotAdmin() {
                     className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition" title="Копировать текст">
                     <Icon name="Copy" size={14} />
                   </button>
-                  <button onClick={downloadContract}
-                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition" title="Скачать .txt">
-                    <Icon name="Download" size={14} />
-                  </button>
                   <div className="relative">
                     <button onClick={() => setShareOpen(v => !v)}
-                      className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition" title="Поделиться">
-                      <Icon name="Share2" size={14} />
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition text-xs font-medium border border-border" title="Скачать">
+                      <Icon name="Download" size={13} />
+                      Скачать
                     </button>
                     {shareOpen && (
-                      <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-border rounded-xl shadow-xl p-3 min-w-[180px]">
-                        <button onClick={() => { copyContractText(); setShareOpen(false); }}
-                          className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-muted text-sm w-full text-left">
-                          <Icon name="Copy" size={13} /> Копировать текст
-                        </button>
+                      <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-border rounded-xl shadow-xl p-3 min-w-[200px]">
+                        <div className="text-xs text-muted-foreground font-semibold px-2 mb-2">Выберите формат</div>
                         <button onClick={() => { downloadContract(); setShareOpen(false); }}
                           className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-muted text-sm w-full text-left">
-                          <Icon name="Download" size={13} /> Скачать .txt
+                          <Icon name="FileText" size={13} className="text-muted-foreground" />
+                          Скачать .TXT
                         </button>
-                        {current?.result_url && (
-                          <a href={current.result_url} target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-muted text-sm w-full text-left"
-                            onClick={() => setShareOpen(false)}>
-                            <Icon name="ExternalLink" size={13} /> Открыть файл
-                          </a>
-                        )}
+                        <button onClick={() => { downloadFormat('docx'); setShareOpen(false); }}
+                          disabled={downloading === 'docx'}
+                          className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-muted text-sm w-full text-left disabled:opacity-50">
+                          {downloading === 'docx'
+                            ? <Icon name="Loader2" size={13} className="animate-spin" />
+                            : <Icon name="FileType" size={13} className="text-blue-600" />}
+                          Скачать .DOCX
+                        </button>
+                        <button onClick={() => { downloadFormat('pdf'); setShareOpen(false); }}
+                          disabled={downloading === 'pdf'}
+                          className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-muted text-sm w-full text-left disabled:opacity-50">
+                          {downloading === 'pdf'
+                            ? <Icon name="Loader2" size={13} className="animate-spin" />
+                            : <Icon name="FileType2" size={13} className="text-red-600" />}
+                          Скачать .PDF
+                        </button>
+                        <div className="border-t border-border mt-2 pt-2">
+                          <button onClick={() => { copyContractText(); setShareOpen(false); }}
+                            className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-muted text-sm w-full text-left">
+                            <Icon name="Copy" size={13} /> Копировать текст
+                          </button>
+                          {current?.result_url && (
+                            <a href={current.result_url} target="_blank" rel="noopener noreferrer"
+                              className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-muted text-sm w-full text-left"
+                              onClick={() => setShareOpen(false)}>
+                              <Icon name="ExternalLink" size={13} /> Открыть файл
+                            </a>
+                          )}
+                        </div>
                       </div>
                     )}
                     {shareOpen && <div className="fixed inset-0 z-40" onClick={() => setShareOpen(false)} />}
