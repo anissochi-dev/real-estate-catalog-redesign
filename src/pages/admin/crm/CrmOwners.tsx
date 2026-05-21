@@ -22,6 +22,8 @@ interface Owner {
   creator?: string;
   listings_count: number;
   deals_count: number;
+  listings?: { id: number; title: string; address?: string; price?: number; status?: string }[];
+  deals?: { id: number; title: string; stage?: string; amount?: number; commission?: number; created_at?: string }[];
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -53,7 +55,7 @@ export default function CrmOwners() {
     },
   });
 
-  useQuery({
+  const { data: ownerDetail, isLoading: detailLoading } = useQuery({
     queryKey: ['crm-owner', selectedOwner?.id],
     queryFn: async () => {
       const r = await fetch(`${CRM_URL}/owners/${selectedOwner!.id}`, { headers });
