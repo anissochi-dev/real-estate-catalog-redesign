@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react';
 import { uploadFile } from '@/lib/adminApi';
 import { useSettings } from '@/contexts/SettingsContext';
-import { applyWatermarkClient } from '@/lib/applyWatermark';
 import Icon from '@/components/ui/icon';
 import WatermarkEraser from './WatermarkEraser';
 
@@ -81,12 +80,9 @@ export default function ImageUploader({
       try {
         // 1. Компрессия
         const compressed = shouldCompress ? await compressImage(f) : f;
-        // 2. Наложение водяного знака на клиенте (если включено)
-        const ready = (applyWatermark && settings.watermark_enabled && settings.watermark_url)
-          ? await applyWatermarkClient(compressed, settings)
-          : compressed;
-        // 3. Загрузка итогового файла на сервер
-        const url = await uploadFile(ready, folder, false);
+        // 2. Загрузка на сервер (бэкенд сам накладывает водяной знак если apply_watermark=true)
+        const needWm = !!(applyWatermark && settings.watermark_enabled && settings.watermark_url);
+        const url = await uploadFile(compressed, folder, needWm);
         uploaded.push(url);
         setProgress(p => ({ ...p, done: p.done + 1 }));
       } catch (e: unknown) {
