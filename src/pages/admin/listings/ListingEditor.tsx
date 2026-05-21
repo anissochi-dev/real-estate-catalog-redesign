@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import ImageUploader from '@/components/admin/ImageUploader';
 import Icon from '@/components/ui/icon';
 import PhonePickerInput from '@/components/admin/PhonePickerInput';
+import { SOCIAL_POST_URL, getToken } from '@/lib/adminApi';
+import { toast } from 'sonner';
 import {
   Listing, City, Purpose,
   CATS, DEALS, CONDITIONS, PURPOSE_LIST,
@@ -20,24 +22,46 @@ interface Props {
   aiLoading: boolean;
   aiTagsLoading: boolean;
   aiSeoLoading: boolean;
-  aiAllLoading: boolean;
   onDescribe: () => void;
   onGenerateTags: () => void;
   onGenerateSeo: () => void;
-  onGenerateAll: () => void;
   onClose: () => void;
   onSave: () => void;
 }
 
 export default function ListingEditor({
   editing, setEditing, photos, setPhotos, cities, purposes,
-  aiLoading, aiTagsLoading, aiSeoLoading, aiAllLoading,
-  onDescribe, onGenerateTags, onGenerateSeo, onGenerateAll, onClose, onSave,
+  aiLoading, aiTagsLoading, aiSeoLoading,
+  onDescribe, onGenerateTags, onGenerateSeo, onClose, onSave,
 }: Props) {
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [purposeOpen, setPurposeOpen] = useState(false);
   const [purposeSearch, setPurposeSearch] = useState('');
+  const [posting, setPosting] = useState(false);
   const purposeRef = useRef<HTMLDivElement>(null);
+
+  const postToSocials = async () => {
+    if (!editing.id) return;
+    setPosting(true);
+    try {
+      const r = await fetch(SOCIAL_POST_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Auth-Token': getToken() },
+        body: JSON.stringify({ action: 'post', entity_type: 'listing', entity_id: editing.id }),
+      });
+      const d = await r.json();
+      if (d.error) { toast.error(d.error); return; }
+      const results: { platform: string; label: string; ok?: boolean; manual?: boolean; error?: string }[] = d.results || [];
+      const ok = results.filter(r => r.ok).length;
+      const manual = results.filter(r => r.manual).length;
+      const fail = results.filter(r => r.error).length;
+      if (ok > 0 || manual > 0) toast.success(`Опубликовано: ${ok} авто, ${manual} для ручной публикации${fail > 0 ? `, ошибок: ${fail}` : ''}`);
+      else if (fail > 0) toast.error(`Ошибки публикации: ${fail}`);
+      else toast.info('Нет включённых платформ с автопостингом для объектов');
+    } finally {
+      setPosting(false);
+    }
+  };
 
   useEffect(() => {
     if (!purposeOpen) return;
@@ -314,11 +338,22 @@ export default function ListingEditor({
           />
         </div>
 
-        <div className="p-5 border-t border-border flex justify-end gap-3 sticky bottom-0 bg-white">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm">Отмена</button>
-          <button onClick={handleSave} className="btn-blue text-white px-5 py-2 rounded-xl text-sm font-semibold">
-            Сохранить
-          </button>
+        <div className="p-5 border-t border-border flex items-center justify-between gap-3 sticky bottom-0 bg-white">
+          <div>
+            {editing.id && (
+              <button onClick={postToSocials} disabled={posting}
+                className="px-4 py-2 rounded-xl text-sm font-medium border border-border hover:bg-muted disabled:opacity-50 inline-flex items-center gap-2 transition">
+                {posting ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Share2" size={14} />}
+                Опубликовать в соцсети
+              </button>
+            )}
+          </div>
+          <div className="flex gap-3">
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm">Отмена</button>
+            <button onClick={handleSave} className="btn-blue text-white px-5 py-2 rounded-xl text-sm font-semibold">
+              Сохранить
+            </button>
+          </div>
         </div>
       </div>
     </div>

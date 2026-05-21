@@ -15,6 +15,7 @@ import CitiesTab from './settings/CitiesTab';
 import LegalTab from './settings/LegalTab';
 import FooterTab from './settings/FooterTab';
 import AdPlatformsTab from './settings/AdPlatformsTab';
+import AutoPostingTab from './settings/AutoPostingTab';
 
 export default function SettingsAdmin() {
   const { reload } = useSettings();
@@ -23,7 +24,7 @@ export default function SettingsAdmin() {
   const [saved, setSaved] = useState(false);
   const [cityQuery, setCityQuery] = useState('');
   const [cityAdding, setCityAdding] = useState(false);
-  const [tab, setTab] = useState<'general' | 'watermark' | 'seo' | 'integrations' | 'ad-platforms' | 'cities' | 'purposes' | 'feeds' | 'legal' | 'footer' | 'seo-ai' | 'roles' | 'migration'>('general');
+  const [tab, setTab] = useState<'general' | 'watermark' | 'seo' | 'integrations' | 'ad-platforms' | 'cities' | 'purposes' | 'feeds' | 'legal' | 'footer' | 'seo-ai' | 'roles' | 'migration' | 'autoposting'>('general');
   const [showKey, setShowKey] = useState(false);
   const [showMapsKey, setShowMapsKey] = useState(false);
   const [showYkSecret, setShowYkSecret] = useState(false);
@@ -183,6 +184,7 @@ export default function SettingsAdmin() {
     ['footer', 'Подвал', 'PanelBottom'],
     ['seo-ai', 'SEO-оптимизация', 'TrendingUp'],
     ['roles', 'Роли и доступы', 'ShieldHalf'],
+    ['autoposting', 'Автопостинг', 'Share2'],
     ['migration', 'Миграция', 'DatabaseBackup'],
   ];
 
@@ -236,6 +238,7 @@ export default function SettingsAdmin() {
       {tab === 'footer' && <FooterTab s={s} setS={setS} saved={saved} save={save} />}
       {tab === 'seo-ai' && <SeoAdmin />}
       {tab === 'roles' && <RolesAdmin />}
+      {tab === 'autoposting' && <AutoPostingTab />}
       {tab === 'migration' && <MigrationTab />}
     </div>
   );
