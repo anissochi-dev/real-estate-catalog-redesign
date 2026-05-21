@@ -3,7 +3,6 @@ import Icon from '@/components/ui/icon';
 import PropertyMapInfrastructure from '@/components/PropertyMapInfrastructure';
 import PropertyCalculators from '@/components/calculators/PropertyCalculators';
 import SimilarListings from '@/components/SimilarListings';
-import CharCount from '@/components/ui/CharCount';
 import RecentlyViewed from '@/components/RecentlyViewed';
 import {
   CONDITION_LABELS, FINISHING_LABELS, PARKING_LABELS,
