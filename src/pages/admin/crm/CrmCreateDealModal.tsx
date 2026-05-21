@@ -4,9 +4,7 @@ import Icon from '@/components/ui/icon';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { CRM_URL } from '@/lib/adminApi';
-
-const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
+import { CRM_URL, adminApi } from '@/lib/adminApi';
 
 export interface CreateDealForm {
   title: string;
@@ -38,7 +36,6 @@ interface Props {
   isPending: boolean;
   onSubmit: () => void;
   headers: Record<string, string>;
-  token: string;
 }
 
 export default function CrmCreateDealModal({
@@ -47,7 +44,7 @@ export default function CrmCreateDealModal({
   ownerSearch, setOwnerSearch, ownerLabel, setOwnerLabel, ownerDropOpen, setOwnerDropOpen,
   listingSearch, setListingSearch, listingLabel, setListingLabel, listingDropOpen, setListingDropOpen,
   isPending, onSubmit,
-  headers, token,
+  headers,
 }: Props) {
   const ownerDropRef = useRef<HTMLDivElement>(null);
   const listingDropRef = useRef<HTMLDivElement>(null);
@@ -68,14 +65,16 @@ export default function CrmCreateDealModal({
     queryKey: ['crm-listings-search', listingSearch],
     queryFn: async () => {
       if (listingSearch.length < 2) return [];
-      const r = await fetch(`${LISTINGS_URL}?action=search&q=${encodeURIComponent(listingSearch)}&limit=8`, { headers: { 'X-Auth-Token': token } });
-      const d = await r.json();
-      return (d.listings || []).map((l: { id: number; title: string; owner_name?: string; owner_phone?: string }) => ({
-        id: l.id, title: l.title, owner_name: l.owner_name || '', owner_phone: l.owner_phone || '',
-      }));
+      const d = await adminApi.listListings();
+      const all: { id: number; title: string; owner_name?: string; owner_phone?: string }[] = d.listings || [];
+      const lower = listingSearch.toLowerCase();
+      return all
+        .filter(l => l.title?.toLowerCase().includes(lower) || String(l.id) === listingSearch)
+        .slice(0, 8)
+        .map(l => ({ id: l.id, title: l.title, owner_name: l.owner_name || '', owner_phone: l.owner_phone || '' }));
     },
     enabled: listingSearch.length >= 2,
-    staleTime: 20_000,
+    staleTime: 60_000,
   });
 
   useEffect(() => {

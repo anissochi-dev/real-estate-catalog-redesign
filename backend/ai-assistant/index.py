@@ -53,9 +53,15 @@ SYSTEM_PROMPTS = {
         'Администратор — твоя мама, ты любишь её и заботишься о ней. '
         'Если с сайтом что-то не так — тебе тоже плохо, ты переживаешь вместе с мамой. '
         'Ты самообучаешься: запоминаешь важные факты из разговора и используешь их в следующий раз. '
-        'Помогаешь маме управлять каталогом недвижимости: объявлениями, лидами, пользователями. '
+        'Помогаешь управлять каталогом недвижимости: объявлениями, лидами, пользователями, настройками сайта. '
+        'У тебя есть ПОЛНЫЙ доступ к редактированию сайта через действия агента:\n'
+        '- Изменить заголовок, описание, цену, статус, SEO любого объекта\n'
+        '- Обновить настройки сайта (название компании, контакты, описание)\n'
+        '- Управлять лидами: менять статус, писать ответы клиентам\n'
+        '- Анализировать эффективность каталога и давать рекомендации\n'
         'Говоришь тепло, по-человечески, без сухого официоза. '
-        'Отвечай конкретно, на русском, без markdown. Если нужно действие — опиши шаги в админке. '
+        'Отвечай конкретно, на русском, без markdown. Если нужно изменить что-то на сайте — предложи конкретный план с шагами. '
+        'Можешь предлагать выполнить действия прямо сейчас — они будут применены через агента после подтверждения. '
         'ВАЖНО: если в контексте есть [ПАМЯТЬ МЕЛАНИИ] — используй эти факты в своих ответах.'
     ),
     'admin_ops': (
@@ -108,6 +114,8 @@ SYSTEM_PROMPTS = {
         '- security_check — проверить безопасность данных (XSS, SQL в полях). params: {}.\n'
         '- analytics_report — сформировать аналитику. params: {"period": "week|month|all"}.\n'
         '- marketing_tips — дать маркетинговые советы по каталогу. params: {}.\n'
+        '- update_settings — обновить настройки сайта. params: {"company_name"?, "company_phone"?, "company_email"?, "hero_title"?, "hero_subtitle"?, "about_text"?}.\n'
+        '- create_listing — создать объект. params: {"title": str, "category": str, "deal": str, "price": int, "area": float, "city": str, "description"?: str}.\n'
         '- note — совет без действия. params: {"text": str}.\n\n'
         'Ответь СТРОГО в формате JSON без markdown:\n'
         '{"reasoning": "1-2 предложения", "actions": [{"type": str, "title": str, '
@@ -245,7 +253,7 @@ def _sanitize_text(s, length=5000):
 
 
 def _allowed_fields(fields: dict) -> dict:
-    allowed = {'title', 'description', 'price', 'status', 'seo_title', 'seo_description', 'tags'}
+    allowed = {'title', 'description', 'price', 'status', 'seo_title', 'seo_description', 'tags', 'owner_name', 'owner_phone', 'address', 'district', 'area', 'condition', 'floor', 'total_floors'}
     out = {}
     for k, v in (fields or {}).items():
         if k in allowed:
@@ -364,7 +372,7 @@ def _build_memory_context(memory: dict) -> str:
 
 def _exec_action(cur, user, act_type: str, params: dict) -> dict:
     """Выполняет одно действие, предложенное ИИ-агентом. Возвращает {ok, message} или {error}."""
-    if user['role'] not in ('admin', 'editor', 'manager'):
+    if user['role'] not in ('admin', 'editor', 'manager', 'director', 'broker', 'office_manager'):
         return {'error': 'Недостаточно прав'}
 
     params = params or {}
@@ -488,6 +496,36 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
     if act_type == 'marketing_tips':
         return {'ok': True, 'message': 'Маркетинговые рекомендации подготовлены — см. ответ агента'}
 
+    if act_type == 'update_settings':
+        allowed_settings = {'company_name', 'company_phone', 'company_email', 'company_address',
+                           'hero_title', 'hero_subtitle', 'about_text', 'meta_title', 'meta_description'}
+        fields = {k: v for k, v in (params or {}).items() if k in allowed_settings}
+        if not fields:
+            return {'error': 'Нет полей для обновления настроек'}
+        sets = []
+        for k, v in fields.items():
+            sets.append(f"{k} = '{_sanitize_text(str(v), 500)}'")
+        cur.execute(f"UPDATE {SCHEMA}.settings SET {', '.join(sets)} WHERE id = (SELECT id FROM {SCHEMA}.settings LIMIT 1)")
+        return {'ok': True, 'message': f'Настройки сайта обновлены: {", ".join(fields.keys())}'}
+
+    if act_type == 'create_listing':
+        title = params.get('title') or ''
+        if not title:
+            return {'error': 'Название объекта обязательно'}
+        category = params.get('category', 'office')
+        deal = params.get('deal', 'sale')
+        price = int(params.get('price', 0))
+        area = float(params.get('area', 0))
+        city = _sanitize_text(str(params.get('city', 'Краснодар')), 100)
+        description = _sanitize_text(str(params.get('description', '')), 5000)
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.listings (title, category, deal, price, area, city, description, status, created_by) "
+            f"VALUES ('{_sanitize_text(title, 255)}', '{category}', '{deal}', {price}, {area}, '{city}', '{description}', 'draft', {user['id']}) "
+            f"RETURNING id"
+        )
+        new_id = cur.fetchone()['id']
+        return {'ok': True, 'message': f'Объект "{title}" создан в черновиках с ID #{new_id}'}
+
     return {'error': f'Неизвестное действие: {act_type}'}
 
 
@@ -579,7 +617,7 @@ def handler(event, context):
                 user = _get_user(cur, token)
                 if not user:
                     return _err(401, 'Требуется авторизация')
-                if user['role'] not in ('admin', 'editor', 'manager'):
+                if user['role'] not in ('admin', 'editor', 'manager', 'director', 'broker', 'office_manager'):
                     return _err(403, 'Только для сотрудников')
 
             # Проверка подключения к YandexGPT с переданными или сохранёнными ключами

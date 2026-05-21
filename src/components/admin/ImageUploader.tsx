@@ -17,7 +17,7 @@ interface Props {
 }
 
 const MAX_SIDE = 1920;
-const WEBP_QUALITY = 0.9;
+const JPEG_QUALITY = 0.9;
 
 async function compressImage(file: File): Promise<File> {
   if (file.type === 'image/gif' || file.type === 'image/svg+xml') return file;
@@ -38,11 +38,11 @@ async function compressImage(file: File): Promise<File> {
     ctx.drawImage(bitmap, 0, 0, w, h);
     bitmap.close?.();
     const blob: Blob | null = await new Promise(resolve =>
-      canvas.toBlob(resolve, 'image/webp', WEBP_QUALITY)
+      canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY)
     );
     if (!blob || blob.size >= file.size) return file;
-    const newName = file.name.replace(/\.(jpe?g|png|webp|bmp|tiff?)$/i, '') + '.webp';
-    return new File([blob], newName, { type: 'image/webp', lastModified: Date.now() });
+    const newName = file.name.replace(/\.(jpe?g|png|webp|bmp|tiff?)$/i, '') + '.jpg';
+    return new File([blob], newName, { type: 'image/jpeg', lastModified: Date.now() });
   } catch {
     return file;
   }

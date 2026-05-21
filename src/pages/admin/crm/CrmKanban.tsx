@@ -197,7 +197,6 @@ export default function CrmKanban() {
         isPending={createMutation.isPending}
         onSubmit={() => createMutation.mutate(form)}
         headers={headers}
-        token={token || ''}
       />
 
       <CrmDealDetailModal

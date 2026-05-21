@@ -5,7 +5,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
 import { Listing, CATS, DEALS } from './types';
 import { TabId, TABS } from './internalCardTypes';
-import { Spinner, TabOverview, TabPriceHistory, TabStats, TabLeads } from './InternalCardTabs1';
+import { Spinner, TabOverview, TabPriceHistory, TabStats, TabLeads, TabComments } from './InternalCardTabs1';
 import { TabAi, TabDocuments, TabBroker } from './InternalCardTabs2';
 
 interface Props {
