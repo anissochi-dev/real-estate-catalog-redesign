@@ -153,7 +153,7 @@ export function NewsArticlePage() {
 
   useEffect(() => {
     if (!article) return;
-    document.title = `${article.title} | ${settings.company_name || 'BIZNEST'}`;
+    document.title = `${article.title} | ${settings.company_name || 'Бизнес. Маркетинг. Недвижимость.'}`;
     const desc = article.summary || (article.content || '').slice(0, 160);
     const setMeta = (sel: string, create: () => HTMLMetaElement, content: string) => {
       let el = document.querySelector(sel) as HTMLMetaElement | null;

@@ -20,11 +20,13 @@
   POST {action:ping_cron}    — внутренний крон-пинг (без токена)
 """
 
+import base64
 import json
 import os
 import re
 import urllib.request
 from datetime import datetime, timezone
+import boto3
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -193,13 +195,79 @@ def _gpt(api_key, folder_id, topic):
         return None, str(e)[:300]
 
 
-def _save_article(cur, conn, article, is_auto, user_id=None):
+def _generate_image(title: str, logo_url: str = '') -> str:
+    """Генерирует обложку статьи через FLUX и загружает в S3. Возвращает CDN URL или ''."""
+    try:
+        flux_url = 'https://api.poehali.dev/v1/images/generations'
+        flux_key = os.environ.get('FLUX_API_KEY', '')
+        if not flux_key:
+            return ''
+        # Формируем SEO-промпт на основе заголовка
+        prompt = (
+            f'Professional business real estate photo for article about: {title}. '
+            'Modern commercial building in Krasnodar Russia, golden hour lighting, '
+            'clean architectural photography, high quality, 16:9 aspect ratio, '
+            'no text, no watermark, photorealistic'
+        )
+        req = urllib.request.Request(
+            flux_url,
+            data=json.dumps({'prompt': prompt, 'n': 1, 'size': '1024x576'}).encode(),
+            headers={'Authorization': f'Bearer {flux_key}', 'Content-Type': 'application/json'},
+            method='POST',
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read().decode())
+        # Получаем URL или base64
+        img_data = (data.get('data') or [{}])[0]
+        img_url = img_data.get('url', '')
+        img_b64 = img_data.get('b64_json', '')
+        if not img_url and not img_b64:
+            return ''
+        # Скачиваем или декодируем
+        if img_b64:
+            img_bytes = base64.b64decode(img_b64)
+        else:
+            with urllib.request.urlopen(img_url, timeout=30) as r:
+                img_bytes = r.read()
+        # Загружаем в S3
+        import secrets as _secrets
+        s3 = boto3.client(
+            's3',
+            endpoint_url='https://bucket.poehali.dev',
+            aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+            aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+        )
+        key = f'news/{_secrets.token_urlsafe(12)}.jpg'
+        s3.put_object(Bucket='files', Key=key, Body=img_bytes, ContentType='image/jpeg')
+        cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
+        return cdn_url
+    except Exception as e:
+        print(f'[news] image generation error: {e}')
+        return ''
+
+
+def _load_logo_url(cur) -> str:
+    """Загружает logo_url компании из настроек."""
+    try:
+        cur.execute(f"SELECT logo_url FROM {SCHEMA}.settings ORDER BY id LIMIT 1")
+        row = cur.fetchone()
+        return (row.get('logo_url') or '') if row else ''
+    except Exception:
+        return ''
+
+
+def _save_article(cur, conn, article, is_auto, user_id=None, auto_publish=False, logo_url=''):
     title = _safe(article.get('title', ''), 299)
     summary = _safe(article.get('summary', ''), 999)
     content = _safe(article.get('content', ''), 49999)
+    # Генерируем картинку
+    image_url = _generate_image(article.get('title', ''), logo_url)
+    img_val = f"'{_safe(image_url, 499)}'" if image_url else 'NULL'
+    pub_val = 'TRUE' if auto_publish else 'FALSE'
+    pub_at_val = f"'{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')}'" if auto_publish else 'NULL'
     cur.execute(
-        f"INSERT INTO {SCHEMA}.news (title, summary, content, is_auto, created_by) "
-        f"VALUES ('{title}', '{summary}', '{content}', {is_auto}, "
+        f"INSERT INTO {SCHEMA}.news (title, summary, content, image_url, is_auto, is_published, published_at, created_by) "
+        f"VALUES ('{title}', '{summary}', '{content}', {img_val}, {is_auto}, {pub_val}, {pub_at_val}, "
         f"{'NULL' if not user_id else user_id}) RETURNING id"
     )
     news_id = cur.fetchone()['id']
@@ -264,8 +332,9 @@ def handler(event: dict, context) -> dict:
                 if last_run and (now_utc - last_run).total_seconds() < 3600 * 20:
                     return _ok({'skipped': True, 'reason': 'already ran today'})
 
-                # Запускаем автогенерацию
+                # Запускаем автогенерацию с картинками и автопубликацией
                 api_key, folder_id = _load_gpt_keys(cur)
+                logo_url = _load_logo_url(cur)
                 import random
                 count = int(sch.get('articles_per_run', 3))
                 topics = random.sample(AUTO_TOPICS, min(count, len(AUTO_TOPICS)))
@@ -273,7 +342,7 @@ def handler(event: dict, context) -> dict:
                 for topic in topics:
                     article, err = _gpt(api_key, folder_id, topic)
                     if article:
-                        _save_article(cur, conn, article, True)
+                        _save_article(cur, conn, article, True, auto_publish=True, logo_url=logo_url)
                         generated += 1
                 ts = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')
                 cur.execute(
@@ -387,30 +456,34 @@ def handler(event: dict, context) -> dict:
                 conn.commit()
                 return _ok({'ok': True})
 
-            # ── ГЕНЕРАЦИЯ СТАТЬИ ─────────────────────────────────────────
+            # ── ГЕНЕРАЦИЯ СТАТЬИ с картинкой ─────────────────────────────
             if action == 'generate':
                 topic = body.get('topic', '').strip()
                 if not topic:
                     import random
                     topic = random.choice(AUTO_TOPICS)
                 api_key, folder_id = _load_gpt_keys(cur)
+                logo_url = _load_logo_url(cur)
+                auto_pub = bool(body.get('auto_publish', False))
                 article, err = _gpt(api_key, folder_id, topic)
                 if err:
                     return _err(f'Ошибка генерации: {err}')
-                nid, slug = _save_article(cur, conn, article, True, user['id'])
+                nid, slug = _save_article(cur, conn, article, True, user['id'], auto_publish=auto_pub, logo_url=logo_url)
                 return _ok({'id': nid, 'slug': slug, 'title': article.get('title'), 'topic': topic})
 
-            # ── АВТОЗАПУСК ВРУЧНУЮ ───────────────────────────────────────
+            # ── АВТОЗАПУСК ВРУЧНУЮ с картинками ──────────────────────────
             if action == 'run_auto':
                 api_key, folder_id = _load_gpt_keys(cur)
+                logo_url = _load_logo_url(cur)
                 count = min(int(body.get('count', 3)), 10)
+                auto_pub = bool(body.get('auto_publish', True))
                 import random
                 topics = random.sample(AUTO_TOPICS, min(count, len(AUTO_TOPICS)))
                 results = []
                 for topic in topics:
                     article, err = _gpt(api_key, folder_id, topic)
                     if article:
-                        nid, slug = _save_article(cur, conn, article, True, user['id'])
+                        nid, slug = _save_article(cur, conn, article, True, user['id'], auto_publish=auto_pub, logo_url=logo_url)
                         results.append({'id': nid, 'slug': slug, 'title': article.get('title'), 'topic': topic})
                     else:
                         results.append({'error': err, 'topic': topic})

@@ -55,7 +55,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   const [latestNews, setLatestNews] = useState<NewsPreview[]>([]);
 
   useEffect(() => {
-    fetch(`${NEWS_URL}?action=list&limit=3`)
+    fetch(`${NEWS_URL}?action=list&limit=10`)
       .then(r => r.json())
       .then(d => setLatestNews(d.news || []))
       .catch(() => undefined);
@@ -96,7 +96,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   const orgLd = {
     '@context': 'https://schema.org',
     '@type': 'RealEstateAgent',
-    name: settings.company_name || 'BIZNEST',
+    name: settings.company_name || 'Бизнес. Маркетинг. Недвижимость.',
     description: settings.seo_description || 'Коммерческая недвижимость и готовый бизнес в Краснодаре',
     foundingDate: String(settings.company_since_year || 2007),
     address: settings.company_address ? {
@@ -278,43 +278,46 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
 
       <ClientLeadsSection />
 
-      {/* Блок новостей */}
+      {/* Блок новостей — 5 в ряд, 2 строки */}
       {latestNews.length > 0 && (
-        <section className="py-10 bg-white">
+        <section className="py-6 bg-muted/30 border-t border-border">
           <div className="container mx-auto px-4">
-            <div className="flex items-end justify-between mb-6">
-              <div>
-                <h2 className="font-display font-800 text-2xl text-foreground">Новости коммерческой недвижимости</h2>
-                <p className="text-muted-foreground text-sm mt-1">Аналитика рынка Краснодара и Краснодарского края</p>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Icon name="Newspaper" size={16} className="text-brand-blue" />
+                <span className="font-display font-700 text-base text-foreground">Новости коммерческой недвижимости</span>
               </div>
               <button
                 onClick={() => navigate('/news')}
-                className="flex items-center gap-1.5 text-brand-blue font-semibold text-sm hover:gap-2 transition-all duration-200 shrink-0"
+                className="flex items-center gap-1 text-brand-blue font-semibold text-xs hover:gap-2 transition-all duration-200 shrink-0"
               >
-                Все новости <Icon name="ArrowRight" size={14} />
+                Все новости <Icon name="ArrowRight" size={12} />
               </button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {latestNews.map(n => (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+              {latestNews.slice(0, 10).map(n => (
                 <article
                   key={n.id}
                   onClick={() => navigate(`/news/${n.slug}`)}
-                  className="group cursor-pointer bg-muted/30 rounded-2xl overflow-hidden border border-border hover:shadow-md hover:-translate-y-1 transition-all duration-200"
+                  className="group cursor-pointer bg-white rounded-xl overflow-hidden border border-border hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
                 >
-                  <div className="h-36 bg-gradient-to-br from-brand-blue/10 to-brand-blue/20 relative overflow-hidden">
+                  <div className="h-24 relative overflow-hidden bg-gradient-to-br from-brand-blue/10 to-brand-blue/20">
                     {n.image_url ? (
                       <img src={n.image_url} alt={n.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    ) : settings.logo_url ? (
+                      <div className="w-full h-full flex items-center justify-center bg-brand-blue/5">
+                        <img src={settings.logo_url} alt="лого" className="w-10 h-10 object-contain opacity-40" />
+                      </div>
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <Icon name="Newspaper" size={32} className="text-brand-blue/30" />
+                        <Icon name="Newspaper" size={20} className="text-brand-blue/30" />
                       </div>
                     )}
                   </div>
-                  <div className="p-4">
-                    <h3 className="font-semibold text-sm leading-snug line-clamp-2 group-hover:text-brand-blue transition-colors mb-2">{n.title}</h3>
-                    {n.summary && <p className="text-xs text-muted-foreground line-clamp-2">{n.summary}</p>}
-                    <div className="text-xs text-muted-foreground mt-2">
-                      {new Date(n.published_at || n.created_at).toLocaleDateString('ru', { day: 'numeric', month: 'long' })}
+                  <div className="p-2.5">
+                    <h3 className="font-medium text-xs leading-snug line-clamp-2 group-hover:text-brand-blue transition-colors">{n.title}</h3>
+                    <div className="text-[10px] text-muted-foreground mt-1.5">
+                      {new Date(n.published_at || n.created_at).toLocaleDateString('ru', { day: 'numeric', month: 'short' })}
                     </div>
                   </div>
                 </article>

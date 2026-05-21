@@ -147,7 +147,7 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
       >
         <div className="p-6 border-b border-border flex items-center justify-between shrink-0">
           <div>
-            <div className="font-display font-700 text-xl text-brand-blue">BIZNEST</div>
+            <div className="font-display font-700 text-sm text-brand-blue leading-tight">Бизнес. Маркетинг. Недвижимость.</div>
             <div className="text-xs text-muted-foreground">Админ-панель</div>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden">

@@ -54,7 +54,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
 
   useEffect(() => {
     if (!item) return;
-    const title = item.seoTitle || `${item.title} — ${item.city || 'Краснодар'} | ${settings.company_name || 'BIZNEST'}`;
+    const title = item.seoTitle || `${item.title} — ${item.city || 'Краснодар'} | ${settings.company_name || 'Бизнес. Маркетинг. Недвижимость.'}`;
     document.title = title;
     const desc = item.seoDescription || (item.description || '').slice(0, 160);
     const setMeta = (selector: string, create: () => HTMLMetaElement, content: string) => {
@@ -66,7 +66,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
     setMeta('meta[property="og:title"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:title'); return m; }, title);
     setMeta('meta[property="og:description"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:description'); return m; }, desc);
     setMeta('meta[property="og:type"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:type'); return m; }, 'product');
-    setMeta('meta[property="og:site_name"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:site_name'); return m; }, settings.company_name || 'BIZNEST');
+    setMeta('meta[property="og:site_name"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:site_name'); return m; }, settings.company_name || 'Бизнес. Маркетинг. Недвижимость.');
     setMeta('meta[property="og:url"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:url'); return m; }, window.location.href);
     setMeta('meta[name="twitter:title"]', () => Object.assign(document.createElement('meta'), { name: 'twitter:title' }), title);
     setMeta('meta[name="twitter:description"]', () => Object.assign(document.createElement('meta'), { name: 'twitter:description' }), desc);

@@ -5,7 +5,7 @@
       "method": "GET",
       "path": "/?action=list",
       "expectedStatus": 200,
-      "expectedBody": {"news": []},
+      "expectedBody": {"total": 5},
       "bodyMatcher": "partial"
     },
     {

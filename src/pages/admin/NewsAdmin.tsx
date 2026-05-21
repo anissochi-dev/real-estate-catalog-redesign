@@ -108,7 +108,7 @@ export default function NewsAdmin() {
     const topic = customTopic.trim() || selectedTopic;
     setGenerating(true);
     try {
-      const r = await fetch(NEWS_URL, { method: 'POST', headers, body: JSON.stringify({ action: 'generate', topic }) });
+      const r = await fetch(NEWS_URL, { method: 'POST', headers, body: JSON.stringify({ action: 'generate', topic, auto_publish: true }) });
       const d = await r.json();
       if (d.error) { toast.error(d.error); return; }
       toast.success(`Статья "${d.title}" создана`);
@@ -330,7 +330,10 @@ export default function NewsAdmin() {
             Расписание автогенерации
           </div>
           <div className="text-sm text-muted-foreground">
-            Копирайтер будет автоматически генерировать и сохранять статьи по расписанию. Новые статьи создаются в статусе «Черновик» — публикуйте вручную.
+            Копирайтер автоматически генерирует статьи с картинками и сразу публикует их на сайте. Сейчас настроено: <strong>09:00 МСК</strong>, 3 статьи в день.
+          </div>
+          <div className="text-xs bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 text-emerald-800">
+            Статьи генерируются с уникальными фото через ИИ и автоматически публикуются.
           </div>
 
           <label className="flex items-center gap-3 cursor-pointer">
