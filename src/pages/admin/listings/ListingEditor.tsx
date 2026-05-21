@@ -5,7 +5,7 @@ import PhonePickerInput from '@/components/admin/PhonePickerInput';
 import { SOCIAL_POST_URL, getToken } from '@/lib/adminApi';
 import { toast } from 'sonner';
 import {
-  Listing, City, Purpose,
+  Listing, City,
   CATS, DEALS, CONDITIONS, PURPOSE_LIST,
 } from './types';
 import ListingEditorPriceSection from './ListingEditorPriceSection';
