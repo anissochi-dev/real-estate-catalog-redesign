@@ -1,26 +1,21 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { crmUrl } from '@/lib/adminApi';
-import { Stage, Deal } from './crmKanbanTypes';
-import CrmDealCard from './CrmDealCard';
+import { Deal } from './crmKanbanTypes';
 import CrmCreateDealModal, { CreateDealForm } from './CrmCreateDealModal';
 import CrmDealDetailModal from './CrmDealDetailModal';
+import CrmKanbanToolbar, { StatusFilter, SortKey } from './kanban/CrmKanbanToolbar';
+import CrmKanbanBoard from './kanban/CrmKanbanBoard';
+import { useCrmKanbanData } from './kanban/useCrmKanbanData';
 
 const EMPTY_FORM: CreateDealForm = {
   title: '', owner_id: '', listing_id: '', amount: '', commission: '', source: '', notes: '', assigned_to: '',
 };
 
-type StatusFilter = 'all' | 'active' | 'closed' | 'overdue';
-type SortKey = 'updated' | 'created' | 'amount' | 'title';
-
 export default function CrmKanban() {
   const { token, user } = useAuth();
-  const qc = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [newActivity, setNewActivity] = useState('');
@@ -40,94 +35,23 @@ export default function CrmKanban() {
   const canReopen = user?.role === 'admin' || user?.role === 'director';
   const headers = { 'Content-Type': 'application/json', 'X-Auth-Token': token || '' };
 
-  const { data: stages = [] } = useQuery<Stage[]>({
-    queryKey: ['crm-stages'],
-    queryFn: async () => {
-      const r = await fetch(crmUrl('stages'), { headers });
-      const j = await r.json();
-      if (Array.isArray(j)) return j;
-      if (Array.isArray(j?.stages)) return j.stages;
-      return [];
-    },
-  });
-
-  const { data: deals = [], isLoading } = useQuery<Deal[]>({
-    queryKey: ['crm-deals', statusFilter, sortKey, search],
-    queryFn: async () => {
-      const r = await fetch(crmUrl('deals', null, null, {
-        status: statusFilter !== 'all' ? statusFilter : undefined,
-        sort: sortKey,
-        search: search.trim() || undefined,
-      }), { headers });
-      const j = await r.json();
-      if (Array.isArray(j)) return j;
-      if (Array.isArray(j?.deals)) return j.deals;
-      return [];
-    },
-  });
-
-  const { data: dealDetail } = useQuery({
-    queryKey: ['crm-deal', detailId],
-    queryFn: async () => {
-      const r = await fetch(crmUrl('deals', detailId), { headers });
-      return r.json();
-    },
-    enabled: !!detailId,
-  });
-
-  const moveMutation = useMutation({
-    mutationFn: async ({ dealId, stageId }: { dealId: number; stageId: number }) => {
-      const r = await fetch(crmUrl('deals', dealId), {
-        method: 'PUT', headers, body: JSON.stringify({ stage_id: stageId }),
-      });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || 'Ошибка перемещения');
-      return j;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['crm-deals'] }),
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const createMutation = useMutation({
-    mutationFn: async (data: CreateDealForm) => {
-      const r = await fetch(crmUrl('deals'), {
-        method: 'POST', headers, body: JSON.stringify({
-          ...data,
-          owner_id: data.owner_id ? Number(data.owner_id) : undefined,
-          amount: data.amount ? Number(data.amount) : undefined,
-          commission: data.commission ? Number(data.commission) : undefined,
-          assigned_to: data.assigned_to ? Number(data.assigned_to) : undefined,
-        }),
-      });
-      const json = await r.json();
-      if (!r.ok) throw new Error(json.error || 'Ошибка');
-      return json;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['crm-deals'] });
+  const {
+    stages, deals, isLoading, dealDetail,
+    moveMutation, createMutation, addActivityMutation,
+  } = useCrmKanbanData({
+    headers,
+    statusFilter,
+    sortKey,
+    search,
+    detailId,
+    onCreateSuccess: () => {
       setModalOpen(false);
       setForm(EMPTY_FORM);
       setOwnerLabel(''); setOwnerSearch('');
       setListingLabel(''); setListingSearch('');
-      toast.success('Сделка создана');
     },
-    onError: (e: Error) => toast.error(e.message),
+    onActivityAdded: () => setNewActivity(''),
   });
-
-  const addActivityMutation = useMutation({
-    mutationFn: async ({ dealId, type, content }: { dealId: number; type: string; content: string }) => {
-      await fetch(crmUrl('activities'), {
-        method: 'POST', headers, body: JSON.stringify({ deal_id: dealId, type, content }),
-      });
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['crm-deal', detailId] });
-      setNewActivity('');
-      toast.success('Активность добавлена');
-    },
-  });
-
-  const dealsByStage = (stageId: number) => deals.filter(d => d.stage_id === stageId);
 
   const handleDrop = (stageId: number) => {
     if (dragDeal && dragDeal.stage_id !== stageId) {
@@ -168,108 +92,25 @@ export default function CrmKanban() {
         </Button>
       </div>
 
-      {/* Фильтры и сортировка */}
-      <div className="bg-white rounded-2xl p-3 shadow-sm flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1 bg-muted/40 rounded-lg p-0.5">
-          {([
-            { key: 'all', label: 'Все' },
-            { key: 'active', label: 'Активные' },
-            { key: 'closed', label: 'Закрытые' },
-            { key: 'overdue', label: 'Просроченные' },
-          ] as { key: StatusFilter; label: string }[]).map(opt => (
-            <button
-              key={opt.key}
-              type="button"
-              onClick={() => setStatusFilter(opt.key)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
-                statusFilter === opt.key
-                  ? 'bg-white text-brand-blue shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+      <CrmKanbanToolbar
+        statusFilter={statusFilter}
+        setStatusFilter={setStatusFilter}
+        search={search}
+        setSearch={setSearch}
+        sortKey={sortKey}
+        setSortKey={setSortKey}
+        dealsCount={deals.length}
+      />
 
-        <div className="relative">
-          <Icon name="Search" size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Поиск по сделке, собственнику, объекту"
-            className="pl-8 pr-3 py-1.5 border rounded-lg text-sm w-72 max-w-full"
-          />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Сортировка:</span>
-          <select
-            value={sortKey}
-            onChange={e => setSortKey(e.target.value as SortKey)}
-            className="px-2.5 py-1.5 border rounded-lg text-xs bg-white"
-          >
-            <option value="updated">По обновлению</option>
-            <option value="created">По дате создания</option>
-            <option value="amount">По сумме</option>
-            <option value="title">По названию</option>
-          </select>
-        </div>
-
-        <div className="ml-auto text-xs text-muted-foreground">
-          Найдено: <b className="text-foreground">{deals.length}</b>
-        </div>
-      </div>
-
-      {isLoading ? (
-        <div className="flex items-center justify-center py-20 text-muted-foreground">
-          <Icon name="Loader2" size={24} className="animate-spin mr-2" /> Загрузка...
-        </div>
-      ) : (
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          {stages.map(stage => {
-            const stageDeals = dealsByStage(stage.id);
-            const totalAmt = stageDeals.reduce((s, d) => s + (d.amount || 0), 0);
-            return (
-              <div
-                key={stage.id}
-                className="flex-shrink-0 w-72 flex flex-col"
-                onDragOver={e => e.preventDefault()}
-                onDrop={() => handleDrop(stage.id)}
-              >
-                <div className="flex items-center justify-between mb-3 px-1">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: stage.color }} />
-                    <span className="font-semibold text-sm">{stage.name}</span>
-                    <Badge variant="secondary" className="text-xs">{stageDeals.length}</Badge>
-                  </div>
-                  {totalAmt > 0 && (
-                    <span className="text-xs text-muted-foreground">{(totalAmt / 1000000).toFixed(1)}М ₽</span>
-                  )}
-                </div>
-
-                <div
-                  className={`flex-1 min-h-[200px] rounded-2xl p-2 space-y-2 transition ${stage.is_terminal ? 'bg-muted/20' : 'bg-muted/40'}`}
-                  style={{ borderTop: `3px solid ${stage.color}` }}
-                >
-                  {stageDeals.map(deal => (
-                    <CrmDealCard
-                      key={deal.id}
-                      deal={deal}
-                      onDragStart={setDragDeal}
-                      onDragEnd={() => setDragDeal(null)}
-                      onClick={setDetailId}
-                    />
-                  ))}
-                  {stageDeals.length === 0 && (
-                    <div className="text-center text-xs text-muted-foreground py-6">Перетащите сделку сюда</div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      <CrmKanbanBoard
+        isLoading={isLoading}
+        stages={stages}
+        deals={deals}
+        onDragStart={setDragDeal}
+        onDragEnd={() => setDragDeal(null)}
+        onDrop={handleDrop}
+        onCardClick={setDetailId}
+      />
 
       <CrmCreateDealModal
         open={modalOpen}
