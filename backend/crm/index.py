@@ -144,7 +144,7 @@ def handler(event: dict, context) -> dict:
     token = headers_lc.get('x-auth-token') or headers_lc.get('x-authorization') or ''
 
     method = event.get('httpMethod', 'GET')
-    path_parts = [p for p in event.get('path', '/').split('/') if p]
+    path_parts = [p for p in (event.get('path') or '/').split('/') if p]
     qs = event.get('queryStringParameters') or {}
     body = {}
     if event.get('body'):
@@ -153,10 +153,18 @@ def handler(event: dict, context) -> dict:
         except Exception:
             body = {}
 
-    # path: /owners, /deals, /stages, /activities, /points, /dashboard, /events, /leads
-    resource = path_parts[0] if path_parts else 'dashboard'
-    resource_id = int(path_parts[1]) if len(path_parts) > 1 and path_parts[1].isdigit() else None
-    sub = path_parts[2] if len(path_parts) > 2 else None
+    # Поддерживаем два формата:
+    #  1) /owners, /deals/123/win  — через path
+    #  2) ?resource=owners&id=123&sub=win — через queryStringParameters (для облачных функций без поддиректорий)
+    if path_parts:
+        resource = path_parts[0]
+        resource_id = int(path_parts[1]) if len(path_parts) > 1 and path_parts[1].isdigit() else None
+        sub = path_parts[2] if len(path_parts) > 2 else None
+    else:
+        resource = qs.get('resource') or 'dashboard'
+        rid_raw = qs.get('id')
+        resource_id = int(rid_raw) if rid_raw and str(rid_raw).isdigit() else None
+        sub = qs.get('sub')
 
     # Логируем входной запрос для диагностики (видно в логах функции)
     print(f"[crm] {method} resource={resource} id={resource_id} path={event.get('path')} token={'yes' if token else 'no'}")

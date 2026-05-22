@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import Icon from '@/components/ui/icon';
-import { CRM_URL } from '@/lib/adminApi';
+import { crmUrl } from '@/lib/adminApi';
 import { CrmEvent, TYPE_META } from './calendarTypes';
 
 /* ── Виджет ближайших напоминаний ── */
@@ -9,7 +9,7 @@ function UpcomingReminders({ token }: { token: string }) {
   const { data: events = [] } = useQuery<CrmEvent[]>({
     queryKey: ['crm-events-upcoming'],
     queryFn: async () => {
-      const r = await fetch(`${CRM_URL}/events`, { headers });
+      const r = await fetch(crmUrl('events'), { headers });
       if (!r.ok) return [];
       return r.json();
     },

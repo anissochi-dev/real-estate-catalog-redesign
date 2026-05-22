@@ -4,7 +4,7 @@ import Icon from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import CharCount from '@/components/ui/CharCount';
-import { CRM_URL, adminApi } from '@/lib/adminApi';
+import { crmUrl, adminApi } from '@/lib/adminApi';
 import {
   CrmEvent, EventType, EventFormState, LinkField, SearchItem,
   TYPE_META, EMPTY_FORM, EMPTY_LINKS,
@@ -70,7 +70,7 @@ function useClientSearch(token: string, q: string) {
 
       // 2) Заявки (Leads)
       try {
-        const r = await fetch(`${CRM_URL}/leads?search=${encodeURIComponent(q)}&limit=6`, {
+        const r = await fetch(crmUrl('leads', null, null, { search: q, limit: 6 }), {
           headers: { 'X-Auth-Token': token },
         });
         const data = await r.json().catch(() => ({}));
@@ -89,7 +89,7 @@ function useClientSearch(token: string, q: string) {
 
       // 3) Собственники объектов
       try {
-        const r = await fetch(`${CRM_URL}/owners?search=${encodeURIComponent(q)}&limit=6`, {
+        const r = await fetch(crmUrl('owners', null, null, { search: q, limit: 6 }), {
           headers: { 'X-Auth-Token': token },
         });
         const data = await r.json().catch(() => ({}));

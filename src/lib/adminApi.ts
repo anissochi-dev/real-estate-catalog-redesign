@@ -5,6 +5,35 @@ const AI_URL = 'https://functions.poehali.dev/34bfc4a2-89b9-4c89-bcbc-d82314730a
 const UPLOADS_URL = 'https://functions.poehali.dev/8983c0a8-a8c8-47ff-97ed-59cc1571aa15';
 const REMOVE_WM_URL = 'https://functions.poehali.dev/93965724-e0d4-411d-8100-b9468a1a0627';
 export const CRM_URL = 'https://functions.poehali.dev/221e23fa-e0a4-416e-b878-c2da2914daac';
+
+/** Билдер URL для CRM-функции.
+ * Cloud Functions Gateway не маршрутизирует подпути, поэтому передаём resource/id/sub
+ * через queryStringParameters. Backend поддерживает оба варианта.
+ *
+ * Примеры:
+ *   crmUrl('stages')                    → ?resource=stages
+ *   crmUrl('deals', 123)                → ?resource=deals&id=123
+ *   crmUrl('deals', 123, 'win')         → ?resource=deals&id=123&sub=win
+ *   crmUrl('deals', null, null, { status: 'active' }) → ?resource=deals&status=active
+ */
+export function crmUrl(
+  resource: string,
+  id?: number | string | null,
+  sub?: string | null,
+  qs?: Record<string, string | number | boolean | undefined | null>,
+): string {
+  const params = new URLSearchParams();
+  params.set('resource', resource);
+  if (id !== undefined && id !== null && id !== '') params.set('id', String(id));
+  if (sub) params.set('sub', sub);
+  if (qs) {
+    for (const [k, v] of Object.entries(qs)) {
+      if (v === undefined || v === null || v === '') continue;
+      params.set(k, String(v));
+    }
+  }
+  return `${CRM_URL}?${params.toString()}`;
+}
 export const CRM_CHECKS_URL = 'https://functions.poehali.dev/be6cb907-b50e-48fa-b9e2-092dd541a82a';
 export const CRM_PAYMENTS_URL = 'https://functions.poehali.dev/74ca5694-a05f-4053-992d-5e04cc5bc7a4';
 export const NEWS_URL = 'https://functions.poehali.dev/984cad3a-0783-4408-a614-52ed36f8c77f';

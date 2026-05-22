@@ -5,7 +5,7 @@ import Icon from '@/components/ui/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { CRM_URL } from '@/lib/adminApi';
+import { crmUrl } from '@/lib/adminApi';
 import { Stage, Deal } from './crmKanbanTypes';
 import CrmDealCard from './CrmDealCard';
 import CrmCreateDealModal, { CreateDealForm } from './CrmCreateDealModal';
@@ -43,7 +43,7 @@ export default function CrmKanban() {
   const { data: stages = [] } = useQuery<Stage[]>({
     queryKey: ['crm-stages'],
     queryFn: async () => {
-      const r = await fetch(`${CRM_URL}/stages`, { headers });
+      const r = await fetch(crmUrl('stages'), { headers });
       return r.json();
     },
   });
@@ -51,11 +51,11 @@ export default function CrmKanban() {
   const { data: deals = [], isLoading } = useQuery<Deal[]>({
     queryKey: ['crm-deals', statusFilter, sortKey, search],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (statusFilter !== 'all') params.set('status', statusFilter);
-      params.set('sort', sortKey);
-      if (search.trim()) params.set('search', search.trim());
-      const r = await fetch(`${CRM_URL}/deals?${params.toString()}`, { headers });
+      const r = await fetch(crmUrl('deals', null, null, {
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        sort: sortKey,
+        search: search.trim() || undefined,
+      }), { headers });
       return r.json();
     },
   });
@@ -63,7 +63,7 @@ export default function CrmKanban() {
   const { data: dealDetail } = useQuery({
     queryKey: ['crm-deal', detailId],
     queryFn: async () => {
-      const r = await fetch(`${CRM_URL}/deals/${detailId}`, { headers });
+      const r = await fetch(crmUrl('deals', detailId), { headers });
       return r.json();
     },
     enabled: !!detailId,
@@ -71,7 +71,7 @@ export default function CrmKanban() {
 
   const moveMutation = useMutation({
     mutationFn: async ({ dealId, stageId }: { dealId: number; stageId: number }) => {
-      const r = await fetch(`${CRM_URL}/deals/${dealId}`, {
+      const r = await fetch(crmUrl('deals', dealId), {
         method: 'PUT', headers, body: JSON.stringify({ stage_id: stageId }),
       });
       const j = await r.json();
@@ -84,7 +84,7 @@ export default function CrmKanban() {
 
   const createMutation = useMutation({
     mutationFn: async (data: CreateDealForm) => {
-      const r = await fetch(`${CRM_URL}/deals`, {
+      const r = await fetch(crmUrl('deals'), {
         method: 'POST', headers, body: JSON.stringify({
           ...data,
           owner_id: data.owner_id ? Number(data.owner_id) : undefined,
@@ -109,7 +109,7 @@ export default function CrmKanban() {
 
   const addActivityMutation = useMutation({
     mutationFn: async ({ dealId, type, content }: { dealId: number; type: string; content: string }) => {
-      await fetch(`${CRM_URL}/activities`, {
+      await fetch(crmUrl('activities'), {
         method: 'POST', headers, body: JSON.stringify({ deal_id: dealId, type, content }),
       });
     },

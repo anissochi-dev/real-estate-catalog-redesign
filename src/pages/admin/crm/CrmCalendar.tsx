@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { CRM_URL } from '@/lib/adminApi';
+import { crmUrl } from '@/lib/adminApi';
 import {
   CrmEvent, EventFormState, LinkField,
   EMPTY_FORM, EMPTY_LINKS, toLocalDateStr,
@@ -30,7 +30,7 @@ export default function CrmCalendar() {
   const { data: events = [], isLoading } = useQuery<CrmEvent[]>({
     queryKey: ['crm-events', year, month],
     queryFn: async () => {
-      const r = await fetch(`${CRM_URL}/events?year=${year}&month=${month + 1}`, { headers });
+      const r = await fetch(crmUrl('events', null, null, { year, month: month + 1 }), { headers });
       if (!r.ok) throw new Error('Ошибка загрузки');
       return r.json();
     },
@@ -59,7 +59,7 @@ export default function CrmCalendar() {
         ? `Клиент: ${links.lead_label}`
         : '';
       const description = [form.description, extraNote].filter(Boolean).join('\n').trim();
-      const r = await fetch(`${CRM_URL}/events`, {
+      const r = await fetch(crmUrl('events'), {
         method: 'POST', headers,
         body: JSON.stringify({
           title: form.title,
@@ -82,7 +82,7 @@ export default function CrmCalendar() {
   const updateMutation = useMutation({
     mutationFn: async ({ form, links }: { form: EventFormState; links: LinkField }) => {
       if (!editing) return;
-      const r = await fetch(`${CRM_URL}/events/${editing.id}`, {
+      const r = await fetch(crmUrl('events', editing.id), {
         method: 'PUT', headers,
         body: JSON.stringify({
           title: form.title,
@@ -104,7 +104,7 @@ export default function CrmCalendar() {
 
   const doneMutation = useMutation({
     mutationFn: async (id: number) => {
-      const r = await fetch(`${CRM_URL}/events/${id}`, {
+      const r = await fetch(crmUrl('events', id), {
         method: 'PUT', headers, body: JSON.stringify({ is_done: true }),
       });
       return r.json();

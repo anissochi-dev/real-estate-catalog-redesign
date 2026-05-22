@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { CRM_PAYMENTS_URL as PAYMENTS_URL, CRM_URL, adminApi } from '@/lib/adminApi';
+import { CRM_PAYMENTS_URL as PAYMENTS_URL, crmUrl, adminApi } from '@/lib/adminApi';
 import { Payment, CreateForm, EMPTY_FORM, STATUS_INFO, REFUND_INFO, typeLabel, fmtMoney, fmtDate, fmtDateOnly } from './paymentTypes';
 import PaymentCreateModal from './PaymentCreateModal';
 import PaymentDetailModal from './PaymentDetailModal';
@@ -36,7 +36,7 @@ export default function CrmPayments() {
   const { data: owners = [] } = useQuery<{ id: number; name: string; phone: string }[]>({
     queryKey: ['crm-owners-list'],
     queryFn: async () => {
-      const r = await fetch(`${CRM_URL}/owners?limit=100`, { headers });
+      const r = await fetch(crmUrl('owners', null, null, { limit: 100 }), { headers });
       const d = await r.json();
       return d.owners || [];
     },
@@ -45,7 +45,7 @@ export default function CrmPayments() {
   const { data: deals = [] } = useQuery<{ id: number; title: string }[]>({
     queryKey: ['crm-deals-list'],
     queryFn: async () => {
-      const r = await fetch(`${CRM_URL}/deals`, { headers });
+      const r = await fetch(crmUrl('deals'), { headers });
       return r.json();
     },
   });

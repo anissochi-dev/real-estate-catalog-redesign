@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
 import { Badge } from '@/components/ui/badge';
-import { CRM_URL } from '@/lib/adminApi';
+import { crmUrl } from '@/lib/adminApi';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 const ROLE_LABELS: Record<string, string> = {
@@ -28,7 +28,7 @@ export default function CrmGamification() {
   const { data: leaderboard = [], isLoading } = useQuery<LeaderRow[]>({
     queryKey: ['crm-points', period],
     queryFn: async () => {
-      const r = await fetch(`${CRM_URL}/points?period=${period}`, { headers });
+      const r = await fetch(crmUrl('points', null, null, { period }), { headers });
       return r.json();
     },
   });

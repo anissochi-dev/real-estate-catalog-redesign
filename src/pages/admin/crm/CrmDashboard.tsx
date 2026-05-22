@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
-import { CRM_URL } from '@/lib/adminApi';
+import { crmUrl } from '@/lib/adminApi';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
@@ -23,7 +23,7 @@ export default function CrmDashboard() {
   const { data, isLoading } = useQuery({
     queryKey: ['crm-dashboard', period],
     queryFn: async () => {
-      const r = await fetch(`${CRM_URL}/dashboard?period=${period}`, { headers });
+      const r = await fetch(crmUrl('dashboard', null, null, { period }), { headers });
       return r.json();
     },
   });

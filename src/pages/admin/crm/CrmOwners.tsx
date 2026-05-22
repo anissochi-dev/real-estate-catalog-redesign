@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { CRM_URL } from '@/lib/adminApi';
+import { crmUrl } from '@/lib/adminApi';
 
 interface Owner {
   id: number;
@@ -49,8 +49,7 @@ export default function CrmOwners() {
   const { data, isLoading } = useQuery({
     queryKey: ['crm-owners', search, page],
     queryFn: async () => {
-      const params = new URLSearchParams({ search, page: String(page), limit: '30' });
-      const r = await fetch(`${CRM_URL}/owners?${params}`, { headers });
+      const r = await fetch(crmUrl('owners', null, null, { search, page, limit: 30 }), { headers });
       return r.json();
     },
   });
@@ -58,7 +57,7 @@ export default function CrmOwners() {
   const { data: ownerDetail, isLoading: detailLoading } = useQuery({
     queryKey: ['crm-owner', selectedOwner?.id],
     queryFn: async () => {
-      const r = await fetch(`${CRM_URL}/owners/${selectedOwner!.id}`, { headers });
+      const r = await fetch(crmUrl('owners', selectedOwner!.id), { headers });
       return r.json();
     },
     enabled: !!selectedOwner,
@@ -66,7 +65,7 @@ export default function CrmOwners() {
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof form) => {
-      const r = await fetch(`${CRM_URL}/owners`, { method: 'POST', headers, body: JSON.stringify(data) });
+      const r = await fetch(crmUrl('owners'), { method: 'POST', headers, body: JSON.stringify(data) });
       const json = await r.json();
       if (r.status === 409) throw { duplicate: true, existing: json.existing };
       if (!r.ok) throw new Error(json.error || 'Ошибка');
