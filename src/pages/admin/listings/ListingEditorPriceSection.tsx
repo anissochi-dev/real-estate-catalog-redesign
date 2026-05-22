@@ -1,64 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
-import Icon from '@/components/ui/icon';
 import { Listing, PARKING, ENTRANCE, perM2 } from './types';
-
-const PREDICT_URL = 'https://functions.poehali.dev/9986e5a6-c4d4-407a-919f-a303aa3eddf2';
-
-interface PredictHint {
-  market_price: number | null;
-  price_per_m2_median: number | null;
-  suggested_price?: number | null;
-  suggestion?: string;
-  price_range?: { min: number | null; max: number | null };
-  price_assessment: { label: string; color: string; delta_pct: number };
-  payback_months: number | null;
-  comparables_count: number;
-  data_source: string;
-}
-
-const ASSESS_COLOR: Record<string, string> = {
-  emerald: 'text-emerald-600 bg-emerald-50 border-emerald-200',
-  green:   'text-green-600 bg-green-50 border-green-200',
-  blue:    'text-blue-600 bg-blue-50 border-blue-200',
-  amber:   'text-amber-600 bg-amber-50 border-amber-200',
-  red:     'text-red-600 bg-red-50 border-red-200',
-  gray:    'text-slate-500 bg-slate-50 border-slate-200',
-};
-
-function fmt(n: number | null | undefined): string {
-  if (!n) return '—';
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace('.0', '') + ' млн ₽';
-  if (n >= 1_000) return (n / 1_000).toFixed(0) + ' тыс. ₽';
-  return n.toLocaleString('ru') + ' ₽';
-}
-
-function usePriceHint(
-  category: string, deal: string, area: number, price: number, district: string, condition: string,
-) {
-  const [hint, setHint] = useState<PredictHint | null>(null);
-  const [loading, setLoading] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (!area || !category || !deal) { setHint(null); return; }
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      setLoading(true);
-      fetch(PREDICT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category, deal, area, price, district, condition }),
-      })
-        .then(r => r.json())
-        .then(d => { if (!d.error) setHint(d as PredictHint); })
-        .catch(() => undefined)
-        .finally(() => setLoading(false));
-    }, 800);
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [category, deal, area, price, district, condition]);
-
-  return { hint, loading };
-}
 
 interface Props {
   editing: Partial<Listing>;
@@ -69,14 +9,6 @@ interface Props {
 
 export default function ListingEditorPriceSection({ editing, setEditing, errors = {}, setErrors }: Props) {
   const err = (field: string) => errors[field] ? 'border-red-400 bg-red-50' : '';
-  const { hint, loading: hintLoading } = usePriceHint(
-    editing.category || '',
-    editing.deal || '',
-    Number(editing.area || 0),
-    Number(editing.price || 0),
-    editing.district || '',
-    editing.condition || '',
-  );
 
   return (
     <>
@@ -108,75 +40,6 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
           {editing.price_unit === 'total' && ' (рассчитано из цены за объект)'}
         </div>
       ) : null}
-
-      {editing.area && editing.category && editing.deal && (
-        <div className="rounded-xl border bg-slate-50 p-3 text-xs space-y-2">
-          <div className="flex items-center gap-1.5 font-semibold text-slate-600">
-            <Icon name="TrendingUp" size={12} />
-            Анализ рынка
-            {hintLoading && <Icon name="Loader2" size={11} className="animate-spin text-slate-400 ml-1" />}
-          </div>
-
-          {hint?.suggestion && (
-            <div className="rounded-lg bg-white border border-slate-200 px-2.5 py-2 text-[12px] leading-relaxed text-slate-700">
-              <div className="flex items-start gap-1.5">
-                <Icon name="Lightbulb" size={12} className="text-amber-500 mt-0.5 flex-shrink-0" />
-                <div>
-                  <div className="font-semibold text-slate-800 mb-0.5">Рекомендация по цене</div>
-                  <div>{hint.suggestion}</div>
-                </div>
-              </div>
-              {hint.suggested_price && (
-                <button type="button"
-                  onClick={() => setEditing({ ...editing, price: hint.suggested_price! })}
-                  className="mt-2 text-[11px] text-brand-blue hover:underline inline-flex items-center gap-1">
-                  <Icon name="Wand2" size={11} />
-                  Применить рекомендованную цену ({fmt(hint.suggested_price)})
-                </button>
-              )}
-            </div>
-          )}
-
-          {hint ? (
-            <div className="flex flex-wrap gap-2">
-              {editing.price && hint.price_assessment && (
-                <span className={`px-2 py-0.5 rounded-full border text-[11px] font-semibold ${ASSESS_COLOR[hint.price_assessment.color] || ASSESS_COLOR.gray}`}>
-                  {hint.price_assessment.label}
-                  {hint.price_assessment.delta_pct !== 0 && (
-                    <> {hint.price_assessment.delta_pct > 0 ? '+' : ''}{hint.price_assessment.delta_pct}%</>
-                  )}
-                </span>
-              )}
-              {hint.market_price && (
-                <span className="px-2 py-0.5 rounded-full border border-slate-200 bg-white text-slate-600 text-[11px]">
-                  Рынок: <b>{fmt(hint.market_price)}</b>
-                </span>
-              )}
-              {hint.price_per_m2_median && (
-                <span className="px-2 py-0.5 rounded-full border border-slate-200 bg-white text-slate-600 text-[11px]">
-                  Медиана ₽/м²: <b>{hint.price_per_m2_median.toLocaleString('ru')} ₽</b>
-                </span>
-              )}
-              {hint.payback_months && (editing.deal === 'sale' || editing.deal === 'business') && (
-                <span className="px-2 py-0.5 rounded-full border border-slate-200 bg-white text-slate-600 text-[11px]">
-                  Окупаемость: <b>
-                    {hint.payback_months < 12
-                      ? `${hint.payback_months} мес.`
-                      : `${Math.floor(hint.payback_months / 12)} лет`}
-                  </b>
-                </span>
-              )}
-              <span className="text-slate-400 text-[10px] self-center">
-                {hint.comparables_count > 0
-                  ? `по ${hint.comparables_count} аналогам`
-                  : 'нормативы рынка'}
-              </span>
-            </div>
-          ) : !hintLoading ? (
-            <span className="text-slate-400">Укажите цену и площадь для анализа</span>
-          ) : null}
-        </div>
-      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div>

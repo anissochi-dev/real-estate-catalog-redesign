@@ -1,6 +1,5 @@
 import type { ListingDetail, Agent } from '@/lib/api';
 import Icon from '@/components/ui/icon';
-import PricePredict from '@/components/PricePredict';
 import { DEAL_LABELS } from './propertyLabels';
 
 interface Props {
@@ -35,9 +34,6 @@ export default function PropertySidebar({ item, agents }: Props) {
           </div>
         )}
       </div>
-
-      {/* Аналитика цены */}
-      <PricePredict listingId={item.id} currentPrice={item.price} deal={item.deal} />
 
       {/* Карточка агента */}
       {agents.length > 0 && (

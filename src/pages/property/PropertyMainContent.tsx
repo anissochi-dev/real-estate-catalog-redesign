@@ -1,7 +1,7 @@
 import type { ListingDetail } from '@/lib/api';
 import Icon from '@/components/ui/icon';
 import PropertyMapInfrastructure from '@/components/PropertyMapInfrastructure';
-import PropertyCalculators from '@/components/calculators/PropertyCalculators';
+import InvestmentModel from '@/components/property/InvestmentModel';
 import SimilarListings from '@/components/SimilarListings';
 import {
   CONDITION_LABELS, FINISHING_LABELS, PARKING_LABELS,
@@ -49,6 +49,14 @@ export default function PropertyMainContent({
           <span>{addressStr}</span>
         </div>
       </div>
+
+      {/* Инвестиционная NOI-модель (AI) — между адресом и параметрами */}
+      <InvestmentModel
+        listingId={item.id}
+        price={item.price}
+        area={item.area}
+        deal={item.deal}
+      />
 
       {/* Параметры объекта */}
       <div className="bg-white rounded-2xl p-5 shadow-sm">
@@ -160,16 +168,7 @@ export default function PropertyMainContent({
         )}
       </div>
 
-      {/* Калькулятор */}
-      <PropertyCalculators
-        price={item.price}
-        area={item.area}
-        deal={item.deal}
-        type={item.type}
-        payback={item.payback}
-        profit={item.profit}
-        pricePerM2={item.pricePerM2}
-      />
+
 
       {/* Особенности */}
       {item.tags && item.tags.length > 0 && (
