@@ -44,7 +44,10 @@ export default function CrmKanban() {
     queryKey: ['crm-stages'],
     queryFn: async () => {
       const r = await fetch(crmUrl('stages'), { headers });
-      return r.json();
+      const j = await r.json();
+      if (Array.isArray(j)) return j;
+      if (Array.isArray(j?.stages)) return j.stages;
+      return [];
     },
   });
 
@@ -56,7 +59,10 @@ export default function CrmKanban() {
         sort: sortKey,
         search: search.trim() || undefined,
       }), { headers });
-      return r.json();
+      const j = await r.json();
+      if (Array.isArray(j)) return j;
+      if (Array.isArray(j?.deals)) return j.deals;
+      return [];
     },
   });
 
@@ -134,6 +140,19 @@ export default function CrmKanban() {
     }
     setDragDeal(null);
   };
+
+  // Воронка сделок доступна только админу и директору
+  if (user && user.role !== 'admin' && user.role !== 'director') {
+    return (
+      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center">
+        <Icon name="Lock" size={32} className="mx-auto mb-3 text-amber-600" />
+        <div className="font-semibold text-amber-800">Раздел недоступен</div>
+        <div className="text-sm text-amber-700 mt-1">
+          Воронка сделок доступна только администратору и директору.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
