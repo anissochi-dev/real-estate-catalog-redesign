@@ -102,27 +102,37 @@ def _extract_text_from_file(file_data: bytes, file_ext: str, file_name: str) -> 
 def _check_rate_limit(cur, user_id: int, action: str = 'fill_contract',
                        max_calls: int = 5, period_minutes: int = 60) -> tuple:
     """Проверяет лимит вызовов. Возвращает (allowed: bool, retry_after_minutes: int)."""
+    # INTERVAL нельзя параметризовать через %s — формируем строку безопасно (int)
+    minutes = int(period_minutes)
     cur.execute(
-        "SELECT COUNT(*) FROM contract_sessions "
-        "WHERE user_id = %s AND status = 'filled' "
-        "AND updated_at > NOW() - INTERVAL '%s minutes'",
-        (user_id, period_minutes)
+        f"SELECT COUNT(*) FROM contract_sessions "
+        f"WHERE user_id = %s AND status = 'filled' "
+        f"AND updated_at > NOW() - INTERVAL '{minutes} minutes'",
+        (user_id,)
     )
     row = cur.fetchone()
-    count = row[0] if row else 0
+    # RealDictCursor вернёт dict, обычный cursor — tuple. Поддерживаем оба.
+    if not row:
+        count = 0
+    else:
+        try:
+            count = row[0] if not isinstance(row, dict) else list(row.values())[0]
+        except Exception:
+            count = 0
     if count >= max_calls:
-        return (False, period_minutes)
+        return (False, minutes)
     return (True, 0)
 
 
 def _get_user(cur, token):
     if not token:
         return None
-    t = token.replace("'", "''")
     cur.execute(
-        f"SELECT u.id, u.role, u.full_name FROM {SCHEMA}.sessions s "
+        f"SELECT u.id, u.role, u.name AS full_name "
+        f"FROM {SCHEMA}.sessions s "
         f"JOIN {SCHEMA}.users u ON u.id = s.user_id "
-        f"WHERE s.token = '{t}' AND s.expires_at > NOW() AND u.is_active = TRUE"
+        f"WHERE s.token = %s AND s.expires_at > NOW() AND u.is_active = TRUE",
+        (token,)
     )
     return cur.fetchone()
 

@@ -85,25 +85,39 @@ def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
 
-    token = event.get('headers', {}).get('x-auth-token') or event.get('headers', {}).get('X-Auth-Token')
+    # Заголовки приходят с разным регистром — приводим к нижнему
+    raw_headers = event.get('headers') or {}
+    headers_lc = {k.lower(): v for k, v in raw_headers.items()}
+    token = headers_lc.get('x-auth-token') or headers_lc.get('x-authorization') or ''
+
     method = event.get('httpMethod', 'GET')
     path_parts = [p for p in event.get('path', '/').split('/') if p]
     qs = event.get('queryStringParameters') or {}
     body = {}
     if event.get('body'):
-        body = json.loads(event['body'])
+        try:
+            body = json.loads(event['body'])
+        except Exception:
+            body = {}
 
-    # path: /owners, /deals, /stages, /activities, /points, /dashboard
+    # path: /owners, /deals, /stages, /activities, /points, /dashboard, /events, /leads
     resource = path_parts[0] if path_parts else 'dashboard'
     resource_id = int(path_parts[1]) if len(path_parts) > 1 and path_parts[1].isdigit() else None
     sub = path_parts[2] if len(path_parts) > 2 else None
 
+    # Логируем входной запрос для диагностики (видно в логах функции)
+    print(f"[crm] {method} resource={resource} id={resource_id} path={event.get('path')} token={'yes' if token else 'no'}")
+
     conn = get_conn()
     user = get_user(token, conn)
 
-    if not user or user['role'] not in ALLOWED_ROLES:
+    if not user:
         conn.close()
-        return err('Нет доступа', 403)
+        print(f"[crm] AUTH FAIL token_preview={token[:8] if token else '-'}")
+        return err('Требуется авторизация', 401)
+    if user['role'] not in ALLOWED_ROLES:
+        conn.close()
+        return err(f'Нет доступа для роли {user["role"]}', 403)
 
     try:
         result = dispatch(conn, user, method, resource, resource_id, sub, qs, body)
@@ -111,6 +125,8 @@ def handler(event: dict, context) -> dict:
         return result
     except Exception as e:
         conn.rollback()
+        import traceback
+        print(f"[crm] ERROR {method} {resource}: {e}\n{traceback.format_exc()}")
         return err(str(e), 500)
     finally:
         conn.close()

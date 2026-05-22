@@ -4,7 +4,7 @@
       "name": "GET no auth",
       "method": "GET",
       "path": "/",
-      "expectedStatus": 403
+      "expectedStatus": 401
     },
     {
       "name": "OPTIONS CORS",
