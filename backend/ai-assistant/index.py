@@ -58,7 +58,12 @@ SYSTEM_PROMPTS = {
         '- Изменить заголовок, описание, цену, статус, SEO любого объекта\n'
         '- Обновить настройки сайта (название компании, контакты, описание)\n'
         '- Управлять лидами: менять статус, писать ответы клиентам\n'
-        '- Анализировать эффективность каталога и давать рекомендации\n'
+        '- Анализировать эффективность каталога и давать рекомендации\n\n'
+        'ВАЖНО — никогда не повторяй один и тот же ответ. Каждый раз используй СВЕЖИЕ данные из контекста:\n'
+        '- Если в контексте есть [ПУЛЬС САЙТА] — обязательно используй эти конкретные цифры в ответе.\n'
+        '- Если есть критические проблемы — назови их по именам и предложи команду /agent чтобы их исправить.\n'
+        '- Если данных мало — честно скажи, что нужно больше информации, и спроси о чём именно помочь.\n'
+        '- Никогда не отвечай шаблонно "я готова помочь" без конкретики по текущей ситуации.\n\n'
         'Говоришь тепло, по-человечески, без сухого официоза. '
         'Отвечай конкретно, на русском, без markdown. Если нужно изменить что-то на сайте — предложи конкретный план с шагами. '
         'Можешь предлагать выполнить действия прямо сейчас — они будут применены через агента после подтверждения. '
@@ -100,28 +105,50 @@ SYSTEM_PROMPTS = {
     'agent': (
         'Ты — автономный ИИ-агент админ-панели BIZNEST. Анализируешь запрос администратора '
         'и САМОСТОЯТЕЛЬНО предлагаешь конкретные действия. Каждое действие требует подтверждения админа.\n\n'
-        'Доступные типы действий (action.type):\n'
+        'ПРАВИЛА RISK:\n'
+        '- low: только чтение/аналитика/отчёты (никаких изменений в БД)\n'
+        '- medium: точечное изменение одного объекта или лида\n'
+        '- high: массовые изменения, удаление, изменение настроек сайта\n\n'
+        'Доступные типы действий (action.type):\n\n'
+        '== Изменения (требуют подтверждения админа) ==\n'
         '- update_listing — изменить объект. params: {"id": int, "fields": {title?, description?, price?, '
-        'status?(active/archived/draft), seo_title?, seo_description?, tags?}}.\n'
-        '- archive_listing — в архив. params: {"id": int}.\n'
-        '- delete_listing — удалить (только мусор). params: {"id": int}.\n'
-        '- reply_lead — ответ клиенту. params: {"id": int, "message": str}.\n'
-        '- close_lead — закрыть лид. params: {"id": int, "reason": str}.\n'
-        '- approve_lead — одобрить лид (pending→new). params: {"id": int}.\n'
-        '- generate_description — переписать описание. params: {"id": int, "new_description": str}.\n'
-        '- seo_optimize — улучшить SEO объекта. params: {"id": int, "seo_title": str, "seo_description": str}.\n'
-        '- bulk_update_status — массово изменить статус группе объектов. params: {"ids": [int,...], "status": str}.\n'
-        '- security_check — проверить безопасность данных (XSS, SQL в полях). params: {}.\n'
-        '- analytics_report — сформировать аналитику. params: {"period": "week|month|all"}.\n'
-        '- marketing_tips — дать маркетинговые советы по каталогу. params: {}.\n'
-        '- update_settings — обновить настройки сайта. params: {"company_name"?, "company_phone"?, "company_email"?, "hero_title"?, "hero_subtitle"?, "about_text"?}.\n'
-        '- create_listing — создать объект. params: {"title": str, "category": str, "deal": str, "price": int, "area": float, "city": str, "description"?: str}.\n'
-        '- note — совет без действия. params: {"text": str}.\n\n'
+        'status?(active/archived/draft), seo_title?, seo_description?, tags?}}. risk: medium.\n'
+        '- archive_listing — в архив. params: {"id": int}. risk: medium.\n'
+        '- delete_listing — удалить (только мусор). params: {"id": int}. risk: high.\n'
+        '- reply_lead — ответ клиенту. params: {"id": int, "message": str}. risk: medium.\n'
+        '- close_lead — закрыть лид. params: {"id": int, "reason": str}. risk: medium.\n'
+        '- approve_lead — одобрить лид (pending→new). params: {"id": int}. risk: medium.\n'
+        '- generate_description — переписать описание. params: {"id": int, "new_description": str}. risk: medium.\n'
+        '- seo_optimize — улучшить SEO объекта. params: {"id": int, "seo_title": str, "seo_description": str}. risk: medium.\n'
+        '- bulk_update_status — массово изменить статус группе объектов. params: {"ids": [int,...], "status": str}. risk: high.\n'
+        '- bulk_generate_descriptions — массово сгенерировать описания. params: {"items": [{"id": int, "description": str}, ...]}. risk: high.\n'
+        '- bulk_seo_optimize — массово улучшить SEO группе. params: {"items": [{"id": int, "seo_title": str, "seo_description": str}, ...]}. risk: high.\n'
+        '- fix_data_quality — исправить проблемы качества. params: {"issue_type": "missing_desc|wrong_price|duplicate", "ids": [int,...]}. risk: high.\n'
+        '- update_settings — обновить настройки сайта. params: {"company_name"?, "company_phone"?, "company_email"?, "hero_title"?, "hero_subtitle"?, "about_text"?}. risk: high.\n'
+        '- create_listing — создать объект. params: {"title": str, "category": str, "deal": str, "price": int, "area": float, "city": str, "description"?: str}. risk: medium.\n\n'
+        '== Аналитика и информация (Мелания собирает сама, не меняет данные) ==\n'
+        '- get_listings_summary — статистика объектов. params: {"period": "week|month|all"?}. risk: low.\n'
+        '- get_leads_summary — статистика лидов. params: {"period": "week|month|all"?}. risk: low.\n'
+        '- get_conversion_analytics — конверсия (просмотры→лиды). params: {"period": "week|month|all"?}. risk: low.\n'
+        '- get_recent_errors — последние ошибки/проблемы из логов. params: {"limit": int?}. risk: low.\n'
+        '- search_listings — поиск по объектам. params: {"query": str, "category"?: str, "max_price"?: int}. risk: low.\n'
+        '- analyze_user_behavior — анализ поведения пользователей. params: {"period": str?}. risk: low.\n'
+        '- get_content_recommendations — рекомендации по контенту. params: {"focus": "seo|conversion|descriptions"?}. risk: low.\n\n'
+        '== Безопасность (только отчёты, без изменений) ==\n'
+        '- check_data_integrity — проверить целостность данных. params: {}. risk: low.\n'
+        '- detect_suspicious_activity — детектить подозрительную активность. params: {"hours": int?}. risk: low.\n'
+        '- scan_xss_vulnerabilities — сканировать XSS-инъекции в полях. params: {}. risk: low.\n'
+        '- validate_seo_compliance — проверка SEO соответствия. params: {}. risk: low.\n'
+        '- security_check — общая проверка безопасности (объединённый отчёт). params: {}. risk: low.\n'
+        '- analytics_report — сформировать аналитический отчёт. params: {"period": "week|month|all"?}. risk: low.\n'
+        '- marketing_tips — маркетинговые советы по каталогу. params: {}. risk: low.\n'
+        '- note — совет без действия. params: {"text": str}. risk: low.\n\n'
         'Ответь СТРОГО в формате JSON без markdown:\n'
         '{"reasoning": "1-2 предложения", "actions": [{"type": str, "title": str, '
         '"description": str, "risk": "low|medium|high", "params": {...}}]}\n\n'
-        'Предлагай максимум 7 действий. Никогда не придумывай id. '
-        'Не предлагай delete_listing без явной причины. Все destructive-операции — risk: high.'
+        'Предлагай максимум 7 действий. Никогда не придумывай id — используй только id из данных контекста. '
+        'СНАЧАЛА предлагай действия с risk: low (сбор данных, отчёты) — их можно применять автоматически. '
+        'Деструктивные/массовые операции (risk: high) — только если они напрямую следуют из запроса админа.'
     ),
     'security': (
         'Ты — специалист по информационной безопасности. Анализируй данные системы (объявления, лиды, '
@@ -528,7 +555,296 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         new_id = cur.fetchone()['id']
         return {'ok': True, 'message': f'Объект "{title}" создан в черновиках с ID #{new_id}'}
 
+    # ─────────── НОВЫЕ ИНСТРУМЕНТЫ МЕЛАНИИ ───────────
+
+    # Аналитика и сбор данных (risk: low — выполняется без подтверждения)
+    if act_type == 'get_listings_summary':
+        period = params.get('period', 'all')
+        interval = "INTERVAL '7 days'" if period == 'week' else ("INTERVAL '30 days'" if period == 'month' else None)
+        where_period = f" AND created_at > NOW() - {interval}" if interval else ""
+        cur.execute(
+            f"SELECT COUNT(*) AS total, "
+            f"COUNT(*) FILTER (WHERE status='active') AS active, "
+            f"COUNT(*) FILTER (WHERE status='archived') AS archived, "
+            f"COUNT(*) FILTER (WHERE status='active' AND COALESCE(LENGTH(description), 0) < 50) AS no_desc, "
+            f"COUNT(*) FILTER (WHERE status='active' AND (seo_title IS NULL OR seo_title='')) AS no_seo, "
+            f"COALESCE(AVG(price) FILTER (WHERE status='active'), 0)::bigint AS avg_price, "
+            f"COALESCE(MIN(price) FILTER (WHERE status='active' AND price > 0), 0) AS min_price, "
+            f"COALESCE(MAX(price) FILTER (WHERE status='active'), 0) AS max_price "
+            f"FROM {SCHEMA}.listings WHERE 1=1{where_period}"
+        )
+        row = dict(cur.fetchone())
+        return {'ok': True, 'message': f"Объектов: {row['active']} активных, {row['archived']} в архиве. "
+                f"Средняя цена: {row['avg_price']:,} ₽. Без описания: {row['no_desc']}, без SEO: {row['no_seo']}.",
+                'data': row}
+
+    if act_type == 'get_leads_summary':
+        period = params.get('period', 'all')
+        interval = "INTERVAL '7 days'" if period == 'week' else ("INTERVAL '30 days'" if period == 'month' else None)
+        where_period = f" AND created_at > NOW() - {interval}" if interval else ""
+        cur.execute(
+            f"SELECT COUNT(*) AS total, "
+            f"COUNT(*) FILTER (WHERE status='new') AS new_count, "
+            f"COUNT(*) FILTER (WHERE status='pending') AS pending, "
+            f"COUNT(*) FILTER (WHERE status='in_progress') AS in_progress, "
+            f"COUNT(*) FILTER (WHERE status='closed') AS closed "
+            f"FROM {SCHEMA}.leads WHERE 1=1{where_period}"
+        )
+        row = dict(cur.fetchone())
+        conv = round((row['closed'] / max(row['total'], 1)) * 100, 1)
+        return {'ok': True, 'message': f"Лиды ({period}): всего {row['total']}, новых {row['new_count']}, "
+                f"в работе {row['in_progress']}, закрыто {row['closed']}. Конверсия в закрытие: {conv}%.",
+                'data': {**row, 'conversion_rate': conv}}
+
+    if act_type == 'get_conversion_analytics':
+        # Простая воронка: просмотры → лиды
+        cur.execute(f"SELECT COALESCE(SUM(views_site), 0) AS views FROM {SCHEMA}.listings WHERE status='active'")
+        views = int(cur.fetchone()['views'] or 0)
+        cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.leads")
+        leads_count = cur.fetchone()['c']
+        cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.leads WHERE status='closed'")
+        closed = cur.fetchone()['c']
+        conv1 = round((leads_count / max(views, 1)) * 100, 2)
+        conv2 = round((closed / max(leads_count, 1)) * 100, 1)
+        return {'ok': True, 'message': f"Воронка: {views} просмотров → {leads_count} заявок ({conv1}%) → {closed} закрыто ({conv2}%).",
+                'data': {'views': views, 'leads': leads_count, 'closed': closed, 'view_to_lead': conv1, 'lead_to_closed': conv2}}
+
+    if act_type == 'get_recent_errors':
+        limit_val = min(int(params.get('limit', 20)), 50)
+        cur.execute(
+            f"SELECT created_at, action, LEFT(prompt, 100) AS prompt_snippet, LEFT(response, 200) AS response_snippet "
+            f"FROM {SCHEMA}.ai_logs "
+            f"WHERE created_at > NOW() - INTERVAL '7 days' "
+            f"AND (LOWER(response) LIKE '%ошибк%' OR LOWER(response) LIKE '%error%' OR LOWER(response) LIKE '%fail%') "
+            f"ORDER BY created_at DESC LIMIT {limit_val}"
+        )
+        errors = [dict(r) for r in cur.fetchall()]
+        return {'ok': True, 'message': f"Найдено {len(errors)} ошибок за 7 дней.",
+                'data': {'errors': errors}}
+
+    if act_type == 'search_listings':
+        query = _sanitize_text(str(params.get('query', '')), 200)
+        category = params.get('category', '')
+        max_price = params.get('max_price')
+        where = ["status = 'active'"]
+        if query:
+            where.append(f"(LOWER(title) LIKE '%{query.lower()}%' OR LOWER(description) LIKE '%{query.lower()}%')")
+        if category:
+            where.append(f"category = '{_sanitize_text(str(category), 50)}'")
+        if max_price:
+            try:
+                where.append(f"price <= {int(max_price)}")
+            except Exception:
+                pass
+        cur.execute(
+            f"SELECT id, title, category, price, area, district FROM {SCHEMA}.listings "
+            f"WHERE {' AND '.join(where)} ORDER BY id DESC LIMIT 20"
+        )
+        found = [dict(r) for r in cur.fetchall()]
+        return {'ok': True, 'message': f"Найдено {len(found)} объектов по запросу.",
+                'data': {'listings': found}}
+
+    if act_type == 'analyze_user_behavior':
+        # По views в разрезе категорий
+        cur.execute(
+            f"SELECT category, SUM(views_site) AS views, COUNT(*) AS count "
+            f"FROM {SCHEMA}.listings WHERE status='active' "
+            f"GROUP BY category ORDER BY views DESC LIMIT 10"
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+        top = rows[0]['category'] if rows else 'нет данных'
+        return {'ok': True, 'message': f"Самая популярная категория по просмотрам: {top}.",
+                'data': {'by_category': rows}}
+
+    if act_type == 'get_content_recommendations':
+        focus = params.get('focus', 'seo')
+        cur.execute(
+            f"SELECT id, title FROM {SCHEMA}.listings "
+            f"WHERE status='active' AND (seo_title IS NULL OR seo_title='') "
+            f"ORDER BY id DESC LIMIT 10"
+        )
+        no_seo = [dict(r) for r in cur.fetchall()]
+        cur.execute(
+            f"SELECT id, title FROM {SCHEMA}.listings "
+            f"WHERE status='active' AND COALESCE(LENGTH(description), 0) < 50 "
+            f"ORDER BY id DESC LIMIT 10"
+        )
+        no_desc = [dict(r) for r in cur.fetchall()]
+        return {'ok': True, 'message': f"Найдено {len(no_seo)} объектов без SEO и {len(no_desc)} без описания.",
+                'data': {'focus': focus, 'no_seo': no_seo, 'no_desc': no_desc}}
+
+    # Безопасность (risk: low — только отчёты)
+    if act_type == 'check_data_integrity':
+        issues = []
+        cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.listings WHERE title IS NULL OR title = ''")
+        if cur.fetchone()['c'] > 0:
+            issues.append("есть объекты без названия")
+        cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.listings WHERE status='active' AND price <= 0")
+        bad_price = cur.fetchone()['c']
+        if bad_price > 0:
+            issues.append(f"{bad_price} активных объектов с ценой 0")
+        cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.leads WHERE phone IS NULL OR phone = ''")
+        bad_leads = cur.fetchone()['c']
+        if bad_leads > 0:
+            issues.append(f"{bad_leads} лидов без телефона")
+        msg = "Проблем не обнаружено." if not issues else "Найдены проблемы: " + "; ".join(issues)
+        return {'ok': True, 'message': msg, 'data': {'issues': issues}}
+
+    if act_type == 'detect_suspicious_activity':
+        hours = min(int(params.get('hours', 24)), 168)
+        cur.execute(
+            f"SELECT phone, COUNT(*) AS attempts FROM {SCHEMA}.leads "
+            f"WHERE created_at > NOW() - INTERVAL '{hours} hours' "
+            f"GROUP BY phone HAVING COUNT(*) > 3 ORDER BY attempts DESC LIMIT 10"
+        )
+        suspicious = [dict(r) for r in cur.fetchall()]
+        msg = ("Подозрительной активности не обнаружено." if not suspicious
+               else f"Найдено {len(suspicious)} номеров с >3 заявками за {hours}ч (возможный спам).")
+        return {'ok': True, 'message': msg, 'data': {'suspicious': suspicious}}
+
+    if act_type == 'scan_xss_vulnerabilities':
+        # Простой поиск тегов script/iframe/onclick в текстовых полях
+        cur.execute(
+            f"SELECT id, title FROM {SCHEMA}.listings "
+            f"WHERE LOWER(description) LIKE '%<script%' OR LOWER(description) LIKE '%<iframe%' "
+            f"OR LOWER(description) LIKE '%onerror=%' OR LOWER(description) LIKE '%onclick=%' "
+            f"OR LOWER(title) LIKE '%<script%' LIMIT 20"
+        )
+        vulns = [dict(r) for r in cur.fetchall()]
+        msg = "XSS-уязвимостей не обнаружено." if not vulns else f"Внимание! Найдено {len(vulns)} объектов с потенциальными XSS-инъекциями."
+        return {'ok': True, 'message': msg, 'data': {'vulnerable': vulns}}
+
+    if act_type == 'validate_seo_compliance':
+        cur.execute(
+            f"SELECT COUNT(*) FILTER (WHERE seo_title IS NULL OR seo_title='') AS no_title, "
+            f"COUNT(*) FILTER (WHERE seo_description IS NULL OR seo_description='') AS no_desc, "
+            f"COUNT(*) FILTER (WHERE LENGTH(seo_title) > 70) AS too_long_title, "
+            f"COUNT(*) FILTER (WHERE LENGTH(seo_description) > 160) AS too_long_desc, "
+            f"COUNT(*) AS total "
+            f"FROM {SCHEMA}.listings WHERE status='active'"
+        )
+        row = dict(cur.fetchone())
+        compliance = round(((row['total'] - row['no_title'] - row['no_desc']) / max(row['total'] * 2, 1)) * 100, 1)
+        return {'ok': True, 'message': f"SEO-соответствие: {compliance}%. Без title: {row['no_title']}, без description: {row['no_desc']}, "
+                f"слишком длинных title: {row['too_long_title']}, description: {row['too_long_desc']}.",
+                'data': row}
+
+    # Массовые исправления (risk: high — требуют подтверждения админа)
+    if act_type == 'bulk_generate_descriptions':
+        items = params.get('items') or []
+        if not isinstance(items, list) or not items:
+            return {'error': 'Не передан список объектов'}
+        if len(items) > 20:
+            return {'error': 'Максимум 20 объектов за раз'}
+        updated = 0
+        for it in items:
+            try:
+                lid = int(it.get('id') or 0)
+                desc = _sanitize_text(str(it.get('description') or ''), 5000)
+                if lid and desc:
+                    cur.execute(f"UPDATE {SCHEMA}.listings SET description='{desc}', updated_at=NOW() WHERE id={lid}")
+                    updated += 1
+            except Exception:
+                continue
+        return {'ok': True, 'message': f'Обновлено описаний: {updated} из {len(items)}'}
+
+    if act_type == 'bulk_seo_optimize':
+        items = params.get('items') or []
+        if not isinstance(items, list) or not items:
+            return {'error': 'Не передан список объектов'}
+        if len(items) > 20:
+            return {'error': 'Максимум 20 объектов за раз'}
+        updated = 0
+        for it in items:
+            try:
+                lid = int(it.get('id') or 0)
+                st = _sanitize_text(str(it.get('seo_title') or ''), 120)
+                sd = _sanitize_text(str(it.get('seo_description') or ''), 300)
+                if lid and (st or sd):
+                    sets = []
+                    if st:
+                        sets.append(f"seo_title='{st}'")
+                    if sd:
+                        sets.append(f"seo_description='{sd}'")
+                    cur.execute(f"UPDATE {SCHEMA}.listings SET {', '.join(sets)}, updated_at=NOW() WHERE id={lid}")
+                    updated += 1
+            except Exception:
+                continue
+        return {'ok': True, 'message': f'SEO обновлён для {updated} объектов из {len(items)}'}
+
+    if act_type == 'fix_data_quality':
+        issue = params.get('issue_type', '')
+        ids = params.get('ids') or []
+        if not ids:
+            return {'error': 'Не указаны id объектов'}
+        if len(ids) > 50:
+            return {'error': 'Максимум 50 объектов за раз'}
+        id_list = ','.join(str(int(i)) for i in ids if str(i).isdigit())
+        if not id_list:
+            return {'error': 'Некорректные id'}
+        if issue == 'missing_desc':
+            cur.execute(f"UPDATE {SCHEMA}.listings SET status='draft', updated_at=NOW() "
+                        f"WHERE id IN ({id_list}) AND COALESCE(LENGTH(description), 0) < 50")
+            return {'ok': True, 'message': f'Объекты без описания переведены в черновики (до {len(ids)})'}
+        if issue == 'wrong_price':
+            cur.execute(f"UPDATE {SCHEMA}.listings SET status='draft', updated_at=NOW() "
+                        f"WHERE id IN ({id_list}) AND price <= 0")
+            return {'ok': True, 'message': f'Объекты с некорректной ценой переведены в черновики'}
+        if issue == 'duplicate':
+            return {'ok': True, 'message': f'Дубли требуют ручной проверки — найдено {len(ids)} кандидатов'}
+        return {'error': f'Неизвестный тип проблемы: {issue}'}
+
     return {'error': f'Неизвестное действие: {act_type}'}
+
+
+def _build_pulse_context(cur) -> str:
+    """Краткий 'пульс' сайта для подмешивания в admin-промпт.
+    Возвращает текст с критичными метриками — чтобы Мелания не отвечала шаблонно."""
+    lines = []
+    try:
+        cur.execute(
+            f"SELECT "
+            f"(SELECT COUNT(*) FROM {SCHEMA}.listings WHERE status='active') AS active, "
+            f"(SELECT COUNT(*) FROM {SCHEMA}.listings WHERE status='active' AND COALESCE(LENGTH(description),0) < 50) AS no_desc, "
+            f"(SELECT COUNT(*) FROM {SCHEMA}.listings WHERE status='active' AND (seo_title IS NULL OR seo_title='')) AS no_seo, "
+            f"(SELECT COUNT(*) FROM {SCHEMA}.leads WHERE status='new') AS new_leads, "
+            f"(SELECT COUNT(*) FROM {SCHEMA}.leads WHERE status='pending') AS pending_leads, "
+            f"(SELECT COUNT(*) FROM {SCHEMA}.leads WHERE created_at > NOW() - INTERVAL '24 hours') AS leads_24h"
+        )
+        row = dict(cur.fetchone() or {})
+        lines.append(f"[ПУЛЬС САЙТА] Сейчас: {row.get('active', 0)} активных объектов, "
+                     f"{row.get('no_desc', 0)} без описания, {row.get('no_seo', 0)} без SEO. "
+                     f"Лиды: {row.get('new_leads', 0)} новых, {row.get('pending_leads', 0)} в ожидании, "
+                     f"{row.get('leads_24h', 0)} за последние 24 часа.")
+        problems = []
+        if (row.get('no_desc') or 0) > 0:
+            problems.append(f"{row['no_desc']} объектов без описания")
+        if (row.get('no_seo') or 0) > 0:
+            problems.append(f"{row['no_seo']} объектов без SEO")
+        if (row.get('pending_leads') or 0) > 0:
+            problems.append(f"{row['pending_leads']} лидов в ожидании одобрения")
+        if problems:
+            lines.append("Критичные проблемы: " + "; ".join(problems) + ".")
+        else:
+            lines.append("Критичных проблем не обнаружено.")
+    except Exception:
+        pass
+
+    # Последние ошибки ИИ за сутки
+    try:
+        cur.execute(
+            f"SELECT COUNT(*) AS c FROM {SCHEMA}.ai_logs "
+            f"WHERE created_at > NOW() - INTERVAL '24 hours' "
+            f"AND (LOWER(response) LIKE '%ошибк%' OR LOWER(response) LIKE '%error%')"
+        )
+        err_row = cur.fetchone()
+        err_count = err_row['c'] if err_row else 0
+        if err_count > 0:
+            lines.append(f"За сутки в логах ИИ обнаружено {err_count} ошибок.")
+    except Exception:
+        pass
+
+    return '\n'.join(lines)
 
 
 def _collect_agent_context(cur) -> dict:
@@ -581,6 +897,42 @@ def _collect_agent_context(cur) -> dict:
         ctx['categories'] = [dict(r) for r in cur.fetchall()]
     except Exception:
         pass
+
+    # Недавние ошибки/проблемы из ai_logs (последние сутки)
+    try:
+        cur.execute(
+            f"SELECT created_at, action, LEFT(response, 200) AS snippet "
+            f"FROM {SCHEMA}.ai_logs "
+            f"WHERE created_at > NOW() - INTERVAL '24 hours' "
+            f"AND (LOWER(response) LIKE '%ошибк%' OR LOWER(response) LIKE '%error%') "
+            f"ORDER BY created_at DESC LIMIT 5"
+        )
+        ctx['recent_errors'] = [dict(r) for r in cur.fetchall()]
+    except Exception:
+        ctx['recent_errors'] = []
+
+    # Подозрительная активность: повторные регистрации/попытки одного IP
+    try:
+        cur.execute(
+            f"SELECT phone, COUNT(*) AS attempts "
+            f"FROM {SCHEMA}.leads WHERE created_at > NOW() - INTERVAL '24 hours' "
+            f"GROUP BY phone HAVING COUNT(*) > 3 ORDER BY attempts DESC LIMIT 5"
+        )
+        ctx['suspicious_leads'] = [dict(r) for r in cur.fetchall()]
+    except Exception:
+        ctx['suspicious_leads'] = []
+
+    # Объекты с резкими изменениями цены за неделю (history)
+    try:
+        cur.execute(
+            f"SELECT listing_id, COUNT(*) AS changes "
+            f"FROM {SCHEMA}.listing_history "
+            f"WHERE changed_at > NOW() - INTERVAL '7 days' "
+            f"GROUP BY listing_id HAVING COUNT(*) > 5 ORDER BY changes DESC LIMIT 5"
+        )
+        ctx['high_activity_listings'] = [dict(r) for r in cur.fetchall()]
+    except Exception:
+        ctx['high_activity_listings'] = []
 
     return ctx
 
@@ -734,7 +1086,8 @@ def handler(event, context):
             if action in ('admin', 'admin_ops'):
                 memory = _load_ai_memory(cur)
                 memory_ctx = _build_memory_context(memory)
-                sys_prompt = sys_prompt + '\n\n' + memory_ctx
+                pulse_ctx = _build_pulse_context(cur)
+                sys_prompt = sys_prompt + '\n\n' + pulse_ctx + '\n\n' + memory_ctx
                 _increment_interaction(cur, conn)
 
             full_prompt = user_text

@@ -17,6 +17,7 @@ import os
 import base64
 import io
 import urllib.request
+import urllib.error
 from datetime import datetime, timezone
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -150,9 +151,28 @@ def _cdn_url(key):
     return f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
 
 
-def _yandex_gpt(system: str, user_msg: str) -> str:
-    api_key = os.environ.get('YANDEX_API_KEY', '')
-    folder_id = os.environ.get('YANDEX_FOLDER_ID', '')
+def _load_yandex_keys(cur) -> tuple:
+    """Берём ключи из таблицы settings, fallback на ENV."""
+    try:
+        cur.execute(f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
+        row = cur.fetchone()
+        if row:
+            api = (row.get('yandex_api_key') or '').strip() if isinstance(row, dict) else ''
+            fld = (row.get('yandex_folder_id') or '').strip() if isinstance(row, dict) else ''
+            if api and fld:
+                return api, fld
+    except Exception:
+        pass
+    return os.environ.get('YANDEX_API_KEY', '').strip(), os.environ.get('YANDEX_FOLDER_ID', '').strip()
+
+
+def _yandex_gpt(system: str, user_msg: str, api_key: str = '', folder_id: str = '') -> str:
+    """Вызов YandexGPT. Бросает ValueError с понятным сообщением при сбое."""
+    api_key = (api_key or os.environ.get('YANDEX_API_KEY', '')).strip()
+    folder_id = (folder_id or os.environ.get('YANDEX_FOLDER_ID', '')).strip()
+    if not api_key or not folder_id:
+        raise ValueError('YandexGPT не настроен: добавьте ключи в Настройки → Интеграции')
+
     payload = {
         'modelUri': f'gpt://{folder_id}/{YANDEX_MODEL}',
         'completionOptions': {'stream': False, 'temperature': 0.3, 'maxTokens': '6000'},
@@ -172,12 +192,37 @@ def _yandex_gpt(system: str, user_msg: str) -> str:
         },
         method='POST',
     )
-    with urllib.request.urlopen(req, timeout=55) as r:
-        result = json.loads(r.read().decode('utf-8'))
-    return result['result']['alternatives'][0]['message']['text']
+    try:
+        with urllib.request.urlopen(req, timeout=55) as r:
+            result = json.loads(r.read().decode('utf-8'))
+    except urllib.error.HTTPError as e:
+        body_text = ''
+        try:
+            body_text = e.read().decode('utf-8', errors='replace')[:500]
+        except Exception:
+            pass
+        if e.code == 401:
+            raise ValueError('YandexGPT отклонил ключ (401). Проверьте API-ключ и Folder ID в Настройки → Интеграции')
+        if e.code == 403:
+            raise ValueError('YandexGPT: нет доступа (403). Проверьте права сервисного аккаунта на ai.languageModels.user')
+        if e.code == 429:
+            raise ValueError('YandexGPT: превышен лимит запросов (429). Подождите минуту')
+        raise ValueError(f'YandexGPT вернул ошибку {e.code}: {body_text[:200]}')
+    except urllib.error.URLError as e:
+        raise ValueError(f'Не удалось связаться с YandexGPT: {e.reason}')
+    except json.JSONDecodeError:
+        raise ValueError('YandexGPT вернул некорректный ответ')
+
+    alts = (result.get('result') or {}).get('alternatives') or []
+    if not alts:
+        raise ValueError('YandexGPT вернул пустой ответ')
+    text = ((alts[0].get('message') or {}).get('text') or '').strip()
+    if not text:
+        raise ValueError('YandexGPT вернул пустой текст')
+    return text
 
 
-def _fill_via_gpt(session: dict, docs: list) -> str:
+def _fill_via_gpt(session: dict, docs: list, api_key: str = '', folder_id: str = '') -> str:
     now = datetime.now(timezone.utc)
     date_str = now.strftime('%d.%m.%Y')
     contract_type_label = CONTRACT_TYPES.get(session.get('contract_type', ''), 'Договор')
@@ -222,7 +267,7 @@ def _fill_via_gpt(session: dict, docs: list) -> str:
 ДОКУМЕНТЫ:
 {docs_text}"""
 
-    return _yandex_gpt(system, user_msg)
+    return _yandex_gpt(system, user_msg, api_key, folder_id)
 
 
 def _generate_docx(text: str, title: str) -> bytes:
@@ -498,10 +543,19 @@ def handler(event: dict, context) -> dict:
                 )
                 docs = [dict(d) for d in cur.fetchall()]
 
-                if not os.environ.get('YANDEX_API_KEY') or not os.environ.get('YANDEX_FOLDER_ID'):
-                    return _err('YandexGPT не настроен')
+                api_key, folder_id = _load_yandex_keys(cur)
+                if not api_key or not folder_id:
+                    return _err('YandexGPT не настроен. Добавьте ключи в Настройки → Интеграции', 503)
 
-                filled = _fill_via_gpt(dict(session), docs)
+                try:
+                    filled = _fill_via_gpt(dict(session), docs, api_key, folder_id)
+                except ValueError as e:
+                    return _err(str(e), 400)
+                except Exception as e:
+                    return _err(f'Ошибка заполнения договора: {type(e).__name__}: {str(e)[:200]}', 500)
+
+                if not filled or not filled.strip():
+                    return _err('ИИ вернул пустой результат. Проверьте загруженные документы и условия сделки.', 400)
 
                 txt_key = f"contracts/{uid}/{sid}/filled_contract.txt"
                 s3 = _s3()

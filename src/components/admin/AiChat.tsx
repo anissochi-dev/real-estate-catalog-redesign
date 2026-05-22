@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { aiApi, AiAction } from '@/lib/adminApi';
 import {
   Msg, Suggestion, QuickCmd,
-  HISTORY_KEY,
+  HISTORY_KEY, AUTO_APPLY_ACTIONS,
   detectSuggestion, loadHistory, saveHistory,
 } from './AiChatTypes';
 import AiChatHeader from './AiChatHeader';
@@ -133,15 +133,33 @@ export default function AiChat({
     try {
       if (act === 'agent') {
         const r = await aiApi.agent(text || 'Что мне сейчас нужно сделать?', contextData);
+        const incomingActions = (r.actions || []).map(a => ({ ...a, status: 'pending' as const }));
         const aiMsg: Msg = {
           role: 'ai',
           text: r.reasoning || 'Готов предложить действия.',
           action: act,
           ts: Date.now(),
           reasoning: r.reasoning,
-          agentActions: (r.actions || []).map(a => ({ ...a, status: 'pending' as const })),
+          agentActions: incomingActions,
         };
-        setMessages(m => [...m, aiMsg]);
+        setMessages(m => {
+          const next = [...m, aiMsg];
+          // Автозапуск безопасных информационных действий (risk=low) — без подтверждения
+          const newMsgIdx = next.length - 1;
+          const autoIdxs = incomingActions
+            .map((a, i) => ({ a, i }))
+            .filter(({ a }) => a.risk === 'low' && AUTO_APPLY_ACTIONS.has(a.type))
+            .map(({ i }) => i);
+          if (autoIdxs.length > 0) {
+            setTimeout(() => {
+              autoIdxs.reduce<Promise<void>>(
+                (p, i) => p.then(() => confirmAgentAction(newMsgIdx, i)),
+                Promise.resolve(),
+              );
+            }, 50);
+          }
+          return next;
+        });
       } else {
         const r = await aiApi.ask(act, text, contextData);
         const aiMsg: Msg = {

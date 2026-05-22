@@ -48,6 +48,7 @@ export const QUICK_CMDS: QuickCmd[] = [
 ];
 
 export const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
+  // Изменения
   update_listing: { label: 'Обновить объект', icon: 'Pencil' },
   archive_listing: { label: 'В архив', icon: 'Archive' },
   delete_listing: { label: 'Удалить объект', icon: 'Trash2' },
@@ -57,13 +58,50 @@ export const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
   generate_description: { label: 'Переписать описание', icon: 'PenLine' },
   seo_optimize: { label: 'Улучшить SEO', icon: 'Search' },
   bulk_update_status: { label: 'Массовый статус', icon: 'Layers' },
+  bulk_generate_descriptions: { label: 'Массовые описания', icon: 'PenSquare' },
+  bulk_seo_optimize: { label: 'Массовое SEO', icon: 'SearchCheck' },
+  fix_data_quality: { label: 'Исправить качество', icon: 'Wrench' },
+  update_settings: { label: 'Обновить настройки', icon: 'Settings' },
+  create_listing: { label: 'Создать объект', icon: 'PlusCircle' },
+  // Аналитика и сбор данных
+  get_listings_summary: { label: 'Сводка по объектам', icon: 'BarChart3' },
+  get_leads_summary: { label: 'Сводка по лидам', icon: 'Users' },
+  get_conversion_analytics: { label: 'Конверсия', icon: 'TrendingUp' },
+  get_recent_errors: { label: 'Последние ошибки', icon: 'AlertTriangle' },
+  search_listings: { label: 'Поиск объектов', icon: 'Search' },
+  analyze_user_behavior: { label: 'Поведение посетителей', icon: 'Activity' },
+  get_content_recommendations: { label: 'Рекомендации контента', icon: 'Lightbulb' },
+  // Безопасность
+  check_data_integrity: { label: 'Целостность данных', icon: 'Database' },
+  detect_suspicious_activity: { label: 'Подозрительная активность', icon: 'ShieldAlert' },
+  scan_xss_vulnerabilities: { label: 'Сканер XSS', icon: 'Bug' },
+  validate_seo_compliance: { label: 'SEO-соответствие', icon: 'CheckSquare' },
   security_check: { label: 'Проверка безопасности', icon: 'ShieldCheck' },
   analytics_report: { label: 'Аналитика', icon: 'BarChart3' },
   marketing_tips: { label: 'Маркетинг', icon: 'TrendingUp' },
-  update_settings: { label: 'Обновить настройки', icon: 'Settings' },
-  create_listing: { label: 'Создать объект', icon: 'PlusCircle' },
   note: { label: 'Совет', icon: 'Lightbulb' },
 };
+
+// Действия с risk: low — это безопасные информационные действия,
+// можно автоматически выполнять при появлении (Мелания "собирает данные сама").
+// Все остальные требуют явного подтверждения админа.
+export const AUTO_APPLY_ACTIONS = new Set([
+  'get_listings_summary',
+  'get_leads_summary',
+  'get_conversion_analytics',
+  'get_recent_errors',
+  'search_listings',
+  'analyze_user_behavior',
+  'get_content_recommendations',
+  'check_data_integrity',
+  'detect_suspicious_activity',
+  'scan_xss_vulnerabilities',
+  'validate_seo_compliance',
+  'security_check',
+  'analytics_report',
+  'marketing_tips',
+  'note',
+]);
 
 export const RISK_STYLES: Record<string, string> = {
   low: 'bg-emerald-100 text-emerald-700',

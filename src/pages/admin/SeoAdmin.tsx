@@ -69,20 +69,30 @@ export default function SeoAdmin() {
   const [listingId, setListingId] = useState('');
   const [lastRun, setLastRun] = useState<{ processed: number; errors: number; total: number; dry_run: boolean } | null>(null);
   const [activeTab, setActiveTab] = useState<'run' | 'schedule' | 'history'>('run');
+  const [errorMsg, setErrorMsg] = useState<string>('');
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const loadStatus = async () => {
     setLoading(true);
+    setErrorMsg('');
     try {
       const r = await fetch(SEO_URL, {
         method: 'POST', headers,
         body: JSON.stringify({ action: 'status' }),
       });
+      if (!r.ok) {
+        setErrorMsg(`Не удалось загрузить статус (HTTP ${r.status})`);
+        return;
+      }
       const d = await r.json();
+      if (d.error) { setErrorMsg(d.error); return; }
       if (d.status) setStatus(d.status);
       if (d.schedule) setSchedule(d.schedule);
       if (d.recent_logs) setLogs(d.recent_logs);
-      setGptOk(d.gpt_configured);
-    } catch { /* ignore */ } finally {
+      setGptOk(!!d.gpt_configured);
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'Ошибка сети');
+    } finally {
       setLoading(false);
     }
   };
@@ -106,20 +116,32 @@ export default function SeoAdmin() {
   };
 
   const loadHistory = async () => {
+    setHistoryLoading(true);
+    setErrorMsg('');
     try {
       const r = await fetch(SEO_URL, {
         method: 'POST', headers,
         body: JSON.stringify({ action: 'log', limit: 50 }),
       });
+      if (!r.ok) {
+        setErrorMsg(`Не удалось загрузить историю (HTTP ${r.status})`);
+        return;
+      }
       const d = await r.json();
-      if (d.logs) setLogs(d.logs);
-    } catch { /* ignore */ }
+      if (d.error) { setErrorMsg(d.error); return; }
+      setLogs(d.logs || []);
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'Ошибка сети');
+    } finally {
+      setHistoryLoading(false);
+    }
   };
 
   const run = async (preview = false) => {
     setRunning(true);
     setResults([]);
     setLastRun(null);
+    setErrorMsg('');
     try {
       const r = await fetch(SEO_URL, {
         method: 'POST', headers,
@@ -130,12 +152,12 @@ export default function SeoAdmin() {
         }),
       });
       const d = await r.json();
-      if (d.error) { alert(d.error); return; }
+      if (d.error) { setErrorMsg(d.error); return; }
       setResults(d.results || []);
       setLastRun({ processed: d.processed, errors: d.errors, total: d.total, dry_run: d.dry_run });
       if (!preview) { await loadStatus(); }
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Ошибка');
+      setErrorMsg(e instanceof Error ? e.message : 'Ошибка сети');
     } finally {
       setRunning(false);
     }
@@ -215,6 +237,20 @@ export default function SeoAdmin() {
           </div>
         </>
       ) : null}
+
+      {/* Универсальный баннер ошибок */}
+      {errorMsg && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+          <Icon name="AlertCircle" size={18} className="text-red-600 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <div className="font-semibold text-red-800 text-sm">Ошибка</div>
+            <div className="text-xs text-red-700 mt-0.5 break-words">{errorMsg}</div>
+          </div>
+          <button onClick={() => setErrorMsg('')} className="text-red-400 hover:text-red-600 text-xs">
+            <Icon name="X" size={14} />
+          </button>
+        </div>
+      )}
 
       {/* GPT предупреждение */}
       {!gptOk && (
@@ -420,7 +456,22 @@ export default function SeoAdmin() {
           {/* Вкладка История */}
           {activeTab === 'history' && (
             <div className="space-y-3">
-              {logs.length === 0 ? (
+              <div className="flex items-center justify-between">
+                <div className="text-xs text-muted-foreground">
+                  Показаны последние {logs.length} запусков (макс. 50)
+                </div>
+                <button onClick={loadHistory} disabled={historyLoading}
+                  className="text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-muted inline-flex items-center gap-1.5 disabled:opacity-50">
+                  <Icon name={historyLoading ? 'Loader2' : 'RefreshCw'} size={12} className={historyLoading ? 'animate-spin' : ''} />
+                  Обновить
+                </button>
+              </div>
+              {historyLoading && logs.length === 0 ? (
+                <div className="text-center text-muted-foreground py-8 text-sm">
+                  <Icon name="Loader2" size={24} className="mx-auto mb-2 animate-spin opacity-60" />
+                  Загружаю историю...
+                </div>
+              ) : logs.length === 0 ? (
                 <div className="text-center text-muted-foreground py-8 text-sm">
                   <Icon name="History" size={32} className="mx-auto mb-2 opacity-40" />
                   История запусков пуста

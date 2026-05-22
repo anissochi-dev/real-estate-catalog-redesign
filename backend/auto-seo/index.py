@@ -16,6 +16,7 @@ Returns: {processed, skipped, errors} или {status} или {schedule} и т.д
 import json
 import os
 import urllib.request
+import urllib.error
 from datetime import datetime, timezone
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -109,8 +110,22 @@ def _gpt(system: str, user_text: str, api_key: str, folder_id: str) -> dict:
         alts = (data.get('result') or {}).get('alternatives') or []
         text = ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
         return {'text': text}
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            return {'error': 'YandexGPT отклонил ключ (401). Проверьте API-ключ в Настройки → Интеграции'}
+        if e.code == 403:
+            return {'error': 'YandexGPT: нет прав (403). Нужна роль ai.languageModels.user у сервисного аккаунта'}
+        if e.code == 429:
+            return {'error': 'YandexGPT: превышен лимит (429). Уменьшите размер пакета или подождите'}
+        try:
+            body_text = e.read().decode('utf-8', errors='replace')[:200]
+        except Exception:
+            body_text = ''
+        return {'error': f'YandexGPT ошибка {e.code}: {body_text}'}
+    except urllib.error.URLError as e:
+        return {'error': f'Не удалось связаться с YandexGPT: {e.reason}'}
     except Exception as e:
-        return {'error': str(e)[:200]}
+        return {'error': f'{type(e).__name__}: {str(e)[:200]}'}
 
 
 def _build_prompt(listing: dict) -> str:
@@ -268,9 +283,9 @@ def _should_run_now(schedule: dict) -> bool:
             except Exception:
                 last_run = None
         if last_run:
-            # Не запускать чаще раза в 23 часа
+            # Не запускать чаще раза в сутки (защита от двойного срабатывания в один час)
             diff = now - last_run.replace(tzinfo=timezone.utc) if last_run.tzinfo is None else now - last_run
-            if diff.total_seconds() < 23 * 3600:
+            if diff.total_seconds() < 23 * 3600 + 30 * 60:  # 23ч30мин — окно одного часа уже точно прошло
                 return False
 
     return True
