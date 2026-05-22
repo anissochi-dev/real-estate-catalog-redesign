@@ -7,13 +7,14 @@ interface Props {
   editing: Partial<Listing>;
   setEditing: (l: Partial<Listing>) => void;
   cities: City[];
+  addressError?: boolean;
 }
 
-export default function ListingEditorDetailsSection({ editing, setEditing, cities }: Props) {
+export default function ListingEditorDetailsSection({ editing, setEditing, cities, addressError }: Props) {
   return (
     <>
       <ListingRoomFeatures editing={editing} setEditing={setEditing} />
-      <AddressWithMap editing={editing} setEditing={setEditing} cities={cities} />
+      <AddressWithMap editing={editing} setEditing={setEditing} cities={cities} hasError={addressError} />
       <ListingExportFields editing={editing} setEditing={setEditing} />
     </>
   );

@@ -31,9 +31,10 @@ interface AddressProps {
   editing: Partial<Listing>;
   setEditing: (l: Partial<Listing>) => void;
   cities: City[];
+  hasError?: boolean;
 }
 
-export default function AddressWithMap({ editing, setEditing, cities }: AddressProps) {
+export default function AddressWithMap({ editing, setEditing, cities, hasError }: AddressProps) {
   const { settings } = useSettings();
   const apiKey = settings.yandex_maps_api_key || '';
   const mapRef = useRef<HTMLDivElement>(null);
@@ -46,6 +47,7 @@ export default function AddressWithMap({ editing, setEditing, cities }: AddressP
 
   const fullAddress = [editing.city || 'Краснодар', editing.district, editing.address]
     .filter(Boolean).join(', ');
+  const [inputValue, setInputValue] = useState(fullAddress);
 
   /* Инициализация карты */
   useEffect(() => {
@@ -159,6 +161,12 @@ export default function AddressWithMap({ editing, setEditing, cities }: AddressP
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing.lat, editing.lng]);
 
+  // Синхронизируем inputValue когда адрес меняется снаружи (геокодер/reverseGeocode)
+  useEffect(() => {
+    setInputValue(fullAddress);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing.city, editing.district, editing.address]);
+
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -167,10 +175,16 @@ export default function AddressWithMap({ editing, setEditing, cities }: AddressP
   };
 
   return (
-    <div className="space-y-3 border-t border-border pt-4">
-      <div className="text-sm font-semibold flex items-center gap-2">
+    <div className="space-y-3 border-t border-border pt-4" data-field-error={hasError ? 'true' : undefined}>
+      <div className="text-sm font-semibold flex items-center gap-2 flex-wrap">
         <Icon name="MapPin" size={15} className="text-brand-blue" />
         Расположение
+        {hasError && (
+          <span className="text-xs font-normal text-red-600 flex items-center gap-1">
+            <Icon name="AlertCircle" size={12} />
+            Укажите расположение объекта *
+          </span>
+        )}
       </div>
 
       <div>
@@ -182,7 +196,8 @@ export default function AddressWithMap({ editing, setEditing, cities }: AddressP
             ref={inputRef}
             className="w-full px-3 py-2 border rounded-lg pr-10 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
             placeholder="Например: Краснодар, ул. Красная, 1"
-            defaultValue={fullAddress}
+            value={inputValue}
+            onChange={e => setInputValue(e.target.value)}
             onKeyDown={handleInputKeyDown}
             onBlur={e => {
               const v = e.target.value.trim();

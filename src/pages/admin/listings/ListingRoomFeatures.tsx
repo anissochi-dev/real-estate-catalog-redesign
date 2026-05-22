@@ -1,4 +1,4 @@
-import { Listing, FINISHING, ROAD_LINES } from './types';
+import { Listing, ROAD_LINES } from './types';
 
 const UTILITIES_MAP: { key: string; label: string; options: string[] }[] = [
   { key: 'Вода', label: '💧 Вода', options: ['Центральная', 'Скважина', 'Колодец', 'Привозная'] },
@@ -24,14 +24,6 @@ export default function ListingRoomFeatures({ editing, setEditing }: Props) {
       <div className="space-y-3 border-t border-border pt-4">
         <div className="text-sm font-semibold">Характеристики помещения</div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div>
-            <label className="text-xs text-muted-foreground">Отделка</label>
-            <select className="w-full px-3 py-2 border rounded-lg" value={editing.finishing || ''}
-              onChange={e => setEditing({ ...editing, finishing: e.target.value })}>
-              <option value="">— Не указано —</option>
-              {FINISHING.map(f => <option key={f[0]} value={f[0]}>{f[1]}</option>)}
-            </select>
-          </div>
           <div>
             <label className="text-xs text-muted-foreground">Высота потолка, м</label>
             <input type="number" step="0.1" min="0" className="w-full px-3 py-2 border rounded-lg"

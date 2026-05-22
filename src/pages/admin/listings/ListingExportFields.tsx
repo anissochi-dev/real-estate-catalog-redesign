@@ -1,5 +1,5 @@
 import Icon from '@/components/ui/icon';
-import { Listing, detectVideoType, BUILDING_CLASSES, PROPERTY_RIGHTS, LAND_STATUSES } from './types';
+import { Listing, detectVideoType, BUILDING_CLASSES, PROPERTY_RIGHTS, LAND_STATUSES, FINISHING } from './types';
 
 interface Props {
   editing: Partial<Listing>;
@@ -41,6 +41,15 @@ export default function ListingExportFields({ editing, setEditing }: Props) {
           <span className="text-[10px] font-normal text-muted-foreground px-1.5 py-0.5 bg-muted rounded">Яндекс / Авито / ЦИАН</span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-muted-foreground">Отделка (для досок)</label>
+            <select className="w-full px-3 py-2 border rounded-lg"
+              value={editing.finishing || ''}
+              onChange={e => setEditing({ ...editing, finishing: e.target.value || null })}>
+              <option value="">— Не указано —</option>
+              {FINISHING.map(f => <option key={f[0]} value={f[0]}>{f[1]}</option>)}
+            </select>
+          </div>
           <div>
             <label className="text-xs text-muted-foreground">Класс здания</label>
             <select className="w-full px-3 py-2 border rounded-lg"

@@ -36,6 +36,7 @@ export default function ListingEditor({
   onDescribe, onGenerateTags, onGenerateSeo, onGenerateAll, onClose, onSave,
 }: Props) {
   const [errors, setErrors] = useState<Record<string, boolean>>({});
+  const formRef = useRef<HTMLDivElement>(null);
   const [purposeOpen, setPurposeOpen] = useState(false);
   const [purposeSearch, setPurposeSearch] = useState('');
   const [posting, setPosting] = useState(false);
@@ -108,16 +109,22 @@ export default function ListingEditor({
   };
 
   const handleSave = () => {
-    if (validate()) onSave();
+    if (validate()) { onSave(); return; }
+    // Скролл к первому полю с ошибкой
+    setTimeout(() => {
+      const el = formRef.current?.querySelector('[data-field-error="true"]');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
   };
 
   const err = (field: string) => errors[field]
     ? 'border-red-400 bg-red-50'
     : '';
+  const errWrap = (field: string) => errors[field] ? { 'data-field-error': 'true' as const } : {};
 
   return (
     <div className="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+      <div ref={formRef} className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-5 border-b border-border flex justify-between items-center sticky top-0 bg-white z-10 gap-3">
           <div className="font-display font-700 text-lg flex items-center gap-2">
             {editing.id ? 'Редактировать' : 'Новый объект'}
@@ -160,7 +167,7 @@ export default function ListingEditor({
           )}
 
           {/* 1. Название */}
-          <div className="space-y-1.5">
+          <div className="space-y-1.5" {...errWrap('title')}>
             <div className="relative">
               <input className={`w-full px-3 py-2 border rounded-lg pr-16 ${err('title')}`} placeholder="Название объекта *"
                 maxLength={120}
@@ -197,7 +204,7 @@ export default function ListingEditor({
 
           {/* 2. Собственник */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-border pt-4">
-            <div>
+            <div {...errWrap('owner_name')}>
               <label className="text-xs text-muted-foreground">Имя собственника *</label>
               <input className={`w-full px-3 py-2 border rounded-lg ${err('owner_name')}`}
                 value={editing.owner_name || ''}
@@ -223,7 +230,7 @@ export default function ListingEditor({
           </div>
 
           {/* 3. Фотографии */}
-          <div className="border-t border-border pt-4">
+          <div className="border-t border-border pt-4" {...errWrap('photos')}>
             <label className={`text-sm font-semibold block mb-1 ${errors.photos ? 'text-red-600' : ''}`}>
               Фотографии *{errors.photos && <span className="ml-2 text-xs font-normal text-red-500">Добавьте хотя бы одно фото</span>}
             </label>
@@ -307,7 +314,7 @@ export default function ListingEditor({
                 </div>
               )}
             </div>
-            <div>
+            <div {...errWrap('condition')}>
               <label className="text-xs text-muted-foreground">Состояние *</label>
               <select className={`w-full px-3 py-2 border rounded-lg ${err('condition')}`} value={editing.condition || ''}
                 onChange={e => { setEditing({ ...editing, condition: e.target.value }); setErrors(v => ({ ...v, condition: false })); }}>
@@ -319,13 +326,7 @@ export default function ListingEditor({
 
           <ListingEditorPriceSection editing={editing} setEditing={setEditing} errors={errors} setErrors={setErrors} />
 
-          <ListingEditorDetailsSection editing={editing} setEditing={(l) => { setEditing(l); setErrors(v => ({ ...v, address: false })); }} cities={cities} />
-          {errors.address && (
-            <div className="text-xs text-red-600 flex items-center gap-1.5 -mt-2">
-              <Icon name="AlertCircle" size={13} />
-              Укажите расположение объекта (адрес или район) *
-            </div>
-          )}
+          <ListingEditorDetailsSection editing={editing} setEditing={(l) => { setEditing(l); setErrors(v => ({ ...v, address: false })); }} cities={cities} addressError={!!errors.address} />
 
           <ListingEditorContentSection
             editing={editing}
