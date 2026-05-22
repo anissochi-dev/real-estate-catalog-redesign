@@ -19,6 +19,7 @@ interface Schedule {
   id?: number;
   is_enabled: boolean;
   run_hour: number;
+  run_minute: number;
   articles_per_run: number;
   last_run_at?: string;
   last_run_count?: number;
@@ -26,7 +27,12 @@ interface Schedule {
 
 const HOURS = Array.from({ length: 24 }, (_, i) => ({
   value: i,
-  label: `${String(i).padStart(2, '0')}:00 UTC (${String((i + 3) % 24).padStart(2, '0')}:00 МСК)`,
+  label: `${String(i).padStart(2, '0')}:xx UTC (${String((i + 3) % 24).padStart(2, '0')}:xx МСК)`,
+}));
+
+const MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map(m => ({
+  value: m,
+  label: String(m).padStart(2, '0'),
 }));
 
 const AUTO_TOPICS = [
@@ -56,7 +62,7 @@ export default function NewsAdmin() {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'list' | 'create' | 'schedule'>('list');
-  const [schedule, setSchedule] = useState<Schedule>({ is_enabled: false, run_hour: 9, articles_per_run: 3 });
+  const [schedule, setSchedule] = useState<Schedule>({ is_enabled: false, run_hour: 9, run_minute: 0, articles_per_run: 3 });
   const [schedSaved, setSchedSaved] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [runningAuto, setRunningAuto] = useState(false);
@@ -330,7 +336,10 @@ export default function NewsAdmin() {
             Расписание автогенерации
           </div>
           <div className="text-sm text-muted-foreground">
-            Копирайтер автоматически генерирует статьи с картинками и сразу публикует их на сайте. Сейчас настроено: <strong>09:00 МСК</strong>, 3 статьи в день.
+            Копирайтер автоматически генерирует статьи с картинками и сразу публикует их на сайте.
+            {schedule.id && (
+              <> Сейчас настроено: <strong>{String((schedule.run_hour + 3) % 24).padStart(2, '0')}:{String(schedule.run_minute || 0).padStart(2, '0')} МСК</strong>, {schedule.articles_per_run} {schedule.articles_per_run === 1 ? 'статья' : 'статьи'} в день.</>
+            )}
           </div>
           <div className="text-xs bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 text-emerald-800">
             Статьи генерируются с уникальными фото через ИИ и автоматически публикуются.
@@ -344,11 +353,21 @@ export default function NewsAdmin() {
           </label>
 
           <div>
-            <label className="text-xs text-muted-foreground block mb-1">Время запуска</label>
-            <select value={schedule.run_hour} onChange={e => setSchedule(s => ({ ...s, run_hour: +e.target.value }))}
-              className="w-full px-3 py-2 border rounded-lg text-sm">
-              {HOURS.map(h => <option key={h.value} value={h.value}>{h.label}</option>)}
-            </select>
+            <label className="text-xs text-muted-foreground block mb-1">Время запуска (МСК)</label>
+            <div className="flex gap-2 items-center">
+              <select value={schedule.run_hour} onChange={e => setSchedule(s => ({ ...s, run_hour: +e.target.value }))}
+                className="flex-1 px-3 py-2 border rounded-lg text-sm">
+                {HOURS.map(h => <option key={h.value} value={h.value}>{h.label}</option>)}
+              </select>
+              <span className="text-muted-foreground font-bold">:</span>
+              <select value={schedule.run_minute ?? 0} onChange={e => setSchedule(s => ({ ...s, run_minute: +e.target.value }))}
+                className="w-24 px-3 py-2 border rounded-lg text-sm">
+                {MINUTES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              МСК = UTC+3. Запуск произойдёт в {String((schedule.run_hour + 3) % 24).padStart(2, '0')}:{String(schedule.run_minute ?? 0).padStart(2, '0')} по московскому времени.
+            </div>
           </div>
 
           <div>

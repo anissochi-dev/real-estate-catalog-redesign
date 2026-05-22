@@ -30,17 +30,28 @@ interface Props {
   onSave: () => void;
 }
 
+type Tab = 'main' | 'photos' | 'location' | 'details' | 'content';
+
+const TABS: { id: Tab; label: string; icon: string }[] = [
+  { id: 'main',     label: 'Основное',      icon: 'FileText' },
+  { id: 'photos',   label: 'Фото',          icon: 'Image' },
+  { id: 'location', label: 'Расположение',  icon: 'MapPin' },
+  { id: 'details',  label: 'Характеристики',icon: 'Settings2' },
+  { id: 'content',  label: 'Описание',      icon: 'AlignLeft' },
+];
+
 export default function ListingEditor({
   editing, setEditing, photos, setPhotos, cities,
   aiLoading, aiTagsLoading, aiSeoLoading, aiAllLoading,
   onDescribe, onGenerateTags, onGenerateSeo, onGenerateAll, onClose, onSave,
 }: Props) {
   const [errors, setErrors] = useState<Record<string, boolean>>({});
-  const formRef = useRef<HTMLDivElement>(null);
+  const [tab, setTab] = useState<Tab>('main');
   const [purposeOpen, setPurposeOpen] = useState(false);
   const [purposeSearch, setPurposeSearch] = useState('');
   const [posting, setPosting] = useState(false);
   const purposeRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLDivElement>(null);
 
   const postToSocials = async () => {
     if (!editing.id) return;
@@ -90,6 +101,14 @@ export default function ListingEditor({
     setEditing({ ...editing, purpose: cur.join('|') });
   };
 
+  // Определяем какие вкладки имеют ошибки
+  const tabErrors: Partial<Record<Tab, boolean>> = {
+    main:     !!(errors.title || errors.category || errors.deal || errors.condition || errors.owner_name || errors.owner_phone),
+    photos:   !!errors.photos,
+    location: !!errors.address,
+    details:  !!(errors.price || errors.area || errors.floor || errors.total_floors),
+  };
+
   const validate = (): boolean => {
     const e: Record<string, boolean> = {};
     if (!editing.title?.trim()) e.title = true;
@@ -110,22 +129,27 @@ export default function ListingEditor({
 
   const handleSave = () => {
     if (validate()) { onSave(); return; }
-    // Скролл к первому полю с ошибкой
-    setTimeout(() => {
-      const el = formRef.current?.querySelector('[data-field-error="true"]');
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 50);
+    // Переключаемся на первую вкладку с ошибкой
+    const order: Tab[] = ['main', 'photos', 'location', 'details'];
+    const firstErrTab = order.find(t => {
+      if (t === 'main') return !!(errors.title || errors.category || errors.deal || errors.condition || errors.owner_name || errors.owner_phone) || (!editing.title?.trim() || !editing.owner_name?.trim() || !editing.owner_phone?.trim() || !editing.category || !editing.deal || !editing.condition);
+      if (t === 'photos') return !photos.length;
+      if (t === 'location') return !editing.address?.trim() && !editing.district?.trim();
+      if (t === 'details') return !editing.price || !editing.area || editing.floor == null || editing.total_floors == null;
+      return false;
+    });
+    if (firstErrTab) setTab(firstErrTab);
   };
 
-  const err = (field: string) => errors[field]
-    ? 'border-red-400 bg-red-50'
-    : '';
+  const err = (field: string) => errors[field] ? 'border-red-400 bg-red-50' : '';
   const errWrap = (field: string) => errors[field] ? { 'data-field-error': 'true' as const } : {};
 
   return (
     <div className="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4">
-      <div ref={formRef} className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-5 border-b border-border flex justify-between items-center sticky top-0 bg-white z-10 gap-3">
+      <div ref={formRef} className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col">
+
+        {/* Шапка */}
+        <div className="p-4 border-b border-border flex justify-between items-center gap-3 flex-shrink-0">
           <div className="font-display font-700 text-lg flex items-center gap-2">
             {editing.id ? 'Редактировать' : 'Новый объект'}
             {editing.public_code ? (
@@ -134,223 +158,297 @@ export default function ListingEditor({
               </span>
             ) : null}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button type="button"
               onClick={() => setEditing({ ...editing, is_visible: !(editing.is_visible !== false) })}
               title={editing.is_visible !== false ? 'Объект виден на сайте' : 'Объект скрыт с сайта'}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                 editing.is_visible !== false
                   ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
                   : 'bg-red-100 text-red-700 hover:bg-red-200'
               }`}>
               <Icon name={editing.is_visible !== false ? 'Eye' : 'EyeOff'} size={13} />
-              {editing.is_visible !== false ? 'Виден на сайте' : 'Скрыт с сайта'}
+              {editing.is_visible !== false ? 'Виден' : 'Скрыт'}
             </button>
             <button type="button" onClick={onGenerateAll} disabled={aiAllLoading}
-              title="Сгенерировать описание, теги и SEO одним кликом"
-              className="btn-orange text-white px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 disabled:opacity-60">
+              className="btn-orange text-white px-2.5 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 disabled:opacity-60">
               <Icon name={aiAllLoading ? 'Loader2' : 'Sparkles'} size={13} className={aiAllLoading ? 'animate-spin' : ''} />
-              {aiAllLoading ? 'Генерация...' : 'Сгенерировать всё'}
+              {aiAllLoading ? 'Генерация...' : 'ИИ'}
             </button>
-            <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1">
               <Icon name="X" size={20} />
             </button>
           </div>
         </div>
 
-        <div className="p-5 space-y-4">
-          {Object.keys(errors).length > 0 && (
-            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700 flex items-start gap-2">
-              <Icon name="AlertCircle" size={16} className="mt-0.5 flex-shrink-0" />
-              Заполните все обязательные поля, выделенные красным.
-            </div>
-          )}
+        {/* Вкладки */}
+        <div className="flex border-b border-border flex-shrink-0 overflow-x-auto">
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors relative ${
+                tab === t.id
+                  ? 'border-brand-blue text-brand-blue'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Icon name={t.icon} size={13} />
+              {t.label}
+              {tabErrors[t.id] && (
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 absolute top-2 right-2" />
+              )}
+            </button>
+          ))}
+        </div>
 
-          {/* 1. Название */}
-          <div className="space-y-1.5" {...errWrap('title')}>
-            <div className="relative">
-              <input className={`w-full px-3 py-2 border rounded-lg pr-16 ${err('title')}`} placeholder="Название объекта *"
-                maxLength={120}
-                value={editing.title || ''}
-                onChange={e => { setEditing({ ...editing, title: e.target.value }); setErrors(v => ({ ...v, title: false })); }} />
-              <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs tabular-nums ${
-                (editing.title?.length || 0) >= 110 ? 'text-red-500' : 'text-muted-foreground'
-              }`}>
-                {editing.title?.length || 0}/120
-              </span>
-            </div>
-            {/* Автодобавление типа сделки */}
-            {editing.deal && editing.category && (() => {
-              const dealLabels: Record<string, string> = { sale: 'Продажа', rent: 'Аренда', business: 'Готовый бизнес' };
-              const catLabels: Record<string, string> = {
-                office: 'офиса', retail: 'торгового помещения', warehouse: 'склада',
-                restaurant: 'помещения под общепит', hotel: 'гостиницы', business: 'готового бизнеса',
-                gab: 'ГАБ', production: 'производственного помещения', land: 'земельного участка',
-                building: 'отдельно стоящего здания', free_purpose: 'помещения свободного назначения',
-                car_service: 'автосервиса',
-              };
-              const suggestion = `${dealLabels[editing.deal] || editing.deal} ${catLabels[editing.category] || editing.category}`;
-              const hasIt = (editing.title || '').toLowerCase().includes(dealLabels[editing.deal]?.toLowerCase() || '');
-              if (hasIt) return null;
-              return (
-                <button type="button"
-                  onClick={() => setEditing({ ...editing, title: `${suggestion}${editing.title ? ' — ' + editing.title : ''}` })}
-                  className="text-xs text-brand-blue hover:underline flex items-center gap-1">
-                  <span>+ Добавить в начало: «{suggestion}»</span>
-                </button>
-              );
-            })()}
-          </div>
-
-          {/* 2. Собственник */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-border pt-4">
-            <div {...errWrap('owner_name')}>
-              <label className="text-xs text-muted-foreground">Имя собственника *</label>
-              <input className={`w-full px-3 py-2 border rounded-lg ${err('owner_name')}`}
-                value={editing.owner_name || ''}
-                onChange={e => { setEditing({ ...editing, owner_name: e.target.value }); setErrors(v => ({ ...v, owner_name: false })); }} />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Телефон собственника *</label>
-              <PhonePickerInput
-                value={editing.owner_phone || ''}
-                onChange={(phone, name) => { setEditing({ ...editing, owner_phone: phone, ...(name && !editing.owner_name ? { owner_name: name } : {}) }); setErrors(v => ({ ...v, owner_phone: false })); }}
-                onNameChange={name => { if (!editing.owner_name) setEditing({ ...editing, owner_name: name }); }}
-              />
-            </div>
-            <div className="sm:col-start-2">
-              <label className="text-xs text-muted-foreground">
-                Дополнительный телефон
-              </label>
-              <PhonePickerInput
-                value={(editing as Record<string, unknown>).owner_phone2 as string || ''}
-                onChange={phone => setEditing({ ...editing, owner_phone2: phone } as typeof editing)}
-              />
+        {/* Баннер ошибок */}
+        {Object.keys(errors).length > 0 && (
+          <div className="px-5 pt-3 flex-shrink-0">
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-sm text-red-700 flex items-center gap-2">
+              <Icon name="AlertCircle" size={15} className="flex-shrink-0" />
+              Заполните обязательные поля — вкладки с ошибками отмечены красной точкой
             </div>
           </div>
+        )}
 
-          {/* 3. Фотографии */}
-          <div className="border-t border-border pt-4" {...errWrap('photos')}>
-            <label className={`text-sm font-semibold block mb-1 ${errors.photos ? 'text-red-600' : ''}`}>
-              Фотографии *{errors.photos && <span className="ml-2 text-xs font-normal text-red-500">Добавьте хотя бы одно фото</span>}
-            </label>
-            <ImageUploader value={photos} onChange={p => { setPhotos(p); setErrors(v => ({ ...v, photos: false })); }} folder="photos" multiple applyWatermark={!!editing.use_watermark} />
-          </div>
+        {/* Контент вкладки */}
+        <div className="overflow-y-auto flex-1 p-5">
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Категория *</label>
-              <select className={`w-full px-3 py-2 border rounded-lg ${err('category')}`} value={editing.category}
-                onChange={e => { setEditing({ ...editing, category: e.target.value }); setErrors(v => ({ ...v, category: false })); }}>
-                {CATS.map(c => <option key={c[0]} value={c[0]}>{c[1]}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Тип сделки *</label>
-              <select className={`w-full px-3 py-2 border rounded-lg ${err('deal')}`} value={editing.deal}
-                onChange={e => { setEditing({ ...editing, deal: e.target.value }); setErrors(v => ({ ...v, deal: false })); }}>
-                {DEALS.map(d => <option key={d[0]} value={d[0]}>{d[1]}</option>)}
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="text-xs text-muted-foreground">
-                Назначение (можно выбрать несколько, максимум {MAX_PURPOSES})
-                {selectedPurposes.length >= MAX_PURPOSES && (
-                  <span className="ml-2 text-amber-600 font-medium">— достигнут лимит</span>
-                )}
-              </label>
-              <div className="relative" ref={purposeRef}>
-                <div className="flex items-center border rounded-lg overflow-hidden">
-                  <Icon name="Search" size={14} className="ml-3 text-muted-foreground flex-shrink-0" />
-                  <input
-                    value={purposeSearch}
-                    onChange={e => { setPurposeSearch(e.target.value); setPurposeOpen(true); }}
-                    onFocus={() => setPurposeOpen(true)}
-                    placeholder="Поиск назначения..."
-                    className="flex-1 px-2 py-2 text-sm outline-none"
-                  />
-                  {selectedPurposes.length > 0 && (
-                    <span className="mr-2 text-xs bg-brand-blue text-white px-1.5 py-0.5 rounded-full flex-shrink-0">
-                      {selectedPurposes.length}
-                    </span>
+          {/* ── ОСНОВНОЕ ── */}
+          {tab === 'main' && (
+            <div className="space-y-4">
+              {/* Название */}
+              <div className="space-y-1.5" {...errWrap('title')}>
+                <label className="text-xs text-muted-foreground">Название объекта *</label>
+                <div className="relative">
+                  <input className={`w-full px-3 py-2 border rounded-lg pr-16 ${err('title')}`}
+                    placeholder="Аренда офиса, продажа склада..."
+                    maxLength={120}
+                    value={editing.title || ''}
+                    onChange={e => { setEditing({ ...editing, title: e.target.value }); setErrors(v => ({ ...v, title: false })); }} />
+                  <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs tabular-nums ${
+                    (editing.title?.length || 0) >= 110 ? 'text-red-500' : 'text-muted-foreground'
+                  }`}>
+                    {editing.title?.length || 0}/120
+                  </span>
+                </div>
+                {editing.deal && editing.category && (() => {
+                  const dealLabels: Record<string, string> = { sale: 'Продажа', rent: 'Аренда', business: 'Готовый бизнес' };
+                  const catLabels: Record<string, string> = {
+                    office: 'офиса', retail: 'торгового помещения', warehouse: 'склада',
+                    restaurant: 'помещения под общепит', hotel: 'гостиницы', business: 'готового бизнеса',
+                    gab: 'ГАБ', production: 'производственного помещения', land: 'земельного участка',
+                    building: 'отдельно стоящего здания', free_purpose: 'помещения свободного назначения',
+                    car_service: 'автосервиса',
+                  };
+                  const suggestion = `${dealLabels[editing.deal] || editing.deal} ${catLabels[editing.category] || editing.category}`;
+                  const hasIt = (editing.title || '').toLowerCase().includes(dealLabels[editing.deal]?.toLowerCase() || '');
+                  if (hasIt) return null;
+                  return (
+                    <button type="button"
+                      onClick={() => setEditing({ ...editing, title: `${suggestion}${editing.title ? ' — ' + editing.title : ''}` })}
+                      className="text-xs text-brand-blue hover:underline flex items-center gap-1">
+                      + Добавить в начало: «{suggestion}»
+                    </button>
+                  );
+                })()}
+              </div>
+
+              {/* Категория, сделка, состояние */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground">Категория *</label>
+                  <select className={`w-full px-3 py-2 border rounded-lg text-sm ${err('category')}`} value={editing.category}
+                    onChange={e => { setEditing({ ...editing, category: e.target.value }); setErrors(v => ({ ...v, category: false })); }}>
+                    {CATS.map(c => <option key={c[0]} value={c[0]}>{c[1]}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Тип сделки *</label>
+                  <select className={`w-full px-3 py-2 border rounded-lg text-sm ${err('deal')}`} value={editing.deal}
+                    onChange={e => { setEditing({ ...editing, deal: e.target.value }); setErrors(v => ({ ...v, deal: false })); }}>
+                    {DEALS.map(d => <option key={d[0]} value={d[0]}>{d[1]}</option>)}
+                  </select>
+                </div>
+                <div {...errWrap('condition')}>
+                  <label className="text-xs text-muted-foreground">Состояние *</label>
+                  <select className={`w-full px-3 py-2 border rounded-lg text-sm ${err('condition')}`} value={editing.condition || ''}
+                    onChange={e => { setEditing({ ...editing, condition: e.target.value }); setErrors(v => ({ ...v, condition: false })); }}>
+                    <option value="">— Не выбрано —</option>
+                    {CONDITIONS.map(c => <option key={c[0]} value={c[0]}>{c[1]}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* Назначение */}
+              <div>
+                <label className="text-xs text-muted-foreground">
+                  Назначение (можно выбрать несколько, максимум {MAX_PURPOSES})
+                  {selectedPurposes.length >= MAX_PURPOSES && (
+                    <span className="ml-2 text-amber-600 font-medium">— достигнут лимит</span>
+                  )}
+                </label>
+                <div className="relative mt-1" ref={purposeRef}>
+                  <div className="flex items-center border rounded-lg overflow-hidden">
+                    <Icon name="Search" size={14} className="ml-3 text-muted-foreground flex-shrink-0" />
+                    <input
+                      value={purposeSearch}
+                      onChange={e => { setPurposeSearch(e.target.value); setPurposeOpen(true); }}
+                      onFocus={() => setPurposeOpen(true)}
+                      placeholder="Поиск назначения..."
+                      className="flex-1 px-2 py-2 text-sm outline-none"
+                    />
+                    {selectedPurposes.length > 0 && (
+                      <span className="mr-2 text-xs bg-brand-blue text-white px-1.5 py-0.5 rounded-full flex-shrink-0">
+                        {selectedPurposes.length}
+                      </span>
+                    )}
+                  </div>
+                  {purposeOpen && (
+                    <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-border rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                      {PURPOSE_LIST
+                        .filter(name => !purposeSearch || name.toLowerCase().includes(purposeSearch.toLowerCase()))
+                        .map(name => {
+                          const isChecked = selectedPurposes.includes(name);
+                          const isDisabled = !isChecked && selectedPurposes.length >= MAX_PURPOSES;
+                          return (
+                            <label key={name} className={`flex items-center gap-2 px-3 py-2 text-sm ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted cursor-pointer'}`}>
+                              <input type="checkbox" checked={isChecked} onChange={() => togglePurpose(name)} disabled={isDisabled} className="accent-brand-blue" />
+                              {name}
+                            </label>
+                          );
+                        })}
+                      {PURPOSE_LIST.filter(n => !purposeSearch || n.toLowerCase().includes(purposeSearch.toLowerCase())).length === 0 && (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">Не найдено</div>
+                      )}
+                    </div>
                   )}
                 </div>
-                {purposeOpen && (
-                  <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-border rounded-xl shadow-lg max-h-52 overflow-y-auto">
-                    {PURPOSE_LIST
-                      .filter(name => !purposeSearch || name.toLowerCase().includes(purposeSearch.toLowerCase()))
-                      .map(name => {
-                        const isChecked = selectedPurposes.includes(name);
-                        const isDisabled = !isChecked && selectedPurposes.length >= MAX_PURPOSES;
-                        return (
-                          <label key={name} className={`flex items-center gap-2 px-3 py-2 text-sm ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted cursor-pointer'}`}>
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => togglePurpose(name)}
-                              disabled={isDisabled}
-                              className="accent-brand-blue"
-                            />
-                            {name}
-                          </label>
-                        );
-                      })}
-                    {PURPOSE_LIST.filter(n => !purposeSearch || n.toLowerCase().includes(purposeSearch.toLowerCase())).length === 0 && (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">Не найдено</div>
-                    )}
+                {selectedPurposes.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {selectedPurposes.map(name => (
+                      <span key={name} className="inline-flex items-center gap-1 text-xs bg-brand-blue/10 text-brand-blue px-2 py-0.5 rounded-full">
+                        {name}
+                        <button type="button" onClick={() => togglePurpose(name)} className="hover:text-red-500">
+                          <Icon name="X" size={10} />
+                        </button>
+                      </span>
+                    ))}
                   </div>
                 )}
               </div>
-              {selectedPurposes.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-1.5">
-                  {selectedPurposes.map(name => (
-                    <span key={name} className="inline-flex items-center gap-1 text-xs bg-brand-blue/10 text-brand-blue px-2 py-0.5 rounded-full">
-                      {name}
-                      <button type="button" onClick={() => togglePurpose(name)} className="hover:text-red-500">
-                        <Icon name="X" size={10} />
-                      </button>
-                    </span>
-                  ))}
+
+              {/* Собственник */}
+              <div className="border-t border-border pt-4">
+                <div className="text-sm font-semibold mb-3">Собственник</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div {...errWrap('owner_name')}>
+                    <label className="text-xs text-muted-foreground">Имя *</label>
+                    <input className={`w-full px-3 py-2 border rounded-lg ${err('owner_name')}`}
+                      value={editing.owner_name || ''}
+                      onChange={e => { setEditing({ ...editing, owner_name: e.target.value }); setErrors(v => ({ ...v, owner_name: false })); }} />
+                  </div>
+                  <div {...errWrap('owner_phone')}>
+                    <label className="text-xs text-muted-foreground">Телефон *</label>
+                    <PhonePickerInput
+                      value={editing.owner_phone || ''}
+                      onChange={(phone, name) => { setEditing({ ...editing, owner_phone: phone, ...(name && !editing.owner_name ? { owner_name: name } : {}) }); setErrors(v => ({ ...v, owner_phone: false })); }}
+                      onNameChange={name => { if (!editing.owner_name) setEditing({ ...editing, owner_name: name }); }}
+                    />
+                  </div>
+                  <div className="sm:col-start-2">
+                    <label className="text-xs text-muted-foreground">Доп. телефон</label>
+                    <PhonePickerInput
+                      value={(editing as Record<string, unknown>).owner_phone2 as string || ''}
+                      onChange={phone => setEditing({ ...editing, owner_phone2: phone } as typeof editing)}
+                    />
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
-            <div {...errWrap('condition')}>
-              <label className="text-xs text-muted-foreground">Состояние *</label>
-              <select className={`w-full px-3 py-2 border rounded-lg ${err('condition')}`} value={editing.condition || ''}
-                onChange={e => { setEditing({ ...editing, condition: e.target.value }); setErrors(v => ({ ...v, condition: false })); }}>
-                <option value="">— Не выбрано —</option>
-                {CONDITIONS.map(c => <option key={c[0]} value={c[0]}>{c[1]}</option>)}
-              </select>
+          )}
+
+          {/* ── ФОТО ── */}
+          {tab === 'photos' && (
+            <div className="space-y-4">
+              <div {...errWrap('photos')}>
+                <label className={`text-sm font-semibold block mb-2 ${errors.photos ? 'text-red-600' : ''}`}>
+                  Фотографии *{errors.photos && <span className="ml-2 text-xs font-normal text-red-500">Добавьте хотя бы одно фото</span>}
+                </label>
+                <ImageUploader value={photos} onChange={p => { setPhotos(p); setErrors(v => ({ ...v, photos: false })); }} folder="photos" multiple applyWatermark={!!editing.use_watermark} />
+              </div>
+              <div className="border-t border-border pt-3">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" checked={!!editing.use_watermark}
+                    onChange={e => setEditing({ ...editing, use_watermark: e.target.checked })} />
+                  Использовать водяной знак на фото
+                </label>
+              </div>
             </div>
-          </div>
+          )}
 
-          <ListingEditorPriceSection editing={editing} setEditing={setEditing} errors={errors} setErrors={setErrors} />
+          {/* ── РАСПОЛОЖЕНИЕ ── */}
+          {tab === 'location' && (
+            <ListingEditorDetailsSection
+              editing={editing}
+              setEditing={(l) => { setEditing(l); setErrors(v => ({ ...v, address: false })); }}
+              cities={cities}
+              addressError={!!errors.address}
+              locationOnly
+            />
+          )}
 
-          <ListingEditorDetailsSection editing={editing} setEditing={(l) => { setEditing(l); setErrors(v => ({ ...v, address: false })); }} cities={cities} addressError={!!errors.address} />
+          {/* ── ХАРАКТЕРИСТИКИ ── */}
+          {tab === 'details' && (
+            <div className="space-y-1">
+              <ListingEditorPriceSection editing={editing} setEditing={setEditing} errors={errors} setErrors={setErrors} />
+              <ListingEditorDetailsSection
+                editing={editing}
+                setEditing={(l) => { setEditing(l); setErrors(v => ({ ...v, address: false })); }}
+                cities={cities}
+                addressError={false}
+                detailsOnly
+              />
+            </div>
+          )}
 
-          <ListingEditorContentSection
-            editing={editing}
-            setEditing={setEditing}
-            aiLoading={aiLoading}
-            aiTagsLoading={aiTagsLoading}
-            aiSeoLoading={aiSeoLoading}
-            onDescribe={onDescribe}
-            onGenerateTags={onGenerateTags}
-            onGenerateSeo={onGenerateSeo}
-          />
+          {/* ── ОПИСАНИЕ / SEO / ПУБЛИКАЦИЯ ── */}
+          {tab === 'content' && (
+            <ListingEditorContentSection
+              editing={editing}
+              setEditing={setEditing}
+              aiLoading={aiLoading}
+              aiTagsLoading={aiTagsLoading}
+              aiSeoLoading={aiSeoLoading}
+              onDescribe={onDescribe}
+              onGenerateTags={onGenerateTags}
+              onGenerateSeo={onGenerateSeo}
+            />
+          )}
         </div>
 
-        <div className="p-5 border-t border-border flex items-center justify-between gap-3 sticky bottom-0 bg-white">
-          <div>
+        {/* Футер */}
+        <div className="p-4 border-t border-border flex items-center justify-between gap-3 flex-shrink-0">
+          <div className="flex gap-2">
             {editing.id && (
               <button onClick={postToSocials} disabled={posting}
-                className="px-4 py-2 rounded-xl text-sm font-medium border border-border hover:bg-muted disabled:opacity-50 inline-flex items-center gap-2 transition">
+                className="px-3 py-2 rounded-xl text-sm font-medium border border-border hover:bg-muted disabled:opacity-50 inline-flex items-center gap-2 transition">
                 {posting ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Share2" size={14} />}
-                Опубликовать в соцсети
+                В соцсети
               </button>
             )}
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 items-center">
+            {/* Индикатор прогресса вкладок */}
+            <div className="hidden sm:flex items-center gap-1">
+              {TABS.map(t => (
+                <button key={t.id} onClick={() => setTab(t.id)}
+                  className={`w-2 h-2 rounded-full transition-colors ${tab === t.id ? 'bg-brand-blue' : tabErrors[t.id] ? 'bg-red-400' : 'bg-border'}`}
+                  title={t.label}
+                />
+              ))}
+            </div>
             <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm">Отмена</button>
             <button onClick={handleSave} className="btn-blue text-white px-5 py-2 rounded-xl text-sm font-semibold">
               Сохранить

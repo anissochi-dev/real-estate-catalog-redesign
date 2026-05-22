@@ -56,7 +56,7 @@ export default function ContractBotAdmin() {
         body: JSON.stringify({ action: 'create_session', ...newForm }),
       });
       const d = await r.json();
-      if (d.error) { toast.error(d.error); return; }
+      if (d.error || !d.session) { toast.error(d.error || 'Ошибка создания сессии'); return; }
       toast.success('Сессия создана');
       setSessions(prev => [d.session, ...prev]);
       openSession(d.session);

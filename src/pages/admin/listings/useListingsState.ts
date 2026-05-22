@@ -51,10 +51,11 @@ export function useListingsState() {
     setLoading(true);
     Promise.all([adminApi.listListings(), adminApi.listCities(), adminApi.listPurposes()])
       .then(([l, c, p]) => {
-        setItems(l.listings);
-        setCities(c.cities.filter((x: City) => x.is_active));
-        setPurposes(p.purposes);
+        setItems(l.listings || []);
+        setCities((c.cities || []).filter((x: City) => x.is_active));
+        setPurposes(p.purposes || []);
       })
+      .catch(() => {/* не сбрасываем страницу при ошибке */})
       .finally(() => setLoading(false));
   };
 

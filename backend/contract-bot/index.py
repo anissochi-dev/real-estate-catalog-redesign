@@ -48,11 +48,7 @@ CONTRACT_TYPES = {
 def _get_conn():
     """Подключение к БД с явным search_path."""
     dsn = os.environ['DATABASE_URL']
-    if 'options=' not in dsn and '?' not in dsn:
-        dsn += f'?options=-csearch_path%3D{SCHEMA}'
-    elif '?' in dsn and 'options=' not in dsn:
-        dsn += f'&options=-csearch_path%3D{SCHEMA}'
-    return psycopg2.connect(dsn)
+    return psycopg2.connect(dsn, options=f'-c search_path={SCHEMA},public')
 
 
 def _ok(body, status=200):
@@ -75,11 +71,11 @@ def _q(s, n=500):
 def _get_user(cur, token):
     if not token:
         return None
+    t = token.replace("'", "''")
     cur.execute(
-        "SELECT u.id, u.role, u.full_name FROM sessions s "
-        "JOIN users u ON u.id = s.user_id "
-        "WHERE s.token = %s AND s.expires_at > NOW() AND u.is_active = TRUE",
-        (token,)
+        f"SELECT u.id, u.role, u.full_name FROM {SCHEMA}.sessions s "
+        f"JOIN {SCHEMA}.users u ON u.id = s.user_id "
+        f"WHERE s.token = '{t}' AND s.expires_at > NOW() AND u.is_active = TRUE"
     )
     return cur.fetchone()
 

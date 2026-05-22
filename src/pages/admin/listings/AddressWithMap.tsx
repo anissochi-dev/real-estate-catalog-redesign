@@ -44,11 +44,17 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError }
   const inputRef = useRef<HTMLInputElement>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState(false);
-  const [focused, setFocused] = useState(false);
 
   const fullAddress = [editing.city || 'Краснодар', editing.district, editing.address]
     .filter(Boolean).join(', ');
-  const [inputValue, setInputValue] = useState(fullAddress);
+
+  // Обновляем value инпута напрямую через DOM когда адрес меняется снаружи (не во время фокуса)
+  useEffect(() => {
+    if (inputRef.current && document.activeElement !== inputRef.current) {
+      inputRef.current.value = fullAddress;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing.city, editing.district, editing.address]);
 
   /* Инициализация карты */
   useEffect(() => {
@@ -102,8 +108,7 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError }
       suggestRef.current.events.add('select', (e: any) => {
         const value: string = e.get('item').value;
         if (destroyed) return;
-        setInputValue(value);
-        setFocused(false);
+        if (inputRef.current) inputRef.current.value = value;
         geocodeAddress(value);
       });
     } catch { /* ignore */ }
@@ -164,12 +169,6 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing.lat, editing.lng]);
 
-  // Синхронизируем inputValue когда адрес меняется снаружи (геокодер/reverseGeocode), но не во время ввода
-  useEffect(() => {
-    if (!focused) setInputValue(fullAddress);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing.city, editing.district, editing.address, focused]);
-
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -199,12 +198,9 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError }
             ref={inputRef}
             className="w-full px-3 py-2 border rounded-lg pr-10 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
             placeholder="Например: Краснодар, ул. Красная, 1"
-            value={inputValue}
-            onChange={e => setInputValue(e.target.value)}
-            onFocus={() => setFocused(true)}
+            defaultValue={fullAddress}
             onKeyDown={handleInputKeyDown}
             onBlur={e => {
-              setFocused(false);
               const v = e.target.value.trim();
               if (v && v !== fullAddress) geocodeAddress(v);
             }}

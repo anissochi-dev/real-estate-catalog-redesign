@@ -340,8 +340,10 @@ def handler(event: dict, context) -> dict:
                 if not sch or not sch.get('is_enabled'):
                     return _ok({'skipped': True, 'reason': 'schedule disabled'})
                 now_utc = datetime.now(timezone.utc)
-                if now_utc.hour != sch.get('run_hour', 9):
-                    return _ok({'skipped': True, 'reason': 'not time yet', 'current_hour': now_utc.hour})
+                run_hour = sch.get('run_hour', 9)
+                run_minute = sch.get('run_minute', 0)
+                if now_utc.hour != run_hour or now_utc.minute < run_minute:
+                    return _ok({'skipped': True, 'reason': 'not time yet', 'current_hour': now_utc.hour, 'current_minute': now_utc.minute})
                 last_run = sch.get('last_run_at')
                 if last_run and (now_utc - last_run).total_seconds() < 3600 * 20:
                     return _ok({'skipped': True, 'reason': 'already ran today'})
@@ -515,18 +517,19 @@ def handler(event: dict, context) -> dict:
                 row = cur.fetchone()
                 is_enabled = bool(body.get('is_enabled', False))
                 run_hour = max(0, min(23, int(body.get('run_hour', 9))))
+                run_minute = max(0, min(59, int(body.get('run_minute', 0))))
                 per_run = max(1, min(10, int(body.get('articles_per_run', 3))))
                 ts = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')
                 if row:
                     cur.execute(
                         f"UPDATE {SCHEMA}.news_schedule SET is_enabled = {is_enabled}, "
-                        f"run_hour = {run_hour}, articles_per_run = {per_run}, updated_at = '{ts}' "
+                        f"run_hour = {run_hour}, run_minute = {run_minute}, articles_per_run = {per_run}, updated_at = '{ts}' "
                         f"WHERE id = {row['id']}"
                     )
                 else:
                     cur.execute(
-                        f"INSERT INTO {SCHEMA}.news_schedule (is_enabled, run_hour, articles_per_run) "
-                        f"VALUES ({is_enabled}, {run_hour}, {per_run})"
+                        f"INSERT INTO {SCHEMA}.news_schedule (is_enabled, run_hour, run_minute, articles_per_run) "
+                        f"VALUES ({is_enabled}, {run_hour}, {run_minute}, {per_run})"
                     )
                 conn.commit()
                 return _ok({'ok': True})
