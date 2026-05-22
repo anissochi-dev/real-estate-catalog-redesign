@@ -50,16 +50,38 @@ export default function CrmChecks() {
     enabled: tab === 'quota',
   });
 
-  const { data: history = [], isLoading: historyLoading, isError: historyError } = useQuery<{ check_type: string; query_key: string; source: string; created_at: string; user?: string }[]>({
-    queryKey: ['crm-checks-history'],
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyFilter, setHistoryFilter] = useState<'all' | 'company' | 'owner' | 'property'>('all');
+
+  const { data: history = [], isLoading: historyLoading, isError: historyError } = useQuery<{ check_type: string; query_key: string; sources: string[]; created_at: string; user?: string }[]>({
+    queryKey: ['crm-checks-history', historySearch, historyFilter],
     queryFn: async () => {
-      const r = await fetch(`${CHECKS_URL}/?action=history`, { headers });
+      const params = new URLSearchParams({ action: 'history' });
+      if (historySearch.trim()) params.set('search', historySearch.trim());
+      if (historyFilter !== 'all') params.set('check_type', historyFilter);
+      const r = await fetch(`${CHECKS_URL}/?${params.toString()}`, { headers });
       const json = await r.json();
       if (!r.ok) throw new Error(json.error || 'Ошибка загрузки истории');
       return Array.isArray(json) ? json : [];
     },
     enabled: tab === 'history',
   });
+
+  const loadCachedResult = async (check_type: string, query_key: string) => {
+    try {
+      const r = await fetch(
+        `${CHECKS_URL}/?action=cached&check_type=${encodeURIComponent(check_type)}&query_key=${encodeURIComponent(query_key)}`,
+        { headers }
+      );
+      const json = await r.json();
+      if (!r.ok) throw new Error(json.error || 'Ошибка');
+      setResults(json.results);
+      setTab('search');
+      toast.success('Результат загружен из кэша');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Ошибка');
+    }
+  };
 
   const checkMutation = useMutation({
     mutationFn: async () => {
@@ -279,48 +301,96 @@ export default function CrmChecks() {
       )}
 
       {tab === 'history' && (
-        <div className="bg-white rounded-2xl border border-border overflow-hidden">
-          {historyLoading ? (
-            <div className="space-y-2 p-4">
-              {[...Array(5)].map((_, i) => <div key={i} className="h-10 bg-muted rounded-xl animate-pulse" />)}
+        <div className="space-y-3">
+          {/* Фильтры истории */}
+          <div className="bg-white rounded-2xl border border-border p-3 flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[200px]">
+              <Icon name="Search" size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={historySearch}
+                onChange={e => setHistorySearch(e.target.value)}
+                placeholder="Поиск в результатах истории"
+                className="w-full pl-8 pr-3 py-1.5 border rounded-lg text-sm"
+              />
             </div>
-          ) : historyError ? (
-            <div className="flex items-center gap-3 p-6 text-amber-700">
-              <Icon name="AlertTriangle" size={18} />
-              <span className="text-sm">Не удалось загрузить историю. Проверьте подключение к сервису.</span>
+            <div className="flex items-center gap-1 bg-muted/40 rounded-lg p-0.5">
+              {([
+                { key: 'all', label: 'Все' },
+                { key: 'company', label: 'Компании' },
+                { key: 'owner', label: 'Собственники' },
+                { key: 'property', label: 'Недвижимость' },
+              ] as const).map(opt => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setHistoryFilter(opt.key)}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition ${
+                    historyFilter === opt.key
+                      ? 'bg-white text-brand-blue shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 border-b border-border">
-                <tr>
-                  <th className="text-left px-4 py-3 font-semibold">Запрос</th>
-                  <th className="text-left px-4 py-3 font-semibold">Тип</th>
-                  <th className="text-left px-4 py-3 font-semibold">Источник</th>
-                  <th className="text-left px-4 py-3 font-semibold">Кто</th>
-                  <th className="text-left px-4 py-3 font-semibold">Дата</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.length === 0 ? (
-                  <tr><td colSpan={5} className="text-center py-8 text-muted-foreground">История пуста</td></tr>
-                ) : history.map((h, i) => (
-                  <tr key={i} className="border-b border-border last:border-0 hover:bg-muted/20">
-                    <td className="px-4 py-3 font-mono text-xs">{h.query_key?.slice(0, 12)}...</td>
-                    <td className="px-4 py-3"><Badge variant="outline">{h.check_type}</Badge></td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${SOURCE_INFO[h.source]?.color || 'bg-muted'}`}>
-                        {SOURCE_INFO[h.source]?.label || h.source}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">{h.user || '—'}</td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {h.created_at ? new Date(h.created_at).toLocaleString('ru', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
-                    </td>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-border overflow-hidden">
+            {historyLoading ? (
+              <div className="space-y-2 p-4">
+                {[...Array(5)].map((_, i) => <div key={i} className="h-10 bg-muted rounded-xl animate-pulse" />)}
+              </div>
+            ) : historyError ? (
+              <div className="flex items-center gap-3 p-6 text-amber-700">
+                <Icon name="AlertTriangle" size={18} />
+                <span className="text-sm">Не удалось загрузить историю. Проверьте подключение к сервису.</span>
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 border-b border-border">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-semibold">Тип</th>
+                    <th className="text-left px-4 py-3 font-semibold">Источники</th>
+                    <th className="text-left px-4 py-3 font-semibold">Кто</th>
+                    <th className="text-left px-4 py-3 font-semibold">Дата</th>
+                    <th className="text-right px-4 py-3 font-semibold">Действие</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                </thead>
+                <tbody>
+                  {history.length === 0 ? (
+                    <tr><td colSpan={5} className="text-center py-8 text-muted-foreground">История пуста</td></tr>
+                  ) : history.map((h, i) => (
+                    <tr key={i} className="border-b border-border last:border-0 hover:bg-muted/20">
+                      <td className="px-4 py-3"><Badge variant="outline">{h.check_type}</Badge></td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {(h.sources || []).map(s => (
+                            <span key={s} className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${SOURCE_INFO[s]?.color || 'bg-muted'}`}>
+                              {SOURCE_INFO[s]?.label || s}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">{h.user || '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs">
+                        {h.created_at ? new Date(h.created_at).toLocaleString('ru', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => loadCachedResult(h.check_type, h.query_key)}
+                          className="text-xs text-brand-blue hover:underline inline-flex items-center gap-1"
+                        >
+                          <Icon name="Eye" size={12} /> Открыть
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
       )}
 

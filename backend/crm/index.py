@@ -60,12 +60,25 @@ def normalize_phone(phone):
     return re.sub(r'[^0-9]', '', phone)
 
 
-def award_points(conn, user_id, points, reason, deal_id=None):
+def award_points(conn, user_id, points, reason, deal_id=None, unique=False):
+    """
+    Начисляет очки пользователю.
+    unique=True — защита от дублей: если за эту (deal_id, reason) уже начислены очки
+    этому пользователю, повторно не начисляем.
+    """
     cur = conn.cursor()
+    if unique and deal_id is not None:
+        cur.execute(
+            "SELECT 1 FROM crm_points WHERE user_id = %s AND deal_id = %s AND reason = %s LIMIT 1",
+            (user_id, deal_id, reason)
+        )
+        if cur.fetchone():
+            return False
     cur.execute(
         "INSERT INTO crm_points (user_id, points, reason, deal_id) VALUES (%s, %s, %s, %s)",
         (user_id, points, reason, deal_id)
     )
+    return True
 
 
 def handler(event: dict, context) -> dict:
@@ -108,29 +121,86 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
 
     # ── DASHBOARD ──────────────────────────────────────────────────────────────
     if resource == 'dashboard':
+        period = qs.get('period', 'month')
+        period_filter = {
+            'week':  "created_at >= date_trunc('week', NOW())",
+            'month': "created_at >= date_trunc('month', NOW())",
+            'year':  "created_at >= date_trunc('year', NOW())",
+            'all':   "TRUE",
+        }.get(period, "created_at >= date_trunc('month', NOW())")
+
         cur.execute("SELECT COUNT(*) FROM crm_deals")
         total_deals = cur.fetchone()[0]
+        cur.execute(f"SELECT COUNT(*) FROM crm_deals WHERE {period_filter}")
+        deals_period = cur.fetchone()[0]
+
         cur.execute("SELECT COUNT(*) FROM crm_deals WHERE closed_at IS NOT NULL AND stage_id IN (SELECT id FROM crm_stages WHERE is_win = TRUE)")
         won_deals = cur.fetchone()[0]
+        cur.execute(f"SELECT COUNT(*) FROM crm_deals WHERE closed_at IS NOT NULL AND stage_id IN (SELECT id FROM crm_stages WHERE is_win = TRUE) AND {period_filter.replace('created_at', 'closed_at')}")
+        won_deals_period = cur.fetchone()[0]
+
         cur.execute("SELECT COUNT(*) FROM crm_owners")
         total_owners = cur.fetchone()[0]
+
         cur.execute("SELECT COALESCE(SUM(commission), 0) FROM crm_deals WHERE stage_id IN (SELECT id FROM crm_stages WHERE is_win = TRUE)")
         total_commission = float(cur.fetchone()[0])
+        cur.execute(f"SELECT COALESCE(SUM(commission), 0) FROM crm_deals WHERE stage_id IN (SELECT id FROM crm_stages WHERE is_win = TRUE) AND {period_filter.replace('created_at', 'closed_at')}")
+        commission_period = float(cur.fetchone()[0])
+
+        # Просроченные сделки (без обновления >14 дней, не закрытые)
+        cur.execute("SELECT COUNT(*) FROM crm_deals WHERE closed_at IS NULL AND updated_at < NOW() - INTERVAL '14 days'")
+        overdue_deals = cur.fetchone()[0]
+
+        # Активные события на ближайшие 7 дней
+        cur.execute("SELECT COUNT(*) FROM crm_events WHERE is_done = FALSE AND starts_at BETWEEN NOW() AND NOW() + INTERVAL '7 days'")
+        upcoming_events = cur.fetchone()[0]
+
         cur.execute(
             "SELECT u.id, u.name, u.avatar, COALESCE(SUM(p.points),0) as total_points "
-            "FROM users u LEFT JOIN crm_points p ON p.user_id = u.id "
-            "WHERE u.role IN ('broker','director','office_manager') "
+            f"FROM users u LEFT JOIN crm_points p ON p.user_id = u.id AND p.{period_filter} "
+            "WHERE u.role IN ('broker','director','office_manager','manager') "
+            "  AND u.is_active = TRUE "
             "GROUP BY u.id, u.name, u.avatar ORDER BY total_points DESC LIMIT 5"
         )
         leaderboard = [{'id': r[0], 'name': r[1], 'avatar': r[2], 'points': int(r[3])} for r in cur.fetchall()]
+
         cur.execute(
-            "SELECT s.id, s.name, s.color, COUNT(d.id) as cnt "
-            "FROM crm_stages s LEFT JOIN crm_deals d ON d.stage_id = s.id "
+            "SELECT s.id, s.name, s.color, COUNT(d.id) as cnt, "
+            "       COALESCE(SUM(d.amount), 0) as total_amount "
+            "FROM crm_stages s LEFT JOIN crm_deals d ON d.stage_id = s.id AND d.closed_at IS NULL "
             "GROUP BY s.id, s.name, s.color, s.position ORDER BY s.position"
         )
-        funnel = [{'id': r[0], 'name': r[1], 'color': r[2], 'count': int(r[3])} for r in cur.fetchall()]
-        return ok({'total_deals': total_deals, 'won_deals': won_deals, 'total_owners': total_owners,
-                   'total_commission': total_commission, 'leaderboard': leaderboard, 'funnel': funnel})
+        funnel = [
+            {'id': r[0], 'name': r[1], 'color': r[2],
+             'count': int(r[3]), 'amount': float(r[4] or 0)}
+            for r in cur.fetchall()
+        ]
+
+        # Динамика по дням за период (для графика)
+        cur.execute(f"""
+            SELECT DATE(created_at) AS day, COUNT(*) AS cnt
+            FROM crm_deals
+            WHERE {period_filter}
+            GROUP BY DATE(created_at)
+            ORDER BY day ASC
+        """)
+        timeline = [{'day': str(r[0]), 'count': int(r[1])} for r in cur.fetchall()]
+
+        return ok({
+            'period': period,
+            'total_deals': total_deals,
+            'deals_period': deals_period,
+            'won_deals': won_deals,
+            'won_deals_period': won_deals_period,
+            'total_owners': total_owners,
+            'total_commission': total_commission,
+            'commission_period': commission_period,
+            'overdue_deals': overdue_deals,
+            'upcoming_events': upcoming_events,
+            'leaderboard': leaderboard,
+            'funnel': funnel,
+            'timeline': timeline,
+        })
 
     # ── STAGES ─────────────────────────────────────────────────────────────────
     if resource == 'stages':
@@ -269,6 +339,8 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
             stage_id = qs.get('stage_id')
             assigned = qs.get('assigned_to')
             search = qs.get('search', '')
+            status = qs.get('status', 'all')  # all | active | closed | overdue
+            sort = qs.get('sort', 'updated')   # updated | created | amount | title
             where_parts = []
             params = []
             if stage_id:
@@ -278,25 +350,48 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
                 where_parts.append('d.assigned_to = %s')
                 params.append(int(assigned))
             if search:
-                where_parts.append('d.title ILIKE %s')
-                params.append(f'%{search}%')
+                where_parts.append('(d.title ILIKE %s OR o.name ILIKE %s OR l.title ILIKE %s)')
+                pat = f'%{search}%'
+                params.extend([pat, pat, pat])
             if user['role'] == 'broker':
                 where_parts.append('d.assigned_to = %s')
                 params.append(user['id'])
+            # Фильтры по статусу
+            if status == 'active':
+                where_parts.append("d.closed_at IS NULL")
+            elif status == 'closed':
+                where_parts.append("d.closed_at IS NOT NULL")
+            elif status == 'overdue':
+                # Просроченные: активные сделки, по которым >14 дней без обновления
+                where_parts.append("d.closed_at IS NULL AND d.updated_at < NOW() - INTERVAL '14 days'")
+
             where = ('WHERE ' + ' AND '.join(where_parts)) if where_parts else ''
+
+            # Сортировка
+            order_map = {
+                'updated': 'd.updated_at DESC',
+                'created': 'd.created_at DESC',
+                'amount':  'd.amount DESC NULLS LAST',
+                'title':   'd.title ASC',
+            }
+            order_by = order_map.get(sort, 'd.updated_at DESC')
+
             cur.execute(f"""
                 SELECT d.id, d.title, d.stage_id, s.name as stage_name, s.color,
                        d.owner_id, o.name as owner_name, o.phone as owner_phone,
                        d.listing_id, l.title as listing_title,
                        d.assigned_to, u.name as assignee_name,
-                       d.amount, d.commission, d.source, d.notes, d.created_at, d.updated_at
+                       d.amount, d.commission, d.source, d.notes, d.created_at, d.updated_at,
+                       d.closed_at,
+                       s.is_terminal, s.is_win,
+                       (d.closed_at IS NULL AND d.updated_at < NOW() - INTERVAL '14 days') AS is_overdue
                 FROM crm_deals d
                 LEFT JOIN crm_stages s ON s.id = d.stage_id
                 LEFT JOIN crm_owners o ON o.id = d.owner_id
                 LEFT JOIN listings l ON l.id = d.listing_id
                 LEFT JOIN users u ON u.id = d.assigned_to
                 {where}
-                ORDER BY d.updated_at DESC
+                ORDER BY {order_by}
             """, params)
             rows = cur.fetchall()
             deals = []
@@ -308,7 +403,11 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
                     'assigned_to': r[10], 'assignee_name': r[11],
                     'amount': float(r[12]) if r[12] else None,
                     'commission': float(r[13]) if r[13] else None,
-                    'source': r[14], 'notes': r[15], 'created_at': r[16], 'updated_at': r[17]
+                    'source': r[14], 'notes': r[15], 'created_at': r[16], 'updated_at': r[17],
+                    'closed_at': r[18],
+                    'is_terminal': bool(r[19]),
+                    'is_win': bool(r[20]),
+                    'is_overdue': bool(r[21]),
                 })
             return ok(deals)
 
@@ -371,15 +470,28 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
                 "INSERT INTO crm_activities (deal_id, user_id, type, content) VALUES (%s,%s,'note',%s)",
                 (new_id, user['id'], f'Сделка создана пользователем {user["name"]}')
             )
-            award_points(conn, user['id'], 10, 'Создана сделка', new_id)
+            award_points(conn, user['id'], 10, 'Создана сделка', new_id, unique=True)
             return ok({'id': new_id}, 201)
 
         if method == 'PUT' and resource_id:
-            cur.execute("SELECT stage_id, assigned_to FROM crm_deals WHERE id = %s", (resource_id,))
+            cur.execute(
+                "SELECT d.stage_id, d.assigned_to, s.is_terminal "
+                "FROM crm_deals d LEFT JOIN crm_stages s ON s.id = d.stage_id "
+                "WHERE d.id = %s",
+                (resource_id,)
+            )
             old = cur.fetchone()
             if not old:
                 return err('Не найдено', 404)
             old_stage_id = old[0]
+            old_is_terminal = bool(old[2])
+
+            # Блокировка изменений этапа уже закрытых (терминальных) сделок —
+            # только админ/директор может вернуть в работу
+            if 'stage_id' in body and body['stage_id'] != old_stage_id and old_is_terminal:
+                if user['role'] not in ('admin', 'director'):
+                    return err('Эта сделка уже закрыта. Переоткрыть может только администратор или директор.', 403)
+
             fields, vals = [], []
             for f in ('title', 'stage_id', 'owner_id', 'listing_id', 'assigned_to', 'amount', 'commission', 'source', 'notes'):
                 if f in body:
@@ -396,7 +508,11 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
                     if new_stage[2]:
                         fields.append('closed_at = NOW()')
                     if new_stage[1]:
-                        award_points(conn, user['id'], 50, 'Сделка выиграна', resource_id)
+                        # assigned_to (или текущий пользователь) получает очки за выигранную сделку
+                        cur.execute("SELECT assigned_to FROM crm_deals WHERE id = %s", (resource_id,))
+                        _r = cur.fetchone()
+                        winner_id = (_r[0] if _r and _r[0] else user['id'])
+                        award_points(conn, winner_id, 50, 'Сделка выиграна', resource_id, unique=True)
             if fields:
                 fields.append('updated_at = NOW()')
                 vals.append(resource_id)
@@ -452,29 +568,51 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
         if method == 'GET':
             period = qs.get('period', 'month')
             if period == 'month':
-                date_filter = "AND p.created_at >= date_trunc('month', NOW())"
+                points_filter = "AND p.created_at >= date_trunc('month', NOW())"
+                deals_filter = "AND d.closed_at >= date_trunc('month', NOW())"
             elif period == 'week':
-                date_filter = "AND p.created_at >= date_trunc('week', NOW())"
+                points_filter = "AND p.created_at >= date_trunc('week', NOW())"
+                deals_filter = "AND d.closed_at >= date_trunc('week', NOW())"
             else:
-                date_filter = ''
+                points_filter = ''
+                deals_filter = ''
             cur.execute(f"""
                 SELECT u.id, u.name, u.avatar, u.role,
                        COALESCE(SUM(p.points), 0) as total_points,
-                       COUNT(DISTINCT d.id) as deals_won
+                       COUNT(DISTINCT d.id) as deals_won,
+                       COALESCE(SUM(d.commission), 0) as total_commission
                 FROM users u
-                LEFT JOIN crm_points p ON p.user_id = u.id {date_filter}
+                LEFT JOIN crm_points p ON p.user_id = u.id {points_filter}
                 LEFT JOIN crm_deals d ON d.assigned_to = u.id
                     AND d.stage_id IN (SELECT id FROM crm_stages WHERE is_win = TRUE)
+                    {deals_filter}
                 WHERE u.role IN ('broker', 'director', 'office_manager', 'manager')
                   AND u.is_active = TRUE
                 GROUP BY u.id, u.name, u.avatar, u.role
-                ORDER BY total_points DESC
+                ORDER BY total_points DESC, deals_won DESC
             """)
             rows = cur.fetchall()
-            return ok([{
-                'id': r[0], 'name': r[1], 'avatar': r[2], 'role': r[3],
-                'points': int(r[4]), 'deals_won': int(r[5])
-            } for r in rows])
+            leaderboard = []
+            for r in rows:
+                # Бейджи на основе показателей
+                badges = []
+                pts = int(r[4])
+                wins = int(r[5])
+                if wins >= 10:
+                    badges.append({'key': 'pro_closer', 'label': '🏆 Топ-закрыватель', 'color': 'amber'})
+                elif wins >= 5:
+                    badges.append({'key': 'closer', 'label': '⭐ Закрыватель', 'color': 'blue'})
+                if pts >= 500:
+                    badges.append({'key': 'top_500', 'label': '🚀 500+ очков', 'color': 'violet'})
+                elif pts >= 100:
+                    badges.append({'key': 'top_100', 'label': '💎 100+ очков', 'color': 'emerald'})
+                leaderboard.append({
+                    'id': r[0], 'name': r[1], 'avatar': r[2], 'role': r[3],
+                    'points': pts, 'deals_won': wins,
+                    'commission': float(r[6]) if r[6] else 0,
+                    'badges': badges,
+                })
+            return ok(leaderboard)
 
     # ── EVENTS (Календарь) ─────────────────────────────────────────────────────
     if resource == 'events':
@@ -598,16 +736,18 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
             search = qs.get('search', '')
             limit = min(int(qs.get('limit', 8)), 20)
             if search:
-                q_s = search.replace("'", "''")[:100]
+                pattern = f'%{search[:100]}%'
                 cur.execute(
-                    f"SELECT id, name, phone, status FROM t_p71821556_real_estate_catalog_.leads "
-                    f"WHERE (name ILIKE '%{q_s}%' OR phone ILIKE '%{q_s}%') "
-                    f"ORDER BY created_at DESC LIMIT {limit}"
+                    "SELECT id, name, phone, status FROM t_p71821556_real_estate_catalog_.leads "
+                    "WHERE (name ILIKE %s OR phone ILIKE %s) "
+                    "ORDER BY created_at DESC LIMIT %s",
+                    (pattern, pattern, limit)
                 )
             else:
                 cur.execute(
-                    f"SELECT id, name, phone, status FROM t_p71821556_real_estate_catalog_.leads "
-                    f"ORDER BY created_at DESC LIMIT {limit}"
+                    "SELECT id, name, phone, status FROM t_p71821556_real_estate_catalog_.leads "
+                    "ORDER BY created_at DESC LIMIT %s",
+                    (limit,)
                 )
             rows = [{'id': r[0], 'name': r[1], 'phone': r[2], 'status': r[3]} for r in cur.fetchall()]
             return ok({'leads': rows})

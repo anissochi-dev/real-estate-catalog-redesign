@@ -68,6 +68,53 @@ def _q(s, n=500):
     return (str(s) or '').replace("'", "''")[:n]
 
 
+def _extract_text_from_file(file_data: bytes, file_ext: str, file_name: str) -> str:
+    """Извлекает текст из PDF/DOCX/TXT. Возвращает короткое описание если не удалось."""
+    ext = (file_ext or '').lower().lstrip('.')
+    try:
+        if ext == 'pdf':
+            from pypdf import PdfReader
+            reader = PdfReader(io.BytesIO(file_data))
+            pages = []
+            # Ограничиваем 30 страницами, чтобы не превысить контекст модели
+            for i, page in enumerate(reader.pages[:30]):
+                try:
+                    pages.append(page.extract_text() or '')
+                except Exception:
+                    continue
+            text = '\n'.join(pages).strip()
+            return text[:15000] if text else f'[PDF без распознаваемого текста: {file_name}]'
+        elif ext == 'docx':
+            from docx import Document
+            doc = Document(io.BytesIO(file_data))
+            paras = [p.text for p in doc.paragraphs if p.text and p.text.strip()]
+            text = '\n'.join(paras).strip()
+            return text[:15000] if text else f'[DOCX пустой: {file_name}]'
+        elif ext in ('txt',):
+            return file_data.decode('utf-8', errors='replace')[:15000]
+        else:
+            # Изображения/прочее — без OCR
+            return f'[Документ "{file_name}" ({ext.upper()}): данные будут учтены при заполнении]'
+    except Exception as e:
+        return f'[Не удалось извлечь текст из "{file_name}": {type(e).__name__}]'
+
+
+def _check_rate_limit(cur, user_id: int, action: str = 'fill_contract',
+                       max_calls: int = 5, period_minutes: int = 60) -> tuple:
+    """Проверяет лимит вызовов. Возвращает (allowed: bool, retry_after_minutes: int)."""
+    cur.execute(
+        "SELECT COUNT(*) FROM contract_sessions "
+        "WHERE user_id = %s AND status = 'filled' "
+        "AND updated_at > NOW() - INTERVAL '%s minutes'",
+        (user_id, period_minutes)
+    )
+    row = cur.fetchone()
+    count = row[0] if row else 0
+    if count >= max_calls:
+        return (False, period_minutes)
+    return (True, 0)
+
+
 def _get_user(cur, token):
     if not token:
         return None
@@ -399,7 +446,9 @@ def handler(event: dict, context) -> dict:
                     'other': 'Прочие',
                 }
                 label = label_map.get(doc_type, doc_type)
-                extracted = f'[{label}: {file_name}. Данные будут учтены при заполнении договора]'
+                # Извлекаем текст из PDF/DOCX для качественного заполнения договора
+                doc_text = _extract_text_from_file(file_data, file_ext, file_name)
+                extracted = f'[{label}: {file_name}]\n{doc_text}'
 
                 cur.execute(
                     "INSERT INTO contract_documents "
@@ -416,6 +465,15 @@ def handler(event: dict, context) -> dict:
             # ── ЗАПОЛНИТЬ ДОГОВОР ─────────────────────────────────────
             if action == 'fill_contract':
                 sid = int(body.get('session_id', 0))
+
+                # Рейт-лимит: не более 5 заполнений в час на пользователя
+                allowed, retry_min = _check_rate_limit(cur, uid, 'fill_contract', 5, 60)
+                if not allowed:
+                    return _err(
+                        f'Превышен лимит запросов к ИИ: не более 5 заполнений в час. Попробуйте через {retry_min} минут.',
+                        429
+                    )
+
                 cur.execute(
                     "SELECT * FROM contract_sessions WHERE id = %s AND user_id = %s",
                     (sid, uid)

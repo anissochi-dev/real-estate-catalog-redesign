@@ -15,8 +15,11 @@ const EMPTY_FORM: CreateDealForm = {
   title: '', owner_id: '', listing_id: '', amount: '', commission: '', source: '', notes: '',
 };
 
+type StatusFilter = 'all' | 'active' | 'closed' | 'overdue';
+type SortKey = 'updated' | 'created' | 'amount' | 'title';
+
 export default function CrmKanban() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const qc = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [detailId, setDetailId] = useState<number | null>(null);
@@ -30,7 +33,11 @@ export default function CrmKanban() {
   const [listingLabel, setListingLabel] = useState('');
   const [listingDropOpen, setListingDropOpen] = useState(false);
   const [dragDeal, setDragDeal] = useState<Deal | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
+  const [sortKey, setSortKey] = useState<SortKey>('updated');
+  const [search, setSearch] = useState('');
 
+  const canReopen = user?.role === 'admin' || user?.role === 'director';
   const headers = { 'Content-Type': 'application/json', 'X-Auth-Token': token || '' };
 
   const { data: stages = [] } = useQuery<Stage[]>({
@@ -42,9 +49,13 @@ export default function CrmKanban() {
   });
 
   const { data: deals = [], isLoading } = useQuery<Deal[]>({
-    queryKey: ['crm-deals'],
+    queryKey: ['crm-deals', statusFilter, sortKey, search],
     queryFn: async () => {
-      const r = await fetch(`${CRM_URL}/deals`, { headers });
+      const params = new URLSearchParams();
+      if (statusFilter !== 'all') params.set('status', statusFilter);
+      params.set('sort', sortKey);
+      if (search.trim()) params.set('search', search.trim());
+      const r = await fetch(`${CRM_URL}/deals?${params.toString()}`, { headers });
       return r.json();
     },
   });
@@ -60,11 +71,15 @@ export default function CrmKanban() {
 
   const moveMutation = useMutation({
     mutationFn: async ({ dealId, stageId }: { dealId: number; stageId: number }) => {
-      await fetch(`${CRM_URL}/deals/${dealId}`, {
+      const r = await fetch(`${CRM_URL}/deals/${dealId}`, {
         method: 'PUT', headers, body: JSON.stringify({ stage_id: stageId }),
       });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Ошибка перемещения');
+      return j;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['crm-deals'] }),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const createMutation = useMutation({
@@ -109,6 +124,12 @@ export default function CrmKanban() {
 
   const handleDrop = (stageId: number) => {
     if (dragDeal && dragDeal.stage_id !== stageId) {
+      // Если перетаскиваем из терминального этапа — нужно право
+      if (dragDeal.is_terminal && !canReopen) {
+        toast.error('Сделка закрыта. Переоткрыть может только админ или директор');
+        setDragDeal(null);
+        return;
+      }
       moveMutation.mutate({ dealId: dragDeal.id, stageId });
     }
     setDragDeal(null);
@@ -116,7 +137,7 @@ export default function CrmKanban() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-2xl font-display font-700">Воронка сделок</h2>
           <p className="text-sm text-muted-foreground">Перетащите карточки между этапами</p>
@@ -125,6 +146,59 @@ export default function CrmKanban() {
           <Icon name="Plus" size={16} className="mr-2" />
           Новая сделка
         </Button>
+      </div>
+
+      {/* Фильтры и сортировка */}
+      <div className="bg-white rounded-2xl p-3 shadow-sm flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1 bg-muted/40 rounded-lg p-0.5">
+          {([
+            { key: 'all', label: 'Все' },
+            { key: 'active', label: 'Активные' },
+            { key: 'closed', label: 'Закрытые' },
+            { key: 'overdue', label: 'Просроченные' },
+          ] as { key: StatusFilter; label: string }[]).map(opt => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => setStatusFilter(opt.key)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
+                statusFilter === opt.key
+                  ? 'bg-white text-brand-blue shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="relative">
+          <Icon name="Search" size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Поиск по сделке, собственнику, объекту"
+            className="pl-8 pr-3 py-1.5 border rounded-lg text-sm w-72 max-w-full"
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Сортировка:</span>
+          <select
+            value={sortKey}
+            onChange={e => setSortKey(e.target.value as SortKey)}
+            className="px-2.5 py-1.5 border rounded-lg text-xs bg-white"
+          >
+            <option value="updated">По обновлению</option>
+            <option value="created">По дате создания</option>
+            <option value="amount">По сумме</option>
+            <option value="title">По названию</option>
+          </select>
+        </div>
+
+        <div className="ml-auto text-xs text-muted-foreground">
+          Найдено: <b className="text-foreground">{deals.length}</b>
+        </div>
       </div>
 
       {isLoading ? (

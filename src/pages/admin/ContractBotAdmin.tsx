@@ -101,17 +101,39 @@ export default function ContractBotAdmin() {
   const fillContract = async () => {
     if (!current) return;
     setFilling(true);
+    // Информируем юзера о ходе процесса — генерация ИИ может идти 5-15 секунд
+    const startMsg = toast.loading('🤖 Мелания анализирует документы…');
+    const phaseTimer = setTimeout(() => {
+      toast.loading('✍️ Формирует текст договора…', { id: startMsg });
+    }, 4000);
+    const phaseTimer2 = setTimeout(() => {
+      toast.loading('📄 Сохраняет результат…', { id: startMsg });
+    }, 9000);
+
     try {
       const r = await fetch(CONTRACT_BOT_URL, {
         method: 'POST', headers: H(),
         body: JSON.stringify({ action: 'fill_contract', session_id: current.id }),
       });
       const d = await r.json();
-      if (d.error) { toast.error(d.error); return; }
-      toast.success('Договор заполнен!');
+      clearTimeout(phaseTimer);
+      clearTimeout(phaseTimer2);
+      if (r.status === 429) {
+        toast.error(d.error || 'Превышен лимит запросов. Попробуйте позже', { id: startMsg });
+        return;
+      }
+      if (d.error) {
+        toast.error(d.error, { id: startMsg });
+        return;
+      }
+      toast.success('✅ Договор готов!', { id: startMsg });
       const updated = { ...current, filled_contract: d.filled_contract, result_url: d.result_url, status: 'filled' };
       setCurrent(updated);
       setSessions(prev => prev.map(s => s.id === current.id ? { ...s, status: 'filled' } : s));
+    } catch {
+      clearTimeout(phaseTimer);
+      clearTimeout(phaseTimer2);
+      toast.error('Не удалось связаться с ИИ', { id: startMsg });
     } finally {
       setFilling(false);
     }

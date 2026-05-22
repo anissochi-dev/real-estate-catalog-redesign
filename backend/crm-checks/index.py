@@ -191,13 +191,57 @@ def run_check(conn, user, method, qs, body, check_keys=None):
         return ok([{'source': r[0], 'used': r[1], 'limit': r[2], 'percent': round(r[1]/r[2]*100 if r[2] else 0)} for r in rows])
 
     if method == 'GET' and qs.get('action') == 'history':
+        search = (qs.get('search') or '').strip()
+        check_type_filter = (qs.get('check_type') or '').strip()
+        limit = min(int(qs.get('limit', 50)), 200)
+
+        where_parts = ['c.expires_at > NOW()']
+        params = []
+        if check_type_filter:
+            where_parts.append('c.check_type = %s')
+            params.append(check_type_filter)
+        # Поиск по результату (JSON text)
+        if search:
+            where_parts.append("c.result::text ILIKE %s")
+            params.append(f'%{search}%')
+
+        where_sql = 'WHERE ' + ' AND '.join(where_parts)
+
+        # Группируем по query_key+check_type — одна запись = один запрос (по всем источникам)
         cur.execute(
-            "SELECT c.check_type, c.query_key, c.source, c.created_at, u.name "
-            "FROM crm_checks_cache c LEFT JOIN users u ON u.id = c.requested_by "
-            "ORDER BY c.created_at DESC LIMIT 50"
+            f"SELECT c.check_type, c.query_key, "
+            f"       array_agg(DISTINCT c.source) as sources, "
+            f"       MAX(c.created_at) as last_check, "
+            f"       MAX(u.name) as user_name "
+            f"FROM crm_checks_cache c LEFT JOIN users u ON u.id = c.requested_by "
+            f"{where_sql} "
+            f"GROUP BY c.check_type, c.query_key "
+            f"ORDER BY last_check DESC LIMIT %s",
+            params + [limit]
         )
         rows = cur.fetchall()
-        return ok([{'check_type': r[0], 'query_key': r[1], 'source': r[2], 'created_at': r[3], 'user': r[4]} for r in rows])
+        return ok([
+            {'check_type': r[0], 'query_key': r[1], 'sources': list(r[2] or []),
+             'created_at': r[3], 'user': r[4]}
+            for r in rows
+        ])
+
+    if method == 'GET' and qs.get('action') == 'cached':
+        # Получить кэшированный результат по ключу из истории
+        check_type = qs.get('check_type', '')
+        query_key = qs.get('query_key', '')
+        if not check_type or not query_key:
+            return err('Укажите check_type и query_key')
+        cur.execute(
+            "SELECT source, result, created_at FROM crm_checks_cache "
+            "WHERE check_type=%s AND query_key=%s AND expires_at > NOW() "
+            "ORDER BY created_at DESC",
+            (check_type, query_key)
+        )
+        rows = cur.fetchall()
+        return ok({
+            'results': {r[0]: {'data': r[1], 'from_cache': True, 'cached_at': r[2]} for r in rows}
+        })
 
     if method != 'POST':
         return err('Метод не поддерживается')

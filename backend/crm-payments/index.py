@@ -178,6 +178,101 @@ def handler(event: dict, context) -> dict:
         conn.close()
         return ok({'history': rows})
 
+    # ── GET /?action=summary  — сводка по периодам и статусам ──────────────
+    if method == 'GET' and action == 'summary':
+        period = qs.get('period', 'month')  # week | month | quarter | year | all
+        period_filter = {
+            'week':    "p.created_at >= date_trunc('week', NOW())",
+            'month':   "p.created_at >= date_trunc('month', NOW())",
+            'quarter': "p.created_at >= NOW() - INTERVAL '3 months'",
+            'year':    "p.created_at >= date_trunc('year', NOW())",
+            'all':     "TRUE",
+        }.get(period, "p.created_at >= date_trunc('month', NOW())")
+
+        # 1. Общая сводка по статусам
+        cur.execute(f"""
+            SELECT status,
+                   COUNT(*) AS cnt,
+                   COALESCE(SUM(amount), 0) AS total_amount,
+                   COALESCE(SUM(sale_price), 0) AS total_sale
+            FROM {SCHEMA}.crm_payments p
+            WHERE {period_filter}
+            GROUP BY status
+        """)
+        by_status = [
+            {'status': r['status'], 'count': int(r['cnt']),
+             'total_amount': float(r['total_amount'] or 0),
+             'total_sale': float(r['total_sale'] or 0)}
+            for r in cur.fetchall()
+        ]
+
+        # 2. Динамика по дням за период (для графика)
+        cur.execute(f"""
+            SELECT DATE(p.created_at) AS day,
+                   COUNT(*) AS cnt,
+                   COALESCE(SUM(amount), 0) AS total_amount,
+                   COALESCE(SUM(CASE WHEN status = 'succeeded' THEN amount ELSE 0 END), 0) AS paid_amount
+            FROM {SCHEMA}.crm_payments p
+            WHERE {period_filter}
+            GROUP BY DATE(p.created_at)
+            ORDER BY day ASC
+        """)
+        timeline = [
+            {'day': str(r['day']),
+             'count': int(r['cnt']),
+             'total': float(r['total_amount'] or 0),
+             'paid':  float(r['paid_amount'] or 0)}
+            for r in cur.fetchall()
+        ]
+
+        # 3. Топ-объекты по сумме (для блока "лидеры")
+        cur.execute(f"""
+            SELECT l.id, l.title, l.address,
+                   COUNT(p.id) AS payments_cnt,
+                   COALESCE(SUM(p.amount), 0) AS total
+            FROM {SCHEMA}.crm_payments p
+            LEFT JOIN {SCHEMA}.listings l ON l.id = p.listing_id
+            WHERE {period_filter} AND p.listing_id IS NOT NULL
+            GROUP BY l.id, l.title, l.address
+            ORDER BY total DESC
+            LIMIT 5
+        """)
+        top_listings = [
+            {'id': r['id'], 'title': r['title'], 'address': r['address'],
+             'count': int(r['payments_cnt']),
+             'total': float(r['total'] or 0)}
+            for r in cur.fetchall()
+        ]
+
+        # 4. Главные метрики (счётчики)
+        cur.execute(f"""
+            SELECT
+              COUNT(*) AS total_count,
+              COALESCE(SUM(amount), 0) AS total_amount,
+              COALESCE(SUM(CASE WHEN status = 'succeeded' THEN amount ELSE 0 END), 0) AS paid_amount,
+              COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0) AS pending_amount,
+              COALESCE(SUM(CASE WHEN status = 'canceled' THEN amount ELSE 0 END), 0) AS canceled_amount
+            FROM {SCHEMA}.crm_payments p
+            WHERE {period_filter}
+        """)
+        m = cur.fetchone() or {}
+        totals = {
+            'count':     int(m.get('total_count') or 0),
+            'total':     float(m.get('total_amount') or 0),
+            'paid':      float(m.get('paid_amount') or 0),
+            'pending':   float(m.get('pending_amount') or 0),
+            'canceled':  float(m.get('canceled_amount') or 0),
+        }
+        totals['conversion_pct'] = round(totals['paid'] / totals['total'] * 100, 1) if totals['total'] > 0 else 0
+        conn.close()
+        return ok({
+            'period': period,
+            'totals': totals,
+            'by_status': by_status,
+            'timeline': timeline,
+            'top_listings': top_listings,
+        })
+
     # ── GET /  — список платежей ───────────────────────────────────────────
     if method == 'GET' and not resource_id:
         page = max(1, int(qs.get('page', 1)))
@@ -187,10 +282,13 @@ def handler(event: dict, context) -> dict:
         status_filter = qs.get('status')
 
         where = []
+        params_list = []
         if payment_type:
-            where.append(f"p.payment_type = '{payment_type}'")
+            where.append("p.payment_type = %s")
+            params_list.append(payment_type)
         if status_filter:
-            where.append(f"p.status = '{status_filter}'")
+            where.append("p.status = %s")
+            params_list.append(status_filter)
         where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
 
         cur.execute(f"""
@@ -210,7 +308,7 @@ def handler(event: dict, context) -> dict:
             LEFT JOIN {SCHEMA}.users u ON u.id = p.created_by
             {where_sql}
             ORDER BY p.created_at DESC LIMIT %s OFFSET %s
-        """, (limit, offset))
+        """, tuple(params_list) + (limit, offset))
         rows = [_ser_payment(r) for r in cur.fetchall()]
         cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.crm_payments p {where_sql}")
         total = cur.fetchone()['c']

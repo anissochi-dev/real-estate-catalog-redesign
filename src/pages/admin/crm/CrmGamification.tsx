@@ -19,15 +19,33 @@ export default function CrmGamification() {
 
   const headers = { 'X-Auth-Token': token || '' };
 
-  const { data: leaderboard = [], isLoading } = useQuery<{
-    id: number; name: string; avatar?: string; role: string; points: number; deals_won: number;
-  }[]>({
+  interface LeaderRow {
+    id: number; name: string; avatar?: string; role: string;
+    points: number; deals_won: number; commission?: number;
+    badges?: { key: string; label: string; color: string }[];
+  }
+
+  const { data: leaderboard = [], isLoading } = useQuery<LeaderRow[]>({
     queryKey: ['crm-points', period],
     queryFn: async () => {
       const r = await fetch(`${CRM_URL}/points?period=${period}`, { headers });
       return r.json();
     },
   });
+
+  const fmtMoney = (n: number) => {
+    if (!n) return '0 ₽';
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)} млн ₽`;
+    if (n >= 1_000) return `${Math.round(n / 1_000)} тыс ₽`;
+    return `${n.toLocaleString('ru')} ₽`;
+  };
+
+  const BADGE_COLORS: Record<string, string> = {
+    amber:   'bg-amber-100 text-amber-700 border-amber-200',
+    blue:    'bg-blue-100 text-blue-700 border-blue-200',
+    violet:  'bg-violet-100 text-violet-700 border-violet-200',
+    emerald: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  };
 
   const POINT_RULES = [
     { action: 'Создана сделка', points: 10, icon: 'Plus' },
@@ -83,10 +101,25 @@ export default function CrmGamification() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-semibold truncate">{member.name}</div>
-                <div className="flex items-center gap-2 mt-0.5">
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                   <Badge variant="secondary" className="text-xs">{ROLE_LABELS[member.role] || member.role}</Badge>
                   <span className="text-xs text-muted-foreground">Побед: {member.deals_won}</span>
+                  {member.commission ? (
+                    <span className="text-xs text-emerald-600 font-medium">
+                      Комиссия: {fmtMoney(member.commission)}
+                    </span>
+                  ) : null}
                 </div>
+                {member.badges && member.badges.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {member.badges.map(b => (
+                      <span key={b.key}
+                        className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${BADGE_COLORS[b.color] || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                        {b.label}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="text-right flex-shrink-0">
                 <div className={`text-2xl font-bold ${idx === 0 ? 'text-yellow-500' : idx === 1 ? 'text-slate-400' : idx === 2 ? 'text-amber-600' : 'text-brand-blue'}`}>

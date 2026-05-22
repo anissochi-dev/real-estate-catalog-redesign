@@ -26,6 +26,10 @@ export interface Deal {
   notes?: string;
   created_at: string;
   updated_at: string;
+  closed_at?: string | null;
+  is_terminal?: boolean;
+  is_win?: boolean;
+  is_overdue?: boolean;
 }
 
 export const ACTIVITY_ICONS: Record<string, string> = {
