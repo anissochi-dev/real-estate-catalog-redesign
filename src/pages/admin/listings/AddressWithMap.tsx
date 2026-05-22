@@ -44,6 +44,7 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError }
   const inputRef = useRef<HTMLInputElement>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState(false);
+  const [focused, setFocused] = useState(false);
 
   const fullAddress = [editing.city || 'Краснодар', editing.district, editing.address]
     .filter(Boolean).join(', ');
@@ -101,6 +102,8 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError }
       suggestRef.current.events.add('select', (e: any) => {
         const value: string = e.get('item').value;
         if (destroyed) return;
+        setInputValue(value);
+        setFocused(false);
         geocodeAddress(value);
       });
     } catch { /* ignore */ }
@@ -161,11 +164,11 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing.lat, editing.lng]);
 
-  // Синхронизируем inputValue когда адрес меняется снаружи (геокодер/reverseGeocode)
+  // Синхронизируем inputValue когда адрес меняется снаружи (геокодер/reverseGeocode), но не во время ввода
   useEffect(() => {
-    setInputValue(fullAddress);
+    if (!focused) setInputValue(fullAddress);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing.city, editing.district, editing.address]);
+  }, [editing.city, editing.district, editing.address, focused]);
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -198,8 +201,10 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError }
             placeholder="Например: Краснодар, ул. Красная, 1"
             value={inputValue}
             onChange={e => setInputValue(e.target.value)}
+            onFocus={() => setFocused(true)}
             onKeyDown={handleInputKeyDown}
             onBlur={e => {
+              setFocused(false);
               const v = e.target.value.trim();
               if (v && v !== fullAddress) geocodeAddress(v);
             }}
