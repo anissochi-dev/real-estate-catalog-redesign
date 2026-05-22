@@ -17,6 +17,8 @@ import statistics
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
+from noi_model import handle_noi_request
+
 SCHEMA = 't_p71821556_real_estate_catalog_'
 
 HEADERS = {'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json'}
@@ -391,8 +393,15 @@ def handler(event: dict, context) -> dict:
     conn = _get_conn()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # NOI-модель (инвестиционная аналитика) — отдельная ветка
+            params_all = event.get('queryStringParameters') or {}
+            if params_all.get('action') == 'noi_model':
+                result = handle_noi_request(cur, conn, params_all)
+                status = result.pop('_status', 200)
+                return _ok(result, status)
+
             if method == 'GET':
-                params = event.get('queryStringParameters') or {}
+                params = params_all
                 listing_id_str = params.get('id') or ''
                 if not listing_id_str.isdigit():
                     return _err(400, 'Не передан id объекта')

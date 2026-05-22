@@ -2,6 +2,7 @@ import type { ListingDetail } from '@/lib/api';
 import Icon from '@/components/ui/icon';
 import PropertyMapInfrastructure from '@/components/PropertyMapInfrastructure';
 import PropertyCalculators from '@/components/calculators/PropertyCalculators';
+import InvestmentModel from '@/components/property/InvestmentModel';
 import SimilarListings from '@/components/SimilarListings';
 import RecentlyViewed from '@/components/RecentlyViewed';
 import CharCount from '@/components/ui/CharCount';
@@ -197,6 +198,14 @@ export default function PropertyMainContent({
           </form>
         )}
       </div>
+
+      {/* Инвестиционная NOI-модель (AI) — над финансовыми калькуляторами */}
+      <InvestmentModel
+        listingId={item.id}
+        price={item.price}
+        area={item.area}
+        deal={item.deal}
+      />
 
       {/* Калькулятор */}
       <PropertyCalculators
