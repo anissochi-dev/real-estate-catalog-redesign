@@ -121,26 +121,28 @@ function useClientSearch(token: string, q: string) {
 }
 
 /* ── Компонент поиска с выпадашкой ── */
-interface SearchDropdownProps<T extends SearchItem> {
+type AnySearchItem = SearchItem & Partial<ClientSearchItem>;
+
+interface SearchDropdownProps {
   label: string;
   icon: string;
   colorClass: string;
   value: string;
   hasSelected: boolean;
   selectedSub?: string;
-  onSelect: (item: T) => void;
+  onSelect: (item: AnySearchItem) => void;
   onClear: () => void;
-  items: T[];
+  items: AnySearchItem[];
   loading: boolean;
   onSearch: (q: string) => void;
   placeholder: string;
-  renderItem?: (item: T) => React.ReactNode;
+  renderItem?: (item: AnySearchItem) => React.ReactNode;
 }
 
-function SearchDropdown<T extends SearchItem>({
+function SearchDropdown({
   label, icon, colorClass, value, hasSelected, selectedSub, onSelect, onClear,
   items, loading, onSearch, placeholder, renderItem,
-}: SearchDropdownProps<T>) {
+}: SearchDropdownProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -328,7 +330,7 @@ export default function CalendarEventModal({
         <div>
           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-2">Привязать к</label>
           <div className="space-y-2">
-            <SearchDropdown<ClientSearchItem>
+            <SearchDropdown
               label="Клиент"
               icon="User"
               colorClass="text-purple-700"
@@ -371,7 +373,7 @@ export default function CalendarEventModal({
               )}
             />
 
-            <SearchDropdown<SearchItem>
+            <SearchDropdown
               label="Объект недвижимости"
               icon="MapPin"
               colorClass="text-emerald-700"
