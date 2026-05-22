@@ -156,6 +156,10 @@ export const adminApi = {
   // listing stats
   getListingStats: (id: number) => req(`${ADMIN_URL}?resource=listing_stats&id=${id}`),
 
+  // AI inpaint (Мелания — убрать лишнее с фото)
+  inpaintListingPhoto: (data: { image_url: string; prompt?: string }) =>
+    req(`${ADMIN_URL}?resource=ai_inpaint`, { method: 'POST', body: JSON.stringify(data) }),
+
   // bulk operations
   bulkListings: (ids: number[], op: string, value?: unknown) =>
     req(`${ADMIN_URL}?resource=listings_bulk`, {

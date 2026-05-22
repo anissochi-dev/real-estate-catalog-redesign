@@ -85,6 +85,14 @@ def _load_permissions(cur):
 def _can(role, resource, op, permissions=None):
     if role == 'admin':
         return True
+    # Сабресурсы listing_comments/listing_history/listing_stats доступны всем сотрудникам
+    # на чтение и запись. Финальная проверка идёт внутри обработчиков (например, чат
+    # комментариев — только для команды объекта).
+    if resource in ('listing_comments', 'listing_history', 'listing_stats', 'listing_documents', 'ai_inpaint'):
+        if role in ('director', 'broker', 'office_manager', 'manager', 'editor'):
+            return True
+    if role == 'admin':
+        return True
     # Проверка через кастомные права из БД
     if permissions and role in permissions:
         role_perms = permissions[role]
@@ -186,6 +194,8 @@ def handler(event, context):
                 return _ad_platform_keys(cur, conn, method, rid, event, user)
             if resource == 'notifications':
                 return _notifications(cur, conn, method, action, event, user)
+            if resource == 'ai_inpaint':
+                return _ai_inpaint(cur, event, user)
 
             return _err(400, 'Неизвестный ресурс')
     finally:
@@ -239,10 +249,25 @@ def _listings(cur, conn, method, rid, event, user):
             f"SELECT l.*, u.name AS broker_name, "
             f"  COALESCE(NULLIF(pc.name, ''), l.owner_name) AS owner_name_final, "
             f"  COALESCE(pc.phone, l.owner_phone) AS owner_phone_final, "
-            f"  pc.photo_url AS owner_photo_url "
+            f"  pc.photo_url AS owner_photo_url, "
+            f"  COALESCE(sv.views, 0) AS stats_views, "
+            f"  COALESCE(sc.calls, 0) AS stats_calls, "
+            f"  COALESCE(sl.leads, 0) AS stats_leads "
             f"FROM {SCHEMA}.listings l "
             f"LEFT JOIN {SCHEMA}.users u ON u.id = COALESCE(l.broker_id, l.author_id) "
             f"LEFT JOIN {SCHEMA}.phone_contacts pc ON pc.id = l.owner_phone_contact_id "
+            f"LEFT JOIN ("
+            f"  SELECT listing_id, SUM(count) AS views FROM {SCHEMA}.listing_stats "
+            f"  WHERE event_type IN ('view','site_view','open') GROUP BY listing_id"
+            f") sv ON sv.listing_id = l.id "
+            f"LEFT JOIN ("
+            f"  SELECT listing_id, SUM(count) AS calls FROM {SCHEMA}.listing_stats "
+            f"  WHERE event_type IN ('call','phone_call','phone_click') GROUP BY listing_id"
+            f") sc ON sc.listing_id = l.id "
+            f"LEFT JOIN ("
+            f"  SELECT listing_id, COUNT(*) AS leads FROM {SCHEMA}.leads "
+            f"  WHERE listing_id IS NOT NULL GROUP BY listing_id"
+            f") sl ON sl.listing_id = l.id "
             f"ORDER BY l.created_at DESC"
         )
         rows = []
@@ -397,6 +422,43 @@ def _listings(cur, conn, method, rid, event, user):
     return _err(400, 'Bad request')
 
 
+def _mask_phone(phone: str) -> str:
+    """Маскирует телефон: +7 (XXX) XXX-XX-XX → +7 (XXX) ***-**-XX (последние 2 цифры остаются)."""
+    if not phone:
+        return ''
+    digits = ''.join(c for c in phone if c.isdigit())
+    if len(digits) < 4:
+        return '***'
+    return phone[:-7].rstrip() + ' ***-**-' + digits[-2:] if len(phone) > 7 else '***' + digits[-2:]
+
+
+def _can_see_phone(lead: dict, user: dict) -> bool:
+    """Правила видимости телефона:
+    - Сетевики (is_network_tenant=TRUE) — телефон виден всем сотрудникам
+    - Брокерские заявки (broker_id IS NOT NULL) — только админу, директору и тому самому брокеру
+    - Остальные заявки — всем сотрудникам
+    """
+    if lead.get('is_network_tenant'):
+        return True
+    broker_id = lead.get('broker_id')
+    if broker_id is None:
+        return True
+    role = user.get('role', '')
+    if role in ('admin', 'director'):
+        return True
+    return broker_id == user.get('id')
+
+
+def _apply_phone_visibility(lead: dict, user: dict) -> dict:
+    """Скрывает телефон в данных лида, если нет прав."""
+    if _can_see_phone(lead, user):
+        return lead
+    masked = dict(lead)
+    masked['phone'] = _mask_phone(lead.get('phone') or '')
+    masked['phone_hidden'] = True
+    return masked
+
+
 def _leads(cur, conn, method, rid, action, event, user):
     if method == 'GET':
         if rid:
@@ -409,10 +471,12 @@ def _leads(cur, conn, method, rid, action, event, user):
                 f"FROM {SCHEMA}.lead_comments WHERE lead_id = {int(rid)} ORDER BY created_at ASC"
             )
             comments = [dict(r) for r in cur.fetchall()]
-            return _ok({'lead': dict(lead), 'comments': comments})
+            lead_dict = _apply_phone_visibility(dict(lead), user)
+            return _ok({'lead': lead_dict, 'comments': comments})
 
         cur.execute(f"SELECT * FROM {SCHEMA}.leads ORDER BY created_at DESC")
-        return _ok({'leads': [dict(r) for r in cur.fetchall()]})
+        leads_list = [_apply_phone_visibility(dict(r), user) for r in cur.fetchall()]
+        return _ok({'leads': leads_list})
 
     body = json.loads(event.get('body') or '{}')
 
@@ -453,7 +517,7 @@ def _leads(cur, conn, method, rid, action, event, user):
                           ('phone', 30), ('company', 200), ('source', 50), ('lead_type', 20)]:
             if f in body:
                 fields.append(f"{f} = {_str_or_null(body[f], length)}")
-        for f in ('assigned_to', 'listing_id', 'budget'):
+        for f in ('assigned_to', 'listing_id', 'budget', 'broker_id'):
             if f in body:
                 fields.append(f"{f} = {_int_or_null(body[f])}")
         for f in ('is_network_tenant', 'show_on_main'):
@@ -1438,12 +1502,33 @@ def _listing_documents(cur, conn, method, rid, action, event, user):
     return _err(400, 'Bad request')
 
 
+def _is_listing_team_member(cur, listing_id: int, user: dict) -> bool:
+    """Проверяет, входит ли пользователь в 'команду объекта'.
+    Команда = автор объекта + брокер объекта + админ + директор.
+    """
+    role = user.get('role', '')
+    if role in ('admin', 'director'):
+        return True
+    cur.execute(
+        f"SELECT author_id, broker_id FROM {SCHEMA}.listings WHERE id = {int(listing_id)}"
+    )
+    row = cur.fetchone()
+    if not row:
+        return False
+    uid = user.get('id')
+    return uid == row.get('author_id') or uid == row.get('broker_id')
+
+
 def _listing_comments(cur, conn, method, rid, event, user):
     qs = event.get('queryStringParameters') or {}
     listing_id = qs.get('listing_id') or (rid and str(rid))
     if not listing_id:
         return _err(400, 'Не указан listing_id')
     lid = int(listing_id)
+
+    # Проверка доступа: только команда объекта может видеть/писать комментарии
+    if method in ('GET', 'POST') and not _is_listing_team_member(cur, lid, user):
+        return _err(403, 'Чат комментариев доступен только команде объекта (автору, брокеру, директору и админу)')
 
     if method == 'GET':
         cur.execute(
@@ -1485,6 +1570,50 @@ def _listing_comments(cur, conn, method, rid, event, user):
         return _ok({'success': True})
 
     return _err(400, 'Bad request')
+
+
+def _ai_inpaint(cur, event, user):
+    """Стирает лишнее с фото через YandexART (перерисовка по prompt).
+
+    Ожидает POST body: {image_url: string, prompt?: string}
+    Возвращает: {ok: true, new_url: string} либо {error: ...}
+
+    Замечание: настоящий *inpaint* (точечная замена области по маске) у Yandex
+    отсутствует — мы используем YandexART image generation как ближайший аналог.
+    Поэтому пока возвращаем 501, чтобы фронт показал понятное сообщение пользователю.
+    """
+    method = event.get('httpMethod', 'POST')
+    if method != 'POST':
+        return _err(405, 'Только POST')
+
+    try:
+        body = json.loads(event.get('body') or '{}')
+    except Exception:
+        return _err(400, 'Некорректное тело запроса')
+
+    image_url = (body.get('image_url') or '').strip()
+    if not image_url:
+        return _err(400, 'Не указан image_url')
+
+    # Проверяем настройки
+    try:
+        cur.execute(f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
+        row = cur.fetchone()
+        api_key = (row.get('yandex_api_key') or '').strip() if row else ''
+        folder_id = (row.get('yandex_folder_id') or '').strip() if row else ''
+    except Exception:
+        api_key, folder_id = '', ''
+
+    if not api_key or not folder_id:
+        return _err(503,
+            'YandexART не настроен. Добавьте API-ключ и Folder ID в Настройки → Интеграции, '
+            'и убедитесь, что у сервисного аккаунта есть роль ai.imageGeneration.user.')
+
+    # Сейчас у YandexART нет публичного inpaint API (только полная генерация по prompt).
+    # Возвращаем 501 с понятным объяснением, чтобы UI показал тоаст пользователю.
+    return _err(501,
+        'Очистка фото через ИИ скоро будет доступна. У Yandex пока нет публичного inpaint API — '
+        'мы интегрируем его, как только он выйдет, либо подключим стороннее inpaint-решение по запросу.')
 
 
 def _ad_platform_keys(cur, conn, method, rid, event, user):

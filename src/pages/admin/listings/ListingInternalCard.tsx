@@ -7,6 +7,7 @@ import { Listing, CATS, DEALS } from './types';
 import { TabId, TABS } from './internalCardTypes';
 import { Spinner, TabOverview, TabPriceHistory, TabStats, TabLeads, TabComments } from './InternalCardTabs1';
 import { TabAi, TabDocuments, TabBroker } from './InternalCardTabs2';
+import TabPhotos from './TabPhotos';
 
 interface Props {
   listingId: number;
@@ -115,6 +116,7 @@ export default function ListingInternalCard({ listingId, onClose, onBrokerChange
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
           {tab === 'overview' && <TabOverview listing={listing} siteUrl={settings.site_url} />}
+          {tab === 'photos' && <TabPhotos listing={listing} />}
           {tab === 'comments' && <TabComments listingId={listingId} />}
           {tab === 'price_history' && <TabPriceHistory listingId={listingId} />}
           {tab === 'stats' && <TabStats listingId={listingId} listing={listing} />}

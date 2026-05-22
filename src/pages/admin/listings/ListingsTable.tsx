@@ -93,6 +93,7 @@ export default function ListingsTable({
             <th className="px-3 py-3">Объект</th>
             <th className="px-3 py-3">Сделка</th>
             <th className="px-3 py-3">Цена</th>
+            <th className="px-3 py-3">Статистика</th>
             <th className="px-3 py-3">Собственник</th>
             <th className="px-3 py-3">Создан</th>
             <th className="px-3 py-3">Изменён</th>
@@ -157,6 +158,23 @@ export default function ListingsTable({
                   <div className="font-semibold">{(it.price || 0).toLocaleString('ru')} ₽</div>
                   {m2 > 0 && <div className="text-xs text-muted-foreground">{m2.toLocaleString('ru')} ₽/м²</div>}
                 </td>
+                <td className="px-3 py-3 whitespace-nowrap">
+                  <button onClick={() => onInternalCard?.(it)} title="Открыть статистику"
+                    className="flex items-center gap-2 text-xs hover:text-brand-blue">
+                    <span className="inline-flex items-center gap-1" title="Просмотры">
+                      <Icon name="Eye" size={11} className="text-brand-blue" />
+                      {(it.stats_views ?? 0).toLocaleString('ru')}
+                    </span>
+                    <span className="inline-flex items-center gap-1" title="Звонки">
+                      <Icon name="Phone" size={11} className="text-emerald-600" />
+                      {(it.stats_calls ?? 0).toLocaleString('ru')}
+                    </span>
+                    <span className="inline-flex items-center gap-1" title="Заявки">
+                      <Icon name="Inbox" size={11} className="text-brand-orange" />
+                      {(it.stats_leads ?? 0).toLocaleString('ru')}
+                    </span>
+                  </button>
+                </td>
                 <td className="px-3 py-3 text-xs">
                   {it.owner_name && <div>{it.owner_name}</div>}
                   {it.owner_phone && (() => {
@@ -173,10 +191,6 @@ export default function ListingsTable({
                 <td className="px-3 py-3 text-xs whitespace-nowrap">{fmtDate(it.updated_at)}</td>
                 <td className="px-3 py-3 text-right whitespace-nowrap">
                   <div className="flex items-center gap-2 justify-end">
-                    <button onClick={() => onPhotoDownload(it)} title="Скачать фото без логотипа"
-                      className="text-muted-foreground hover:text-brand-blue">
-                      <Icon name="ImageDown" size={16} />
-                    </button>
                     <button onClick={() => onHistory(it)} title="История и статистика"
                       className="text-muted-foreground hover:text-brand-blue">
                       <Icon name="BarChart2" size={16} />

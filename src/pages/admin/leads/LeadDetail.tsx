@@ -25,9 +25,18 @@ export default function LeadDetail({
         <div className="flex justify-between items-start gap-4">
           <div>
             <div className="font-display font-700 text-lg">{active.name}</div>
-            <div className="text-sm text-muted-foreground mt-1">
-              <a href={`tel:${active.phone}`} className="text-brand-blue hover:underline">{active.phone}</a>
-              {active.email && <> · {active.email}</>}
+            <div className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
+              <a href={`tel:${active.phone}`}
+                 className={`hover:underline ${active.phone_hidden ? 'text-muted-foreground' : 'text-brand-blue'}`}>
+                {active.phone}
+              </a>
+              {active.phone_hidden && (
+                <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded"
+                      title="Заявка брокера — телефон собственника видят только админ, директор и сам брокер.">
+                  <Icon name="EyeOff" size={10} /> Скрыт
+                </span>
+              )}
+              {active.email && <span>· {active.email}</span>}
             </div>
             {active.company && (
               <div className="text-xs text-muted-foreground mt-1">Компания: {active.company}</div>

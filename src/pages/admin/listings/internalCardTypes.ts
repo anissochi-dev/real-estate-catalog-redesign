@@ -1,4 +1,4 @@
-export type TabId = 'overview' | 'price_history' | 'stats' | 'leads' | 'ai' | 'documents' | 'broker';
+export type TabId = 'overview' | 'photos' | 'price_history' | 'stats' | 'leads' | 'comments' | 'ai' | 'documents' | 'broker';
 
 export interface HistoryRow {
   id: number;
@@ -60,9 +60,11 @@ export const LEAD_STATUS: Record<string, string> = {
 
 export const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'overview', label: 'Обзор', icon: 'Info' },
+  { id: 'photos', label: 'Фото', icon: 'Image' },
   { id: 'price_history', label: 'История цен', icon: 'TrendingDown' },
   { id: 'stats', label: 'Статистика', icon: 'BarChart2' },
   { id: 'leads', label: 'Заявки', icon: 'Inbox' },
+  { id: 'comments', label: 'Чат команды', icon: 'MessageSquare' },
   { id: 'ai', label: 'Мелания', icon: 'Sparkles' },
   { id: 'documents', label: 'Документы', icon: 'FileText' },
   { id: 'broker', label: 'Брокер', icon: 'UserCheck' },

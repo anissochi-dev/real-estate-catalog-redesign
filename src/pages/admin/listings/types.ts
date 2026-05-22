@@ -69,6 +69,10 @@ export interface Listing {
   min_area?: number | null;
   building_year?: number | null;
   is_apartments?: boolean;
+  // Сводная статистика — приходит вместе со списком объектов
+  stats_views?: number | null;
+  stats_calls?: number | null;
+  stats_leads?: number | null;
 }
 
 export interface City { id: number; name: string; is_active: boolean }

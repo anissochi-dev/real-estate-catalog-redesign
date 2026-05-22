@@ -3,7 +3,7 @@ import { adminApi, aiApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import { Lead, Comment, Listing, STATUSES, empty } from './leads/leadsTypes';
 import LeadsFilterBar from './leads/LeadsFilterBar';
-import LeadsList from './leads/LeadsList';
+import LeadsTable from './leads/LeadsTable';
 import LeadDetail from './leads/LeadDetail';
 import LeadEditModal from './leads/LeadEditModal';
 
@@ -98,36 +98,45 @@ export default function LeadsAdmin() {
         onAdd={() => setEditing({ ...empty })}
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <LeadsList
-          filtered={filtered}
-          active={active}
-          onOpen={openLead}
-        />
+      <LeadsTable
+        leads={filtered}
+        onOpen={openLead}
+        onDelete={del}
+      />
 
-        <div className="lg:col-span-2">
-          {!active ? (
-            <div className="bg-white rounded-2xl p-12 text-center text-muted-foreground">
-              <Icon name="Inbox" size={40} className="mx-auto mb-3 opacity-50" />
-              Выберите лид слева
+      {/* Модальное окно с деталями выбранной заявки */}
+      {active && (
+        <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4"
+             onClick={() => setActive(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto"
+               onClick={e => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white border-b border-border px-5 py-3 flex items-center justify-between z-10">
+              <div className="font-semibold text-sm inline-flex items-center gap-2">
+                <Icon name="User" size={16} className="text-brand-blue" />
+                Заявка #{active.id}
+              </div>
+              <button onClick={() => setActive(null)} className="p-1 rounded hover:bg-muted">
+                <Icon name="X" size={18} />
+              </button>
             </div>
-          ) : (
-            <LeadDetail
-              active={active}
-              comments={comments}
-              comment={comment}
-              setComment={setComment}
-              aiReply={aiReply}
-              aiLoading={aiLoading}
-              onUpdate={update}
-              onEdit={() => setEditing(active)}
-              onDelete={() => del(active.id)}
-              onSendComment={sendComment}
-              onGenerateReply={generateReply}
-            />
-          )}
+            <div className="p-5">
+              <LeadDetail
+                active={active}
+                comments={comments}
+                comment={comment}
+                setComment={setComment}
+                aiReply={aiReply}
+                aiLoading={aiLoading}
+                onUpdate={update}
+                onEdit={() => setEditing(active)}
+                onDelete={() => del(active.id)}
+                onSendComment={sendComment}
+                onGenerateReply={generateReply}
+              />
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       {editing && (
         <LeadEditModal

@@ -25,7 +25,6 @@ const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; gro
   { id: 'dashboard', label: 'Дашборд', icon: 'LayoutDashboard', roles: ['admin', 'editor', 'manager'] },
   { id: 'listings', label: 'Объекты', icon: 'Building2', roles: ['admin', 'editor', 'manager'] },
   { id: 'leads', label: 'Заявки', icon: 'Inbox', roles: ['admin', 'editor', 'manager'] },
-  { id: 'network-tenants', label: 'Сетевики', icon: 'Network', roles: ['admin', 'editor', 'manager'] },
   { id: 'users', label: 'Пользователи', icon: 'Users', roles: ['admin'] },
   { id: 'news', label: 'Новости', icon: 'Newspaper', roles: ['admin', 'editor', 'manager', 'director'] },
   { id: 'contract-bot', label: 'Бот договоров', icon: 'FilePen', roles: ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'] },
@@ -42,6 +41,16 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
   const [aiOpen, setAiOpen] = useState(false);
   const { state: pushState, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePushNotifications();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem('biznest_admin_sidebar_collapsed') === '1'; } catch { return false; }
+  });
+  const toggleCollapsed = () => {
+    setCollapsed(c => {
+      const next = !c;
+      try { localStorage.setItem('biznest_admin_sidebar_collapsed', next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  };
   const [idleWarning, setIdleWarning] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(IDLE_WARNING_MS / 1000);
   const [rolePerms, setRolePerms] = useState<Record<string, Record<string, boolean>> | null>(null);
@@ -138,75 +147,113 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
     director: 'Директор',
   };
 
+  const sidebarWidth = collapsed ? 'w-16' : 'w-64';
+
   return (
     <div className="min-h-screen bg-muted/30 flex">
       <aside
-        className={`fixed lg:sticky top-0 left-0 h-screen w-64 bg-white border-r border-border z-40 flex flex-col transition-transform ${
+        className={`fixed lg:sticky top-0 left-0 h-screen ${sidebarWidth} bg-white border-r border-border z-40 flex flex-col transition-all duration-200 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
-        <div className="p-6 border-b border-border flex items-center justify-between shrink-0">
-          <div>
-            <div className="font-display font-700 text-sm text-brand-blue leading-tight">Бизнес. Маркетинг. Недвижимость.</div>
-            <div className="text-xs text-muted-foreground">Админ-панель</div>
-          </div>
-          <button onClick={() => setSidebarOpen(false)} className="lg:hidden">
-            <Icon name="X" size={20} />
-          </button>
+        <div className={`border-b border-border flex items-center shrink-0 ${collapsed ? 'p-3 justify-center' : 'p-6 justify-between'}`}>
+          {!collapsed ? (
+            <>
+              <div>
+                <div className="font-display font-700 text-sm text-brand-blue leading-tight">Бизнес. Маркетинг. Недвижимость.</div>
+                <div className="text-xs text-muted-foreground">Админ-панель</div>
+              </div>
+              <button onClick={() => setSidebarOpen(false)} className="lg:hidden">
+                <Icon name="X" size={20} />
+              </button>
+            </>
+          ) : (
+            <Icon name="LayoutDashboard" size={22} className="text-brand-blue" />
+          )}
         </div>
 
-        <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+        <nav className={`flex-1 overflow-y-auto space-y-1 ${collapsed ? 'p-2' : 'p-3'}`}>
           {items.filter(n => !n.group).map(item => (
             <button
               key={item.id}
+              title={collapsed ? item.label : undefined}
               onClick={() => { setSection(item.id); setSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition ${
+              className={`w-full flex items-center rounded-xl text-sm transition ${
+                collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'
+              } ${
                 section === item.id ? 'bg-brand-blue text-white font-semibold' : 'text-foreground hover:bg-muted'
               }`}
             >
               <Icon name={item.icon} size={18} />
-              {item.label}
+              {!collapsed && item.label}
             </button>
           ))}
           {items.some(n => n.group === 'crm') && (
             <>
-              <div className="pt-3 pb-1 px-3">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">CRM</div>
-              </div>
+              {!collapsed ? (
+                <div className="pt-3 pb-1 px-3">
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">CRM</div>
+                </div>
+              ) : (
+                <div className="pt-3 pb-1">
+                  <div className="border-t border-border mx-2" />
+                </div>
+              )}
               {items.filter(n => n.group === 'crm').map(item => (
                 <button
                   key={item.id}
+                  title={collapsed ? item.label : undefined}
                   onClick={() => { setSection(item.id); setSidebarOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition ${
+                  className={`w-full flex items-center rounded-xl text-sm transition ${
+                    collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'
+                  } ${
                     section === item.id ? 'bg-brand-blue text-white font-semibold' : 'text-foreground hover:bg-muted'
                   }`}
                 >
                   <Icon name={item.icon} size={18} />
-                  {item.label}
+                  {!collapsed && item.label}
                 </button>
               ))}
             </>
           )}
         </nav>
 
-        <div className="shrink-0 p-3 border-t border-border bg-white">
-          <div className="px-3 py-2 mb-2">
-            <div className="text-sm font-semibold truncate">{user.name}</div>
-            <div className="text-xs text-muted-foreground">{roleLabel[user.role]}</div>
-          </div>
+        <div className={`shrink-0 border-t border-border bg-white ${collapsed ? 'p-2' : 'p-3'}`}>
+          {!collapsed && (
+            <div className="px-3 py-2 mb-2">
+              <div className="text-sm font-semibold truncate">{user.name}</div>
+              <div className="text-xs text-muted-foreground">{roleLabel[user.role]}</div>
+            </div>
+          )}
+          <button
+            onClick={toggleCollapsed}
+            title={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
+            className={`w-full hidden lg:flex items-center rounded-xl text-sm hover:bg-muted transition mb-1 ${
+              collapsed ? 'justify-center px-2 py-2' : 'gap-3 px-3 py-2'
+            }`}
+          >
+            <Icon name={collapsed ? 'ChevronsRight' : 'ChevronsLeft'} size={16} />
+            {!collapsed && 'Свернуть'}
+          </button>
           <button
             onClick={onExit}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm hover:bg-muted transition"
+            title="На сайт"
+            className={`w-full flex items-center rounded-xl text-sm hover:bg-muted transition ${
+              collapsed ? 'justify-center px-2 py-2' : 'gap-3 px-3 py-2'
+            }`}
           >
             <Icon name="ExternalLink" size={16} />
-            На сайт
+            {!collapsed && 'На сайт'}
           </button>
           <button
             onClick={() => logout()}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-red-600 hover:bg-red-50 transition"
+            title="Выйти"
+            className={`w-full flex items-center rounded-xl text-sm text-red-600 hover:bg-red-50 transition ${
+              collapsed ? 'justify-center px-2 py-2' : 'gap-3 px-3 py-2'
+            }`}
           >
             <Icon name="LogOut" size={16} />
-            Выйти
+            {!collapsed && 'Выйти'}
           </button>
         </div>
       </aside>
@@ -214,8 +261,12 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
       <main className="flex-1 min-w-0 overflow-y-auto h-screen">
         <header className="bg-white border-b border-border px-4 lg:px-8 py-4 flex items-center justify-between sticky top-0 z-30">
           <div className="flex items-center gap-3">
-            <button onClick={() => setSidebarOpen(true)} className="lg:hidden">
+            <button onClick={() => setSidebarOpen(true)} className="lg:hidden" title="Меню">
               <Icon name="Menu" size={22} />
+            </button>
+            <button onClick={toggleCollapsed} className="hidden lg:inline-flex p-1 rounded hover:bg-muted"
+              title={collapsed ? 'Развернуть меню' : 'Свернуть меню'}>
+              <Icon name={collapsed ? 'PanelLeftOpen' : 'PanelLeftClose'} size={20} />
             </button>
             <h1 className="font-display font-700 text-xl">
               {items.find(n => n.id === section)?.label || 'Админ-панель'}
