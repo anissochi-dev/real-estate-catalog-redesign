@@ -18,6 +18,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from noi_model import handle_noi_request
+from mela_price import handle_mela_price_check
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
 
@@ -397,6 +398,18 @@ def handler(event: dict, context) -> dict:
             params_all = event.get('queryStringParameters') or {}
             if params_all.get('action') == 'noi_model':
                 result = handle_noi_request(cur, conn, params_all)
+                status = result.pop('_status', 200)
+                return _ok(result, status)
+
+            # Мелания: проверка цены по аналогам CIAN/restate
+            body_data = {}
+            if event.get('body'):
+                try:
+                    body_data = json.loads(event['body'])
+                except Exception:
+                    body_data = {}
+            if params_all.get('action') == 'mela_price_check' or body_data.get('action') == 'mela_price_check':
+                result = handle_mela_price_check(cur, conn, body_data, params_all)
                 status = result.pop('_status', 200)
                 return _ok(result, status)
 

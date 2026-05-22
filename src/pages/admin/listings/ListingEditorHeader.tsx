@@ -1,5 +1,6 @@
 import Icon from '@/components/ui/icon';
 import { Listing } from './types';
+import MelaPriceCheck from './MelaPriceCheck';
 
 export type EditorTab = 'main' | 'photos' | 'location' | 'details' | 'content' | 'extra';
 
@@ -32,13 +33,18 @@ export default function ListingEditorHeader({
     <>
       {/* Шапка */}
       <div className="p-4 border-b border-border flex justify-between items-center gap-3 flex-shrink-0">
-        <div className="font-display font-700 text-lg flex items-center gap-2">
+        <div className="font-display font-700 text-lg flex items-center gap-2 flex-wrap">
           {editing.id ? 'Редактировать' : 'Новый объект'}
           {editing.public_code ? (
             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue">
               ID: {editing.public_code}
             </span>
           ) : null}
+          {/* Мелания: анализ цены — между названием и кнопкой видимости */}
+          <MelaPriceCheck
+            editing={editing}
+            onApplySuggested={(price) => setEditing({ ...editing, price })}
+          />
         </div>
         <div className="flex items-center gap-2">
           <button type="button"
