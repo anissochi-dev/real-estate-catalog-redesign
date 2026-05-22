@@ -7,16 +7,14 @@ interface Props {
   setEditing: (l: Partial<Listing>) => void;
   aiLoading: boolean;
   aiTagsLoading: boolean;
-  aiSeoLoading: boolean;
   onDescribe: () => void;
   onGenerateTags: () => void;
-  onGenerateSeo: () => void;
 }
 
 export default function ListingEditorContentSection({
   editing, setEditing,
-  aiLoading, aiTagsLoading, aiSeoLoading,
-  onDescribe, onGenerateTags, onGenerateSeo,
+  aiLoading, aiTagsLoading,
+  onDescribe, onGenerateTags,
 }: Props) {
   return (
     <>
@@ -29,7 +27,7 @@ export default function ListingEditorContentSection({
             {aiLoading ? 'Генерация...' : 'Сгенерировать ИИ'}
           </button>
         </div>
-        <CharCount as="textarea" rows={4} max={3000} warnAt={2500}
+        <CharCount as="textarea" rows={6} max={3000} warnAt={2500}
           value={editing.description || ''} onChange={e => setEditing({ ...editing, description: (e.target as HTMLTextAreaElement).value })} />
       </div>
 
@@ -46,86 +44,6 @@ export default function ListingEditorContentSection({
           placeholder="Теги создаются автоматически на основе данных объекта"
           value={typeof editing.tags === 'string' ? editing.tags : (editing.tags || []).join(', ')} />
         <div className="text-xs text-muted-foreground mt-1">Создаются на основе данных. Кнопка ИИ — пересоздать.</div>
-      </div>
-
-      <div className="space-y-2 border-t border-border pt-4">
-        <div className="text-sm font-semibold">Дополнительно</div>
-        <div className="flex flex-wrap gap-4">
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={!!editing.use_watermark}
-              onChange={e => setEditing({ ...editing, use_watermark: e.target.checked })} />
-            Использовать водяной знак
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={!!editing.is_hot}
-              onChange={e => setEditing({ ...editing, is_hot: e.target.checked })} />
-            🔥 Горячее
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={!!editing.is_new}
-              onChange={e => setEditing({ ...editing, is_new: e.target.checked })} />
-            Новинка
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={!!editing.is_exclusive}
-              onChange={e => setEditing({ ...editing, is_exclusive: e.target.checked })} />
-            ⭐ Эксклюзив
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={!!editing.is_urgent}
-              onChange={e => setEditing({ ...editing, is_urgent: e.target.checked })} />
-            ⚡ Срочно
-          </label>
-        </div>
-        <div className="text-xs text-muted-foreground">Эксклюзив и Срочно отображаются бейджами на фото в каталоге.</div>
-        <div className="text-xs text-muted-foreground pt-2">Выгрузка в XML фиды:</div>
-        <div className="flex flex-wrap gap-4">
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={!!editing.export_yandex}
-              onChange={e => setEditing({ ...editing, export_yandex: e.target.checked })} />
-            Яндекс.Недвижимость
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={!!editing.export_avito}
-              onChange={e => setEditing({ ...editing, export_avito: e.target.checked })} />
-            Авито
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={!!editing.export_cian}
-              onChange={e => setEditing({ ...editing, export_cian: e.target.checked })} />
-            ЦИАН
-          </label>
-        </div>
-      </div>
-
-      <div className="space-y-2 border-t border-border pt-4">
-        <div className="flex items-center justify-between">
-          <div className="text-sm font-semibold flex items-center gap-1.5">
-            <Icon name="Search" size={14} /> SEO для поисковых систем
-          </div>
-          <button type="button" onClick={onGenerateSeo} disabled={aiSeoLoading}
-            className="text-xs text-brand-orange hover:underline inline-flex items-center gap-1">
-            <Icon name="Sparkles" size={12} />
-            {aiSeoLoading ? 'Генерация...' : 'Сгенерировать ИИ'}
-          </button>
-        </div>
-        <div>
-          <label className="text-xs text-muted-foreground">SEO Title (до 70 символов)</label>
-          <CharCount as="input" max={70} warnAt={60}
-            placeholder="Аренда офиса 120 м² в центре Краснодара | BIZNEST"
-            value={editing.seo_title || ''}
-            onChange={e => setEditing({ ...editing, seo_title: (e.target as HTMLInputElement).value })} />
-        </div>
-        <div>
-          <label className="text-xs text-muted-foreground">SEO Description (до 160 символов)</label>
-          <CharCount as="textarea" rows={2} max={160} warnAt={140}
-            placeholder="Светлый офис 120 м² с евроремонтом в БЦ на ул. Красной. Парковка, охрана 24/7..."
-            value={editing.seo_description || ''}
-            onChange={e => setEditing({ ...editing, seo_description: (e.target as HTMLTextAreaElement).value })} />
-        </div>
-        <div className="text-[11px] text-muted-foreground">
-          Если поля пустые — поисковики возьмут текст из названия и описания объекта.
-        </div>
       </div>
 
       {editing.id && (

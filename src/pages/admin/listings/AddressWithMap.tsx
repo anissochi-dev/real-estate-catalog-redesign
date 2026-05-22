@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
-import { Listing, City } from './types';
+import { Listing, City, ROAD_LINES } from './types';
 
 /* ── Яндекс.Карты типы ── */
 declare global {
@@ -51,27 +51,49 @@ interface AddressProps {
   hasError?: boolean;
 }
 
+interface Suggestion {
+  value: string;        // что показывать (улица, дом)
+  displayName: string;
+}
+
 export default function AddressWithMap({ editing, setEditing, cities, hasError }: AddressProps) {
   const { settings } = useSettings();
   const apiKey = settings.yandex_maps_api_key || '';
   const mapRef = useRef<HTMLDivElement>(null);
   const ymapInstance = useRef<any>(null);
   const markerRef = useRef<any>(null);
-  const suggestRef = useRef<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const editingRef = useRef(editing);
   editingRef.current = editing;
+
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState(false);
+  const [streetInput, setStreetInput] = useState(editing.address || '');
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [highlightIdx, setHighlightIdx] = useState(-1);
+  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const currentCity = editing.city || 'Краснодар';
 
-  // Синхронизируем значение поля улицы извне (когда меняется адрес через клик по карте)
+  // Синхронизация значения поля при изменении адреса извне (например клик по карте)
   useEffect(() => {
-    if (inputRef.current && document.activeElement !== inputRef.current) {
-      inputRef.current.value = editing.address || '';
+    if (document.activeElement !== inputRef.current) {
+      setStreetInput(editing.address || '');
     }
   }, [editing.address]);
+
+  // Закрытие dropdown при клике вне
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (!dropdownRef.current?.contains(e.target as Node) && e.target !== inputRef.current) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   /* Инициализация карты */
   useEffect(() => {
@@ -113,47 +135,33 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey]);
 
-  /* Suggest для улиц (с привязкой к городу) */
-  useEffect(() => {
-    if (!mapReady || !inputRef.current) return;
-    // Уничтожаем старый suggest при смене города
-    try { suggestRef.current?.destroy(); } catch { /* ignore */ }
-    suggestRef.current = null;
-
-    let destroyed = false;
-    try {
-      // Привязываем подсказки к городу — Яндекс будет искать только в его пределах
-      suggestRef.current = new window.ymaps.SuggestView(inputRef.current, {
-        results: 7,
-        provider: {
-          suggest: (req: string) => {
-            return window.ymaps.suggest(`${currentCity}, ${req}`).then((items: any[]) => {
-              // Удаляем дублирование города из подсказок — показываем только улицу и дом
-              return items.map(it => {
-                const cleaned = (it.displayName || it.value || '')
-                  .replace(new RegExp(`^${currentCity},\\s*`), '')
-                  .replace(/^Россия,\s*[^,]+,\s*/, '');
-                return { value: cleaned, displayName: cleaned };
-              });
-            });
-          },
-        },
-      });
-      suggestRef.current.events.add('select', (e: any) => {
-        const value: string = e.get('item').value;
-        if (destroyed) return;
-        if (inputRef.current) inputRef.current.value = value;
-        // Геокодируем полный адрес = город + введённая улица
-        geocodeAddress(`${currentCity}, ${value}`, value);
-      });
-    } catch { /* ignore */ }
-
-    return () => {
-      destroyed = true;
-      try { suggestRef.current?.destroy(); } catch { /* ignore */ }
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapReady, currentCity]);
+  // Запрос подсказок (debounced)
+  const fetchSuggestions = (query: string) => {
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    if (!query.trim() || !window.ymaps?.suggest) {
+      setSuggestions([]);
+      return;
+    }
+    suggestTimer.current = setTimeout(() => {
+      window.ymaps.suggest(`${currentCity}, ${query}`, { results: 8 })
+        .then((items: any[]) => {
+          const list: Suggestion[] = items.map(it => {
+            const raw = it.displayName || it.value || '';
+            const cleaned = raw
+              .replace(new RegExp(`^${currentCity},\\s*`, 'i'), '')
+              .replace(/^Россия,\s*[^,]+,\s*/i, '')
+              .replace(new RegExp(`,?\\s*${currentCity}\\s*,?`, 'i'), '')
+              .trim()
+              .replace(/^,\s*/, '');
+            return { value: cleaned || raw, displayName: cleaned || raw };
+          });
+          setSuggestions(list);
+          setShowSuggestions(list.length > 0);
+          setHighlightIdx(-1);
+        })
+        .catch(() => setSuggestions([]));
+    }, 250);
+  };
 
   function geocodeAddress(fullAddr: string, streetOnly?: string) {
     if (!window.ymaps) return;
@@ -190,12 +198,12 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError }
     const cur = editingRef.current;
     setEditing({
       ...cur,
-      // Город НЕ перезаписываем — он управляется только селектом выше
       district: district || cur.district || '',
       address: finalAddress,
       lat: coords[0],
       lng: coords[1],
     });
+    setStreetInput(finalAddress);
   }
 
   /* При смене координат снаружи — обновляем маркер */
@@ -217,11 +225,40 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCity, mapReady]);
 
+  const pickSuggestion = (s: Suggestion) => {
+    setStreetInput(s.value);
+    setShowSuggestions(false);
+    geocodeAddress(`${currentCity}, ${s.value}`, s.value);
+  };
+
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (showSuggestions && suggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHighlightIdx(i => Math.min(i + 1, suggestions.length - 1));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHighlightIdx(i => Math.max(i - 1, 0));
+        return;
+      }
+      if (e.key === 'Escape') {
+        setShowSuggestions(false);
+        return;
+      }
+    }
     if (e.key === 'Enter') {
       e.preventDefault();
-      const v = (e.target as HTMLInputElement).value.trim();
-      if (v) geocodeAddress(`${currentCity}, ${v}`, v);
+      if (highlightIdx >= 0 && suggestions[highlightIdx]) {
+        pickSuggestion(suggestions[highlightIdx]);
+      } else {
+        const v = streetInput.trim();
+        if (v) {
+          setShowSuggestions(false);
+          geocodeAddress(`${currentCity}, ${v}`, v);
+        }
+      }
     }
   };
 
@@ -244,12 +281,15 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError }
           <select
             className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
             value={currentCity}
-            onChange={e => setEditing({ ...editing, city: e.target.value, address: '', lat: null, lng: null })}
+            onChange={e => {
+              setStreetInput('');
+              setEditing({ ...editing, city: e.target.value, address: '', lat: null, lng: null });
+            }}
           >
             {cities.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
           </select>
         </div>
-        <div className="sm:col-span-2">
+        <div className="sm:col-span-2 relative">
           <label className="text-xs text-muted-foreground block mb-1">
             Улица и дом (начните вводить — появятся подсказки)
           </label>
@@ -258,15 +298,50 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError }
               ref={inputRef}
               className="w-full px-3 py-2 border rounded-lg pr-10 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
               placeholder="напр. Красная, 1"
-              defaultValue={editing.address || ''}
+              value={streetInput}
+              onChange={e => {
+                setStreetInput(e.target.value);
+                fetchSuggestions(e.target.value);
+              }}
+              onFocus={() => {
+                if (suggestions.length > 0) setShowSuggestions(true);
+              }}
               onKeyDown={handleInputKeyDown}
               onBlur={e => {
                 const v = e.target.value.trim();
-                if (v && v !== (editing.address || '')) geocodeAddress(`${currentCity}, ${v}`, v);
+                // Закрытие/геокодинг происходит через клик или Enter; на blur геокодируем только если изменилось
+                setTimeout(() => {
+                  if (v && v !== (editing.address || '') && !showSuggestions) {
+                    geocodeAddress(`${currentCity}, ${v}`, v);
+                  }
+                }, 150);
               }}
             />
             <Icon name="Search" size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           </div>
+
+          {/* Кастомный явный dropdown с подсказками */}
+          {showSuggestions && suggestions.length > 0 && (
+            <div
+              ref={dropdownRef}
+              className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-border rounded-lg shadow-lg max-h-64 overflow-y-auto"
+            >
+              {suggestions.map((s, i) => (
+                <button
+                  key={`${s.value}-${i}`}
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); pickSuggestion(s); }}
+                  onMouseEnter={() => setHighlightIdx(i)}
+                  className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 ${
+                    i === highlightIdx ? 'bg-brand-blue/10 text-brand-blue' : 'hover:bg-muted'
+                  }`}
+                >
+                  <Icon name="MapPin" size={13} className="text-muted-foreground flex-shrink-0" />
+                  <span className="truncate">{s.displayName}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -275,6 +350,16 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError }
           Район: <span className="font-medium text-foreground">{editing.district}</span>
         </div>
       )}
+
+      <div>
+        <label className="text-xs text-muted-foreground block mb-1">Линия расположения</label>
+        <select className="w-full sm:w-1/2 px-3 py-2 border rounded-lg text-sm bg-white"
+          value={editing.road_line || ''}
+          onChange={e => setEditing({ ...editing, road_line: e.target.value })}>
+          <option value="">— Не указано —</option>
+          {ROAD_LINES.map(r => <option key={r[0]} value={r[0]}>{r[1]}</option>)}
+        </select>
+      </div>
 
       <div className="relative rounded-xl overflow-hidden border border-border" style={{ height: 280 }}>
         <div ref={mapRef} style={{ width: '100%', height: '100%' }} />

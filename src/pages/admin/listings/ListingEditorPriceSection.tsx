@@ -183,12 +183,12 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
             {ENTRANCE.map(p => <option key={p[0]} value={p[0]}>{p[1]}</option>)}
           </select>
         </div>
-        <div>
-          <label className="text-xs text-muted-foreground">Комиссия брокера</label>
-          <input type="text" className="w-full px-3 py-2 border rounded-lg"
+        <div data-field-error={errors.broker_commission ? 'true' : undefined}>
+          <label className="text-xs text-muted-foreground">Комиссия брокера *</label>
+          <input type="text" className={`w-full px-3 py-2 border rounded-lg ${err('broker_commission')}`}
             placeholder="напр. 3% или 50 000 ₽"
             value={(editing as Record<string,unknown>).broker_commission as string || ''}
-            onChange={e => setEditing({ ...editing, broker_commission: e.target.value } as typeof editing)} />
+            onChange={e => { setEditing({ ...editing, broker_commission: e.target.value } as typeof editing); setErrors?.(v => ({ ...v, broker_commission: false })); }} />
         </div>
       </div>
     </>

@@ -6,11 +6,12 @@ import { SOCIAL_POST_URL, getToken } from '@/lib/adminApi';
 import { toast } from 'sonner';
 import {
   Listing, City,
-  CATS, DEALS, CONDITIONS, PURPOSE_LIST,
+  CATS, DEALS, CONDITIONS, PURPOSE_LIST, detectVideoType,
 } from './types';
 import ListingEditorPriceSection from './ListingEditorPriceSection';
 import ListingEditorDetailsSection from './ListingEditorDetailsSection';
 import ListingEditorContentSection from './ListingEditorContentSection';
+import ListingEditorExtraSection from './ListingEditorExtraSection';
 
 interface Props {
   editing: Partial<Listing>;
@@ -30,14 +31,15 @@ interface Props {
   onSave: () => void;
 }
 
-type Tab = 'main' | 'photos' | 'location' | 'details' | 'content';
+type Tab = 'main' | 'photos' | 'location' | 'details' | 'content' | 'extra';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'main',     label: 'Основное',      icon: 'FileText' },
-  { id: 'photos',   label: 'Фото',          icon: 'Image' },
-  { id: 'location', label: 'Расположение',  icon: 'MapPin' },
-  { id: 'details',  label: 'Характеристики',icon: 'Settings2' },
-  { id: 'content',  label: 'Описание',      icon: 'AlignLeft' },
+  { id: 'main',     label: 'Основное',       icon: 'FileText' },
+  { id: 'photos',   label: 'Фото',           icon: 'Image' },
+  { id: 'location', label: 'Расположение',   icon: 'MapPin' },
+  { id: 'details',  label: 'Характеристики', icon: 'Settings2' },
+  { id: 'content',  label: 'Описание',       icon: 'AlignLeft' },
+  { id: 'extra',    label: 'Дополнительное', icon: 'Layers' },
 ];
 
 export default function ListingEditor({
@@ -106,7 +108,8 @@ export default function ListingEditor({
     main:     !!(errors.title || errors.category || errors.deal || errors.condition || errors.owner_name || errors.owner_phone),
     photos:   !!errors.photos,
     location: !!errors.address,
-    details:  !!(errors.price || errors.area || errors.floor || errors.total_floors),
+    details:  !!(errors.price || errors.area || errors.floor || errors.total_floors || errors.broker_commission),
+    extra:    !!(errors.finishing || errors.building_class || errors.building_year || errors.property_rights),
   };
 
   const validate = (): boolean => {
@@ -123,6 +126,12 @@ export default function ListingEditor({
     if (editing.floor == null) e.floor = true;
     if (editing.total_floors == null) e.total_floors = true;
     if (!editing.address?.trim() && !editing.district?.trim()) e.address = true;
+    const bc = (editing as Record<string, unknown>).broker_commission as string | undefined;
+    if (!bc || !bc.trim()) e.broker_commission = true;
+    if (!editing.finishing) e.finishing = true;
+    if (!editing.building_class) e.building_class = true;
+    if (!editing.building_year) e.building_year = true;
+    if (!editing.property_rights) e.property_rights = true;
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -130,12 +139,14 @@ export default function ListingEditor({
   const handleSave = () => {
     if (validate()) { onSave(); return; }
     // Переключаемся на первую вкладку с ошибкой
-    const order: Tab[] = ['main', 'photos', 'location', 'details'];
+    const order: Tab[] = ['main', 'photos', 'location', 'details', 'extra'];
+    const bc = (editing as Record<string, unknown>).broker_commission as string | undefined;
     const firstErrTab = order.find(t => {
-      if (t === 'main') return !!(errors.title || errors.category || errors.deal || errors.condition || errors.owner_name || errors.owner_phone) || (!editing.title?.trim() || !editing.owner_name?.trim() || !editing.owner_phone?.trim() || !editing.category || !editing.deal || !editing.condition);
+      if (t === 'main') return !editing.title?.trim() || !editing.owner_name?.trim() || !editing.owner_phone?.trim() || !editing.category || !editing.deal || !editing.condition;
       if (t === 'photos') return !photos.length;
       if (t === 'location') return !editing.address?.trim() && !editing.district?.trim();
-      if (t === 'details') return !editing.price || !editing.area || editing.floor == null || editing.total_floors == null;
+      if (t === 'details') return !editing.price || !editing.area || editing.floor == null || editing.total_floors == null || !bc?.trim();
+      if (t === 'extra') return !editing.finishing || !editing.building_class || !editing.building_year || !editing.property_rights;
       return false;
     });
     if (firstErrTab) setTab(firstErrTab);
@@ -378,12 +389,50 @@ export default function ListingEditor({
                 </label>
                 <ImageUploader value={photos} onChange={p => { setPhotos(p); setErrors(v => ({ ...v, photos: false })); }} folder="photos" multiple applyWatermark={!!editing.use_watermark} />
               </div>
+
+              <div className="border-t border-border pt-3 space-y-2">
+                <div className="text-sm font-semibold">Метки и оформление</div>
+                <div className="flex flex-wrap gap-x-4 gap-y-2">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" checked={!!editing.use_watermark}
+                      onChange={e => setEditing({ ...editing, use_watermark: e.target.checked })} />
+                    Использовать водяной знак
+                  </label>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" checked={!!editing.is_hot}
+                      onChange={e => setEditing({ ...editing, is_hot: e.target.checked })} />
+                    🔥 Горячее
+                  </label>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" checked={!!editing.is_new}
+                      onChange={e => setEditing({ ...editing, is_new: e.target.checked })} />
+                    Новинка
+                  </label>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" checked={!!editing.is_exclusive}
+                      onChange={e => setEditing({ ...editing, is_exclusive: e.target.checked })} />
+                    ⭐ Эксклюзив
+                  </label>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" checked={!!editing.is_urgent}
+                      onChange={e => setEditing({ ...editing, is_urgent: e.target.checked })} />
+                    ⚡ Срочно
+                  </label>
+                </div>
+                <div className="text-xs text-muted-foreground">Эксклюзив и Срочно отображаются бейджами на фото в каталоге.</div>
+              </div>
+
               <div className="border-t border-border pt-3">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input type="checkbox" checked={!!editing.use_watermark}
-                    onChange={e => setEditing({ ...editing, use_watermark: e.target.checked })} />
-                  Использовать водяной знак на фото
-                </label>
+                <label className="text-sm font-semibold block mb-1">Видео (VK Видео или RuTube URL)</label>
+                <input className="w-full px-3 py-2 border rounded-lg"
+                  placeholder="https://vk.com/video... или https://rutube.ru/video/..."
+                  value={editing.video_url || ''}
+                  onChange={e => setEditing({ ...editing, video_url: e.target.value })} />
+                {editing.video_url && (
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Тип: {detectVideoType(editing.video_url) === 'vk' ? 'VK Видео' : detectVideoType(editing.video_url) === 'rutube' ? 'RuTube' : 'Другое'}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -413,16 +462,26 @@ export default function ListingEditor({
             </div>
           )}
 
-          {/* ── ОПИСАНИЕ / SEO / ПУБЛИКАЦИЯ ── */}
+          {/* ── ОПИСАНИЕ ── */}
           {tab === 'content' && (
             <ListingEditorContentSection
               editing={editing}
               setEditing={setEditing}
               aiLoading={aiLoading}
               aiTagsLoading={aiTagsLoading}
-              aiSeoLoading={aiSeoLoading}
               onDescribe={onDescribe}
               onGenerateTags={onGenerateTags}
+            />
+          )}
+
+          {/* ── ДОПОЛНИТЕЛЬНОЕ ── */}
+          {tab === 'extra' && (
+            <ListingEditorExtraSection
+              editing={editing}
+              setEditing={setEditing}
+              errors={errors}
+              setErrors={setErrors}
+              aiSeoLoading={aiSeoLoading}
               onGenerateSeo={onGenerateSeo}
             />
           )}

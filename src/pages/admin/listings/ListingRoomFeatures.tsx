@@ -1,4 +1,4 @@
-import { Listing, ROAD_LINES } from './types';
+import { Listing } from './types';
 
 const UTILITIES_MAP: { key: string; label: string; options: string[] }[] = [
   { key: 'Вода', label: '💧 Вода', options: ['Центральная', 'Скважина', 'Колодец', 'Привозная'] },
@@ -67,63 +67,6 @@ export default function ListingRoomFeatures({ editing, setEditing }: Props) {
                 );
               })}
             </div>
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Линия расположения</label>
-            <select className="w-full px-3 py-2 border rounded-lg" value={editing.road_line || ''}
-              onChange={e => setEditing({ ...editing, road_line: e.target.value })}>
-              <option value="">— Не указано —</option>
-              {ROAD_LINES.map(r => <option key={r[0]} value={r[0]}>{r[1]}</option>)}
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-3 border-t border-border pt-4">
-        <div className="text-sm font-semibold">Доходность и арендатор</div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div>
-            <label className="text-xs text-muted-foreground">МАП (мес. арендный поток), ₽</label>
-            <input type="number" min="0" className="w-full px-3 py-2 border rounded-lg"
-              value={editing.monthly_rent ?? ''}
-              onChange={e => {
-                const v = e.target.value === '' ? null : +e.target.value;
-                setEditing({ ...editing, monthly_rent: v, yearly_rent: v ? Math.round(v * 12) : editing.yearly_rent ?? null });
-              }} />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">ГАП (год. арендный поток), ₽</label>
-            <input type="number" min="0" className="w-full px-3 py-2 border rounded-lg"
-              value={editing.yearly_rent ?? ''}
-              onChange={e => {
-                const v = e.target.value === '' ? null : +e.target.value;
-                setEditing({ ...editing, yearly_rent: v, monthly_rent: v ? Math.round(v / 12) : editing.monthly_rent ?? null });
-              }} />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Окупаемость, мес</label>
-            <input type="number" min="0" className="w-full px-3 py-2 border rounded-lg"
-              placeholder="авто, если пусто"
-              value={editing.payback ?? ''}
-              onChange={e => setEditing({ ...editing, payback: e.target.value === '' ? null : +e.target.value })} />
-            {!editing.payback && editing.price && (editing.monthly_rent || editing.profit) ? (
-              <div className="text-[11px] text-muted-foreground mt-0.5">
-                Авто: ~{Math.round(+editing.price / +(editing.monthly_rent || editing.profit || 1))} мес
-              </div>
-            ) : null}
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Прибыль/мес, ₽</label>
-            <input type="number" min="0" className="w-full px-3 py-2 border rounded-lg"
-              value={editing.profit ?? ''}
-              onChange={e => setEditing({ ...editing, profit: e.target.value === '' ? null : +e.target.value })} />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="text-xs text-muted-foreground">Название арендатора (если есть)</label>
-            <input className="w-full px-3 py-2 border rounded-lg"
-              placeholder="напр. «Магнит», «Сбербанк»..."
-              value={editing.tenant_name || ''}
-              onChange={e => setEditing({ ...editing, tenant_name: e.target.value })} />
           </div>
         </div>
       </div>
