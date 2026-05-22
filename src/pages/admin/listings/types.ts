@@ -166,7 +166,7 @@ export const LAND_STATUSES = [
 ];
 
 export const empty: Partial<Listing> = {
-  title: '', category: 'office', deal: 'sale', price: 0, area: 0,
+  title: '', category: '', deal: '', price: 0, area: 0,
   address: '', district: '', city: 'Краснодар', description: '', image: '', images: '', tags: '',
   status: 'active', is_hot: false, is_new: false, is_visible: true,
   owner_name: '', owner_phone: '', owner_phone2: '', price_unit: 'total',

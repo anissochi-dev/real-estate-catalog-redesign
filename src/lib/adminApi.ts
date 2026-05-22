@@ -1,7 +1,8 @@
 const AUTH_URL = 'https://functions.poehali.dev/e5d9d96a-a3ca-45cd-9ea3-3e2982b626f7';
 const ADMIN_URL = 'https://functions.poehali.dev/aeccc0fe-9c55-4933-b292-432cec9cc09d';
 const AI_URL = 'https://functions.poehali.dev/34bfc4a2-89b9-4c89-bcbc-d82314730aef';
-const UPLOADS_URL = 'https://functions.poehali.dev/82b9e0bc-2ffa-4045-a74b-a09985cec2b5';
+// Используем функцию upload/ (поддерживает водяной знак и возвращает original_url)
+const UPLOADS_URL = 'https://functions.poehali.dev/8983c0a8-a8c8-47ff-97ed-59cc1571aa15';
 const REMOVE_WM_URL = 'https://functions.poehali.dev/93965724-e0d4-411d-8100-b9468a1a0627';
 export const CRM_URL = 'https://functions.poehali.dev/221e23fa-e0a4-416e-b878-c2da2914daac';
 export const CRM_CHECKS_URL = 'https://functions.poehali.dev/be6cb907-b50e-48fa-b9e2-092dd541a82a';
@@ -196,11 +197,18 @@ export const adminApi = {
     }),
 };
 
-export async function uploadFile(
+export interface UploadResult {
+  url: string;
+  originalUrl: string;
+  watermarked: boolean;
+}
+
+/** Расширенная загрузка — возвращает url (с ВЗ), original_url (без ВЗ), watermarked */
+export async function uploadFileEx(
   file: File,
   folder: 'photos' | 'logo' | 'watermark' = 'photos',
   applyWatermark = false,
-): Promise<string> {
+): Promise<UploadResult> {
   const b64 = await new Promise<string>((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(String(r.result));
@@ -212,11 +220,40 @@ export async function uploadFile(
   const res = await fetch(UPLOADS_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(token ? { 'X-Auth-Token': token } : {}) },
-    body: JSON.stringify({ file_base64: b64, filename: file.name, folder, kind, apply_watermark: applyWatermark }),
+    body: JSON.stringify({ file_base64: b64, filename: file.name, kind, apply_watermark: applyWatermark }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Ошибка загрузки');
-  return data.url as string;
+  return {
+    url: data.url as string,
+    originalUrl: (data.original_url as string) || (data.url as string),
+    watermarked: !!data.watermarked,
+  };
+}
+
+/** Обратно-совместимая загрузка — возвращает только URL (с ВЗ если есть, иначе оригинал) */
+export async function uploadFile(
+  file: File,
+  folder: 'photos' | 'logo' | 'watermark' = 'photos',
+  applyWatermark = false,
+): Promise<string> {
+  const r = await uploadFileEx(file, folder, applyWatermark);
+  return r.url;
+}
+
+/**
+ * Возвращает URL оригинала фото без водяного знака (если он был наложен).
+ * Логика: если URL содержит "_wm" — заменяем на "" (бекенд сохранил оригинал по тому же ключу).
+ * Иначе возвращаем тот же URL.
+ */
+export function getOriginalPhotoUrl(url: string): string {
+  if (!url) return url;
+  // Преобразуем .../photos/abc123_wm.jpg → .../photos/abc123.jpg (или сохранённое расширение)
+  // Бекенд сохраняет оригинал по ключу <token>.<ext>, а ВЗ-версию <token>_wm.jpg
+  if (/_wm\.(jpe?g|png|webp)$/i.test(url)) {
+    return url.replace(/_wm(\.(jpe?g|png|webp))$/i, '$1');
+  }
+  return url;
 }
 
 export async function removeWatermark(

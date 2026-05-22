@@ -44,11 +44,29 @@ function loadYmaps(apiKey: string): Promise<void> {
   return loadingPromise;
 }
 
+// Валидация и нормализация координат (на случай если lat/lng перепутаны или строки)
+function normalizeCoords(lat: number | string, lng: number | string): [number, number] | null {
+  const a = Number(lat);
+  const b = Number(lng);
+  if (!Number.isFinite(a) || !Number.isFinite(b) || (a === 0 && b === 0)) return null;
+  // Стандартный диапазон: широта -90..90, долгота -180..180
+  // Если значения перепутаны (например a=38.97, b=45.03) — меняем местами
+  const aLatOk = a >= -90 && a <= 90;
+  const bLngOk = b >= -180 && b <= 180;
+  const aLngOk = a >= -180 && a <= 180;
+  const bLatOk = b >= -90 && b <= 90;
+  if (aLatOk && bLngOk) return [a, b];
+  if (bLatOk && aLngOk) return [b, a];
+  return null;
+}
+
 export default function PropertyMapInfrastructure({ lat, lng, title, address }: Props) {
   const { settings } = useSettings();
   const containerRef = useRef<HTMLDivElement | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const markRef = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const collectionsRef = useRef<Record<string, any>>({});
   const [activeLayer, setActiveLayer] = useState<string | null>(null);
@@ -60,23 +78,26 @@ export default function PropertyMapInfrastructure({ lat, lng, title, address }: 
   useEffect(() => {
     const apiKey = settings.yandex_maps_api_key || '';
     if (!apiKey) { setError('NO_KEY'); return; }
+    const coords = normalizeCoords(lat, lng);
+    if (!coords) { setError('NO_COORDS'); return; }
     let cancelled = false;
 
     loadYmaps(apiKey).then(() => {
       if (cancelled || !containerRef.current || mapRef.current) return;
       try {
         mapRef.current = new window.ymaps.Map(containerRef.current, {
-          center: [lat, lng],
+          center: coords,
           zoom: 15,
           controls: ['zoomControl', 'fullscreenControl'],
         });
 
         // Метка самого объекта
         const mark = new window.ymaps.Placemark(
-          [lat, lng],
+          coords,
           { balloonContentHeader: title, balloonContentBody: address || '', hintContent: title },
-          { preset: 'islands#redDotIconWithCaption', iconCaptionMaxWidth: '200' }
+          { preset: 'islands#redDotIconWithCaption', iconCaptionMaxWidth: '200', iconCaption: title }
         );
+        markRef.current = mark;
         mapRef.current.geoObjects.add(mark);
         setInitialized(true);
       } catch {
@@ -87,6 +108,17 @@ export default function PropertyMapInfrastructure({ lat, lng, title, address }: 
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.yandex_maps_api_key]);
+
+  // Синхронизация координат при изменении lat/lng (без переинициализации карты)
+  useEffect(() => {
+    if (!mapRef.current || !markRef.current) return;
+    const coords = normalizeCoords(lat, lng);
+    if (!coords) return;
+    try {
+      markRef.current.geometry.setCoordinates(coords);
+      mapRef.current.setCenter(coords, 15, { duration: 300 });
+    } catch { /* ignore */ }
+  }, [lat, lng]);
 
   // Загрузка / скрытие слоя инфраструктуры
   const toggleLayer = (key: string) => {
@@ -179,6 +211,13 @@ export default function PropertyMapInfrastructure({ lat, lng, title, address }: 
     return (
       <div className="rounded-xl bg-muted flex items-center justify-center h-40 text-sm text-muted-foreground text-center px-4">
         Карта не настроена. Добавьте API-ключ Яндекс.Карт в Настройки.
+      </div>
+    );
+  }
+  if (error === 'NO_COORDS') {
+    return (
+      <div className="rounded-xl bg-muted flex items-center justify-center h-40 text-sm text-muted-foreground text-center px-4">
+        У объекта не указаны корректные координаты для отображения на карте.
       </div>
     );
   }

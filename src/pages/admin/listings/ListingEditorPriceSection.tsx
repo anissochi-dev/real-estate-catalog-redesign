@@ -7,6 +7,9 @@ const PREDICT_URL = 'https://functions.poehali.dev/9986e5a6-c4d4-407a-919f-a303a
 interface PredictHint {
   market_price: number | null;
   price_per_m2_median: number | null;
+  suggested_price?: number | null;
+  suggestion?: string;
+  price_range?: { min: number | null; max: number | null };
   price_assessment: { label: string; color: string; delta_pct: number };
   payback_months: number | null;
   comparables_count: number;
@@ -29,7 +32,9 @@ function fmt(n: number | null | undefined): string {
   return n.toLocaleString('ru') + ' ₽';
 }
 
-function usePriceHint(category: string, deal: string, area: number, price: number, district: string) {
+function usePriceHint(
+  category: string, deal: string, area: number, price: number, district: string, condition: string,
+) {
   const [hint, setHint] = useState<PredictHint | null>(null);
   const [loading, setLoading] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -42,7 +47,7 @@ function usePriceHint(category: string, deal: string, area: number, price: numbe
       fetch(PREDICT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category, deal, area, price, district }),
+        body: JSON.stringify({ category, deal, area, price, district, condition }),
       })
         .then(r => r.json())
         .then(d => { if (!d.error) setHint(d as PredictHint); })
@@ -50,7 +55,7 @@ function usePriceHint(category: string, deal: string, area: number, price: numbe
         .finally(() => setLoading(false));
     }, 800);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [category, deal, area, price, district]);
+  }, [category, deal, area, price, district, condition]);
 
   return { hint, loading };
 }
@@ -70,6 +75,7 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
     Number(editing.area || 0),
     Number(editing.price || 0),
     editing.district || '',
+    editing.condition || '',
   );
 
   return (
@@ -104,12 +110,33 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
       ) : null}
 
       {editing.area && editing.category && editing.deal && (
-        <div className="rounded-xl border bg-slate-50 p-3 text-xs">
-          <div className="flex items-center gap-1.5 font-semibold text-slate-600 mb-2">
+        <div className="rounded-xl border bg-slate-50 p-3 text-xs space-y-2">
+          <div className="flex items-center gap-1.5 font-semibold text-slate-600">
             <Icon name="TrendingUp" size={12} />
             Анализ рынка
             {hintLoading && <Icon name="Loader2" size={11} className="animate-spin text-slate-400 ml-1" />}
           </div>
+
+          {hint?.suggestion && (
+            <div className="rounded-lg bg-white border border-slate-200 px-2.5 py-2 text-[12px] leading-relaxed text-slate-700">
+              <div className="flex items-start gap-1.5">
+                <Icon name="Lightbulb" size={12} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <div className="font-semibold text-slate-800 mb-0.5">Рекомендация по цене</div>
+                  <div>{hint.suggestion}</div>
+                </div>
+              </div>
+              {hint.suggested_price && (
+                <button type="button"
+                  onClick={() => setEditing({ ...editing, price: hint.suggested_price! })}
+                  className="mt-2 text-[11px] text-brand-blue hover:underline inline-flex items-center gap-1">
+                  <Icon name="Wand2" size={11} />
+                  Применить рекомендованную цену ({fmt(hint.suggested_price)})
+                </button>
+              )}
+            </div>
+          )}
+
           {hint ? (
             <div className="flex flex-wrap gap-2">
               {editing.price && hint.price_assessment && (

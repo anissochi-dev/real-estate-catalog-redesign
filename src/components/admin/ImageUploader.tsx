@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { uploadFile } from '@/lib/adminApi';
+import { uploadFileEx, getOriginalPhotoUrl } from '@/lib/adminApi';
 import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
 import WatermarkEraser from './WatermarkEraser';
@@ -79,10 +79,11 @@ export default function ImageUploader({
       try {
         // 1. Компрессия
         const compressed = shouldCompress ? await compressImage(f) : f;
-        // 2. Загрузка на сервер (бэкенд сам накладывает водяной знак если apply_watermark=true)
+        // 2. Загрузка на сервер (бекенд сам накладывает ВЗ если apply_watermark=true,
+        //    при этом возвращает url (с ВЗ) и original_url (сжатый JPEG без ВЗ))
         const needWm = !!(applyWatermark && settings.watermark_enabled && settings.watermark_url);
-        const url = await uploadFile(compressed, folder, needWm);
-        uploaded.push(url);
+        const r = await uploadFileEx(compressed, folder, needWm);
+        uploaded.push(r.url);
         setProgress(p => ({ ...p, done: p.done + 1 }));
       } catch (e: unknown) {
         alert('Ошибка загрузки: ' + (e instanceof Error ? e.message : ''));
@@ -92,12 +93,13 @@ export default function ImageUploader({
     onChange(multiple ? [...value, ...uploaded] : uploaded.slice(0, 1));
   };
 
-  const download = async (url: string) => {
+  const download = async (url: string, opts: { original?: boolean } = {}) => {
+    const targetUrl = opts.original ? getOriginalPhotoUrl(url) : url;
     try {
-      const res = await fetch(url, { mode: 'cors' });
+      const res = await fetch(targetUrl, { mode: 'cors' });
       const blob = await res.blob();
       const a = document.createElement('a');
-      const fname = url.split('/').pop() || 'photo.webp';
+      const fname = targetUrl.split('/').pop() || 'photo.jpg';
       a.href = URL.createObjectURL(blob);
       a.download = fname;
       document.body.appendChild(a);
@@ -105,7 +107,7 @@ export default function ImageUploader({
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     } catch {
-      window.open(url, '_blank');
+      window.open(targetUrl, '_blank');
     }
   };
 
@@ -241,10 +243,19 @@ export default function ImageUploader({
                   )}
 
                   {allowDownload && (
-                    <button type="button" onClick={e => { e.stopPropagation(); download(url); }}
-                      className="bg-white rounded p-1 shadow" title="Скачать оригинал">
-                      <Icon name="Download" size={14} />
-                    </button>
+                    <>
+                      <button type="button" onClick={e => { e.stopPropagation(); download(url); }}
+                        className="bg-white rounded p-1 shadow" title="Скачать (как на сайте)">
+                        <Icon name="Download" size={14} />
+                      </button>
+                      {/* Кнопка "Скачать без водяного знака" — показывается если url содержит _wm */}
+                      {/_wm\.(jpe?g|png|webp)$/i.test(url) && (
+                        <button type="button" onClick={e => { e.stopPropagation(); download(url, { original: true }); }}
+                          className="bg-emerald-500 text-white rounded p-1 shadow" title="Скачать без водяного знака (сжатый JPEG)">
+                          <Icon name="DownloadCloud" size={14} />
+                        </button>
+                      )}
+                    </>
                   )}
                   <button type="button" onClick={e => { e.stopPropagation(); remove(i); }}
                     className="bg-red-500 text-white rounded p-1 shadow" title="Удалить">

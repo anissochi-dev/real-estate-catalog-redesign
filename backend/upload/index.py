@@ -261,29 +261,53 @@ def handler(event, context):
                 'webp': 'image/webp', 'gif': 'image/gif', 'svg': 'image/svg+xml',
             }[ext]
 
+            folder = {'photo': 'photos', 'logo': 'logos', 'watermark': 'watermarks'}.get(kind, 'files')
+            token12 = secrets.token_urlsafe(12)
+            aws_key = os.environ['AWS_ACCESS_KEY_ID']
+            s3 = boto3.client(
+                's3',
+                endpoint_url='https://bucket.poehali.dev',
+                aws_access_key_id=aws_key,
+                aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+            )
+
+            original_data = data
+            original_ext = ext
+            original_ct = content_type
+            wm_applied = False
+
+            # Если фото и нужен водяной знак — накладываем + сохраняем ОТДЕЛЬНО оригинал
             if kind == 'photo' and apply_wm and ext in ('jpg', 'jpeg', 'png', 'webp'):
                 cur.execute(
                     f"SELECT watermark_enabled, watermark_url, watermark_opacity, watermark_position "
                     f"FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
                 )
                 wm_row = cur.fetchone()
-                if wm_row and wm_row.get('watermark_enabled'):
-                    data = _apply_watermark(data, dict(wm_row))
-                    ext = 'jpg'
-                    content_type = 'image/jpeg'
+                if wm_row and wm_row.get('watermark_enabled') and wm_row.get('watermark_url'):
+                    wm_data = _apply_watermark(data, dict(wm_row))
+                    if wm_data and wm_data != data:
+                        # Сохраняем версию с водяным знаком как основной файл
+                        wm_key = f"{folder}/{token12}_wm.jpg"
+                        s3.put_object(Bucket='files', Key=wm_key, Body=wm_data, ContentType='image/jpeg')
+                        # Сохраняем оригинал (сжатый, без ВЗ) для скачивания
+                        orig_key = f"{folder}/{token12}.{original_ext}"
+                        s3.put_object(Bucket='files', Key=orig_key, Body=original_data, ContentType=original_ct)
 
-            folder = {'photo': 'photos', 'logo': 'logos', 'watermark': 'watermarks'}.get(kind, 'files')
-            key = f"{folder}/{secrets.token_urlsafe(12)}.{ext}"
+                        wm_applied = True
+                        url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{wm_key}"
+                        original_url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{orig_key}"
+                        return _ok({
+                            'url': url,
+                            'original_url': original_url,
+                            'watermarked': True,
+                            'size': len(wm_data),
+                        })
 
-            s3 = boto3.client(
-                's3',
-                endpoint_url='https://bucket.poehali.dev',
-                aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
-                aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
-            )
-            s3.put_object(Bucket='files', Key=key, Body=data, ContentType=content_type)
-
-            url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
-            return _ok({'url': url, 'size': len(data)})
+            # Без водяного знака — обычное сохранение
+            if not wm_applied:
+                key = f"{folder}/{token12}.{ext}"
+                s3.put_object(Bucket='files', Key=key, Body=data, ContentType=content_type)
+                url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{key}"
+                return _ok({'url': url, 'original_url': url, 'watermarked': False, 'size': len(data)})
     finally:
         conn.close()

@@ -74,6 +74,34 @@ def _district_coeff(district: str) -> float:
     return 1.0
 
 
+# Поправочные коэффициенты на состояние объекта
+CONDITION_COEFF = {
+    'new':           1.15,   # новое (готово к въезду)
+    'euro':          1.20,   # евроремонт
+    'designer':      1.25,   # дизайнерский ремонт
+    'good':          1.05,   # хорошее
+    'normal':        1.00,   # рабочее
+    'needs_repair':  0.85,   # требует ремонта
+    'rough':         0.75,   # черновая отделка
+    'shell':         0.70,   # без отделки
+}
+
+
+def _condition_coeff(condition: str) -> float:
+    if not condition:
+        return 1.0
+    return CONDITION_COEFF.get(condition.lower(), 1.0)
+
+
+def _condition_label(condition: str) -> str:
+    labels = {
+        'new': 'новое', 'euro': 'евроремонт', 'designer': 'дизайнерский',
+        'good': 'хорошее', 'normal': 'рабочее',
+        'needs_repair': 'треб. ремонта', 'rough': 'черновая', 'shell': 'без отделки',
+    }
+    return labels.get((condition or '').lower(), condition or '')
+
+
 def _percentile(data: list, p: float) -> float:
     if not data:
         return 0.0
@@ -123,7 +151,8 @@ def _demand_index(comparables_count: int, category: str, deal: str) -> dict:
 
 
 def _predict(cur, category: str, deal: str, area: float, price: float,
-             district: str = '', city: str = 'Краснодар', listing_id: int = 0) -> dict:
+             district: str = '', city: str = 'Краснодар', listing_id: int = 0,
+             condition: str = '') -> dict:
 
     area = float(area or 0)
     price = float(price or 0)
@@ -178,14 +207,28 @@ def _predict(cur, category: str, deal: str, area: float, price: float,
         ppm2_p25 = base * 0.75
         ppm2_p75 = base * 1.30
 
-    # Поправка на район
+    # Поправка на район и состояние
     d_coeff = _district_coeff(district)
-    market_ppm2_adj = market_ppm2  # уже в данных с учётом района, корректировка не нужна
+    c_coeff = _condition_coeff(condition)
+    # Если аналогов мало — корректируем по району; если много — район уже зашит в данные.
+    # Состояние учитываем всегда (различает квартиры с ремонтом и без)
+    if comparables_count < 3:
+        market_ppm2_adj = market_ppm2 * d_coeff * c_coeff
+        ppm2_p25 = ppm2_p25 * d_coeff * c_coeff
+        ppm2_p75 = ppm2_p75 * d_coeff * c_coeff
+    else:
+        market_ppm2_adj = market_ppm2 * c_coeff
+        ppm2_p25 = ppm2_p25 * c_coeff
+        ppm2_p75 = ppm2_p75 * c_coeff
 
     # 3. Расчётная рыночная цена объекта
     market_price = market_ppm2_adj * area if area > 0 else 0
     price_range_min = ppm2_p25 * area
     price_range_max = ppm2_p75 * area
+
+    # Рекомендованная цена (центр диапазона) — для текстового предложения
+    suggested_price = market_price
+    suggested_ppm2 = market_ppm2_adj
 
     # 4. Окупаемость (для продажи)
     payback_months = None
@@ -269,6 +312,45 @@ def _predict(cur, category: str, deal: str, area: float, price: float,
             'district': r.get('district') or '',
         })
 
+    # 9. Текстовое предложение по цене (учитывает категорию, сделку, состояние, площадь)
+    cat_labels = {
+        'office': 'офиса', 'retail': 'торгового помещения', 'warehouse': 'склада',
+        'restaurant': 'помещения общепита', 'hotel': 'гостиницы',
+        'business': 'готового бизнеса', 'gab': 'ГАБ', 'production': 'производственного помещения',
+        'land': 'участка', 'building': 'отдельно стоящего здания',
+        'free_purpose': 'помещения свободного назначения', 'car_service': 'автосервиса',
+    }
+    deal_labels = {'sale': 'продажа', 'rent': 'аренда', 'business': 'готовый бизнес'}
+    cat_lbl = cat_labels.get(category, category or 'объекта')
+    deal_lbl = deal_labels.get(deal, deal or 'сделки')
+    cond_lbl = _condition_label(condition)
+
+    suggestion_parts = [
+        f"Для {cat_lbl} ({deal_lbl}) площадью {round(area)} м²"
+    ]
+    if cond_lbl:
+        suggestion_parts.append(f"с состоянием «{cond_lbl}»")
+    if district:
+        suggestion_parts.append(f"в районе «{district}»")
+
+    if suggested_price > 0:
+        suggestion_parts.append(
+            f"справедливая цена ≈ {round(suggested_price):,} ₽".replace(',', ' ')
+        )
+        if price_range_min and price_range_max:
+            suggestion_parts.append(
+                f"(диапазон {round(price_range_min):,}–{round(price_range_max):,} ₽)".replace(',', ' ')
+            )
+        if suggested_ppm2:
+            suggestion_parts.append(f"~ {round(suggested_ppm2):,} ₽/м²".replace(',', ' '))
+
+    if price > 0 and price_assessment.get('label') != 'Нет данных':
+        suggestion_parts.append(
+            f"Ваша цена — «{price_assessment['label']}» ({price_assessment.get('delta_pct', 0):+}% от рынка)."
+        )
+
+    suggestion = ' · '.join(suggestion_parts)
+
     return {
         'market_price': round(market_price) if market_price else None,
         'price_per_m2_median': round(market_ppm2_adj) if market_ppm2_adj else None,
@@ -276,6 +358,10 @@ def _predict(cur, category: str, deal: str, area: float, price: float,
             'min': round(price_range_min) if price_range_min else None,
             'max': round(price_range_max) if price_range_max else None,
         },
+        'suggested_price': round(suggested_price) if suggested_price else None,
+        'suggestion': suggestion,
+        'condition_coeff': c_coeff,
+        'district_coeff': d_coeff,
         'payback_months': payback_months,
         'monthly_income_est': round(monthly_income_est) if monthly_income_est else None,
         'demand': demand,
@@ -312,7 +398,7 @@ def handler(event: dict, context) -> dict:
                     return _err(400, 'Не передан id объекта')
                 listing_id = int(listing_id_str)
                 cur.execute(
-                    f"SELECT id, category, deal, area, price, district, city, payback, profit, monthly_rent "
+                    f"SELECT id, category, deal, area, price, district, city, payback, profit, monthly_rent, condition "
                     f"FROM {SCHEMA}.listings WHERE id = {listing_id} AND status = 'active'"
                 )
                 row = cur.fetchone()
@@ -327,6 +413,7 @@ def handler(event: dict, context) -> dict:
                     district=row.get('district') or '',
                     city=row.get('city') or 'Краснодар',
                     listing_id=listing_id,
+                    condition=row.get('condition') or '',
                 )
                 return _ok(result)
 
@@ -338,9 +425,11 @@ def handler(event: dict, context) -> dict:
                 price = float(body.get('price') or 0)
                 district = str(body.get('district') or '')
                 city = str(body.get('city') or 'Краснодар')
+                condition = str(body.get('condition') or '')
                 if area <= 0:
                     return _err(400, 'Не передана площадь объекта')
-                result = _predict(cur, category, deal, area, price, district, city)
+                result = _predict(cur, category, deal, area, price, district, city,
+                                  condition=condition)
                 return _ok(result)
 
             return _err(405, 'Method not allowed')

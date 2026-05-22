@@ -268,17 +268,19 @@ export default function ListingEditor({
 
               {/* Категория, сделка, состояние */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <div>
+                <div {...errWrap('category')}>
                   <label className="text-xs text-muted-foreground">Категория *</label>
-                  <select className={`w-full px-3 py-2 border rounded-lg text-sm ${err('category')}`} value={editing.category}
+                  <select className={`w-full px-3 py-2 border rounded-lg text-sm ${err('category')}`} value={editing.category || ''}
                     onChange={e => { setEditing({ ...editing, category: e.target.value }); setErrors(v => ({ ...v, category: false })); }}>
+                    <option value="">— Выберите категорию —</option>
                     {CATS.map(c => <option key={c[0]} value={c[0]}>{c[1]}</option>)}
                   </select>
                 </div>
-                <div>
+                <div {...errWrap('deal')}>
                   <label className="text-xs text-muted-foreground">Тип сделки *</label>
-                  <select className={`w-full px-3 py-2 border rounded-lg text-sm ${err('deal')}`} value={editing.deal}
+                  <select className={`w-full px-3 py-2 border rounded-lg text-sm ${err('deal')}`} value={editing.deal || ''}
                     onChange={e => { setEditing({ ...editing, deal: e.target.value }); setErrors(v => ({ ...v, deal: false })); }}>
+                    <option value="">— Выберите тип сделки —</option>
                     {DEALS.map(d => <option key={d[0]} value={d[0]}>{d[1]}</option>)}
                   </select>
                 </div>

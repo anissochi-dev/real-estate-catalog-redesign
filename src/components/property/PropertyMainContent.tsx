@@ -43,17 +43,26 @@ export default function PropertyMainContent({
 
   return (
     <>
-      {/* Название и адрес */}
+      {/* Название */}
       <div className="bg-white rounded-2xl px-4 py-3 shadow-sm">
-        <h1 className="font-display font-800 text-xl md:text-2xl text-foreground mb-1">{item.title}</h1>
+        <h1 className="font-display font-800 text-xl md:text-2xl text-foreground">{item.title}</h1>
+      </div>
+
+      {/* Адрес — отдельный блок между названием и параметрами */}
+      <div className="bg-white rounded-2xl px-4 py-3 shadow-sm">
         <button
           type="button"
           onClick={() => document.getElementById('property-map')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-brand-blue transition-colors group"
+          className="w-full inline-flex items-start gap-2 text-left text-sm text-foreground hover:text-brand-blue transition-colors group"
         >
-          <Icon name="MapPin" size={12} className="flex-shrink-0 text-brand-blue" />
-          <span className="group-hover:underline underline-offset-2">{addressStr}</span>
-          <Icon name="Map" size={10} className="opacity-0 group-hover:opacity-60 transition-opacity" />
+          <Icon name="MapPin" size={16} className="flex-shrink-0 text-brand-blue mt-0.5" />
+          <span className="flex-1">
+            <span className="block text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Адрес</span>
+            <span className="font-medium leading-snug group-hover:underline underline-offset-2">{addressStr}</span>
+          </span>
+          {item.lat && item.lng ? (
+            <Icon name="Map" size={14} className="opacity-50 group-hover:opacity-100 transition-opacity mt-0.5" />
+          ) : null}
         </button>
       </div>
 
