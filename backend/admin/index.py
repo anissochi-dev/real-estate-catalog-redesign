@@ -1097,6 +1097,35 @@ def _listings_bulk(cur, conn, event, user):
         cur.execute(
             f"UPDATE {SCHEMA}.listings SET city = '{city}', updated_at = NOW() WHERE id IN ({ids_sql})"
         )
+    elif op == 'set_broker':
+        # Назначить брокера группе объектов — только админ/директор
+        if user['role'] not in ('admin', 'director'):
+            return _err(403, 'Только администратор или директор может передавать объекты')
+        new_broker_id = body.get('value')
+        if new_broker_id is None or new_broker_id == '':
+            cur.execute(
+                f"UPDATE {SCHEMA}.listings SET broker_id = NULL, updated_at = NOW() "
+                f"WHERE id IN ({ids_sql})"
+            )
+        else:
+            try:
+                bid = int(new_broker_id)
+            except Exception:
+                return _err(400, 'Некорректный id брокера')
+            # Проверяем, что такой пользователь существует и активен
+            cur.execute(
+                f"SELECT id, name FROM {SCHEMA}.users "
+                f"WHERE id = {bid} AND is_active = TRUE"
+            )
+            target = cur.fetchone()
+            if not target:
+                return _err(404, 'Брокер не найден или отключён')
+            cur.execute(
+                f"UPDATE {SCHEMA}.listings SET broker_id = {bid}, updated_at = NOW() "
+                f"WHERE id IN ({ids_sql})"
+            )
+            for lid in ids:
+                _write_history(cur, lid, user, 'broker_changed', {'broker_id': bid, 'broker_name': target['name']})
     else:
         return _err(400, f'Неизвестная операция: {op}')
     conn.commit()

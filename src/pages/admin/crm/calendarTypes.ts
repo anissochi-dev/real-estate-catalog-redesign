@@ -59,6 +59,7 @@ export const EMPTY_LINKS: LinkField = {
   deal_id: null, deal_label: '',
   owner_id: null, owner_label: '',
   listing_id: null, listing_label: '',
+  lead_id: null, lead_label: '',
 };
 
 export function toLocalDateStr(date: Date) {

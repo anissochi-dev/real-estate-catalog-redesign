@@ -1,13 +1,32 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 
-const BULK_OPS = [
-  { op: 'archive', label: 'Архивировать', icon: 'Archive', confirm: true },
-  { op: 'activate', label: 'Сделать активными', icon: 'CheckCircle', confirm: true },
-  { op: 'set_hot', label: 'Горячее', icon: 'Flame', value: true },
-  { op: 'set_hot_off', label: 'Убрать горячее', icon: 'FlameOff', value: false, realOp: 'set_hot' },
-  { op: 'set_new', label: 'Новинка', icon: 'Sparkles', value: true },
-  { op: 'set_new_off', label: 'Убрать новинку', icon: 'X', value: false, realOp: 'set_new' },
+interface BulkOp {
+  op: string;
+  realOp?: string;
+  label: string;
+  icon: string;
+  className: string;
+  confirm?: boolean;
+  value?: unknown;
+}
+
+const BULK_OPS: BulkOp[] = [
+  { op: 'activate',    label: 'Активные',  icon: 'CheckCircle', className: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200', confirm: true },
+  { op: 'archive',     label: 'В архив',   icon: 'Archive',     className: 'bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200', confirm: true },
+  { op: 'set_hot',     label: 'Горячее',   icon: 'Flame',       className: 'bg-orange-50 text-orange-700 hover:bg-orange-100 border-orange-200', value: true },
+  { op: 'set_hot_off', label: 'Не горячее', icon: 'FlameOff',   className: 'bg-muted/40 text-muted-foreground hover:bg-muted border-border', value: false, realOp: 'set_hot' },
+  { op: 'set_new',     label: 'Новинка',   icon: 'Sparkles',    className: 'bg-sky-50 text-sky-700 hover:bg-sky-100 border-sky-200', value: true },
+  { op: 'set_new_off', label: 'Не новинка', icon: 'X',          className: 'bg-muted/40 text-muted-foreground hover:bg-muted border-border', value: false, realOp: 'set_new' },
 ];
+
+interface Broker {
+  id: number;
+  name: string;
+  role: string;
+}
 
 interface Props {
   selected: Set<number>;
@@ -21,48 +40,165 @@ interface Props {
 export default function ListingsBulkBar({
   selected, onDeselect, onBulk, onBulkDelete, bulkLoading, isAdmin,
 }: Props) {
+  const { user } = useAuth();
+  const canAssignBroker = user?.role === 'admin' || user?.role === 'director';
+
+  const [brokers, setBrokers] = useState<Broker[]>([]);
+  const [showBrokers, setShowBrokers] = useState(false);
+  const [brokerQuery, setBrokerQuery] = useState('');
+  const brokerBtnRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!canAssignBroker) return;
+    adminApi.listUsers()
+      .then(d => {
+        const list: Broker[] = (d.users || []).filter((u: Broker) =>
+          ['broker', 'manager', 'office_manager', 'director'].includes(u.role),
+        );
+        setBrokers(list);
+      })
+      .catch(() => { /* showError уже отработал */ });
+  }, [canAssignBroker]);
+
+  // Закрываем меню при клике вне
+  useEffect(() => {
+    if (!showBrokers) return;
+    const onClick = (e: MouseEvent) => {
+      if (brokerBtnRef.current && !brokerBtnRef.current.contains(e.target as Node)) {
+        setShowBrokers(false);
+      }
+    };
+    window.addEventListener('mousedown', onClick);
+    return () => window.removeEventListener('mousedown', onClick);
+  }, [showBrokers]);
+
+  const filteredBrokers = useMemo(() => {
+    const q = brokerQuery.trim().toLowerCase();
+    if (!q) return brokers;
+    return brokers.filter(b => b.name.toLowerCase().includes(q));
+  }, [brokers, brokerQuery]);
+
   if (selected.size === 0) return null;
 
+  const ROLE_RU: Record<string, string> = {
+    admin: 'Админ', editor: 'Редактор', manager: 'Менеджер',
+    director: 'Директор', broker: 'Брокер', office_manager: 'Офис-менеджер',
+  };
+
+  const handleAssignBroker = (bid: number | null) => {
+    if (!confirm(
+      bid === null
+        ? `Снять брокера с ${selected.size} объект(ов)?`
+        : `Передать ${selected.size} объект(ов) выбранному агенту?`,
+    )) return;
+    onBulk('set_broker', bid);
+    setShowBrokers(false);
+    setBrokerQuery('');
+  };
+
   return (
-    <div className="flex flex-wrap items-center gap-2 p-3 bg-brand-blue/5 border border-brand-blue/20 rounded-xl">
-      <span className="text-sm font-semibold text-brand-blue">
-        Выбрано: {selected.size}
+    <div className="flex flex-wrap items-center gap-1.5 p-2.5 bg-brand-blue/5 border border-brand-blue/20 rounded-xl">
+      <span className="text-xs font-semibold text-brand-blue bg-white px-2 py-1 rounded-md border border-brand-blue/30">
+        <Icon name="CheckSquare" size={12} className="inline -mt-0.5 mr-1" />
+        {selected.size}
       </span>
-      <div className="flex flex-wrap gap-2 ml-2">
-        {BULK_OPS.map(op => (
-          <button
-            key={op.op}
-            disabled={bulkLoading}
-            onClick={() => {
-              const realOp = (op as { realOp?: string }).realOp || op.op;
-              const doIt = () => onBulk(realOp, 'value' in op ? op.value : undefined);
-              if (op.confirm) {
-                if (confirm(`${op.label} ${selected.size} объект(ов)?`)) doIt();
-              } else {
-                doIt();
-              }
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-border bg-white hover:bg-muted disabled:opacity-50"
-          >
-            <Icon name={op.icon} size={13} />
-            {op.label}
-          </button>
-        ))}
-        {isAdmin && (
-          <button
-            disabled={bulkLoading}
-            onClick={onBulkDelete}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-50"
-          >
-            <Icon name="Trash2" size={13} />
-            Удалить насовсем
-          </button>
-        )}
-        <button onClick={onDeselect}
-          className="text-xs text-muted-foreground hover:text-foreground px-2">
-          Снять выбор
+
+      {BULK_OPS.map(op => (
+        <button
+          key={op.op}
+          disabled={bulkLoading}
+          onClick={() => {
+            const realOp = op.realOp || op.op;
+            const doIt = () => onBulk(realOp, op.value);
+            if (op.confirm) {
+              if (confirm(`${op.label} — применить к ${selected.size} объект(ам)?`)) doIt();
+            } else {
+              doIt();
+            }
+          }}
+          className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border transition disabled:opacity-50 ${op.className}`}
+          title={op.label}
+        >
+          <Icon name={op.icon} size={11} />
+          {op.label}
         </button>
-      </div>
+      ))}
+
+      {canAssignBroker && (
+        <div className="relative" ref={brokerBtnRef}>
+          <button
+            disabled={bulkLoading}
+            onClick={() => setShowBrokers(s => !s)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border bg-violet-50 text-violet-700 hover:bg-violet-100 border-violet-200 disabled:opacity-50"
+            title="Передать выбранные объекты другому агенту"
+          >
+            <Icon name="UserCheck" size={11} />
+            Передать агенту
+            <Icon name={showBrokers ? 'ChevronUp' : 'ChevronDown'} size={10} />
+          </button>
+
+          {showBrokers && (
+            <div className="absolute z-30 mt-1 w-72 bg-white border border-border rounded-xl shadow-xl overflow-hidden">
+              <div className="p-2 border-b border-border">
+                <div className="relative">
+                  <Icon name="Search" size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="Поиск по имени..."
+                    value={brokerQuery}
+                    onChange={e => setBrokerQuery(e.target.value)}
+                    className="w-full pl-7 pr-2 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:border-brand-blue"
+                  />
+                </div>
+              </div>
+              <div className="max-h-64 overflow-y-auto">
+                {filteredBrokers.length === 0 ? (
+                  <div className="p-3 text-xs text-center text-muted-foreground">Нет подходящих агентов</div>
+                ) : (
+                  filteredBrokers.map(b => (
+                    <button
+                      key={b.id}
+                      onClick={() => handleAssignBroker(b.id)}
+                      className="w-full text-left px-3 py-2 hover:bg-muted/50 flex items-center justify-between border-b border-border/40 last:border-0"
+                    >
+                      <div>
+                        <div className="text-xs font-medium">{b.name}</div>
+                        <div className="text-[10px] text-muted-foreground">{ROLE_RU[b.role] || b.role}</div>
+                      </div>
+                      <Icon name="ChevronRight" size={12} className="text-muted-foreground" />
+                    </button>
+                  ))
+                )}
+              </div>
+              <button
+                onClick={() => handleAssignBroker(null)}
+                className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 border-t border-border inline-flex items-center gap-1.5"
+              >
+                <Icon name="UserMinus" size={12} />
+                Снять брокера
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {isAdmin && (
+        <button
+          disabled={bulkLoading}
+          onClick={onBulkDelete}
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border bg-red-50 text-red-700 hover:bg-red-100 border-red-200 disabled:opacity-50"
+        >
+          <Icon name="Trash2" size={11} />
+          Удалить
+        </button>
+      )}
+
+      <button onClick={onDeselect}
+        className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 inline-flex items-center gap-1">
+        <Icon name="X" size={11} />
+        Снять
+      </button>
     </div>
   );
 }

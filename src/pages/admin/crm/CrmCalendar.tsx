@@ -53,16 +53,21 @@ export default function CrmCalendar() {
 
   const createMutation = useMutation({
     mutationFn: async ({ form, links }: { form: EventFormState; links: LinkField }) => {
+      // Если выбран контакт из телефонной базы (lead_id=null, есть lead_label) —
+      // прикладываем имя клиента к описанию, чтобы не потерять.
+      const extraNote = !links.lead_id && links.lead_label
+        ? `Клиент: ${links.lead_label}`
+        : '';
+      const description = [form.description, extraNote].filter(Boolean).join('\n').trim();
       const r = await fetch(`${CRM_URL}/events`, {
         method: 'POST', headers,
         body: JSON.stringify({
           title: form.title,
-          description: form.description || undefined,
+          description: description || undefined,
           event_type: form.event_type,
           starts_at: form.starts_at,
           ends_at: form.ends_at || undefined,
-          deal_id: links.deal_id || undefined,
-          owner_id: links.owner_id || undefined,
+          lead_id: links.lead_id || undefined,
           listing_id: links.listing_id || undefined,
         }),
       });
@@ -70,7 +75,7 @@ export default function CrmCalendar() {
       if (!r.ok) throw new Error(json.error || 'Ошибка');
       return json;
     },
-    onSuccess: () => { toast.success('Создано'); closeModal(); invalidate(); },
+    onSuccess: () => { toast.success('Событие создано'); closeModal(); invalidate(); },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -85,8 +90,7 @@ export default function CrmCalendar() {
           event_type: form.event_type,
           starts_at: form.starts_at,
           ends_at: form.ends_at || undefined,
-          deal_id: links.deal_id,
-          owner_id: links.owner_id,
+          lead_id: links.lead_id,
           listing_id: links.listing_id,
         }),
       });
@@ -132,9 +136,11 @@ export default function CrmCalendar() {
       ends_at: ev.ends_at?.slice(0, 16) || '',
     });
     setModalLinks({
-      deal_id: ev.deal_id || null,    deal_label: ev.deal_title || '',
-      owner_id: ev.owner_id || null,  owner_label: ev.owner_name || '',
+      deal_id: null, deal_label: '',
+      owner_id: null, owner_label: '',
       listing_id: ev.listing_id || null, listing_label: ev.listing_title || '',
+      lead_id: (ev as CrmEvent & { lead_id?: number }).lead_id ?? null,
+      lead_label: (ev as CrmEvent & { lead_name?: string }).lead_name ?? '',
     });
     setEditing(ev);
     setModal(true);

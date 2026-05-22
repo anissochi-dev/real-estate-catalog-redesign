@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
-import { adminApi } from '@/lib/adminApi';
 import { Listing } from './types';
 
 interface Props {
@@ -67,18 +66,6 @@ export default function TabPhotos({ listing }: Props) {
     }
   };
 
-  const handleInpaint = async (url: string, idx: number) => {
-    setBusy(`inpaint-${idx}`);
-    try {
-      await adminApi.inpaintListingPhoto({ image_url: url });
-      // Если успешно — backend вернёт новый url; пока что заглушка
-    } catch {
-      // showError уже отработал в adminApi.req
-    } finally {
-      setBusy(null);
-    }
-  };
-
   if (photos.length === 0) {
     return (
       <div className="p-8 text-center text-muted-foreground">
@@ -125,15 +112,6 @@ export default function TabPhotos({ listing }: Props) {
                       ? <Icon name="Loader2" size={12} className="animate-spin" />
                       : <Icon name="Download" size={12} />}
                     Скачать
-                  </button>
-                  <button onClick={() => handleInpaint(url, idx)}
-                          disabled={busy === `inpaint-${idx}`}
-                          className="flex-1 min-w-[110px] text-xs bg-brand-orange/95 hover:bg-brand-orange text-white px-2.5 py-1.5 rounded-lg inline-flex items-center justify-center gap-1 font-medium disabled:opacity-60"
-                          title="Убрать лишнее с фото через Меланию (YandexART)">
-                    {busy === `inpaint-${idx}`
-                      ? <Icon name="Loader2" size={12} className="animate-spin" />
-                      : <Icon name="Sparkles" size={12} />}
-                    Очистить ИИ
                   </button>
                 </div>
               </div>

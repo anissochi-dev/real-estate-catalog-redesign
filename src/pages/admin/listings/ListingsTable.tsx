@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
 import { Listing, DEALS, fmtDate, perM2, splitImages } from './types';
@@ -19,14 +18,12 @@ interface Props {
   siteUrl?: string;
 }
 
-function PhotoCell({ it, siteUrl, onPhotoDownload }: { it: Listing; siteUrl?: string; onPhotoDownload: (it: Listing) => void }) {
-  const [hover, setHover] = useState(false);
+function PhotoCell({ it }: { it: Listing; siteUrl?: string; onPhotoDownload?: (it: Listing) => void }) {
   const imgs = splitImages(it.images);
   const mainImg = imgs[0] || it.image;
 
   const openSite = () => {
     const slug = it.slug || it.id;
-    // Сбрасываем view → site, чтобы SPA открыл карточку объекта, а не админку
     try { localStorage.removeItem(VIEW_KEY); } catch { /* ignore */ }
     window.open(`/object/${slug}`, '_blank');
   };
@@ -34,9 +31,8 @@ function PhotoCell({ it, siteUrl, onPhotoDownload }: { it: Listing; siteUrl?: st
   return (
     <div
       className="relative w-16 h-16 flex-shrink-0 cursor-pointer group"
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
       onClick={openSite}
+      title="Открыть объект на сайте"
     >
       {mainImg ? (
         <img src={mainImg} alt={it.title}
@@ -44,20 +40,6 @@ function PhotoCell({ it, siteUrl, onPhotoDownload }: { it: Listing; siteUrl?: st
       ) : (
         <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center border border-border">
           <Icon name="Image" size={20} className="text-muted-foreground" />
-        </div>
-      )}
-      {hover && mainImg && (
-        <div className="absolute inset-0 rounded-lg bg-black/40 flex flex-col items-center justify-center gap-1">
-          <div className="w-5 h-5 flex items-center justify-center rounded-full bg-white/90">
-            <Icon name="ExternalLink" size={11} className="text-slate-800" />
-          </div>
-          <button
-            className="w-5 h-5 flex items-center justify-center rounded-full bg-white/90 hover:bg-white"
-            onClick={e => { e.stopPropagation(); onPhotoDownload(it); }}
-            title="Скачать фото без логотипа"
-          >
-            <Icon name="Download" size={11} className="text-slate-800" />
-          </button>
         </div>
       )}
       {imgs.length > 1 && (
@@ -112,7 +94,7 @@ export default function ListingsTable({
                     onChange={() => onToggleSelect(it.id)} className="rounded" />
                 </td>
                 <td className="px-3 py-3">
-                  <PhotoCell it={it} siteUrl={siteUrl} onPhotoDownload={onPhotoDownload} />
+                  <PhotoCell it={it} />
                 </td>
                 <td className="px-3 py-3">
                   <div className="flex items-center gap-2 flex-wrap">

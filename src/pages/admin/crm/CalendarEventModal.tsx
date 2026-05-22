@@ -9,48 +9,7 @@ import {
   CrmEvent, EventType, EventFormState, LinkField, SearchItem,
   TYPE_META, EMPTY_FORM, EMPTY_LINKS,
 } from './calendarTypes';
-
-/* ── Хук поиска сделок ── */
-function useDealsSearch(token: string, q: string) {
-  return useQuery<SearchItem[]>({
-    queryKey: ['deals-search', q],
-    queryFn: async () => {
-      if (q.length < 2) return [];
-      const r = await fetch(`${CRM_URL}/deals?search=${encodeURIComponent(q)}&limit=8`, {
-        headers: { 'X-Auth-Token': token },
-      });
-      const data = await r.json();
-      return (data.deals || data || []).map((d: { id: number; title: string; amount?: number }) => ({
-        id: d.id,
-        label: d.title,
-        sub: d.amount ? `${Number(d.amount).toLocaleString('ru')} ₽` : undefined,
-      }));
-    },
-    enabled: q.length >= 2,
-    staleTime: 30_000,
-  });
-}
-
-/* ── Хук поиска собственников ── */
-function useOwnersSearch(token: string, q: string) {
-  return useQuery<SearchItem[]>({
-    queryKey: ['owners-search', q],
-    queryFn: async () => {
-      if (q.length < 2) return [];
-      const r = await fetch(`${CRM_URL}/owners?search=${encodeURIComponent(q)}&limit=8`, {
-        headers: { 'X-Auth-Token': token },
-      });
-      const data = await r.json();
-      return (data.owners || []).map((o: { id: number; name: string; phone?: string }) => ({
-        id: o.id,
-        label: o.name,
-        sub: o.phone,
-      }));
-    },
-    enabled: q.length >= 2,
-    staleTime: 30_000,
-  });
-}
+import EventDateTimeBlock from './EventDateTimeBlock';
 
 /* ── Хук поиска объектов ── */
 function useListingsSearchReal(q: string) {
@@ -71,22 +30,117 @@ function useListingsSearchReal(q: string) {
   });
 }
 
+/** Объединённый поиск клиента: телефонная база + заявки + собственники объектов.
+ * id отрицательный для phone_contacts (минус id), положительный — для leads.
+ * sub — телефон (или компания).
+ */
+interface ClientSearchItem extends SearchItem {
+  source: 'phone' | 'lead' | 'owner';
+  phone?: string;
+  /** Положительный id — для записи в lead_id. Если выбрана запись из телефонной базы — lead_id остаётся null,
+   * но название/телефон сохраняются в title (для отображения).
+   */
+  leadId?: number | null;
+}
+
+function useClientSearch(token: string, q: string) {
+  return useQuery<ClientSearchItem[]>({
+    queryKey: ['client-search', q],
+    queryFn: async () => {
+      if (q.length < 2) return [];
+      const results: ClientSearchItem[] = [];
+
+      // 1) Телефонная база
+      try {
+        const data = await adminApi.searchPhones(q);
+        const items = (data.contacts || data.results || data || []) as
+          { id: number; name?: string; phone?: string; company?: string }[];
+        for (const it of items.slice(0, 6)) {
+          const name = it.name || it.phone || '—';
+          results.push({
+            id: -it.id, // отрицательный — для phone_contact
+            label: name,
+            sub: it.phone + (it.company ? ` · ${it.company}` : ''),
+            source: 'phone',
+            phone: it.phone,
+            leadId: null,
+          });
+        }
+      } catch { /* showError уже сработал */ }
+
+      // 2) Заявки (Leads)
+      try {
+        const r = await fetch(`${CRM_URL}/leads?search=${encodeURIComponent(q)}&limit=6`, {
+          headers: { 'X-Auth-Token': token },
+        });
+        const data = await r.json().catch(() => ({}));
+        const items = (data.leads || []) as { id: number; name: string; phone?: string }[];
+        for (const it of items) {
+          results.push({
+            id: it.id,
+            label: it.name,
+            sub: it.phone ? `Заявка · ${it.phone}` : 'Заявка',
+            source: 'lead',
+            phone: it.phone,
+            leadId: it.id,
+          });
+        }
+      } catch { /* ignore */ }
+
+      // 3) Собственники объектов
+      try {
+        const r = await fetch(`${CRM_URL}/owners?search=${encodeURIComponent(q)}&limit=6`, {
+          headers: { 'X-Auth-Token': token },
+        });
+        const data = await r.json().catch(() => ({}));
+        const items = (data.owners || []) as { id: number; name: string; phone?: string }[];
+        for (const it of items) {
+          results.push({
+            id: -100000 - it.id,
+            label: it.name,
+            sub: it.phone ? `Собственник · ${it.phone}` : 'Собственник',
+            source: 'owner',
+            phone: it.phone,
+            leadId: null,
+          });
+        }
+      } catch { /* ignore */ }
+
+      // Дедупликация по телефону
+      const seen = new Set<string>();
+      return results.filter(r => {
+        const key = (r.phone || r.label || String(r.id)).toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).slice(0, 12);
+    },
+    enabled: q.length >= 2,
+    staleTime: 15_000,
+  });
+}
+
 /* ── Компонент поиска с выпадашкой ── */
-interface SearchDropdownProps {
+interface SearchDropdownProps<T extends SearchItem> {
   label: string;
   icon: string;
   colorClass: string;
   value: string;
-  selectedId: number | null;
-  onSelect: (id: number, label: string) => void;
+  hasSelected: boolean;
+  selectedSub?: string;
+  onSelect: (item: T) => void;
   onClear: () => void;
-  items: SearchItem[];
+  items: T[];
   loading: boolean;
   onSearch: (q: string) => void;
   placeholder: string;
+  renderItem?: (item: T) => React.ReactNode;
 }
 
-function SearchDropdown({ label, icon, colorClass, value, selectedId, onSelect, onClear, items, loading, onSearch, placeholder }: SearchDropdownProps) {
+function SearchDropdown<T extends SearchItem>({
+  label, icon, colorClass, value, hasSelected, selectedSub, onSelect, onClear,
+  items, loading, onSearch, placeholder, renderItem,
+}: SearchDropdownProps<T>) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -101,9 +155,12 @@ function SearchDropdown({ label, icon, colorClass, value, selectedId, onSelect, 
       <label className={`text-[10px] font-semibold flex items-center gap-1 mb-1 ${colorClass}`}>
         <Icon name={icon} size={10} />{label}
       </label>
-      {selectedId ? (
+      {hasSelected ? (
         <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-xs font-medium ${colorClass} bg-white border-current/30`}>
-          <span className="truncate">{value}</span>
+          <div className="truncate">
+            <div className="font-semibold">{value}</div>
+            {selectedSub && <div className="text-[10px] opacity-70">{selectedSub}</div>}
+          </div>
           <button type="button" onClick={onClear} className="ml-1 shrink-0 hover:opacity-60">
             <Icon name="X" size={12} />
           </button>
@@ -121,16 +178,20 @@ function SearchDropdown({ label, icon, colorClass, value, selectedId, onSelect, 
             <Icon name="Loader2" size={12} className="absolute right-2 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />
           )}
           {open && items.length > 0 && (
-            <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-border rounded-xl shadow-lg overflow-hidden max-h-44 overflow-y-auto">
+            <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-border rounded-xl shadow-lg overflow-hidden max-h-60 overflow-y-auto">
               {items.map(item => (
                 <button
-                  key={item.id}
+                  key={String(item.id)}
                   type="button"
-                  className="w-full text-left px-3 py-2 hover:bg-muted transition text-xs"
-                  onMouseDown={() => { onSelect(item.id, item.label); setOpen(false); }}
+                  className="w-full text-left px-3 py-2 hover:bg-muted transition text-xs border-b border-border/30 last:border-0"
+                  onMouseDown={() => { onSelect(item); setOpen(false); }}
                 >
-                  <div className="font-medium truncate">{item.label}</div>
-                  {item.sub && <div className="text-muted-foreground truncate">{item.sub}</div>}
+                  {renderItem ? renderItem(item) : (
+                    <>
+                      <div className="font-medium truncate">{item.label}</div>
+                      {item.sub && <div className="text-muted-foreground truncate">{item.sub}</div>}
+                    </>
+                  )}
                 </button>
               ))}
             </div>
@@ -144,26 +205,6 @@ function SearchDropdown({ label, icon, colorClass, value, selectedId, onSelect, 
       )}
     </div>
   );
-}
-
-/* ── Хук поиска лидов ── */
-function useLeadsSearch(token: string, q: string) {
-  return useQuery<SearchItem[]>({
-    queryKey: ['leads-search', q],
-    queryFn: async () => {
-      if (q.length < 2) return [];
-      const data = await fetch(`${CRM_URL}/leads?search=${encodeURIComponent(q)}&limit=8`, {
-        headers: { 'X-Auth-Token': token },
-      }).then(r => r.json()).catch(() => ({}));
-      return (data.leads || []).map((l: { id: number; name: string; phone?: string }) => ({
-        id: l.id,
-        label: l.name,
-        sub: l.phone,
-      }));
-    },
-    enabled: q.length >= 2,
-    staleTime: 30_000,
-  });
 }
 
 /* ── Модалка событий ── */
@@ -185,29 +226,31 @@ export default function CalendarEventModal({
   const [form, setForm]   = useState<EventFormState>(initialForm);
   const [links, setLinks] = useState<LinkField>(initialLinks);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [dealQ,    setDealQ]    = useState(initialLinks.deal_label);
-  const [ownerQ,   setOwnerQ]   = useState(initialLinks.owner_label);
+
+  // Клиент: значение для поиска и доп. поля для отображения выбранного
+  const [clientQ, setClientQ] = useState(initialLinks.lead_label || '');
+  const [clientSub, setClientSub] = useState('');
   const [listingQ, setListingQ] = useState(initialLinks.listing_label);
-  const [leadQ, setLeadQ] = useState('');
 
   useEffect(() => {
     setForm(initialForm);
     setLinks(initialLinks);
-    setDealQ(initialLinks.deal_label);
-    setOwnerQ(initialLinks.owner_label);
+    setClientQ(initialLinks.lead_label || '');
+    setClientSub('');
     setListingQ(initialLinks.listing_label);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
 
-  const { data: dealResults = [],    isFetching: dealFetching    } = useDealsSearch(token, dealQ);
-  const { data: ownerResults = [],   isFetching: ownerFetching   } = useOwnersSearch(token, ownerQ);
+  const { data: clientResults = [], isFetching: clientFetching } = useClientSearch(token, clientQ);
   const { data: listingResults = [], isFetching: listingFetching } = useListingsSearchReal(listingQ);
-  const { data: leadResults = [],    isFetching: leadFetching    } = useLeadsSearch(token, leadQ);
 
   const validate = () => {
     const e: Record<string, string> = {};
     if (!form.title.trim()) e.title = 'Введите название события';
     if (!form.starts_at) e.starts_at = 'Укажите дату и время начала';
+    if (form.starts_at && form.ends_at && new Date(form.ends_at) <= new Date(form.starts_at)) {
+      e.starts_at = 'Окончание должно быть позже начала';
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -215,6 +258,9 @@ export default function CalendarEventModal({
   const handleSubmit = () => {
     if (validate()) onSubmit(form, links);
   };
+
+  const hasClient = (links.lead_id != null && links.lead_id !== 0)
+    || (links.lead_label && links.lead_label.length > 0);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 overflow-y-auto">
@@ -268,75 +314,77 @@ export default function CalendarEventModal({
         </div>
 
         {/* Дата/время */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1">
-              Начало <span className="text-red-500">*</span>
-            </label>
-            <input type="datetime-local" value={form.starts_at}
-              onChange={e => { setForm(f => ({ ...f, starts_at: e.target.value })); setErrors(er => ({ ...er, starts_at: '' })); }}
-              className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30 ${errors.starts_at ? 'border-red-400' : ''}`} />
-            {errors.starts_at && <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><Icon name="AlertCircle" size={11} />{errors.starts_at}</p>}
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Конец</label>
-            <input type="datetime-local" value={form.ends_at}
-              onChange={e => setForm(f => ({ ...f, ends_at: e.target.value }))}
-              className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30" />
-          </div>
-        </div>
+        <EventDateTimeBlock
+          startsAt={form.starts_at}
+          endsAt={form.ends_at}
+          error={errors.starts_at}
+          onChange={({ startsAt, endsAt }) => {
+            setForm(f => ({ ...f, starts_at: startsAt, ends_at: endsAt }));
+            setErrors(er => ({ ...er, starts_at: '' }));
+          }}
+        />
 
         {/* Привязки */}
         <div>
           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-2">Привязать к</label>
           <div className="space-y-2">
-            <SearchDropdown
-              label="Сделка"
-              icon="Handshake"
-              colorClass="text-blue-700"
-              value={dealQ}
-              selectedId={links.deal_id}
-              onSelect={(id, label) => { setLinks(l => ({ ...l, deal_id: id, deal_label: label })); setDealQ(label); }}
-              onClear={() => { setLinks(l => ({ ...l, deal_id: null, deal_label: '' })); setDealQ(''); }}
-              items={dealResults}
-              loading={dealFetching}
-              onSearch={setDealQ}
-              placeholder="Начните вводить название сделки..."
-            />
-            <SearchDropdown
-              label="Собственник"
+            <SearchDropdown<ClientSearchItem>
+              label="Клиент"
               icon="User"
               colorClass="text-purple-700"
-              value={ownerQ}
-              selectedId={links.owner_id}
-              onSelect={(id, label) => { setLinks(l => ({ ...l, owner_id: id, owner_label: label })); setOwnerQ(label); }}
-              onClear={() => { setLinks(l => ({ ...l, owner_id: null, owner_label: '' })); setOwnerQ(''); }}
-              items={ownerResults}
-              loading={ownerFetching}
-              onSearch={setOwnerQ}
-              placeholder="Имя или телефон..."
+              value={clientQ}
+              hasSelected={!!hasClient}
+              selectedSub={clientSub}
+              onSelect={(item) => {
+                setLinks(l => ({
+                  ...l,
+                  lead_id: item.leadId ?? null,
+                  lead_label: item.label,
+                }));
+                setClientQ(item.label);
+                setClientSub(item.sub || '');
+              }}
+              onClear={() => {
+                setLinks(l => ({ ...l, lead_id: null, lead_label: '' }));
+                setClientQ('');
+                setClientSub('');
+              }}
+              items={clientResults}
+              loading={clientFetching}
+              onSearch={setClientQ}
+              placeholder="Имя, телефон, компания..."
+              renderItem={(item) => (
+                <div className="flex items-center gap-2">
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    item.source === 'phone'  ? 'bg-emerald-500' :
+                    item.source === 'lead'   ? 'bg-orange-500'  :
+                    'bg-blue-500'
+                  }`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">{item.label}</div>
+                    {item.sub && <div className="text-muted-foreground truncate text-[10px]">{item.sub}</div>}
+                  </div>
+                  <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                    {item.source === 'phone' ? 'Контакт' : item.source === 'lead' ? 'Заявка' : 'Объект'}
+                  </span>
+                </div>
+              )}
             />
-            <SearchDropdown
-              label="Лид (заявка)"
-              icon="Inbox"
-              colorClass="text-orange-700"
-              value={leadQ}
-              selectedId={links.lead_id ?? null}
-              onSelect={(id, label) => { setLinks(l => ({ ...l, lead_id: id, lead_label: label })); setLeadQ(label); }}
-              onClear={() => { setLinks(l => ({ ...l, lead_id: null, lead_label: '' })); setLeadQ(''); }}
-              items={leadResults}
-              loading={leadFetching}
-              onSearch={setLeadQ}
-              placeholder="Имя клиента или телефон..."
-            />
-            <SearchDropdown
+
+            <SearchDropdown<SearchItem>
               label="Объект недвижимости"
               icon="MapPin"
               colorClass="text-emerald-700"
               value={listingQ}
-              selectedId={links.listing_id}
-              onSelect={(id, label) => { setLinks(l => ({ ...l, listing_id: id, listing_label: label })); setListingQ(label); }}
-              onClear={() => { setLinks(l => ({ ...l, listing_id: null, listing_label: '' })); setListingQ(''); }}
+              hasSelected={!!links.listing_id}
+              onSelect={(item) => {
+                setLinks(l => ({ ...l, listing_id: item.id, listing_label: item.label }));
+                setListingQ(item.label);
+              }}
+              onClear={() => {
+                setLinks(l => ({ ...l, listing_id: null, listing_label: '' }));
+                setListingQ('');
+              }}
               items={listingResults}
               loading={listingFetching}
               onSearch={setListingQ}
