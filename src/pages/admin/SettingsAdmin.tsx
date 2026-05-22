@@ -16,6 +16,8 @@ import LegalTab from './settings/LegalTab';
 import FooterTab from './settings/FooterTab';
 import AdPlatformsTab from './settings/AdPlatformsTab';
 import AutoPostingTab from './settings/AutoPostingTab';
+import BrandKitTab from './settings/BrandKitTab';
+import NotificationsTab from './settings/NotificationsTab';
 
 export default function SettingsAdmin() {
   const { reload } = useSettings();
@@ -24,7 +26,10 @@ export default function SettingsAdmin() {
   const [saved, setSaved] = useState(false);
   const [cityQuery, setCityQuery] = useState('');
   const [cityAdding, setCityAdding] = useState(false);
-  const [tab, setTab] = useState<'general' | 'watermark' | 'seo' | 'integrations' | 'ad-platforms' | 'cities' | 'purposes' | 'feeds' | 'legal' | 'footer' | 'seo-ai' | 'roles' | 'migration' | 'autoposting'>('general');
+  type TabId = 'general' | 'watermark' | 'brand-kit' | 'seo' | 'seo-ai' | 'footer' | 'legal'
+    | 'integrations' | 'ad-platforms' | 'autoposting' | 'feeds' | 'notifications'
+    | 'cities' | 'purposes' | 'roles' | 'migration';
+  const [tab, setTab] = useState<TabId>('general');
   const [showKey, setShowKey] = useState(false);
   const [showMapsKey, setShowMapsKey] = useState(false);
   const [showYkSecret, setShowYkSecret] = useState(false);
@@ -171,30 +176,71 @@ export default function SettingsAdmin() {
     loadCities();
   };
 
-  const TABS: [typeof tab, string, string][] = [
-    ['general', 'Общие', 'Settings'],
-    ['watermark', 'Водяной знак', 'Stamp'],
-    ['seo', 'SEO сайта', 'BarChart3'],
-    ['integrations', 'Интеграции', 'Zap'],
-    ['ad-platforms', 'Доски объявлений', 'Globe'],
-    ['cities', 'Города', 'MapPin'],
-    ['purposes', 'Назначения', 'Tag'],
-    ['feeds', 'XML фиды', 'Rss'],
-    ['legal', 'Правовые', 'Scale'],
-    ['footer', 'Подвал', 'PanelBottom'],
-    ['seo-ai', 'SEO-оптимизация', 'TrendingUp'],
-    ['roles', 'Роли и доступы', 'ShieldHalf'],
-    ['autoposting', 'Автопостинг', 'Share2'],
-    ['migration', 'Миграция', 'DatabaseBackup'],
+  type TabDef = [TabId, string, string];
+  const GROUPS: { id: string; label: string; icon: string; tabs: TabDef[] }[] = [
+    {
+      id: 'company', label: 'Компания', icon: 'Building2', tabs: [
+        ['general', 'Общие', 'Settings'],
+        ['brand-kit', 'Бренд-кит', 'Palette'],
+        ['watermark', 'Водяной знак', 'Stamp'],
+        ['cities', 'Города', 'MapPin'],
+      ],
+    },
+    {
+      id: 'site', label: 'Сайт', icon: 'Globe', tabs: [
+        ['seo', 'SEO сайта', 'BarChart3'],
+        ['seo-ai', 'SEO-оптимизация', 'TrendingUp'],
+        ['footer', 'Подвал', 'PanelBottom'],
+        ['legal', 'Правовые', 'Scale'],
+        ['purposes', 'Назначения', 'Tag'],
+      ],
+    },
+    {
+      id: 'integrations', label: 'Интеграции', icon: 'Zap', tabs: [
+        ['integrations', 'API и сервисы', 'Zap'],
+        ['ad-platforms', 'Доски объявлений', 'Megaphone'],
+        ['autoposting', 'Автопостинг', 'Share2'],
+        ['feeds', 'XML фиды', 'Rss'],
+        ['notifications', 'Уведомления', 'Bell'],
+      ],
+    },
+    {
+      id: 'admin', label: 'Администрирование', icon: 'Shield', tabs: [
+        ['roles', 'Роли и доступы', 'ShieldHalf'],
+        ['migration', 'Экспорт/импорт', 'DatabaseBackup'],
+      ],
+    },
   ];
 
+  const currentGroup = GROUPS.find(g => g.tabs.some(([id]) => id === tab)) || GROUPS[0];
+
   return (
-    <div className="max-w-4xl space-y-4">
+    <div className="max-w-4xl space-y-3">
+      {/* Группы */}
       <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm overflow-x-auto">
-        {TABS.map(([id, label, icon]) => (
+        {GROUPS.map(g => {
+          const active = currentGroup.id === g.id;
+          return (
+            <button
+              key={g.id}
+              onClick={() => setTab(g.tabs[0][0])}
+              className={`flex-1 min-w-fit px-4 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap transition inline-flex items-center justify-center gap-2 ${
+                active ? 'bg-brand-blue text-white' : 'hover:bg-muted text-foreground/80'
+              }`}
+            >
+              <Icon name={g.icon} size={15} />
+              {g.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Вкладки текущей группы */}
+      <div className="flex gap-1 bg-muted/40 rounded-xl p-1 overflow-x-auto">
+        {currentGroup.tabs.map(([id, label, icon]) => (
           <button key={id} onClick={() => setTab(id)}
-            className={`flex-1 min-w-fit px-3 py-2 rounded-lg text-sm whitespace-nowrap transition inline-flex items-center justify-center gap-1.5 ${
-              tab === id ? 'bg-brand-blue text-white' : 'hover:bg-muted'
+            className={`min-w-fit px-3 py-2 rounded-lg text-sm whitespace-nowrap transition inline-flex items-center justify-center gap-1.5 ${
+              tab === id ? 'bg-white text-brand-blue shadow-sm font-semibold' : 'hover:bg-white/60 text-foreground/70'
             }`}>
             <Icon name={icon} size={14} />
             {label}
@@ -239,6 +285,8 @@ export default function SettingsAdmin() {
       {tab === 'seo-ai' && <SeoAdmin />}
       {tab === 'roles' && <RolesAdmin />}
       {tab === 'autoposting' && <AutoPostingTab />}
+      {tab === 'brand-kit' && <BrandKitTab s={s} setS={setS} saved={saved} save={save} />}
+      {tab === 'notifications' && <NotificationsTab s={s} setS={setS} saved={saved} save={save} />}
       {tab === 'migration' && <MigrationTab />}
     </div>
   );

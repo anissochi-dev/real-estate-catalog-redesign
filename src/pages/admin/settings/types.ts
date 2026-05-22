@@ -32,6 +32,30 @@ export interface S {
   footer_description: string;
   footer_catalog_links: string;
   footer_extra_links: string;
+  // Бренд-кит
+  brand_primary_color: string;
+  brand_secondary_color: string;
+  brand_accent_color: string;
+  favicon_url: string;
+  og_image_url: string;
+  apple_touch_icon_url: string;
+  // Уведомления
+  notify_email_enabled: boolean;
+  notify_email_recipients: string;
+  notify_email_on_lead: boolean;
+  notify_email_on_deal: boolean;
+  notify_email_on_complaint: boolean;
+  notify_telegram_enabled: boolean;
+  notify_telegram_bot_token: string;
+  notify_telegram_chat_ids: string;
+  notify_telegram_on_lead: boolean;
+  notify_telegram_on_deal: boolean;
+  notify_telegram_on_complaint: boolean;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_user: string;
+  smtp_password: string;
+  smtp_from: string;
 }
 
 export interface City {

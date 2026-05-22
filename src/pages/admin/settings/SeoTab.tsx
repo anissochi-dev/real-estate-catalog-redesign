@@ -76,19 +76,6 @@ export default function SeoTab({ s, setS, saved, save }: Props) {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl p-6 shadow-sm space-y-3">
-        <div className="font-display font-700 text-lg flex items-center gap-2">
-          <Icon name="Map" size={18} /> Яндекс.Карты
-        </div>
-        <div>
-          <label className="text-sm font-semibold block mb-1">API-ключ Яндекс.Карт</label>
-          <input className="w-full px-3 py-2 border rounded-lg" placeholder="12345678-abcd-1234-abcd-1234567890ab"
-            value={s.yandex_maps_api_key || ''}
-            onChange={e => setS({ ...s, yandex_maps_api_key: e.target.value })} />
-          <div className="text-xs text-muted-foreground mt-1">developer.tech.yandex.ru → JavaScript API и Геокодер.</div>
-        </div>
-      </div>
-
       <div className="flex items-center gap-3 sticky bottom-4 bg-white p-3 rounded-xl shadow z-20">
         <button onClick={save} className="btn-blue text-white px-6 py-3 rounded-xl font-semibold">Сохранить</button>
         {saved && <span className="text-emerald-600 text-sm">Сохранено</span>}

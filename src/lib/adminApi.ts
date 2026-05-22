@@ -195,6 +195,13 @@ export const adminApi = {
       method: 'PUT',
       body: JSON.stringify({ permissions }),
     }),
+
+  // notifications (тестовая отправка email/telegram)
+  testNotification: (data: { channel: 'email' | 'telegram' }) =>
+    req(`${ADMIN_URL}?resource=notifications&action=test`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
 
 export interface UploadResult {

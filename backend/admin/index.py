@@ -184,6 +184,8 @@ def handler(event, context):
                 return _listing_comments(cur, conn, method, rid, event, user)
             if resource == 'ad_platform_keys':
                 return _ad_platform_keys(cur, conn, method, rid, event, user)
+            if resource == 'notifications':
+                return _notifications(cur, conn, method, action, event, user)
 
             return _err(400, 'Неизвестный ресурс')
     finally:
@@ -579,7 +581,14 @@ def _settings(cur, conn, method, event, user):
                           ('legal_personal_data', 10000), ('legal_privacy_policy', 10000),
                           ('legal_marketing_consent', 10000),
                           ('footer_description', 1000), ('footer_catalog_links', 3000),
-                          ('footer_extra_links', 3000)]:
+                          ('footer_extra_links', 3000),
+                          # Бренд-кит
+                          ('brand_primary_color', 20), ('brand_secondary_color', 20), ('brand_accent_color', 20),
+                          ('favicon_url', 500), ('og_image_url', 500), ('apple_touch_icon_url', 500),
+                          # Уведомления
+                          ('notify_email_recipients', 1000),
+                          ('notify_telegram_bot_token', 500), ('notify_telegram_chat_ids', 1000),
+                          ('smtp_host', 255), ('smtp_user', 255), ('smtp_password', 500), ('smtp_from', 255)]:
             if f in body:
                 fields.append(f"{f} = {_str_or_null(body[f], length)}")
         if 'company_since_year' in body:
@@ -588,6 +597,13 @@ def _settings(cur, conn, method, event, user):
             fields.append(f"watermark_enabled = {_bool(body['watermark_enabled'])}")
         if 'watermark_opacity' in body:
             fields.append(f"watermark_opacity = {_int_or_null(body['watermark_opacity'])}")
+        if 'smtp_port' in body:
+            fields.append(f"smtp_port = {_int_or_null(body['smtp_port'])}")
+        for bf in ('notify_email_enabled', 'notify_email_on_lead', 'notify_email_on_deal', 'notify_email_on_complaint',
+                   'notify_telegram_enabled', 'notify_telegram_on_lead', 'notify_telegram_on_deal',
+                   'notify_telegram_on_complaint'):
+            if bf in body:
+                fields.append(f"{bf} = {_bool(body[bf])}")
         if 'role_permissions' in body:
             rp = body['role_permissions']
             rp_json = _safe(json.dumps(rp, ensure_ascii=False), 50000)
@@ -600,6 +616,81 @@ def _settings(cur, conn, method, event, user):
         return _ok({'success': True})
 
     return _err(400, 'Bad request')
+
+
+def _notifications(cur, conn, method, action, event, user):
+    """Тестовая отправка уведомлений: email и telegram."""
+    if method != 'POST' or action != 'test':
+        return _err(400, 'Bad request')
+    body = json.loads(event.get('body') or '{}')
+    channel = body.get('channel')
+    # Загружаем настройки
+    cur.execute(f"SELECT * FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
+    s = cur.fetchone()
+    if not s:
+        return _err(400, 'Настройки не найдены')
+
+    if channel == 'telegram':
+        token = (s.get('notify_telegram_bot_token') or '').strip()
+        chats = (s.get('notify_telegram_chat_ids') or '').strip()
+        if not token or not chats:
+            return _err(400, 'Заполните токен бота и Chat ID')
+        try:
+            import urllib.request
+            import urllib.parse
+            chat_ids = [c.strip() for c in chats.split(',') if c.strip()]
+            sent = 0
+            errors = []
+            for cid in chat_ids:
+                try:
+                    text = f"🧪 Тестовое сообщение от {s.get('company_name') or 'админ-панели'}.\nЕсли вы видите этот текст — уведомления настроены правильно."
+                    data = urllib.parse.urlencode({'chat_id': cid, 'text': text}).encode()
+                    req_url = f"https://api.telegram.org/bot{token}/sendMessage"
+                    with urllib.request.urlopen(req_url, data=data, timeout=10) as r:
+                        if r.status == 200:
+                            sent += 1
+                        else:
+                            errors.append(f"chat {cid}: HTTP {r.status}")
+                except Exception as ex:
+                    errors.append(f"chat {cid}: {str(ex)[:100]}")
+            if sent == 0:
+                return _err(400, 'Не удалось отправить: ' + '; '.join(errors))
+            return _ok({'success': True, 'message': f'Отправлено в {sent} чат(ов)', 'errors': errors})
+        except Exception as ex:
+            return _err(500, f'Ошибка Telegram: {str(ex)[:200]}')
+
+    if channel == 'email':
+        recipients = (s.get('notify_email_recipients') or '').strip()
+        host = (s.get('smtp_host') or '').strip()
+        port = s.get('smtp_port') or 465
+        smtp_user = (s.get('smtp_user') or '').strip()
+        smtp_pass = s.get('smtp_password') or ''
+        smtp_from = (s.get('smtp_from') or smtp_user or '').strip()
+        if not recipients:
+            return _err(400, 'Не указаны получатели')
+        if not host or not smtp_user or not smtp_pass:
+            return _err(400, 'Заполните SMTP-сервер, логин и пароль')
+        try:
+            import smtplib
+            from email.mime.text import MIMEText
+            to_list = [r.strip() for r in recipients.split(',') if r.strip()]
+            msg = MIMEText(f'Это тестовое письмо от {s.get("company_name") or "админ-панели"}.\n\nЕсли вы видите этот текст — уведомления настроены правильно.', 'plain', 'utf-8')
+            msg['Subject'] = 'Тестовое уведомление'
+            msg['From'] = smtp_from
+            msg['To'] = ', '.join(to_list)
+            if int(port) == 465:
+                server = smtplib.SMTP_SSL(host, int(port), timeout=15)
+            else:
+                server = smtplib.SMTP(host, int(port), timeout=15)
+                server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(smtp_from, to_list, msg.as_string())
+            server.quit()
+            return _ok({'success': True, 'message': f'Письмо отправлено на {len(to_list)} адрес(а)'})
+        except Exception as ex:
+            return _err(500, f'SMTP-ошибка: {str(ex)[:200]}')
+
+    return _err(400, 'Неизвестный канал')
 
 
 def _role_permissions(cur, conn, method, event, user, permissions):
