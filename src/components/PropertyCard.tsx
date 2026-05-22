@@ -308,7 +308,8 @@ export default function PropertyCard({
             </button>
           )}
 
-          {/* Оценка рынка */}
+          {/* Оценка рынка (ниже рынка / выше рынка) скрыта в общем списке карточек */}
+          {/*
           {assessCls && hint?.price_assessment && (
             <div className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border w-fit ${assessCls}`}>
               <Icon name="BarChart2" size={10} />
@@ -318,6 +319,7 @@ export default function PropertyCard({
               )}
             </div>
           )}
+          */}
 
           {/* Футер */}
           <div className="mt-auto flex items-center justify-between gap-2 pt-1.5 border-t border-border/50">
