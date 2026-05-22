@@ -141,7 +141,13 @@ def handler(event: dict, context) -> dict:
     # Заголовки приходят с разным регистром — приводим к нижнему
     raw_headers = event.get('headers') or {}
     headers_lc = {k.lower(): v for k, v in raw_headers.items()}
-    token = headers_lc.get('x-auth-token') or headers_lc.get('x-authorization') or ''
+    token = (
+        headers_lc.get('x-auth-token')
+        or headers_lc.get('x-authorization')
+        or headers_lc.get('authorization', '').replace('Bearer ', '').strip()
+        or (event.get('queryStringParameters') or {}).get('auth_token')
+        or ''
+    )
 
     method = event.get('httpMethod', 'GET')
     path_parts = [p for p in (event.get('path') or '/').split('/') if p]

@@ -32,6 +32,10 @@ export function crmUrl(
       params.set(k, String(v));
     }
   }
+  // Дублируем токен в query — Cloud Functions Gateway иногда обрезает X-Auth-Token
+  // на POST/PUT-запросах с JSON. Backend читает оба варианта.
+  const t = getToken();
+  if (t && !params.has('auth_token')) params.set('auth_token', t);
   return `${CRM_URL}?${params.toString()}`;
 }
 export const CRM_CHECKS_URL = 'https://functions.poehali.dev/be6cb907-b50e-48fa-b9e2-092dd541a82a';
