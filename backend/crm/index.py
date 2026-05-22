@@ -15,7 +15,8 @@ ALLOWED_ROLES = ('admin', 'director', 'broker', 'office_manager', 'manager')
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token, X-User-Id',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token, X-User-Id, X-Authorization, Authorization',
+    'Access-Control-Max-Age': '86400',
 }
 
 
@@ -170,6 +171,11 @@ def handler(event: dict, context) -> dict:
     if user['role'] not in ALLOWED_ROLES:
         conn.close()
         return err(f'Нет доступа для роли {user["role"]}', 403)
+
+    # Воронка сделок (deals/stages) — только админ и директор
+    if resource in ('deals', 'stages') and user['role'] not in ('admin', 'director'):
+        conn.close()
+        return err('Воронка сделок доступна только администратору и директору', 403)
 
     try:
         result = dispatch(conn, user, method, resource, resource_id, sub, qs, body)

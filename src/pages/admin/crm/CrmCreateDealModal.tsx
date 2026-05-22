@@ -4,7 +4,7 @@ import Icon from '@/components/ui/icon';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { CRM_URL, adminApi } from '@/lib/adminApi';
+import { adminApi } from '@/lib/adminApi';
 
 export interface CreateDealForm {
   title: string;
@@ -21,12 +21,13 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   form: CreateDealForm;
   setForm: React.Dispatch<React.SetStateAction<CreateDealForm>>;
-  ownerSearch: string;
-  setOwnerSearch: (v: string) => void;
-  ownerLabel: string;
-  setOwnerLabel: (v: string) => void;
-  ownerDropOpen: boolean;
-  setOwnerDropOpen: (v: boolean) => void;
+  /** Поля собственника больше не используются — данные подтягиваются из объекта. */
+  ownerSearch?: string;
+  setOwnerSearch?: (v: string) => void;
+  ownerLabel?: string;
+  setOwnerLabel?: (v: string) => void;
+  ownerDropOpen?: boolean;
+  setOwnerDropOpen?: (v: boolean) => void;
   listingSearch: string;
   setListingSearch: (v: string) => void;
   listingLabel: string;
@@ -35,31 +36,16 @@ interface Props {
   setListingDropOpen: (v: boolean) => void;
   isPending: boolean;
   onSubmit: () => void;
-  headers: Record<string, string>;
+  headers?: Record<string, string>;
 }
 
 export default function CrmCreateDealModal({
   open, onOpenChange,
   form, setForm,
-  ownerSearch, setOwnerSearch, ownerLabel, setOwnerLabel, ownerDropOpen, setOwnerDropOpen,
   listingSearch, setListingSearch, listingLabel, setListingLabel, listingDropOpen, setListingDropOpen,
   isPending, onSubmit,
-  headers,
 }: Props) {
-  const ownerDropRef = useRef<HTMLDivElement>(null);
   const listingDropRef = useRef<HTMLDivElement>(null);
-
-  const { data: ownerResults = [], isFetching: ownerFetching } = useQuery<{ id: number; name: string; phone: string }[]>({
-    queryKey: ['crm-owners-search', ownerSearch],
-    queryFn: async () => {
-      if (ownerSearch.length < 1) return [];
-      const r = await fetch(`${CRM_URL}/owners?search=${encodeURIComponent(ownerSearch)}&limit=10`, { headers });
-      const d = await r.json();
-      return d.owners || [];
-    },
-    enabled: ownerSearch.length >= 1,
-    staleTime: 20_000,
-  });
 
   const { data: listingResults = [], isFetching: listingFetching } = useQuery<{ id: number; title: string; owner_name: string; owner_phone: string }[]>({
     queryKey: ['crm-listings-search', listingSearch],
@@ -79,16 +65,24 @@ export default function CrmCreateDealModal({
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ownerDropRef.current && !ownerDropRef.current.contains(e.target as Node)) {
-        setOwnerDropOpen(false);
-      }
       if (listingDropRef.current && !listingDropRef.current.contains(e.target as Node)) {
         setListingDropOpen(false);
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [setOwnerDropOpen, setListingDropOpen]);
+  }, [setListingDropOpen]);
+
+  // Собственник, подтянутый из выбранного объекта (для отображения, неизменяем)
+  const ownerFromListing = (() => {
+    if (!form.listing_id) return null;
+    const found = listingResults.find(l => String(l.id) === form.listing_id);
+    if (found && (found.owner_name || found.owner_phone)) {
+      return { name: found.owner_name, phone: found.owner_phone };
+    }
+    // Если объект уже выбран и нет в текущей выдаче — берём имя из метки
+    return null;
+  })();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -102,55 +96,7 @@ export default function CrmCreateDealModal({
             <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="Аренда офиса 150 м²" />
           </div>
 
-          {/* Собственник */}
-          <div ref={ownerDropRef} className="relative">
-            <label className="text-xs text-muted-foreground">Собственник</label>
-            {form.owner_id ? (
-              <div className="flex items-center justify-between px-3 py-2 border border-brand-blue/40 rounded-xl bg-brand-blue/5 text-sm">
-                <span className="font-medium text-brand-blue truncate">{ownerLabel}</span>
-                <button type="button" onClick={() => { setForm(f => ({ ...f, owner_id: '' })); setOwnerLabel(''); setOwnerSearch(''); }}
-                  className="ml-2 shrink-0 text-muted-foreground hover:text-red-500">
-                  <Icon name="X" size={14} />
-                </button>
-              </div>
-            ) : (
-              <div className="relative">
-                <Input
-                  value={ownerSearch}
-                  onChange={e => { setOwnerSearch(e.target.value); setOwnerDropOpen(true); }}
-                  onFocus={() => setOwnerDropOpen(true)}
-                  placeholder="Введите имя или телефон..."
-                  className="pr-8"
-                />
-                {ownerFetching && (
-                  <Icon name="Loader2" size={13} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />
-                )}
-                {ownerDropOpen && ownerResults.length > 0 && (
-                  <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-border rounded-xl shadow-lg overflow-hidden max-h-48 overflow-y-auto">
-                    {ownerResults.map(o => (
-                      <button key={o.id} type="button"
-                        className="w-full text-left px-3 py-2 hover:bg-muted transition text-sm"
-                        onMouseDown={() => {
-                          setForm(f => ({ ...f, owner_id: String(o.id) }));
-                          setOwnerLabel(`${o.name} (${o.phone})`);
-                          setOwnerDropOpen(false);
-                        }}>
-                        <div className="font-medium">{o.name}</div>
-                        {o.phone && <div className="text-xs text-muted-foreground">{o.phone}</div>}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {ownerDropOpen && !ownerFetching && ownerSearch.length >= 1 && ownerResults.length === 0 && (
-                  <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-border rounded-xl shadow-lg px-3 py-2 text-sm text-muted-foreground">
-                    Не найдено
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Объект — при выборе подтягивает телефон собственника */}
+          {/* Объект — выбирается первым. Собственник подтянется автоматически. */}
           <div ref={listingDropRef} className="relative">
             <label className="text-xs text-muted-foreground">Объект недвижимости</label>
             {form.listing_id ? (
@@ -182,10 +128,6 @@ export default function CrmCreateDealModal({
                           setForm(f => ({ ...f, listing_id: String(l.id) }));
                           setListingLabel(`#${l.id} ${l.title}`);
                           setListingDropOpen(false);
-                          if (l.owner_phone && !form.owner_id) {
-                            setOwnerSearch(l.owner_phone);
-                            setOwnerDropOpen(true);
-                          }
                         }}>
                         <div className="font-medium truncate">{l.title}</div>
                         {l.owner_name && <div className="text-xs text-muted-foreground">{l.owner_name}{l.owner_phone ? ` · ${l.owner_phone}` : ''}</div>}
@@ -196,6 +138,26 @@ export default function CrmCreateDealModal({
               </div>
             )}
           </div>
+
+          {/* Собственник — подтягивается из объекта автоматически */}
+          {form.listing_id && (ownerFromListing || listingLabel) && (
+            <div className="bg-muted/40 border border-border rounded-xl px-3 py-2">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wide flex items-center gap-1 mb-0.5">
+                <Icon name="User" size={10} />
+                Собственник <span className="text-muted-foreground/70 normal-case tracking-normal">(из объекта)</span>
+              </div>
+              {ownerFromListing ? (
+                <div className="text-sm">
+                  <span className="font-medium">{ownerFromListing.name || 'Без имени'}</span>
+                  {ownerFromListing.phone && (
+                    <span className="text-muted-foreground ml-2">{ownerFromListing.phone}</span>
+                  )}
+                </div>
+              ) : (
+                <div className="text-xs text-muted-foreground">Данные подтянутся после загрузки объекта</div>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
