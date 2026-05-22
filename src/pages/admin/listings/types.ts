@@ -58,6 +58,17 @@ export interface Listing {
   is_visible?: boolean;
   rooms?: number | null;
   broker_commission?: string | null;
+  building_class?: string | null;
+  subway_station?: string | null;
+  subway_distance?: number | null;
+  land_area?: number | null;
+  land_status?: string | null;
+  has_furniture?: boolean;
+  has_equipment?: boolean;
+  property_rights?: string | null;
+  min_area?: number | null;
+  building_year?: number | null;
+  is_apartments?: boolean;
 }
 
 export interface City { id: number; name: string; is_active: boolean }
@@ -130,6 +141,30 @@ export const ROAD_LINES = [
   ['yard', 'Во дворе'],
 ];
 
+export const BUILDING_CLASSES = [
+  ['A', 'Класс A (премиум)'],
+  ['A+', 'Класс A+'],
+  ['B+', 'Класс B+'],
+  ['B', 'Класс B'],
+  ['C', 'Класс C'],
+];
+
+export const PROPERTY_RIGHTS = [
+  ['ownership', 'Собственность'],
+  ['lease', 'Аренда'],
+  ['sublease', 'Субаренда'],
+];
+
+export const LAND_STATUSES = [
+  ['izhs', 'ИЖС'],
+  ['lph', 'ЛПХ'],
+  ['snt', 'СНТ'],
+  ['dni', 'ДНТ'],
+  ['commercial', 'Коммерческое назначение'],
+  ['agricultural', 'Сельскохозяйственное назначение'],
+  ['industrial', 'Промышленное назначение'],
+];
+
 export const empty: Partial<Listing> = {
   title: '', category: 'office', deal: 'sale', price: 0, area: 0,
   address: '', district: '', city: 'Краснодар', description: '', image: '', images: '', tags: '',
@@ -143,6 +178,9 @@ export const empty: Partial<Listing> = {
   finishing: '', ceiling_height: null, electricity_kw: null,
   utilities: '', road_line: '', payback: null, profit: null,
   is_exclusive: false, is_urgent: false,
+  building_class: null, subway_station: '', subway_distance: null,
+  land_area: null, land_status: null, has_furniture: false, has_equipment: false,
+  property_rights: null, min_area: null, building_year: null, is_apartments: false,
 };
 
 export const fmtDate = (s: string | null) => {

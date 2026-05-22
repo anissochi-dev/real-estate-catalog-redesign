@@ -42,7 +42,6 @@ def _autofix_xml(text):
         text = CONTROL_CHARS_RE.sub('', text)
         fixes.append('removed control chars')
 
-    # Раздельная обработка CDATA — не трогаем содержимое
     parts = []
     last = 0
     for m in CDATA_RE.finditer(text):
@@ -162,6 +161,113 @@ def _split_images(row):
     return []
 
 
+# ── Маппинги категорий ──────────────────────────────────────────────────────
+
+YANDEX_CATEGORY_MAP = {
+    'office': 'офисное помещение',
+    'retail': 'торговое помещение',
+    'warehouse': 'складское помещение',
+    'restaurant': 'помещение свободного назначения',
+    'hotel': 'помещение свободного назначения',
+    'business': 'готовый бизнес',
+    'gab': 'готовый бизнес',
+    'production': 'производственное помещение',
+    'land': 'земля',
+    'building': 'здание',
+    'free_purpose': 'помещение свободного назначения',
+    'car_service': 'производственное помещение',
+}
+
+AVITO_OBJECT_TYPE_MAP = {
+    'office': 'Офисное помещение',
+    'retail': 'Торговое помещение',
+    'warehouse': 'Складское помещение',
+    'restaurant': 'Помещение свободного назначения',
+    'hotel': 'Гостиница',
+    'business': 'Готовый бизнес',
+    'gab': 'Готовый арендный бизнес',
+    'production': 'Производственное помещение',
+    'land': 'Земельный участок',
+    'building': 'Здание',
+    'free_purpose': 'Помещение свободного назначения',
+    'car_service': 'Автосервис',
+}
+
+CIAN_CATEGORY_MAP_SALE = {
+    'office': 'officeSale',
+    'retail': 'shoppingAreaSale',
+    'warehouse': 'warehouseSale',
+    'restaurant': 'freeAppointmentObjectSale',
+    'hotel': 'freeAppointmentObjectSale',
+    'business': 'businessSale',
+    'gab': 'businessSale',
+    'production': 'industrySale',
+    'land': 'landSale',
+    'building': 'buildingSale',
+    'free_purpose': 'freeAppointmentObjectSale',
+    'car_service': 'industrySale',
+}
+
+CIAN_CATEGORY_MAP_RENT = {
+    'office': 'officeRent',
+    'retail': 'shoppingAreaRent',
+    'warehouse': 'warehouseRent',
+    'restaurant': 'freeAppointmentObjectRent',
+    'hotel': 'freeAppointmentObjectRent',
+    'business': 'officeRent',
+    'gab': 'officeRent',
+    'production': 'industryRent',
+    'land': 'landRent',
+    'building': 'buildingRent',
+    'free_purpose': 'freeAppointmentObjectRent',
+    'car_service': 'industryRent',
+}
+
+LAND_STATUS_YANDEX = {
+    'izhs': 'ИЖС',
+    'lph': 'ЛПХ',
+    'snt': 'СНТ',
+    'dni': 'ДНТ',
+    'commercial': 'Коммерческое',
+    'agricultural': 'Сельскохозяйственное',
+    'industrial': 'Промышленное',
+}
+
+LAND_STATUS_AVITO = {
+    'izhs': 'ИЖС',
+    'lph': 'ЛПХ',
+    'snt': 'СНТ',
+    'dni': 'ДНТ',
+    'commercial': 'Коммерческое назначение',
+    'agricultural': 'Сельскохозяйственное назначение',
+    'industrial': 'Промышленное назначение',
+}
+
+CONDITION_YANDEX = {
+    'new': 'отличное',
+    'euro': 'отличное',
+    'good': 'хорошее',
+    'cosmetic': 'удовлетворительное',
+    'rough': 'требует ремонта',
+    'shellcore': 'требует ремонта',
+}
+
+FINISHING_CIAN = {
+    'none': 'no',
+    'rough': 'rough',
+    'pre_finish': 'roughFinish',
+    'cosmetic': 'cosmetic',
+    'euro': 'euro',
+    'designer': 'design',
+}
+
+PROPERTY_RIGHTS_AVITO = {
+    'ownership': 'Собственность',
+    'lease': 'Аренда',
+    'sublease': 'Субаренда',
+}
+
+
 def _build_yandex(listings, company):
     company_name = _xml_escape(company.get('company_name', 'BIZNEST'))
     phone = _xml_escape(company.get('company_phone', ''))
@@ -172,13 +278,8 @@ def _build_yandex(listings, company):
     out.append(f'<realty-feed xmlns="http://webmaster.yandex.ru/schemas/feed/realty/2010-06" generation-date="{now}">')
 
     for l in listings:
-        category_map = {
-            'office': 'офисное помещение', 'retail': 'торговое помещение',
-            'warehouse': 'складское помещение', 'restaurant': 'помещение свободного назначения',
-            'business': 'готовый бизнес', 'production': 'производственное помещение',
-        }
         deal_map = {'sale': 'продажа', 'rent': 'аренда', 'business': 'продажа'}
-        cat = category_map.get(l.get('category'), 'коммерческая')
+        cat = YANDEX_CATEGORY_MAP.get(l.get('category'), 'коммерческая')
         deal = deal_map.get(l.get('deal'), 'продажа')
 
         out.append(f'<offer internal-id="{l["id"]}">')
@@ -186,12 +287,21 @@ def _build_yandex(listings, company):
         out.append('<property-type>коммерческая</property-type>')
         out.append(f'<category>{cat}</category>')
         out.append(f'<creation-date>{l["created_at"]}</creation-date>')
+
+        # Адрес и геолокация
         out.append('<location>')
-        out.append(f'<country>Россия</country>')
+        out.append('<country>Россия</country>')
         out.append(f'<locality-name>{_xml_escape(l.get("city") or "Краснодар")}</locality-name>')
+        if l.get('district'):
+            out.append(f'<sub-locality-name>{_xml_escape(l["district"])}</sub-locality-name>')
         if l.get('address'):
             out.append(f'<address>{_xml_escape(l["address"])}</address>')
+        if l.get('lat') and l.get('lng'):
+            out.append(f'<latitude>{l["lat"]}</latitude>')
+            out.append(f'<longitude>{l["lng"]}</longitude>')
         out.append('</location>')
+
+        # Агент
         out.append('<sales-agent>')
         out.append(f'<name>{company_name}</name>')
         if phone:
@@ -200,24 +310,83 @@ def _build_yandex(listings, company):
             out.append(f'<email>{email}</email>')
         out.append('<category>agency</category>')
         out.append('</sales-agent>')
+
+        # Цена
         out.append('<price>')
-        out.append(f'<value>{l.get("price", 0)}</value>')
+        price_val = l.get('price', 0)
+        if l.get('price_unit') == 'm2' and l.get('area'):
+            price_val = int(float(l['price']) * float(l['area']))
+        out.append(f'<value>{price_val}</value>')
         out.append('<currency>RUB</currency>')
         if l.get('deal') == 'rent':
             out.append('<period>month</period>')
+            out.append('<unit>всего</unit>')
         out.append('</price>')
+
+        # Площадь
         if l.get('area'):
             out.append(f'<area><value>{l["area"]}</value><unit>кв. м</unit></area>')
+        if l.get('min_area'):
+            out.append(f'<lot-area><value>{l["min_area"]}</value><unit>кв. м</unit></lot-area>')
+
+        # Земельный участок
+        if l.get('category') == 'land':
+            if l.get('land_area'):
+                out.append(f'<lot-area><value>{l["land_area"]}</value><unit>сот.</unit></lot-area>')
+            if l.get('land_status') and l['land_status'] in LAND_STATUS_YANDEX:
+                out.append(f'<lot-type>{LAND_STATUS_YANDEX[l["land_status"]]}</lot-type>')
+
+        # Этажность
         if l.get('floor') is not None:
             out.append(f'<floor>{l["floor"]}</floor>')
         if l.get('total_floors') is not None:
             out.append(f'<floors-total>{l["total_floors"]}</floors-total>')
+
+        # Состояние / отделка
+        if l.get('condition') and l['condition'] in CONDITION_YANDEX:
+            out.append(f'<quality>{CONDITION_YANDEX[l["condition"]]}</quality>')
+
+        # Класс здания
+        if l.get('building_class'):
+            out.append(f'<building-class>{_xml_escape(l["building_class"])}</building-class>')
+
+        # Год постройки
+        if l.get('building_year'):
+            out.append(f'<built-year>{l["building_year"]}</built-year>')
+
+        # Высота потолков
+        if l.get('ceiling_height'):
+            out.append(f'<ceiling-height>{l["ceiling_height"]}</ceiling-height>')
+
+        # Электричество
+        if l.get('electricity_kw'):
+            out.append(f'<electricity>{l["electricity_kw"]}</electricity>')
+
+        # Парковка
+        parking_map = {'none': 'нет', 'street': 'открытая', 'building': 'подземная'}
+        if l.get('parking') and l['parking'] != 'none':
+            out.append(f'<parking-type>{parking_map.get(l["parking"], "")}</parking-type>')
+
+        # Метро
+        if l.get('subway_station'):
+            out.append('<metro>')
+            out.append(f'<name>{_xml_escape(l["subway_station"])}</name>')
+            if l.get('subway_distance'):
+                out.append(f'<time-on-foot>{l["subway_distance"]}</time-on-foot>')
+            out.append('</metro>')
+
+        # Описание
         if l.get('description'):
             out.append(f'<description>{_xml_escape(l["description"])}</description>')
+
+        # Фото
         for img in _split_images(l):
             out.append(f'<image>{_xml_escape(img)}</image>')
+
+        # Видео
         if l.get('video_url'):
             out.append(f'<video>{_xml_escape(l["video_url"])}</video>')
+
         out.append('</offer>')
 
     out.append('</realty-feed>')
@@ -230,42 +399,108 @@ def _build_avito(listings, company):
 
     for l in listings:
         deal_map = {'sale': 'Продам', 'rent': 'Сдам', 'business': 'Продам'}
-        cat_map = {
-            'office': 'Офисное помещение', 'retail': 'Торговое помещение',
-            'warehouse': 'Помещение свободного назначения', 'restaurant': 'Помещение свободного назначения',
-            'business': 'Готовый бизнес', 'production': 'Производственное помещение',
-        }
         out.append('<Ad>')
         out.append(f'<Id>{l["id"]}</Id>')
-        out.append(f'<DateBegin>{l["created_at"]}</DateBegin>')
+        out.append(f'<DateBegin>{(l.get("created_at") or "")[:10]}</DateBegin>')
         out.append('<Category>Коммерческая недвижимость</Category>')
         out.append(f'<OperationType>{deal_map.get(l.get("deal"), "Продам")}</OperationType>')
-        out.append(f'<ObjectType>{cat_map.get(l.get("category"), "Офисное помещение")}</ObjectType>')
+        out.append(f'<ObjectType>{_xml_escape(AVITO_OBJECT_TYPE_MAP.get(l.get("category"), "Офисное помещение"))}</ObjectType>')
+
+        # Заголовок и описание
         out.append(f'<Title>{_xml_escape(l.get("title", ""))}</Title>')
         out.append(f'<Description><![CDATA[{l.get("description", "")}]]></Description>')
-        out.append(f'<Price>{l.get("price", 0)}</Price>')
+
+        # Цена
+        price_val = l.get('price', 0)
+        if l.get('price_unit') == 'm2' and l.get('area'):
+            price_val = int(float(l['price']) * float(l['area']))
+        out.append(f'<Price>{price_val}</Price>')
+
+        # Адрес
         out.append('<Address>')
         out.append(f'<City>{_xml_escape(l.get("city") or "Краснодар")}</City>')
+        if l.get('district'):
+            out.append(f'<District>{_xml_escape(l["district"])}</District>')
         if l.get('address'):
             out.append(f'<Street>{_xml_escape(l["address"])}</Street>')
+        if l.get('lat') and l.get('lng'):
+            out.append(f'<Latitude>{l["lat"]}</Latitude>')
+            out.append(f'<Longitude>{l["lng"]}</Longitude>')
         out.append('</Address>')
+
+        # Параметры площади
         if l.get('area'):
             out.append(f'<Square>{l["area"]}</Square>')
+        if l.get('min_area'):
+            out.append(f'<MinSquare>{l["min_area"]}</MinSquare>')
+
+        # Земля
+        if l.get('category') == 'land':
+            if l.get('land_area'):
+                out.append(f'<LandSquare>{l["land_area"]}</LandSquare>')
+            if l.get('land_status') and l['land_status'] in LAND_STATUS_AVITO:
+                out.append(f'<LandStatus>{_xml_escape(LAND_STATUS_AVITO[l["land_status"]])}</LandStatus>')
+
+        # Этажи
         if l.get('floor') is not None:
             out.append(f'<Floor>{l["floor"]}</Floor>')
         if l.get('total_floors') is not None:
             out.append(f'<Floors>{l["total_floors"]}</Floors>')
-        imgs = _split_images(l)
-        if imgs:
-            out.append('<Images>')
-            for img in imgs:
-                out.append(f'<Image url="{_xml_escape(img)}"/>')
-            out.append('</Images>')
-        if l.get('video_url'):
-            out.append(f'<VideoURL>{_xml_escape(l["video_url"])}</VideoURL>')
+
+        # Высота потолков
+        if l.get('ceiling_height'):
+            out.append(f'<CeilingHeight>{l["ceiling_height"]}</CeilingHeight>')
+
+        # Класс здания
+        if l.get('building_class'):
+            out.append(f'<BuildingClass>{_xml_escape(l["building_class"])}</BuildingClass>')
+
+        # Год постройки
+        if l.get('building_year'):
+            out.append(f'<BuildingYear>{l["building_year"]}</BuildingYear>')
+
+        # Электричество
+        if l.get('electricity_kw'):
+            out.append(f'<Power>{l["electricity_kw"]}</Power>')
+
+        # Права на объект
+        if l.get('property_rights') and l['property_rights'] in PROPERTY_RIGHTS_AVITO:
+            out.append(f'<PropertyRights>{PROPERTY_RIGHTS_AVITO[l["property_rights"]]}</PropertyRights>')
+
+        # Мебель и оборудование
+        if l.get('has_furniture'):
+            out.append('<Furniture>Да</Furniture>')
+        if l.get('has_equipment'):
+            out.append('<Equipment>Да</Equipment>')
+
+        # Парковка
+        parking_map = {'street': 'Открытая', 'building': 'Подземная'}
+        if l.get('parking') and l['parking'] != 'none':
+            out.append(f'<Parking>{parking_map.get(l["parking"], "Есть")}</Parking>')
+
+        # Метро
+        if l.get('subway_station'):
+            out.append(f'<Metro>{_xml_escape(l["subway_station"])}</Metro>')
+            if l.get('subway_distance'):
+                out.append(f'<MetroDistance>{l["subway_distance"]}</MetroDistance>')
+
+        # Контакт
         company_phone = company.get('company_phone', '')
         if company_phone:
             out.append(f'<ContactPhone>{_xml_escape(company_phone)}</ContactPhone>')
+
+        # Фото
+        imgs = _split_images(l)
+        if imgs:
+            out.append('<Images>')
+            for img in imgs[:40]:
+                out.append(f'<Image url="{_xml_escape(img)}"/>')
+            out.append('</Images>')
+
+        # Видео
+        if l.get('video_url'):
+            out.append(f'<VideoURL>{_xml_escape(l["video_url"])}</VideoURL>')
+
         out.append('</Ad>')
 
     out.append('</Ads>')
@@ -275,39 +510,131 @@ def _build_avito(listings, company):
 def _build_cian(listings, company):
     out = ['<?xml version="1.0" encoding="UTF-8"?>']
     out.append('<feed>')
-    out.append(f'<feed_version>2</feed_version>')
+    out.append('<feed_version>2</feed_version>')
 
     for l in listings:
-        cat_map = {
-            'office': 'officeSale', 'retail': 'shoppingAreaSale',
-            'warehouse': 'warehouseSale', 'restaurant': 'freeAppointmentObjectSale',
-            'business': 'businessSale', 'production': 'industrySale',
-        }
-        if l.get('deal') == 'rent':
-            cat_map = {k: v.replace('Sale', 'Rent') for k, v in cat_map.items()}
+        deal = l.get('deal', 'sale')
+        category = l.get('category', 'office')
+        if deal == 'rent':
+            cian_cat = CIAN_CATEGORY_MAP_RENT.get(category, 'officeRent')
+        else:
+            cian_cat = CIAN_CATEGORY_MAP_SALE.get(category, 'officeSale')
+
         out.append('<object>')
         out.append(f'<ExternalId>{l["id"]}</ExternalId>')
-        out.append(f'<Category>{cat_map.get(l.get("category"), "officeSale")}</Category>')
-        out.append(f'<Description><![CDATA[{l.get("description", "")}]]></Description>')
+        out.append(f'<Category>{cian_cat}</Category>')
+
+        # Описание
+        if l.get('description'):
+            out.append(f'<Description><![CDATA[{l["description"]}]]></Description>')
+
+        # Заголовок (title)
+        if l.get('title'):
+            out.append(f'<Title>{_xml_escape(l["title"])}</Title>')
+
+        # Адрес
         out.append('<Address>')
-        out.append(f'<Country>Россия</Country>')
+        out.append('<Country>Россия</Country>')
         out.append(f'<Location>{_xml_escape(l.get("city") or "Краснодар")}</Location>')
+        if l.get('district'):
+            out.append(f'<District>{_xml_escape(l["district"])}</District>')
         if l.get('address'):
             out.append(f'<Address>{_xml_escape(l["address"])}</Address>')
+        if l.get('lat') and l.get('lng'):
+            out.append(f'<Lat>{l["lat"]}</Lat>')
+            out.append(f'<Lng>{l["lng"]}</Lng>')
         out.append('</Address>')
+
+        # Площадь
         if l.get('area'):
             out.append(f'<TotalArea>{l["area"]}</TotalArea>')
+        if l.get('min_area'):
+            out.append(f'<MinArea>{l["min_area"]}</MinArea>')
+
+        # Земля
+        if category == 'land' and l.get('land_area'):
+            out.append(f'<LandArea>{l["land_area"]}</LandArea>')
+            if l.get('land_status'):
+                out.append(f'<LandStatus>{_xml_escape(l["land_status"])}</LandStatus>')
+
+        # Этажи
         if l.get('floor') is not None:
             out.append(f'<FloorNumber>{l["floor"]}</FloorNumber>')
-        out.append(f'<BargainTerms><Price>{l.get("price", 0)}</Price><Currency>rur</Currency></BargainTerms>')
+        if l.get('total_floors') is not None:
+            out.append(f'<FloorsCount>{l["total_floors"]}</FloorsCount>')
+
+        # Высота потолков
+        if l.get('ceiling_height'):
+            out.append(f'<CeilingHeight>{l["ceiling_height"]}</CeilingHeight>')
+
+        # Класс здания
+        if l.get('building_class'):
+            out.append(f'<BuildingClassType>{_xml_escape(l["building_class"])}</BuildingClassType>')
+
+        # Год постройки
+        if l.get('building_year'):
+            out.append(f'<BuildYear>{l["building_year"]}</BuildYear>')
+
+        # Электричество
+        if l.get('electricity_kw'):
+            out.append(f'<ElectricPower>{l["electricity_kw"]}</ElectricPower>')
+
+        # Отделка
+        if l.get('finishing') and l['finishing'] in FINISHING_CIAN:
+            out.append(f'<Decoration>{FINISHING_CIAN[l["finishing"]]}</Decoration>')
+
+        # Мебель
+        if l.get('has_furniture'):
+            out.append('<FurniturePresence>yes</FurniturePresence>')
+
+        # Апартаменты
+        if l.get('is_apartments'):
+            out.append('<IsApartments>true</IsApartments>')
+
+        # Парковка
+        if l.get('parking') == 'building':
+            out.append('<HasParking>true</HasParking>')
+            out.append('<ParkingType>underground</ParkingType>')
+        elif l.get('parking') == 'street':
+            out.append('<HasParking>true</HasParking>')
+            out.append('<ParkingType>openAir</ParkingType>')
+
+        # Метро
+        if l.get('subway_station'):
+            out.append('<Undergrounds>')
+            out.append('<Underground>')
+            out.append(f'<StationName>{_xml_escape(l["subway_station"])}</StationName>')
+            if l.get('subway_distance'):
+                out.append(f'<Time>{l["subway_distance"]}</Time>')
+                out.append('<TransportType>walk</TransportType>')
+            out.append('</Underground>')
+            out.append('</Undergrounds>')
+
+        # Цена
+        out.append('<BargainTerms>')
+        price_val = l.get('price', 0)
+        if l.get('price_unit') == 'm2' and l.get('area'):
+            price_val = int(float(l['price']) * float(l['area']))
+        out.append(f'<Price>{price_val}</Price>')
+        out.append('<Currency>rur</Currency>')
+        if deal == 'rent':
+            out.append('<PaymentPeriod>monthly</PaymentPeriod>')
+            if l.get('price_unit') == 'm2':
+                out.append('<PriceType>squareMeter</PriceType>')
+        out.append('</BargainTerms>')
+
+        # Фото
         imgs = _split_images(l)
         if imgs:
             out.append('<Photos>')
-            for img in imgs:
+            for img in imgs[:50]:
                 out.append(f'<PhotoSchema><FullUrl>{_xml_escape(img)}</FullUrl></PhotoSchema>')
             out.append('</Photos>')
+
+        # Видео
         if l.get('video_url'):
             out.append(f'<Video><FullUrl>{_xml_escape(l["video_url"])}</FullUrl></Video>')
+
         out.append('</object>')
 
     out.append('</feed>')
@@ -373,7 +700,6 @@ def handler(event, context):
                 return _json({'error': 'Неизвестный формат'}, 400)
 
             if method == 'POST':
-                # Импорт XML Яндекс.Недвижимости
                 headers = event.get('headers') or {}
                 token = headers.get('X-Auth-Token') or headers.get('x-auth-token') or ''
                 user = _get_user(cur, token)
@@ -394,7 +720,6 @@ def handler(event, context):
                         )
                         with urllib.request.urlopen(req, timeout=25) as resp:
                             raw = resp.read()
-                        # Определяем кодировку из заголовка декларации
                         head = raw[:200].decode('ascii', errors='ignore')
                         m = re.search(r'encoding=["\']([^"\']+)["\']', head, re.IGNORECASE)
                         enc = (m.group(1) if m else 'utf-8').lower()
@@ -417,7 +742,6 @@ def handler(event, context):
                 try:
                     root = ET.fromstring(xml_text)
                 except ET.ParseError:
-                    # Авто-починка типичных синтаксических ошибок и повторная попытка
                     fixed_text, autofix_report = _autofix_xml(xml_text)
                     try:
                         root = ET.fromstring(fixed_text)
@@ -441,6 +765,12 @@ def handler(event, context):
                             category = 'warehouse'
                         elif 'производ' in cat_text:
                             category = 'production'
+                        elif 'земл' in cat_text or 'участ' in cat_text:
+                            category = 'land'
+                        elif 'здани' in cat_text:
+                            category = 'building'
+                        elif 'свободн' in cat_text or 'псн' in cat_text:
+                            category = 'free_purpose'
 
                         title = offer.findtext('description') or 'Без названия'
                         title = title[:255].strip().split('\n')[0]
@@ -457,18 +787,48 @@ def handler(event, context):
                             area = 0
                         city = offer.findtext('location/locality-name') or 'Краснодар'
                         address = offer.findtext('location/address') or ''
+                        floor_val = offer.findtext('floor')
+                        floor = int(floor_val) if floor_val and floor_val.isdigit() else None
+                        floors_total_val = offer.findtext('floors-total')
+                        total_floors = int(floors_total_val) if floors_total_val and floors_total_val.isdigit() else None
+                        ceiling_val = offer.findtext('ceiling-height')
+                        ceiling_height = float(ceiling_val) if ceiling_val else None
+                        built_year_val = offer.findtext('built-year')
+                        building_year = int(built_year_val) if built_year_val and built_year_val.isdigit() else None
+                        building_class = offer.findtext('building-class') or None
+
                         images = [img.text.strip() for img in offer.findall('image') if img.text]
                         first_img = images[0] if images else ''
                         images_str = '|'.join(images)
 
+                        # Метро
+                        subway_station = offer.findtext('.//metro/name') or None
+                        subway_time = offer.findtext('.//metro/time-on-foot')
+                        subway_distance = int(subway_time) if subway_time and subway_time.isdigit() else None
+
+                        lat_val = offer.findtext('location/latitude')
+                        lng_val = offer.findtext('location/longitude')
+                        lat = float(lat_val) if lat_val else None
+                        lng = float(lng_val) if lng_val else None
+
                         cur.execute(
                             f"INSERT INTO {SCHEMA}.listings "
-                            f"(title, description, category, deal, price, area, address, city, image, images, status, author_id) "
+                            f"(title, description, category, deal, price, area, address, city, image, images, status, author_id, "
+                            f"floor, total_floors, ceiling_height, building_year, building_class, subway_station, subway_distance, lat, lng) "
                             f"VALUES ('{_safe(title, 255)}', '{_safe(description, 5000)}', "
                             f"'{category}', '{deal}', {price}, {area}, "
                             f"'{_safe(address, 255)}', '{_safe(city, 100)}', "
                             f"'{_safe(first_img, 500)}', '{_safe(images_str, 5000)}', "
-                            f"'active', {user['id']})"
+                            f"'active', {user['id']}, "
+                            f"{floor if floor is not None else 'NULL'}, "
+                            f"{total_floors if total_floors is not None else 'NULL'}, "
+                            f"{ceiling_height if ceiling_height is not None else 'NULL'}, "
+                            f"{building_year if building_year is not None else 'NULL'}, "
+                            f"{'NULL' if not building_class else chr(39) + _safe(building_class, 10) + chr(39)}, "
+                            f"{'NULL' if not subway_station else chr(39) + _safe(subway_station, 150) + chr(39)}, "
+                            f"{subway_distance if subway_distance is not None else 'NULL'}, "
+                            f"{lat if lat is not None else 'NULL'}, "
+                            f"{lng if lng is not None else 'NULL'})"
                         )
                         imported += 1
                     except Exception as e:
