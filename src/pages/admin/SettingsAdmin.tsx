@@ -5,6 +5,7 @@ import PurposesAdmin from './PurposesAdmin';
 import XmlFeedsAdmin from './XmlFeedsAdmin';
 import SeoAdmin from './SeoAdmin';
 import RolesAdmin from './RolesAdmin';
+import PagesAdmin from './PagesAdmin';
 import MigrationTab from './settings/MigrationTab';
 import Icon from '@/components/ui/icon';
 import { S, City, PingState } from './settings/types';
@@ -28,7 +29,7 @@ export default function SettingsAdmin() {
   const [cityAdding, setCityAdding] = useState(false);
   type TabId = 'general' | 'watermark' | 'brand-kit' | 'seo' | 'seo-ai' | 'footer' | 'legal'
     | 'integrations' | 'ad-platforms' | 'autoposting' | 'feeds' | 'notifications'
-    | 'cities' | 'purposes' | 'roles' | 'migration';
+    | 'cities' | 'purposes' | 'pages' | 'roles' | 'migration';
   const [tab, setTab] = useState<TabId>('general');
   const [showKey, setShowKey] = useState(false);
   const [showMapsKey, setShowMapsKey] = useState(false);
@@ -190,6 +191,7 @@ export default function SettingsAdmin() {
       id: 'site', label: 'Сайт', icon: 'Globe', tabs: [
         ['seo', 'SEO сайта', 'BarChart3'],
         ['seo-ai', 'SEO-оптимизация', 'TrendingUp'],
+        ['pages', 'Страницы', 'FileText'],
         ['footer', 'Подвал', 'PanelBottom'],
         ['legal', 'Правовые', 'Scale'],
         ['purposes', 'Назначения', 'Tag'],
@@ -288,6 +290,7 @@ export default function SettingsAdmin() {
       {tab === 'brand-kit' && <BrandKitTab s={s} setS={setS} saved={saved} save={save} />}
       {tab === 'notifications' && <NotificationsTab s={s} setS={setS} saved={saved} save={save} />}
       {tab === 'migration' && <MigrationTab />}
+      {tab === 'pages' && <PagesAdmin />}
     </div>
   );
 }

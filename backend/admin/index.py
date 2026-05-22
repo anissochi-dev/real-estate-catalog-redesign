@@ -381,10 +381,14 @@ def _listings(cur, conn, method, rid, event, user):
     if method == 'DELETE' and rid:
         force = event.get('queryStringParameters', {}).get('force') == '1'
         if force and user and user['role'] == 'admin':
-            cur.execute(f"DELETE FROM {SCHEMA}.listing_history WHERE listing_id = {int(rid)}")
-            cur.execute(f"DELETE FROM {SCHEMA}.listing_stats_daily WHERE listing_id = {int(rid)}")
-            cur.execute(f"DELETE FROM {SCHEMA}.listing_views WHERE listing_id = {int(rid)}")
-            cur.execute(f"DELETE FROM {SCHEMA}.listings WHERE id = {int(rid)}")
+            try:
+                _hard_delete_listings(cur, [int(rid)])
+            except psycopg2.errors.ForeignKeyViolation as e:
+                conn.rollback()
+                return _err(409, f'Объект нельзя удалить: на него ссылаются другие записи. {str(e)[:200]}')
+            except Exception as e:
+                conn.rollback()
+                return _err(500, f'Ошибка удаления: {type(e).__name__}: {str(e)[:200]}')
         else:
             cur.execute(f"UPDATE {SCHEMA}.listings SET status = 'archived' WHERE id = {int(rid)}")
         conn.commit()
@@ -939,6 +943,46 @@ def _listing_stats(cur, rid):
     })
 
 
+def _hard_delete_listings(cur, ids: list):
+    """Полное удаление объектов вместе со всеми зависимыми записями.
+    Бросает psycopg2.errors.ForeignKeyViolation если есть незачищенные связи (например crm_deals)."""
+    if not ids:
+        return
+    ids_sql = ', '.join(str(int(i)) for i in ids if str(i).isdigit())
+    if not ids_sql:
+        return
+    # Дочерние таблицы — удаляем в порядке зависимости
+    dependent_tables = [
+        'listing_history',
+        'listing_views',
+        'listing_stats',
+        'listing_stats_daily',
+        'phone_listing_links',
+        'listing_comments',
+        'listing_documents',
+        'crm_owner_listings',
+    ]
+    for tbl in dependent_tables:
+        try:
+            cur.execute(f"DELETE FROM {SCHEMA}.{tbl} WHERE listing_id IN ({ids_sql})")
+        except psycopg2.errors.UndefinedTable:
+            # Таблицы может не быть — пропускаем
+            continue
+    # Для crm_deals и crm_payments listing_id nullable — обнуляем, чтобы сохранить историю сделок
+    for tbl in ('crm_deals', 'crm_payments'):
+        try:
+            cur.execute(f"UPDATE {SCHEMA}.{tbl} SET listing_id = NULL WHERE listing_id IN ({ids_sql})")
+        except psycopg2.errors.UndefinedTable:
+            continue
+        except Exception:
+            # Если колонка NOT NULL — придётся удалить
+            try:
+                cur.execute(f"DELETE FROM {SCHEMA}.{tbl} WHERE listing_id IN ({ids_sql})")
+            except Exception:
+                pass
+    cur.execute(f"DELETE FROM {SCHEMA}.listings WHERE id IN ({ids_sql})")
+
+
 def _listings_bulk(cur, conn, event, user):
     body = json.loads(event.get('body') or '{}')
     ids = [int(i) for i in (body.get('ids') or []) if str(i).isdigit()]
@@ -971,11 +1015,14 @@ def _listings_bulk(cur, conn, event, user):
     elif op == 'delete':
         if user['role'] != 'admin':
             return _err(403, 'Только администратор может удалять объекты')
-        for lid in ids:
-            cur.execute(f"DELETE FROM {SCHEMA}.listing_history WHERE listing_id = {lid}")
-            cur.execute(f"DELETE FROM {SCHEMA}.listing_stats_daily WHERE listing_id = {lid}")
-            cur.execute(f"DELETE FROM {SCHEMA}.listing_views WHERE listing_id = {lid}")
-            cur.execute(f"DELETE FROM {SCHEMA}.listings WHERE id = {lid}")
+        try:
+            _hard_delete_listings(cur, ids)
+        except psycopg2.errors.ForeignKeyViolation as e:
+            conn.rollback()
+            return _err(409, f'Не удалось удалить — на объекты ссылаются связанные записи. {str(e)[:200]}')
+        except Exception as e:
+            conn.rollback()
+            return _err(500, f'Ошибка удаления: {type(e).__name__}: {str(e)[:200]}')
     elif op == 'set_category':
         cat = _safe(body.get('value') or '', 50)
         cur.execute(

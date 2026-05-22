@@ -30,16 +30,30 @@ export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
 async function req(url: string, init?: RequestInit) {
   const token = getToken();
-  const res = await fetch(url, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { 'X-Auth-Token': token } : {}),
-      ...(init?.headers || {}),
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'X-Auth-Token': token } : {}),
+        ...(init?.headers || {}),
+      },
+    });
+  } catch (networkErr) {
+    // Сетевая ошибка — показываем тост и пробрасываем дальше
+    const { showError } = await import('./errorTranslator');
+    const msg = networkErr instanceof Error ? networkErr.message : 'Failed to fetch';
+    showError(msg);
+    throw new Error(msg);
+  }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  if (!res.ok) {
+    const msg = data.error || `HTTP ${res.status}`;
+    const { showError } = await import('./errorTranslator');
+    showError(msg);
+    throw new Error(msg);
+  }
   return data;
 }
 
