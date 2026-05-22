@@ -49,10 +49,11 @@ interface Props {
   onOpenCreate: (dateStr?: string) => void;
   onOpenEdit: (ev: CrmEvent) => void;
   onMarkDone: (id: number) => void;
+  onDelete: (id: number) => void;
 }
 
 export default function CalendarDayPanel({
-  selected, selectedEvents, token, onOpenCreate, onOpenEdit, onMarkDone,
+  selected, selectedEvents, token, onOpenCreate, onOpenEdit, onMarkDone, onDelete,
 }: Props) {
   return (
     <div className="space-y-3">
@@ -100,6 +101,10 @@ export default function CalendarDayPanel({
                       <button onClick={() => onOpenEdit(ev)}
                         className="p-1 rounded-lg hover:bg-muted text-muted-foreground transition" title="Редактировать">
                         <Icon name="Pencil" size={13} />
+                      </button>
+                      <button onClick={() => onDelete(ev.id)}
+                        className="p-1 rounded-lg hover:bg-red-100 text-red-500 transition" title="Удалить">
+                        <Icon name="Trash2" size={13} />
                       </button>
                     </div>
                   </div>

@@ -53,7 +53,7 @@ export const MONTHS_RU = ['Январь','Февраль','Март','Апрел
 export const DAYS_RU   = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 
 export const EMPTY_FORM: EventFormState = {
-  title: '', description: '', event_type: 'note', starts_at: '', ends_at: '',
+  title: '', description: '', event_type: 'reminder', starts_at: '', ends_at: '',
 };
 export const EMPTY_LINKS: LinkField = {
   deal_id: null, deal_label: '',

@@ -300,15 +300,15 @@ def handler(event: dict, context) -> dict:
             'headers': {
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token, X-Cron-Token',
+                'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token, X-Authorization, Authorization, X-Cron-Token',
                 'Access-Control-Max-Age': '86400',
             },
             'body': '',
         }
 
-    headers = event.get('headers') or {}
-    token = headers.get('X-Auth-Token') or headers.get('x-auth-token') or ''
-    cron_token = headers.get('X-Cron-Token') or headers.get('x-cron-token') or ''
+    raw_headers = event.get('headers') or {}
+    headers_lc = {k.lower(): v for k, v in raw_headers.items()}
+    cron_token = headers_lc.get('x-cron-token') or ''
 
     body = {}
     if event.get('body'):
@@ -319,6 +319,15 @@ def handler(event: dict, context) -> dict:
 
     qs = event.get('queryStringParameters') or {}
     action = body.get('action') or qs.get('action') or 'status'
+
+    # Токен пользователя: заголовки, Authorization, query-параметр (Gateway режет заголовки на POST с JSON)
+    token = (
+        headers_lc.get('x-auth-token')
+        or headers_lc.get('x-authorization')
+        or headers_lc.get('authorization', '').replace('Bearer ', '').strip()
+        or qs.get('auth_token')
+        or ''
+    )
 
     dsn = os.environ['DATABASE_URL']
     conn = psycopg2.connect(dsn)

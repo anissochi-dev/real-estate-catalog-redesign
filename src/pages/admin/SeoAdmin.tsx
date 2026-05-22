@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
 
-const SEO_URL = 'https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d';
+const SEO_BASE = 'https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d';
+const seoUrl = (token: string) => token ? `${SEO_BASE}?auth_token=${encodeURIComponent(token)}` : SEO_BASE;
 
 const HOURS = Array.from({ length: 24 }, (_, i) => ({
   value: i,
@@ -76,7 +77,7 @@ export default function SeoAdmin() {
     setLoading(true);
     setErrorMsg('');
     try {
-      const r = await fetch(SEO_URL, {
+      const r = await fetch(seoUrl(token || ''), {
         method: 'POST', headers,
         body: JSON.stringify({ action: 'status' }),
       });
@@ -102,7 +103,7 @@ export default function SeoAdmin() {
   const saveSchedule = async () => {
     setSavingSchedule(true);
     try {
-      const r = await fetch(SEO_URL, {
+      const r = await fetch(seoUrl(token || ''), {
         method: 'POST', headers,
         body: JSON.stringify({ action: 'schedule_set', ...schedule }),
       });
@@ -119,7 +120,7 @@ export default function SeoAdmin() {
     setHistoryLoading(true);
     setErrorMsg('');
     try {
-      const r = await fetch(SEO_URL, {
+      const r = await fetch(seoUrl(token || ''), {
         method: 'POST', headers,
         body: JSON.stringify({ action: 'log', limit: 50 }),
       });
@@ -143,7 +144,7 @@ export default function SeoAdmin() {
     setLastRun(null);
     setErrorMsg('');
     try {
-      const r = await fetch(SEO_URL, {
+      const r = await fetch(seoUrl(token || ''), {
         method: 'POST', headers,
         body: JSON.stringify({
           action: preview ? 'preview' : 'run',

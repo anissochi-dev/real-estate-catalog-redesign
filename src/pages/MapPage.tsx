@@ -36,9 +36,18 @@ export default function MapPage({
     [activeType, properties],
   );
 
+  // Отсекаем «заглушки»: ровные значения вроде 45.000000, 39.000000 или 45.000000, 38.000000.
+  // Реальные координаты адреса всегда имеют дробную часть.
+  const isStubCoord = (n: number) => Math.abs(n - Math.round(n * 1000) / 1000) < 1e-9 && Math.abs(n * 1000 - Math.round(n * 1000)) < 1e-9 && Math.abs(n - Math.round(n)) < 1e-6;
+
   const points = useMemo(
     () => filtered
-      .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng) && p.lat !== 0 && p.lng !== 0)
+      .filter(p =>
+        Number.isFinite(p.lat) && Number.isFinite(p.lng)
+        && p.lat !== 0 && p.lng !== 0
+        // Отсечь координаты-заглушки (например 45.000000, 39.000000)
+        && !(isStubCoord(p.lat) && isStubCoord(p.lng))
+      )
       .map(p => ({
         id: p.id,
         lat: p.lat,

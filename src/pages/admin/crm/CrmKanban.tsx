@@ -12,7 +12,7 @@ import CrmCreateDealModal, { CreateDealForm } from './CrmCreateDealModal';
 import CrmDealDetailModal from './CrmDealDetailModal';
 
 const EMPTY_FORM: CreateDealForm = {
-  title: '', owner_id: '', listing_id: '', amount: '', commission: '', source: '', notes: '',
+  title: '', owner_id: '', listing_id: '', amount: '', commission: '', source: '', notes: '', assigned_to: '',
 };
 
 type StatusFilter = 'all' | 'active' | 'closed' | 'overdue';
@@ -96,6 +96,7 @@ export default function CrmKanban() {
           owner_id: data.owner_id ? Number(data.owner_id) : undefined,
           amount: data.amount ? Number(data.amount) : undefined,
           commission: data.commission ? Number(data.commission) : undefined,
+          assigned_to: data.assigned_to ? Number(data.assigned_to) : undefined,
         }),
       });
       const json = await r.json();
@@ -290,6 +291,8 @@ export default function CrmKanban() {
         isPending={createMutation.isPending}
         onSubmit={() => createMutation.mutate(form)}
         headers={headers}
+        canAssignBroker={canReopen}
+        currentUserId={user?.id}
       />
 
       <CrmDealDetailModal

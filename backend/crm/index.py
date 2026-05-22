@@ -846,7 +846,7 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
             return ok({'ok': True})
 
         if method == 'DELETE' and resource_id:
-            cur.execute("UPDATE crm_events SET is_done = TRUE WHERE id = %s", (resource_id,))
+            cur.execute("DELETE FROM crm_events WHERE id = %s", (resource_id,))
             return ok({'ok': True})
 
     # ── LEADS SEARCH (для связки с событиями) ──────────────────────────────────

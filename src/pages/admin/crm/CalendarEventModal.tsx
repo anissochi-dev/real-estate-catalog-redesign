@@ -6,8 +6,8 @@ import { Input } from '@/components/ui/input';
 import CharCount from '@/components/ui/CharCount';
 import { crmUrl, adminApi } from '@/lib/adminApi';
 import {
-  CrmEvent, EventType, EventFormState, LinkField, SearchItem,
-  TYPE_META, EMPTY_FORM, EMPTY_LINKS,
+  CrmEvent, EventFormState, LinkField, SearchItem,
+  EMPTY_FORM, EMPTY_LINKS,
 } from './calendarTypes';
 import EventDateTimeBlock from './EventDateTimeBlock';
 
@@ -272,26 +272,6 @@ export default function CalendarEventModal({
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-muted">
             <Icon name="X" size={18} />
           </button>
-        </div>
-
-        {/* Тип */}
-        <div>
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">Тип</label>
-          <div className="flex gap-2">
-            {(Object.keys(TYPE_META) as EventType[]).map(t => {
-              const m = TYPE_META[t];
-              return (
-                <button key={t} type="button"
-                  onClick={() => setForm(f => ({ ...f, event_type: t }))}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border text-xs font-semibold transition ${
-                    form.event_type === t ? `${m.bg} ${m.border} ${m.color}` : 'border-border hover:bg-muted'
-                  }`}
-                >
-                  <Icon name={m.icon} size={13} />{m.label}
-                </button>
-              );
-            })}
-          </div>
         </div>
 
         {/* Название */}

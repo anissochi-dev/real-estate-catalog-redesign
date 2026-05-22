@@ -14,6 +14,13 @@ export interface CreateDealForm {
   commission: string;
   source: string;
   notes: string;
+  assigned_to: string;
+}
+
+interface BrokerOption {
+  id: number;
+  name: string;
+  role: string;
 }
 
 interface Props {
@@ -37,6 +44,10 @@ interface Props {
   isPending: boolean;
   onSubmit: () => void;
   headers?: Record<string, string>;
+  /** Может ли пользователь назначить брокера сделки (admin/director). */
+  canAssignBroker?: boolean;
+  /** Текущий пользователь — для значения по умолчанию. */
+  currentUserId?: number;
 }
 
 export default function CrmCreateDealModal({
@@ -44,8 +55,23 @@ export default function CrmCreateDealModal({
   form, setForm,
   listingSearch, setListingSearch, listingLabel, setListingLabel, listingDropOpen, setListingDropOpen,
   isPending, onSubmit,
+  canAssignBroker, currentUserId,
 }: Props) {
   const listingDropRef = useRef<HTMLDivElement>(null);
+
+  // Список брокеров (для admin/director)
+  const { data: brokers = [] } = useQuery<BrokerOption[]>({
+    queryKey: ['crm-brokers-list'],
+    queryFn: async () => {
+      const d = await adminApi.listUsers();
+      const list: { id: number; name: string; role: string; is_active?: boolean }[] = d.users || d || [];
+      return list
+        .filter(u => u.is_active !== false && ['broker', 'manager', 'admin', 'director', 'office_manager'].includes(u.role))
+        .map(u => ({ id: u.id, name: u.name, role: u.role }));
+    },
+    enabled: !!canAssignBroker && open,
+    staleTime: 5 * 60_000,
+  });
 
   const { data: listingResults = [], isFetching: listingFetching } = useQuery<{ id: number; title: string; owner_name: string; owner_phone: string }[]>({
     queryKey: ['crm-listings-search', listingSearch],
@@ -138,6 +164,30 @@ export default function CrmCreateDealModal({
               </div>
             )}
           </div>
+
+          {/* Брокер сделки — только админ/директор может назначать */}
+          {canAssignBroker && (
+            <div>
+              <label className="text-xs text-muted-foreground flex items-center gap-1">
+                <Icon name="UserCheck" size={11} />
+                Брокер сделки
+              </label>
+              <select
+                value={form.assigned_to || (currentUserId ? String(currentUserId) : '')}
+                onChange={e => setForm(f => ({ ...f, assigned_to: e.target.value }))}
+                className="w-full px-3 py-2 border border-border rounded-xl bg-white text-sm"
+              >
+                <option value="">— Не назначен —</option>
+                {brokers.map(b => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} ({b.role === 'admin' ? 'админ' : b.role === 'director' ? 'директор' :
+                      b.role === 'broker' ? 'брокер' : b.role === 'manager' ? 'менеджер' :
+                      b.role === 'office_manager' ? 'офис-менеджер' : b.role})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Собственник — подтягивается из объекта автоматически */}
           {form.listing_id && (ownerFromListing || listingLabel) && (

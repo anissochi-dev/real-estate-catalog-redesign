@@ -112,6 +112,18 @@ export default function CrmCalendar() {
     onSuccess: () => { toast.success('Выполнено'); invalidate(); },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const r = await fetch(crmUrl('events', id), { method: 'DELETE', headers });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        throw new Error(j.error || 'Ошибка удаления');
+      }
+    },
+    onSuccess: () => { toast.success('Удалено'); invalidate(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   function closeModal() {
     setModal(false);
     setEditing(null);
@@ -197,6 +209,9 @@ export default function CrmCalendar() {
           onOpenCreate={openCreate}
           onOpenEdit={openEdit}
           onMarkDone={id => doneMutation.mutate(id)}
+          onDelete={id => {
+            if (confirm('Удалить напоминание?')) deleteMutation.mutate(id);
+          }}
         />
       </div>
 
