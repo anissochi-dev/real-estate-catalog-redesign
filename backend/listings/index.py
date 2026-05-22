@@ -213,9 +213,14 @@ def handler(event: dict, context) -> dict:
             listing_id = params.get('id')
             if listing_id:
                 cur.execute(
-                    "SELECT * FROM t_p71821556_real_estate_catalog_.listings WHERE id = "
+                    "SELECT l.*, "
+                    "  COALESCE(NULLIF(pc.name, ''), l.owner_name) AS owner_name_final, "
+                    "  COALESCE(pc.phone, l.owner_phone) AS owner_phone_final "
+                    "FROM t_p71821556_real_estate_catalog_.listings l "
+                    "LEFT JOIN t_p71821556_real_estate_catalog_.phone_contacts pc ON pc.id = l.owner_phone_contact_id "
+                    "WHERE l.id = "
                     + str(int(listing_id))
-                    + " AND (is_visible IS NULL OR is_visible = TRUE)"
+                    + " AND (l.is_visible IS NULL OR l.is_visible = TRUE)"
                 )
                 row = cur.fetchone()
                 if not row:
@@ -224,8 +229,14 @@ def handler(event: dict, context) -> dict:
                         'headers': {'Access-Control-Allow-Origin': '*'},
                         'body': json.dumps({'error': 'Not found'}),
                     }
-                item = _serialize(dict(row))
-                return _ok({'listing': item})
+                d = dict(row)
+                if d.get('owner_name_final'):
+                    d['owner_name'] = d['owner_name_final']
+                if d.get('owner_phone_final'):
+                    d['owner_phone'] = d['owner_phone_final']
+                d.pop('owner_name_final', None)
+                d.pop('owner_phone_final', None)
+                return _ok({'listing': _serialize(d)})
 
             where = ["status = 'active'", "(is_visible IS NULL OR is_visible = TRUE)"]
             category = params.get('category')

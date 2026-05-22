@@ -6,8 +6,47 @@ Returns: HTTP-ответ с id созданной заявки или ошибк
 
 import json
 import os
+import re
 import threading
 import psycopg2
+
+
+SCHEMA_LEADS = 't_p71821556_real_estate_catalog_'
+
+
+def _normalize_phone(phone):
+    digits = re.sub(r'\D', '', phone or '')
+    if len(digits) == 11 and digits.startswith('8'):
+        digits = '7' + digits[1:]
+    return digits
+
+
+def _upsert_phone_contact(cur, phone, name=None):
+    """Находит или создаёт запись в phone_contacts. Возвращает id или None."""
+    if not phone:
+        return None
+    norm = _normalize_phone(phone)
+    if not norm:
+        return None
+    cur.execute(
+        f"SELECT id, name FROM {SCHEMA_LEADS}.phone_contacts WHERE phone_normalized = %s LIMIT 1",
+        (norm,)
+    )
+    row = cur.fetchone()
+    if row:
+        pid, existing_name = row[0], row[1]
+        if (not existing_name or not str(existing_name).strip()) and name and str(name).strip():
+            cur.execute(
+                f"UPDATE {SCHEMA_LEADS}.phone_contacts SET name = %s, updated_at = NOW() WHERE id = %s",
+                (name.strip()[:200], pid)
+            )
+        return pid
+    cur.execute(
+        f"INSERT INTO {SCHEMA_LEADS}.phone_contacts (phone, phone_normalized, name) "
+        f"VALUES (%s, %s, %s) RETURNING id",
+        (phone[:30], norm, (name or '').strip()[:200] or None)
+    )
+    return cur.fetchone()[0]
 
 
 def handler(event: dict, context) -> dict:
@@ -64,19 +103,31 @@ def handler(event: dict, context) -> dict:
     SITE_SOURCES = ('site', 'property-page', 'offer-to-lead', 'callback', 'hero', 'catalog')
     initial_status = 'pending' if source in SITE_SOURCES else 'new'
 
-    sql = (
-        "INSERT INTO t_p71821556_real_estate_catalog_.leads "
-        "(name, phone, email, message, listing_id, source, status) VALUES ("
-        f"'{name_s}', '{phone_s}', {email_s}, {msg_s}, {listing_s}, '{source_s}', '{initial_status}'"
-        ") RETURNING id"
-    )
-
     dsn = os.environ['DATABASE_URL']
     conn = psycopg2.connect(dsn)
     try:
         with conn.cursor() as cur:
+            # Авто-линковка к телефонной базе (единый источник имени/телефона)
+            pc_id = _upsert_phone_contact(cur, phone, name)
+            pc_sql = str(pc_id) if pc_id else 'NULL'
+
+            sql = (
+                "INSERT INTO t_p71821556_real_estate_catalog_.leads "
+                "(name, phone, email, message, listing_id, source, status, phone_contact_id) VALUES ("
+                f"'{name_s}', '{phone_s}', {email_s}, {msg_s}, {listing_s}, '{source_s}', '{initial_status}', {pc_sql}"
+                ") RETURNING id"
+            )
             cur.execute(sql)
             lead_id = cur.fetchone()[0]
+
+            # Связь phone_contact ↔ lead
+            if pc_id:
+                cur.execute(
+                    "INSERT INTO t_p71821556_real_estate_catalog_.phone_lead_links "
+                    "(phone_contact_id, lead_id) VALUES (%s, %s) "
+                    "ON CONFLICT (phone_contact_id, lead_id) DO NOTHING",
+                    (pc_id, lead_id)
+                )
             conn.commit()
     finally:
         conn.close()

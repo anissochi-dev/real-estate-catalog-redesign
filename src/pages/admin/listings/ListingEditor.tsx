@@ -366,7 +366,13 @@ export default function ListingEditor({
                     <label className="text-xs text-muted-foreground">Телефон *</label>
                     <PhonePickerInput
                       value={editing.owner_phone || ''}
-                      onChange={(phone, name) => { setEditing({ ...editing, owner_phone: phone, ...(name && !editing.owner_name ? { owner_name: name } : {}) }); setErrors(v => ({ ...v, owner_phone: false })); }}
+                      onChange={(phone, name, phoneContactId) => {
+                        const update: Partial<typeof editing> = { owner_phone: phone };
+                        if (name) update.owner_name = name;
+                        if (phoneContactId) (update as Record<string, unknown>).owner_phone_contact_id = phoneContactId;
+                        setEditing({ ...editing, ...update });
+                        setErrors(v => ({ ...v, owner_phone: false }));
+                      }}
                       onNameChange={name => { if (!editing.owner_name) setEditing({ ...editing, owner_name: name }); }}
                     />
                   </div>

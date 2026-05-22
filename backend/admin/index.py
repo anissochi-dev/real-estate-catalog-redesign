@@ -194,29 +194,78 @@ def _listings(cur, conn, method, rid, event, user):
     if method == 'GET':
         if rid:
             cur.execute(
-                f"SELECT l.*, u.name AS broker_name, u.id AS broker_user_id "
+                f"SELECT l.*, u.name AS broker_name, u.id AS broker_user_id, "
+                f"  pc.name AS pc_owner_name, pc.phone AS pc_owner_phone, pc.photo_url AS pc_owner_photo, "
+                f"  pc.company AS pc_owner_company, pc.notes AS pc_owner_notes, "
+                f"  pc2.name AS pc2_owner_name, pc2.phone AS pc2_owner_phone "
                 f"FROM {SCHEMA}.listings l "
                 f"LEFT JOIN {SCHEMA}.users u ON u.id = COALESCE(l.broker_id, l.author_id) "
+                f"LEFT JOIN {SCHEMA}.phone_contacts pc ON pc.id = l.owner_phone_contact_id "
+                f"LEFT JOIN {SCHEMA}.phone_contacts pc2 ON pc2.id = l.owner_phone2_contact_id "
                 f"WHERE l.id = {int(rid)}"
             )
             row = cur.fetchone()
             if not row:
                 return _err(404, 'Не найдено')
-            return _ok({'listing': _ser(dict(row))})
+            row_dict = dict(row)
+            # Авто-миграция: если у объекта есть owner_phone, но нет связи — связываем
+            if not row_dict.get('owner_phone_contact_id') and row_dict.get('owner_phone'):
+                pc_id = _upsert_phone_contact(cur, row_dict.get('owner_phone'),
+                                               row_dict.get('owner_name'), user['id'] if user else None)
+                if pc_id:
+                    cur.execute(
+                        f"UPDATE {SCHEMA}.listings SET owner_phone_contact_id = {pc_id} WHERE id = {int(rid)}"
+                    )
+                    _link_phone_to_listing(cur, pc_id, int(rid), 'owner')
+                    row_dict['owner_phone_contact_id'] = pc_id
+                    conn.commit()
+            # Используем данные из phone_contacts (приоритет)
+            if row_dict.get('pc_owner_name'):
+                row_dict['owner_name'] = row_dict['pc_owner_name']
+            if row_dict.get('pc_owner_phone'):
+                row_dict['owner_phone'] = row_dict['pc_owner_phone']
+            row_dict['owner_photo_url'] = row_dict.get('pc_owner_photo')
+            row_dict['owner_company'] = row_dict.get('pc_owner_company')
+            if row_dict.get('pc2_owner_phone'):
+                row_dict['owner_phone2'] = row_dict['pc2_owner_phone']
+            # Удаляем временные поля
+            for k in ('pc_owner_name', 'pc_owner_phone', 'pc_owner_photo', 'pc_owner_company',
+                      'pc_owner_notes', 'pc2_owner_name', 'pc2_owner_phone'):
+                row_dict.pop(k, None)
+            return _ok({'listing': _ser(row_dict)})
         cur.execute(
-            f"SELECT l.*, u.name AS broker_name "
+            f"SELECT l.*, u.name AS broker_name, "
+            f"  COALESCE(NULLIF(pc.name, ''), l.owner_name) AS owner_name_final, "
+            f"  COALESCE(pc.phone, l.owner_phone) AS owner_phone_final, "
+            f"  pc.photo_url AS owner_photo_url "
             f"FROM {SCHEMA}.listings l "
             f"LEFT JOIN {SCHEMA}.users u ON u.id = COALESCE(l.broker_id, l.author_id) "
+            f"LEFT JOIN {SCHEMA}.phone_contacts pc ON pc.id = l.owner_phone_contact_id "
             f"ORDER BY l.created_at DESC"
         )
-        return _ok({'listings': [_ser(dict(r)) for r in cur.fetchall()]})
+        rows = []
+        for r in cur.fetchall():
+            d = dict(r)
+            # Подменяем owner_name/owner_phone значениями из телефонной базы (если связь есть)
+            if d.get('owner_name_final'):
+                d['owner_name'] = d['owner_name_final']
+            if d.get('owner_phone_final'):
+                d['owner_phone'] = d['owner_phone_final']
+            d.pop('owner_name_final', None)
+            d.pop('owner_phone_final', None)
+            rows.append(_ser(d))
+        return _ok({'listings': rows})
 
     body = json.loads(event.get('body') or '{}')
 
     if method == 'POST':
+        # Авто-линковка собственника с единой телефонной базой
+        owner_pc_id = _upsert_phone_contact(cur, body.get('owner_phone'), body.get('owner_name'), user['id'])
+        owner_pc2_id = _upsert_phone_contact(cur, body.get('owner_phone2'), body.get('owner_name'), user['id'])
+
         sql = (
             f"INSERT INTO {SCHEMA}.listings "
-            f"(title, description, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, is_visible, rooms, broker_commission) VALUES ("
+            f"(title, description, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, is_visible, rooms, broker_commission, owner_phone_contact_id, owner_phone2_contact_id) VALUES ("
             f"{_str_or_null(body.get('title'), 255)}, {_str_or_null(body.get('description'), 5000)}, "
             f"{_str_or_null(body.get('category'), 50)}, {_str_or_null(body.get('deal'), 20)}, "
             f"{_int_or_null(body.get('price'))}, {_int_or_null(body.get('price_per_m2'))}, "
@@ -244,15 +293,50 @@ def _listings(cur, conn, method, rid, event, user):
             f"{_num_or_null(body.get('ceiling_height'))}, {_num_or_null(body.get('electricity_kw'))}, "
             f"{_str_or_null(body.get('utilities'), 500)}, {_str_or_null(body.get('road_line'), 50)}, "
             f"{user['id']}, {_bool(body.get('is_visible', True))}, {_int_or_null(body.get('rooms'))}, "
-            f"{_str_or_null(body.get('broker_commission'), 100)}) RETURNING id"
+            f"{_str_or_null(body.get('broker_commission'), 100)}, "
+            f"{owner_pc_id if owner_pc_id else 'NULL'}, "
+            f"{owner_pc2_id if owner_pc2_id else 'NULL'}) RETURNING id"
         )
         cur.execute(sql)
         new_id = cur.fetchone()['id']
+        # Связь телефон ↔ объект (для системы phonebook)
+        if owner_pc_id:
+            _link_phone_to_listing(cur, owner_pc_id, new_id, 'owner')
+        if owner_pc2_id:
+            _link_phone_to_listing(cur, owner_pc2_id, new_id, 'owner')
         conn.commit()
-        return _ok({'id': new_id, 'success': True})
+        return _ok({'id': new_id, 'success': True, 'owner_phone_contact_id': owner_pc_id})
 
     if method == 'PUT' and rid:
         fields = []
+        # Если меняется owner_phone или owner_name — авто-линкуем к phone_contacts
+        if 'owner_phone' in body or 'owner_name' in body:
+            # Если есть owner_phone в body — берём его, иначе достаём текущий из БД
+            new_phone = body.get('owner_phone')
+            new_name = body.get('owner_name')
+            if new_phone is None or new_name is None:
+                cur.execute(f"SELECT owner_phone, owner_name FROM {SCHEMA}.listings WHERE id = {int(rid)}")
+                _cur_row = cur.fetchone()
+                if _cur_row:
+                    if new_phone is None:
+                        new_phone = _cur_row['owner_phone']
+                    if new_name is None:
+                        new_name = _cur_row['owner_name']
+            if new_phone:
+                pc_id = _upsert_phone_contact(cur, new_phone, new_name, user['id'])
+                fields.append(f"owner_phone_contact_id = {pc_id if pc_id else 'NULL'}")
+                if pc_id:
+                    _link_phone_to_listing(cur, pc_id, int(rid), 'owner')
+        if 'owner_phone2' in body:
+            new_phone2 = body.get('owner_phone2')
+            if new_phone2:
+                pc2_id = _upsert_phone_contact(cur, new_phone2, body.get('owner_name'), user['id'])
+                fields.append(f"owner_phone2_contact_id = {pc2_id if pc2_id else 'NULL'}")
+                if pc2_id:
+                    _link_phone_to_listing(cur, pc2_id, int(rid), 'owner')
+            else:
+                fields.append("owner_phone2_contact_id = NULL")
+
         for f, length in [('title', 255), ('description', 5000), ('category', 50), ('deal', 20),
                           ('address', 255), ('district', 100), ('city', 100), ('image', 500),
                           ('images', 5000), ('tags', 1000), ('status', 20),
@@ -832,6 +916,55 @@ def _normalize_phone(phone):
     if len(digits) == 11 and digits.startswith('8'):
         digits = '7' + digits[1:]
     return digits
+
+
+def _upsert_phone_contact(cur, phone, name=None, user_id=None):
+    """
+    Находит или создаёт запись в phone_contacts по нормализованному номеру.
+    Возвращает id записи или None если телефон пустой.
+    Эта функция — единый источник истины для всех собственников / контактов.
+    """
+    if not phone:
+        return None
+    norm = _normalize_phone(phone)
+    if not norm:
+        return None
+    cur.execute(
+        f"SELECT id, name FROM {SCHEMA}.phone_contacts WHERE phone_normalized = '{norm}' LIMIT 1"
+    )
+    row = cur.fetchone()
+    if row:
+        pid = row['id'] if isinstance(row, dict) else row[0]
+        existing_name = row['name'] if isinstance(row, dict) else row[1]
+        # Обновляем имя, если оно было пустое
+        if (not existing_name or not str(existing_name).strip()) and name and str(name).strip():
+            safe_name = _safe(name, 200)
+            cur.execute(
+                f"UPDATE {SCHEMA}.phone_contacts SET name = '{safe_name}', updated_at = NOW() WHERE id = {pid}"
+            )
+        return pid
+    # Создаём новую запись
+    safe_phone = _safe(phone, 30)
+    safe_name = _safe(name, 200) if name else ''
+    name_sql = f"'{safe_name}'" if safe_name else 'NULL'
+    user_sql = str(int(user_id)) if user_id else 'NULL'
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.phone_contacts (phone, phone_normalized, name, created_by) "
+        f"VALUES ('{safe_phone}', '{norm}', {name_sql}, {user_sql}) RETURNING id"
+    )
+    new_row = cur.fetchone()
+    return new_row['id'] if isinstance(new_row, dict) else new_row[0]
+
+
+def _link_phone_to_listing(cur, phone_contact_id, listing_id, role='owner'):
+    """Создаёт связь phone_listing_links (если её ещё нет)."""
+    if not phone_contact_id or not listing_id:
+        return
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.phone_listing_links (phone_contact_id, listing_id, role) "
+        f"VALUES ({int(phone_contact_id)}, {int(listing_id)}, '{_safe(role, 50)}') "
+        f"ON CONFLICT (phone_contact_id, listing_id) DO NOTHING"
+    )
 
 
 def _phones(cur, conn, method, rid, action, event, user):

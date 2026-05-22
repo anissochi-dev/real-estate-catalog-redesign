@@ -57,7 +57,59 @@ def get_user(token, conn):
 def normalize_phone(phone):
     if not phone:
         return ''
-    return re.sub(r'[^0-9]', '', phone)
+    digits = re.sub(r'[^0-9]', '', phone)
+    # Российские номера: 8XXXXXXXXXX → 7XXXXXXXXXX
+    if len(digits) == 11 and digits.startswith('8'):
+        digits = '7' + digits[1:]
+    return digits
+
+
+def upsert_phone_contact(conn, phone: str, name: str = '', user_id: int = None):
+    """
+    Находит или создаёт запись в phone_contacts по нормализованному номеру.
+    Если запись найдена, но имя пустое а new_name есть — обновляет имя.
+    Возвращает id записи (или None если телефон пустой).
+    """
+    if not phone:
+        return None
+    norm = normalize_phone(phone)
+    if not norm:
+        return None
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, name FROM phone_contacts WHERE phone_normalized = %s LIMIT 1",
+        (norm,)
+    )
+    row = cur.fetchone()
+    if row:
+        pid, existing_name = row[0], row[1]
+        # Если имя в базе пустое, а нам передали — обновим
+        if (not existing_name or not existing_name.strip()) and name and name.strip():
+            cur.execute(
+                "UPDATE phone_contacts SET name = %s, updated_at = NOW() WHERE id = %s",
+                (name.strip(), pid)
+            )
+        return pid
+    # Создаём новую запись
+    cur.execute(
+        "INSERT INTO phone_contacts (phone, phone_normalized, name, created_by) "
+        "VALUES (%s, %s, %s, %s) RETURNING id",
+        (phone, norm, (name or '').strip() or None, user_id)
+    )
+    return cur.fetchone()[0]
+
+
+def link_phone_to_listing(conn, phone_contact_id: int, listing_id: int, role: str = 'owner'):
+    """Создаёт связь телефонного контакта с объектом (если её ещё нет)."""
+    if not phone_contact_id or not listing_id:
+        return
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO phone_listing_links (phone_contact_id, listing_id, role) "
+        "VALUES (%s, %s, %s) "
+        "ON CONFLICT (phone_contact_id, listing_id) DO NOTHING",
+        (phone_contact_id, listing_id, role)
+    )
 
 
 def award_points(conn, user_id, points, reason, deal_id=None, unique=False):
@@ -256,16 +308,23 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
                 where = "WHERE o.name ILIKE %s OR o.phone ILIKE %s OR o.company ILIKE %s"
                 params = [f'%{search}%', f'%{search}%', f'%{search}%']
             cur.execute(f"""
-                SELECT o.id, o.name, o.phone, o.email, o.company, o.inn, o.source, o.notes,
+                SELECT o.id, COALESCE(NULLIF(pc.name, ''), o.name) as name,
+                       COALESCE(pc.phone, o.phone) as phone, o.email,
+                       COALESCE(pc.company, o.company) as company,
+                       COALESCE(pc.inn, o.inn) as inn,
+                       o.source, COALESCE(pc.notes, o.notes) as notes,
                        o.created_at, u.name as creator,
                        COUNT(DISTINCT ol.listing_id) as listings_count,
-                       COUNT(DISTINCT d.id) as deals_count
+                       COUNT(DISTINCT d.id) as deals_count,
+                       o.phone_contact_id,
+                       pc.photo_url
                 FROM crm_owners o
+                LEFT JOIN phone_contacts pc ON pc.id = o.phone_contact_id
                 LEFT JOIN users u ON u.id = o.created_by
                 LEFT JOIN crm_owner_listings ol ON ol.owner_id = o.id
                 LEFT JOIN crm_deals d ON d.owner_id = o.id
                 {where}
-                GROUP BY o.id, u.name
+                GROUP BY o.id, u.name, pc.name, pc.phone, pc.company, pc.inn, pc.notes, pc.photo_url
                 ORDER BY o.created_at DESC
                 LIMIT %s OFFSET %s
             """, params + [limit, offset])
@@ -277,7 +336,8 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
                 owners.append({'id': r[0], 'name': r[1], 'phone': r[2], 'email': r[3],
                                 'company': r[4], 'inn': r[5], 'source': r[6], 'notes': r[7],
                                 'created_at': r[8], 'creator': r[9],
-                                'listings_count': int(r[10]), 'deals_count': int(r[11])})
+                                'listings_count': int(r[10]), 'deals_count': int(r[11]),
+                                'phone_contact_id': r[12], 'photo_url': r[13]})
             return ok({'owners': owners, 'total': total, 'page': page, 'limit': limit})
 
         if method == 'GET' and resource_id:
@@ -316,25 +376,48 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
             dup = cur.fetchone()
             if dup:
                 return ok({'duplicate': True, 'existing': {'id': dup[0], 'name': dup[1]}}, 409)
+            # ⬇ Авто-линк к телефонной базе (единый источник)
+            pc_id = upsert_phone_contact(conn, phone, body.get('name', ''), user['id'])
             cur.execute(
-                "INSERT INTO crm_owners (name, phone, phone_normalized, email, company, inn, source, notes, created_by) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+                "INSERT INTO crm_owners (name, phone, phone_normalized, email, company, inn, source, notes, created_by, phone_contact_id) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
                 (body['name'], phone, norm, body.get('email'), body.get('company'),
-                 body.get('inn'), body.get('source','manual'), body.get('notes'), user['id'])
+                 body.get('inn'), body.get('source','manual'), body.get('notes'), user['id'], pc_id)
             )
             new_id = cur.fetchone()[0]
             award_points(conn, user['id'], 5, 'Добавлен собственник')
-            return ok({'id': new_id}, 201)
+            return ok({'id': new_id, 'phone_contact_id': pc_id}, 201)
 
         if method == 'PUT' and resource_id:
             fields, vals = [], []
+            new_phone = None
+            new_name = None
             for f in ('name', 'phone', 'email', 'company', 'inn', 'source', 'notes'):
                 if f in body:
                     fields.append(f'{f} = %s')
                     vals.append(body[f])
                     if f == 'phone':
+                        new_phone = body[f]
                         fields.append('phone_normalized = %s')
                         vals.append(normalize_phone(body[f]))
+                    if f == 'name':
+                        new_name = body[f]
+
+            # Перевязать телефонную базу, если телефон изменился
+            if new_phone is not None:
+                pc_id = upsert_phone_contact(conn, new_phone, new_name or '', user['id'])
+                fields.append('phone_contact_id = %s')
+                vals.append(pc_id)
+            elif new_name is not None:
+                # Если меняли только имя — обновим имя в связанной phone_contact (если есть)
+                cur.execute("SELECT phone_contact_id, phone FROM crm_owners WHERE id = %s", (resource_id,))
+                _r = cur.fetchone()
+                if _r and _r[0] and new_name:
+                    cur.execute(
+                        "UPDATE phone_contacts SET name = %s, updated_at = NOW() WHERE id = %s",
+                        (new_name, _r[0])
+                    )
+
             if fields:
                 fields.append('updated_at = NOW()')
                 vals.append(resource_id)

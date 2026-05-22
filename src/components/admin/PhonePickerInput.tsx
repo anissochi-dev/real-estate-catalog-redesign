@@ -12,7 +12,7 @@ interface PhoneContact {
 
 interface Props {
   value: string;
-  onChange: (phone: string, name?: string) => void;
+  onChange: (phone: string, name?: string, phoneContactId?: number) => void;
   onNameChange?: (name: string) => void;
   placeholder?: string;
   className?: string;
@@ -63,7 +63,7 @@ export default function PhonePickerInput({ value, onChange, onNameChange, placeh
   };
 
   const pick = (c: PhoneContact) => {
-    onChange(c.phone, c.name || undefined);
+    onChange(c.phone, c.name || undefined, c.id);
     if (c.name && onNameChange) onNameChange(c.name);
     setMatchedContact(c);
     setOpen(false);
