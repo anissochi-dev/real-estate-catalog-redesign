@@ -175,17 +175,21 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
             </div>
           )}
 
-          <div className="border-t border-white/10 mt-5 pt-4 text-center sm:text-left">
-            <div className="text-xs text-white/40 inline-flex items-center gap-1.5 flex-wrap justify-center sm:justify-start">
-              <span>© {new Date().getFullYear()} {company}. Все права защищены.</span>
-              <button
-                onClick={onLogin}
-                aria-label="Вход для сотрудников"
-                title="Вход для сотрудников"
-                className="text-white/30 hover:text-white/70 transition-colors p-1 -m-1 rounded inline-flex items-center justify-center"
-              >
-                <Icon name="Lock" size={11} />
-              </button>
+          <div className="border-t border-white/10 mt-5 pt-4 pb-[max(4px,env(safe-area-inset-bottom))] text-center sm:text-left">
+            <div className="text-[11px] sm:text-xs text-white/40 leading-relaxed flex flex-wrap items-center gap-x-1 justify-center sm:justify-start">
+              <span>© {new Date().getFullYear()} {company}.</span>
+              <span className="whitespace-nowrap inline-flex items-center gap-1">
+                Все права защищены.
+                <button
+                  onClick={onLogin}
+                  aria-label="Вход для сотрудников"
+                  title="Вход для сотрудников"
+                  className="text-white/30 hover:text-white/70 active:text-white/90 focus-visible:text-white/80 transition-colors p-1.5 -m-0.5 rounded inline-flex items-center justify-center min-w-[32px] min-h-[32px] sm:min-w-0 sm:min-h-0 sm:p-1"
+                >
+                  <Icon name="Lock" size={12} className="sm:hidden" />
+                  <Icon name="Lock" size={11} className="hidden sm:block" />
+                </button>
+              </span>
             </div>
           </div>
         </div>
