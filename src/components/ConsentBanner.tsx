@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
 import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
 
@@ -115,7 +114,6 @@ export default function ConsentBanner({ onAccept }: Props) {
   const navigate = useNavigate();
   const { settings } = useSettings();
   const [openDoc, setOpenDoc] = useState<LegalDoc | null>(null);
-  const [pulse, setPulse] = useState(false);
   // Какие документы пользователь открывал — пишем в журнал для юр. защиты.
   const [openedDocs, setOpenedDocs] = useState<Set<string>>(() => new Set());
 
@@ -129,57 +127,6 @@ export default function ConsentBanner({ onAccept }: Props) {
       return next;
     });
   };
-
-  // Лёгкая пульсация баннера, чтобы привлечь внимание при попытке клика мимо
-  useEffect(() => {
-    if (!pulse) return;
-    const t = setTimeout(() => setPulse(false), 700);
-    return () => clearTimeout(t);
-  }, [pulse]);
-
-  // Глобальный перехват кликов вне баннера: показываем подсказку и пульсируем
-  useEffect(() => {
-    const handler = (e: MouseEvent | TouchEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (!target) return;
-      if (target.closest('[data-consent-banner="true"]')) return;
-      if (target.closest('[data-consent-modal="true"]')) return;
-      // Блокируем переход и показываем тост-напоминание
-      e.preventDefault();
-      e.stopPropagation();
-      setPulse(true);
-      toast.warning('Сначала ознакомьтесь с документами и нажмите «Согласен»', {
-        id: 'consent-required',
-        duration: 2200,
-      });
-    };
-    document.addEventListener('click', handler, true);
-    document.addEventListener('touchstart', handler, true);
-    return () => {
-      document.removeEventListener('click', handler, true);
-      document.removeEventListener('touchstart', handler, true);
-    };
-  }, []);
-
-  // Блокируем прокрутку body, чтобы человек не мог скрыть баннер
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, []);
-
-  // Блокируем клавиатурную навигацию (Tab) мимо баннера
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      // Esc и Enter тоже не дают пропустить
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setPulse(true);
-      }
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, []);
 
   const handleAccept = () => {
     try {
@@ -236,12 +183,9 @@ export default function ConsentBanner({ onAccept }: Props) {
       {/* Сам баннер */}
       <div
         data-consent-banner="true"
-        className={`fixed left-0 right-0 bottom-0 z-[100] flex justify-center pointer-events-none px-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:px-4 sm:pb-6 ${pulse ? 'animate-[pulse_0.6s_ease-in-out]' : ''}`}
+        className="fixed left-0 right-0 bottom-0 z-[100] flex justify-center pointer-events-none px-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:px-4 sm:pb-6"
       >
-        <div
-          className={`pointer-events-auto bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-brand-blue/10 flex flex-col overflow-hidden ${pulse ? 'ring-4 ring-brand-blue/40' : ''}`}
-          style={{ transition: 'box-shadow 0.3s, transform 0.3s' }}
-        >
+        <div className="pointer-events-auto bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-brand-blue/10 flex flex-col overflow-hidden">
           {/* Header */}
           <div className="px-4 sm:px-5 pt-4 sm:pt-5 pb-3">
             <div className="flex items-start gap-3 mb-2">
