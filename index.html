@@ -44,58 +44,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 
-    <!-- Защита от принудительной перезагрузки Vite HMR при потере WS-соединения -->
-    <script>
-      (function() {
-        // Перехват только в dev-режиме (когда Vite активен).
-        // В production эти скрипты вообще не нужны и могут ломать fetch.
-        var isDev = location.hostname === 'localhost'
-          || location.hostname === '127.0.0.1'
-          || location.hostname.endsWith('.poehali.dev');
-        if (!isDev) return;
-
-        var _nativeReload = window.location.reload.bind(window.location);
-        var _lastAllowedReload = 0;
-
-        try {
-          Object.defineProperty(window.location, 'reload', {
-            configurable: true,
-            get: function() {
-              return function(force) {
-                var now = Date.now();
-                if (now - _lastAllowedReload < 60000) {
-                  console.info('[HMR] reload подавлен — слишком частый вызов');
-                  return;
-                }
-                _lastAllowedReload = now;
-                _nativeReload(force);
-              };
-            }
-          });
-        } catch (e) { /* некоторые браузеры не дают переопределить location.reload */ }
-
-        // ВАЖНО: нативный fetch ТРЕБУЕТ вызываться с this = window.
-        // .apply(this, ...) ломает fetch в Safari iOS и Chrome строгом режиме
-        // (TypeError: Illegal invocation → выглядит как "Failed to fetch").
-        // Поэтому биндим _nativeFetch к window раз и навсегда.
-        var _nativeFetch = window.fetch.bind(window);
-        window.fetch = function(input, init) {
-          var url;
-          try {
-            url = typeof input === 'string' ? input
-              : (input && input.url) ? input.url : String(input);
-          } catch (e) { url = ''; }
-          // Vite polling — подавляем ошибку, чтобы не дёргать reload
-          if (url && (url.indexOf('/@vite/') !== -1 || url.indexOf('__vite_ping') !== -1)) {
-            return _nativeFetch(input, init).catch(function() {
-              return new Response('', { status: 200 });
-            });
-          }
-          // Все остальные запросы — пробрасываем без изменений
-          return _nativeFetch(input, init);
-        };
-      })();
-    </script>
+    <!-- HMR/fetch перехват ОТКЛЮЧЁН — раньше ломал нативный fetch. Vite сам справится. -->
 
     <!-- Защита контента -->
     <script>

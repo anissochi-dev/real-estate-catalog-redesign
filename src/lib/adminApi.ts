@@ -97,19 +97,35 @@ async function req(url: string, init?: RequestInit) {
     });
   };
 
-  let res: Response;
-  try {
-    res = await doFetch();
-    // Один автоматический retry при 401 — возможно, токен только что обновился
-    if (res.status === 401) {
-      await new Promise(r => setTimeout(r, 150));
+  let res: Response | null = null;
+  let lastNetworkErr: unknown = null;
+  // Делаем до 3 попыток с возрастающей задержкой — это лечит "Failed to fetch"
+  // во время HMR-реконнектов Vite в режиме preview и кратковременных сбоев сети.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
       res = await doFetch();
+      lastNetworkErr = null;
+      break;
+    } catch (networkErr) {
+      lastNetworkErr = networkErr;
+      // Если браузер сообщил, что сети нет — не дёргаем сервер
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        break;
+      }
+      // Экспоненциальная задержка: 300мс → 700мс
+      await new Promise(r => setTimeout(r, 300 + attempt * 400));
     }
-  } catch (networkErr) {
+  }
+  if (!res) {
     const { showError } = await import('./errorTranslator');
-    const msg = networkErr instanceof Error ? networkErr.message : 'Failed to fetch';
+    const msg = lastNetworkErr instanceof Error ? lastNetworkErr.message : 'Failed to fetch';
     showError(msg);
     throw new Error(msg);
+  }
+  // Один автоматический retry при 401 — возможно, токен только что обновился
+  if (res.status === 401) {
+    await new Promise(r => setTimeout(r, 150));
+    try { res = await doFetch(); } catch { /* keep previous response */ }
   }
 
   const data = await res.json().catch(() => ({}));

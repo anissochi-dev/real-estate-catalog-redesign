@@ -89,8 +89,23 @@ function mapListing(item: ApiListing): Property {
   };
 }
 
+/** fetch с автоматическим retry на сетевые сбои (актуально в превью с HMR-реконнектами). */
+async function fetchWithRetry(url: string, init?: RequestInit, retries = 3): Promise<Response> {
+  let lastErr: unknown = null;
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fetch(url, init);
+    } catch (e) {
+      lastErr = e;
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) break;
+      await new Promise(r => setTimeout(r, 300 + i * 400));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error('Network error');
+}
+
 export async function fetchListings(): Promise<Property[]> {
-  const res = await fetch(LISTINGS_URL);
+  const res = await fetchWithRetry(LISTINGS_URL);
   if (!res.ok) throw new Error('Не удалось загрузить объекты');
   const data = await res.json();
   return (data.listings || []).map(mapListing);
@@ -213,7 +228,7 @@ export interface PublicSettings {
 
 export async function fetchPublicSettings(): Promise<PublicSettings> {
   try {
-    const res = await fetch(`${LISTINGS_URL}?resource=public_settings`);
+    const res = await fetchWithRetry(`${LISTINGS_URL}?resource=public_settings`);
     const data = await res.json();
     return data.settings || {};
   } catch {
