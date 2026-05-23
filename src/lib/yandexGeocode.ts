@@ -1,0 +1,69 @@
+/**
+ * Утилита геокодирования через Yandex HTTP Geocoder API.
+ * Не зависит от загруженного на странице ymaps — может работать в любом контексте.
+ */
+
+export interface GeocodeResult {
+  lat: number;
+  lng: number;
+  /** Распознанные компоненты адреса (если есть). */
+  district?: string;
+  street?: string;
+  house?: string;
+  /** Полный текст адреса от геокодера. */
+  text?: string;
+  /** Адрес в формате "Улица, дом" (если разобрано). */
+  shortAddress?: string;
+}
+
+/**
+ * Геокодирует адрес → координаты + компоненты.
+ * Возвращает null, если адрес не распознан или произошла ошибка сети.
+ */
+export async function geocodeAddress(
+  fullAddress: string,
+  apiKey?: string,
+): Promise<GeocodeResult | null> {
+  const q = (fullAddress || '').trim();
+  if (!q) return null;
+  const url =
+    `https://geocode-maps.yandex.ru/1.x/?format=json&lang=ru_RU&results=1` +
+    (apiKey ? `&apikey=${encodeURIComponent(apiKey)}` : '') +
+    `&geocode=${encodeURIComponent(q)}`;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const features: any[] = data?.response?.GeoObjectCollection?.featureMember || [];
+    const obj = features[0]?.GeoObject;
+    if (!obj) return null;
+    const pos: string = obj?.Point?.pos || '';
+    const parts = pos.split(' ');
+    if (parts.length !== 2) return null;
+    const lng = parseFloat(parts[0]);
+    const lat = parseFloat(parts[1]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+    const meta = obj?.metaDataProperty?.GeocoderMetaData || {};
+    const components: { kind: string; name: string }[] = meta?.Address?.Components || [];
+    let district = '', street = '', house = '';
+    for (const p of components) {
+      if (p.kind === 'district' && !district) district = p.name;
+      else if (p.kind === 'street' && !street) street = p.name;
+      else if (p.kind === 'house' && !house) house = p.name;
+    }
+    const shortAddress = [street, house].filter(Boolean).join(', ');
+    return {
+      lat,
+      lng,
+      district: district || undefined,
+      street: street || undefined,
+      house: house || undefined,
+      text: meta?.text || obj?.name || undefined,
+      shortAddress: shortAddress || undefined,
+    };
+  } catch {
+    return null;
+  }
+}

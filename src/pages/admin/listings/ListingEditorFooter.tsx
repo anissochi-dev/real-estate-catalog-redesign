@@ -12,9 +12,10 @@ interface Props {
   tabErrors: Partial<Record<EditorTab, boolean>>;
   onClose: () => void;
   onSave: () => void;
+  saving?: boolean;
 }
 
-export default function ListingEditorFooter({ editing, tab, setTab, tabErrors, onClose, onSave }: Props) {
+export default function ListingEditorFooter({ editing, tab, setTab, tabErrors, onClose, onSave, saving }: Props) {
   const [posting, setPosting] = useState(false);
 
   const postToSocials = async () => {
@@ -62,7 +63,12 @@ export default function ListingEditorFooter({ editing, tab, setTab, tabErrors, o
           ))}
         </div>
         <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm">Отмена</button>
-        <button onClick={onSave} className="btn-blue text-white px-5 py-2 rounded-xl text-sm font-semibold">
+        <button
+          onClick={onSave}
+          disabled={saving}
+          className="btn-blue text-white px-5 py-2 rounded-xl text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center gap-2"
+        >
+          {saving && <Icon name="Loader2" size={14} className="animate-spin" />}
           Сохранить
         </button>
       </div>

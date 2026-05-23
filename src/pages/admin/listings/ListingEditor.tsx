@@ -8,6 +8,8 @@ import ListingEditorHeader, { EditorTab } from './ListingEditorHeader';
 import ListingEditorMainTab from './ListingEditorMainTab';
 import ListingEditorPhotosTab from './ListingEditorPhotosTab';
 import ListingEditorFooter from './ListingEditorFooter';
+import { useSettings } from '@/contexts/SettingsContext';
+import { geocodeAddress } from '@/lib/yandexGeocode';
 
 interface Props {
   editing: Partial<Listing>;
@@ -34,7 +36,10 @@ export default function ListingEditor({
 }: Props) {
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [tab, setTab] = useState<EditorTab>('main');
+  const [geocoding, setGeocoding] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
+  const { settings } = useSettings();
+  const yandexApiKey = settings.yandex_maps_api_key || '';
 
   // Определяем какие вкладки имеют ошибки
   const tabErrors: Partial<Record<EditorTab, boolean>> = {
@@ -69,8 +74,42 @@ export default function ListingEditor({
     return Object.keys(e).length === 0;
   };
 
-  const handleSave = () => {
-    if (validate()) { onSave(); return; }
+  /**
+   * Авто-геокодирование адреса перед сохранением.
+   * Если адрес указан, но координаты отсутствуют — пробуем получить lat/lng
+   * через Yandex Geocoder. Координаты, выставленные вручную (кликом по карте
+   * или перетаскиванием маркера), не перезаписываем.
+   */
+  const ensureCoordinates = async (): Promise<void> => {
+    const addr = editing.address?.trim();
+    const hasCoords =
+      editing.lat != null && editing.lng != null &&
+      Number.isFinite(+editing.lat) && Number.isFinite(+editing.lng);
+    if (!addr || hasCoords) return;
+    const city = editing.city?.trim();
+    const fullQuery = city ? `${city}, ${addr}` : addr;
+    setGeocoding(true);
+    try {
+      const res = await geocodeAddress(fullQuery, yandexApiKey);
+      if (res) {
+        setEditing({
+          ...editing,
+          lat: res.lat,
+          lng: res.lng,
+          district: editing.district || res.district || '',
+        });
+      }
+    } finally {
+      setGeocoding(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (validate()) {
+      await ensureCoordinates();
+      onSave();
+      return;
+    }
     // Переключаемся на первую вкладку с ошибкой
     const order: EditorTab[] = ['main', 'photos', 'location', 'details', 'extra'];
     const bc = (editing as Record<string, unknown>).broker_commission as string | undefined;
@@ -183,6 +222,7 @@ export default function ListingEditor({
           tabErrors={tabErrors}
           onClose={onClose}
           onSave={handleSave}
+          saving={geocoding}
         />
       </div>
     </div>
