@@ -109,12 +109,12 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
               {/* Hamburger — mobile */}
               <button
                 onClick={() => setDrawerOpen(true)}
-                className="md:hidden p-2 rounded-lg hover:bg-muted transition-colors relative"
+                className="md:hidden p-2.5 rounded-lg hover:bg-muted transition-colors relative min-h-[44px] min-w-[44px] flex items-center justify-center"
                 aria-label="Открыть меню"
               >
                 <Icon name="Menu" size={22} />
                 {favoritesCount > 0 && (
-                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-brand-orange" />
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-brand-orange" />
                 )}
               </button>
             </div>
@@ -132,7 +132,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
 
       {/* Mobile Drawer */}
       <div
-        className={`fixed top-0 right-0 h-full w-[280px] z-[70] bg-white shadow-2xl flex flex-col transition-transform duration-300 md:hidden ${
+        className={`fixed top-0 right-0 h-full w-[280px] max-w-[85vw] z-[70] bg-white shadow-2xl flex flex-col transition-transform duration-300 md:hidden pb-safe ${
           drawerOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >

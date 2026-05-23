@@ -115,18 +115,26 @@ export default function PropertyMediaGallery({
       {/* Лайтбокс */}
       {lightbox && mainImg && (
         <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center"
+          style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
           onClick={() => setLightbox(false)}>
-          <button className="absolute top-4 right-4 text-white/70 hover:text-white" onClick={() => setLightbox(false)}>
-            <Icon name="X" size={28} />
+          <button
+            className="absolute top-3 right-3 sm:top-4 sm:right-4 text-white/80 hover:text-white bg-white/10 rounded-full p-2.5 sm:p-2 min-h-[44px] min-w-[44px] flex items-center justify-center"
+            onClick={() => setLightbox(false)}
+            aria-label="Закрыть"
+            style={{ top: 'calc(env(safe-area-inset-top) + 12px)' }}
+          >
+            <Icon name="X" size={24} />
           </button>
           {imgs.length > 1 && (
             <>
-              <button className="absolute left-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-white/10 rounded-full p-2"
-                onClick={e => { e.stopPropagation(); setActiveImg(i => Math.max(i - 1, 0)); }}>
+              <button className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white bg-white/10 rounded-full p-3 sm:p-2 min-h-[44px] min-w-[44px] flex items-center justify-center"
+                onClick={e => { e.stopPropagation(); setActiveImg(i => Math.max(i - 1, 0)); }}
+                aria-label="Предыдущее">
                 <Icon name="ChevronLeft" size={24} />
               </button>
-              <button className="absolute right-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-white/10 rounded-full p-2"
-                onClick={e => { e.stopPropagation(); setActiveImg(i => Math.min(i + 1, imgs.length - 1)); }}>
+              <button className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white bg-white/10 rounded-full p-3 sm:p-2 min-h-[44px] min-w-[44px] flex items-center justify-center"
+                onClick={e => { e.stopPropagation(); setActiveImg(i => Math.min(i + 1, imgs.length - 1)); }}
+                aria-label="Следующее">
                 <Icon name="ChevronRight" size={24} />
               </button>
             </>
@@ -171,7 +179,7 @@ export default function PropertyMediaGallery({
           </div>
         )}
 
-        <div className="relative rounded-2xl overflow-hidden bg-muted aspect-[16/10]">
+        <div className="relative rounded-2xl overflow-hidden bg-muted aspect-video sm:aspect-[16/10]">
           {isVideoActive ? (
             <VideoEmbed url={item.videoUrl!} />
           ) : mainImg !== null && mainImg !== undefined ? (

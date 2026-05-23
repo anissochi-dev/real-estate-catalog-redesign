@@ -49,6 +49,23 @@ export default function FooterTab({ s, setS, saved, save }: Props) {
         />
       </div>
 
+      <div className="bg-white rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="font-display font-700 text-lg">Реквизиты компании</div>
+        <div className="text-xs text-muted-foreground -mt-2">
+          Реквизиты юр./физ. лица в нижней части подвала (ИП/ООО, ИНН, ОГРН, юр. адрес и т.п.).
+          Если поле пустое — блок на сайте не отображается. Каждая строка переносится на новую.
+        </div>
+        <textarea
+          className="w-full px-3 py-2 border rounded-lg text-sm" rows={4}
+          placeholder={"ИП Самойленко И. П.\nИНН 230000000000\nОГРНИП 300000000000000\nг. Краснодар, ул. Красная, 1"}
+          value={s.footer_legal_info || ''}
+          onChange={e => setS({ ...s, footer_legal_info: e.target.value })}
+        />
+        <div className="text-[11px] text-muted-foreground">
+          Максимум 2000 символов. На сайте отображается мелким серым шрифтом под основным блоком подвала.
+        </div>
+      </div>
+
       <div className="flex items-center gap-3 sticky bottom-4 bg-white p-3 rounded-xl shadow z-20">
         <button onClick={save} className="btn-blue text-white px-6 py-3 rounded-xl font-semibold">Сохранить</button>
         {saved && <span className="text-emerald-600 text-sm">Сохранено</span>}

@@ -364,7 +364,9 @@ export default function App() {
         />
       )}
 
-      {!consentGiven && location.pathname !== '/declined' && (
+      {!consentGiven && location.pathname !== '/declined'
+        && !location.pathname.startsWith('/admin')
+        && !location.pathname.startsWith('/login') && (
         <ConsentBanner onAccept={() => setConsentGiven(true)} />
       )}
 

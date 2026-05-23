@@ -143,12 +143,20 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
             <div>
               <div className="font-semibold text-white mb-3">Контакты</div>
               <ul className="space-y-2 text-sm">
-                {phone && <li><a href={`tel:${phone}`} className="hover:text-white transition-colors">{phone}</a></li>}
-                {email && <li><a href={`mailto:${email}`} className="hover:text-white transition-colors">{email}</a></li>}
-                <li className="pt-1 text-white/50">{city}, с {settings.company_since_year || 2007} года</li>
+                {phone && <li><a href={`tel:${phone}`} className="hover:text-white transition-colors break-all">{phone}</a></li>}
+                {email && <li><a href={`mailto:${email}`} className="hover:text-white transition-colors break-all">{email}</a></li>}
               </ul>
             </div>
           </div>
+
+          {/* Реквизиты компании — показываем только если заполнено в админке */}
+          {settings.footer_legal_info && settings.footer_legal_info.trim() && (
+            <div className="border-t border-white/10 mt-6 pt-5">
+              <div className="text-xs text-white/55 whitespace-pre-line leading-relaxed">
+                {settings.footer_legal_info}
+              </div>
+            </div>
+          )}
 
           {/* Правовые документы */}
           {legalDocs.length > 0 && (

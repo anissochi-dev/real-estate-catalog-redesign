@@ -723,7 +723,7 @@ def _settings(cur, conn, method, event, user):
                           ('legal_personal_data', 10000), ('legal_privacy_policy', 10000),
                           ('legal_marketing_consent', 10000),
                           ('footer_description', 1000), ('footer_catalog_links', 3000),
-                          ('footer_extra_links', 3000),
+                          ('footer_extra_links', 3000), ('footer_legal_info', 2000),
                           # Бренд-кит
                           ('brand_primary_color', 20), ('brand_secondary_color', 20), ('brand_accent_color', 20),
                           ('favicon_url', 500), ('og_image_url', 500), ('apple_touch_icon_url', 500),

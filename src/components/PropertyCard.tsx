@@ -176,26 +176,29 @@ export default function PropertyCard({
             <>
               <button
                 type="button"
+                aria-label="Предыдущее фото"
                 onClick={e => { e.preventDefault(); setActiveImg(i => (i - 1 + imgs.length) % imgs.length); }}
-                className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
+                className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 sm:w-7 sm:h-7 rounded-full bg-black/50 text-white flex items-center justify-center opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-opacity hover:bg-black/70"
               >
                 <Icon name="ChevronLeft" size={14} />
               </button>
               <button
                 type="button"
+                aria-label="Следующее фото"
                 onClick={e => { e.preventDefault(); setActiveImg(i => (i + 1) % imgs.length); }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
+                className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 sm:w-7 sm:h-7 rounded-full bg-black/50 text-white flex items-center justify-center opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-opacity hover:bg-black/70"
               >
                 <Icon name="ChevronRight" size={14} />
               </button>
               {/* Точки */}
-              <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex gap-1 z-10">
+              <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
                 {imgs.map((_, i) => (
                   <button
                     key={i}
                     type="button"
+                    aria-label={`Фото ${i + 1}`}
                     onClick={e => { e.preventDefault(); setActiveImg(i); }}
-                    className={`w-1.5 h-1.5 rounded-full transition-all ${i === activeImg ? 'bg-white scale-125' : 'bg-white/50'}`}
+                    className={`w-2 h-2 sm:w-1.5 sm:h-1.5 rounded-full transition-all ${i === activeImg ? 'bg-white scale-125' : 'bg-white/50'}`}
                   />
                 ))}
               </div>
@@ -228,14 +231,16 @@ export default function PropertyCard({
 
 
 
-          {/* Избранное / сравнение */}
-          <div className="absolute right-2.5 top-10 flex flex-col gap-1.5 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+          {/* Избранное / сравнение — на тач-устройствах всегда видимы, на десктопе на hover */}
+          <div className="absolute right-2 top-10 flex flex-col gap-1.5 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
             <button type="button" onClick={e => { e.preventDefault(); onToggleFavorite(property.id); }}
-              className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md backdrop-blur-sm transition-all ${isFavorite ? 'bg-red-500 text-white' : 'bg-white/90 text-slate-400 hover:text-red-500'}`}>
+              aria-label="В избранное"
+              className={`w-9 h-9 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shadow-md backdrop-blur-sm transition-all ${isFavorite ? 'bg-red-500 text-white' : 'bg-white/90 text-slate-400 hover:text-red-500'}`}>
               <Icon name="Heart" size={14} className={isFavorite ? 'fill-current' : ''} />
             </button>
             <button type="button" onClick={e => { e.preventDefault(); onToggleCompare(property.id); }}
-              className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md backdrop-blur-sm transition-all ${isCompare ? 'bg-brand-orange text-white' : 'bg-white/90 text-slate-400 hover:text-brand-orange'}`}>
+              aria-label="К сравнению"
+              className={`w-9 h-9 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shadow-md backdrop-blur-sm transition-all ${isCompare ? 'bg-brand-orange text-white' : 'bg-white/90 text-slate-400 hover:text-brand-orange'}`}>
               <Icon name="GitCompare" size={14} />
             </button>
           </div>

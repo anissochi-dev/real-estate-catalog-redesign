@@ -46,7 +46,7 @@ def handler(event: dict, context) -> dict:
                     "yandex_maps_api_key, yandex_metrika_id, google_analytics_id, "
                     "company_since_year, site_url, seo_keywords, seo_description, "
                     "legal_personal_data, legal_privacy_policy, legal_marketing_consent, "
-                    "footer_description, footer_catalog_links, footer_extra_links "
+                    "footer_description, footer_catalog_links, footer_extra_links, footer_legal_info "
                     "FROM t_p71821556_real_estate_catalog_.settings ORDER BY id ASC LIMIT 1"
                 )
                 row = cur.fetchone()

@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
 
 const CONSENT_KEY = 'biznest_consent_v1';
@@ -24,9 +26,105 @@ interface Props {
   onAccept: () => void;
 }
 
+interface LegalDoc {
+  key: 'privacy' | 'personal' | 'marketing';
+  label: string;
+  short: string;
+  content: string;
+}
+
+function LegalModal({ title, content, onClose }: { title: string; content: string; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85svh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-border shrink-0">
+          <h3 className="font-display font-700 text-base sm:text-lg pr-2">{title}</h3>
+          <button
+            onClick={onClose}
+            className="p-2 -mr-2 rounded-lg hover:bg-muted transition-colors shrink-0"
+            aria-label="Закрыть"
+          >
+            <Icon name="X" size={18} />
+          </button>
+        </div>
+        <div className="overflow-y-auto p-4 sm:p-6 text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">
+          {content}
+        </div>
+        <div className="px-4 sm:px-6 py-3 border-t border-border shrink-0">
+          <button
+            onClick={onClose}
+            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-brand-blue text-white text-sm font-semibold hover:bg-brand-blue/90 transition-colors"
+          >
+            Понятно
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ConsentBanner({ onAccept }: Props) {
   const navigate = useNavigate();
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const { settings } = useSettings();
+  const [openDoc, setOpenDoc] = useState<LegalDoc | null>(null);
+  const [pulse, setPulse] = useState(false);
+
+  // Лёгкая пульсация баннера, чтобы привлечь внимание при попытке клика мимо
+  useEffect(() => {
+    if (!pulse) return;
+    const t = setTimeout(() => setPulse(false), 700);
+    return () => clearTimeout(t);
+  }, [pulse]);
+
+  // Глобальный перехват кликов вне баннера: показываем подсказку и пульсируем
+  useEffect(() => {
+    const handler = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('[data-consent-banner="true"]')) return;
+      if (target.closest('[data-consent-modal="true"]')) return;
+      // Блокируем переход и показываем тост-напоминание
+      e.preventDefault();
+      e.stopPropagation();
+      setPulse(true);
+      toast.warning('Сначала ознакомьтесь с документами и нажмите «Согласен»', {
+        id: 'consent-required',
+        duration: 2200,
+      });
+    };
+    document.addEventListener('click', handler, true);
+    document.addEventListener('touchstart', handler, true);
+    return () => {
+      document.removeEventListener('click', handler, true);
+      document.removeEventListener('touchstart', handler, true);
+    };
+  }, []);
+
+  // Блокируем прокрутку body, чтобы человек не мог скрыть баннер
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  // Блокируем клавиатурную навигацию (Tab) мимо баннера
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Esc и Enter тоже не дают пропустить
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setPulse(true);
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
 
   const handleAccept = () => {
     try {
@@ -38,86 +136,123 @@ export default function ConsentBanner({ onAccept }: Props) {
   };
 
   const handleDecline = () => {
-    navigate('/declined');
+    // Пробуем закрыть вкладку; если не получилось — показываем заглушку
+    try {
+      window.close();
+    } catch {
+      // ignore
+    }
+    // Если вкладка осталась — переходим на заглушку (страница уже есть в App.tsx)
+    setTimeout(() => navigate('/declined'), 100);
   };
 
+  const docs: LegalDoc[] = [
+    {
+      key: 'privacy',
+      label: 'Политика конфиденциальности',
+      short: 'Политика',
+      content: settings.legal_privacy_policy || '',
+    },
+    {
+      key: 'personal',
+      label: 'Согласие на обработку персональных данных',
+      short: 'Согласие на обработку ПД',
+      content: settings.legal_personal_data || '',
+    },
+    {
+      key: 'marketing',
+      label: 'Согласие на рекламные рассылки',
+      short: 'Согласие на рассылки',
+      content: settings.legal_marketing_consent || '',
+    },
+  ].filter(d => d.content.trim().length > 0);
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-white w-full sm:max-w-xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90vh] sm:max-h-[80vh]">
-        {/* Header */}
-        <div className="px-5 pt-5 pb-4 shrink-0">
-          <div className="flex items-start gap-3 mb-3">
-            <div className="w-10 h-10 rounded-xl bg-brand-blue/10 flex items-center justify-center shrink-0">
-              <Icon name="ShieldCheck" size={20} className="text-brand-blue" />
+    <>
+      {/* Полупрозрачный оверлей — блокирует визуальное взаимодействие с сайтом */}
+      <div
+        className="fixed inset-0 z-[95] bg-black/45 backdrop-blur-[2px]"
+        aria-hidden="true"
+      />
+
+      {/* Сам баннер */}
+      <div
+        data-consent-banner="true"
+        className={`fixed left-0 right-0 bottom-0 z-[100] flex justify-center pointer-events-none px-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:px-4 sm:pb-6 ${pulse ? 'animate-[pulse_0.6s_ease-in-out]' : ''}`}
+      >
+        <div
+          className={`pointer-events-auto bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-brand-blue/10 flex flex-col overflow-hidden ${pulse ? 'ring-4 ring-brand-blue/40' : ''}`}
+          style={{ transition: 'box-shadow 0.3s, transform 0.3s' }}
+        >
+          {/* Header */}
+          <div className="px-4 sm:px-5 pt-4 sm:pt-5 pb-3">
+            <div className="flex items-start gap-3 mb-2">
+              <div className="w-10 h-10 rounded-xl bg-brand-blue/10 flex items-center justify-center shrink-0">
+                <Icon name="ShieldCheck" size={20} className="text-brand-blue" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="font-display font-800 text-base sm:text-lg text-foreground leading-tight">
+                  Чтобы пользоваться сайтом, нужно ваше согласие
+                </h2>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+                  Ознакомьтесь с документами ниже
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="font-display font-800 text-lg text-foreground leading-tight">Прежде чем продолжить</h2>
-              <p className="text-sm text-muted-foreground mt-0.5">Для работы сайта нам нужно ваше согласие</p>
-            </div>
+
+            <p className="text-sm text-foreground/80 leading-relaxed">
+              Используя сайт, вы соглашаетесь с обработкой персональных данных,
+              получением рекламных рассылок и политикой конфиденциальности.
+            </p>
+
+            {/* Документы */}
+            {docs.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {docs.map(doc => (
+                  <button
+                    key={doc.key}
+                    onClick={() => setOpenDoc(doc)}
+                    className="inline-flex items-center gap-1.5 text-xs sm:text-[13px] px-3 py-2 rounded-xl bg-brand-blue/[0.07] text-brand-blue font-semibold hover:bg-brand-blue/15 transition-colors min-h-[40px]"
+                  >
+                    <Icon name="FileText" size={13} />
+                    {doc.label}
+                    <Icon name="ExternalLink" size={11} className="opacity-60" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          <p className="text-sm text-foreground/80 leading-relaxed">
-            Используя этот сайт, вы соглашаетесь с нашей{' '}
-            <strong>Политикой конфиденциальности</strong>, <strong>Пользовательским соглашением</strong>{' '}
-            и даёте согласие на использование <strong>файлов cookie</strong> для корректной работы сервиса.
-          </p>
-
-          <button
-            onClick={() => setDetailsOpen(v => !v)}
-            className="mt-3 inline-flex items-center gap-1.5 text-xs text-brand-blue hover:underline"
-          >
-            <Icon name={detailsOpen ? 'ChevronUp' : 'ChevronDown'} size={14} />
-            {detailsOpen ? 'Скрыть подробности' : 'Подробнее о данных'}
-          </button>
-        </div>
-
-        {/* Details */}
-        {detailsOpen && (
-          <div className="px-5 pb-4 overflow-y-auto shrink-0">
-            <div className="bg-muted/40 rounded-xl p-4 space-y-3 text-sm text-foreground/75">
-              <div className="flex gap-3">
-                <Icon name="Cookie" size={16} className="text-brand-blue shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-semibold text-foreground mb-0.5">Файлы cookie</div>
-                  <p>Используются для сохранения настроек, аналитики и корректной работы форм.</p>
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <Icon name="User" size={16} className="text-brand-blue shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-semibold text-foreground mb-0.5">Персональные данные</div>
-                  <p>Данные из форм обратной связи (имя, телефон) используются для связи с вами.</p>
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <Icon name="BarChart2" size={16} className="text-brand-blue shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-semibold text-foreground mb-0.5">Аналитика</div>
-                  <p>Яндекс.Метрика и Google Analytics помогают нам улучшать сайт. Данные обезличены.</p>
-                </div>
-              </div>
-            </div>
+          {/* Actions */}
+          <div className="px-4 sm:px-5 pb-4 sm:pb-5 pt-2 flex flex-col-reverse sm:flex-row gap-2 border-t border-border">
+            <button
+              onClick={handleDecline}
+              className="sm:flex-none sm:px-5 py-3 rounded-xl font-semibold text-sm border border-border text-muted-foreground hover:bg-muted transition-colors flex items-center justify-center gap-2 min-h-[44px]"
+            >
+              <Icon name="X" size={16} />
+              Не согласен
+            </button>
+            <button
+              onClick={handleAccept}
+              className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors min-h-[44px] shadow-lg shadow-emerald-600/20"
+            >
+              <Icon name="Check" size={16} />
+              Согласен — продолжить
+            </button>
           </div>
-        )}
-
-        {/* Actions */}
-        <div className="px-5 pb-5 pt-2 shrink-0 flex flex-col sm:flex-row gap-2 border-t border-border mt-auto">
-          <button
-            onClick={handleAccept}
-            className="flex-1 btn-blue text-white py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
-          >
-            <Icon name="Check" size={16} />
-            Принять и продолжить
-          </button>
-          <button
-            onClick={handleDecline}
-            className="flex-1 sm:flex-none sm:px-5 py-3 rounded-xl font-semibold text-sm border border-border text-muted-foreground hover:bg-muted transition-colors flex items-center justify-center gap-2"
-          >
-            <Icon name="X" size={16} />
-            Отказаться
-          </button>
         </div>
       </div>
-    </div>
+
+      {/* Модалка с текстом конкретного документа */}
+      {openDoc && (
+        <div data-consent-modal="true">
+          <LegalModal
+            title={openDoc.label}
+            content={openDoc.content || 'Текст документа не настроен'}
+            onClose={() => setOpenDoc(null)}
+          />
+        </div>
+      )}
+    </>
   );
 }

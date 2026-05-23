@@ -32,6 +32,7 @@ export interface S {
   footer_description: string;
   footer_catalog_links: string;
   footer_extra_links: string;
+  footer_legal_info: string;
   // Бренд-кит
   brand_primary_color: string;
   brand_secondary_color: string;

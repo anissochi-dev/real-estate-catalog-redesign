@@ -121,10 +121,10 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
       <section className="hero-bg text-white py-10 md:py-14">
         <div className="container mx-auto px-4 relative z-10">
           <div className="max-w-3xl">
-            <h1 className="font-display font-900 text-3xl md:text-4xl leading-tight mb-3 animate-fade-in-up stagger-1">
+            <h1 className="font-display font-900 text-2xl sm:text-3xl md:text-4xl leading-tight mb-3 animate-fade-in-up stagger-1">
               Коммерческая недвижимость и готовый бизнес Краснодара
             </h1>
-            <p className="text-white/75 text-base mb-5 animate-fade-in-up stagger-2 max-w-xl">
+            <p className="text-white/75 text-sm sm:text-base mb-5 animate-fade-in-up stagger-2 max-w-xl">
               Более {totalCount} объектов в {mainCity}е и пригороде. Подбор с ИИ за 2 минуты.
             </p>
 
@@ -143,13 +143,15 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
                 <input
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="ИИ-поиск: офис 80 м² в центре до 15 млн ₽..."
-                  className="bg-transparent text-white placeholder:text-white/55 outline-none w-full text-sm"
+                  placeholder="Опишите объект…"
+                  aria-label="ИИ-поиск объекта"
+                  className="bg-transparent text-white placeholder:text-white/55 outline-none w-full text-sm min-w-0"
                 />
               </div>
               <button
                 type="submit"
-                className="btn-orange text-white px-5 py-2 rounded-xl font-semibold font-display text-sm flex-shrink-0 inline-flex items-center gap-1.5"
+                aria-label="Найти с ИИ"
+                className="btn-orange text-white px-3 sm:px-5 py-2.5 rounded-xl font-semibold font-display text-sm flex-shrink-0 inline-flex items-center gap-1.5 min-h-[44px]"
               >
                 <Icon name="Sparkles" size={14} />
                 Найти с ИИ
@@ -260,7 +262,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
             </button>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             {newObjects.map((property, i) => (
               <PropertyCard
                 key={property.id}

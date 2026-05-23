@@ -204,6 +204,7 @@ export interface PublicSettings {
   footer_description?: string;
   footer_catalog_links?: string;
   footer_extra_links?: string;
+  footer_legal_info?: string;
   watermark_url?: string;
   watermark_enabled?: boolean;
   watermark_position?: string;
