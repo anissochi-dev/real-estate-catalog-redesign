@@ -47,38 +47,52 @@
     <!-- Защита от принудительной перезагрузки Vite HMR при потере WS-соединения -->
     <script>
       (function() {
+        // Перехват только в dev-режиме (когда Vite активен).
+        // В production эти скрипты вообще не нужны и могут ломать fetch.
+        var isDev = location.hostname === 'localhost'
+          || location.hostname === '127.0.0.1'
+          || location.hostname.endsWith('.poehali.dev');
+        if (!isDev) return;
+
         var _nativeReload = window.location.reload.bind(window.location);
         var _lastAllowedReload = 0;
-        var _pendingReloadTimer = null;
 
-        Object.defineProperty(window.location, 'reload', {
-          configurable: true,
-          get: function() {
-            return function(force) {
-              var now = Date.now();
-              // Vite вызывает reload при reconnect — подавляем если прошло < 60 сек
-              if (now - _lastAllowedReload < 60000) {
-                console.info('[HMR] reload подавлен — слишком частый вызов');
-                return;
-              }
-              _lastAllowedReload = now;
-              _nativeReload(force);
-            };
-          }
-        });
+        try {
+          Object.defineProperty(window.location, 'reload', {
+            configurable: true,
+            get: function() {
+              return function(force) {
+                var now = Date.now();
+                if (now - _lastAllowedReload < 60000) {
+                  console.info('[HMR] reload подавлен — слишком частый вызов');
+                  return;
+                }
+                _lastAllowedReload = now;
+                _nativeReload(force);
+              };
+            }
+          });
+        } catch (e) { /* некоторые браузеры не дают переопределить location.reload */ }
 
-        // Перехватываем Vite polling — он делает fetch('/@vite/client') и потом reload
-        var _nativeFetch = window.fetch;
+        // ВАЖНО: нативный fetch ТРЕБУЕТ вызываться с this = window.
+        // .apply(this, ...) ломает fetch в Safari iOS и Chrome строгом режиме
+        // (TypeError: Illegal invocation → выглядит как "Failed to fetch").
+        // Поэтому биндим _nativeFetch к window раз и навсегда.
+        var _nativeFetch = window.fetch.bind(window);
         window.fetch = function(input, init) {
-          var url = typeof input === 'string' ? input : (input instanceof Request ? input.url : String(input));
-          // Если Vite пытается "проверить" сервер после потери соединения — не даём reload произойти
-          if (url && (url.includes('/@vite/') || url.includes('__vite_ping'))) {
-            return _nativeFetch.apply(this, arguments).catch(function(e) {
-              // Подавляем ошибку — пусть Vite продолжает polling без reload
+          var url;
+          try {
+            url = typeof input === 'string' ? input
+              : (input && input.url) ? input.url : String(input);
+          } catch (e) { url = ''; }
+          // Vite polling — подавляем ошибку, чтобы не дёргать reload
+          if (url && (url.indexOf('/@vite/') !== -1 || url.indexOf('__vite_ping') !== -1)) {
+            return _nativeFetch(input, init).catch(function() {
               return new Response('', { status: 200 });
             });
           }
-          return _nativeFetch.apply(this, arguments);
+          // Все остальные запросы — пробрасываем без изменений
+          return _nativeFetch(input, init);
         };
       })();
     </script>
