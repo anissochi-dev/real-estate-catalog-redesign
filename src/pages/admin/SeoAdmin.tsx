@@ -8,6 +8,8 @@ import SeoOverview from './seo/SeoOverview';
 import SeoRunTab from './seo/SeoRunTab';
 import SeoScheduleTab from './seo/SeoScheduleTab';
 import SeoHistoryTab from './seo/SeoHistoryTab';
+import SeoPagesTab from './seo/SeoPagesTab';
+import SeoFilesTab from './seo/SeoFilesTab';
 
 export default function SeoAdmin() {
   const { token } = useAuth();
@@ -26,7 +28,7 @@ export default function SeoAdmin() {
   const [previewMode, setPreviewMode] = useState(false);
   const [listingId, setListingId] = useState('');
   const [lastRun, setLastRun] = useState<{ processed: number; errors: number; total: number; dry_run: boolean } | null>(null);
-  const [activeTab, setActiveTab] = useState<'run' | 'schedule' | 'history'>('run');
+  const [activeTab, setActiveTab] = useState<'run' | 'pages' | 'files' | 'schedule' | 'history'>('run');
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [historyLoading, setHistoryLoading] = useState(false);
 
@@ -134,7 +136,8 @@ export default function SeoAdmin() {
           Автоматическая SEO-оптимизация
         </h2>
         <p className="text-sm text-muted-foreground">
-          ИИ генерирует SEO Title и Description для объектов каталога. Поддерживает ручной запуск и расписание.
+          ИИ генерирует Title и Description для объектов каталога и страниц сайта. Управление robots.txt и sitemap.xml,
+          ручной запуск и расписание.
         </p>
       </div>
 
@@ -151,7 +154,9 @@ export default function SeoAdmin() {
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
         <div className="flex border-b border-border">
           {([
-            { id: 'run', label: 'Запуск', icon: 'Zap' },
+            { id: 'run', label: 'Объекты', icon: 'Zap' },
+            { id: 'pages', label: 'Страницы', icon: 'FileText' },
+            { id: 'files', label: 'Файлы', icon: 'FileCode2' },
             { id: 'schedule', label: 'Расписание', icon: 'Clock' },
             { id: 'history', label: 'История', icon: 'History' },
           ] as const).map(tab => (
@@ -189,6 +194,14 @@ export default function SeoAdmin() {
             />
           )}
 
+          {activeTab === 'pages' && (
+            <SeoPagesTab token={token || ''} gptOk={gptOk} />
+          )}
+
+          {activeTab === 'files' && (
+            <SeoFilesTab token={token || ''} />
+          )}
+
           {activeTab === 'schedule' && (
             <SeoScheduleTab
               schedule={schedule}
@@ -215,10 +228,11 @@ export default function SeoAdmin() {
           <Icon name="Info" size={14} /> Как работает
         </div>
         <ul className="text-xs text-muted-foreground space-y-0.5 list-disc list-inside">
-          <li>Выбирает активные объекты без seo_title (или конкретный по ID)</li>
-          <li>YandexGPT генерирует уникальный Title (65 симв.) и Description (155 симв.)</li>
-          <li>Расписание автоматически обрабатывает новые объекты каждую ночь</li>
-          <li>Все запуски сохраняются в истории</li>
+          <li><b>Объекты</b> — массовая генерация Title/Description для карточек каталога</li>
+          <li><b>Страницы</b> — ручное и ИИ-управление мета-тегами главной, каталога, контактов и др.</li>
+          <li><b>Файлы</b> — robots.txt (закрывает админку и логин) и sitemap.xml для поисковиков</li>
+          <li><b>Расписание</b> — ночной автозапуск для новых объектов</li>
+          <li><b>История</b> — все запуски и их результаты</li>
         </ul>
       </div>
     </div>
