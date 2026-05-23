@@ -50,9 +50,6 @@ export interface Listing {
   price_per_m2?: number | null;
   is_exclusive?: boolean;
   is_urgent?: boolean;
-  is_pinned?: boolean;
-  pinned_at?: string | null;
-  pinned_by?: number | null;
   last_edited_at?: string | null;
   last_edited_by?: number | null;
   lat?: number | null;

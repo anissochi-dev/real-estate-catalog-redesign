@@ -57,6 +57,7 @@ export default function ListingEditor({
     photos:   !!errors.photos,
     location: !!errors.address,
     details:  !!(errors.price || errors.area || errors.floor || errors.total_floors || errors.broker_commission),
+    content:  !!errors.description,
     extra:    !!(errors.finishing || errors.building_class || errors.building_year || errors.property_rights),
   };
 
@@ -76,6 +77,8 @@ export default function ListingEditor({
     if (!editing.address?.trim() && !editing.district?.trim()) e.address = true;
     const bc = (editing as Record<string, unknown>).broker_commission as string | undefined;
     if (!bc || !bc.trim()) e.broker_commission = true;
+    // Описание — обязательное, минимум 30 символов
+    if (!editing.description?.trim() || editing.description.trim().length < 30) e.description = true;
     if (!editing.finishing) e.finishing = true;
     if (!editing.building_class) e.building_class = true;
     if (!editing.building_year) e.building_year = true;
@@ -135,13 +138,14 @@ export default function ListingEditor({
       return;
     }
     // Переключаемся на первую вкладку с ошибкой
-    const order: EditorTab[] = ['main', 'photos', 'location', 'details', 'extra'];
+    const order: EditorTab[] = ['main', 'photos', 'location', 'details', 'content', 'extra'];
     const bc = (editing as Record<string, unknown>).broker_commission as string | undefined;
     const firstErrTab = order.find(t => {
       if (t === 'main') return !editing.title?.trim() || !editing.owner_name?.trim() || !editing.owner_phone?.trim() || !editing.category || !editing.deal || !editing.condition;
       if (t === 'photos') return !photos.length;
       if (t === 'location') return !editing.address?.trim() && !editing.district?.trim();
       if (t === 'details') return !editing.price || !editing.area || editing.floor == null || editing.total_floors == null || !bc?.trim();
+      if (t === 'content') return !editing.description?.trim() || editing.description.trim().length < 30;
       if (t === 'extra') return !editing.finishing || !editing.building_class || !editing.building_year || !editing.property_rights;
       return false;
     });
@@ -225,6 +229,8 @@ export default function ListingEditor({
               aiTagsLoading={aiTagsLoading}
               onDescribe={onDescribe}
               onGenerateTags={onGenerateTags}
+              errors={errors}
+              setErrors={setErrors}
             />
           )}
 

@@ -454,31 +454,6 @@ def _listings(cur, conn, method, rid, event, user):
         return _ok({'id': new_id, 'success': True, 'owner_phone_contact_id': owner_pc_id})
 
     if method == 'PUT' and rid:
-        # Спец-actions: pin / unpin (только admin/director)
-        action = (event.get('queryStringParameters') or {}).get('action') or body.get('action')
-        if action in ('pin', 'unpin'):
-            if not user or user.get('role') not in ('admin', 'director'):
-                return _err(403, 'Закреплять объекты могут только администратор и директор')
-            if action == 'pin':
-                # лимит 10 закреплённых
-                cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.listings WHERE is_pinned = TRUE")
-                cnt_row = cur.fetchone() or {}
-                if int(cnt_row.get('c', 0)) >= 10:
-                    return _err(400, 'Достигнут лимит закреплённых объектов (10). Открепите один из уже закреплённых.')
-                cur.execute(
-                    f"UPDATE {SCHEMA}.listings SET is_pinned = TRUE, pinned_at = NOW(), "
-                    f"pinned_by = {int(user['id'])}, updated_at = NOW() WHERE id = {int(rid)}"
-                )
-                _write_history(cur, int(rid), user, 'pinned', {'is_pinned': {'old': False, 'new': True}})
-            else:
-                cur.execute(
-                    f"UPDATE {SCHEMA}.listings SET is_pinned = FALSE, pinned_at = NULL, "
-                    f"pinned_by = NULL, updated_at = NOW() WHERE id = {int(rid)}"
-                )
-                _write_history(cur, int(rid), user, 'unpinned', {'is_pinned': {'old': True, 'new': False}})
-            conn.commit()
-            return _ok({'success': True, 'action': action})
-
         # ── Снимаем "до" — для diff и истории ─────────────────────────────────
         diff_cols = [
             'title', 'description', 'category', 'deal', 'price', 'price_per_m2',
@@ -532,13 +507,17 @@ def _listings(cur, conn, method, rid, event, user):
                           ('owner_name', 150), ('owner_phone', 30), ('owner_phone2', 30), ('price_unit', 10),
                           ('purpose', 100), ('condition', 50), ('parking', 20), ('entrance', 20),
                           ('video_url', 500), ('video_type', 20), ('tenant_name', 200),
-                          ('finishing', 100), ('utilities', 500), ('road_line', 50)]:
+                          ('finishing', 100), ('utilities', 500), ('road_line', 50),
+                          # Дополнительные поля из вкладки «Дополнительное»
+                          ('building_class', 10), ('property_rights', 30),
+                          ('land_status', 30), ('subway_station', 100)]:
             if f in body:
                 fields.append(f"{f} = {_str_or_null(body.get(f), length)}")
-        for f in ('price', 'price_per_m2', 'area', 'payback', 'profit', 'floor', 'total_floors'):
+        for f in ('price', 'price_per_m2', 'area', 'payback', 'profit', 'floor', 'total_floors',
+                  'building_year', 'subway_distance'):
             if f in body:
                 fields.append(f"{f} = {_int_or_null(body.get(f))}")
-        for f in ('monthly_rent', 'yearly_rent', 'ceiling_height', 'electricity_kw'):
+        for f in ('monthly_rent', 'yearly_rent', 'ceiling_height', 'electricity_kw', 'land_area', 'min_area'):
             if f in body:
                 fields.append(f"{f} = {_num_or_null(body.get(f))}")
         for f in ('use_watermark', 'export_yandex', 'export_avito', 'export_cian'):
@@ -548,7 +527,8 @@ def _listings(cur, conn, method, rid, event, user):
             if f in body:
                 v = body.get(f)
                 fields.append(f"{f} = " + ('NULL' if v is None or v == '' else str(float(v))))
-        for f in ('is_hot', 'is_new', 'is_exclusive', 'is_urgent', 'is_visible'):
+        for f in ('is_hot', 'is_new', 'is_exclusive', 'is_urgent', 'is_visible',
+                  'has_furniture', 'has_equipment', 'is_apartments'):
             if f in body:
                 fields.append(f"{f} = {_bool(body.get(f))}")
         if 'rooms' in body:

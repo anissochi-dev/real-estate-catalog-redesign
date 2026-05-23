@@ -26,8 +26,6 @@ interface ApiListing {
   is_new: boolean;
   is_exclusive?: boolean;
   is_urgent?: boolean;
-  is_pinned?: boolean | null;
-  pinned_at?: string | null;
   public_code?: number | null;
   tenant_name?: string | null;
   monthly_rent?: number | null;
@@ -72,8 +70,6 @@ function mapListing(item: ApiListing): Property {
     isNew: item.is_new,
     isExclusive: item.is_exclusive,
     isUrgent: item.is_urgent,
-    isPinned: item.is_pinned ?? undefined,
-    pinnedAt: item.pinned_at ?? undefined,
     publicCode: item.public_code ?? undefined,
     tenantName: item.tenant_name ?? undefined,
     monthlyRent: item.monthly_rent ?? undefined,

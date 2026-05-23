@@ -50,8 +50,6 @@ export interface Property {
   isNew?: boolean;
   isExclusive?: boolean;
   isUrgent?: boolean;
-  isPinned?: boolean;
-  pinnedAt?: string;
   publicCode?: number;
   tenantName?: string;
   monthlyRent?: number;

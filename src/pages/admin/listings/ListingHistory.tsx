@@ -49,8 +49,6 @@ const ACTION_LABELS: Record<string, { label: string; icon: string; color: string
   price_changed: { label: 'Цена изменена', icon: 'TrendingDown', color: 'text-amber-600 bg-amber-50' },
   status_changed: { label: 'Статус изменён', icon: 'RefreshCw', color: 'text-violet-600 bg-violet-50' },
   broker_changed: { label: 'Брокер изменён', icon: 'UserCheck', color: 'text-indigo-600 bg-indigo-50' },
-  pinned: { label: 'Закреплено в топе', icon: 'Pin', color: 'text-sky-700 bg-sky-50' },
-  unpinned: { label: 'Снято с закрепления', icon: 'PinOff', color: 'text-slate-600 bg-slate-100' },
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -62,7 +60,7 @@ const FIELD_LABELS: Record<string, string> = {
   parking: 'Парковка', entrance: 'Вход',
   video_url: 'Видео', video_type: 'Тип видео',
   is_hot: 'Горячее', is_new: 'Новинка', is_exclusive: 'Эксклюзив',
-  is_urgent: 'Срочно', is_pinned: 'Закрепление', is_visible: 'Видимость на сайте',
+  is_urgent: 'Срочно', is_visible: 'Видимость на сайте',
   use_watermark: 'Водяной знак', export_yandex: 'Яндекс',
   export_avito: 'Авито', export_cian: 'ЦИАН', tenant_name: 'Арендатор',
   monthly_rent: 'Аренда в мес.', yearly_rent: 'Аренда в год', finishing: 'Отделка',
@@ -85,7 +83,6 @@ const FIELD_FMT: Record<string, (v: unknown) => string> = {
   is_new: v => v ? 'Да' : 'Нет',
   is_exclusive: v => v ? 'Да' : 'Нет',
   is_urgent: v => v ? 'Да' : 'Нет',
-  is_pinned: v => v ? 'Закреплён' : 'Не закреплён',
   is_visible: v => v ? 'Виден' : 'Скрыт',
   use_watermark: v => v ? 'Вкл' : 'Выкл',
   export_yandex: v => v ? 'Вкл' : 'Выкл',

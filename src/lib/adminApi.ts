@@ -234,10 +234,6 @@ export const adminApi = {
     req(`${ADMIN_URL}?resource=listings&id=${id}`, { method: 'DELETE' }),
   deleteListing: (id: number) =>
     req(`${ADMIN_URL}?resource=listings&id=${id}&force=1`, { method: 'DELETE' }),
-  pinListing: (id: number) =>
-    req(`${ADMIN_URL}?resource=listings&id=${id}&action=pin`, { method: 'PUT', body: '{}' }),
-  unpinListing: (id: number) =>
-    req(`${ADMIN_URL}?resource=listings&id=${id}&action=unpin`, { method: 'PUT', body: '{}' }),
 
   // leads
   listLeads: () => req(`${ADMIN_URL}?resource=leads`),
