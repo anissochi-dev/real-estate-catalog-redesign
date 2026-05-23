@@ -83,8 +83,16 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   const mainCity = settings.main_city || stats.main_city || 'Краснодар';
   const totalCount = stats.total || properties.length;
 
-  // Новые объекты — последние по дате, 20 штук (4 в строке × 5 рядов)
-  const newObjects = [...properties].sort((a, b) => b.id - a.id).slice(0, 20);
+  // Новые объекты — приоритет: недавно отредактированные > обновлённые > новые по id
+  const propTime = (p: Property): number => {
+    const src = p.lastEditedAt || p.updatedAt || p.createdAt;
+    if (src) {
+      const t = new Date(src).getTime();
+      if (Number.isFinite(t)) return t;
+    }
+    return p.id;
+  };
+  const newObjects = [...properties].sort((a, b) => propTime(b) - propTime(a)).slice(0, 20);
 
   const STATS_VIEW = [
     { value: `${totalCount}+`, label: 'Объектов в базе', icon: 'Building2', deal: 'all' as const },

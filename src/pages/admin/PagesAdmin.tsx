@@ -24,8 +24,24 @@ interface P {
 export default function PagesAdmin() {
   const [pages, setPages] = useState<P[]>([]);
   const [editing, setEditing] = useState<Partial<P> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
 
-  const load = () => adminApi.listPages().then(d => setPages(d.pages));
+  const load = () => {
+    setLoading(true);
+    setError('');
+    adminApi.listPages()
+      .then(d => {
+        // Защита: backend может вернуть undefined/null/неверный формат
+        const list = Array.isArray(d?.pages) ? d.pages : [];
+        setPages(list);
+      })
+      .catch((e: unknown) => {
+        setError(e instanceof Error ? e.message : 'Не удалось загрузить страницы');
+        setPages([]);
+      })
+      .finally(() => setLoading(false));
+  };
   useEffect(() => { load(); }, []);
 
   const save = async () => {
@@ -52,8 +68,35 @@ export default function PagesAdmin() {
         </button>
       </div>
 
+      {loading && (
+        <div className="bg-white rounded-2xl p-8 shadow-sm text-center text-muted-foreground">
+          <Icon name="Loader2" size={20} className="animate-spin mx-auto mb-2" />
+          Загрузка страниц…
+        </div>
+      )}
+
+      {error && !loading && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3">
+          <Icon name="AlertCircle" size={18} className="text-red-600 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <div className="font-semibold text-red-800 text-sm">Не удалось загрузить страницы</div>
+            <div className="text-xs text-red-700 mt-0.5">{error}</div>
+            <button onClick={load} className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-white border border-red-200 hover:bg-red-50 inline-flex items-center gap-1">
+              <Icon name="RefreshCw" size={12} /> Повторить
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!loading && !error && pages.length === 0 && (
+        <div className="bg-white rounded-2xl p-8 shadow-sm text-center text-muted-foreground">
+          <Icon name="FileText" size={28} className="mx-auto mb-2 opacity-50" />
+          Пока нет ни одной страницы. Нажмите «Новая страница», чтобы создать первую.
+        </div>
+      )}
+
       <div className="grid gap-3">
-        {pages.map(p => (
+        {(Array.isArray(pages) ? pages : []).map(p => (
           <div key={p.id} className="bg-white rounded-2xl p-5 shadow-sm flex justify-between items-center">
             <div className="min-w-0">
               <div className="font-semibold">{p.title}</div>

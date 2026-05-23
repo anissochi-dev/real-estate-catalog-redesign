@@ -62,6 +62,7 @@ export interface Property {
   roadLine?: string;
   updatedAt?: string;
   createdAt?: string;
+  lastEditedAt?: string;
 }
 
 export type Page = 'home' | 'catalog' | 'map' | 'favorites' | 'compare' | 'network-tenants' | 'news';

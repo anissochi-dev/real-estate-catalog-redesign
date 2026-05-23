@@ -168,28 +168,42 @@ export default function PropertyCard({
           {/* Градиент снизу */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/5 to-transparent pointer-events-none" />
 
-          {/* Кликабельная область → переход на объект */}
-          <Link to={href} className="absolute inset-0" aria-label={property.title} />
-
-          {/* Стрелки слайдера */}
-          {imgs.length > 1 && (
+          {/* Кликабельные зоны: если фото больше одного — клик по левой/правой половине листает.
+              Если фото одно — клик по всему фото открывает страницу объекта. */}
+          {imgs.length > 1 ? (
             <>
               <button
                 type="button"
                 aria-label="Предыдущее фото"
-                onClick={e => { e.preventDefault(); setActiveImg(i => (i - 1 + imgs.length) % imgs.length); }}
-                className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 sm:w-7 sm:h-7 rounded-full bg-black/50 text-white flex items-center justify-center opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-opacity hover:bg-black/70"
-              >
-                <Icon name="ChevronLeft" size={14} />
-              </button>
+                onClick={e => { e.preventDefault(); e.stopPropagation(); setActiveImg(i => (i - 1 + imgs.length) % imgs.length); }}
+                className="absolute left-0 top-0 bottom-0 w-1/2 z-[1] cursor-pointer"
+              />
               <button
                 type="button"
                 aria-label="Следующее фото"
-                onClick={e => { e.preventDefault(); setActiveImg(i => (i + 1) % imgs.length); }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 sm:w-7 sm:h-7 rounded-full bg-black/50 text-white flex items-center justify-center opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-opacity hover:bg-black/70"
+                onClick={e => { e.preventDefault(); e.stopPropagation(); setActiveImg(i => (i + 1) % imgs.length); }}
+                className="absolute right-0 top-0 bottom-0 w-1/2 z-[1] cursor-pointer"
+              />
+            </>
+          ) : (
+            <Link to={href} className="absolute inset-0" aria-label={property.title} />
+          )}
+
+          {/* Видимые стрелки-подсказки */}
+          {imgs.length > 1 && (
+            <>
+              <div
+                aria-hidden="true"
+                className="absolute left-2 top-1/2 -translate-y-1/2 z-[2] w-8 h-8 sm:w-7 sm:h-7 rounded-full bg-black/50 text-white flex items-center justify-center opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-opacity pointer-events-none"
+              >
+                <Icon name="ChevronLeft" size={14} />
+              </div>
+              <div
+                aria-hidden="true"
+                className="absolute right-2 top-1/2 -translate-y-1/2 z-[2] w-8 h-8 sm:w-7 sm:h-7 rounded-full bg-black/50 text-white flex items-center justify-center opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-opacity pointer-events-none"
               >
                 <Icon name="ChevronRight" size={14} />
-              </button>
+              </div>
               {/* Точки */}
               <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
                 {imgs.map((_, i) => (
@@ -197,8 +211,8 @@ export default function PropertyCard({
                     key={i}
                     type="button"
                     aria-label={`Фото ${i + 1}`}
-                    onClick={e => { e.preventDefault(); setActiveImg(i); }}
-                    className={`w-2 h-2 sm:w-1.5 sm:h-1.5 rounded-full transition-all ${i === activeImg ? 'bg-white scale-125' : 'bg-white/50'}`}
+                    onClick={e => { e.preventDefault(); e.stopPropagation(); setActiveImg(i); }}
+                    className={`w-2.5 h-2.5 sm:w-2 sm:h-2 rounded-full transition-all ${i === activeImg ? 'bg-white scale-125' : 'bg-white/50'}`}
                   />
                 ))}
               </div>

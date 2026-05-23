@@ -38,6 +38,7 @@ interface ApiListing {
   road_line?: string | null;
   updated_at?: string | null;
   created_at?: string | null;
+  last_edited_at?: string | null;
 }
 
 function toNum(v: unknown): number {
@@ -82,6 +83,7 @@ function mapListing(item: ApiListing): Property {
     roadLine: item.road_line ?? undefined,
     updatedAt: item.updated_at ?? undefined,
     createdAt: item.created_at ?? undefined,
+    lastEditedAt: item.last_edited_at ?? undefined,
   };
 }
 

@@ -70,17 +70,23 @@ export function useCrmKanbanData({
 
   const createMutation = useMutation({
     mutationFn: async (data: CreateDealForm) => {
+      // Backend ждёт integer для всех ID-полей. Пустую строку
+      // приводим к null/undefined, иначе psycopg падает с ошибкой типа.
+      const payload: Record<string, unknown> = {
+        title: data.title,
+        source: data.source || undefined,
+        notes: data.notes || undefined,
+        owner_id: data.owner_id ? Number(data.owner_id) : undefined,
+        listing_id: data.listing_id ? Number(data.listing_id) : undefined,
+        amount: data.amount ? Number(data.amount) : undefined,
+        commission: data.commission ? Number(data.commission) : undefined,
+        assigned_to: data.assigned_to ? Number(data.assigned_to) : undefined,
+      };
       const r = await fetch(crmUrl('deals'), {
-        method: 'POST', headers, body: JSON.stringify({
-          ...data,
-          owner_id: data.owner_id ? Number(data.owner_id) : undefined,
-          amount: data.amount ? Number(data.amount) : undefined,
-          commission: data.commission ? Number(data.commission) : undefined,
-          assigned_to: data.assigned_to ? Number(data.assigned_to) : undefined,
-        }),
+        method: 'POST', headers, body: JSON.stringify(payload),
       });
-      const json = await r.json();
-      if (!r.ok) throw new Error(json.error || 'Ошибка');
+      const json = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(json.error || `Не удалось создать сделку (код ${r.status})`);
       return json;
     },
     onSuccess: () => {

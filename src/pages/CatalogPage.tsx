@@ -96,8 +96,10 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
       case 'area_asc': result.sort((a, b) => a.area - b.area); break;
       case 'newest':
         result.sort((a, b) => {
-          const ta = a.updatedAt ? new Date(a.updatedAt).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
-          const tb = b.updatedAt ? new Date(b.updatedAt).getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+          // Приоритет: недавно отредактированные → обновлённые → созданные
+          const tSrc = (p: typeof a) => p.lastEditedAt || p.updatedAt || p.createdAt;
+          const ta = tSrc(a) ? new Date(tSrc(a)!).getTime() : 0;
+          const tb = tSrc(b) ? new Date(tSrc(b)!).getTime() : 0;
           return tb - ta;
         });
         break;
