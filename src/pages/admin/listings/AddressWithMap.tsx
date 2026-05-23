@@ -50,6 +50,12 @@ interface AddressProps {
   setEditing: (l: Partial<Listing>) => void;
   cities: City[];
   hasError?: boolean;
+  /**
+   * Колбэк для отметки "координаты выставлены вручную".
+   * Вызывается с true при клике/перетаскивании маркера на карте,
+   * с false — при ручном изменении адресной строки или смене города.
+   */
+  onCoordsManualChange?: (manual: boolean) => void;
 }
 
 interface Suggestion {
@@ -57,7 +63,7 @@ interface Suggestion {
   displayName: string;
 }
 
-export default function AddressWithMap({ editing, setEditing, cities, hasError }: AddressProps) {
+export default function AddressWithMap({ editing, setEditing, cities, hasError, onCoordsManualChange }: AddressProps) {
   const { settings } = useSettings();
   const apiKey = settings.yandex_maps_api_key || '';
   const mapRef = useRef<HTMLDivElement>(null);
@@ -119,12 +125,14 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError }
 
         markerRef.current.events.add('dragend', () => {
           const coords = markerRef.current.geometry.getCoordinates();
+          onCoordsManualChange?.(true);
           reverseGeocode(coords[0], coords[1]);
         });
 
         ymapInstance.current.events.add('click', (e: any) => {
           const coords = e.get('coords') as [number, number];
           markerRef.current.geometry.setCoordinates(coords);
+          onCoordsManualChange?.(true);
           reverseGeocode(coords[0], coords[1]);
         });
 
@@ -315,6 +323,7 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError }
             value={currentCity}
             onChange={e => {
               setStreetInput('');
+              onCoordsManualChange?.(false);
               setEditing({ ...editing, city: e.target.value, address: '', lat: null, lng: null });
             }}
           >
@@ -334,6 +343,9 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError }
               onChange={e => {
                 setStreetInput(e.target.value);
                 fetchSuggestions(e.target.value);
+                // Адрес поменяли вручную — координаты больше не считаем "ручными",
+                // чтобы при сохранении они пересчитались по новому адресу.
+                onCoordsManualChange?.(false);
               }}
               onFocus={() => {
                 if (suggestions.length > 0) setShowSuggestions(true);

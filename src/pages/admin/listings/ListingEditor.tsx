@@ -37,6 +37,16 @@ export default function ListingEditor({
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [tab, setTab] = useState<EditorTab>('main');
   const [geocoding, setGeocoding] = useState(false);
+  /**
+   * Признак того, что текущие координаты выставлены пользователем вручную
+   * (клик по карте или перетаскивание маркера). Если true — при сохранении
+   * lat/lng НЕ перезаписываются автогеокодом. Любое ручное изменение
+   * адресной строки / смена города сбрасывают этот флаг в false.
+   * При открытии редактора (модалка монтируется) флаг всегда false —
+   * адрес считается источником истины, координаты будут пересчитаны при сохранении,
+   * если адрес не был подтверждён через карту в этой сессии редактирования.
+   */
+  const [coordsManual, setCoordsManual] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
   const { settings } = useSettings();
   const yandexApiKey = settings.yandex_maps_api_key || '';
@@ -75,17 +85,22 @@ export default function ListingEditor({
   };
 
   /**
-   * Авто-геокодирование адреса перед сохранением.
-   * Если адрес указан, но координаты отсутствуют — пробуем получить lat/lng
-   * через Yandex Geocoder. Координаты, выставленные вручную (кликом по карте
-   * или перетаскиванием маркера), не перезаписываем.
+   * Синхронизация координат с адресом перед сохранением.
+   *
+   * Правило: при сохранении объекта всегда обновляем lat/lng по введённому
+   * адресу через Yandex Geocoder, КРОМЕ случая, когда пользователь явно
+   * выставил координаты вручную (кликом по карте или перетаскиванием маркера)
+   * в текущей сессии редактирования.
+   *
+   * Таким образом адрес — источник истины: если изменили адрес, но забыли
+   * подтвердить на карте (Enter/blur не сработали), координаты всё равно
+   * подтянутся к новому адресу при сохранении.
    */
   const ensureCoordinates = async (): Promise<void> => {
     const addr = editing.address?.trim();
-    const hasCoords =
-      editing.lat != null && editing.lng != null &&
-      Number.isFinite(+editing.lat) && Number.isFinite(+editing.lng);
-    if (!addr || hasCoords) return;
+    if (!addr) return;
+    // Если пользователь выставил точку на карте вручную — доверяем ей.
+    if (coordsManual) return;
     const city = editing.city?.trim();
     const fullQuery = city ? `${city}, ${addr}` : addr;
     setGeocoding(true);
@@ -173,6 +188,7 @@ export default function ListingEditor({
               cities={cities}
               addressError={!!errors.address}
               locationOnly
+              onCoordsManualChange={setCoordsManual}
             />
           )}
 
@@ -186,6 +202,7 @@ export default function ListingEditor({
                 cities={cities}
                 addressError={false}
                 detailsOnly
+                onCoordsManualChange={setCoordsManual}
               />
             </div>
           )}
