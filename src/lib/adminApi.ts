@@ -79,69 +79,6 @@ function buildAuthUrl(url: string, token: string): string {
   }
 }
 
-/**
- * Достаём «чистый» XMLHttpRequest и fetch из iframe — они НЕ перехвачены
- * скриптами телеметрии poehali.dev, которые могут ломать промисы в preview.
- */
-let cleanXHR: typeof XMLHttpRequest | null = null;
-let cleanFetch: typeof fetch | null = null;
-function getCleanApis(): { XHR: typeof XMLHttpRequest; doFetch: typeof fetch } {
-  if (!cleanXHR || !cleanFetch) {
-    try {
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.setAttribute('aria-hidden', 'true');
-      document.body.appendChild(iframe);
-      const w = iframe.contentWindow as Window | null;
-      if (w) {
-        cleanXHR = w.XMLHttpRequest || window.XMLHttpRequest;
-        cleanFetch = (w.fetch ? w.fetch.bind(w) : window.fetch.bind(window)) as typeof fetch;
-      }
-      // Iframe не удаляем — иначе ссылки на API становятся мёртвыми.
-    } catch {
-      cleanXHR = window.XMLHttpRequest;
-      cleanFetch = window.fetch.bind(window) as typeof fetch;
-    }
-  }
-  return {
-    XHR: cleanXHR || window.XMLHttpRequest,
-    doFetch: cleanFetch || (window.fetch.bind(window) as typeof fetch),
-  };
-}
-
-/**
- * Fallback на XMLHttpRequest через ЧИСТЫЙ iframe — обходит перехваты телеметрии.
- */
-function xhrRequest(url: string, init: RequestInit = {}): Promise<Response> {
-  return new Promise((resolve, reject) => {
-    try {
-      const { XHR } = getCleanApis();
-      const xhr = new XHR();
-      const method = (init.method || 'GET').toUpperCase();
-      xhr.open(method, url, true);
-      xhr.timeout = 30000;
-      const headers = (init.headers || {}) as Record<string, string>;
-      for (const [k, v] of Object.entries(headers)) {
-        try { xhr.setRequestHeader(k, v); } catch { /* ignore forbidden */ }
-      }
-      xhr.onload = () => {
-        resolve(new Response(xhr.responseText || '', {
-          status: xhr.status || 0,
-          statusText: xhr.statusText || '',
-          headers: { 'Content-Type': xhr.getResponseHeader('Content-Type') || 'application/json' },
-        }));
-      };
-      xhr.onerror = () => reject(new Error('XHR network error'));
-      xhr.ontimeout = () => reject(new Error('XHR timeout'));
-      xhr.onabort = () => reject(new Error('XHR aborted'));
-      const body = init.body as BodyInit | null | undefined;
-      xhr.send(body as Document | XMLHttpRequestBodyInit | null | undefined);
-    } catch (e) {
-      reject(e);
-    }
-  });
-}
-
 async function req(url: string, init?: RequestInit) {
   const doFetch = async (): Promise<Response> => {
     const token = getToken();
@@ -155,15 +92,8 @@ async function req(url: string, init?: RequestInit) {
       } : {}),
       ...(init?.headers || {}),
     };
-    // Используем чистый fetch из iframe — не перехвачен телеметрией
-    const { doFetch: cleanF } = getCleanApis();
-    try {
-      return await cleanF(finalUrl, { ...init, headers });
-    } catch (e) {
-      // Резервный канал — XHR через тот же чистый iframe
-      console.warn('[fetch fallback to XHR]', e);
-      return xhrRequest(finalUrl, { ...init, headers });
-    }
+    // Прямой нативный fetch. CORS уже корректно настроен на backend.
+    return fetch(finalUrl, { ...init, headers });
   };
 
   let res: Response | null = null;

@@ -187,7 +187,7 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token',
+            'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token, X-Authorization, Authorization, X-User-Id, X-Session-Id',
         }, 'body': ''}
 
     if event.get('httpMethod') != 'POST':

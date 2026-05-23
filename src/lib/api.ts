@@ -87,46 +87,12 @@ function mapListing(item: ApiListing): Property {
   };
 }
 
-/** Fallback на XHR — лечит "Failed to fetch" в preview-режиме (HMR-разрывы). */
-function xhrRequest(url: string, init: RequestInit = {}): Promise<Response> {
-  return new Promise((resolve, reject) => {
-    try {
-      const xhr = new XMLHttpRequest();
-      xhr.open((init.method || 'GET').toUpperCase(), url, true);
-      xhr.timeout = 30000;
-      const headers = (init.headers || {}) as Record<string, string>;
-      for (const [k, v] of Object.entries(headers)) {
-        try { xhr.setRequestHeader(k, v); } catch { /* ignore */ }
-      }
-      xhr.onload = () => {
-        resolve(new Response(xhr.responseText || '', {
-          status: xhr.status || 0,
-          statusText: xhr.statusText || '',
-          headers: { 'Content-Type': xhr.getResponseHeader('Content-Type') || 'application/json' },
-        }));
-      };
-      xhr.onerror = () => reject(new Error('XHR network error'));
-      xhr.ontimeout = () => reject(new Error('XHR timeout'));
-      xhr.onabort = () => reject(new Error('XHR aborted'));
-      xhr.send((init.body as BodyInit | null | undefined) as Document | XMLHttpRequestBodyInit | null | undefined);
-    } catch (e) {
-      reject(e);
-    }
-  });
-}
-
-/** fetch с retry + XHR fallback (актуально в preview с HMR-реконнектами). */
+/** fetch с retry на сетевые сбои (без XHR-fallback — он ломал ИИ-запросы из-за CORS). */
 async function fetchWithRetry(url: string, init?: RequestInit, retries = 3): Promise<Response> {
   let lastErr: unknown = null;
   for (let i = 0; i < retries; i++) {
     try {
-      try {
-        return await fetch(url, init);
-      } catch (fetchErr) {
-        // Если нативный fetch упал — пробуем через XHR
-        console.warn('[fetchWithRetry: fallback to XHR]', fetchErr);
-        return await xhrRequest(url, init);
-      }
+      return await fetch(url, init);
     } catch (e) {
       lastErr = e;
       if (typeof navigator !== 'undefined' && navigator.onLine === false) break;

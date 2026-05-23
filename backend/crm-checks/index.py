@@ -14,7 +14,7 @@ import urllib.parse
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token, X-Authorization, Authorization, X-User-Id, X-Session-Id',
 }
 
 ALLOWED_ROLES = ('admin', 'director', 'broker', 'office_manager', 'manager')
