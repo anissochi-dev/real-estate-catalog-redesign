@@ -158,15 +158,15 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
             </div>
           )}
 
-          {/* Правовые документы */}
+          {/* Правовые документы — по центру */}
           {legalDocs.length > 0 && (
             <div className="border-t border-white/10 mt-6 pt-5">
-              <div className="flex flex-wrap gap-x-5 gap-y-2">
+              <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-x-6 gap-y-2">
                 {legalDocs.map(doc => (
                   <button
                     key={doc.label}
                     onClick={() => setModal({ title: doc.label, content: doc.content })}
-                    className="text-xs text-white/50 hover:text-white/80 underline underline-offset-2 transition-colors"
+                    className="text-xs text-white/50 hover:text-white/80 active:text-white/90 underline underline-offset-2 transition-colors text-center min-h-[28px]"
                   >
                     {doc.label}
                   </button>
@@ -175,8 +175,9 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
             </div>
           )}
 
-          <div className="border-t border-white/10 mt-5 pt-4 pb-[max(4px,env(safe-area-inset-bottom))] text-center sm:text-left">
-            <div className="text-[11px] sm:text-xs text-white/40 leading-relaxed flex flex-wrap items-center gap-x-1 justify-center sm:justify-start">
+          {/* Копирайт — по центру на всех экранах */}
+          <div className="border-t border-white/10 mt-5 pt-4 pb-[max(4px,env(safe-area-inset-bottom))] text-center">
+            <div className="text-[11px] sm:text-xs text-white/40 leading-relaxed inline-flex flex-wrap items-center justify-center gap-x-1">
               <span>© {new Date().getFullYear()} {company}.</span>
               <span className="whitespace-nowrap inline-flex items-center gap-1">
                 Все права защищены.
