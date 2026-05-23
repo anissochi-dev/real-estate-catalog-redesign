@@ -1,6 +1,10 @@
+import { useState } from 'react';
 import Icon from '@/components/ui/icon';
+import { toast } from 'sonner';
 import { Listing } from './types';
 import MelaPriceCheck from './MelaPriceCheck';
+import { useAuth } from '@/contexts/AuthContext';
+import { adminApi } from '@/lib/adminApi';
 
 export type EditorTab = 'main' | 'photos' | 'location' | 'details' | 'content' | 'extra';
 
@@ -29,6 +33,34 @@ export default function ListingEditorHeader({
   editing, setEditing, tab, setTab, tabErrors, hasErrors,
   aiAllLoading, onGenerateAll, onClose,
 }: Props) {
+  const { user } = useAuth();
+  const canPin = !!user && (user.role === 'admin' || user.role === 'director');
+  const isPinned = !!editing.is_pinned;
+  const [pinLoading, setPinLoading] = useState(false);
+
+  const togglePin = async () => {
+    if (!editing.id) {
+      toast.error('Сначала сохраните объект, потом закрепляйте.');
+      return;
+    }
+    setPinLoading(true);
+    try {
+      if (isPinned) {
+        await adminApi.unpinListing(editing.id);
+        setEditing({ ...editing, is_pinned: false, pinned_at: null });
+        toast.success('Объект откреплён');
+      } else {
+        await adminApi.pinListing(editing.id);
+        setEditing({ ...editing, is_pinned: true, pinned_at: new Date().toISOString() });
+        toast.success('Объект закреплён в топе');
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Не удалось изменить закрепление');
+    } finally {
+      setPinLoading(false);
+    }
+  };
+
   return (
     <>
       {/* Шапка */}
@@ -47,6 +79,20 @@ export default function ListingEditorHeader({
           />
         </div>
         <div className="flex items-center gap-2">
+          {canPin && editing.id ? (
+            <button type="button"
+              onClick={togglePin}
+              disabled={pinLoading}
+              title={isPinned ? 'Открепить (объект перестанет быть первым в списке)' : 'Закрепить — объект будет показан первым в каталоге и на главной'}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-60 ${
+                isPinned
+                  ? 'bg-sky-600 text-white hover:bg-sky-700'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}>
+              <Icon name={pinLoading ? 'Loader2' : (isPinned ? 'PinOff' : 'Pin')} size={13} className={pinLoading ? 'animate-spin' : ''} />
+              {isPinned ? 'Закреплён' : 'Закрепить'}
+            </button>
+          ) : null}
           <button type="button"
             onClick={() => setEditing({ ...editing, is_visible: !(editing.is_visible !== false) })}
             title={editing.is_visible !== false ? 'Объект виден на сайте' : 'Объект скрыт с сайта'}

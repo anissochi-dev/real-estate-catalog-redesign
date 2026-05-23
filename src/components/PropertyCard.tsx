@@ -204,6 +204,11 @@ export default function PropertyCard({
 
           {/* Badges сверху-слева */}
           <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1 z-10">
+            {property.isPinned && (
+              <span className="text-[10px] font-bold font-display px-2 py-0.5 rounded-full bg-sky-600 text-white shadow-sm inline-flex items-center gap-1">
+                <Icon name="Pin" size={10} /> Закреплено
+              </span>
+            )}
             <span className={`text-[10px] font-bold font-display px-2 py-0.5 rounded-full shadow-sm ${DEAL_COLORS[property.deal] ?? 'bg-white/90 text-brand-blue'}`}>
               {DEAL_LABELS[property.deal]}
             </span>

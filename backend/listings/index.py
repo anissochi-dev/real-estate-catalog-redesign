@@ -270,7 +270,9 @@ def handler(event: dict, context) -> dict:
             sql = (
                 "SELECT * FROM t_p71821556_real_estate_catalog_.listings WHERE "
                 + " AND ".join(where)
-                + " ORDER BY is_hot DESC, is_new DESC, created_at DESC"
+                + " ORDER BY is_pinned DESC, pinned_at DESC NULLS LAST, "
+                + "last_edited_at DESC NULLS LAST, is_hot DESC, is_new DESC, "
+                + "updated_at DESC NULLS LAST, created_at DESC, id DESC"
             )
             cur.execute(sql)
             rows = cur.fetchall()
@@ -320,9 +322,12 @@ def _serialize(row: dict) -> dict:
                 row[k] = float(row[k])
             except (TypeError, ValueError):
                 row[k] = None
-    for k in ('created_at', 'updated_at'):
+    for k in ('created_at', 'updated_at', 'last_edited_at', 'pinned_at'):
         if row.get(k) is not None:
-            row[k] = row[k].isoformat()
+            try:
+                row[k] = row[k].isoformat()
+            except Exception:
+                row[k] = str(row[k])
 
     # Авто-вывод одного из арендных потоков из другого
     mr = row.get('monthly_rent')

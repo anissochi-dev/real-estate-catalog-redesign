@@ -335,6 +335,49 @@ def _listings(cur, conn, method, rid, event, user):
         return _ok({'id': new_id, 'success': True, 'owner_phone_contact_id': owner_pc_id})
 
     if method == 'PUT' and rid:
+        # Спец-actions: pin / unpin (только admin/director)
+        action = (event.get('queryStringParameters') or {}).get('action') or body.get('action')
+        if action in ('pin', 'unpin'):
+            if not user or user.get('role') not in ('admin', 'director'):
+                return _err(403, 'Закреплять объекты могут только администратор и директор')
+            if action == 'pin':
+                # лимит 10 закреплённых
+                cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.listings WHERE is_pinned = TRUE")
+                cnt_row = cur.fetchone() or {}
+                if int(cnt_row.get('c', 0)) >= 10:
+                    return _err(400, 'Достигнут лимит закреплённых объектов (10). Открепите один из уже закреплённых.')
+                cur.execute(
+                    f"UPDATE {SCHEMA}.listings SET is_pinned = TRUE, pinned_at = NOW(), "
+                    f"pinned_by = {int(user['id'])}, updated_at = NOW() WHERE id = {int(rid)}"
+                )
+                _write_history(cur, int(rid), user, 'pinned', {'is_pinned': {'old': False, 'new': True}})
+            else:
+                cur.execute(
+                    f"UPDATE {SCHEMA}.listings SET is_pinned = FALSE, pinned_at = NULL, "
+                    f"pinned_by = NULL, updated_at = NOW() WHERE id = {int(rid)}"
+                )
+                _write_history(cur, int(rid), user, 'unpinned', {'is_pinned': {'old': True, 'new': False}})
+            conn.commit()
+            return _ok({'success': True, 'action': action})
+
+        # ── Снимаем "до" — для diff и истории ─────────────────────────────────
+        diff_cols = [
+            'title', 'description', 'category', 'deal', 'price', 'price_per_m2',
+            'area', 'payback', 'profit', 'floor', 'total_floors', 'rooms',
+            'address', 'district', 'city', 'image', 'images', 'tags', 'status',
+            'owner_name', 'owner_phone', 'owner_phone2', 'price_unit', 'purpose',
+            'condition', 'parking', 'entrance', 'video_url', 'video_type',
+            'tenant_name', 'monthly_rent', 'yearly_rent', 'finishing',
+            'ceiling_height', 'electricity_kw', 'utilities', 'road_line',
+            'is_hot', 'is_new', 'is_exclusive', 'is_urgent', 'is_visible',
+            'use_watermark', 'export_yandex', 'export_avito', 'export_cian',
+            'broker_commission', 'broker_id', 'lat', 'lng',
+        ]
+        cols_sql = ', '.join(diff_cols)
+        cur.execute(f"SELECT {cols_sql} FROM {SCHEMA}.listings WHERE id = {int(rid)}")
+        before_row = cur.fetchone()
+        before = dict(before_row) if before_row else {}
+
         fields = []
         # Если меняется owner_phone или owner_name — авто-линкуем к phone_contacts
         if 'owner_phone' in body or 'owner_name' in body:
@@ -398,8 +441,39 @@ def _listings(cur, conn, method, rid, event, user):
             fields.append(f"broker_id = " + ('NULL' if v is None else str(int(v))))
         if not fields:
             return _err(400, 'Нет полей для обновления')
+        # Помечаем как «реально отредактированный человеком из админки»
         fields.append("updated_at = NOW()")
+        fields.append("last_edited_at = NOW()")
+        if user and user.get('id'):
+            fields.append(f"last_edited_by = {int(user['id'])}")
         cur.execute(f"UPDATE {SCHEMA}.listings SET {', '.join(fields)} WHERE id = {int(rid)}")
+
+        # ── Считаем diff и пишем подробную историю ─────────────────────────────
+        try:
+            cur.execute(f"SELECT {cols_sql} FROM {SCHEMA}.listings WHERE id = {int(rid)}")
+            after_row = cur.fetchone()
+            after = dict(after_row) if after_row else {}
+            diff = {}
+            for k in diff_cols:
+                ov = before.get(k)
+                nv = after.get(k)
+                # Нормализуем None и пустые строки
+                if ov is None and nv == '':
+                    continue
+                if nv is None and ov == '':
+                    continue
+                if ov == nv:
+                    continue
+                # Для строк сравниваем по содержимому
+                if isinstance(ov, str) and isinstance(nv, str) and ov.strip() == nv.strip():
+                    continue
+                diff[k] = {'old': ov, 'new': nv}
+            if diff:
+                _write_history(cur, int(rid), user, 'updated', diff)
+        except Exception:
+            # Не валим основной запрос если diff не получилось снять
+            pass
+
         conn.commit()
         return _ok({'success': True})
 
@@ -1134,7 +1208,10 @@ def _listings_bulk(cur, conn, event, user):
 
 def _write_history(cur, listing_id, user, action, changes):
     user_name = _safe(user['name'], 150)
-    changes_json = json.dumps(changes, ensure_ascii=False).replace("'", "''")
+    changes_json = json.dumps(changes, ensure_ascii=False, default=str).replace("'", "''")
+    # Защита: ограничим длину JSON в логе истории
+    if len(changes_json) > 20000:
+        changes_json = changes_json[:20000]
     cur.execute(
         f"INSERT INTO {SCHEMA}.listing_history (listing_id, user_id, user_name, action, changes) "
         f"VALUES ({listing_id}, {user['id']}, '{user_name}', '{action}', '{changes_json}')"

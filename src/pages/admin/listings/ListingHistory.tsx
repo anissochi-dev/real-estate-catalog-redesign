@@ -4,12 +4,15 @@ import Icon from '@/components/ui/icon';
 
 const STATS_URL = 'https://functions.poehali.dev/1d84bd40-ef8c-4bd3-82c3-af294b1ec0b1';
 
+type ChangeValue = unknown;
+type ChangesMap = Record<string, [ChangeValue, ChangeValue] | { old?: ChangeValue; new?: ChangeValue } | ChangeValue>;
+
 interface HistoryItem {
   id: number;
   listing_id: number;
   user_name: string;
   action: string;
-  changes: Record<string, [unknown, unknown]> | null;
+  changes: ChangesMap | null;
   created_at: string;
 }
 
@@ -46,6 +49,8 @@ const ACTION_LABELS: Record<string, { label: string; icon: string; color: string
   price_changed: { label: 'Цена изменена', icon: 'TrendingDown', color: 'text-amber-600 bg-amber-50' },
   status_changed: { label: 'Статус изменён', icon: 'RefreshCw', color: 'text-violet-600 bg-violet-50' },
   broker_changed: { label: 'Брокер изменён', icon: 'UserCheck', color: 'text-indigo-600 bg-indigo-50' },
+  pinned: { label: 'Закреплено в топе', icon: 'Pin', color: 'text-sky-700 bg-sky-50' },
+  unpinned: { label: 'Снято с закрепления', icon: 'PinOff', color: 'text-slate-600 bg-slate-100' },
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -53,9 +58,12 @@ const FIELD_LABELS: Record<string, string> = {
   price: 'Цена', area: 'Площадь', address: 'Адрес', district: 'Район', city: 'Город',
   status: 'Статус', owner_name: 'Имя собственника', owner_phone: 'Телефон собственника',
   owner_phone2: 'Доп. телефон', purpose: 'Назначение', condition: 'Состояние',
-  floor: 'Этаж', total_floors: 'Этажей всего', parking: 'Парковка', entrance: 'Вход',
-  video_url: 'Видео', is_hot: 'Горячее', is_new: 'Новинка', is_exclusive: 'Эксклюзив',
-  is_urgent: 'Срочно', use_watermark: 'Водяной знак', export_yandex: 'Яндекс',
+  floor: 'Этаж', total_floors: 'Этажей всего', rooms: 'Комнат',
+  parking: 'Парковка', entrance: 'Вход',
+  video_url: 'Видео', video_type: 'Тип видео',
+  is_hot: 'Горячее', is_new: 'Новинка', is_exclusive: 'Эксклюзив',
+  is_urgent: 'Срочно', is_pinned: 'Закрепление', is_visible: 'Видимость на сайте',
+  use_watermark: 'Водяной знак', export_yandex: 'Яндекс',
   export_avito: 'Авито', export_cian: 'ЦИАН', tenant_name: 'Арендатор',
   monthly_rent: 'Аренда в мес.', yearly_rent: 'Аренда в год', finishing: 'Отделка',
   ceiling_height: 'Высота потолков', electricity_kw: 'Электричество',
@@ -63,6 +71,45 @@ const FIELD_LABELS: Record<string, string> = {
   price_per_m2: 'Цена за м²', slug: 'Слаг', seo_title: 'SEO заголовок',
   seo_description: 'SEO описание', image: 'Фото', images: 'Фотографии', tags: 'Теги',
   lat: 'Широта', lng: 'Долгота', broker_id: 'Брокер',
+  broker_commission: 'Комиссия брокера', price_unit: 'Единица цены',
+};
+
+const FIELD_FMT: Record<string, (v: unknown) => string> = {
+  price: v => v == null || v === '' ? '—' : `${Number(v).toLocaleString('ru')} ₽`,
+  monthly_rent: v => v == null || v === '' ? '—' : `${Number(v).toLocaleString('ru')} ₽/мес`,
+  yearly_rent: v => v == null || v === '' ? '—' : `${Number(v).toLocaleString('ru')} ₽/год`,
+  profit: v => v == null || v === '' ? '—' : `${Number(v).toLocaleString('ru')} ₽/мес`,
+  price_per_m2: v => v == null || v === '' ? '—' : `${Number(v).toLocaleString('ru')} ₽/м²`,
+  area: v => v == null || v === '' ? '—' : `${v} м²`,
+  is_hot: v => v ? 'Да' : 'Нет',
+  is_new: v => v ? 'Да' : 'Нет',
+  is_exclusive: v => v ? 'Да' : 'Нет',
+  is_urgent: v => v ? 'Да' : 'Нет',
+  is_pinned: v => v ? 'Закреплён' : 'Не закреплён',
+  is_visible: v => v ? 'Виден' : 'Скрыт',
+  use_watermark: v => v ? 'Вкл' : 'Выкл',
+  export_yandex: v => v ? 'Вкл' : 'Выкл',
+  export_avito: v => v ? 'Вкл' : 'Выкл',
+  export_cian: v => v ? 'Вкл' : 'Выкл',
+  status: v => ({ active: 'Активен', archived: 'В архиве', draft: 'Черновик', moderation: 'На модерации' } as Record<string, string>)[String(v)] || String(v ?? '—'),
+  deal: v => ({ sale: 'Продажа', rent: 'Аренда', business: 'Бизнес' } as Record<string, string>)[String(v)] || String(v ?? '—'),
+};
+
+const fmtVal = (field: string, val: unknown): string => {
+  const f = FIELD_FMT[field];
+  if (f) return f(val);
+  if (val === null || val === undefined || val === '') return '—';
+  if (typeof val === 'string' && val.length > 80) return val.slice(0, 80) + '…';
+  return String(val);
+};
+
+const extractOldNew = (raw: ChangesMap[string]): { old: ChangeValue; new: ChangeValue } => {
+  if (Array.isArray(raw) && raw.length >= 2) return { old: raw[0], new: raw[1] };
+  if (raw && typeof raw === 'object' && ('old' in raw || 'new' in raw)) {
+    const r = raw as { old?: ChangeValue; new?: ChangeValue };
+    return { old: r.old, new: r.new };
+  }
+  return { old: undefined, new: raw };
 };
 
 const SOURCES = [
@@ -375,15 +422,37 @@ export default function ListingHistory({ listingId, listingTitle, onClose }: Pro
                           <span className="text-xs text-muted-foreground ml-auto">{fmtDt(h.created_at)}</span>
                         </div>
                         {h.changes && Object.keys(h.changes).length > 0 && (
-                          <div className="mt-1 text-xs text-muted-foreground space-y-0.5">
-                            {Object.entries(h.changes).slice(0, 5).map(([field, [oldV, newV]]) => (
-                              <div key={field}>
-                                <span className="font-medium">{FIELD_LABELS[field] || field}:</span>{' '}
-                                <span className="line-through opacity-60">{String(oldV)}</span>
-                                {' → '}
-                                <span>{String(newV)}</span>
+                          <div className="mt-1.5 space-y-1">
+                            {Object.entries(h.changes).slice(0, 10).map(([field, raw]) => {
+                              const { old: oldV, new: newV } = extractOldNew(raw);
+                              const oldStr = fmtVal(field, oldV);
+                              const newStr = fmtVal(field, newV);
+                              const isDescr = field === 'description';
+                              const isImages = field === 'images';
+                              return (
+                                <div key={field} className="text-xs flex items-start gap-1.5 flex-wrap">
+                                  <span className="font-semibold text-foreground">{FIELD_LABELS[field] || field}:</span>{' '}
+                                  {isDescr || isImages ? (
+                                    <span className="text-muted-foreground italic">
+                                      {isImages
+                                        ? `обновлены (было ${String(oldV ?? '').split(/[|,]/).filter(Boolean).length} → стало ${String(newV ?? '').split(/[|,]/).filter(Boolean).length} фото)`
+                                        : `описание изменено (было ${String(oldV ?? '').length} симв. → стало ${String(newV ?? '').length} симв.)`}
+                                    </span>
+                                  ) : (
+                                    <>
+                                      <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-700 line-through opacity-80 break-all">{oldStr}</span>
+                                      <Icon name="ArrowRight" size={11} className="text-muted-foreground mt-0.5" />
+                                      <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium break-all">{newStr}</span>
+                                    </>
+                                  )}
+                                </div>
+                              );
+                            })}
+                            {Object.keys(h.changes).length > 10 && (
+                              <div className="text-[11px] text-muted-foreground italic">
+                                и ещё {Object.keys(h.changes).length - 10} изменений…
                               </div>
-                            ))}
+                            )}
                           </div>
                         )}
                       </div>

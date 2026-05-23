@@ -1,6 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { ListingDetail } from '@/lib/api';
 import Icon from '@/components/ui/icon';
+
+type MediaTab = 'photos' | 'video';
 
 interface Props {
   item: ListingDetail;
@@ -69,6 +71,34 @@ export default function PropertyMediaGallery({
   isFav, inCompare, onToggleFavorite, onToggleCompare,
   dealLabel, typeLabel,
 }: Props) {
+  // Выбранная вкладка: фото или видео. Если видео нет — вкладок не показываем,
+  // активной всегда остаётся "photos".
+  const [mediaTab, setMediaTab] = useState<MediaTab>(isVideoActive ? 'video' : 'photos');
+
+  // Если внешне переключили на индекс видео — синхронизируем вкладку
+  useEffect(() => {
+    if (isVideoActive && mediaTab !== 'video') setMediaTab('video');
+    if (!isVideoActive && mediaTab === 'video' && activeImg !== videoIndex) setMediaTab('photos');
+  }, [isVideoActive, activeImg, videoIndex, mediaTab]);
+
+  // Переключатель вкладки
+  const switchTab = (t: MediaTab) => {
+    setMediaTab(t);
+    if (t === 'video' && hasVideo) {
+      setActiveImg(videoIndex);
+    } else {
+      // Возврат к первому фото (с учётом того, что видео могло быть на позиции 1)
+      setActiveImg(0);
+    }
+  };
+
+  // Список превью только из фото (без кнопки видео — она теперь в виде вкладки)
+  const photoThumbs = rawImgs;
+  // Для активного индекса фото пересчитываем номер слайда без учёта видео
+  const photoActiveIdx = hasVideo && activeImg > videoIndex
+    ? activeImg - 1
+    : (hasVideo && activeImg === videoIndex ? 0 : activeImg);
+
   useEffect(() => {
     if (!lightbox) return;
     const handler = (e: KeyboardEvent) => {
@@ -110,6 +140,37 @@ export default function PropertyMediaGallery({
 
       {/* Медиа-галерея */}
       <div className="space-y-2">
+        {/* Вкладки Фото/Видео — показываются только если есть видео */}
+        {hasVideo && (
+          <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit">
+            <button
+              type="button"
+              onClick={() => switchTab('photos')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                mediaTab === 'photos'
+                  ? 'bg-white shadow text-brand-blue'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Icon name="Image" size={13} />
+              Фото
+              {rawImgs.length > 0 && <span className="opacity-60">({rawImgs.length})</span>}
+            </button>
+            <button
+              type="button"
+              onClick={() => switchTab('video')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                mediaTab === 'video'
+                  ? 'bg-white shadow text-brand-blue'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Icon name="Play" size={13} />
+              Видео
+            </button>
+          </div>
+        )}
+
         <div className="relative rounded-2xl overflow-hidden bg-muted aspect-[16/10]">
           {isVideoActive ? (
             <VideoEmbed url={item.videoUrl!} />
@@ -145,31 +206,23 @@ export default function PropertyMediaGallery({
             </button>
           </div>
 
-          {totalMedia > 1 && (
+          {!isVideoActive && photoThumbs.length > 1 && (
             <div className="absolute bottom-3 left-3 bg-black/50 text-white rounded-lg px-2 py-1 text-xs pointer-events-none">
-              {activeImg + 1} / {totalMedia}
+              {photoActiveIdx + 1} / {photoThumbs.length}
             </div>
           )}
         </div>
 
-        {totalMedia > 1 && (
+        {/* Превью фото — показываем только если активна вкладка «Фото» и фото больше одного */}
+        {mediaTab === 'photos' && photoThumbs.length > 1 && (
           <div className="flex gap-2 overflow-x-auto pb-1">
-            <button onClick={() => setActiveImg(0)}
-              className={`w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all ${activeImg === 0 ? 'border-brand-blue' : 'border-transparent opacity-70 hover:opacity-100'}`}>
-              <img src={rawImgs[0]} alt="" className="w-full h-full object-cover" />
-            </button>
-            {hasVideo && (
-              <button onClick={() => setActiveImg(videoIndex)}
-                className={`w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all flex flex-col items-center justify-center bg-slate-900 gap-1 ${activeImg === videoIndex ? 'border-brand-blue' : 'border-transparent opacity-70 hover:opacity-100'}`}>
-                <Icon name="Play" size={20} className="text-white" />
-                <span className="text-[9px] text-white/60">Видео</span>
-              </button>
-            )}
-            {rawImgs.slice(1).map((u, i) => {
-              const mediaIdx = i + 2;
+            {photoThumbs.map((u, i) => {
+              // если есть видео, оно занимает позицию videoIndex — пропускаем её
+              const mediaIdx = hasVideo && i >= videoIndex ? i + 1 : i;
+              const isActive = mediaIdx === activeImg;
               return (
                 <button key={u + i} onClick={() => setActiveImg(mediaIdx)}
-                  className={`w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all ${mediaIdx === activeImg ? 'border-brand-blue' : 'border-transparent opacity-70 hover:opacity-100'}`}>
+                  className={`w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all ${isActive ? 'border-brand-blue' : 'border-transparent opacity-70 hover:opacity-100'}`}>
                   <img src={u} alt="" className="w-full h-full object-cover" />
                 </button>
               );

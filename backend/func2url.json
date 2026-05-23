@@ -21,6 +21,7 @@
   "xml-feeds": "https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7",
   "auth": "https://functions.poehali.dev/e5d9d96a-a3ca-45cd-9ea3-3e2982b626f7",
   "ai-assistant": "https://functions.poehali.dev/34bfc4a2-89b9-4c89-bcbc-d82314730aef",
+  "admin": "https://functions.poehali.dev/aeccc0fe-9c55-4933-b292-432cec9cc09d",
   "leads": "https://functions.poehali.dev/45673fe4-a39d-4193-b529-174d4c8c8f97",
   "listings": "https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa"
 }
