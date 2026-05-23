@@ -1,6 +1,34 @@
 export const SEO_BASE = 'https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d';
-export const seoUrl = (token: string) =>
-  token ? `${SEO_BASE}?auth_token=${encodeURIComponent(token)}` : SEO_BASE;
+
+/**
+ * Билдер URL для SEO-функции.
+ * Cloud Functions Gateway режет заголовок X-Auth-Token на POST/JSON,
+ * поэтому ВСЕГДА дублируем токен в query-параметр auth_token.
+ * Если переданный токен пустой — пробуем достать из localStorage.
+ */
+export const seoUrl = (token: string) => {
+  let t = token;
+  if (!t) {
+    try { t = localStorage.getItem('biznest_token') || ''; } catch { /* ignore */ }
+  }
+  return t ? `${SEO_BASE}?auth_token=${encodeURIComponent(t)}` : SEO_BASE;
+};
+
+/** Безопасный билдер заголовков с токеном — дублируем в нескольких полях,
+ * так как разные шлюзы режут разные заголовки. */
+export const seoHeaders = (token: string): Record<string, string> => {
+  let t = token;
+  if (!t) {
+    try { t = localStorage.getItem('biznest_token') || ''; } catch { /* ignore */ }
+  }
+  const h: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (t) {
+    h['X-Auth-Token'] = t;
+    h['X-Authorization'] = t;
+    h['Authorization'] = `Bearer ${t}`;
+  }
+  return h;
+};
 
 export const HOURS = Array.from({ length: 24 }, (_, i) => ({
   value: i,

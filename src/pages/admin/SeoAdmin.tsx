@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
+import { toast } from 'sonner';
 import {
-  SeoStatus, Schedule, RunLog, SeoResult, seoUrl,
+  SeoStatus, Schedule, RunLog, SeoResult, seoUrl, seoHeaders,
 } from './seo/seoTypes';
 import SeoOverview from './seo/SeoOverview';
 import SeoRunTab from './seo/SeoRunTab';
@@ -12,8 +13,7 @@ import SeoPagesTab from './seo/SeoPagesTab';
 import SeoFilesTab from './seo/SeoFilesTab';
 
 export default function SeoAdmin() {
-  const { token } = useAuth();
-  const headers = { 'Content-Type': 'application/json', 'X-Auth-Token': token || '' };
+  const { refreshToken } = useAuth();
 
   const [status, setStatus] = useState<SeoStatus | null>(null);
   const [schedule, setSchedule] = useState<Schedule>({ is_enabled: true, run_hour: 3, batch_limit: 20 });
@@ -32,69 +32,76 @@ export default function SeoAdmin() {
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [historyLoading, setHistoryLoading] = useState(false);
 
+  /**
+   * Универсальный вызов SEO-API с защитой от 401:
+   * 1. Дублирует токен в query И в headers (Gateway режет разные поля по-разному).
+   * 2. Передаёт токен также в body — backend читает его оттуда как fallback.
+   * 3. При 401 делает ОДИН retry со свежим токеном из localStorage.
+   * 4. Возвращает понятное сообщение об ошибке вместо HTTP-кода.
+   */
+  const seoCall = async (payload: Record<string, unknown>): Promise<{ data: Record<string, unknown> | null; error: string | null }> => {
+    const doFetch = async () => {
+      const tok = refreshToken();
+      return fetch(seoUrl(tok), {
+        method: 'POST',
+        headers: seoHeaders(tok),
+        body: JSON.stringify({ ...payload, auth_token: tok || undefined }),
+      });
+    };
+    try {
+      let r = await doFetch();
+      if (r.status === 401) {
+        // Один retry со свежим токеном — на случай если первый запрос был сделан
+        // до того, как React-стейт получил актуальный токен.
+        await new Promise(res => setTimeout(res, 150));
+        r = await doFetch();
+      }
+      if (r.status === 401) {
+        return { data: null, error: 'Сессия истекла — войдите заново' };
+      }
+      if (!r.ok) {
+        return { data: null, error: `Сервис временно недоступен (код ${r.status})` };
+      }
+      const d = await r.json();
+      if (d && d.error) return { data: null, error: String(d.error) };
+      return { data: d, error: null };
+    } catch (e) {
+      return { data: null, error: e instanceof Error ? e.message : 'Нет связи с сервером' };
+    }
+  };
+
   const loadStatus = async () => {
     setLoading(true);
     setErrorMsg('');
-    try {
-      const r = await fetch(seoUrl(token || ''), {
-        method: 'POST', headers,
-        body: JSON.stringify({ action: 'status' }),
-      });
-      if (!r.ok) {
-        setErrorMsg(`Не удалось загрузить статус (HTTP ${r.status})`);
-        return;
-      }
-      const d = await r.json();
-      if (d.error) { setErrorMsg(d.error); return; }
-      if (d.status) setStatus(d.status);
-      if (d.schedule) setSchedule(d.schedule);
-      if (d.recent_logs) setLogs(d.recent_logs);
-      setGptOk(!!d.gpt_configured);
-    } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : 'Ошибка сети');
-    } finally {
-      setLoading(false);
-    }
+    const { data, error } = await seoCall({ action: 'status' });
+    setLoading(false);
+    if (error) { setErrorMsg(error); return; }
+    if (!data) return;
+    if (data.status) setStatus(data.status as SeoStatus);
+    if (data.schedule) setSchedule(data.schedule as Schedule);
+    if (data.recent_logs) setLogs(data.recent_logs as RunLog[]);
+    setGptOk(!!data.gpt_configured);
   };
 
   useEffect(() => { loadStatus(); }, []);
 
   const saveSchedule = async () => {
     setSavingSchedule(true);
-    try {
-      const r = await fetch(seoUrl(token || ''), {
-        method: 'POST', headers,
-        body: JSON.stringify({ action: 'schedule_set', ...schedule }),
-      });
-      const d = await r.json();
-      if (d.error) { alert(d.error); return; }
-      setScheduleChanged(false);
-      await loadStatus();
-    } finally {
-      setSavingSchedule(false);
-    }
+    const { error } = await seoCall({ action: 'schedule_set', ...schedule });
+    setSavingSchedule(false);
+    if (error) { toast.error(error); return; }
+    setScheduleChanged(false);
+    toast.success('Расписание сохранено');
+    await loadStatus();
   };
 
   const loadHistory = async () => {
     setHistoryLoading(true);
     setErrorMsg('');
-    try {
-      const r = await fetch(seoUrl(token || ''), {
-        method: 'POST', headers,
-        body: JSON.stringify({ action: 'log', limit: 50 }),
-      });
-      if (!r.ok) {
-        setErrorMsg(`Не удалось загрузить историю (HTTP ${r.status})`);
-        return;
-      }
-      const d = await r.json();
-      if (d.error) { setErrorMsg(d.error); return; }
-      setLogs(d.logs || []);
-    } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : 'Ошибка сети');
-    } finally {
-      setHistoryLoading(false);
-    }
+    const { data, error } = await seoCall({ action: 'log', limit: 50 });
+    setHistoryLoading(false);
+    if (error) { setErrorMsg(error); return; }
+    if (data && Array.isArray(data.logs)) setLogs(data.logs as RunLog[]);
   };
 
   const run = async (preview = false) => {
@@ -102,25 +109,22 @@ export default function SeoAdmin() {
     setResults([]);
     setLastRun(null);
     setErrorMsg('');
-    try {
-      const r = await fetch(seoUrl(token || ''), {
-        method: 'POST', headers,
-        body: JSON.stringify({
-          action: preview ? 'preview' : 'run',
-          limit,
-          ...(listingId ? { listing_id: parseInt(listingId) } : {}),
-        }),
-      });
-      const d = await r.json();
-      if (d.error) { setErrorMsg(d.error); return; }
-      setResults(d.results || []);
-      setLastRun({ processed: d.processed, errors: d.errors, total: d.total, dry_run: d.dry_run });
-      if (!preview) { await loadStatus(); }
-    } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : 'Ошибка сети');
-    } finally {
-      setRunning(false);
-    }
+    const { data, error } = await seoCall({
+      action: preview ? 'preview' : 'run',
+      limit,
+      ...(listingId ? { listing_id: parseInt(listingId) } : {}),
+    });
+    setRunning(false);
+    if (error) { setErrorMsg(error); return; }
+    if (!data) return;
+    setResults((data.results as SeoResult[]) || []);
+    setLastRun({
+      processed: Number(data.processed) || 0,
+      errors: Number(data.errors) || 0,
+      total: Number(data.total) || 0,
+      dry_run: !!data.dry_run,
+    });
+    if (!preview) { await loadStatus(); }
   };
 
   const updateSchedule = (patch: Partial<Schedule>) => {

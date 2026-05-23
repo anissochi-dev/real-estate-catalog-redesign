@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
-import { seoUrl } from './seoTypes';
+import { seoUrl, seoHeaders } from './seoTypes';
 
 interface FileStatus {
   robots_url?: string;
@@ -15,7 +15,24 @@ interface Props {
 }
 
 export default function SeoFilesTab({ token }: Props) {
-  const headers = { 'Content-Type': 'application/json', 'X-Auth-Token': token || '' };
+  const seoCall = async (payload: Record<string, unknown>): Promise<{ data: Record<string, unknown> | null; error: string | null }> => {
+    const doFetch = async () => fetch(seoUrl(token), {
+      method: 'POST',
+      headers: seoHeaders(token),
+      body: JSON.stringify({ ...payload, auth_token: token || undefined }),
+    });
+    let r = await doFetch();
+    if (r.status === 401) {
+      await new Promise(res => setTimeout(res, 150));
+      r = await doFetch();
+    }
+    if (r.status === 401) return { data: null, error: 'Сессия истекла — войдите заново' };
+    if (!r.ok) return { data: null, error: `Сервис временно недоступен (код ${r.status})` };
+    const d = await r.json();
+    if (d?.error) return { data: null, error: String(d.error) };
+    return { data: d, error: null };
+  };
+
   const [status, setStatus] = useState<FileStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
@@ -25,23 +42,10 @@ export default function SeoFilesTab({ token }: Props) {
   const load = async () => {
     setLoading(true);
     setError('');
-    try {
-      const r = await fetch(seoUrl(token), {
-        method: 'POST', headers,
-        body: JSON.stringify({ action: 'files_status' }),
-      });
-      if (!r.ok) {
-        setError(`Не удалось загрузить статус (HTTP ${r.status})`);
-        return;
-      }
-      const d = await r.json();
-      if (d.error) { setError(d.error); return; }
-      setStatus(d);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Ошибка сети');
-    } finally {
-      setLoading(false);
-    }
+    const { data, error: err } = await seoCall({ action: 'files_status' });
+    setLoading(false);
+    if (err) { setError(err); return; }
+    if (data) setStatus(data as FileStatus);
   };
 
   useEffect(() => { load(); }, []);
@@ -50,21 +54,12 @@ export default function SeoFilesTab({ token }: Props) {
     setRegenerating(true);
     setError('');
     setMsg('');
-    try {
-      const r = await fetch(seoUrl(token), {
-        method: 'POST', headers,
-        body: JSON.stringify({ action: 'sitemap_rebuild' }),
-      });
-      const d = await r.json();
-      if (d.error) { setError(d.error); return; }
-      setMsg(`Sitemap обновлён: ${d.urls_count || 0} URL`);
-      await load();
-      setTimeout(() => setMsg(''), 3000);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Ошибка сети');
-    } finally {
-      setRegenerating(false);
-    }
+    const { data, error: err } = await seoCall({ action: 'sitemap_rebuild' });
+    setRegenerating(false);
+    if (err) { setError(err); return; }
+    setMsg(`Sitemap обновлён: ${(data?.urls_count as number) || 0} URL`);
+    await load();
+    setTimeout(() => setMsg(''), 3000);
   };
 
   return (

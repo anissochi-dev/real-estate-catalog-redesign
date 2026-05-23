@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
-import { seoUrl } from './seoTypes';
+import { seoUrl, seoHeaders } from './seoTypes';
 
 interface SeoPage {
   id?: number;
@@ -30,7 +30,24 @@ interface Props {
 }
 
 export default function SeoPagesTab({ token, gptOk }: Props) {
-  const headers = { 'Content-Type': 'application/json', 'X-Auth-Token': token || '' };
+  // Унифицированный вызов SEO-API с авто-retry при 401
+  const seoCall = async (payload: Record<string, unknown>) => {
+    const doFetch = async () => fetch(seoUrl(token), {
+      method: 'POST',
+      headers: seoHeaders(token),
+      body: JSON.stringify({ ...payload, auth_token: token || undefined }),
+    });
+    let r = await doFetch();
+    if (r.status === 401) {
+      await new Promise(res => setTimeout(res, 150));
+      r = await doFetch();
+    }
+    if (r.status === 401) return { data: null, error: 'Сессия истекла — войдите заново' };
+    if (!r.ok) return { data: null, error: `Сервис временно недоступен (код ${r.status})` };
+    const d = await r.json();
+    if (d?.error) return { data: null, error: String(d.error) };
+    return { data: d, error: null };
+  };
   const [pages, setPages] = useState<SeoPage[]>(DEFAULT_PAGES);
   const [activePath, setActivePath] = useState<string>('/');
   const [loading, setLoading] = useState(false);
@@ -44,29 +61,17 @@ export default function SeoPagesTab({ token, gptOk }: Props) {
   const load = async () => {
     setLoading(true);
     setError('');
-    try {
-      const r = await fetch(seoUrl(token), {
-        method: 'POST', headers,
-        body: JSON.stringify({ action: 'pages_list' }),
+    const { data, error: err } = await seoCall({ action: 'pages_list' });
+    setLoading(false);
+    if (err) { setError(err); return; }
+    if (data && Array.isArray(data.pages) && data.pages.length) {
+      const list = data.pages as SeoPage[];
+      const merged: SeoPage[] = DEFAULT_PAGES.map(def => {
+        const found = list.find(p => p.path === def.path);
+        return found ? { ...def, ...found } : def;
       });
-      if (!r.ok) {
-        setError(`Не удалось загрузить страницы (HTTP ${r.status})`);
-        return;
-      }
-      const d = await r.json();
-      if (d.error) { setError(d.error); return; }
-      if (Array.isArray(d.pages) && d.pages.length) {
-        const merged: SeoPage[] = DEFAULT_PAGES.map(def => {
-          const found = d.pages.find((p: SeoPage) => p.path === def.path);
-          return found ? { ...def, ...found } : def;
-        });
-        const extra = d.pages.filter((p: SeoPage) => !DEFAULT_PAGES.some(d => d.path === p.path));
-        setPages([...merged, ...extra]);
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Ошибка сети');
-    } finally {
-      setLoading(false);
+      const extra = list.filter(p => !DEFAULT_PAGES.some(d => d.path === p.path));
+      setPages([...merged, ...extra]);
     }
   };
 
@@ -81,20 +86,11 @@ export default function SeoPagesTab({ token, gptOk }: Props) {
     setSaving(true);
     setError('');
     setSavedMsg('');
-    try {
-      const r = await fetch(seoUrl(token), {
-        method: 'POST', headers,
-        body: JSON.stringify({ action: 'page_save', ...current }),
-      });
-      const d = await r.json();
-      if (d.error) { setError(d.error); return; }
-      setSavedMsg('Сохранено');
-      setTimeout(() => setSavedMsg(''), 2000);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Ошибка сети');
-    } finally {
-      setSaving(false);
-    }
+    const { error: err } = await seoCall({ action: 'page_save', ...current });
+    setSaving(false);
+    if (err) { setError(err); return; }
+    setSavedMsg('Сохранено');
+    setTimeout(() => setSavedMsg(''), 2000);
   };
 
   const generateAi = async () => {
@@ -104,22 +100,14 @@ export default function SeoPagesTab({ token, gptOk }: Props) {
     }
     setGenerating(true);
     setError('');
-    try {
-      const r = await fetch(seoUrl(token), {
-        method: 'POST', headers,
-        body: JSON.stringify({ action: 'page_generate', path: activePath }),
-      });
-      const d = await r.json();
-      if (d.error) { setError(d.error); return; }
-      if (d.page) {
-        setPages(ps => ps.map(p => p.path === activePath ? { ...p, ...d.page, auto_generated: true } : p));
-        setSavedMsg('Сгенерировано ИИ');
-        setTimeout(() => setSavedMsg(''), 2000);
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Ошибка сети');
-    } finally {
-      setGenerating(false);
+    const { data, error: err } = await seoCall({ action: 'page_generate', path: activePath });
+    setGenerating(false);
+    if (err) { setError(err); return; }
+    if (data && data.page) {
+      const page = data.page as Partial<SeoPage>;
+      setPages(ps => ps.map(p => p.path === activePath ? { ...p, ...page, auto_generated: true } : p));
+      setSavedMsg('Сгенерировано ИИ');
+      setTimeout(() => setSavedMsg(''), 2000);
     }
   };
 

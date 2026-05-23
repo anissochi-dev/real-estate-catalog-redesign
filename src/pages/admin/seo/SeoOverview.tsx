@@ -77,19 +77,48 @@ export default function SeoOverview({ loading, status, schedule, gptOk, errorMsg
         </>
       ) : null}
 
-      {/* Универсальный баннер ошибок */}
-      {errorMsg && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
-          <Icon name="AlertCircle" size={18} className="text-red-600 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <div className="font-semibold text-red-800 text-sm">Ошибка</div>
-            <div className="text-xs text-red-700 mt-0.5 break-words">{errorMsg}</div>
+      {/* Универсальный баннер ошибок — дружелюбный, без HTTP-кодов */}
+      {errorMsg && (() => {
+        const isSession = /сесси|истек|войдите|401/i.test(errorMsg);
+        const cls = isSession
+          ? 'bg-amber-50 border-amber-200 text-amber-800'
+          : 'bg-red-50 border-red-200 text-red-800';
+        const iconColor = isSession ? 'text-amber-600' : 'text-red-600';
+        return (
+          <div className={`border rounded-xl p-4 flex items-start gap-3 ${cls}`}>
+            <Icon
+              name={isSession ? 'LogIn' : 'AlertCircle'}
+              size={18}
+              className={`${iconColor} shrink-0 mt-0.5`}
+            />
+            <div className="flex-1">
+              <div className="font-semibold text-sm">
+                {isSession ? 'Нужно войти заново' : 'Не удалось загрузить данные'}
+              </div>
+              <div className="text-xs mt-0.5 opacity-80 break-words">{errorMsg}</div>
+              <div className="mt-2 flex gap-2">
+                <button
+                  onClick={() => window.location.reload()}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-white hover:bg-muted border border-current/20 font-semibold inline-flex items-center gap-1"
+                >
+                  <Icon name="RefreshCw" size={12} /> Обновить
+                </button>
+                {isSession && (
+                  <button
+                    onClick={() => { try { localStorage.removeItem('biznest_token'); } catch { /* ignore */ } window.location.href = '/'; }}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-brand-blue text-white font-semibold inline-flex items-center gap-1"
+                  >
+                    <Icon name="LogIn" size={12} /> Войти заново
+                  </button>
+                )}
+              </div>
+            </div>
+            <button onClick={() => setErrorMsg('')} className="opacity-60 hover:opacity-100">
+              <Icon name="X" size={14} />
+            </button>
           </div>
-          <button onClick={() => setErrorMsg('')} className="text-red-400 hover:text-red-600 text-xs">
-            <Icon name="X" size={14} />
-          </button>
-        </div>
-      )}
+        );
+      })()}
 
       {/* GPT предупреждение */}
       {!gptOk && (

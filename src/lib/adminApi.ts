@@ -61,27 +61,68 @@ export const getToken = () => localStorage.getItem(TOKEN_KEY) || '';
 export const setToken = (t: string) => localStorage.setItem(TOKEN_KEY, t);
 export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
-async function req(url: string, init?: RequestInit) {
-  const token = getToken();
-  let res: Response;
+/**
+ * Универсальный fetch к админ-API.
+ * - Дублирует токен в query-параметр auth_token (Cloud Functions Gateway
+ *   режет заголовки на POST/JSON, query — самый надёжный канал).
+ * - Один retry со свежим токеном при 401.
+ * - На повторный 401 — сбрасывает токен и редиректит на главную.
+ */
+function buildAuthUrl(url: string, token: string): string {
+  if (!token) return url;
   try {
-    res = await fetch(url, {
+    const u = new URL(url, window.location.origin);
+    if (!u.searchParams.has('auth_token')) u.searchParams.set('auth_token', token);
+    return u.toString();
+  } catch {
+    return url.includes('?') ? `${url}&auth_token=${encodeURIComponent(token)}` : `${url}?auth_token=${encodeURIComponent(token)}`;
+  }
+}
+
+async function req(url: string, init?: RequestInit) {
+  const doFetch = async (): Promise<Response> => {
+    const token = getToken();
+    const finalUrl = buildAuthUrl(url, token);
+    return fetch(finalUrl, {
       ...init,
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { 'X-Auth-Token': token } : {}),
+        ...(token ? {
+          'X-Auth-Token': token,
+          'X-Authorization': token,
+          'Authorization': `Bearer ${token}`,
+        } : {}),
         ...(init?.headers || {}),
       },
     });
+  };
+
+  let res: Response;
+  try {
+    res = await doFetch();
+    // Один автоматический retry при 401 — возможно, токен только что обновился
+    if (res.status === 401) {
+      await new Promise(r => setTimeout(r, 150));
+      res = await doFetch();
+    }
   } catch (networkErr) {
-    // Сетевая ошибка — показываем тост и пробрасываем дальше
     const { showError } = await import('./errorTranslator');
     const msg = networkErr instanceof Error ? networkErr.message : 'Failed to fetch';
     showError(msg);
     throw new Error(msg);
   }
+
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
+    // 401 после retry — сессия точно истекла. Чистим токен,
+    // показываем дружелюбное сообщение. Редирект не делаем —
+    // в админке это сделает компонент, заметив отсутствие user.
+    if (res.status === 401) {
+      clearToken();
+      const { showError } = await import('./errorTranslator');
+      showError('Сессия истекла — войдите заново');
+      throw new Error('Сессия истекла — войдите заново');
+    }
     const msg = data.error || `HTTP ${res.status}`;
     const { showError } = await import('./errorTranslator');
     showError(msg);

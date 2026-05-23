@@ -454,14 +454,25 @@ def handler(event: dict, context) -> dict:
             # Дефолтный GET — статус (но это требует токена)
             pass
 
-    # Токен пользователя: заголовки, Authorization, query-параметр (Gateway режет заголовки на POST с JSON)
+    # Токен пользователя: ищем во всех возможных местах, потому что Cloud Functions Gateway
+    # режет заголовки на POST с JSON. Порядок: query (приоритетно — не режется),
+    # затем заголовки, затем тело запроса как fallback.
     token = (
-        headers_lc.get('x-auth-token')
+        qs.get('auth_token')
+        or headers_lc.get('x-auth-token')
         or headers_lc.get('x-authorization')
         or headers_lc.get('authorization', '').replace('Bearer ', '').strip()
-        or qs.get('auth_token')
+        or (body.get('auth_token') if isinstance(body, dict) else '')
         or ''
     )
+    # Дополнительно — пытаемся прочитать токен из cookie
+    if not token:
+        cookie_str = headers_lc.get('cookie') or headers_lc.get('x-cookie') or ''
+        for part in cookie_str.split(';'):
+            kv = part.strip().split('=', 1)
+            if len(kv) == 2 and kv[0].strip() in ('biznest_token', 'auth_token'):
+                token = kv[1].strip()
+                break
 
     dsn = os.environ['DATABASE_URL']
     conn = psycopg2.connect(dsn)
@@ -559,9 +570,10 @@ def handler(event: dict, context) -> dict:
             # Все остальные действия — требуют авторизации
             user = _get_user(cur, token)
             if not user:
-                return _err(401, 'Требуется авторизация')
-            if user['role'] not in ('admin', 'editor'):
-                return _err(403, 'Только для admin/editor')
+                # Сообщение более дружелюбное — фронт показывает его пользователю как есть
+                return _err(401, 'Сессия истекла — войдите заново')
+            if user['role'] not in ('admin', 'editor', 'director'):
+                return _err(403, 'Недостаточно прав для управления SEO')
 
             api_key, folder_id = _load_keys(cur)
 
