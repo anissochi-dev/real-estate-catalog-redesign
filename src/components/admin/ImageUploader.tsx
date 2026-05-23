@@ -59,6 +59,14 @@ export default function ImageUploader({
   allowDownload = true,
   applyWatermark = false,
 }: Props) {
+  // Защита: если value пришёл строкой (например "url1|url2"), массивом с null
+  // или undefined — приводим к массиву строк, чтобы .map() не падал.
+  const safeValue: string[] = Array.isArray(value)
+    ? value.filter((v): v is string => typeof v === 'string' && v.length > 0)
+    : typeof value === 'string' && value
+      ? String(value).split(value.includes('|') ? '|' : ',').map(s => s.trim()).filter(Boolean)
+      : [];
+  value = safeValue;
   const { settings } = useSettings();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
