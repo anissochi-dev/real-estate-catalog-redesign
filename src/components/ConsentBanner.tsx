@@ -5,6 +5,11 @@ import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
 
 const CONSENT_KEY = 'biznest_consent_v1';
+const CONSENT_ID_KEY = 'biznest_consent_id';
+const CONSENT_SESSION_KEY = 'biznest_consent_session';
+
+// Публичная функция listings — там обрабатывается action=consent_save
+const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
 
 export function hasConsent(): boolean {
   try {
@@ -17,8 +22,45 @@ export function hasConsent(): boolean {
 export function revokeConsent(): void {
   try {
     localStorage.removeItem(CONSENT_KEY);
+    localStorage.removeItem(CONSENT_ID_KEY);
   } catch {
     // ignore
+  }
+}
+
+function getSessionId(): string {
+  try {
+    let s = localStorage.getItem(CONSENT_SESSION_KEY);
+    if (!s) {
+      s = `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+      localStorage.setItem(CONSENT_SESSION_KEY, s);
+    }
+    return s;
+  } catch {
+    return `s_${Date.now().toString(36)}`;
+  }
+}
+
+async function logConsent(documentsOpened: string[]): Promise<void> {
+  try {
+    const r = await fetch(LISTINGS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'consent_save',
+        documents_opened: documentsOpened,
+        page_url: typeof window !== 'undefined' ? window.location.pathname + window.location.search : '',
+        session_id: getSessionId(),
+        user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+      }),
+    });
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d?.id) {
+      try { localStorage.setItem(CONSENT_ID_KEY, String(d.id)); } catch { /* ignore */ }
+    }
+  } catch {
+    // тихо игнорируем — лог не критичен для работы сайта
   }
 }
 
@@ -74,6 +116,19 @@ export default function ConsentBanner({ onAccept }: Props) {
   const { settings } = useSettings();
   const [openDoc, setOpenDoc] = useState<LegalDoc | null>(null);
   const [pulse, setPulse] = useState(false);
+  // Какие документы пользователь открывал — пишем в журнал для юр. защиты.
+  const [openedDocs, setOpenedDocs] = useState<Set<string>>(() => new Set());
+
+  // Открываем модалку конкретного документа и помечаем его как просмотренный
+  const openDocument = (doc: LegalDoc) => {
+    setOpenDoc(doc);
+    setOpenedDocs(prev => {
+      if (prev.has(doc.key)) return prev;
+      const next = new Set(prev);
+      next.add(doc.key);
+      return next;
+    });
+  };
 
   // Лёгкая пульсация баннера, чтобы привлечь внимание при попытке клика мимо
   useEffect(() => {
@@ -132,6 +187,9 @@ export default function ConsentBanner({ onAccept }: Props) {
     } catch {
       // ignore
     }
+    // Отправляем лог в БД — не ждём ответа, не блокируем UI пользователя.
+    // Журнал нужен для юридической защиты компании.
+    logConsent(Array.from(openedDocs));
     onAccept();
   };
 
@@ -208,17 +266,24 @@ export default function ConsentBanner({ onAccept }: Props) {
             {/* Документы */}
             {docs.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
-                {docs.map(doc => (
-                  <button
-                    key={doc.key}
-                    onClick={() => setOpenDoc(doc)}
-                    className="inline-flex items-center gap-1.5 text-xs sm:text-[13px] px-3 py-2 rounded-xl bg-brand-blue/[0.07] text-brand-blue font-semibold hover:bg-brand-blue/15 transition-colors min-h-[40px]"
-                  >
-                    <Icon name="FileText" size={13} />
-                    {doc.label}
-                    <Icon name="ExternalLink" size={11} className="opacity-60" />
-                  </button>
-                ))}
+                {docs.map(doc => {
+                  const opened = openedDocs.has(doc.key);
+                  return (
+                    <button
+                      key={doc.key}
+                      onClick={() => openDocument(doc)}
+                      className={`inline-flex items-center gap-1.5 text-xs sm:text-[13px] px-3 py-2 rounded-xl font-semibold transition-colors min-h-[40px] ${
+                        opened
+                          ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                          : 'bg-brand-blue/[0.07] text-brand-blue hover:bg-brand-blue/15'
+                      }`}
+                    >
+                      <Icon name={opened ? 'CheckCircle2' : 'FileText'} size={13} />
+                      {doc.label}
+                      <Icon name="ExternalLink" size={11} className="opacity-60" />
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>

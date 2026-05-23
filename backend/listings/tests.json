@@ -13,10 +13,25 @@
       "expectedStatus": 200
     },
     {
-      "name": "Получить одно объявление",
-      "method": "GET",
-      "path": "/?id=1",
-      "expectedStatus": 200
+      "name": "Записать согласие пользователя",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "consent_save",
+        "documents_opened": ["privacy", "personal"],
+        "page_url": "/",
+        "session_id": "test-session-1"
+      },
+      "expectedStatus": 200,
+      "bodyMatcher": "partial",
+      "expectedBody": { "success": true }
+    },
+    {
+      "name": "POST без action — отклонено",
+      "method": "POST",
+      "path": "/",
+      "body": { "foo": "bar" },
+      "expectedStatus": 405
     }
   ]
 }

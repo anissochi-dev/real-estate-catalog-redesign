@@ -196,10 +196,129 @@ def handler(event, context):
                 return _notifications(cur, conn, method, action, event, user)
             if resource == 'ai_inpaint':
                 return _ai_inpaint(cur, event, user)
+            if resource == 'consent_log':
+                return _consent_log(cur, conn, method, event, user)
 
             return _err(400, 'Неизвестный ресурс')
     finally:
         conn.close()
+
+
+def _consent_log(cur, conn, method, event, user):
+    """Журнал принятых согласий. Только admin/director.
+    GET ?resource=consent_log — список с фильтрами
+    GET ?resource=consent_log&action=stats — счётчики (всего/сегодня/7д/30д)
+    GET ?resource=consent_log&action=export — CSV
+    """
+    if user['role'] not in ('admin', 'director'):
+        return _err(403, 'Доступ только для администратора и директора')
+    if method != 'GET':
+        return _err(405, 'Метод не поддерживается')
+
+    params = event.get('queryStringParameters') or {}
+    action = params.get('action') or ''
+
+    # Счётчики
+    if action == 'stats':
+        cur.execute(
+            f"SELECT "
+            f"COUNT(*) AS total, "
+            f"COUNT(*) FILTER (WHERE accepted_at >= NOW() - INTERVAL '1 day') AS today, "
+            f"COUNT(*) FILTER (WHERE accepted_at >= NOW() - INTERVAL '7 days') AS week, "
+            f"COUNT(*) FILTER (WHERE accepted_at >= NOW() - INTERVAL '30 days') AS month "
+            f"FROM {SCHEMA}.consent_log"
+        )
+        row = cur.fetchone()
+        return _ok({
+            'total': int(row['total'] or 0),
+            'today': int(row['today'] or 0),
+            'week': int(row['week'] or 0),
+            'month': int(row['month'] or 0),
+        })
+
+    # Фильтры
+    where = ['1=1']
+    date_from = params.get('date_from')
+    date_to = params.get('date_to')
+    ip_filter = params.get('ip')
+    period = params.get('period')  # today|week|month
+    if period == 'today':
+        where.append("accepted_at >= NOW() - INTERVAL '1 day'")
+    elif period == 'week':
+        where.append("accepted_at >= NOW() - INTERVAL '7 days'")
+    elif period == 'month':
+        where.append("accepted_at >= NOW() - INTERVAL '30 days'")
+    if date_from:
+        where.append(f"accepted_at >= '{_safe(date_from, 50)}'")
+    if date_to:
+        where.append(f"accepted_at <= '{_safe(date_to, 50)}'")
+    if ip_filter:
+        ip_s = _safe(ip_filter, 100)
+        where.append(f"ip_address LIKE '%{ip_s}%'")
+    where_sql = ' AND '.join(where)
+
+    # CSV-экспорт
+    if action == 'export':
+        cur.execute(
+            f"SELECT id, accepted_at, ip_address, user_agent, documents_opened, page_url, session_id "
+            f"FROM {SCHEMA}.consent_log WHERE {where_sql} ORDER BY accepted_at DESC LIMIT 10000"
+        )
+        rows = cur.fetchall()
+        lines = ['id;accepted_at;ip;user_agent;documents_opened;page_url;session_id']
+        for r in rows:
+            d = dict(r)
+            docs = d.get('documents_opened') or []
+            if not isinstance(docs, list):
+                try:
+                    docs = json.loads(docs) if isinstance(docs, str) else []
+                except Exception:
+                    docs = []
+            docs_str = '+'.join(str(x) for x in docs)
+            ua = (d.get('user_agent') or '').replace(';', ',').replace('\n', ' ')[:300]
+            line = ';'.join([
+                str(d.get('id') or ''),
+                d.get('accepted_at').isoformat() if d.get('accepted_at') else '',
+                d.get('ip_address') or '',
+                ua,
+                docs_str,
+                (d.get('page_url') or '')[:200],
+                (d.get('session_id') or '')[:100],
+            ])
+            lines.append(line)
+        csv = '\n'.join(lines)
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Content-Type': 'text/csv; charset=utf-8',
+                'Content-Disposition': 'attachment; filename="consent_log.csv"',
+            },
+            'body': csv,
+        }
+
+    # Список с пагинацией
+    page = max(1, int(params.get('page') or 1))
+    limit = min(int(params.get('limit') or 50), 200)
+    offset = (page - 1) * limit
+
+    cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.consent_log WHERE {where_sql}")
+    total = int(cur.fetchone()['c'] or 0)
+
+    cur.execute(
+        f"SELECT id, accepted_at, ip_address, user_agent, documents_opened, page_url, session_id "
+        f"FROM {SCHEMA}.consent_log WHERE {where_sql} "
+        f"ORDER BY accepted_at DESC LIMIT {limit} OFFSET {offset}"
+    )
+    items = []
+    for r in cur.fetchall():
+        d = dict(r)
+        if d.get('accepted_at'):
+            try:
+                d['accepted_at'] = d['accepted_at'].isoformat()
+            except Exception:
+                d['accepted_at'] = str(d['accepted_at'])
+        items.append(d)
+    return _ok({'logs': items, 'total': total, 'page': page, 'limit': limit})
 
 
 def _listings(cur, conn, method, rid, event, user):

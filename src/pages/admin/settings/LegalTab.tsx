@@ -1,5 +1,6 @@
 import Icon from '@/components/ui/icon';
 import { S } from './types';
+import ConsentLogSection from './ConsentLogSection';
 
 interface Props {
   s: Partial<S>;
@@ -67,6 +68,9 @@ export default function LegalTab({ s, setS, saved, save }: Props) {
         <button onClick={save} className="btn-blue text-white px-6 py-3 rounded-xl font-semibold">Сохранить</button>
         {saved && <span className="text-emerald-600 text-sm">Сохранено</span>}
       </div>
+
+      {/* Журнал принятых согласий — встроен в конец раздела "Правовые" */}
+      <ConsentLogSection />
     </div>
   );
 }

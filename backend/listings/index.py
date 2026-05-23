@@ -18,12 +18,102 @@ def handler(event: dict, context) -> dict:
             'statusCode': 200,
             'headers': {
                 'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'GET, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type',
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, X-Session-Id, User-Agent',
                 'Access-Control-Max-Age': '86400',
             },
             'body': '',
         }
+
+    params = event.get('queryStringParameters') or {}
+    dsn = os.environ['DATABASE_URL']
+
+    # POST разрешён ТОЛЬКО для публичной записи согласия. Всё остальное — только GET.
+    if method == 'POST':
+        body_raw = event.get('body') or '{}'
+        try:
+            body = json.loads(body_raw)
+        except Exception:
+            body = {}
+        action = body.get('action') or params.get('action')
+        if action != 'consent_save':
+            return {
+                'statusCode': 405,
+                'headers': {'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'error': 'Method not allowed'}),
+            }
+
+        # Извлекаем IP, User-Agent и поля
+        raw_headers = event.get('headers') or {}
+        headers_lc = {k.lower(): v for k, v in raw_headers.items()}
+        req_ctx = event.get('requestContext') or {}
+        identity = req_ctx.get('identity') or {}
+        ip = (
+            identity.get('sourceIp')
+            or headers_lc.get('x-real-ip')
+            or headers_lc.get('x-forwarded-for', '').split(',')[0].strip()
+            or ''
+        )
+        ua = headers_lc.get('user-agent') or body.get('user_agent') or ''
+        docs_opened = body.get('documents_opened') or []
+        page_url = body.get('page_url') or ''
+        session_id = body.get('session_id') or ''
+
+        # Безопасное экранирование
+        def _esc(s):
+            return str(s or '').replace("'", "''")[:1000]
+
+        ip_e = _esc(ip)
+        ua_e = _esc(ua)
+        pu_e = _esc(page_url)
+        sid_e = _esc(session_id)
+        # Нормализуем documents_opened — только строки
+        if isinstance(docs_opened, list):
+            docs_clean = [str(d)[:50] for d in docs_opened if d]
+        else:
+            docs_clean = []
+        docs_json = json.dumps(docs_clean, ensure_ascii=False).replace("'", "''")
+
+        conn = psycopg2.connect(dsn)
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Дедуп: если за последние 24ч был лог с этим IP+UA — обновляем
+                cur.execute(
+                    "SELECT id, documents_opened FROM t_p71821556_real_estate_catalog_.consent_log "
+                    f"WHERE ip_address = '{ip_e}' AND user_agent = '{ua_e}' "
+                    "AND accepted_at > NOW() - INTERVAL '24 hours' "
+                    "ORDER BY accepted_at DESC LIMIT 1"
+                )
+                existing = cur.fetchone()
+                if existing:
+                    # Объединяем массивы открытых документов
+                    old_docs = existing.get('documents_opened') or []
+                    if isinstance(old_docs, str):
+                        try:
+                            old_docs = json.loads(old_docs)
+                        except Exception:
+                            old_docs = []
+                    merged = list({*([str(d) for d in old_docs]), *docs_clean})
+                    merged_json = json.dumps(merged, ensure_ascii=False).replace("'", "''")
+                    cur.execute(
+                        "UPDATE t_p71821556_real_estate_catalog_.consent_log "
+                        f"SET documents_opened = '{merged_json}'::jsonb, "
+                        f"page_url = '{pu_e}', session_id = '{sid_e}', "
+                        f"accepted_at = NOW() WHERE id = {int(existing['id'])} RETURNING id"
+                    )
+                    new_id = cur.fetchone()['id']
+                else:
+                    cur.execute(
+                        "INSERT INTO t_p71821556_real_estate_catalog_.consent_log "
+                        "(ip_address, user_agent, documents_opened, page_url, session_id) "
+                        f"VALUES ('{ip_e}', '{ua_e}', '{docs_json}'::jsonb, '{pu_e}', '{sid_e}') "
+                        "RETURNING id"
+                    )
+                    new_id = cur.fetchone()['id']
+                conn.commit()
+                return _ok({'success': True, 'id': new_id})
+        finally:
+            conn.close()
 
     if method != 'GET':
         return {
@@ -31,9 +121,6 @@ def handler(event: dict, context) -> dict:
             'headers': {'Access-Control-Allow-Origin': '*'},
             'body': json.dumps({'error': 'Method not allowed'}),
         }
-
-    params = event.get('queryStringParameters') or {}
-    dsn = os.environ['DATABASE_URL']
 
     conn = psycopg2.connect(dsn)
     try:
