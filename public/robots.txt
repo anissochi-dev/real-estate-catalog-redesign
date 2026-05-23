@@ -1,19 +1,32 @@
 User-agent: *
 Allow: /
 Disallow: /admin
+Disallow: /admin/
 Disallow: /login
+Disallow: /auth
+Disallow: /signin
+Disallow: /api/
+Disallow: /private/
 
 User-agent: Yandex
 Allow: /
 Disallow: /admin
+Disallow: /admin/
 Disallow: /login
+Disallow: /auth
+Disallow: /signin
+Disallow: /api/
 Clean-param: utm_source&utm_medium&utm_campaign&utm_term&utm_content
 
 User-agent: Googlebot
 Allow: /
 Disallow: /admin
+Disallow: /admin/
 Disallow: /login
+Disallow: /auth
+Disallow: /signin
+Disallow: /api/
 
 Sitemap: /sitemap.xml
 Sitemap: /sitemap_index.xml
-Sitemap: https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa?resource=sitemap
+Sitemap: https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d?file=sitemap

@@ -19,6 +19,7 @@ import CompareBar from './components/CompareBar';
 import AnalyticsLoader from './components/AnalyticsLoader';
 import ScrollToTop from './components/ScrollToTop';
 import ConsentBanner, { hasConsent } from './components/ConsentBanner';
+import SeoHead from './components/SeoHead';
 import { fetchListings } from './lib/api';
 import { useAuth } from './contexts/AuthContext';
 
@@ -200,7 +201,12 @@ export default function App() {
   }, [user, authLoading]);
 
   if (view === 'login') {
-    return <LoginPage onSuccess={() => { /* переход сработает через useEffect выше */ }} onBack={() => setView('site')} />;
+    return (
+      <>
+        <SeoHead title="Вход для сотрудников" noindex />
+        <LoginPage onSuccess={() => { /* переход сработает через useEffect выше */ }} onBack={() => setView('site')} />
+      </>
+    );
   }
 
   if (view === 'admin') {
@@ -208,12 +214,27 @@ export default function App() {
       return <div className="min-h-screen flex items-center justify-center">Загрузка...</div>;
     }
     if (!user) {
-      return <LoginPage onSuccess={() => setView(user && ADMIN_ROLES.includes((user as { role: string }).role) ? 'admin' : 'site')} onBack={() => setView('site')} />;
+      return (
+        <>
+          <SeoHead title="Вход для сотрудников" noindex />
+          <LoginPage onSuccess={() => setView(user && ADMIN_ROLES.includes((user as { role: string }).role) ? 'admin' : 'site')} onBack={() => setView('site')} />
+        </>
+      );
     }
     if (!ADMIN_ROLES.includes(user.role)) {
-      return <LoginPage onSuccess={() => setView('admin')} onBack={() => setView('site')} />;
+      return (
+        <>
+          <SeoHead title="Вход для сотрудников" noindex />
+          <LoginPage onSuccess={() => setView('admin')} onBack={() => setView('site')} />
+        </>
+      );
     }
-    return <AdminPage onExit={() => { setView('site'); setAdminInitialSection(undefined); }} initialSection={adminInitialSection as string | undefined} />;
+    return (
+      <>
+        <SeoHead title="Админ-панель" noindex />
+        <AdminPage onExit={() => { setView('site'); setAdminInitialSection(undefined); }} initialSection={adminInitialSection as string | undefined} />
+      </>
+    );
   }
 
   if (loading) {
@@ -249,6 +270,7 @@ export default function App() {
     <div className="min-h-screen bg-background font-body">
       <ScrollToTop />
       <AnalyticsLoader />
+      <SeoHead />
       <Navbar
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}

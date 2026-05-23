@@ -13,6 +13,28 @@
       "body": { "action": "status" },
       "expectedStatus": 401,
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Публичный SEO главной (без авторизации)",
+      "method": "POST",
+      "path": "/",
+      "body": { "action": "get_page_seo", "path": "/" },
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "robots.txt без авторизации",
+      "method": "POST",
+      "path": "/",
+      "body": { "action": "robots_txt" },
+      "expectedStatus": 200
+    },
+    {
+      "name": "sitemap.xml без авторизации",
+      "method": "POST",
+      "path": "/",
+      "body": { "action": "sitemap_xml" },
+      "expectedStatus": 200
     }
   ]
 }

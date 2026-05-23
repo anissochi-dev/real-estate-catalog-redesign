@@ -4,6 +4,7 @@ import { Property } from '@/App';
 import PropertyCard from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
 import Breadcrumbs from '@/components/Breadcrumbs';
+import { useSeoH1 } from '@/components/SeoHead';
 
 const PAGE_SIZE = 20;
 
@@ -41,6 +42,7 @@ const PROPERTY_TYPES = [
 ];
 
 export default function CatalogPage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare }: CatalogPageProps) {
+  const h1 = useSeoH1('Каталог коммерческой недвижимости');
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [dealFilter, setDealFilter] = useState('all');
@@ -255,6 +257,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
             { label: 'Каталог' },
           ]} />
         </div>
+        <h1 className="font-display font-900 text-2xl md:text-3xl text-foreground mb-4">{h1}</h1>
         <div className="flex items-center justify-between mb-6">
           <div className="text-sm text-muted-foreground">
             Найдено <span className="font-semibold text-foreground">{filtered.length}</span> объектов

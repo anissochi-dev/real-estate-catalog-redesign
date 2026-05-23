@@ -38,6 +38,33 @@ SEO_SYSTEM_PROMPT = (
     'Формат строго:\nTITLE: <заголовок>\nDESCRIPTION: <описание>'
 )
 
+PAGE_SYSTEM_PROMPT = (
+    'Ты — SEO-специалист агентства коммерческой недвижимости BIZNEST в Краснодаре. '
+    'По описанию страницы сайта сгенерируй H1, Title и Description.\n'
+    '- H1 — главный заголовок (до 70 символов).\n'
+    '- TITLE — заголовок вкладки браузера до 65 символов с упоминанием бренда BIZNEST.\n'
+    '- DESCRIPTION — мета-описание для выдачи до 155 символов, с УТП и призывом.\n'
+    'Без markdown, без кавычек, на русском.\n'
+    'Формат строго:\nH1: <заголовок>\nTITLE: <title>\nDESCRIPTION: <description>'
+)
+
+PAGE_HINTS = {
+    '/': 'Главная страница агентства коммерческой недвижимости BIZNEST в Краснодаре — каталог, новости, готовый бизнес.',
+    '/catalog': 'Каталог всех активных объектов коммерческой недвижимости: офисы, склады, торговые, готовый бизнес.',
+    '/map': 'Интерактивная карта объектов коммерческой недвижимости по Краснодару и краю.',
+    '/favorites': 'Избранные объекты пользователя — сохранённые карточки коммерческой недвижимости.',
+    '/compare': 'Сравнение коммерческой недвижимости — характеристики, цены, окупаемость в одной таблице.',
+    '/network-tenants': 'Объекты с сетевыми арендаторами — готовый арендный бизнес с проверенным доходом.',
+    '/news': 'Новости и аналитика рынка коммерческой недвижимости Краснодара и края.',
+    '/about': 'О компании BIZNEST: команда брокеров, опыт, услуги для собственников и инвесторов.',
+    '/contacts': 'Контакты офиса BIZNEST в Краснодаре: телефон, адрес, мессенджеры.',
+}
+
+ROBOTS_DISALLOW = [
+    '/admin', '/admin/', '/login', '/auth', '/signin',
+    '/api/', '/private/',
+]
+
 DEAL_RU = {'sale': 'Продажа', 'rent': 'Аренда', 'business': 'Готовый бизнес'}
 CAT_RU = {
     'office': 'офиса', 'retail': 'магазина', 'warehouse': 'склада',
@@ -291,6 +318,102 @@ def _should_run_now(schedule: dict) -> bool:
     return True
 
 
+def _parse_page_seo(text: str) -> tuple:
+    h1, title, desc = '', '', ''
+    for line in text.splitlines():
+        line = line.strip()
+        up = line.upper()
+        if up.startswith('H1:'):
+            h1 = line[3:].strip()[:150]
+        elif up.startswith('TITLE:'):
+            title = line[6:].strip()[:120]
+        elif up.startswith('DESCRIPTION:'):
+            desc = line[12:].strip()[:300]
+    return h1, title, desc
+
+
+def _site_base_url(cur) -> str:
+    """Достаём базовый URL сайта из настроек."""
+    try:
+        cur.execute(f"SELECT site_url FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
+        row = cur.fetchone()
+        if row and row.get('site_url'):
+            url = str(row['site_url']).rstrip('/')
+            if url.startswith('http'):
+                return url
+    except Exception:
+        pass
+    return os.environ.get('SITE_URL', 'https://biznest-krd.ru').rstrip('/')
+
+
+def _build_sitemap_xml(cur) -> tuple:
+    """Возвращает (xml_string, urls_count)."""
+    base = _site_base_url(cur)
+    urls = []
+
+    # Статические страницы из seo_pages (только не noindex)
+    cur.execute(
+        f"SELECT path, updated_at FROM {SCHEMA}.seo_pages "
+        f"WHERE noindex = FALSE ORDER BY path"
+    )
+    for r in cur.fetchall():
+        p = r.get('path') or '/'
+        if p.startswith('/admin') or p.startswith('/login') or p.startswith('/auth'):
+            continue
+        upd = r.get('updated_at')
+        urls.append((base + p, upd))
+
+    # Активные объекты
+    cur.execute(
+        f"SELECT id, slug, updated_at FROM {SCHEMA}.listings "
+        f"WHERE status = 'active' ORDER BY updated_at DESC NULLS LAST LIMIT 5000"
+    )
+    for r in cur.fetchall():
+        lid = r.get('id')
+        slug = r.get('slug') or ''
+        path = f"/object/{slug}-{lid}" if slug else f"/object/{lid}"
+        urls.append((base + path, r.get('updated_at')))
+
+    parts = ['<?xml version="1.0" encoding="UTF-8"?>',
+             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for u, upd in urls:
+        u_safe = u.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        lastmod = ''
+        if upd:
+            try:
+                lastmod = f'<lastmod>{upd.strftime("%Y-%m-%d")}</lastmod>'
+            except Exception:
+                lastmod = ''
+        parts.append(f'<url><loc>{u_safe}</loc>{lastmod}</url>')
+    parts.append('</urlset>')
+    return '\n'.join(parts), len(urls)
+
+
+def _save_sitemap(cur, conn) -> dict:
+    """Перестраивает sitemap.xml и кэширует в seo_artifacts."""
+    xml, count = _build_sitemap_xml(cur)
+    safe_xml = _safe(xml, 2_000_000)
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.seo_artifacts (kind, content, urls_count, updated_at) "
+        f"VALUES ('sitemap', '{safe_xml}', {int(count)}, NOW()) "
+        f"ON CONFLICT (kind) DO UPDATE SET content = EXCLUDED.content, "
+        f"urls_count = EXCLUDED.urls_count, updated_at = NOW()"
+    )
+    conn.commit()
+    return {'urls_count': count, 'xml_length': len(xml)}
+
+
+def _build_robots_txt(cur) -> str:
+    base = _site_base_url(cur)
+    lines = ['User-agent: *']
+    for d in ROBOTS_DISALLOW:
+        lines.append(f'Disallow: {d}')
+    lines.append('Allow: /')
+    lines.append('')
+    lines.append(f'Sitemap: {base}/sitemap.xml')
+    return '\n'.join(lines) + '\n'
+
+
 def handler(event: dict, context) -> dict:
     method = event.get('httpMethod', 'GET')
 
@@ -319,6 +442,17 @@ def handler(event: dict, context) -> dict:
 
     qs = event.get('queryStringParameters') or {}
     action = body.get('action') or qs.get('action') or 'status'
+
+    # GET-короткие пути для роботов (?file=robots или ?file=sitemap)
+    if method == 'GET':
+        file_q = (qs.get('file') or '').lower()
+        if file_q == 'robots':
+            action = 'robots_txt'
+        elif file_q == 'sitemap':
+            action = 'sitemap_xml'
+        elif not body and not qs.get('action'):
+            # Дефолтный GET — статус (но это требует токена)
+            pass
 
     # Токен пользователя: заголовки, Authorization, query-параметр (Gateway режет заголовки на POST с JSON)
     token = (
@@ -350,6 +484,50 @@ def handler(event: dict, context) -> dict:
                 limit_val = schedule.get('batch_limit', 20)
                 result = _run_batch(cur, conn, api_key, folder_id, limit_val, dry_run=False, triggered_by='schedule')
                 return _ok({**result, 'triggered': True})
+
+            # Публичные эндпоинты (без авторизации) ───────────────────────────
+            if action == 'get_page_seo':
+                path = (body.get('path') or qs.get('path') or '/').strip()
+                p = _safe(path, 255)
+                cur.execute(
+                    f"SELECT path, title, description, h1, keywords, og_image, noindex "
+                    f"FROM {SCHEMA}.seo_pages WHERE path = '{p}'"
+                )
+                row = cur.fetchone()
+                if row:
+                    return _ok({'page': dict(row)})
+                return _ok({'page': None})
+
+            if action == 'robots_txt':
+                content = _build_robots_txt(cur)
+                return {
+                    'statusCode': 200,
+                    'headers': {
+                        'Access-Control-Allow-Origin': '*',
+                        'Content-Type': 'text/plain; charset=utf-8',
+                        'Cache-Control': 'public, max-age=3600',
+                    },
+                    'body': content,
+                }
+
+            if action == 'sitemap_xml':
+                cur.execute(
+                    f"SELECT content, updated_at FROM {SCHEMA}.seo_artifacts WHERE kind='sitemap'"
+                )
+                row = cur.fetchone()
+                if row and row.get('content'):
+                    xml = row['content']
+                else:
+                    xml, _cnt = _build_sitemap_xml(cur)
+                return {
+                    'statusCode': 200,
+                    'headers': {
+                        'Access-Control-Allow-Origin': '*',
+                        'Content-Type': 'application/xml; charset=utf-8',
+                        'Cache-Control': 'public, max-age=1800',
+                    },
+                    'body': xml,
+                }
 
             # Cron-режим: запускается внешним планировщиком (с токеном) или вручную авторизованным
             if action == 'cron':
@@ -462,6 +640,109 @@ def handler(event: dict, context) -> dict:
                     return _ok(result)
 
                 return _ok(result)
+
+            # ── Мета-теги статических страниц ──────────────────────────────────
+            if action == 'pages_list':
+                cur.execute(
+                    f"SELECT id, path, title, description, h1, keywords, og_image, "
+                    f"noindex, auto_generated, manual_override, page_label, updated_at "
+                    f"FROM {SCHEMA}.seo_pages ORDER BY path"
+                )
+                pages = [dict(r) for r in cur.fetchall()]
+                # Дополним дефолтными путями, которых нет в таблице
+                existing = {p['path'] for p in pages}
+                for default_path in PAGE_HINTS.keys():
+                    if default_path not in existing:
+                        pages.append({
+                            'path': default_path, 'title': '', 'description': '',
+                            'h1': '', 'keywords': '', 'og_image': '',
+                            'noindex': False, 'auto_generated': False,
+                            'manual_override': False, 'updated_at': None,
+                        })
+                return _ok({'pages': pages})
+
+            if action == 'page_save':
+                path = (body.get('path') or '').strip()
+                if not path or not path.startswith('/'):
+                    return _err(400, 'Не указан путь страницы (path)')
+                p = _safe(path, 255)
+                t = _safe(body.get('title') or '', 500)
+                d = _safe(body.get('description') or '', 1000)
+                h = _safe(body.get('h1') or '', 500)
+                kw = _safe(body.get('keywords') or '', 500)
+                og = _safe(body.get('og_image') or '', 500)
+                noindex = 'TRUE' if body.get('noindex') else 'FALSE'
+
+                cur.execute(
+                    f"INSERT INTO {SCHEMA}.seo_pages "
+                    f"(path, title, description, h1, keywords, og_image, noindex, auto_generated, manual_override, updated_at) "
+                    f"VALUES ('{p}', '{t}', '{d}', '{h}', '{kw}', '{og}', {noindex}, FALSE, TRUE, NOW()) "
+                    f"ON CONFLICT (path) DO UPDATE SET "
+                    f"title=EXCLUDED.title, description=EXCLUDED.description, h1=EXCLUDED.h1, "
+                    f"keywords=EXCLUDED.keywords, og_image=EXCLUDED.og_image, noindex=EXCLUDED.noindex, "
+                    f"auto_generated=FALSE, manual_override=TRUE, updated_at=NOW()"
+                )
+                conn.commit()
+                # Перестроим sitemap (страница могла стать (не)индексируемой)
+                try:
+                    _save_sitemap(cur, conn)
+                except Exception:
+                    pass
+                return _ok({'ok': True, 'path': path})
+
+            if action == 'page_generate':
+                path = (body.get('path') or '').strip()
+                if not path or not path.startswith('/'):
+                    return _err(400, 'Не указан путь страницы (path)')
+                if not api_key or not folder_id:
+                    return _err(503, 'YandexGPT не настроен')
+
+                hint = PAGE_HINTS.get(path, f'Страница сайта BIZNEST: {path}')
+                user_text = f'Адрес страницы: {path}\nЧто это: {hint}'
+                gpt = _gpt(PAGE_SYSTEM_PROMPT, user_text, api_key, folder_id)
+                if 'error' in gpt:
+                    return _err(502, gpt['error'])
+                h1, t, d = _parse_page_seo(gpt['text'])
+                if not h1 and not t:
+                    return _err(502, 'Не удалось распарсить ответ ИИ')
+
+                p_safe = _safe(path, 255)
+                cur.execute(
+                    f"INSERT INTO {SCHEMA}.seo_pages "
+                    f"(path, title, description, h1, auto_generated, manual_override, updated_at) "
+                    f"VALUES ('{p_safe}', '{_safe(t, 500)}', '{_safe(d, 1000)}', '{_safe(h1, 500)}', TRUE, FALSE, NOW()) "
+                    f"ON CONFLICT (path) DO UPDATE SET "
+                    f"title=EXCLUDED.title, description=EXCLUDED.description, h1=EXCLUDED.h1, "
+                    f"auto_generated=TRUE, manual_override=FALSE, updated_at=NOW()"
+                )
+                conn.commit()
+                return _ok({'ok': True, 'page': {
+                    'path': path, 'title': t, 'description': d, 'h1': h1,
+                    'auto_generated': True,
+                }})
+
+            # ── robots.txt и sitemap.xml ───────────────────────────────────────
+            if action == 'files_status':
+                cur.execute(
+                    f"SELECT urls_count, updated_at FROM {SCHEMA}.seo_artifacts "
+                    f"WHERE kind = 'sitemap'"
+                )
+                row = cur.fetchone()
+                base = _site_base_url(cur)
+                return _ok({
+                    'robots_url': f'{base}/robots.txt',
+                    'sitemap_url': f'{base}/sitemap.xml',
+                    'sitemap_urls_count': (row['urls_count'] if row else 0),
+                    'sitemap_updated_at': (row['updated_at'] if row else None),
+                    'robots_disallow': ROBOTS_DISALLOW,
+                })
+
+            if action == 'sitemap_rebuild':
+                r = _save_sitemap(cur, conn)
+                return _ok({'ok': True, **r})
+
+            # ── Публичная отдача robots.txt и sitemap.xml ──────────────────────
+            # Эти actions работают без авторизации — обрабатываются раньше.
 
     finally:
         conn.close()

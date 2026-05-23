@@ -288,12 +288,37 @@ export default function PropertyCard({
                 {property.payback} мес
               </div>
             ) : null}
-            {property.profit ? (
-              <div className="flex items-center gap-1 text-[12px] font-semibold text-emerald-700">
-                <Icon name="Wallet" size={11} className="text-emerald-600" />
-                +{(property.profit / 1000).toFixed(0)} тыс/мес
-              </div>
-            ) : null}
+            {(() => {
+              // Логика блока дохода:
+              // - аренда → не показываем (цена и так за месяц)
+              // - готовый бизнес (deal=business) + profit → "Доход: +X тыс/мес"
+              // - продажа/ГАБ с реальным арендатором (tenantName или monthlyRent) → "Сдан в аренду: +X тыс/мес"
+              // - просто profit без арендатора → "+X тыс/мес" (прогноз, синий)
+              if (property.deal === 'rent') return null;
+              const income = property.monthlyRent || property.profit || 0;
+              if (!income) return null;
+              const hasTenant = !!property.tenantName || !!property.monthlyRent;
+              const isBusiness = property.deal === 'business';
+              const label = isBusiness
+                ? 'Доход'
+                : hasTenant
+                  ? 'Сдан'
+                  : 'Прогноз';
+              const isFact = hasTenant || isBusiness;
+              const color = isFact ? 'text-emerald-700' : 'text-blue-700';
+              const iconColor = isFact ? 'text-emerald-600' : 'text-blue-600';
+              const icon = isFact ? 'CheckCircle2' : 'TrendingUp';
+              return (
+                <div
+                  className={`flex items-center gap-1 text-[12px] font-semibold ${color}`}
+                  title={hasTenant && property.tenantName ? `Арендатор: ${property.tenantName}` : ''}
+                >
+                  <Icon name={icon} size={11} className={iconColor} />
+                  <span className="opacity-80">{label}:</span>
+                  <span>+{(income / 1000).toFixed(0)} тыс/мес</span>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Адрес */}
