@@ -117,10 +117,14 @@ export function useListingsState() {
     }
   };
 
-  const save = async () => {
+  const save = async (override?: Partial<Listing>) => {
     if (!editing) return;
     const isNew = !editing.id;
-    const data: Record<string, unknown> = { ...editing };
+    // override используется, когда вызывающий код (например, авто-геокодинг
+    // в ListingEditor) только что вычислил поля и не может полагаться на
+    // обновление React-стейта до отправки запроса.
+    const merged = { ...editing, ...(override || {}) };
+    const data: Record<string, unknown> = { ...merged };
     if (Array.isArray(data.tags)) data.tags = (data.tags as string[]).join(',');
     data.images = photos.join('|');
     data.image = photos[0] || '';

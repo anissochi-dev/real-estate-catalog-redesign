@@ -26,7 +26,7 @@ interface Props {
   onGenerateSeo: () => void;
   onGenerateAll: () => void;
   onClose: () => void;
-  onSave: () => void;
+  onSave: (override?: Partial<Listing>) => void;
 }
 
 export default function ListingEditor({
@@ -95,25 +95,32 @@ export default function ListingEditor({
    * Таким образом адрес — источник истины: если изменили адрес, но забыли
    * подтвердить на карте (Enter/blur не сработали), координаты всё равно
    * подтянутся к новому адресу при сохранении.
+   *
+   * Возвращает patch с lat/lng/district либо null, если геокодинг не нужен
+   * или не удался. Параллельно обновляет локальный стейт editing, но из-за
+   * асинхронности React этот апдейт может не успеть к моменту вызова onSave —
+   * поэтому patch явно возвращается и пробрасывается в onSave override.
    */
-  const ensureCoordinates = async (): Promise<void> => {
+  const ensureCoordinates = async (): Promise<Partial<Listing> | null> => {
     const addr = editing.address?.trim();
-    if (!addr) return;
+    if (!addr) return null;
     // Если пользователь выставил точку на карте вручную — доверяем ей.
-    if (coordsManual) return;
+    if (coordsManual) return null;
     const city = editing.city?.trim();
     const fullQuery = city ? `${city}, ${addr}` : addr;
     setGeocoding(true);
     try {
       const res = await geocodeAddress(fullQuery, yandexApiKey);
-      if (res) {
-        setEditing({
-          ...editing,
-          lat: res.lat,
-          lng: res.lng,
-          district: editing.district || res.district || '',
-        });
-      }
+      if (!res) return null;
+      const patch: Partial<Listing> = {
+        lat: res.lat,
+        lng: res.lng,
+        district: editing.district || res.district || '',
+      };
+      setEditing({ ...editing, ...patch });
+      return patch;
+    } catch {
+      return null;
     } finally {
       setGeocoding(false);
     }
@@ -121,8 +128,10 @@ export default function ListingEditor({
 
   const handleSave = async () => {
     if (validate()) {
-      await ensureCoordinates();
-      onSave();
+      const patch = await ensureCoordinates();
+      // Передаём patch явно — React-стейт ещё не успел обновиться,
+      // но координаты обязаны попасть в сохраняемый объект.
+      onSave(patch || undefined);
       return;
     }
     // Переключаемся на первую вкладку с ошибкой
