@@ -175,13 +175,18 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
             </div>
           )}
 
-          <div className="border-t border-white/10 mt-5 pt-4 flex flex-col sm:flex-row justify-between items-center gap-2">
-            <div className="text-xs text-white/40">© {new Date().getFullYear()} {company}. Все права защищены.</div>
-            <button onClick={onLogin}
-              className="text-[11px] text-white/30 hover:text-white/70 inline-flex items-center gap-1 transition">
-              <Icon name="Lock" size={10} />
-              Вход для сотрудников
-            </button>
+          <div className="border-t border-white/10 mt-5 pt-4 text-center sm:text-left">
+            <div className="text-xs text-white/40 inline-flex items-center gap-1.5 flex-wrap justify-center sm:justify-start">
+              <span>© {new Date().getFullYear()} {company}. Все права защищены.</span>
+              <button
+                onClick={onLogin}
+                aria-label="Вход для сотрудников"
+                title="Вход для сотрудников"
+                className="text-white/30 hover:text-white/70 transition-colors p-1 -m-1 rounded inline-flex items-center justify-center"
+              >
+                <Icon name="Lock" size={11} />
+              </button>
+            </div>
           </div>
         </div>
       </footer>
