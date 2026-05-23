@@ -79,28 +79,71 @@ function buildAuthUrl(url: string, token: string): string {
   }
 }
 
+/**
+ * Fallback на XMLHttpRequest когда fetch бросает "Failed to fetch".
+ * XHR более устойчив к перехватам и HMR-разрывам в preview-режиме.
+ */
+function xhrRequest(url: string, init: RequestInit = {}): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    try {
+      const xhr = new XMLHttpRequest();
+      const method = (init.method || 'GET').toUpperCase();
+      xhr.open(method, url, true);
+      xhr.timeout = 30000;
+      // Заголовки
+      const headers = (init.headers || {}) as Record<string, string>;
+      for (const [k, v] of Object.entries(headers)) {
+        try { xhr.setRequestHeader(k, v); } catch { /* ignore forbidden headers */ }
+      }
+      xhr.onload = () => {
+        // Эмулируем Response из fetch
+        const body = xhr.responseText || '';
+        const status = xhr.status || 0;
+        resolve(new Response(body, {
+          status,
+          statusText: xhr.statusText || '',
+          headers: { 'Content-Type': xhr.getResponseHeader('Content-Type') || 'application/json' },
+        }));
+      };
+      xhr.onerror = () => reject(new Error('XHR network error'));
+      xhr.ontimeout = () => reject(new Error('XHR timeout'));
+      xhr.onabort = () => reject(new Error('XHR aborted'));
+      const body = init.body as BodyInit | null | undefined;
+      xhr.send(body as Document | XMLHttpRequestBodyInit | null | undefined);
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
 async function req(url: string, init?: RequestInit) {
   const doFetch = async (): Promise<Response> => {
     const token = getToken();
     const finalUrl = buildAuthUrl(url, token);
-    return fetch(finalUrl, {
-      ...init,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? {
-          'X-Auth-Token': token,
-          'X-Authorization': token,
-          'Authorization': `Bearer ${token}`,
-        } : {}),
-        ...(init?.headers || {}),
-      },
-    });
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(token ? {
+        'X-Auth-Token': token,
+        'X-Authorization': token,
+        'Authorization': `Bearer ${token}`,
+      } : {}),
+      ...(init?.headers || {}),
+    };
+    // Сначала пробуем нативный fetch
+    try {
+      return await fetch(finalUrl, { ...init, headers });
+    } catch (e) {
+      // Если fetch упал с "Failed to fetch" — пробуем через XHR.
+      // Это лечит проблемы в preview-режиме poehali.dev,
+      // где Vite HMR может разрывать соединения.
+      console.warn('[fetch fallback to XHR]', e);
+      return xhrRequest(finalUrl, { ...init, headers });
+    }
   };
 
   let res: Response | null = null;
   let lastNetworkErr: unknown = null;
-  // Делаем до 3 попыток с возрастающей задержкой — это лечит "Failed to fetch"
-  // во время HMR-реконнектов Vite в режиме preview и кратковременных сбоев сети.
+  // До 3 попыток с возрастающей задержкой
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       res = await doFetch();
@@ -108,11 +151,9 @@ async function req(url: string, init?: RequestInit) {
       break;
     } catch (networkErr) {
       lastNetworkErr = networkErr;
-      // Если браузер сообщил, что сети нет — не дёргаем сервер
       if (typeof navigator !== 'undefined' && navigator.onLine === false) {
         break;
       }
-      // Экспоненциальная задержка: 300мс → 700мс
       await new Promise(r => setTimeout(r, 300 + attempt * 400));
     }
   }
@@ -122,7 +163,7 @@ async function req(url: string, init?: RequestInit) {
     showError(msg);
     throw new Error(msg);
   }
-  // Один автоматический retry при 401 — возможно, токен только что обновился
+  // Retry при 401
   if (res.status === 401) {
     await new Promise(r => setTimeout(r, 150));
     try { res = await doFetch(); } catch { /* keep previous response */ }
