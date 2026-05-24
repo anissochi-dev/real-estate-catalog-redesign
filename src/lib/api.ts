@@ -271,6 +271,65 @@ export async function aiMatch(prompt: string): Promise<AiMatchResult> {
   };
 }
 
+/** ИИ-поиск по заявкам клиентов. Возвращает id подходящих заявок. */
+export async function aiSearchLeads(prompt: string): Promise<{ ids: number[]; reasoning: string }> {
+  const res = await fetch(AI_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'search_leads', prompt }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Ошибка ИИ-поиска заявок');
+  return {
+    ids: Array.isArray(data.ids) ? data.ids.map((x: unknown) => Number(x)).filter((n: number) => Number.isFinite(n)) : [],
+    reasoning: data.reasoning || '',
+  };
+}
+
+/** Тип публичной заявки. */
+export interface PublicLead {
+  id: number;
+  name: string;
+  message: string;
+  budget: number | null;
+  company: string | null;
+  request_category: string | null;
+  lead_type: string | null;
+  created_at: string;
+}
+
+/** Получить полный список публичных заявок. */
+export async function fetchPublicLeads(params: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  ids?: number[];
+  min_budget?: number;
+  max_budget?: number;
+  category?: string;
+  sort?: 'newest' | 'budget_desc' | 'budget_asc';
+} = {}): Promise<{ leads: PublicLead[]; total: number; page: number; pages: number }> {
+  const qs = new URLSearchParams();
+  qs.set('resource', 'public_leads_full');
+  if (params.page) qs.set('page', String(params.page));
+  if (params.limit) qs.set('limit', String(params.limit));
+  if (params.search) qs.set('search', params.search);
+  if (params.ids && params.ids.length) qs.set('ids', params.ids.join(','));
+  if (params.min_budget) qs.set('min_budget', String(params.min_budget));
+  if (params.max_budget) qs.set('max_budget', String(params.max_budget));
+  if (params.category) qs.set('category', params.category);
+  if (params.sort) qs.set('sort', params.sort);
+  const res = await fetch(`${LISTINGS_URL}?${qs.toString()}`);
+  if (!res.ok) throw new Error('Не удалось загрузить заявки');
+  const data = await res.json();
+  return {
+    leads: Array.isArray(data.leads) ? data.leads : [],
+    total: Number(data.total) || 0,
+    page: Number(data.page) || 1,
+    pages: Number(data.pages) || 1,
+  };
+}
+
 export interface Agent {
   id: number;
   name: string;

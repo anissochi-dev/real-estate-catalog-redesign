@@ -126,6 +126,12 @@ SYSTEM_PROMPTS = {
         '{"ids": [id1, id2, id3], "reasoning": "одно предложение почему подобрал именно их", '
         '"advice": "1-2 предложения совета клиенту и расчёт окупаемости если применимо"}'
     ),
+    'search_leads': (
+        'Ты — поисковый помощник. На входе — запрос посетителя сайта и список заявок других '
+        'клиентов (что они ищут). Выбери до 10 заявок, наиболее подходящих под запрос — по теме, '
+        'бюджету, типу объекта, локации, целям. Ответь СТРОГО в формате JSON без markdown:\n'
+        '{"ids": [id1, id2, ...], "reasoning": "1 предложение почему именно эти заявки"}'
+    ),
     'agent': (
         'Ты — автономный ИИ-агент админ-панели BIZNEST. Анализируешь запрос администратора '
         'и САМОСТОЯТЕЛЬНО предлагаешь конкретные действия. Каждое действие требует подтверждения админа.\n\n'
@@ -1020,7 +1026,8 @@ def handler(event, context):
     conn = psycopg2.connect(dsn)
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            is_public = action == 'match'
+            is_public = action in ('match', 'search_leads')
+            is_search_leads = action == 'search_leads'
             user = None
             if not is_public:
                 user = _get_user(cur, token)
@@ -1115,7 +1122,8 @@ def handler(event, context):
 
             # Для match — подтягиваем активные объекты как контекст
             matches = []
-            if is_public:
+            leads_for_search = []
+            if is_public and not is_search_leads:
                 cur.execute(
                     f"SELECT id, title, category, deal, price, area, district, address, "
                     f"payback, profit, image FROM {SCHEMA}.listings "
@@ -1123,7 +1131,6 @@ def handler(event, context):
                 )
                 listings = cur.fetchall()
                 matches = [dict(r) for r in listings]
-                # Сжатый контекст для модели — только id и ключевые поля
                 compact = [
                     {
                         'id': r['id'],
@@ -1138,6 +1145,29 @@ def handler(event, context):
                     for r in matches
                 ]
                 ctx_data = {'listings': compact}
+
+            # Для search_leads — подтягиваем активные публичные заявки
+            if is_search_leads:
+                cur.execute(
+                    f"SELECT id, name, message, budget, company, request_category, lead_type "
+                    f"FROM {SCHEMA}.leads "
+                    f"WHERE show_on_main = TRUE AND status IN ('new','in_progress') "
+                    f"ORDER BY created_at DESC LIMIT 80"
+                )
+                leads_rows = cur.fetchall()
+                leads_for_search = [dict(r) for r in leads_rows]
+                compact_leads = [
+                    {
+                        'id': r['id'],
+                        'name': (r.get('name') or '')[:60],
+                        'message': (r.get('message') or '')[:300],
+                        'budget': r.get('budget'),
+                        'category': r.get('request_category') or '',
+                        'type': r.get('lead_type') or '',
+                    }
+                    for r in leads_for_search
+                ]
+                ctx_data = {'leads': compact_leads}
 
             sys_prompt = SYSTEM_PROMPTS[action]
 
@@ -1167,7 +1197,7 @@ def handler(event, context):
             if 'error' in result:
                 return _err(502, result['error'])
 
-            # Парсим JSON-ответ для match
+            # Парсим JSON-ответ для match / search_leads
             if is_public:
                 text = result['text'].strip()
                 if text.startswith('```'):
@@ -1177,6 +1207,13 @@ def handler(event, context):
                 except Exception:
                     parsed = {'ids': [], 'reasoning': result['text'][:500], 'advice': ''}
                 ids = parsed.get('ids') or []
+                if is_search_leads:
+                    # Возвращаем найденные id заявок — фронт сам подтянет полные данные
+                    return _ok({
+                        'ids': ids[:10],
+                        'reasoning': parsed.get('reasoning', ''),
+                        'tokens': result.get('tokens', 0),
+                    })
                 picked = [r for r in matches if r['id'] in ids]
                 picked_sorted = sorted(picked, key=lambda r: ids.index(r['id']) if r['id'] in ids else 99)
                 return _ok({

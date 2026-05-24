@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Icon from '@/components/ui/icon';
 import SmartCaptcha, { CaptchaResult } from '@/components/SmartCaptcha';
 
@@ -63,10 +64,16 @@ export default function ClientLeadsSection() {
   return (
     <section className="py-6 bg-white">
       <div className="container mx-auto px-4">
-        <div className="flex items-end justify-between mb-3">
+        <div className="flex items-end justify-between gap-3 mb-3 flex-wrap">
           <p className="text-xs text-muted-foreground max-w-xl">
             Есть подходящий объект? Предложите его клиенту — заявка попадёт нашему менеджеру.
           </p>
+          <Link
+            to="/leads"
+            className="text-sm font-semibold text-brand-blue hover:text-brand-orange transition-colors inline-flex items-center gap-1 whitespace-nowrap"
+          >
+            Все заявки <Icon name="ArrowRight" size={14} />
+          </Link>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

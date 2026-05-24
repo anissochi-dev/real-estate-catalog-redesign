@@ -13,6 +13,7 @@ import CategoryPage from './pages/CategoryPage';
 import NotFoundPage from './pages/NotFoundPage';
 import DeclinedPage from './pages/DeclinedPage';
 import { NewsListPage, NewsArticlePage } from './pages/NewsPage';
+import LeadsListPage from './pages/LeadsListPage';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import CompareBar from './components/CompareBar';
@@ -348,6 +349,7 @@ export default function App() {
           } />
           <Route path="/news" element={<NewsListPage />} />
           <Route path="/news/:slug" element={<NewsArticlePage />} />
+          <Route path="/leads" element={<LeadsListPage />} />
           <Route path="/declined" element={<DeclinedPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

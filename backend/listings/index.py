@@ -161,6 +161,92 @@ def handler(event: dict, context) -> dict:
                     rows.append(d)
                 return _ok({'leads': rows})
 
+            if params.get('resource') == 'public_leads_full':
+                # Полный список заявок с пагинацией, фильтрами и поиском.
+                # Доступен без авторизации. Контакты (телефон/email) не отдаём — приватность.
+                try:
+                    page = max(1, int(params.get('page') or 1))
+                except (TypeError, ValueError):
+                    page = 1
+                try:
+                    limit = min(max(int(params.get('limit') or 24), 1), 100)
+                except (TypeError, ValueError):
+                    limit = 24
+                offset = (page - 1) * limit
+
+                where = ["show_on_main = TRUE", "status IN ('new','in_progress')"]
+                # Поиск по message/name/company
+                q = (params.get('search') or '').strip()
+                if q:
+                    q_safe = q.replace("'", "''").lower()
+                    where.append(
+                        f"(LOWER(COALESCE(message,'')) LIKE '%{q_safe}%' "
+                        f"OR LOWER(COALESCE(name,'')) LIKE '%{q_safe}%' "
+                        f"OR LOWER(COALESCE(company,'')) LIKE '%{q_safe}%' "
+                        f"OR LOWER(COALESCE(request_category,'')) LIKE '%{q_safe}%')"
+                    )
+                # Фильтр по бюджету
+                try:
+                    min_b = params.get('min_budget')
+                    if min_b:
+                        where.append(f"budget >= {int(min_b)}")
+                except (TypeError, ValueError):
+                    pass
+                try:
+                    max_b = params.get('max_budget')
+                    if max_b:
+                        where.append(f"budget <= {int(max_b)}")
+                except (TypeError, ValueError):
+                    pass
+                # Фильтр по категории запроса
+                cat = (params.get('category') or '').strip()
+                if cat:
+                    cat_safe = cat.replace("'", "''")
+                    where.append(f"request_category = '{cat_safe}'")
+                # Фильтр по списку id (для ИИ-поиска)
+                ids_param = (params.get('ids') or '').strip()
+                if ids_param:
+                    try:
+                        ids_list = [int(x) for x in ids_param.split(',') if x.strip().isdigit()]
+                        if ids_list:
+                            ids_sql = ','.join(str(x) for x in ids_list[:50])
+                            where.append(f"id IN ({ids_sql})")
+                    except Exception:
+                        pass
+
+                where_sql = ' AND '.join(where)
+                # Сортировка
+                sort = (params.get('sort') or 'newest').strip()
+                order = {
+                    'newest': 'created_at DESC',
+                    'budget_desc': 'budget DESC NULLS LAST, created_at DESC',
+                    'budget_asc': 'budget ASC NULLS LAST, created_at DESC',
+                }.get(sort, 'created_at DESC')
+
+                cur.execute(
+                    f"SELECT COUNT(*) AS c FROM t_p71821556_real_estate_catalog_.leads WHERE {where_sql}"
+                )
+                total = int(cur.fetchone()['c'] or 0)
+
+                cur.execute(
+                    f"SELECT id, name, message, budget, company, request_category, lead_type, created_at "
+                    f"FROM t_p71821556_real_estate_catalog_.leads WHERE {where_sql} "
+                    f"ORDER BY {order} LIMIT {limit} OFFSET {offset}"
+                )
+                rows = []
+                for r in cur.fetchall():
+                    d = dict(r)
+                    if d.get('created_at') is not None:
+                        d['created_at'] = d['created_at'].isoformat()
+                    rows.append(d)
+                return _ok({
+                    'leads': rows,
+                    'total': total,
+                    'page': page,
+                    'limit': limit,
+                    'pages': (total + limit - 1) // limit if limit else 1,
+                })
+
             if params.get('resource') == 'network_tenants':
                 cur.execute(
                     "SELECT id, name, message, budget, company, phone, email, request_category, created_at "

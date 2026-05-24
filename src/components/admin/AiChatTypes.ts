@@ -110,7 +110,29 @@ export const RISK_STYLES: Record<string, string> = {
 };
 
 export const HISTORY_KEY = 'biznest_ai_chat_history';
-export const HISTORY_LIMIT = 50;
+export const HISTORY_LIMIT_KEY = 'biznest_ai_chat_history_limit';
+export const DEFAULT_HISTORY_LIMIT = 5000;
+export const WARNING_THRESHOLD = 0.8; // 80% — жёлтое предупреждение
+export const CRITICAL_THRESHOLD = 0.95; // 95% — красное предупреждение
+
+/** Получить текущий лимит истории (по умолчанию 5000, можно увеличить вручную). */
+export function getHistoryLimit(): number {
+  try {
+    const v = parseInt(localStorage.getItem(HISTORY_LIMIT_KEY) || '', 10);
+    if (Number.isFinite(v) && v > 0) return v;
+  } catch { /* ignore */ }
+  return DEFAULT_HISTORY_LIMIT;
+}
+
+/** Установить новый лимит (увеличение). */
+export function setHistoryLimit(n: number) {
+  try {
+    localStorage.setItem(HISTORY_LIMIT_KEY, String(Math.max(100, Math.floor(n))));
+  } catch { /* ignore */ }
+}
+
+// Обратная совместимость для импортов
+export const HISTORY_LIMIT = DEFAULT_HISTORY_LIMIT;
 
 export function detectSuggestion(text: string, action?: AiAction, currentText?: string): Suggestion | undefined {
   if (!text) return undefined;
@@ -129,7 +151,8 @@ export function loadHistory(): Msg[] {
     const raw = localStorage.getItem(HISTORY_KEY);
     if (!raw) return [];
     const arr = JSON.parse(raw) as Msg[];
-    return Array.isArray(arr) ? arr.slice(-HISTORY_LIMIT) : [];
+    const limit = getHistoryLimit();
+    return Array.isArray(arr) ? arr.slice(-limit) : [];
   } catch {
     return [];
   }
@@ -137,8 +160,29 @@ export function loadHistory(): Msg[] {
 
 export function saveHistory(msgs: Msg[]) {
   try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(msgs.slice(-HISTORY_LIMIT)));
+    const limit = getHistoryLimit();
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(msgs.slice(-limit)));
   } catch {
     // ignore quota
+  }
+}
+
+/** Полностью очистить историю. */
+export function clearHistory() {
+  try { localStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
+}
+
+/** Очистить старые сообщения, оставив последние N. */
+export function trimHistory(keepLast: number): Msg[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw) as Msg[];
+    if (!Array.isArray(arr)) return [];
+    const kept = arr.slice(-keepLast);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(kept));
+    return kept;
+  } catch {
+    return [];
   }
 }
