@@ -231,6 +231,30 @@ def handler(event: dict, context) -> dict:
             if method != 'POST':
                 return _err(405, 'Method not allowed')
 
+            # Фидбэк: 👍 / 👎 на конкретный ответ ВБ
+            action = body.get('action') or qs.get('action')
+            if action == 'feedback':
+                log_id = body.get('log_id')
+                value = body.get('value')  # 1 = 👍, -1 = 👎
+                if not log_id:
+                    return _err(400, 'Нет log_id')
+                try:
+                    vint = int(value)
+                except Exception:
+                    return _err(400, 'Некорректный value (нужно 1 или -1)')
+                if vint not in (1, -1):
+                    return _err(400, 'value должен быть 1 или -1')
+                try:
+                    cur.execute(
+                        f"UPDATE {SCHEMA}.chatbot_log "
+                        f"SET feedback = {vint}, feedback_at = NOW() "
+                        f"WHERE id = {int(log_id)}"
+                    )
+                    conn.commit()
+                    return _ok({'success': True})
+                except Exception as e:
+                    return _err(500, f'Не удалось сохранить фидбэк: {e}')
+
             user_message = (body.get('message') or '').strip()[:500]
             if not user_message:
                 return _err(400, 'Сообщение не может быть пустым')
@@ -259,18 +283,22 @@ def handler(event: dict, context) -> dict:
             if not reply:
                 reply = 'Спасибо за вопрос! Для получения подробной информации, пожалуйста, оставьте заявку на сайте — наши менеджеры свяжутся с вами в ближайшее время.'
 
-            # Логируем диалог (без персональных данных)
+            # Логируем диалог (без персональных данных) и возвращаем id для возможного фидбэка
+            log_id = None
             try:
-                q_safe = _safe(user_message, 300)
-                a_safe = _safe(reply, 500)
+                q_safe = _safe(user_message, 500)
+                a_safe = _safe(reply, 2000)
+                sid_safe = _safe(body.get('session_id') or '', 100)
                 cur.execute(
-                    f"INSERT INTO {SCHEMA}.chatbot_log (question, answer) VALUES ('{q_safe}', '{a_safe}')"
+                    f"INSERT INTO {SCHEMA}.chatbot_log (question, answer, session_id) "
+                    f"VALUES ('{q_safe}', '{a_safe}', '{sid_safe}') RETURNING id"
                 )
+                log_id = cur.fetchone()['id']
                 conn.commit()
             except Exception:
-                pass  # Таблица может не существовать — не критично
+                pass  # Не критично
 
-            return _ok({'reply': reply})
+            return _ok({'reply': reply, 'log_id': log_id})
 
     finally:
         conn.close()

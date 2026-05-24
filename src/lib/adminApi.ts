@@ -173,6 +173,8 @@ export const adminApi = {
     req(`${ADMIN_URL}?resource=ai_memory&id=${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteAiMemory: (id: number) =>
     req(`${ADMIN_URL}?resource=ai_memory&id=${id}`, { method: 'DELETE' }),
+  trainVbFromNews: (): Promise<{ success: boolean; saved: number; news_count: number }> =>
+    req(`${ADMIN_URL}?resource=ai_memory&action=from_news`, { method: 'POST', body: '{}' }),
 
   // leads
   listLeads: () => req(`${ADMIN_URL}?resource=leads`),

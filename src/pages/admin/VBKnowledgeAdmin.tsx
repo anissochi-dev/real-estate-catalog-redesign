@@ -44,6 +44,22 @@ export default function VBKnowledgeAdmin() {
   const [filter, setFilter] = useState<string>('');
   const [editing, setEditing] = useState<Partial<MemoryItem> | null>(null);
   const [saving, setSaving] = useState(false);
+  const [trainingNews, setTrainingNews] = useState(false);
+
+  const trainFromNews = async () => {
+    if (trainingNews) return;
+    if (!confirm('Запустить переобучение из новостей? ИИ обработает 15 последних новостей и добавит из них факты в базу знаний.')) return;
+    setTrainingNews(true);
+    try {
+      const r = await adminApi.trainVbFromNews();
+      toast.success(`Готово! Добавлено фактов: ${r.saved} (из ${r.news_count} новостей)`);
+      load();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Не удалось переобучить');
+    } finally {
+      setTrainingNews(false);
+    }
+  };
 
   const load = () => {
     setLoading(true);
@@ -122,12 +138,23 @@ export default function VBKnowledgeAdmin() {
               ВБ использует эти факты для ответов клиентам. Глоссарий терминов, FAQ по сайту, правила подбора объектов и т.п.
             </p>
           </div>
-          <button
-            onClick={() => setEditing({ key: '', value: '' })}
-            className="btn-blue text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2"
-          >
-            <Icon name="Plus" size={15} /> Добавить факт
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={trainFromNews}
+              disabled={trainingNews}
+              title="ИИ возьмёт 15 последних новостей и извлечёт из них факты для базы знаний"
+              className="px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2 bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 disabled:opacity-60 transition"
+            >
+              <Icon name={trainingNews ? 'Loader2' : 'Sparkles'} size={15} className={trainingNews ? 'animate-spin' : ''} />
+              {trainingNews ? 'Переобучение…' : 'Переобучить из новостей'}
+            </button>
+            <button
+              onClick={() => setEditing({ key: '', value: '' })}
+              className="btn-blue text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2"
+            >
+              <Icon name="Plus" size={15} /> Добавить факт
+            </button>
+          </div>
         </div>
 
         <div className="mt-3 flex items-center gap-2">

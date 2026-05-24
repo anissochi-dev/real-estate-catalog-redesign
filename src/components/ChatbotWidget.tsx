@@ -12,6 +12,22 @@ interface Message {
   role: 'user' | 'bot';
   text: string;
   ts: number;
+  logId?: number | null;
+  feedback?: 1 | -1 | null;
+}
+
+const SESSION_KEY = 'biznest_chatbot_session';
+function getSessionId(): string {
+  try {
+    let s = localStorage.getItem(SESSION_KEY);
+    if (!s) {
+      s = `cs_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      localStorage.setItem(SESSION_KEY, s);
+    }
+    return s;
+  } catch {
+    return `cs_${Date.now().toString(36)}`;
+  }
 }
 
 const WELCOME = 'Привет! Я Виртуальный брокер (ВБ) — ИИ-ассистент Бизнес. Маркетинг. Недвижимость. Помогу найти подходящий объект, отвечу на вопросы об аренде и покупке. Чем могу помочь?';
@@ -67,11 +83,12 @@ export default function ChatbotWidget() {
       const r = await fetch(CHATBOT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: msg }),
+        body: JSON.stringify({ message: msg, session_id: getSessionId() }),
       });
       const data = await r.json();
       const reply = data.reply || 'Не удалось получить ответ. Попробуйте позже.';
-      setMessages(m => [...m, { role: 'bot', text: reply, ts: Date.now() }]);
+      const logId = typeof data.log_id === 'number' ? data.log_id : null;
+      setMessages(m => [...m, { role: 'bot', text: reply, ts: Date.now(), logId, feedback: null }]);
       if (!open) setUnread(n => n + 1);
     } catch {
       setMessages(m => [...m, {
@@ -81,6 +98,22 @@ export default function ChatbotWidget() {
       }]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const sendFeedback = async (idx: number, value: 1 | -1) => {
+    const msg = messages[idx];
+    if (!msg || msg.role !== 'bot' || !msg.logId || msg.feedback) return;
+    // Оптимистичное обновление
+    setMessages(m => m.map((x, i) => i === idx ? { ...x, feedback: value } : x));
+    try {
+      await fetch(CHATBOT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'feedback', log_id: msg.logId, value }),
+      });
+    } catch {
+      // Тихо игнорируем — фидбэк не критичен
     }
   };
 
@@ -128,13 +161,48 @@ export default function ChatbotWidget() {
                 {m.role === 'bot' && (
                   <div className="w-6 h-6 bg-brand-blue/10 rounded-full flex items-center justify-center text-xs shrink-0 mt-1 mr-2">🏠</div>
                 )}
-                <div className={`max-w-[80%] px-3 py-2.5 rounded-2xl text-sm ${
-                  m.role === 'user'
-                    ? 'bg-brand-blue text-white rounded-br-sm'
-                    : 'bg-muted text-foreground rounded-bl-sm'
-                }`}>
-                  <div className="leading-relaxed">{m.text}</div>
-                  <div className="text-[10px] opacity-50 mt-1 text-right">{fmt(m.ts)}</div>
+                <div className="max-w-[80%] flex flex-col items-start gap-1">
+                  <div className={`px-3 py-2.5 rounded-2xl text-sm ${
+                    m.role === 'user'
+                      ? 'bg-brand-blue text-white rounded-br-sm self-end'
+                      : 'bg-muted text-foreground rounded-bl-sm'
+                  }`}>
+                    <div className="leading-relaxed whitespace-pre-wrap">{m.text}</div>
+                    <div className="text-[10px] opacity-50 mt-1 text-right">{fmt(m.ts)}</div>
+                  </div>
+                  {/* Фидбэк только для ответов бота (кроме приветствия) с logId */}
+                  {m.role === 'bot' && m.logId && (
+                    <div className="flex items-center gap-1 pl-1">
+                      {m.feedback === null || m.feedback === undefined ? (
+                        <>
+                          <span className="text-[10px] text-muted-foreground">Полезно?</span>
+                          <button
+                            onClick={() => sendFeedback(i, 1)}
+                            className="p-1 rounded-md hover:bg-emerald-50 text-muted-foreground hover:text-emerald-600 transition"
+                            aria-label="Полезно"
+                            title="Полезно"
+                          >
+                            <Icon name="ThumbsUp" size={12} />
+                          </button>
+                          <button
+                            onClick={() => sendFeedback(i, -1)}
+                            className="p-1 rounded-md hover:bg-red-50 text-muted-foreground hover:text-red-600 transition"
+                            aria-label="Не полезно"
+                            title="Не полезно"
+                          >
+                            <Icon name="ThumbsDown" size={12} />
+                          </button>
+                        </>
+                      ) : (
+                        <span className={`text-[10px] inline-flex items-center gap-1 ${
+                          m.feedback === 1 ? 'text-emerald-600' : 'text-red-500'
+                        }`}>
+                          <Icon name={m.feedback === 1 ? 'ThumbsUp' : 'ThumbsDown'} size={11} />
+                          {m.feedback === 1 ? 'Спасибо!' : 'Учтём для улучшения'}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

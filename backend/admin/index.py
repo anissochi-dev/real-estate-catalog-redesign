@@ -228,6 +228,135 @@ def _ai_memory(cur, conn, method, rid, event, user):
         return _ok({'items': items})
 
     body = json.loads(event.get('body') or '{}')
+    action = (event.get('queryStringParameters') or {}).get('action') or body.get('action')
+
+    # Спец-действие: «Переобучить из новостей» — ИИ преобразует свежие новости в факты
+    if method == 'POST' and action == 'from_news':
+        if user['role'] not in ('admin', 'director'):
+            return _err(403, 'Только admin и director могут переобучать ВБ')
+        # Берём 15 последних опубликованных новостей
+        try:
+            cur.execute(
+                f"SELECT id, title, summary, content FROM {SCHEMA}.news "
+                f"WHERE published = TRUE "
+                f"ORDER BY COALESCE(published_at, created_at) DESC LIMIT 15"
+            )
+            news_rows = cur.fetchall()
+        except Exception:
+            news_rows = []
+        if not news_rows:
+            return _err(400, 'Нет новостей для обработки. Добавьте новости в разделе «Новости».')
+
+        # Достаём ключ YandexGPT
+        try:
+            cur.execute(
+                f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings ORDER BY id LIMIT 1"
+            )
+            row = cur.fetchone() or {}
+            api_key = row.get('yandex_api_key') or os.environ.get('YANDEX_API_KEY', '')
+            folder_id = row.get('yandex_folder_id') or os.environ.get('YANDEX_FOLDER_ID', '')
+        except Exception:
+            api_key = os.environ.get('YANDEX_API_KEY', '')
+            folder_id = os.environ.get('YANDEX_FOLDER_ID', '')
+
+        if not api_key or not folder_id:
+            return _err(503, 'YandexGPT не настроен. Добавьте ключи в Настройки → Интеграции.')
+
+        # Собираем новости в текстовый список
+        news_text_parts = []
+        for n in news_rows:
+            t = (n.get('title') or '').strip()
+            s = (n.get('summary') or '').strip()[:300]
+            c = (n.get('content') or '').strip()[:600]
+            block = f"#{n.get('id')} «{t}»"
+            if s:
+                block += f"\nКраткое: {s}"
+            if c:
+                block += f"\nПодробно: {c}"
+            news_text_parts.append(block)
+        news_text = '\n\n---\n\n'.join(news_text_parts)[:8000]
+
+        system_prompt = (
+            'Ты — помощник Виртуального брокера (ВБ). На входе — список новостей о коммерческой '
+            'недвижимости. Извлеки из них короткие факты для базы знаний ВБ.\n\n'
+            'Формат строго JSON-массив без markdown:\n'
+            '[{"key": "news_short_slug", "value": "Краткий факт 1-2 предложения, без воды"}, ...]\n\n'
+            'Правила:\n'
+            '- key: латиница, нижний регистр, через _, начинается с "news_" (например news_rate_2026)\n'
+            '- value: 1-3 предложения, готовое утверждение, которое ВБ сможет процитировать клиенту\n'
+            '- Не дублируй факты, объединяй похожие\n'
+            '- 5-15 фактов максимум\n'
+            '- Только русский язык в значениях'
+        )
+
+        payload = {
+            'modelUri': f'gpt://{folder_id}/yandexgpt/rc',
+            'completionOptions': {'stream': False, 'temperature': 0.3, 'maxTokens': '1500'},
+            'messages': [
+                {'role': 'system', 'text': system_prompt},
+                {'role': 'user', 'text': news_text},
+            ],
+        }
+        try:
+            import urllib.request
+            req_obj = urllib.request.Request(
+                'https://llm.api.cloud.yandex.net/foundationModels/v1/completion',
+                data=json.dumps(payload).encode('utf-8'),
+                headers={
+                    'Authorization': f'Api-Key {api_key}',
+                    'Content-Type': 'application/json',
+                    'x-folder-id': folder_id,
+                },
+                method='POST',
+            )
+            with urllib.request.urlopen(req_obj, timeout=60) as resp:
+                gpt_data = json.loads(resp.read().decode('utf-8'))
+            alts = (gpt_data.get('result') or {}).get('alternatives') or []
+            raw_text = ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
+        except Exception as e:
+            return _err(502, f'YandexGPT ошибка: {str(e)[:200]}')
+
+        # Пробуем распарсить JSON. Может прийти с обёрткой ```json — срежем
+        cleaned = raw_text.strip()
+        if cleaned.startswith('```'):
+            cleaned = cleaned.strip('`')
+            if cleaned.lower().startswith('json'):
+                cleaned = cleaned[4:].strip()
+        # Берём от первой [ до последней ]
+        start_idx = cleaned.find('[')
+        end_idx = cleaned.rfind(']')
+        if start_idx >= 0 and end_idx > start_idx:
+            cleaned = cleaned[start_idx:end_idx + 1]
+        try:
+            facts = json.loads(cleaned)
+        except Exception:
+            return _err(502, 'ИИ вернул некорректный JSON. Попробуйте ещё раз.')
+
+        if not isinstance(facts, list):
+            return _err(502, 'ИИ вернул не массив фактов')
+
+        # Сохраняем в ai_memory с префиксом news_
+        saved = 0
+        for f in facts[:20]:
+            if not isinstance(f, dict):
+                continue
+            k = _safe(str(f.get('key') or '').strip(), 100)
+            v = _safe(str(f.get('value') or '').strip(), 5000)
+            if not k or not v:
+                continue
+            if not k.startswith('news_'):
+                k = ('news_' + k)[:100]
+            try:
+                cur.execute(
+                    f"INSERT INTO {SCHEMA}.ai_memory (key, value, updated_at) "
+                    f"VALUES ('{k}', '{v}', NOW()) "
+                    f"ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()"
+                )
+                saved += 1
+            except Exception:
+                continue
+        conn.commit()
+        return _ok({'success': True, 'saved': saved, 'news_count': len(news_rows)})
 
     if method == 'POST':
         key = _safe(body.get('key') or '', 100)
