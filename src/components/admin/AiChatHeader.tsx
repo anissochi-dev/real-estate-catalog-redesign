@@ -29,7 +29,7 @@ export default function AiChatHeader({
           </div>
           <div className="min-w-0">
             <div className="font-display font-700 truncate">
-              {chatTab === 'admin_ops' ? 'Мелания · Администрирование' : (title || 'Мелания')}
+              {chatTab === 'admin_ops' ? 'Виртуальный брокер · Администрирование' : (title || 'Виртуальный брокер')}
             </div>
             <div className="text-xs opacity-80">
               {chatTab === 'admin_ops' ? 'Серьёзные вопросы · только с разрешения' : 'Живу на этом сайте · самообучаюсь'}
@@ -46,7 +46,7 @@ export default function AiChatHeader({
             <button
               onClick={onLoadMemory}
               disabled={memoryLoading}
-              title="Память Мелании"
+              title="Память Виртуального брокера"
               className="hover:bg-white/10 rounded-lg p-1.5 flex items-center gap-1 text-xs"
             >
               {memoryLoading ? <Icon name="Loader2" size={16} className="animate-spin" /> : <Icon name="Brain" size={16} />}

@@ -116,7 +116,7 @@ export default function MelaPriceCheck({ editing, onApplySuggested }: Props) {
     return (
       <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-100 text-slate-500 text-[11px]">
         <Icon name="Sparkles" size={11} />
-        Мелания: укажите цену и площадь
+        Виртуальный брокер: укажите цену и площадь
       </div>
     );
   }
@@ -125,7 +125,7 @@ export default function MelaPriceCheck({ editing, onApplySuggested }: Props) {
     return (
       <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-100 text-slate-600 text-[11px]">
         <Icon name="Loader2" size={11} className="animate-spin" />
-        Мелания анализирует…
+        Виртуальный брокер анализирует…
       </div>
     );
   }
@@ -152,7 +152,7 @@ export default function MelaPriceCheck({ editing, onApplySuggested }: Props) {
         type="button"
         onClick={() => setOpen(o => !o)}
         className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition ${colorClass}`}
-        title="Анализ цены Меланией"
+        title="Анализ цены Виртуальным брокером"
       >
         <Icon name={iconName} size={12} />
         <span className="hidden sm:inline">{v.label}</span>
@@ -171,7 +171,7 @@ export default function MelaPriceCheck({ editing, onApplySuggested }: Props) {
               <Icon name="Sparkles" size={14} className="text-purple-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="font-semibold text-sm">Мелания · анализ цены</div>
+              <div className="font-semibold text-sm">Виртуальный брокер · анализ цены</div>
               <div className="text-muted-foreground text-[11px]">{v.comment}</div>
             </div>
             <button type="button" onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground p-0.5">

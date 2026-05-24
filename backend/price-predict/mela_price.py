@@ -1,5 +1,5 @@
 """
-Мелания: проверка цены объекта по реальным аналогам с krasnodar.cian.ru
+Виртуальный брокер: проверка цены объекта по реальным аналогам с krasnodar.cian.ru
 и krasnodar.restate.ru. Гибрид: сначала скрапинг, при блокировке — фоллбэк на YandexGPT.
 Возвращает вердикт (выше/рыночная/ниже) + диапазон цен.
 """
@@ -208,7 +208,7 @@ def _load_keys(cur):
 
 
 GPT_PROMPT = (
-    'Ты — Мелания, ИИ-аналитик коммерческой недвижимости Краснодара. '
+    'Ты — Виртуальный брокер (ВБ), ИИ-аналитик коммерческой недвижимости Краснодара. '
     'По характеристикам объекта оцени рыночные цены аналогов на основе данных '
     'krasnodar.cian.ru и krasnodar.restate.ru. Сгенерируй 6–8 аналогов '
     '(площадь, цена, район) и рассчитай рыночный диапазон и медиану ₽/м².\n'
@@ -437,7 +437,7 @@ def handle_mela_price_check(cur, conn, body: dict, qs: dict) -> dict:
         gpt_analogs = _gpt_fallback(listing, api_key, folder_id)
         if gpt_analogs:
             analogs.extend(gpt_analogs)
-            sources_used.append('Мелания (GPT)')
+            sources_used.append('Виртуальный брокер (GPT)')
             used_fallback = True
 
     # Отфильтровать выбросы (вне 5–95 перцентилей по ₽/м²)

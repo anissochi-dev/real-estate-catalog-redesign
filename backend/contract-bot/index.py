@@ -5,7 +5,7 @@
 POST {action: create_session, contract_type, title, conditions_text}  — создать сессию
 POST {action: update_session, session_id, ...}  — обновить условия
 POST {action: upload_doc, session_id, doc_type, file_name, file_base64, file_ext}  — загрузить документ
-POST {action: fill_contract, session_id}  — заполнить договор через Мелания
+POST {action: fill_contract, session_id}  — заполнить договор через Виртуального брокера
 POST {action: download_format, session_id, format}  — скачать DOCX/PDF (base64)
 GET  /?action=sessions  — список сессий
 GET  /?action=session&id=  — одна сессия с документами

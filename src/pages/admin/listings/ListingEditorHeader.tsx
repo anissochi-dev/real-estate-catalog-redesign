@@ -40,7 +40,7 @@ export default function ListingEditorHeader({
               ID: {editing.public_code}
             </span>
           ) : null}
-          {/* Мелания: анализ цены — между названием и кнопкой видимости */}
+          {/* Виртуальный брокер: анализ цены — между названием и кнопкой видимости */}
           <MelaPriceCheck
             editing={editing}
             onApplySuggested={(price) => setEditing({ ...editing, price })}

@@ -1,5 +1,5 @@
 /**
- * ChatbotWidget — плавающий чат-бот Мелании для посетителей сайта.
+ * ChatbotWidget — плавающий чат-бот Виртуального брокера для посетителей сайта.
  * Отвечает на вопросы об объектах и услугах, НЕ раскрывает
  * конфиденциальную информацию компании и собственников.
  */
@@ -14,7 +14,7 @@ interface Message {
   ts: number;
 }
 
-const WELCOME = 'Привет! Я Мелания — ИИ-ассистент Бизнес. Маркетинг. Недвижимость. Помогу найти подходящий объект, отвечу на вопросы об аренде и покупке. Чем могу помочь?';
+const WELCOME = 'Привет! Я Виртуальный брокер (ВБ) — ИИ-ассистент Бизнес. Маркетинг. Недвижимость. Помогу найти подходящий объект, отвечу на вопросы об аренде и покупке. Чем могу помочь?';
 
 const QUICK_QUESTIONS = [
   'Какие объекты есть в аренду?',
@@ -94,7 +94,7 @@ export default function ChatbotWidget() {
       <button
         onClick={() => setOpen(o => !o)}
         className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-brand-blue text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-transform"
-        aria-label="Открыть чат с Меланией"
+        aria-label="Открыть чат с Виртуальным брокером"
       >
         {open ? <Icon name="X" size={22} /> : <Icon name="MessageCircle" size={24} />}
         {!open && unread > 0 && (
@@ -113,7 +113,7 @@ export default function ChatbotWidget() {
           <div className="bg-gradient-to-r from-brand-blue to-brand-blue-dark text-white px-4 py-3 flex items-center gap-3">
             <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-base shrink-0">🏠</div>
             <div className="flex-1 min-w-0">
-              <div className="font-semibold text-sm">Мелания</div>
+              <div className="font-semibold text-sm">Виртуальный брокер</div>
               <div className="text-[11px] opacity-80">ИИ-ассистент BIZNEST · онлайн</div>
             </div>
             <button onClick={() => setOpen(false)} className="hover:bg-white/10 rounded-lg p-1">
@@ -189,7 +189,7 @@ export default function ChatbotWidget() {
               </button>
             </div>
             <div className="text-[10px] text-muted-foreground mt-1.5 text-center">
-              Мелания не раскрывает контакты собственников и конфиденциальные данные
+              Виртуальный брокер не раскрывает контакты собственников и конфиденциальные данные
             </div>
           </div>
         </div>

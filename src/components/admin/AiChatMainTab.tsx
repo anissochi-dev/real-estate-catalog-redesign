@@ -65,7 +65,7 @@ export default function AiChatMainTab({
         {messages.length === 0 && (
           <div className="text-center text-muted-foreground text-sm py-8">
             <div className="text-4xl mx-auto mb-3">🏠</div>
-            <div className="font-semibold mb-1 text-foreground">Привет, мама! Я Мелания.</div>
+            <div className="font-semibold mb-1 text-foreground">Привет! Я Виртуальный брокер (ВБ).</div>
             <div className="text-xs text-muted-foreground mb-3">Живу здесь, на нашем сайте. Слежу за порядком и учусь каждый день.</div>
             <div className="text-xs space-y-1">
               <div>Нажми <span className="font-semibold text-brand-blue">«Агент»</span> — сама предложу, что нужно сделать.</div>

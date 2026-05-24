@@ -198,10 +198,74 @@ def handler(event, context):
                 return _ai_inpaint(cur, event, user)
             if resource == 'consent_log':
                 return _consent_log(cur, conn, method, event, user)
+            if resource == 'ai_memory':
+                return _ai_memory(cur, conn, method, rid, event, user)
 
             return _err(400, 'Неизвестный ресурс')
     finally:
         conn.close()
+
+
+def _ai_memory(cur, conn, method, rid, event, user):
+    """CRUD базы знаний Виртуального брокера (ai_memory: key/value)."""
+    if user['role'] not in ('admin', 'director', 'editor'):
+        return _err(403, 'Доступ только для admin/director/editor')
+
+    if method == 'GET':
+        cur.execute(
+            f"SELECT id, key, value, updated_at FROM {SCHEMA}.ai_memory "
+            f"ORDER BY updated_at DESC NULLS LAST, id DESC LIMIT 500"
+        )
+        items = []
+        for r in cur.fetchall():
+            d = dict(r)
+            if d.get('updated_at'):
+                try:
+                    d['updated_at'] = d['updated_at'].isoformat()
+                except Exception:
+                    d['updated_at'] = str(d['updated_at'])
+            items.append(d)
+        return _ok({'items': items})
+
+    body = json.loads(event.get('body') or '{}')
+
+    if method == 'POST':
+        key = _safe(body.get('key') or '', 100)
+        value = _safe(body.get('value') or '', 5000)
+        if not key or not value:
+            return _err(400, 'Нужны key и value')
+        # UPSERT по key
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.ai_memory (key, value, updated_at) "
+            f"VALUES ('{key}', '{value}', NOW()) "
+            f"ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW() "
+            f"RETURNING id"
+        )
+        new_id = cur.fetchone()['id']
+        conn.commit()
+        return _ok({'id': new_id, 'success': True})
+
+    if method == 'PUT' and rid:
+        if 'value' not in body and 'key' not in body:
+            return _err(400, 'Нет полей')
+        fields = []
+        if 'key' in body:
+            fields.append(f"key = {_str_or_null(body.get('key'), 100)}")
+        if 'value' in body:
+            fields.append(f"value = {_str_or_null(body.get('value'), 5000)}")
+        fields.append('updated_at = NOW()')
+        cur.execute(
+            f"UPDATE {SCHEMA}.ai_memory SET {', '.join(fields)} WHERE id = {int(rid)}"
+        )
+        conn.commit()
+        return _ok({'success': True})
+
+    if method == 'DELETE' and rid:
+        cur.execute(f"DELETE FROM {SCHEMA}.ai_memory WHERE id = {int(rid)}")
+        conn.commit()
+        return _ok({'success': True})
+
+    return _err(405, 'Метод не поддерживается')
 
 
 def _consent_log(cur, conn, method, event, user):

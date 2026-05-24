@@ -79,7 +79,7 @@ export default function AiChatAdminOpsTab({
           <div className="flex items-center justify-between px-4 py-2.5 bg-red-50 border-b border-red-100">
             <div className="flex items-center gap-2 text-sm font-semibold text-red-800">
               <Icon name="Brain" size={15} />
-              Память Мелании
+              Память Виртуального брокера
             </div>
             <button onClick={onCloseMemory} className="text-red-400 hover:text-red-700">
               <Icon name="X" size={15} />

@@ -165,6 +165,15 @@ export const adminApi = {
   deleteListing: (id: number) =>
     req(`${ADMIN_URL}?resource=listings&id=${id}&force=1`, { method: 'DELETE' }),
 
+  // База знаний Виртуального брокера (ai_memory)
+  listAiMemory: () => req(`${ADMIN_URL}?resource=ai_memory`),
+  createAiMemory: (data: { key: string; value: string }) =>
+    req(`${ADMIN_URL}?resource=ai_memory`, { method: 'POST', body: JSON.stringify(data) }),
+  updateAiMemory: (id: number, data: { key?: string; value?: string }) =>
+    req(`${ADMIN_URL}?resource=ai_memory&id=${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteAiMemory: (id: number) =>
+    req(`${ADMIN_URL}?resource=ai_memory&id=${id}`, { method: 'DELETE' }),
+
   // leads
   listLeads: () => req(`${ADMIN_URL}?resource=leads`),
   getLead: (id: number) => req(`${ADMIN_URL}?resource=leads&id=${id}`),

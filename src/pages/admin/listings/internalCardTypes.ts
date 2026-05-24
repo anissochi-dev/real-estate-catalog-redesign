@@ -65,7 +65,7 @@ export const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'stats', label: 'Статистика', icon: 'BarChart2' },
   { id: 'leads', label: 'Заявки', icon: 'Inbox' },
   { id: 'comments', label: 'Чат команды', icon: 'MessageSquare' },
-  { id: 'ai', label: 'Мелания', icon: 'Sparkles' },
+  { id: 'ai', label: 'ВБ', icon: 'Sparkles' },
   { id: 'documents', label: 'Документы', icon: 'FileText' },
   { id: 'broker', label: 'Брокер', icon: 'UserCheck' },
 ];

@@ -19,15 +19,15 @@ export function TabAi({ listing }: { listing: Listing }) {
     if (text !== '__auto__') setMessages(m => [...m, { role: 'user', text }]);
     try {
       const prompt = text === '__auto__'
-        ? `Ты — Мелания, личный ИИ-помощник коммерческого брокера. Проанализируй объект и дай конкретные рекомендации как авитолог, маркетолог и профессиональный коммерческий брокер.\n\nОбъект: ${listing.title}\nКатегория: ${listing.category}, площадь: ${listing.area}м², цена: ${listing.price}₽\nАдрес: ${listing.address || listing.district || listing.city}\nОписание: ${listing.description || '—'}\n\nОтветь структурированно:\n1. На что обратить внимание\n2. Стоит ли снизить/повысить цену\n3. Что изменить в названии\n4. Что улучшить в описании\n5. Рекомендации по фото и размещению`
+        ? `Ты — Виртуальный брокер (ВБ), личный ИИ-помощник коммерческого брокера. Проанализируй объект и дай конкретные рекомендации как авитолог, маркетолог и профессиональный коммерческий брокер.\n\nОбъект: ${listing.title}\nКатегория: ${listing.category}, площадь: ${listing.area}м², цена: ${listing.price}₽\nАдрес: ${listing.address || listing.district || listing.city}\nОписание: ${listing.description || '—'}\n\nОтветь структурированно:\n1. На что обратить внимание\n2. Стоит ли снизить/повысить цену\n3. Что изменить в названии\n4. Что улучшить в описании\n5. Рекомендации по фото и размещению`
         : text;
       const r = await aiApi.ask('marketing', prompt);
       setMessages(m => [...m, { role: 'ai', text: r.text }]);
       if (text === '__auto__') {
-        await adminApi.addListingComment(listing.id, `[Мелания] ${r.text}`, true).catch(() => {});
+        await adminApi.addListingComment(listing.id, `[Виртуальный брокер] ${r.text}`, true).catch(() => {});
       }
     } catch {
-      setMessages(m => [...m, { role: 'ai', text: 'Ошибка при обращении к Мелании. Попробуйте ещё раз.' }]);
+      setMessages(m => [...m, { role: 'ai', text: 'Ошибка при обращении к Виртуальному брокеру. Попробуйте ещё раз.' }]);
     } finally {
       setLoading(false);
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
@@ -66,7 +66,7 @@ export function TabAi({ listing }: { listing: Listing }) {
         {messages.length === 0 && loading && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Icon name="Loader2" size={16} className="animate-spin text-brand-orange" />
-            Мелания анализирует объект...
+            Виртуальный брокер анализирует объект...
           </div>
         )}
         {messages.map((m, i) => {
@@ -86,7 +86,7 @@ export function TabAi({ listing }: { listing: Listing }) {
         })}
         {loading && messages.length > 0 && (
           <div className="flex gap-2 items-center text-xs text-muted-foreground">
-            <Icon name="Loader2" size={14} className="animate-spin" /> Мелания печатает...
+            <Icon name="Loader2" size={14} className="animate-spin" /> Виртуальный брокер печатает...
           </div>
         )}
         <div ref={bottomRef} />
@@ -94,7 +94,7 @@ export function TabAi({ listing }: { listing: Listing }) {
 
       {lastAiText && (
         <div className="px-5 py-2 border-t border-border bg-amber-50/50">
-          <div className="text-xs text-muted-foreground mb-1.5 font-medium">Применить рекомендации Мелании:</div>
+          <div className="text-xs text-muted-foreground mb-1.5 font-medium">Применить рекомендации Виртуального брокера:</div>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => {
@@ -137,7 +137,7 @@ export function TabAi({ listing }: { listing: Listing }) {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
-            placeholder="Задать вопрос Мелании..."
+            placeholder="Задать вопрос Виртуальному брокеру..."
             disabled={loading}
             className="flex-1 px-4 py-2.5 border border-border rounded-xl text-sm outline-none focus:border-brand-blue"
           />

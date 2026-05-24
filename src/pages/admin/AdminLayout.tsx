@@ -10,7 +10,7 @@ const IDLE_WARNING_MS = 2 * 60 * 1000;
 
 export type AdminSection = 'dashboard' | 'listings' | 'leads' | 'network-tenants' | 'users' | 'pages' | 'settings' | 'ai-logs'
   | 'crm-owners' | 'crm-kanban' | 'crm-gamification' | 'crm-checks' | 'crm-payments'
-  | 'phones' | 'news' | 'contract-bot';
+  | 'phones' | 'news' | 'contract-bot' | 'vb-knowledge';
 
 interface Props {
   section: AdminSection;
@@ -28,6 +28,7 @@ const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; gro
   { id: 'users', label: 'Пользователи', icon: 'Users', roles: ['admin'] },
   { id: 'news', label: 'Новости', icon: 'Newspaper', roles: ['admin', 'editor', 'manager', 'director'] },
   { id: 'contract-bot', label: 'Бот договоров', icon: 'FilePen', roles: ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'] },
+  { id: 'vb-knowledge', label: 'База знаний ВБ', icon: 'Brain', roles: ['admin', 'editor', 'director'] },
   { id: 'settings', label: 'Настройки', icon: 'Settings', roles: ['admin', 'editor'] },
   { id: 'phones', label: 'Телефонная база', icon: 'Phone', roles: ['admin', 'editor', 'manager'] },
   { id: 'crm-kanban', label: 'Воронка сделок', icon: 'KanbanSquare', roles: ['admin', 'director'], group: 'crm' },

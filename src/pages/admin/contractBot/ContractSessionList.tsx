@@ -26,7 +26,7 @@ export default function ContractSessionList({
       <div className="flex items-center justify-between">
         <div>
           <h2 className="font-display font-700 text-lg">Бот договоров</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">Мелания заполняет договоры на основе документов сторон</p>
+          <p className="text-sm text-muted-foreground mt-0.5">Виртуальный брокер заполняет договоры на основе документов сторон</p>
         </div>
       </div>
 
