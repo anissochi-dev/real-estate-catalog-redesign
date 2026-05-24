@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { aiApi, AiAction } from '@/lib/adminApi';
 import {
   Msg, Suggestion, QuickCmd,
@@ -174,10 +175,14 @@ export default function AiChat({
         onResult?.(r.text);
       }
     } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : 'неизвестно';
       setMessages(m => [
         ...m,
-        { role: 'ai', text: 'Ошибка: ' + (e instanceof Error ? e.message : 'неизвестно'), ts: Date.now() },
+        { role: 'ai', text: 'Не удалось получить ответ: ' + errMsg, ts: Date.now() },
       ]);
+      toast.error('Не удалось получить ответ от ВБ', {
+        description: errMsg.slice(0, 120),
+      });
     } finally {
       setLoading(false);
     }
