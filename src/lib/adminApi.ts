@@ -424,13 +424,22 @@ export interface ExecuteResult {
   result: { ok?: boolean; message?: string; error?: string };
 }
 
+/** История диалога: формат [{role: 'user'|'ai', text: '...'}], последние 15-20 сообщений. */
+export interface AiHistoryItem { role: 'user' | 'ai'; text: string }
+
 export const aiApi = {
-  ask: (action: AiAction, prompt: string, context_data?: unknown) =>
-    req(AI_URL, { method: 'POST', body: JSON.stringify({ action, prompt, context_data }) }) as Promise<{ text: string; tokens: number }>,
+  ask: (action: AiAction, prompt: string, context_data?: unknown, history?: AiHistoryItem[]) =>
+    req(AI_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action, prompt, context_data, history: history || [] }),
+    }) as Promise<{ text: string; tokens: number }>,
   ping: (api_key?: string, folder_id?: string) =>
     req(AI_URL, { method: 'POST', body: JSON.stringify({ action: 'ping', api_key, folder_id }) }) as Promise<{ success: boolean; message: string; reply: string; tokens: number }>,
-  agent: (prompt: string, context_data?: unknown) =>
-    req(AI_URL, { method: 'POST', body: JSON.stringify({ action: 'agent', prompt, context_data }) }) as Promise<AgentResponse>,
+  agent: (prompt: string, context_data?: unknown, history?: AiHistoryItem[]) =>
+    req(AI_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'agent', prompt, context_data, history: history || [] }),
+    }) as Promise<AgentResponse>,
   execute: (actions: AgentAction[]) =>
     req(AI_URL, { method: 'POST', body: JSON.stringify({ action: 'execute', actions }) }) as Promise<{ results: ExecuteResult[] }>,
   getMemory: () =>

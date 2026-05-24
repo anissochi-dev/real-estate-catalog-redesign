@@ -110,14 +110,23 @@ export default function AiChat({
   const _doOpsRequest = async (msg: string) => {
     setOpsLoading(true);
     try {
-      const r = await aiApi.ask('admin_ops', msg);
+      // История диалога режима «Администрирование» — отдельная от обычного чата
+      const opsHistory = opsMessages
+        .slice(-15)
+        .filter(m => (m.role === 'user' || m.role === 'ai') && (m.text || '').trim().length > 0)
+        .map(m => ({ role: m.role as 'user' | 'ai', text: m.text }));
+      const r = await aiApi.ask('admin_ops', msg, undefined, opsHistory);
       setOpsMessages(m => [...m, { role: 'ai', text: r.text, ts: Date.now() }]);
     } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : 'неизвестно';
       setOpsMessages(m => [...m, {
         role: 'ai',
-        text: 'Ошибка: ' + (e instanceof Error ? e.message : 'неизвестно'),
+        text: 'Не удалось получить ответ: ' + errMsg,
         ts: Date.now(),
       }]);
+      toast.error('Не удалось получить ответ от ВБ', {
+        description: errMsg.slice(0, 120),
+      });
     } finally {
       setOpsLoading(false);
     }
@@ -132,8 +141,14 @@ export default function AiChat({
     setInput('');
     setLoading(true);
     try {
+      // Собираем историю диалога — последние 15 сообщений, чтобы ВБ помнил контекст
+      const history = messages
+        .slice(-15)
+        .filter(m => (m.role === 'user' || m.role === 'ai') && (m.text || '').trim().length > 0)
+        .map(m => ({ role: m.role as 'user' | 'ai', text: m.text }));
+
       if (act === 'agent') {
-        const r = await aiApi.agent(text || 'Что мне сейчас нужно сделать?', contextData);
+        const r = await aiApi.agent(text || 'Что мне сейчас нужно сделать?', contextData, history);
         const incomingActions = (r.actions || []).map(a => ({ ...a, status: 'pending' as const }));
         const aiMsg: Msg = {
           role: 'ai',
@@ -162,7 +177,7 @@ export default function AiChat({
           return next;
         });
       } else {
-        const r = await aiApi.ask(act, text, contextData);
+        const r = await aiApi.ask(act, text, contextData, history);
         const aiMsg: Msg = {
           role: 'ai',
           text: r.text,

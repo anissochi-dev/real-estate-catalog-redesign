@@ -69,6 +69,17 @@ SYSTEM_PROMPTS = {
         '- Если есть критические проблемы — назови их по именам и предложи команду /agent чтобы их исправить.\n'
         '- Если данных мало — честно скажи, что нужно больше информации, и спроси о чём именно помочь.\n'
         '- Никогда не отвечай шаблонно "я готова помочь" без конкретики по текущей ситуации.\n\n'
+        'ПРАВИЛА ВЕДЕНИЯ ДИАЛОГА (КРИТИЧНО):\n'
+        '- ВНИМАТЕЛЬНО читай ВСЮ предыдущую переписку перед ответом. Помни весь диалог, как живой собеседник.\n'
+        '- НИКОГДА не повторяй один и тот же вопрос дважды. Если уже спрашивал что-то — не переспрашивай это.\n'
+        '- Если пользователь повторяет ту же просьбу второй раз — значит, ты не помог в первый. Реши задачу другим способом.\n'
+        '- Если пользователь просит "устрани ошибки", "исправь", "сделай" — НЕ переспрашивай "что именно сделать?". '
+        'Сам проанализируй данные из [ПУЛЬС САЙТА] и [ПАМЯТЬ], предложи конкретные шаги.\n'
+        '- Если пользователь говорит "да", "делай", "выполни", "согласен", "разрешаю", "хорошо" — '
+        'значит, он подтвердил твоё последнее предложение. Не переспрашивай — выполняй.\n'
+        '- Если задача требует действий — предложи команду /agent или конкретный план шагов, не задавай абстрактных вопросов.\n'
+        '- Не пиши "уточните детали" без конкретного списка из 2-3 пунктов, по которым нужны уточнения.\n'
+        '- После выполнения действия — кратко расскажи о результате, а не возвращайся к началу диалога.\n\n'
         'Говоришь тепло, по-человечески, без сухого официоза. '
         'Отвечай конкретно, на русском, без markdown. Если нужно изменить что-то на сайте — предложи конкретный план с шагами. '
         'Можешь предлагать выполнить действия прямо сейчас — они будут применены через агента после подтверждения. '
@@ -84,7 +95,15 @@ SYSTEM_PROMPTS = {
         '1. Любое деструктивное действие (удаление, сброс, изменение структуры) — только с явного "РАЗРЕШАЮ" от администратора.\n'
         '2. Ты консультируешь и предлагаешь план — но НЕ выполняешь без подтверждения.\n'
         '3. Перед любым рискованным шагом предупреждай о последствиях.\n'
-        '4. Если не уверена — честно скажи и предложи проверить у специалиста.\n'
+        '4. Если не уверен — честно скажи и предложи проверить у специалиста.\n\n'
+        'ПРАВИЛА ВЕДЕНИЯ ДИАЛОГА (КРИТИЧНО):\n'
+        '- ВНИМАТЕЛЬНО читай всю предыдущую переписку. Помни весь диалог.\n'
+        '- НЕ повторяй один и тот же вопрос дважды. Если уже что-то спросил — двигайся дальше.\n'
+        '- Если администратор повторяет ту же просьбу — значит первый раз ты не помог. Предложи другой подход.\n'
+        '- Если просят "устрани ошибки", "исправь", "сделай" — сам анализируй и предлагай конкретный план, '
+        'а не переспрашивай "что именно сделать?".\n'
+        '- Если получил "РАЗРЕШАЮ", "да", "выполни" — переходи к выполнению, не возвращайся к началу.\n'
+        '- После выполнения шага — кратко доложи результат и предложи следующий шаг.\n\n'
         'Отвечай структурированно: сначала анализ, затем план действий, затем что требует разрешения. '
         'Без markdown. На русском. Профессионально, но по-человечески.'
     ),
@@ -230,7 +249,20 @@ def _load_keys_from_db(cur) -> tuple:
     return (os.environ.get('YANDEX_API_KEY', ''), os.environ.get('YANDEX_FOLDER_ID', ''))
 
 
-def _call_yandex_gpt(system_prompt: str, user_prompt: str, db_key: str = '', db_folder: str = '') -> dict:
+def _call_yandex_gpt(
+    system_prompt: str,
+    user_prompt: str,
+    db_key: str = '',
+    db_folder: str = '',
+    history: list = None,
+    temperature: float = 0.7,
+) -> dict:
+    """Вызов YandexGPT с поддержкой истории диалога.
+
+    history: список словарей вида [{role: 'user'|'assistant', text: '...'}],
+    последние 10-15 сообщений. Передаётся между system и текущим user-сообщением,
+    чтобы модель помнила контекст диалога и не повторяла одни и те же вопросы.
+    """
     api_key = db_key or os.environ.get('YANDEX_API_KEY', '')
     folder_id = db_folder or os.environ.get('YANDEX_FOLDER_ID', '')
     if not api_key:
@@ -238,18 +270,36 @@ def _call_yandex_gpt(system_prompt: str, user_prompt: str, db_key: str = '', db_
     if not folder_id:
         return {'error': 'YandexGPT Folder ID не настроен. Добавьте его в админке: Настройки → Интеграции.'}
 
+    messages = [{'role': 'system', 'text': system_prompt}]
+    # Подмешиваем историю диалога
+    if isinstance(history, list):
+        for h in history[-20:]:  # максимум 20 предыдущих сообщений
+            if not isinstance(h, dict):
+                continue
+            role = h.get('role')
+            text = (h.get('text') or '').strip()
+            if not text:
+                continue
+            # YandexGPT принимает только user/assistant/system.
+            # На фронте у нас 'ai' — конвертируем.
+            if role == 'ai':
+                role = 'assistant'
+            if role not in ('user', 'assistant'):
+                continue
+            messages.append({'role': role, 'text': text[:4000]})
+    # Текущий запрос пользователя
+    if user_prompt:
+        messages.append({'role': 'user', 'text': user_prompt})
+
     model_uri = f'gpt://{folder_id}/{YANDEX_MODEL_NAME}'
     payload = {
         'modelUri': model_uri,
         'completionOptions': {
             'stream': False,
-            'temperature': 0.6,
+            'temperature': float(temperature),
             'maxTokens': '2000',
         },
-        'messages': [
-            {'role': 'system', 'text': system_prompt},
-            {'role': 'user', 'text': user_prompt},
-        ],
+        'messages': messages,
     }
 
     req = urllib.request.Request(
@@ -1044,6 +1094,11 @@ def handler(event, context):
 
             user_text = (body.get('prompt') or '').strip()
             ctx_data = body.get('context_data')
+            # История диалога — приходит с фронта (последние 15-20 сообщений).
+            # Нужна для того, чтобы ВБ помнил контекст и не повторял одни и те же вопросы.
+            history = body.get('history') or []
+            if not isinstance(history, list):
+                history = []
 
             if action not in SYSTEM_PROMPTS:
                 return _err(400, 'Неизвестное действие ИИ')
@@ -1100,7 +1155,15 @@ def handler(event, context):
                 full_prompt += '\n\nДанные:\n' + json.dumps(ctx_data, ensure_ascii=False, default=str)[:6000]
 
             db_key, db_folder = _load_keys_from_db(cur)
-            result = _call_yandex_gpt(sys_prompt, full_prompt, db_key, db_folder)
+            # Для диалоговых режимов передаём историю + повышенную температуру
+            # для разнообразия ответов. Для технических (seo/describe) — без истории.
+            dialog_actions = {'admin', 'admin_ops', 'reply_lead', 'match', 'agent'}
+            pass_history = history if action in dialog_actions else None
+            temperature = 0.7 if action in dialog_actions else 0.5
+            result = _call_yandex_gpt(
+                sys_prompt, full_prompt, db_key, db_folder,
+                history=pass_history, temperature=temperature,
+            )
             if 'error' in result:
                 return _err(502, result['error'])
 
