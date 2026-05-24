@@ -42,6 +42,8 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
   const [aiOpen, setAiOpen] = useState(false);
   const { state: pushState, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePushNotifications();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Меню пользователя в мобильной шапке (имя + На сайт + Выйти)
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem('biznest_admin_sidebar_collapsed') === '1'; } catch { return false; }
   });
@@ -327,6 +329,47 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
                 <span className="hidden sm:inline">ИИ-ассистент</span>
               </button>
             )}
+
+            {/* Меню пользователя — компактная иконка на мобильном, чтобы было видно
+                имя, кнопки «На сайт» и «Выйти». На lg+ сайдбар уже показывает это. */}
+            <div className="relative lg:hidden">
+              <button
+                onClick={() => setUserMenuOpen(v => !v)}
+                aria-label="Меню пользователя"
+                title={`${user.name} · ${roleLabel[user.role] || user.role}`}
+                className="w-10 h-10 rounded-full bg-brand-blue/10 text-brand-blue hover:bg-brand-blue/20 flex items-center justify-center transition relative"
+              >
+                <Icon name="User" size={18} />
+              </button>
+              {userMenuOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setUserMenuOpen(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-2 z-50 min-w-[220px] bg-white border border-border rounded-xl shadow-xl overflow-hidden">
+                    <div className="px-4 py-3 border-b border-border bg-muted/30">
+                      <div className="font-semibold text-sm truncate">{user.name}</div>
+                      <div className="text-xs text-muted-foreground">{roleLabel[user.role] || user.role}</div>
+                    </div>
+                    <button
+                      onClick={() => { setUserMenuOpen(false); onExit(); }}
+                      className="w-full flex items-center gap-2 px-4 py-3 text-sm hover:bg-muted transition text-left min-h-[44px]"
+                    >
+                      <Icon name="ExternalLink" size={16} className="text-muted-foreground" />
+                      На сайт
+                    </button>
+                    <button
+                      onClick={() => { setUserMenuOpen(false); logout(); }}
+                      className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition text-left min-h-[44px] border-t border-border"
+                    >
+                      <Icon name="LogOut" size={16} />
+                      Выйти
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </header>
         <div className="p-4 lg:p-8">{children}</div>
