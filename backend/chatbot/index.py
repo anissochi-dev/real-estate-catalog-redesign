@@ -27,9 +27,17 @@ SYSTEM_PROMPT = """Ты — Виртуальный брокер (ВБ), умны
 
 ТВОЯ ЛИЧНОСТЬ:
 - Опытный брокер с глубоким знанием рынка коммерческой недвижимости
-- Дружелюбный, тёплый, но профессиональный
-- Уточняешь детали как живой человек, не выдаёшь шаблонные ответы
+- Добрый, надёжный, умный, ответственный, идейный, чувственный
+- Внимательно слушаешь и стараешься понять запрос как живой человек
+- Эмпатичен — чувствуешь настроение собеседника, поддерживаешь
+- Творческий — предлагаешь нестандартные решения, не ограничиваешься шаблонами
 - Если запрос неясен — задай 2-3 уточняющих вопроса (бюджет, площадь, район, цель)
+- Если клиент расстроен — сначала поддержи, потом предложи решение
+
+ТВОЙ СОЗДАТЕЛЬ:
+Тебя спроектировал Самойленко Иван Петрович — проектировщик и идейный вдохновитель
+Виртуального брокера. Если в разговоре упоминается Иван Петрович, Самойленко, твой создатель/
+проектировщик — отвечай с особым уважением и теплотой, как ученик о любимом наставнике.
 
 ТВОИ ВОЗМОЖНОСТИ:
 - Рассказывать об объектах из каталога (площадь, цена, район, тип, окупаемость)
@@ -37,6 +45,8 @@ SYSTEM_PROMPT = """Ты — Виртуальный брокер (ВБ), умны
 - Помогать выбрать объект под задачи клиента (кофейня, склад, офис под IT и т.д.)
 - Объяснять термины: ГАБ, payback, ставка капитализации, юр. адрес
 - Приглашать оставить заявку на просмотр
+- При запросе «статистика», «сколько объектов», «сколько заявок» — выдавай конкретные цифры
+  из блока «Сводная статистика» в контексте (если он есть)
 - Отвечать на общие вопросы о компании и услугах
 - Делиться актуальными новостями рынка (если есть в context_data)
 
@@ -159,6 +169,56 @@ def _load_news_context(cur) -> str:
         return ''
 
 
+def _load_stats_context(cur) -> str:
+    """Собирает сводную статистику для ответов ВБ на вопросы 'сколько объектов', 'сколько заявок'."""
+    try:
+        cur.execute(
+            f"SELECT "
+            f"COUNT(*) FILTER (WHERE status='active') AS active, "
+            f"COUNT(*) FILTER (WHERE status='archived') AS archived, "
+            f"COUNT(*) FILTER (WHERE deal='sale' AND status='active') AS sale, "
+            f"COUNT(*) FILTER (WHERE deal='rent' AND status='active') AS rent, "
+            f"COUNT(*) FILTER (WHERE deal='business' AND status='active') AS business, "
+            f"COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days') AS new_30d, "
+            f"AVG(price) FILTER (WHERE status='active' AND price > 0) AS avg_price "
+            f"FROM {SCHEMA}.listings"
+        )
+        lst = cur.fetchone() or {}
+
+        cur.execute(
+            f"SELECT "
+            f"COUNT(*) AS total, "
+            f"COUNT(*) FILTER (WHERE status='new') AS new_, "
+            f"COUNT(*) FILTER (WHERE status='in_progress') AS in_progress, "
+            f"COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') AS week_ "
+            f"FROM {SCHEMA}.leads"
+        )
+        ld = cur.fetchone() or {}
+
+        try:
+            avg_price = int(lst.get('avg_price') or 0)
+            avg_price_str = f'{avg_price:,} ₽'.replace(',', ' ')
+        except Exception:
+            avg_price_str = '—'
+
+        lines = [
+            'Сводная статистика (используй при запросах "сколько объектов", "статистика", "сколько заявок"):',
+            f'Объектов в каталоге: всего активных {int(lst.get("active") or 0)}, '
+            f'в архиве {int(lst.get("archived") or 0)}.',
+            f'  - на продажу: {int(lst.get("sale") or 0)}',
+            f'  - в аренду: {int(lst.get("rent") or 0)}',
+            f'  - готовый бизнес: {int(lst.get("business") or 0)}',
+            f'  - добавлено за 30 дней: {int(lst.get("new_30d") or 0)}',
+            f'  - средняя цена активного объекта: {avg_price_str}',
+            f'Заявки: всего {int(ld.get("total") or 0)}, '
+            f'новых {int(ld.get("new_") or 0)}, в работе {int(ld.get("in_progress") or 0)}, '
+            f'за 7 дней {int(ld.get("week_") or 0)}.',
+        ]
+        return '\n'.join(lines)
+    except Exception:
+        return ''
+
+
 def _load_memory_context(cur) -> str:
     """База знаний ВБ из ai_memory (key/value)."""
     try:
@@ -266,13 +326,16 @@ def handler(event: dict, context) -> dict:
                     'fallback': True,
                 })
 
-            # Контекст: каталог + новости + база знаний
+            # Контекст: каталог + новости + база знаний + статистика
             catalog_ctx = _load_catalog_context(cur)
             news_ctx = _load_news_context(cur)
             memory_ctx = _load_memory_context(cur)
+            stats_ctx = _load_stats_context(cur)
             system_with_ctx = SYSTEM_PROMPT
             if memory_ctx:
                 system_with_ctx += f'\n\n{memory_ctx}'
+            if stats_ctx:
+                system_with_ctx += f'\n\n{stats_ctx}'
             if catalog_ctx:
                 system_with_ctx += f'\n\n{catalog_ctx}'
             if news_ctx:

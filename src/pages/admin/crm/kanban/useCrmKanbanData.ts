@@ -110,6 +110,34 @@ export function useCrmKanbanData({
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: CreateDealForm }) => {
+      const payload: Record<string, unknown> = {
+        title: data.title,
+        source: data.source || null,
+        notes: data.notes || null,
+        owner_id: data.owner_id ? Number(data.owner_id) : null,
+        listing_id: data.listing_id ? Number(data.listing_id) : null,
+        amount: data.amount ? Number(data.amount) : null,
+        commission: data.commission ? Number(data.commission) : null,
+        assigned_to: data.assigned_to ? Number(data.assigned_to) : null,
+      };
+      const r = await fetch(crmUrl('deals', id), {
+        method: 'PUT', headers, body: JSON.stringify(payload),
+      });
+      const json = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(json.error || `Не удалось сохранить (код ${r.status})`);
+      return json;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['crm-deals'] });
+      qc.invalidateQueries({ queryKey: ['crm-deal', detailId] });
+      onCreateSuccess();
+      toast.success('Сделка обновлена');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   return {
     stages: stagesQuery.data ?? [],
     deals: dealsQuery.data ?? [],
@@ -117,6 +145,7 @@ export function useCrmKanbanData({
     dealDetail: dealDetailQuery.data,
     moveMutation,
     createMutation,
+    updateMutation,
     addActivityMutation,
   };
 }

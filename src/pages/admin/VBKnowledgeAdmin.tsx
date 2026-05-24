@@ -10,6 +10,13 @@ interface MemoryItem {
   updated_at: string | null;
 }
 
+interface Usage {
+  total_bytes: number;
+  limit_bytes: number;
+  usage_percent: number;
+  items_count: number;
+}
+
 const SUGGESTED_KEYS = [
   { prefix: 'glossary_', label: 'Глоссарий' },
   { prefix: 'faq_', label: 'FAQ' },
@@ -17,7 +24,28 @@ const SUGGESTED_KEYS = [
   { prefix: 'contact_', label: 'Контакты/компания' },
   { prefix: 'process_', label: 'Процесс' },
   { prefix: 'persona', label: 'Личность ВБ' },
+  { prefix: 'creator_', label: 'Создатель' },
+  { prefix: 'personality', label: 'Личность ВБ' },
+  { prefix: 'news_', label: 'Новости рынка' },
+  { prefix: 'listing_', label: 'Из объектов' },
+  { prefix: 'invest_', label: 'Инвестиции' },
+  { prefix: 'demand_', label: 'Спрос клиентов' },
+  { prefix: 'term_', label: 'Термины' },
 ];
+
+const TRAINING_SOURCES = [
+  { id: 'news', label: 'Новости рынка', icon: 'Newspaper', hint: '15 последних новостей' },
+  { id: 'listings', label: 'Объекты каталога', icon: 'Building2', hint: 'Описания, теги, характеристики (30 объектов)' },
+  { id: 'invest', label: 'Инвест-модель', icon: 'TrendingUp', hint: 'Средние цены, окупаемость, ставки по категориям' },
+  { id: 'demand', label: 'Заявки клиентов', icon: 'Inbox', hint: 'Что ищут — тренды спроса (60 заявок)' },
+  { id: 'terms', label: 'Термины из описаний', icon: 'Quote', hint: 'Популярные ключевые слова и понятия' },
+];
+
+function fmtBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} Б`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} КБ`;
+  return `${(bytes / 1024 / 1024).toFixed(2)} МБ`;
+}
 
 function categoryByKey(key: string): string {
   for (const c of SUGGESTED_KEYS) {
@@ -39,20 +67,38 @@ function fmtDate(s: string | null): string {
 
 export default function VBKnowledgeAdmin() {
   const [items, setItems] = useState<MemoryItem[]>([]);
+  const [usage, setUsage] = useState<Usage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [filter, setFilter] = useState<string>('');
   const [editing, setEditing] = useState<Partial<MemoryItem> | null>(null);
   const [saving, setSaving] = useState(false);
   const [trainingNews, setTrainingNews] = useState(false);
+  const [trainOpen, setTrainOpen] = useState(false);
+  const [selectedSources, setSelectedSources] = useState<string[]>(['news']);
 
   const trainFromNews = async () => {
     if (trainingNews) return;
-    if (!confirm('Запустить переобучение из новостей? ИИ обработает 15 последних новостей и добавит из них факты в базу знаний.')) return;
+    if (selectedSources.length === 0) {
+      toast.error('Выберите хотя бы один источник');
+      return;
+    }
+    const sourceNames = TRAINING_SOURCES.filter(s => selectedSources.includes(s.id)).map(s => s.label).join(', ');
+    if (!confirm(`Запустить переобучение ВБ?\n\nИсточники: ${sourceNames}\n\nЭто займёт 10-60 секунд в зависимости от количества источников.`)) return;
     setTrainingNews(true);
     try {
-      const r = await adminApi.trainVbFromNews();
-      toast.success(`Готово! Добавлено фактов: ${r.saved} (из ${r.news_count} новостей)`);
+      const r = await adminApi.trainVb(selectedSources);
+      const lines = (r.per_source || []).map(s => {
+        const srcName = TRAINING_SOURCES.find(t => t.id === s.source)?.label || s.source;
+        if (s.error) return `${srcName}: ошибка (${s.error.slice(0, 50)})`;
+        if (s.skipped) return `${srcName}: ${s.skipped}`;
+        return `${srcName}: +${s.saved} фактов (из ${s.input_count || 0})`;
+      });
+      toast.success(`Готово! Всего добавлено: ${r.saved} фактов`, {
+        description: lines.join('\n'),
+        duration: 8000,
+      });
+      setTrainOpen(false);
       load();
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Не удалось переобучить');
@@ -67,11 +113,18 @@ export default function VBKnowledgeAdmin() {
     adminApi.listAiMemory()
       .then(d => {
         setItems(Array.isArray(d?.items) ? d.items : []);
+        if (d?.usage) setUsage(d.usage as Usage);
       })
       .catch((e: unknown) => {
         setError(e instanceof Error ? e.message : 'Не удалось загрузить базу знаний');
       })
       .finally(() => setLoading(false));
+  };
+
+  const toggleSource = (id: string) => {
+    setSelectedSources(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
   };
 
   useEffect(() => { load(); }, []);
@@ -140,13 +193,13 @@ export default function VBKnowledgeAdmin() {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={trainFromNews}
+              onClick={() => setTrainOpen(true)}
               disabled={trainingNews}
-              title="ИИ возьмёт 15 последних новостей и извлечёт из них факты для базы знаний"
+              title="Переобучить ВБ из выбранных источников"
               className="px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2 bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 disabled:opacity-60 transition"
             >
               <Icon name={trainingNews ? 'Loader2' : 'Sparkles'} size={15} className={trainingNews ? 'animate-spin' : ''} />
-              {trainingNews ? 'Переобучение…' : 'Переобучить из новостей'}
+              {trainingNews ? 'Переобучение…' : 'Переобучить ВБ'}
             </button>
             <button
               onClick={() => setEditing({ key: '', value: '' })}
@@ -156,6 +209,45 @@ export default function VBKnowledgeAdmin() {
             </button>
           </div>
         </div>
+
+        {/* Индикатор использования базы знаний (лимит 500 МБ) */}
+        {usage && (() => {
+          const pct = usage.usage_percent;
+          const isCritical = pct >= 100;
+          const isWarn = pct >= 80;
+          const barColor = isCritical ? 'bg-red-500' : isWarn ? 'bg-amber-500' : 'bg-emerald-500';
+          const limitMb = Math.round(usage.limit_bytes / 1024 / 1024);
+          return (
+            <div className="mt-4 p-3 rounded-xl bg-slate-50 border border-slate-200">
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="font-semibold text-foreground">
+                  Использовано: {fmtBytes(usage.total_bytes)} из {limitMb} МБ ({usage.items_count} {usage.items_count === 1 ? 'факт' : 'фактов'})
+                </span>
+                <span className={`font-bold ${isCritical ? 'text-red-600' : isWarn ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  {pct.toFixed(2)}%
+                </span>
+              </div>
+              <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                <div
+                  className={`h-full ${barColor} transition-all duration-500`}
+                  style={{ width: `${Math.min(pct, 100)}%` }}
+                />
+              </div>
+              {isCritical && (
+                <div className="mt-2 text-xs text-red-700 inline-flex items-center gap-1.5">
+                  <Icon name="AlertCircle" size={13} />
+                  Лимит исчерпан. Удалите старые факты или закажите расширение базы знаний.
+                </div>
+              )}
+              {isWarn && !isCritical && (
+                <div className="mt-2 text-xs text-amber-700 inline-flex items-center gap-1.5">
+                  <Icon name="AlertTriangle" size={13} />
+                  База знаний почти заполнена. Рекомендуем расширение на +100 МБ.
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         <div className="mt-3 flex items-center gap-2">
           <div className="relative flex-1">
@@ -240,6 +332,82 @@ export default function VBKnowledgeAdmin() {
           </div>
         </div>
       ))}
+
+      {/* Модалка выбора источников переобучения */}
+      {trainOpen && (
+        <div className="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-5 border-b border-border flex justify-between items-center sticky top-0 bg-white">
+              <div className="font-display font-700 text-base flex items-center gap-2">
+                <Icon name="Sparkles" size={18} className="text-amber-600" />
+                Переобучить ВБ
+              </div>
+              <button onClick={() => setTrainOpen(false)} disabled={trainingNews} className="p-1 hover:bg-muted rounded disabled:opacity-50">
+                <Icon name="X" size={18} />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Выберите источники, из которых ИИ извлечёт факты для базы знаний ВБ:
+              </p>
+              <div className="space-y-2">
+                {TRAINING_SOURCES.map(src => {
+                  const checked = selectedSources.includes(src.id);
+                  return (
+                    <label
+                      key={src.id}
+                      className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition ${
+                        checked ? 'bg-amber-50 border-amber-300' : 'bg-white border-border hover:border-amber-200'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleSource(src.id)}
+                        disabled={trainingNews}
+                        className="mt-0.5"
+                      />
+                      <Icon name={src.icon} size={18} className={checked ? 'text-amber-600' : 'text-muted-foreground'} />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm">{src.label}</div>
+                        <div className="text-xs text-muted-foreground">{src.hint}</div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="text-xs text-muted-foreground bg-muted/40 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <Icon name="Info" size={13} className="mt-0.5 text-brand-blue" />
+                  <span>
+                    ИИ обработает выбранные источники и извлечёт из них 5–15 фактов на источник.
+                    Каждый факт сохраняется в базе знаний с префиксом источника
+                    (<code className="bg-white px-1 rounded">news_</code>, <code className="bg-white px-1 rounded">listing_</code> и т.д.).
+                    Старые факты с теми же ключами будут обновлены.
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="p-5 border-t border-border flex justify-end gap-2 sticky bottom-0 bg-white">
+              <button
+                onClick={() => setTrainOpen(false)}
+                disabled={trainingNews}
+                className="px-4 py-2 rounded-xl text-sm hover:bg-muted disabled:opacity-50"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={trainFromNews}
+                disabled={trainingNews || selectedSources.length === 0}
+                className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-1.5 disabled:opacity-60"
+              >
+                {trainingNews && <Icon name="Loader2" size={13} className="animate-spin" />}
+                {trainingNews ? 'Идёт обучение…' : `Запустить (${selectedSources.length})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Модалка редактирования */}
       {editing && (

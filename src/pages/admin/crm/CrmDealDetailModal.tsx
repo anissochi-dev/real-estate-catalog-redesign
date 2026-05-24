@@ -1,5 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import Icon from '@/components/ui/icon';
 import { Stage } from './crmKanbanTypes';
 import DealHeaderInfo from './dealDetail/DealHeaderInfo';
 import StageSwitcher from './dealDetail/StageSwitcher';
@@ -32,6 +34,7 @@ interface Props {
   onMoveStage: (dealId: number, stageId: number) => void;
   onAddActivity: (dealId: number, type: string, content: string) => void;
   addActivityPending: boolean;
+  onEdit?: () => void;
 }
 
 export default function CrmDealDetailModal({
@@ -41,6 +44,7 @@ export default function CrmDealDetailModal({
   activityType, setActivityType,
   onMoveStage, onAddActivity,
   addActivityPending,
+  onEdit,
 }: Props) {
   const qc = useQueryClient();
 
@@ -58,6 +62,18 @@ export default function CrmDealDetailModal({
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 mt-2">
+              {onEdit && (
+                <div className="flex justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onEdit}
+                    className="inline-flex items-center gap-1.5"
+                  >
+                    <Icon name="Pencil" size={14} /> Редактировать
+                  </Button>
+                </div>
+              )}
               <DealHeaderInfo dealDetail={dealDetail} />
 
               {/* Смена этапа */}

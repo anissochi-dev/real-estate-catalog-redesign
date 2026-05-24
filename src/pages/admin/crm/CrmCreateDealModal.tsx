@@ -43,6 +43,8 @@ interface Props {
   canAssignBroker?: boolean;
   /** Текущий пользователь — для значения по умолчанию. */
   currentUserId?: number;
+  /** ID редактируемой сделки. Если задан — окно работает в режиме редактирования. */
+  editingDealId?: number | null;
 }
 
 export default function CrmCreateDealModal({
@@ -51,7 +53,9 @@ export default function CrmCreateDealModal({
   listingSearch, setListingSearch, listingLabel, setListingLabel, listingDropOpen, setListingDropOpen,
   isPending, onSubmit,
   canAssignBroker, currentUserId,
+  editingDealId,
 }: Props) {
+  const isEdit = !!editingDealId;
   // Список брокеров (для admin/director)
   const { data: brokers = [] } = useBrokers(!!canAssignBroker && open);
 
@@ -72,7 +76,7 @@ export default function CrmCreateDealModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Новая сделка</DialogTitle>
+          <DialogTitle>{isEdit ? 'Редактировать сделку' : 'Новая сделка'}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 mt-2">
           <div>
@@ -135,7 +139,7 @@ export default function CrmCreateDealModal({
               onClick={onSubmit}
             >
               {isPending && <Icon name="Loader2" size={15} className="animate-spin mr-1" />}
-              Создать
+              {isEdit ? 'Сохранить' : 'Создать'}
             </Button>
           </div>
         </div>

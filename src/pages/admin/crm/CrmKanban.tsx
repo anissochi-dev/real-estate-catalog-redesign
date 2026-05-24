@@ -17,6 +17,7 @@ const EMPTY_FORM: CreateDealForm = {
 export default function CrmKanban() {
   const { token, user } = useAuth();
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingDealId, setEditingDealId] = useState<number | null>(null);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [newActivity, setNewActivity] = useState('');
   const [activityType, setActivityType] = useState('note');
@@ -37,7 +38,7 @@ export default function CrmKanban() {
 
   const {
     stages, deals, isLoading, dealDetail,
-    moveMutation, createMutation, addActivityMutation,
+    moveMutation, createMutation, updateMutation, addActivityMutation,
   } = useCrmKanbanData({
     headers,
     statusFilter,
@@ -46,12 +47,31 @@ export default function CrmKanban() {
     detailId,
     onCreateSuccess: () => {
       setModalOpen(false);
+      setEditingDealId(null);
       setForm(EMPTY_FORM);
       setOwnerLabel(''); setOwnerSearch('');
       setListingLabel(''); setListingSearch('');
     },
     onActivityAdded: () => setNewActivity(''),
   });
+
+  const openEditModal = () => {
+    if (!dealDetail) return;
+    setEditingDealId(dealDetail.id);
+    setForm({
+      title: dealDetail.title || '',
+      owner_id: '',
+      listing_id: '',
+      amount: dealDetail.amount != null ? String(dealDetail.amount) : '',
+      commission: dealDetail.commission != null ? String(dealDetail.commission) : '',
+      source: dealDetail.source || '',
+      notes: dealDetail.notes || '',
+      assigned_to: '',
+    });
+    setListingLabel('');
+    setListingSearch('');
+    setModalOpen(true);
+  };
 
   const handleDrop = (stageId: number) => {
     if (dragDeal && dragDeal.stage_id !== stageId) {
@@ -114,7 +134,7 @@ export default function CrmKanban() {
 
       <CrmCreateDealModal
         open={modalOpen}
-        onOpenChange={setModalOpen}
+        onOpenChange={(open) => { setModalOpen(open); if (!open) setEditingDealId(null); }}
         form={form}
         setForm={setForm}
         ownerSearch={ownerSearch}
@@ -129,11 +149,18 @@ export default function CrmKanban() {
         setListingLabel={setListingLabel}
         listingDropOpen={listingDropOpen}
         setListingDropOpen={setListingDropOpen}
-        isPending={createMutation.isPending}
-        onSubmit={() => createMutation.mutate(form)}
+        isPending={editingDealId ? updateMutation.isPending : createMutation.isPending}
+        onSubmit={() => {
+          if (editingDealId) {
+            updateMutation.mutate({ id: editingDealId, data: form });
+          } else {
+            createMutation.mutate(form);
+          }
+        }}
         headers={headers}
         canAssignBroker={canReopen}
         currentUserId={user?.id}
+        editingDealId={editingDealId}
       />
 
       <CrmDealDetailModal
@@ -148,6 +175,7 @@ export default function CrmKanban() {
         onMoveStage={(dealId, stageId) => moveMutation.mutate({ dealId, stageId })}
         onAddActivity={(dealId, type, content) => addActivityMutation.mutate({ dealId, type, content })}
         addActivityPending={addActivityMutation.isPending}
+        onEdit={() => { setDetailId(null); openEditModal(); }}
       />
     </div>
   );

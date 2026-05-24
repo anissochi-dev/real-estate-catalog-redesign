@@ -212,6 +212,24 @@ def _ai_memory(cur, conn, method, rid, event, user):
         return _err(403, 'Доступ только для admin/director/editor')
 
     if method == 'GET':
+        # Подсчёт использованного объёма (сумма длин value в байтах)
+        total_bytes = 0
+        items_count = 0
+        try:
+            cur.execute(
+                f"SELECT COUNT(*) AS c, COALESCE(SUM(LENGTH(value)), 0) AS total "
+                f"FROM {SCHEMA}.ai_memory"
+            )
+            r = cur.fetchone() or {}
+            items_count = int(r.get('c') or 0)
+            total_bytes = int(r.get('total') or 0)
+        except Exception:
+            pass
+
+        # Лимит — 500 МБ
+        limit_bytes = 500 * 1024 * 1024
+        usage_percent = round((total_bytes / limit_bytes) * 100, 2) if limit_bytes else 0
+
         cur.execute(
             f"SELECT id, key, value, updated_at FROM {SCHEMA}.ai_memory "
             f"ORDER BY updated_at DESC NULLS LAST, id DESC LIMIT 500"
@@ -225,27 +243,36 @@ def _ai_memory(cur, conn, method, rid, event, user):
                 except Exception:
                     d['updated_at'] = str(d['updated_at'])
             items.append(d)
-        return _ok({'items': items})
+        return _ok({
+            'items': items,
+            'usage': {
+                'total_bytes': total_bytes,
+                'limit_bytes': limit_bytes,
+                'usage_percent': usage_percent,
+                'items_count': items_count,
+            },
+        })
 
     body = json.loads(event.get('body') or '{}')
     action = (event.get('queryStringParameters') or {}).get('action') or body.get('action')
 
-    # Спец-действие: «Переобучить из новостей» — ИИ преобразует свежие новости в факты
-    if method == 'POST' and action == 'from_news':
+    # Спец-действие: «Переобучить ВБ» — ИИ преобразует разные источники в факты
+    # Поддерживаемые источники (sources):
+    #   news      — новости рынка
+    #   listings  — описания объектов каталога
+    #   invest    — инвест-модель (средние цены, окупаемость)
+    #   demand    — заявки и поисковые запросы клиентов
+    #   terms     — популярные термины из описаний объектов
+    if method == 'POST' and (action == 'from_news' or action == 'retrain'):
         if user['role'] not in ('admin', 'director'):
             return _err(403, 'Только admin и director могут переобучать ВБ')
-        # Берём 15 последних опубликованных новостей
-        try:
-            cur.execute(
-                f"SELECT id, title, summary, content FROM {SCHEMA}.news "
-                f"WHERE published = TRUE "
-                f"ORDER BY COALESCE(published_at, created_at) DESC LIMIT 15"
-            )
-            news_rows = cur.fetchall()
-        except Exception:
-            news_rows = []
-        if not news_rows:
-            return _err(400, 'Нет новостей для обработки. Добавьте новости в разделе «Новости».')
+
+        # Список источников. Для обратной совместимости: from_news = только news.
+        sources = body.get('sources')
+        if action == 'from_news':
+            sources = ['news']
+        if not isinstance(sources, list) or not sources:
+            sources = ['news']
 
         # Достаём ключ YandexGPT
         try:
@@ -258,47 +285,20 @@ def _ai_memory(cur, conn, method, rid, event, user):
         except Exception:
             api_key = os.environ.get('YANDEX_API_KEY', '')
             folder_id = os.environ.get('YANDEX_FOLDER_ID', '')
-
         if not api_key or not folder_id:
             return _err(503, 'YandexGPT не настроен. Добавьте ключи в Настройки → Интеграции.')
 
-        # Собираем новости в текстовый список
-        news_text_parts = []
-        for n in news_rows:
-            t = (n.get('title') or '').strip()
-            s = (n.get('summary') or '').strip()[:300]
-            c = (n.get('content') or '').strip()[:600]
-            block = f"#{n.get('id')} «{t}»"
-            if s:
-                block += f"\nКраткое: {s}"
-            if c:
-                block += f"\nПодробно: {c}"
-            news_text_parts.append(block)
-        news_text = '\n\n---\n\n'.join(news_text_parts)[:8000]
+        import urllib.request
 
-        system_prompt = (
-            'Ты — помощник Виртуального брокера (ВБ). На входе — список новостей о коммерческой '
-            'недвижимости. Извлеки из них короткие факты для базы знаний ВБ.\n\n'
-            'Формат строго JSON-массив без markdown:\n'
-            '[{"key": "news_short_slug", "value": "Краткий факт 1-2 предложения, без воды"}, ...]\n\n'
-            'Правила:\n'
-            '- key: латиница, нижний регистр, через _, начинается с "news_" (например news_rate_2026)\n'
-            '- value: 1-3 предложения, готовое утверждение, которое ВБ сможет процитировать клиенту\n'
-            '- Не дублируй факты, объединяй похожие\n'
-            '- 5-15 фактов максимум\n'
-            '- Только русский язык в значениях'
-        )
-
-        payload = {
-            'modelUri': f'gpt://{folder_id}/yandexgpt/rc',
-            'completionOptions': {'stream': False, 'temperature': 0.3, 'maxTokens': '1500'},
-            'messages': [
-                {'role': 'system', 'text': system_prompt},
-                {'role': 'user', 'text': news_text},
-            ],
-        }
-        try:
-            import urllib.request
+        def _call_gpt(system_prompt: str, user_text: str) -> str:
+            payload = {
+                'modelUri': f'gpt://{folder_id}/yandexgpt/rc',
+                'completionOptions': {'stream': False, 'temperature': 0.3, 'maxTokens': '1500'},
+                'messages': [
+                    {'role': 'system', 'text': system_prompt},
+                    {'role': 'user', 'text': user_text},
+                ],
+            }
             req_obj = urllib.request.Request(
                 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion',
                 data=json.dumps(payload).encode('utf-8'),
@@ -312,51 +312,230 @@ def _ai_memory(cur, conn, method, rid, event, user):
             with urllib.request.urlopen(req_obj, timeout=60) as resp:
                 gpt_data = json.loads(resp.read().decode('utf-8'))
             alts = (gpt_data.get('result') or {}).get('alternatives') or []
-            raw_text = ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
-        except Exception as e:
-            return _err(502, f'YandexGPT ошибка: {str(e)[:200]}')
+            return ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
 
-        # Пробуем распарсить JSON. Может прийти с обёрткой ```json — срежем
-        cleaned = raw_text.strip()
-        if cleaned.startswith('```'):
-            cleaned = cleaned.strip('`')
-            if cleaned.lower().startswith('json'):
-                cleaned = cleaned[4:].strip()
-        # Берём от первой [ до последней ]
-        start_idx = cleaned.find('[')
-        end_idx = cleaned.rfind(']')
-        if start_idx >= 0 and end_idx > start_idx:
-            cleaned = cleaned[start_idx:end_idx + 1]
-        try:
-            facts = json.loads(cleaned)
-        except Exception:
-            return _err(502, 'ИИ вернул некорректный JSON. Попробуйте ещё раз.')
-
-        if not isinstance(facts, list):
-            return _err(502, 'ИИ вернул не массив фактов')
-
-        # Сохраняем в ai_memory с префиксом news_
-        saved = 0
-        for f in facts[:20]:
-            if not isinstance(f, dict):
-                continue
-            k = _safe(str(f.get('key') or '').strip(), 100)
-            v = _safe(str(f.get('value') or '').strip(), 5000)
-            if not k or not v:
-                continue
-            if not k.startswith('news_'):
-                k = ('news_' + k)[:100]
+        def _parse_facts(raw_text: str) -> list:
+            cleaned = raw_text.strip()
+            if cleaned.startswith('```'):
+                cleaned = cleaned.strip('`')
+                if cleaned.lower().startswith('json'):
+                    cleaned = cleaned[4:].strip()
+            s = cleaned.find('[')
+            e = cleaned.rfind(']')
+            if s >= 0 and e > s:
+                cleaned = cleaned[s:e + 1]
             try:
-                cur.execute(
-                    f"INSERT INTO {SCHEMA}.ai_memory (key, value, updated_at) "
-                    f"VALUES ('{k}', '{v}', NOW()) "
-                    f"ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()"
-                )
-                saved += 1
+                result = json.loads(cleaned)
+                return result if isinstance(result, list) else []
             except Exception:
+                return []
+
+        def _save_facts(facts: list, prefix: str) -> int:
+            count = 0
+            for f in facts[:20]:
+                if not isinstance(f, dict):
+                    continue
+                k = _safe(str(f.get('key') or '').strip(), 100)
+                v = _safe(str(f.get('value') or '').strip(), 5000)
+                if not k or not v:
+                    continue
+                if not k.startswith(prefix):
+                    k = (prefix + k)[:100]
+                try:
+                    cur.execute(
+                        f"INSERT INTO {SCHEMA}.ai_memory (key, value, updated_at) "
+                        f"VALUES ('{k}', '{v}', NOW()) "
+                        f"ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()"
+                    )
+                    count += 1
+                except Exception:
+                    continue
+            return count
+
+        # Описания форматов источников
+        source_configs = {
+            'news': {
+                'prefix': 'news_',
+                'system': (
+                    'Ты — помощник ВБ. На входе — новости рынка коммерческой недвижимости. '
+                    'Извлеки 5-15 коротких фактов для базы знаний.\n'
+                    'Формат: JSON-массив без markdown: '
+                    '[{"key": "news_slug", "value": "1-3 предложения"}, ...]\n'
+                    'key начинается с news_, латиница нижний регистр через _.'
+                ),
+            },
+            'listings': {
+                'prefix': 'listing_',
+                'system': (
+                    'Ты — помощник ВБ. На входе — описания объектов каталога коммерческой '
+                    'недвижимости. Извлеки 5-10 типовых закономерностей: характерные сильные '
+                    'стороны объектов, популярные локации, отличительные черты.\n'
+                    'Формат: JSON-массив без markdown: '
+                    '[{"key": "listing_slug", "value": "1-3 предложения"}, ...]\n'
+                    'key начинается с listing_, латиница нижний регистр через _.'
+                ),
+            },
+            'invest': {
+                'prefix': 'invest_',
+                'system': (
+                    'Ты — помощник ВБ. На входе — данные о ценах, окупаемости, доходности '
+                    'объектов. Извлеки 5-10 инвест-фактов для клиентов: средние ставки cap-rate, '
+                    'типичные сроки окупаемости, диапазоны цен по категориям.\n'
+                    'Формат: JSON-массив без markdown: '
+                    '[{"key": "invest_slug", "value": "1-3 предложения с цифрами"}, ...]\n'
+                    'key начинается с invest_.'
+                ),
+            },
+            'demand': {
+                'prefix': 'demand_',
+                'system': (
+                    'Ты — помощник ВБ. На входе — заявки и поисковые запросы клиентов. '
+                    'Извлеки 5-10 фактов о спросе: какие категории чаще ищут, типичные бюджеты, '
+                    'популярные локации, частые задачи (под кофейню/под склад и т.д.).\n'
+                    'Формат: JSON-массив без markdown: '
+                    '[{"key": "demand_slug", "value": "1-3 предложения"}, ...]\n'
+                    'key начинается с demand_.'
+                ),
+            },
+            'terms': {
+                'prefix': 'term_',
+                'system': (
+                    'Ты — помощник ВБ. На входе — текстовые описания объектов. '
+                    'Найди 5-10 ключевых терминов/фраз, которые часто встречаются, '
+                    'и объясни каждый коротко.\n'
+                    'Формат: JSON-массив без markdown: '
+                    '[{"key": "term_slug", "value": "Термин — объяснение"}, ...]\n'
+                    'key начинается с term_.'
+                ),
+            },
+        }
+
+        total_saved = 0
+        per_source: list = []
+
+        for src in sources:
+            if src not in source_configs:
                 continue
+            cfg = source_configs[src]
+            user_text = ''
+            count_input = 0
+
+            try:
+                if src == 'news':
+                    cur.execute(
+                        f"SELECT id, title, summary, content FROM {SCHEMA}.news "
+                        f"WHERE published = TRUE "
+                        f"ORDER BY COALESCE(published_at, created_at) DESC LIMIT 15"
+                    )
+                    rows = cur.fetchall() or []
+                    count_input = len(rows)
+                    parts = []
+                    for n in rows:
+                        t = (n.get('title') or '').strip()
+                        s = (n.get('summary') or '').strip()[:300]
+                        c = (n.get('content') or '').strip()[:600]
+                        block = f"«{t}»"
+                        if s: block += f"\nКраткое: {s}"
+                        if c: block += f"\nПодробно: {c}"
+                        parts.append(block)
+                    user_text = '\n\n---\n\n'.join(parts)[:8000]
+
+                elif src == 'listings':
+                    cur.execute(
+                        f"SELECT title, category, deal, description, district, price, area, tags "
+                        f"FROM {SCHEMA}.listings WHERE status='active' AND LENGTH(COALESCE(description,''))>50 "
+                        f"ORDER BY updated_at DESC NULLS LAST LIMIT 30"
+                    )
+                    rows = cur.fetchall() or []
+                    count_input = len(rows)
+                    parts = []
+                    for n in rows:
+                        t = (n.get('title') or '')[:120]
+                        d = (n.get('description') or '')[:500]
+                        meta = f"{n.get('category', '')}/{n.get('deal', '')} · {n.get('district', '')} · {n.get('area', '')} м² · {n.get('price', '')} ₽"
+                        parts.append(f"«{t}» ({meta})\n{d}")
+                    user_text = '\n\n---\n\n'.join(parts)[:9000]
+
+                elif src == 'invest':
+                    cur.execute(
+                        f"SELECT category, deal, "
+                        f"AVG(price) AS avg_price, AVG(price_per_m2) AS avg_ppm2, "
+                        f"AVG(payback) AS avg_payback, AVG(monthly_rent) AS avg_rent, "
+                        f"COUNT(*) AS cnt "
+                        f"FROM {SCHEMA}.listings WHERE status='active' "
+                        f"GROUP BY category, deal HAVING COUNT(*) > 0 "
+                        f"ORDER BY cnt DESC LIMIT 30"
+                    )
+                    rows = cur.fetchall() or []
+                    count_input = len(rows)
+                    parts = []
+                    for r in rows:
+                        try:
+                            ap = int(r.get('avg_price') or 0)
+                            app = int(r.get('avg_ppm2') or 0)
+                            apb = int(r.get('avg_payback') or 0)
+                            arn = int(r.get('avg_rent') or 0)
+                            parts.append(
+                                f"{r.get('category')}/{r.get('deal')}: "
+                                f"средняя цена {ap:,} ₽, цена/м² {app:,}, "
+                                f"окупаемость ~{apb} мес, средняя аренда {arn:,} ₽. "
+                                f"Всего объектов: {r.get('cnt')}".replace(',', ' ')
+                            )
+                        except Exception:
+                            continue
+                    user_text = '\n'.join(parts)[:8000]
+
+                elif src == 'demand':
+                    cur.execute(
+                        f"SELECT message, budget, request_category, lead_type "
+                        f"FROM {SCHEMA}.leads "
+                        f"WHERE LENGTH(COALESCE(message,'')) > 20 "
+                        f"ORDER BY created_at DESC LIMIT 60"
+                    )
+                    rows = cur.fetchall() or []
+                    count_input = len(rows)
+                    parts = []
+                    for r in rows:
+                        m = (r.get('message') or '')[:300]
+                        b = r.get('budget') or ''
+                        rc = r.get('request_category') or ''
+                        lt = r.get('lead_type') or ''
+                        parts.append(f"[{lt} · {rc} · бюджет {b}] {m}")
+                    user_text = '\n\n'.join(parts)[:8000]
+
+                elif src == 'terms':
+                    cur.execute(
+                        f"SELECT description FROM {SCHEMA}.listings "
+                        f"WHERE status='active' AND LENGTH(COALESCE(description,'')) > 100 "
+                        f"ORDER BY updated_at DESC NULLS LAST LIMIT 40"
+                    )
+                    rows = cur.fetchall() or []
+                    count_input = len(rows)
+                    parts = [(r.get('description') or '')[:600] for r in rows]
+                    user_text = '\n\n---\n\n'.join(parts)[:9000]
+
+                if not user_text.strip() or count_input == 0:
+                    per_source.append({'source': src, 'saved': 0, 'input_count': 0, 'skipped': 'нет данных'})
+                    continue
+
+                raw = _call_gpt(cfg['system'], user_text)
+                facts = _parse_facts(raw)
+                saved_count = _save_facts(facts, cfg['prefix'])
+                per_source.append({'source': src, 'saved': saved_count, 'input_count': count_input})
+                total_saved += saved_count
+
+            except Exception as e:
+                per_source.append({'source': src, 'saved': 0, 'error': str(e)[:200]})
+                continue
+
         conn.commit()
-        return _ok({'success': True, 'saved': saved, 'news_count': len(news_rows)})
+        return _ok({
+            'success': True,
+            'saved': total_saved,
+            'per_source': per_source,
+            # Поля для обратной совместимости
+            'news_count': next((p.get('input_count', 0) for p in per_source if p.get('source') == 'news'), 0),
+        })
 
     if method == 'POST':
         key = _safe(body.get('key') or '', 100)
@@ -896,10 +1075,35 @@ def _leads(cur, conn, method, rid, action, event, user):
         return _ok({'success': True})
 
     if method == 'DELETE' and rid:
-        cur.execute(f"DELETE FROM {SCHEMA}.lead_comments WHERE lead_id = {int(rid)}")
-        cur.execute(f"DELETE FROM {SCHEMA}.leads WHERE id = {int(rid)}")
-        conn.commit()
-        return _ok({'success': True})
+        lid = int(rid)
+        # 1. Удаляем зависимые записи, чтобы не упасть на FK constraint.
+        #    Комментарии — полностью удаляем (теряют смысл без лида).
+        try:
+            cur.execute(f"DELETE FROM {SCHEMA}.lead_comments WHERE lead_id = {lid}")
+        except Exception:
+            pass
+        # 2. Связи телефонной базы → удаляем (history останется в phone_contact_history).
+        try:
+            cur.execute(f"DELETE FROM {SCHEMA}.phone_lead_links WHERE lead_id = {lid}")
+        except Exception:
+            pass
+        # 3. CRM-сделки, активности, платежи — обнуляем lead_id,
+        #    чтобы сохранить историю сделок даже если лид удалён.
+        for tbl in ('crm_deals', 'crm_activities', 'crm_payments', 'crm_events', 'crm_points'):
+            try:
+                cur.execute(f"UPDATE {SCHEMA}.{tbl} SET lead_id = NULL WHERE lead_id = {lid}")
+            except Exception:
+                # Таблица может не иметь поля lead_id — это нормально, идём дальше
+                pass
+        # 4. Удаляем сам лид
+        try:
+            cur.execute(f"DELETE FROM {SCHEMA}.leads WHERE id = {lid}")
+            conn.commit()
+            return _ok({'success': True})
+        except Exception as e:
+            conn.rollback()
+            msg = str(e)[:200]
+            return _err(409, f'Не удалось удалить заявку — есть связанные данные. {msg}')
 
     return _err(400, 'Bad request')
 
