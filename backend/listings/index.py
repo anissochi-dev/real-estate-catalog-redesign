@@ -215,13 +215,14 @@ def handler(event: dict, context) -> dict:
                         pass
 
                 where_sql = ' AND '.join(where)
-                # Сортировка
+                # Сортировка по умолчанию — последние редактированные первыми
+                # (updated_at, с фолбэком на created_at).
                 sort = (params.get('sort') or 'newest').strip()
                 order = {
-                    'newest': 'created_at DESC',
-                    'budget_desc': 'budget DESC NULLS LAST, created_at DESC',
-                    'budget_asc': 'budget ASC NULLS LAST, created_at DESC',
-                }.get(sort, 'created_at DESC')
+                    'newest': 'COALESCE(updated_at, created_at) DESC NULLS LAST, id DESC',
+                    'budget_desc': 'budget DESC NULLS LAST, COALESCE(updated_at, created_at) DESC',
+                    'budget_asc': 'budget ASC NULLS LAST, COALESCE(updated_at, created_at) DESC',
+                }.get(sort, 'COALESCE(updated_at, created_at) DESC NULLS LAST, id DESC')
 
                 cur.execute(
                     f"SELECT COUNT(*) AS c FROM t_p71821556_real_estate_catalog_.leads WHERE {where_sql}"
@@ -229,15 +230,20 @@ def handler(event: dict, context) -> dict:
                 total = int(cur.fetchone()['c'] or 0)
 
                 cur.execute(
-                    f"SELECT id, name, message, budget, company, request_category, lead_type, created_at "
+                    f"SELECT id, name, message, budget, company, request_category, lead_type, "
+                    f"created_at, updated_at "
                     f"FROM t_p71821556_real_estate_catalog_.leads WHERE {where_sql} "
                     f"ORDER BY {order} LIMIT {limit} OFFSET {offset}"
                 )
                 rows = []
                 for r in cur.fetchall():
                     d = dict(r)
-                    if d.get('created_at') is not None:
-                        d['created_at'] = d['created_at'].isoformat()
+                    for k in ('created_at', 'updated_at'):
+                        if d.get(k) is not None:
+                            try:
+                                d[k] = d[k].isoformat()
+                            except Exception:
+                                d[k] = str(d[k])
                     rows.append(d)
                 return _ok({
                     'leads': rows,

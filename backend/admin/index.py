@@ -1070,6 +1070,8 @@ def _leads(cur, conn, method, rid, action, event, user):
                 fields.append(f"{f} = {_bool(body[f])}")
         if not fields:
             return _err(400, 'Нет полей')
+        # Помечаем заявку как «недавно отредактированную» — для сортировки на сайте
+        fields.append('updated_at = NOW()')
         cur.execute(f"UPDATE {SCHEMA}.leads SET {', '.join(fields)} WHERE id = {int(rid)}")
         conn.commit()
         return _ok({'success': True})

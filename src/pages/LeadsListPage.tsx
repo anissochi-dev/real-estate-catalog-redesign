@@ -1,14 +1,12 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
 import Breadcrumbs from '@/components/Breadcrumbs';
+import SmartCaptcha, { CaptchaResult } from '@/components/SmartCaptcha';
 import { fetchPublicLeads, aiSearchLeads, sendLead, PublicLead } from '@/lib/api';
 import { useSeoH1 } from '@/components/SeoHead';
 
 const PAGE_SIZE = 24;
-
-type Sort = 'newest' | 'budget_desc' | 'budget_asc';
 
 function fmtBudget(b: number | null): string {
   if (!b) return 'не указан';
@@ -43,32 +41,27 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export default function LeadsListPage() {
   const h1 = useSeoH1('Заявки клиентов');
-  const [searchParams, setSearchParams] = useSearchParams();
 
   const [leads, setLeads] = useState<PublicLead[]>([]);
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-
-  const [search, setSearch] = useState(searchParams.get('search') || '');
-  const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
-  const [sort, setSort] = useState<Sort>('newest');
   const [page, setPage] = useState(1);
-  const [category, setCategory] = useState('');
-  const [maxBudget, setMaxBudget] = useState('');
 
-  // ИИ-поиск
+  // ИИ-поиск (единственный фильтр на странице)
   const [aiQuery, setAiQuery] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiIds, setAiIds] = useState<number[] | null>(null);
   const [aiReasoning, setAiReasoning] = useState('');
 
-  // Контактная форма
+  // Контактная форма + капча
   const [contactLead, setContactLead] = useState<PublicLead | null>(null);
   const [contactForm, setContactForm] = useState({ name: '', phone: '', message: '' });
   const [contactSending, setContactSending] = useState(false);
   const [contactSent, setContactSent] = useState(false);
+  const [captcha, setCaptcha] = useState<CaptchaResult | null>(null);
+  const [captchaKey, setCaptchaKey] = useState(0);
 
   const load = (p: number = page) => {
     setLoading(true);
@@ -76,11 +69,8 @@ export default function LeadsListPage() {
     fetchPublicLeads({
       page: p,
       limit: PAGE_SIZE,
-      search: aiIds ? undefined : search,
       ids: aiIds || undefined,
-      max_budget: maxBudget ? Number(maxBudget) : undefined,
-      category: category || undefined,
-      sort,
+      sort: 'newest',
     })
       .then(r => {
         setLeads(r.leads);
@@ -96,27 +86,7 @@ export default function LeadsListPage() {
   };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(1); }, [search, sort, category, maxBudget, aiIds]);
-
-  const applySearch = () => {
-    setAiIds(null);
-    setAiReasoning('');
-    setSearch(searchInput.trim());
-    const sp = new URLSearchParams(searchParams);
-    if (searchInput.trim()) sp.set('search', searchInput.trim());
-    else sp.delete('search');
-    setSearchParams(sp);
-  };
-
-  const resetFilters = () => {
-    setSearch('');
-    setSearchInput('');
-    setCategory('');
-    setMaxBudget('');
-    setAiIds(null);
-    setAiReasoning('');
-    setSearchParams(new URLSearchParams());
-  };
+  useEffect(() => { load(1); }, [aiIds]);
 
   const runAiSearch = async () => {
     const q = aiQuery.trim();
@@ -141,6 +111,12 @@ export default function LeadsListPage() {
     }
   };
 
+  const resetAi = () => {
+    setAiIds(null);
+    setAiReasoning('');
+    setAiQuery('');
+  };
+
   const openContact = (lead: PublicLead) => {
     setContactLead(lead);
     setContactForm({
@@ -149,11 +125,22 @@ export default function LeadsListPage() {
       message: `Хочу связаться по заявке #${lead.id}${lead.name ? ` (${lead.name})` : ''}`,
     });
     setContactSent(false);
+    setCaptcha(null);
+    setCaptchaKey(k => k + 1);
+  };
+
+  const closeContact = () => {
+    setContactLead(null);
+    setCaptcha(null);
   };
 
   const submitContact = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!contactLead) return;
+    if (!captcha?.passed) {
+      toast.error('Пожалуйста, пройдите проверку «не робот»');
+      return;
+    }
     setContactSending(true);
     try {
       await sendLead({
@@ -184,15 +171,15 @@ export default function LeadsListPage() {
           Что ищут другие посетители — может быть, вам подойдёт похожая идея, или вы готовы стать арендатором.
         </p>
 
-        {/* ИИ-поиск */}
+        {/* ИИ-поиск ВБ — единственный поиск на странице */}
         <div className="bg-gradient-to-br from-brand-blue/5 to-brand-orange/5 border border-brand-blue/15 rounded-2xl p-4 sm:p-5 mb-4">
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-orange to-rose-500 flex items-center justify-center">
-              <Icon name="Sparkles" size={15} className="text-white" />
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-orange to-rose-500 flex items-center justify-center">
+              <Icon name="Sparkles" size={16} className="text-white" />
             </div>
             <div>
-              <div className="font-semibold text-sm">ИИ-поиск по заявкам</div>
-              <div className="text-[11px] text-muted-foreground">Опишите, что ищете — ВБ найдёт похожие заявки</div>
+              <div className="font-semibold text-sm">ИИ-поиск Виртуального брокера</div>
+              <div className="text-[11px] text-muted-foreground">Опишите задачу — ВБ найдёт похожие заявки</div>
             </div>
           </div>
           <form
@@ -202,7 +189,7 @@ export default function LeadsListPage() {
             <input
               value={aiQuery}
               onChange={e => setAiQuery(e.target.value)}
-              placeholder="Например: ищу офис в центре до 80 м²"
+              placeholder="Например: ищу офис в центре до 80 м² под IT"
               className="flex-1 px-3 py-2 border border-border rounded-xl text-sm focus:outline-none focus:border-brand-blue"
               disabled={aiLoading}
             />
@@ -221,76 +208,22 @@ export default function LeadsListPage() {
                 {aiReasoning ? <><b>ВБ:</b> {aiReasoning}</> : `Найдено ${aiIds.length} заявок по ИИ-поиску`}
               </div>
               <button
-                onClick={() => { setAiIds(null); setAiReasoning(''); setAiQuery(''); }}
-                className="text-brand-blue hover:underline shrink-0 inline-flex items-center gap-1"
+                onClick={resetAi}
+                className="text-brand-blue hover:underline shrink-0 inline-flex items-center gap-1 whitespace-nowrap"
               >
-                <Icon name="X" size={11} /> Сбросить
+                <Icon name="X" size={11} /> Показать все
               </button>
             </div>
           )}
         </div>
 
-        {/* Обычные фильтры */}
-        <div className="bg-white border border-border rounded-2xl p-3 sm:p-4 mb-4 space-y-3">
-          <div className="flex flex-col sm:flex-row gap-2">
-            <div className="flex-1 flex items-center gap-2 bg-muted rounded-xl px-3 py-2">
-              <Icon name="Search" size={15} className="text-muted-foreground shrink-0" />
-              <input
-                value={searchInput}
-                onChange={e => setSearchInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') applySearch(); }}
-                placeholder="Поиск по тексту заявок…"
-                className="bg-transparent outline-none text-sm w-full"
-              />
-              {searchInput && (
-                <button onClick={() => { setSearchInput(''); setSearch(''); }} className="text-muted-foreground">
-                  <Icon name="X" size={14} />
-                </button>
-              )}
-            </div>
-            <button
-              onClick={applySearch}
-              className="btn-blue text-white px-4 py-2 rounded-xl text-sm font-semibold min-h-[40px]"
-            >
-              Найти
-            </button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <select
-              value={category}
-              onChange={e => setCategory(e.target.value)}
-              className="px-3 py-2 border border-border rounded-xl text-sm bg-white"
-            >
-              <option value="">Все категории</option>
-              {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
-            </select>
-            <input
-              type="number"
-              value={maxBudget}
-              onChange={e => setMaxBudget(e.target.value)}
-              placeholder="Бюджет до, ₽"
-              className="px-3 py-2 border border-border rounded-xl text-sm"
-            />
-            <select
-              value={sort}
-              onChange={e => setSort(e.target.value as Sort)}
-              className="px-3 py-2 border border-border rounded-xl text-sm bg-white"
-            >
-              <option value="newest">Сначала свежие</option>
-              <option value="budget_desc">Бюджет: по убыванию</option>
-              <option value="budget_asc">Бюджет: по возрастанию</option>
-            </select>
-          </div>
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Всего заявок: <b className="text-foreground">{total}</b></span>
-            {(search || category || maxBudget || aiIds) && (
-              <button onClick={resetFilters} className="text-brand-orange font-semibold hover:underline inline-flex items-center gap-1">
-                <Icon name="X" size={12} /> Сбросить фильтры
-              </button>
-            )}
-          </div>
+        {/* Счётчик */}
+        <div className="flex items-center justify-between text-xs text-muted-foreground mb-3 px-1">
+          <span>
+            Всего заявок: <b className="text-foreground">{total}</b>
+            {aiIds && <span className="ml-2 text-brand-blue">· ИИ-выборка</span>}
+          </span>
+          <span className="hidden sm:inline">Сначала недавно отредактированные</span>
         </div>
 
         {error && (
@@ -309,7 +242,9 @@ export default function LeadsListPage() {
           <div className="text-center py-20">
             <div className="text-5xl mb-3">🔍</div>
             <div className="font-display font-700 text-xl mb-1">Заявки не найдены</div>
-            <div className="text-muted-foreground text-sm">Попробуйте изменить фильтры или поисковый запрос</div>
+            <div className="text-muted-foreground text-sm">
+              {aiIds ? 'Попробуйте переформулировать запрос' : 'Пока нет опубликованных заявок'}
+            </div>
           </div>
         ) : (
           <>
@@ -396,7 +331,7 @@ export default function LeadsListPage() {
                 <div className="font-display font-700 text-lg">Связаться по заявке</div>
                 <div className="text-xs text-muted-foreground mt-0.5">Менеджер свяжется с вами в ближайшее время</div>
               </div>
-              <button onClick={() => setContactLead(null)} className="p-1 hover:bg-muted rounded">
+              <button onClick={closeContact} className="p-1 hover:bg-muted rounded">
                 <Icon name="X" size={18} />
               </button>
             </div>
@@ -410,7 +345,7 @@ export default function LeadsListPage() {
                   Мы свяжемся с вами в ближайшее время.
                 </div>
                 <button
-                  onClick={() => setContactLead(null)}
+                  onClick={closeContact}
                   className="btn-blue text-white px-5 py-2 rounded-xl font-semibold text-sm"
                 >
                   Закрыть
@@ -455,14 +390,29 @@ export default function LeadsListPage() {
                     className="w-full px-3 py-2 border rounded-xl text-sm resize-none"
                   />
                 </div>
+
+                {/* Капча — обязательна */}
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1.5">
+                    Проверка «не робот» *
+                  </label>
+                  <SmartCaptcha key={captchaKey} fieldCount={3} onVerify={setCaptcha} />
+                </div>
+
                 <button
                   type="submit"
-                  disabled={contactSending || !contactForm.name || !contactForm.phone}
+                  disabled={contactSending || !contactForm.name || !contactForm.phone || !captcha?.passed}
                   className="w-full btn-blue text-white py-3 rounded-xl font-semibold text-sm inline-flex items-center justify-center gap-2 disabled:opacity-60"
                 >
                   {contactSending && <Icon name="Loader2" size={14} className="animate-spin" />}
                   {contactSending ? 'Отправка…' : 'Отправить'}
                 </button>
+                {!captcha?.passed && (
+                  <div className="text-[11px] text-amber-600 text-center inline-flex items-center justify-center gap-1 w-full">
+                    <Icon name="AlertTriangle" size={11} />
+                    Пройдите проверку «не робот» чтобы отправить
+                  </div>
+                )}
                 <div className="text-[10px] text-muted-foreground text-center">
                   Нажимая «Отправить», вы соглашаетесь на обработку персональных данных.
                 </div>
