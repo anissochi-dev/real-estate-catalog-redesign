@@ -261,12 +261,17 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
       {/* Новые объекты */}
       <section className="py-6 bg-muted/40">
         <div className="container mx-auto px-4">
-          <div className="flex items-end justify-end mb-3">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2">
+              <Icon name="Building2" size={16} className="text-brand-blue" />
+              <span className="font-display font-700 text-base text-foreground">Новые объекты</span>
+            </div>
             <button
               onClick={() => onNavigate('catalog')}
-              className="flex items-center gap-1.5 text-brand-blue font-semibold text-xs hover:gap-2 transition-all duration-200"
+              aria-label="Смотреть все объекты каталога"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-brand-blue/10 text-brand-blue hover:bg-brand-blue hover:text-white font-semibold text-sm transition-colors whitespace-nowrap shrink-0 min-h-[40px] w-full sm:w-auto"
             >
-              Смотреть все <Icon name="ArrowRight" size={14} />
+              Смотреть все объекты <Icon name="ArrowRight" size={14} />
             </button>
           </div>
 
@@ -292,16 +297,17 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
       {latestNews.length > 0 && (
         <section className="py-6 bg-muted/30 border-t border-border">
           <div className="container mx-auto px-4">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-4">
               <div className="flex items-center gap-2">
                 <Icon name="Newspaper" size={16} className="text-brand-blue" />
                 <span className="font-display font-700 text-base text-foreground">Новости коммерческой недвижимости</span>
               </div>
               <button
                 onClick={() => navigate('/news')}
-                className="flex items-center gap-1 text-brand-blue font-semibold text-xs hover:gap-2 transition-all duration-200 shrink-0"
+                aria-label="Смотреть все новости рынка"
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-brand-blue/10 text-brand-blue hover:bg-brand-blue hover:text-white font-semibold text-sm transition-colors whitespace-nowrap shrink-0 min-h-[40px] w-full sm:w-auto"
               >
-                Все новости <Icon name="ArrowRight" size={12} />
+                Смотреть все новости <Icon name="ArrowRight" size={14} />
               </button>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
