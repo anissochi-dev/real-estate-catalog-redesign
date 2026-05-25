@@ -93,11 +93,19 @@ const VIEW_KEY = 'biznest_view';
 
 function loadInitialView(): AppView {
   try {
-    // Публичные страницы всегда открываются как сайт, независимо от состояния сессии
-    const publicPaths = ['/object/', '/catalog', '/map', '/favorites', '/compare', '/network-tenants', '/catalog/', '/news'];
-    if (publicPaths.some(p => window.location.pathname.startsWith(p))) return 'site';
+    // 1. Если в localStorage сохранён admin/login — приоритет за ним.
+    //    Это нужно чтобы при перезагрузке страницы (особенно на мобиле,
+    //    где URL не меняется при переходе в админку) пользователь оставался
+    //    в админ-панели, а не выкидывался на публичный сайт.
     const v = localStorage.getItem(VIEW_KEY);
-    if (v === 'admin' || v === 'login' || v === 'site') return v;
+    if (v === 'admin' || v === 'login') return v;
+
+    // 2. Иначе если URL — публичная страница, открываем сайт.
+    const publicPaths = ['/object/', '/catalog', '/map', '/favorites', '/compare', '/network-tenants', '/news', '/leads', '/declined'];
+    if (publicPaths.some(p => window.location.pathname.startsWith(p))) return 'site';
+
+    // 3. Иначе берём что есть в localStorage (или site по умолчанию).
+    if (v === 'site') return v;
   } catch {
     // ignore localStorage errors
   }
