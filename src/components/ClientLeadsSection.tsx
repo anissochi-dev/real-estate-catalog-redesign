@@ -64,15 +64,19 @@ export default function ClientLeadsSection() {
   return (
     <section className="py-6 bg-white">
       <div className="container mx-auto px-4">
-        <div className="flex items-end justify-between gap-3 mb-3 flex-wrap">
+        {/* Шапка секции: подзаголовок + ссылка «Все заявки».
+            На мобиле — две строки, ссылка отдельной кнопкой во всю ширину.
+            На sm+ — в одну строку справа. */}
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-3">
           <p className="text-xs text-muted-foreground max-w-xl">
             Есть подходящий объект? Предложите его клиенту — заявка попадёт нашему менеджеру.
           </p>
           <Link
             to="/leads"
-            className="text-sm font-semibold text-brand-blue hover:text-brand-orange transition-colors inline-flex items-center gap-1 whitespace-nowrap"
+            aria-label="Смотреть все заявки клиентов"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-brand-blue/10 text-brand-blue hover:bg-brand-blue hover:text-white font-semibold text-sm transition-colors whitespace-nowrap shrink-0 min-h-[40px] w-full sm:w-auto"
           >
-            Все заявки <Icon name="ArrowRight" size={14} />
+            Смотреть все заявки <Icon name="ArrowRight" size={14} />
           </Link>
         </div>
 
@@ -102,6 +106,18 @@ export default function ClientLeadsSection() {
               </button>
             </div>
           ))}
+        </div>
+
+        {/* Дублирующая кнопка снизу — особенно полезна на мобиле,
+            где после скролла превью пользователь сразу видит «Смотреть все». */}
+        <div className="mt-5 flex justify-center">
+          <Link
+            to="/leads"
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl border-2 border-brand-blue text-brand-blue hover:bg-brand-blue hover:text-white font-semibold text-sm transition-colors min-h-[44px]"
+          >
+            Смотреть все заявки клиентов
+            <Icon name="ArrowRight" size={15} />
+          </Link>
         </div>
       </div>
 
