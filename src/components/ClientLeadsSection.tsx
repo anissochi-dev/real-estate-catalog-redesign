@@ -107,18 +107,6 @@ export default function ClientLeadsSection() {
             </div>
           ))}
         </div>
-
-        {/* Дублирующая кнопка снизу — особенно полезна на мобиле,
-            где после скролла превью пользователь сразу видит «Смотреть все». */}
-        <div className="mt-5 flex justify-center">
-          <Link
-            to="/leads"
-            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl border-2 border-brand-blue text-brand-blue hover:bg-brand-blue hover:text-white font-semibold text-sm transition-colors min-h-[44px]"
-          >
-            Смотреть все заявки клиентов
-            <Icon name="ArrowRight" size={15} />
-          </Link>
-        </div>
       </div>
 
       {offerLead && (
