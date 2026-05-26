@@ -9,7 +9,7 @@ import { SettingsProvider } from './contexts/SettingsContext';
 import './index.css';
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
+  defaultOptions: { queries: { retry: 1, staleTime: 5 * 60_000 } },
 });
 
 createRoot(document.getElementById('root')!).render(
