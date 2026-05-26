@@ -5,6 +5,7 @@ import PropertyCard from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import { useSeoH1 } from '@/components/SeoHead';
+import AIMatchModal from '@/components/AIMatchModal';
 
 const PAGE_SIZE = 20;
 
@@ -83,6 +84,9 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
 
   const h1 = buildCatalogH1(dealFilter, typeFilter) || h1Base;
 
+  const [aiQuery, setAiQuery] = useState('');
+  const [aiOpen, setAiOpen] = useState(false);
+
   // Читаем фильтры из URL при первом рендере
   useEffect(() => {
     const deal = searchParams.get('deal');
@@ -152,117 +156,50 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="bg-white border-b border-border sticky top-16 z-30">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex flex-col md:flex-row gap-3">
-            {/* Search */}
-            <div className="flex-1 flex items-center gap-2 bg-muted rounded-xl px-4 py-2.5">
-              <Icon name="Search" size={18} className="text-muted-foreground flex-shrink-0" />
+
+      {/* ── ИИ-поиск ── */}
+      <div className="hero-bg text-white">
+        <div className="container mx-auto px-4 py-6 md:py-8">
+          <form
+            onSubmit={e => { e.preventDefault(); if (aiQuery.trim()) setAiOpen(true); }}
+            className="flex gap-2 max-w-2xl"
+          >
+            <div className="flex-1 flex items-center gap-2 bg-white/10 border border-white/25 rounded-xl px-3 py-2.5 backdrop-blur-sm focus-within:border-white/60 transition-colors">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-orange to-rose-500 flex items-center justify-center flex-shrink-0">
+                <Icon name="Sparkles" size={14} className="text-white" />
+              </div>
               <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Поиск по названию, адресу, району..."
-                className="bg-transparent outline-none text-sm w-full text-foreground placeholder:text-muted-foreground"
+                value={aiQuery}
+                onChange={e => setAiQuery(e.target.value)}
+                placeholder="Опишите нужный объект — ИИ подберёт варианты…"
+                aria-label="ИИ-поиск объекта"
+                className="bg-transparent text-white placeholder:text-white/55 outline-none w-full text-sm min-w-0"
               />
-              {search && (
-                <button onClick={() => setSearch('')} className="text-muted-foreground hover:text-foreground">
-                  <Icon name="X" size={16} />
+              {aiQuery && (
+                <button type="button" onClick={() => setAiQuery('')} className="text-white/50 hover:text-white/80 flex-shrink-0">
+                  <Icon name="X" size={14} />
                 </button>
               )}
             </div>
-
-            {/* Filter toggle */}
             <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 font-semibold text-sm transition-all duration-200
-                ${showFilters ? 'border-brand-blue bg-brand-blue text-white' : 'border-border text-foreground hover:border-brand-blue'}`}
+              type="submit"
+              className="btn-orange text-white px-4 sm:px-5 py-2.5 rounded-xl font-semibold font-display text-sm flex-shrink-0 inline-flex items-center gap-1.5 min-h-[44px]"
             >
-              <Icon name="SlidersHorizontal" size={16} />
-              Фильтры
+              <Icon name="Sparkles" size={14} />
+              <span className="hidden sm:inline">Найти с ИИ</span>
+              <span className="sm:hidden">ИИ</span>
             </button>
-
-            {/* Sort */}
-            <select
-              value={sortBy}
-              onChange={e => setSortBy(e.target.value as SortOption)}
-              className="px-4 py-2.5 rounded-xl border-2 border-border bg-white text-sm font-medium text-foreground outline-none cursor-pointer hover:border-brand-blue transition-colors"
-            >
-              <option value="newest">Сначала свежие</option>
-              <option value="price_asc">Цена: по возрастанию</option>
-              <option value="price_desc">Цена: по убыванию</option>
-              <option value="area_asc">Площадь: по возрастанию</option>
-            </select>
-          </div>
-
-          {/* Expanded filters */}
-          {showFilters && (
-            <div className="mt-4 pt-4 border-t border-border animate-fade-in">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Deal type */}
-                <div>
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Тип сделки</div>
-                  <div className="flex flex-wrap gap-2">
-                    {DEAL_TYPES.map(dt => (
-                      <button
-                        key={dt.value}
-                        onClick={() => setDealFilter(dt.value)}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-150
-                          ${dealFilter === dt.value ? 'bg-brand-blue text-white' : 'bg-muted text-foreground hover:bg-brand-blue/10'}`}
-                      >
-                        {dt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Property type */}
-                <div>
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Тип объекта</div>
-                  <select
-                    value={typeFilter}
-                    onChange={e => setTypeFilter(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm outline-none"
-                  >
-                    {PROPERTY_TYPES.map(pt => (
-                      <option key={pt.value} value={pt.value}>{pt.label}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Area & Price */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">От м²</div>
-                    <input
-                      type="number"
-                      value={minArea}
-                      onChange={e => setMinArea(e.target.value)}
-                      placeholder="50"
-                      className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm outline-none focus:border-brand-blue transition-colors"
-                    />
-                  </div>
-                  <div>
-                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">До цены (млн)</div>
-                    <input
-                      type="number"
-                      value={maxPrice}
-                      onChange={e => setMaxPrice(e.target.value)}
-                      placeholder="100"
-                      className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm outline-none focus:border-brand-blue transition-colors"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          </form>
+          <p className="text-[11px] text-white/50 mt-1.5">Опишите задачу обычным языком — ИИ подберёт подходящие объекты</p>
         </div>
       </div>
 
-      {/* Deal type tabs */}
-      <div className="bg-white border-b border-border">
+      {/* ── Табы + фильтры ── */}
+      <div className="bg-white border-b border-border sticky top-16 z-30">
         <div className="container mx-auto px-4">
-          <div className="flex gap-1 overflow-x-auto pb-0 scrollbar-none">
+
+          {/* Табы тип сделки */}
+          <div className="flex items-center gap-0 overflow-x-auto scrollbar-none">
             {DEAL_TYPES.map(dt => (
               <button
                 key={dt.value}
@@ -276,9 +213,89 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
                 {dt.label}
               </button>
             ))}
+            <div className="flex-1" />
+            {/* Кнопка фильтров справа */}
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 my-1.5 rounded-lg text-xs font-semibold transition-all border
+                ${showFilters || dealFilter !== 'all' || typeFilter !== 'all' || minArea || maxPrice
+                  ? 'border-brand-blue bg-brand-blue/10 text-brand-blue'
+                  : 'border-border text-muted-foreground hover:border-brand-blue hover:text-brand-blue'
+                }`}
+            >
+              <Icon name="SlidersHorizontal" size={14} />
+              Фильтры
+              {(dealFilter !== 'all' || typeFilter !== 'all' || minArea || maxPrice) && (
+                <span className="w-4 h-4 rounded-full bg-brand-blue text-white text-[10px] flex items-center justify-center">
+                  {[dealFilter !== 'all', typeFilter !== 'all', !!minArea, !!maxPrice].filter(Boolean).length}
+                </span>
+              )}
+            </button>
           </div>
+
+          {/* Раскрытые фильтры */}
+          {showFilters && (
+            <div className="pb-4 pt-1 border-t border-border animate-fade-in">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3">
+
+                {/* Тип объекта */}
+                <div>
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Тип объекта</div>
+                  <select
+                    value={typeFilter}
+                    onChange={e => setTypeFilter(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm outline-none focus:border-brand-blue transition-colors"
+                  >
+                    {PROPERTY_TYPES.map(pt => (
+                      <option key={pt.value} value={pt.value}>{pt.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Площадь и цена */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">От м²</div>
+                    <input type="number" value={minArea} onChange={e => setMinArea(e.target.value)}
+                      placeholder="50"
+                      className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm outline-none focus:border-brand-blue transition-colors" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">До цены (млн)</div>
+                    <input type="number" value={maxPrice} onChange={e => setMaxPrice(e.target.value)}
+                      placeholder="100"
+                      className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm outline-none focus:border-brand-blue transition-colors" />
+                  </div>
+                </div>
+
+                {/* Сортировка */}
+                <div>
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Сортировка</div>
+                  <select value={sortBy} onChange={e => setSortBy(e.target.value as SortOption)}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm outline-none focus:border-brand-blue transition-colors">
+                    <option value="newest">Сначала свежие</option>
+                    <option value="price_asc">Цена: по возрастанию</option>
+                    <option value="price_desc">Цена: по убыванию</option>
+                    <option value="area_asc">Площадь: по возрастанию</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Сброс */}
+              {(dealFilter !== 'all' || typeFilter !== 'all' || minArea || maxPrice) && (
+                <button
+                  onClick={() => { setDealFilter('all'); setTypeFilter('all'); setMinArea(''); setMaxPrice(''); }}
+                  className="mt-3 text-xs text-brand-orange font-semibold flex items-center gap-1 hover:opacity-80"
+                >
+                  <Icon name="X" size={12} /> Сбросить все фильтры
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
+
+      <AIMatchModal open={aiOpen} onClose={() => setAiOpen(false)} initialPrompt={aiQuery} autoSubmit={!!aiQuery.trim()} />
 
       {/* Results */}
       <div className="container mx-auto px-4 py-8">
@@ -296,15 +313,6 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
               <span> · показаны {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)}</span>
             )}
           </div>
-          {(search || dealFilter !== 'all' || typeFilter !== 'all') && (
-            <button
-              onClick={() => { setSearch(''); setDealFilter('all'); setTypeFilter('all'); setMinArea(''); setMaxPrice(''); }}
-              className="text-sm text-brand-orange font-semibold flex items-center gap-1 hover:opacity-80 transition-opacity"
-            >
-              <Icon name="X" size={14} />
-              Сбросить фильтры
-            </button>
-          )}
         </div>
 
         {filtered.length === 0 ? (
