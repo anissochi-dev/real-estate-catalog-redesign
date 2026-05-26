@@ -15,6 +15,8 @@ export interface S {
   yandex_maps_api_key: string;
   yandex_metrika_id: string;
   google_analytics_id: string;
+  yandex_webmaster_verification: string;
+  google_search_console_verification: string;
   company_since_year: number;
   site_url: string;
   seo_keywords: string;

@@ -10,6 +10,42 @@ export default function AnalyticsLoader() {
   const { settings } = useSettings();
   const ymId = settings.yandex_metrika_id;
   const gaId = settings.google_analytics_id;
+  const ymVerify = settings.yandex_webmaster_verification;
+  const gsVerify = settings.google_search_console_verification;
+
+  // Яндекс Вебмастер — мета-тег подтверждения
+  useEffect(() => {
+    const id = 'ym-webmaster-meta';
+    let tag = document.getElementById(id) as HTMLMetaElement | null;
+    if (ymVerify) {
+      if (!tag) {
+        tag = document.createElement('meta');
+        tag.id = id;
+        tag.name = 'yandex-verification';
+        document.head.appendChild(tag);
+      }
+      tag.content = ymVerify;
+    } else if (tag) {
+      tag.remove();
+    }
+  }, [ymVerify]);
+
+  // Google Search Console — мета-тег подтверждения
+  useEffect(() => {
+    const id = 'gsc-webmaster-meta';
+    let tag = document.getElementById(id) as HTMLMetaElement | null;
+    if (gsVerify) {
+      if (!tag) {
+        tag = document.createElement('meta');
+        tag.id = id;
+        tag.name = 'google-site-verification';
+        document.head.appendChild(tag);
+      }
+      tag.content = gsVerify;
+    } else if (tag) {
+      tag.remove();
+    }
+  }, [gsVerify]);
 
   // Яндекс.Метрика
   useEffect(() => {
