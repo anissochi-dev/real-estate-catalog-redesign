@@ -104,7 +104,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   const newObjects = [...properties].sort((a, b) => propTime(b) - propTime(a)).slice(0, homeLimit);
 
   const STATS_VIEW = [
-    { value: `${totalCount}+`, label: 'Объектов в базе', icon: 'Building2', deal: 'all' as const },
+    { value: `${totalCount}+`, label: 'Объектов в базе', icon: 'Building2', deal: null },
     { value: leadsCount > 0 ? `${leadsCount}+` : '...', label: 'Заявок от клиентов', icon: 'MessageSquare', deal: null },
     { value: '98%', label: 'Успешных сделок', icon: 'TrendingUp', deal: null },
     { value: `с ${settings.company_since_year || 2007}`, label: 'На рынке', icon: 'Award', deal: null },
