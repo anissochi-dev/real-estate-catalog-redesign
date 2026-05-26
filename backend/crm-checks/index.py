@@ -116,11 +116,59 @@ def inc_quota(conn, source):
 
 
 def fetch_zachestny(inn, api_key):
-    url = f"https://zachestnyibiznesapi.ru/paid/data/company?api_key={api_key}&id={inn}"
+    """
+    Официальный API zachestnyibiznesapi.ru.
+    /paid/data/card — универсальный endpoint для ООО и ИП.
+    ИНН 10 цифр = юрлицо, 12 цифр = ИП.
+    """
+    inn_clean = ''.join(filter(str.isdigit, str(inn)))
+    url = f"https://zachestnyibiznesapi.ru/paid/data/card?api_key={api_key}&id={inn_clean}"
     try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'BizNest CRM/1.0'})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read().decode())
+        req = urllib.request.Request(url, headers={'User-Agent': 'BizNest CRM/1.0', 'Accept': 'application/json'})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = json.loads(resp.read().decode())
+            # Нормализуем ответ: вытаскиваем body[0] если массив
+            body = raw.get('body', raw)
+            if isinstance(body, list) and body:
+                item = body[0]
+            elif isinstance(body, dict):
+                item = body
+            else:
+                return {'error': 'Пустой ответ от API', '_raw': raw}
+
+            # Определяем тип: ИП или ООО
+            entity_type = 'ip' if len(inn_clean) == 12 else 'ul'
+
+            # Нормализованная карточка с ключевыми полями
+            card = {
+                '_type': entity_type,
+                '_source': 'zachestnyibiznes',
+                'inn': inn_clean,
+                'ogrn': item.get('ОГРН') or item.get('ogrn', ''),
+                'name': (item.get('НаимЮЛСокр') or item.get('НаимЮЛПолн')
+                         or item.get('ФИОПолн') or item.get('name', '')),
+                'status': item.get('Активность') or item.get('СтатусЮЛ') or item.get('status', ''),
+                'address': (item.get('АдресЮЛСтр') or item.get('Адрес') or item.get('address', '')),
+                'okved': item.get('КодОКВЭД') or item.get('okved', ''),
+                'okved_name': item.get('НаимОКВЭД') or '',
+                'reg_date': item.get('ДатаРег') or item.get('reg_date', ''),
+                'liquidation_date': item.get('ДатаПрекр') or '',
+                'employees': item.get('СрЧисРаб') or item.get('ЧисРаб') or '',
+                'capital': item.get('СумКап') or '',
+                'tax_system': item.get('СистемаНалогообложения') or '',
+                'risk_score': item.get('Риск') or item.get('risk', ''),
+                '_raw': item,
+            }
+
+            # Для ИП — руководитель = само лицо
+            if entity_type == 'ip':
+                card['director'] = item.get('ФИОПолн') or item.get('name', '')
+            else:
+                card['director'] = (item.get('РуководительФИО') or item.get('ФИОРук')
+                                    or item.get('director', ''))
+                card['director_post'] = item.get('РуководительДолжн') or ''
+
+            return card
     except Exception as e:
         return {'error': str(e)}
 

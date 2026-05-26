@@ -8,6 +8,84 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { CRM_CHECKS_URL as CHECKS_URL } from '@/lib/adminApi';
 
+interface ZachestnyData {
+  _type?: string;
+  inn?: string;
+  ogrn?: string;
+  name?: string;
+  status?: string;
+  address?: string;
+  okved?: string;
+  okved_name?: string;
+  reg_date?: string;
+  liquidation_date?: string;
+  employees?: string | number;
+  capital?: string | number;
+  tax_system?: string;
+  risk_score?: string | number;
+  director?: string;
+  director_post?: string;
+  error?: string;
+}
+
+function ZachestnyCard({ data }: { data: ZachestnyData }) {
+  const isActive = data.status && (
+    data.status.toLowerCase().includes('действу') ||
+    data.status.toLowerCase().includes('активн') ||
+    data.status === '1' || data.status === 'true'
+  );
+  const isLiquidated = data.status && (
+    data.status.toLowerCase().includes('ликвид') ||
+    data.status.toLowerCase().includes('прекращ')
+  );
+
+  const statusColor = isLiquidated
+    ? 'bg-red-100 text-red-700'
+    : isActive
+      ? 'bg-emerald-100 text-emerald-700'
+      : 'bg-amber-100 text-amber-700';
+
+  const fields: [string, string | number | undefined, string?][] = [
+    ['ИНН', data.inn],
+    ['ОГРН', data.ogrn],
+    ['Тип', data._type === 'ip' ? 'Индивидуальный предприниматель' : 'Юридическое лицо'],
+    ['Адрес', data.address],
+    ['ОКВЭД', data.okved && data.okved_name ? `${data.okved} — ${data.okved_name}` : (data.okved || data.okved_name)],
+    ['Руководитель', data.director && data.director_post ? `${data.director} (${data.director_post})` : data.director],
+    ['Дата регистрации', data.reg_date],
+    ['Сотрудников', data.employees],
+    ['Уставной капитал', data.capital ? `${Number(data.capital).toLocaleString('ru-RU')} руб.` : undefined],
+    ['Система налогообложения', data.tax_system],
+    ['Оценка риска', data.risk_score],
+    ...(data.liquidation_date ? [['Дата прекращения', data.liquidation_date] as [string, string]] : []),
+  ];
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-base leading-tight">{data.name || '—'}</div>
+          <div className="flex items-center gap-2 mt-1">
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor}`}>
+              {data.status || 'Статус неизвестен'}
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm border-t pt-3">
+        {fields.map(([label, value]) =>
+          value ? (
+            <div key={label} className="flex gap-2">
+              <span className="text-muted-foreground min-w-[140px] shrink-0 text-xs pt-0.5">{label}</span>
+              <span className="font-medium text-xs break-all">{String(value)}</span>
+            </div>
+          ) : null
+        )}
+      </div>
+    </div>
+  );
+}
+
 const SOURCE_INFO: Record<string, { label: string; color: string; desc: string }> = {
   zachestny: { label: 'ЧестныйБизнес', color: 'bg-green-100 text-green-700', desc: 'Компании и ИП' },
   newdb: { label: 'NewDB', color: 'bg-blue-100 text-blue-700', desc: 'Физлица и телефоны' },
@@ -283,12 +361,24 @@ export default function CrmChecks() {
                         </span>
                         {res.from_cache && <Badge variant="outline" className="text-xs">Из кэша</Badge>}
                       </div>
+                      {src === 'zachestny' && res.data && !(res.data as Record<string, unknown>).error && (
+                        <a
+                          href={`https://zachestnyibiznes.ru/company/ul/${(res.data as Record<string, unknown>).ogrn || (res.data as Record<string, unknown>).inn}`}
+                          target="_blank" rel="noopener noreferrer"
+                          className="text-xs text-brand-blue hover:underline flex items-center gap-1"
+                        >
+                          <Icon name="ExternalLink" size={12} />
+                          Открыть на сайте
+                        </a>
+                      )}
                     </div>
                     {res.error ? (
                       <div className="text-red-600 text-sm flex items-center gap-2">
                         <Icon name="AlertCircle" size={15} />
                         {res.error}
                       </div>
+                    ) : src === 'zachestny' && res.data && !(res.data as Record<string, unknown>).error ? (
+                      <ZachestnyCard data={res.data as ZachestnyData} />
                     ) : (
                       <div className="text-sm">{renderValue(res.data)}</div>
                     )}
