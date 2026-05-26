@@ -57,7 +57,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
                   <Icon name="Building" size={18} className="text-white" />
                 </div>
               )}
-              <span className="font-display font-800 text-base md:text-lg text-brand-blue tracking-tight">{brandName}</span>
+              <span className="font-display font-800 text-base md:text-lg text-brand-blue tracking-tight truncate max-w-[160px] sm:max-w-[260px] md:max-w-none">{brandName}</span>
             </button>
 
             {/* Nav links — desktop */}
