@@ -210,6 +210,36 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
           </div>
         </div>
 
+        {/* ИИ-подбор похожих — над галереей */}
+        <div className="bg-gradient-to-r from-brand-blue to-indigo-600 rounded-2xl px-4 py-3 mb-4">
+          <form
+            onSubmit={e => { e.preventDefault(); setAiOpen(true); }}
+            className="flex items-center gap-2"
+          >
+            <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+              <Icon name="Sparkles" size={14} className="text-white" />
+            </div>
+            <input
+              value={aiQuery}
+              onChange={e => setAiQuery(e.target.value)}
+              placeholder={`Найти похожие на «${item.title.slice(0, 40)}${item.title.length > 40 ? '…' : ''}»`}
+              className="flex-1 bg-transparent text-white placeholder:text-white/50 outline-none text-sm min-w-0"
+            />
+            {aiQuery && (
+              <button type="button" onClick={() => setAiQuery('')} className="text-white/50 hover:text-white/80 flex-shrink-0">
+                <Icon name="X" size={13} />
+              </button>
+            )}
+            <button
+              type="submit"
+              className="flex-shrink-0 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1.5"
+            >
+              <Icon name="Sparkles" size={12} />
+              Найти с ИИ
+            </button>
+          </form>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 space-y-3">
             <PropertyMediaGallery
@@ -232,36 +262,6 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
               dealLabel={dealLabel}
               typeLabel={typeLabel}
             />
-            {/* ИИ-подбор похожих */}
-            <div className="bg-gradient-to-r from-brand-blue to-indigo-600 rounded-2xl px-4 py-3">
-              <form
-                onSubmit={e => { e.preventDefault(); setAiOpen(true); }}
-                className="flex items-center gap-2"
-              >
-                <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
-                  <Icon name="Sparkles" size={14} className="text-white" />
-                </div>
-                <input
-                  value={aiQuery}
-                  onChange={e => setAiQuery(e.target.value)}
-                  placeholder={`Найти похожие на «${item.title.slice(0, 40)}${item.title.length > 40 ? '…' : ''}»`}
-                  className="flex-1 bg-transparent text-white placeholder:text-white/50 outline-none text-sm min-w-0"
-                />
-                {aiQuery && (
-                  <button type="button" onClick={() => setAiQuery('')} className="text-white/50 hover:text-white/80 flex-shrink-0">
-                    <Icon name="X" size={13} />
-                  </button>
-                )}
-                <button
-                  type="submit"
-                  className="flex-shrink-0 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1.5"
-                >
-                  <Icon name="Sparkles" size={12} />
-                  Найти с ИИ
-                </button>
-              </form>
-            </div>
-
             <PropertyMainContent
               item={item}
               dealLabel={dealLabel}
