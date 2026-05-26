@@ -38,6 +38,18 @@ export function GalleryMainImage({
   onTouchStart, onTouchMove, onTouchEnd,
   onPrev, onNext,
 }: GalleryMainImageProps) {
+  // Click on image: left half = prev, right half = next
+  const handleImgClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (photoThumbs.length <= 1) {
+      onOpenLightbox();
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    if (x < rect.width / 2) onPrev();
+    else onNext();
+  };
+
   return (
     <div
       className="relative rounded-2xl overflow-hidden bg-muted"
@@ -51,19 +63,34 @@ export function GalleryMainImage({
       {isVideoActive ? (
         <VideoEmbed url={item.videoUrl!} />
       ) : mainImg !== null && mainImg !== undefined ? (
-        <div className="w-full h-full cursor-pointer" onClick={onOpenLightbox}>
-          <img
-            key={fadeKey}
-            src={mainImg}
-            alt={item.title}
-            loading="lazy"
-            onLoad={onImgLoad}
-            className={`w-full h-full object-cover transition-opacity duration-300 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
-          />
-          {!imgLoaded && (
-            <div className="absolute inset-0 bg-muted animate-pulse" />
-          )}
-        </div>
+        <>
+          <div
+            className="w-full h-full cursor-pointer"
+            onClick={handleImgClick}
+          >
+            <img
+              key={fadeKey}
+              src={mainImg}
+              alt={item.title}
+              loading="lazy"
+              onLoad={onImgLoad}
+              className={`w-full h-full object-cover transition-opacity duration-300 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
+            />
+            {!imgLoaded && (
+              <div className="absolute inset-0 bg-muted animate-pulse" />
+            )}
+          </div>
+
+          {/* Lightbox open button — bottom right, visible on hover */}
+          <button
+            onClick={e => { e.stopPropagation(); onOpenLightbox(); }}
+            className={`absolute bottom-3 right-3 z-10 bg-black/55 hover:bg-black/80 text-white rounded-lg px-2 py-1.5 text-xs hidden sm:flex items-center gap-1.5 transition-all duration-200 ${showArrows ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+            aria-label="Открыть во весь экран"
+          >
+            <Icon name="Expand" size={13} />
+            Открыть
+          </button>
+        </>
       ) : (
         <div className="w-full h-full flex items-center justify-center">
           <Icon name="Image" size={48} className="text-muted-foreground" />
