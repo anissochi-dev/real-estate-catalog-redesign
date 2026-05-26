@@ -76,7 +76,7 @@ export default function PropertyMainContent({
 
       {/* Параметры объекта */}
       <div className="bg-white rounded-2xl px-4 py-3 shadow-sm">
-        <div className="font-display font-700 text-base mb-3">Параметры объекта</div>
+        <h2 className="font-display font-700 text-base mb-3">Параметры объекта</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           <ParamCard icon="Maximize" label="Площадь" value={`${item.area} м²`} />
           <ParamCard icon="Briefcase" label="Тип сделки" value={dealLabel} />
@@ -111,7 +111,7 @@ export default function PropertyMainContent({
         {/* Коммуникации */}
         {item.utilities && (
           <div className="mt-3 pt-3 border-t border-border">
-            <div className="font-display font-700 text-sm mb-2">Коммуникации</div>
+            <h3 className="font-display font-700 text-sm mb-2">Коммуникации</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               {item.utilities.split(',').map(u => u.trim()).filter(Boolean).map(u => {
                 const [key, val] = u.includes(':') ? u.split(':').map(s => s.trim()) : [u, ''];
@@ -136,9 +136,9 @@ export default function PropertyMainContent({
       {/* Назначение — отдельный блок */}
       {item.purpose && (
         <div className="bg-white rounded-2xl px-4 py-3 shadow-sm">
-          <div className="font-display font-700 text-base mb-3 flex items-center gap-2">
+          <h2 className="font-display font-700 text-base mb-3 flex items-center gap-2">
             <Icon name="Target" size={16} className="text-brand-blue" /> Подходящее назначение
-          </div>
+          </h2>
           <div className="flex flex-wrap gap-2">
             {(item.purpose.includes('|')
               ? item.purpose.split('|').map(s => s.trim()).filter(Boolean)
@@ -156,7 +156,7 @@ export default function PropertyMainContent({
       {/* Описание */}
       {item.description && (
         <div className="bg-white rounded-2xl px-4 py-3 shadow-sm">
-          <div className="font-display font-700 text-base mb-2">Описание</div>
+          <h2 className="font-display font-700 text-base mb-2">Описание</h2>
           <div className="text-sm whitespace-pre-wrap text-foreground/80 leading-relaxed">{item.description}</div>
         </div>
       )}
@@ -164,9 +164,9 @@ export default function PropertyMainContent({
       {/* Карта */}
       {(!!item.lat && !!item.lng) && (
         <div id="property-map" className="bg-white rounded-2xl px-4 py-3 shadow-sm">
-          <div className="font-display font-700 text-base mb-0.5 flex items-center gap-2">
+          <h2 className="font-display font-700 text-base mb-0.5 flex items-center gap-2">
             <Icon name="Map" size={16} /> Расположение и инфраструктура
-          </div>
+          </h2>
           <p className="text-xs text-muted-foreground mb-2">
             Выберите категорию — объекты в радиусе 800 м
           </p>
@@ -176,9 +176,9 @@ export default function PropertyMainContent({
 
       {/* Форма заявки */}
       <div className="bg-white rounded-2xl px-4 py-3 shadow-sm">
-        <div className="font-display font-700 text-base mb-3 flex items-center gap-2">
+        <h2 className="font-display font-700 text-base mb-3 flex items-center gap-2">
           <Icon name="CalendarCheck" size={16} className="text-brand-blue" /> Заказать просмотр
-        </div>
+        </h2>
         {sent ? (
           <div className="py-4 text-center">
             <Icon name="CheckCircle2" size={36} className="mx-auto mb-2 text-emerald-500" />
@@ -211,7 +211,7 @@ export default function PropertyMainContent({
       {/* Особенности */}
       {item.tags && item.tags.length > 0 && (
         <div className="bg-white rounded-2xl px-4 py-3 shadow-sm">
-          <div className="font-display font-700 text-base mb-2">Особенности</div>
+          <h2 className="font-display font-700 text-base mb-2">Особенности</h2>
           <div className="flex flex-wrap gap-1.5">
             {item.tags.map(t => (
               <span key={t} className="text-xs px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue font-medium">{t}</span>

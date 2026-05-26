@@ -41,8 +41,36 @@ const PROPERTY_TYPES = [
   { value: 'car_service', label: '🔧 Автосервисы' },
 ];
 
+const DEAL_H1: Record<string, string> = {
+  sale: 'Продажа коммерческой недвижимости в Краснодаре',
+  rent: 'Аренда коммерческой недвижимости в Краснодаре',
+  business: 'Готовый бизнес в Краснодаре — актуальные предложения',
+};
+
+const TYPE_H1: Record<string, Record<string, string>> = {
+  office:       { all: 'Офисы в Краснодаре', rent: 'Аренда офисов в Краснодаре', sale: 'Продажа офисов в Краснодаре' },
+  retail:       { all: 'Торговые площади в Краснодаре', rent: 'Торговые площади в аренду в Краснодаре', sale: 'Продажа торговых помещений в Краснодаре' },
+  warehouse:    { all: 'Склады в Краснодаре', rent: 'Аренда складов в Краснодаре', sale: 'Продажа складов в Краснодаре' },
+  restaurant:   { all: 'Рестораны и кафе в Краснодаре', rent: 'Аренда помещений под общепит в Краснодаре', sale: 'Рестораны и кафе на продажу в Краснодаре' },
+  hotel:        { all: 'Гостиницы в Краснодаре', rent: 'Аренда гостиниц в Краснодаре', sale: 'Продажа гостиниц в Краснодаре' },
+  business:     { all: 'Готовый бизнес в Краснодаре', rent: 'Готовый бизнес в Краснодаре', sale: 'Продажа готового бизнеса в Краснодаре', business: 'Готовый бизнес в Краснодаре — актуальные предложения' },
+  gab:          { all: 'Готовый арендный бизнес (ГАБ) в Краснодаре', rent: 'ГАБ в аренду в Краснодаре', sale: 'Продажа готового арендного бизнеса в Краснодаре' },
+  production:   { all: 'Производственные помещения в Краснодаре', rent: 'Аренда производственных помещений в Краснодаре', sale: 'Продажа производственных помещений в Краснодаре' },
+  land:         { all: 'Земельные участки в Краснодаре', rent: 'Аренда земельных участков в Краснодаре', sale: 'Продажа земельных участков в Краснодаре' },
+  building:     { all: 'Отдельно стоящие здания в Краснодаре', rent: 'Аренда зданий в Краснодаре', sale: 'Продажа зданий в Краснодаре' },
+  free_purpose: { all: 'Помещения свободного назначения в Краснодаре', rent: 'Аренда помещений свободного назначения', sale: 'Продажа помещений свободного назначения' },
+  car_service:  { all: 'Автосервисы в Краснодаре', rent: 'Аренда автосервисов в Краснодаре', sale: 'Продажа автосервисов в Краснодаре' },
+};
+
+function buildCatalogH1(deal: string, type: string): string {
+  if (type !== 'all' && TYPE_H1[type]) {
+    return TYPE_H1[type][deal] || TYPE_H1[type].all;
+  }
+  return DEAL_H1[deal] || 'Каталог коммерческой недвижимости в Краснодаре';
+}
+
 export default function CatalogPage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare }: CatalogPageProps) {
-  const h1 = useSeoH1('Каталог коммерческой недвижимости');
+  const h1Base = useSeoH1('Каталог коммерческой недвижимости в Краснодаре');
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [dealFilter, setDealFilter] = useState('all');
@@ -53,6 +81,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
   const [maxPrice, setMaxPrice] = useState('');
   const [page, setPage] = useState(1);
 
+  const h1 = buildCatalogH1(dealFilter, typeFilter) || h1Base;
 
   // Читаем фильтры из URL при первом рендере
   useEffect(() => {

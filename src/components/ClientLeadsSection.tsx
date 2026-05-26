@@ -71,7 +71,7 @@ export default function ClientLeadsSection() {
           <div>
             <h2 className="font-display font-700 text-base text-foreground flex items-center gap-2 mb-1">
               <Icon name="Users" size={16} className="text-brand-blue" />
-              Заявки клиентов
+              Готовый бизнес в Краснодаре — актуальные предложения
             </h2>
             <p className="text-xs text-muted-foreground max-w-xl">
               Есть подходящий объект? Предложите его клиенту — заявка попадёт нашему менеджеру.

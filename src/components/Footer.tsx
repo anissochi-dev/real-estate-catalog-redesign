@@ -101,13 +101,13 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
 
             {/* Компания */}
             <div className="col-span-2 md:col-span-1">
-              <div className="font-display font-800 text-white text-lg mb-2">{company}</div>
+              <h3 className="font-display font-800 text-white text-lg mb-2">{company}</h3>
               <div className="text-sm leading-relaxed">{description}</div>
             </div>
 
             {/* Каталог */}
             <div>
-              <div className="font-semibold text-white mb-3">Каталог</div>
+              <h3 className="font-semibold text-white mb-3">Каталог</h3>
               <ul className="space-y-2 text-sm">
                 {catalogLinks
                   ? catalogLinks.map(link => (
@@ -129,7 +129,7 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
 
             {/* Категории — 2 столбца */}
             <div className="col-span-2">
-              <div className="font-semibold text-white mb-3">Категории</div>
+              <h3 className="font-semibold text-white mb-3">Категории</h3>
               <ul className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                 {(categoryLinks || DEFAULT_CATEGORIES).map(item => (
                   <li key={item.href}>
@@ -141,7 +141,7 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
 
             {/* Контакты */}
             <div>
-              <div className="font-semibold text-white mb-3">Контакты</div>
+              <h3 className="font-semibold text-white mb-3">Контакты</h3>
               <ul className="space-y-2 text-sm">
                 {phone && <li><a href={`tel:${phone}`} className="hover:text-white transition-colors break-all">{phone}</a></li>}
                 {email && <li><a href={`mailto:${email}`} className="hover:text-white transition-colors break-all">{email}</a></li>}

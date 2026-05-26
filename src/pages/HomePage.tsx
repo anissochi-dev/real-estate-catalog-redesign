@@ -130,13 +130,14 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
         <div className="container mx-auto px-4 relative z-10">
           <div className="max-w-3xl">
             <h1 className="font-display font-900 text-2xl sm:text-3xl md:text-4xl leading-tight mb-3 animate-fade-in-up stagger-1">
-              Коммерческая недвижимость и готовый бизнес Краснодара
+              Коммерческая недвижимость и готовый бизнес в Краснодаре
             </h1>
             <p className="text-white/75 text-sm sm:text-base mb-5 animate-fade-in-up stagger-2 max-w-xl">
               Более {totalCount} объектов в {mainCity}е и пригороде. Подбор с ИИ за 2 минуты.
             </p>
 
             {/* AI search bar */}
+            <h2 className="sr-only">Подбор помещения с ИИ за 2 минуты</h2>
             <form
               onSubmit={e => {
                 e.preventDefault();
@@ -264,7 +265,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-3">
             <div className="flex items-center gap-2">
               <Icon name="Building2" size={16} className="text-brand-blue" />
-              <h2 className="font-display font-700 text-base text-foreground">Новые объекты</h2>
+              <h2 className="font-display font-700 text-base text-foreground">Аренда и продажа коммерческой недвижимости в Краснодаре</h2>
             </div>
             <button
               onClick={() => onNavigate('catalog')}
@@ -300,7 +301,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Icon name="Newspaper" size={16} className="text-brand-blue" />
-                <h2 className="font-display font-700 text-base text-foreground">Новости коммерческой недвижимости</h2>
+              <h2 className="font-display font-700 text-base text-foreground">Новости коммерческой недвижимости Краснодара</h2>
               </div>
               <button
                 onClick={() => navigate('/news')}
