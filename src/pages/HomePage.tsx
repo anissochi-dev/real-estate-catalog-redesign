@@ -7,6 +7,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import ClientLeadsSection from '@/components/ClientLeadsSection';
 import AIMatchModal from '@/components/AIMatchModal';
 import { NEWS_URL } from '@/lib/adminApi';
+import SeoHead from '@/components/SeoHead';
 
 interface PublicStats {
   total: number;
@@ -167,8 +168,12 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
     url: settings.site_url,
   }), [settings.company_name, settings.seo_description, settings.company_since_year, settings.company_address, settings.main_city, settings.company_phone, settings.company_email, settings.logo_url, settings.site_url]);
 
+  // Первый объект с фото — используем как og:image главной страницы
+  const lcpImage = newObjects.find(p => p.image)?.image;
+
   return (
     <div>
+      {lcpImage && <SeoHead ogImage={lcpImage} />}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: orgLdJson }}
