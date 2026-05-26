@@ -3,7 +3,6 @@ const ADMIN_URL = 'https://functions.poehali.dev/aeccc0fe-9c55-4933-b292-432cec9
 const AI_URL = 'https://functions.poehali.dev/34bfc4a2-89b9-4c89-bcbc-d82314730aef';
 // Используем функцию upload/ (поддерживает водяной знак и возвращает original_url)
 const UPLOADS_URL = 'https://functions.poehali.dev/8983c0a8-a8c8-47ff-97ed-59cc1571aa15';
-const REMOVE_WM_URL = 'https://functions.poehali.dev/93965724-e0d4-411d-8100-b9468a1a0627';
 export const CRM_URL = 'https://functions.poehali.dev/221e23fa-e0a4-416e-b878-c2da2914daac';
 
 /** Билдер URL для CRM-функции.
@@ -42,7 +41,6 @@ export const CRM_CHECKS_URL = 'https://functions.poehali.dev/be6cb907-b50e-48fa-
 export const CRM_PAYMENTS_URL = 'https://functions.poehali.dev/74ca5694-a05f-4053-992d-5e04cc5bc7a4';
 export const NEWS_URL = 'https://functions.poehali.dev/984cad3a-0783-4408-a614-52ed36f8c77f';
 export const SOCIAL_POST_URL = 'https://functions.poehali.dev/2f8f20f3-5dba-4a58-a1f6-aa6e886f4e5e';
-export const CONTRACT_BOT_URL = 'https://functions.poehali.dev/3128fdf1-b90c-44a3-b580-3d5481d79a68';
 
 export type Role = 'admin' | 'editor' | 'manager' | 'client' | 'broker' | 'director' | 'office_manager';
 

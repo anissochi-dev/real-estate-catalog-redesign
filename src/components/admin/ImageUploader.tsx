@@ -2,7 +2,6 @@ import { useRef, useState } from 'react';
 import { uploadFileEx, getOriginalPhotoUrl } from '@/lib/adminApi';
 import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
-import WatermarkEraser from './WatermarkEraser';
 
 interface Props {
   value: string[];
@@ -72,7 +71,6 @@ export default function ImageUploader({
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
-  const [eraserIdx, setEraserIdx] = useState<number | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const shouldCompress = compress ?? (folder === 'photos');
@@ -119,14 +117,6 @@ export default function ImageUploader({
     }
   };
 
-  const handleEraserDone = (newUrl: string) => {
-    if (eraserIdx === null) return;
-    const next = [...value];
-    next[eraserIdx] = newUrl;
-    onChange(next);
-    setEraserIdx(null);
-  };
-
   const remove = (i: number) => onChange(value.filter((_, idx) => idx !== i));
 
   const move = (i: number, dir: -1 | 1) => {
@@ -169,7 +159,6 @@ export default function ImageUploader({
   };
 
   return (
-    <>
     <div className={className}>
       <div
         onDragOver={e => { e.preventDefault(); setDragOver(true); }}
@@ -282,13 +271,5 @@ export default function ImageUploader({
         </>
       )}
     </div>
-      {eraserIdx !== null && (
-        <WatermarkEraser
-          photoUrl={value[eraserIdx]}
-          onDone={handleEraserDone}
-          onClose={() => setEraserIdx(null)}
-        />
-      )}
-    </>
   );
 }
