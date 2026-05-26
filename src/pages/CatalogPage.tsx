@@ -150,6 +150,11 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
     if (page > totalPages) setPage(1);
   }, [totalPages, page]);
 
+  const goToPage = (n: number) => {
+    setPage(n);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   // Сброс страницы при изменении поиска/сортировки
   useEffect(() => { setPage(1); }, [search, sortBy, minArea, maxPrice]);
 
@@ -338,7 +343,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
 
             {totalPages > 1 && (
               <div className="flex items-center justify-center gap-1 mt-10">
-                <button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}
+                <button disabled={page === 1} onClick={() => goToPage(Math.max(1, page - 1))}
                   className="px-3 py-2 rounded-lg border border-border text-sm font-semibold disabled:opacity-40 hover:bg-muted">
                   <Icon name="ChevronLeft" size={14} />
                 </button>
@@ -347,13 +352,13 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
                   .map((n, idx, arr) => (
                     <span key={n}>
                       {idx > 0 && arr[idx - 1] !== n - 1 && <span className="px-2 text-muted-foreground">…</span>}
-                      <button onClick={() => setPage(n)}
+                      <button onClick={() => goToPage(n)}
                         className={`px-3.5 py-2 rounded-lg text-sm font-semibold ${n === page ? 'bg-brand-blue text-white' : 'border border-border hover:bg-muted'}`}>
                         {n}
                       </button>
                     </span>
                   ))}
-                <button disabled={page === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                <button disabled={page === totalPages} onClick={() => goToPage(Math.min(totalPages, page + 1))}
                   className="px-3 py-2 rounded-lg border border-border text-sm font-semibold disabled:opacity-40 hover:bg-muted">
                   <Icon name="ChevronRight" size={14} />
                 </button>
