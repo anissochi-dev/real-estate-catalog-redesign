@@ -1115,7 +1115,7 @@ def _leads(cur, conn, method, rid, action, event, user):
 def _users(cur, conn, method, rid, event, user):
     if method == 'GET':
         cur.execute(
-            f"SELECT id, email, name, phone, max_phone, role, avatar, is_active, created_at "
+            f"SELECT id, email, name, phone, max_phone, max_user_id, role, avatar, is_active, created_at "
             f"FROM {SCHEMA}.users ORDER BY created_at DESC"
         )
         return _ok({'users': [dict(r) for r in cur.fetchall()]})
@@ -1124,7 +1124,7 @@ def _users(cur, conn, method, rid, event, user):
 
     if method == 'PUT' and rid:
         fields = []
-        for f, length in [('name', 150), ('phone', 30), ('max_phone', 30), ('role', 20)]:
+        for f, length in [('name', 150), ('phone', 30), ('max_phone', 30), ('max_user_id', 64), ('role', 20)]:
             if f in body:
                 fields.append(f"{f} = {_str_or_null(body[f], length)}")
         if 'avatar' in body:
@@ -1230,7 +1230,10 @@ def _settings(cur, conn, method, event, user):
                           # Уведомления
                           ('notify_email_recipients', 1000),
                           ('notify_telegram_bot_token', 500), ('notify_telegram_chat_ids', 1000),
-                          ('smtp_host', 255), ('smtp_user', 255), ('smtp_password', 500), ('smtp_from', 255)]:
+                          ('smtp_host', 255), ('smtp_user', 255), ('smtp_password', 500), ('smtp_from', 255),
+                          # MAX Bot API
+                          ('notify_max_bot_token', 500),
+                          ('notify_max_roles', 500), ('notify_max_extra_phones', 1000)]:
             if f in body:
                 fields.append(f"{f} = {_str_or_null(body[f], length)}")
         if 'company_since_year' in body:
@@ -1401,48 +1404,49 @@ def _notifications(cur, conn, method, action, event, user):
             return _err(500, f'SMTP-ошибка: {str(ex)[:200]}')
 
     if channel == 'max':
-        # Собираем номера из настроек (notify_max_roles) и users.max_phone
+        import urllib.request as _ureq
+        bot_token = (s.get('notify_max_bot_token') or '').strip()
+        if not bot_token:
+            return _err(400, 'Укажите токен MAX-бота в разделе Интеграции → MAX')
+        # Собираем user_id из users по ролям
         enabled_roles_str = (s.get('notify_max_roles') or 'broker,admin,director,office_manager').strip()
         enabled_roles = [r.strip() for r in enabled_roles_str.split(',') if r.strip()]
+        roles_sql = ', '.join(f"'{r}'" for r in enabled_roles)
         cur.execute(
-            f"SELECT name, max_phone FROM {SCHEMA}.users "
-            f"WHERE is_active = TRUE AND max_phone IS NOT NULL AND max_phone != '' "
-            f"AND role = ANY(ARRAY[{', '.join(chr(39)+r+chr(39) for r in enabled_roles)}])"
+            f"SELECT name, max_user_id FROM {SCHEMA}.users "
+            f"WHERE is_active = TRUE AND max_user_id IS NOT NULL AND max_user_id != '' "
+            f"AND role IN ({roles_sql})"
         )
-        users_phones = [(row['name'], row['max_phone']) for row in cur.fetchall()]
+        recipients = [(row['name'], row['max_user_id']) for row in cur.fetchall()]
         extra_raw = (s.get('notify_max_extra_phones') or '').strip()
-        extra_phones = [(f'Доп. номер {i+1}', p.strip()) for i, p in enumerate(extra_raw.split(',')) if p.strip()]
-        all_phones = users_phones + extra_phones
-        if not all_phones:
-            return _err(400, 'Нет номеров для отправки. Заполните номера MAX у пользователей или укажите дополнительные номера.')
-        try:
-            import urllib.request
-            import urllib.parse
-            company = s.get('company_name') or 'Система'
-            text = f'🧪 Тест от {company}. Уведомления MAX настроены правильно.'
-            sent = 0
-            errors = []
-            for uname, phone in all_phones:
-                clean = ''.join(c for c in phone if c.isdigit() or c == '+')
-                try:
-                    params = urllib.parse.urlencode({
-                        'phone': clean,
-                        'text': text,
-                        'appId': 'biznest',
-                    })
-                    req_url = f'https://max.ru/api/send?{params}'
-                    with urllib.request.urlopen(req_url, timeout=8) as r:
-                        if r.status == 200:
-                            sent += 1
-                        else:
-                            errors.append(f'{uname} ({clean}): HTTP {r.status}')
-                except Exception as ex:
-                    errors.append(f'{uname} ({clean}): {str(ex)[:80]}')
-            if sent == 0 and errors:
-                return _ok({'success': False, 'message': f'Не отправлено. Ошибки: {"; ".join(errors[:3])}'})
-            return _ok({'success': True, 'message': f'Отправлено: {sent} из {len(all_phones)} номеров', 'errors': errors})
-        except Exception as ex:
-            return _err(500, f'MAX ошибка: {str(ex)[:200]}')
+        for i, uid in enumerate([u.strip() for u in extra_raw.split(',') if u.strip()]):
+            recipients.append((f'Доп. получатель {i+1}', uid))
+        if not recipients:
+            return _err(400, 'Нет получателей. Укажите MAX User ID у сотрудников или добавьте дополнительные ID.')
+        company = s.get('company_name') or 'Система'
+        text = f'🧪 Тест от {company}. Уведомления MAX работают!'
+        base_url = 'https://botapi.max.ru'
+        sent, errors = 0, []
+        for uname, user_id in recipients:
+            try:
+                import json as _json
+                payload = _json.dumps({'text': text}, ensure_ascii=False).encode('utf-8')
+                req = _ureq.Request(
+                    f'{base_url}/messages?user_id={user_id}',
+                    data=payload,
+                    headers={'Authorization': bot_token, 'Content-Type': 'application/json'},
+                    method='POST',
+                )
+                with _ureq.urlopen(req, timeout=8) as r:
+                    if r.status == 200:
+                        sent += 1
+                    else:
+                        errors.append(f'{uname}: HTTP {r.status}')
+            except Exception as ex:
+                errors.append(f'{uname}: {str(ex)[:80]}')
+        if sent == 0:
+            return _ok({'success': False, 'message': f'Не отправлено. {"; ".join(errors[:3])}'})
+        return _ok({'success': True, 'message': f'Отправлено {sent} из {len(recipients)} получателей', 'errors': errors})
 
     return _err(400, 'Неизвестный канал')
 

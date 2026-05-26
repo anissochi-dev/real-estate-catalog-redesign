@@ -62,7 +62,7 @@ export default function NotificationsTab({ s, setS, saved, save }: Props) {
   const [maxTest,   setMaxTest]     = useState<TestState>(idleTest);
   const [users,     setUsers]       = useState<User[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
-  const [maxPhones, setMaxPhones]   = useState<Record<number, string>>({});
+  const [maxUserIds, setMaxUserIds] = useState<Record<number, string>>({});
 
   const enabledRoles = (s.notify_max_roles || 'broker,admin,director,office_manager')
     .split(',').map(r => r.trim()).filter(Boolean);
@@ -83,14 +83,14 @@ export default function NotificationsTab({ s, setS, saved, save }: Props) {
         u.role !== 'client' && u.is_active !== false
       );
       setUsers(staff);
-      const phones: Record<number, string> = {};
-      staff.forEach(u => { phones[u.id] = u.max_phone || ''; });
-      setMaxPhones(phones);
+      const ids: Record<number, string> = {};
+      staff.forEach(u => { ids[u.id] = u.max_user_id || ''; });
+      setMaxUserIds(ids);
     }).finally(() => setUsersLoading(false));
   }, [s.notify_max_enabled]);
 
-  const saveMaxPhone = async (userId: number) => {
-    await adminApi.updateUser(userId, { max_phone: maxPhones[userId] || null });
+  const saveMaxUserId = async (userId: number) => {
+    await adminApi.updateUser(userId, { max_user_id: maxUserIds[userId] || null });
   };
 
   const testEmail = async () => {
@@ -311,7 +311,7 @@ export default function NotificationsTab({ s, setS, saved, save }: Props) {
             })}
           </div>
           <div className="text-xs text-muted-foreground mt-1.5">
-            Выбранным ролям будут отправляться уведомления на их номера MAX.
+            Выбранным ролям будут отправляться уведомления — если у сотрудника указан User ID в MAX.
           </div>
         </div>
 
@@ -325,10 +325,15 @@ export default function NotificationsTab({ s, setS, saved, save }: Props) {
           </div>
         </div>
 
-        {/* Таблица номеров сотрудников */}
+        {/* Таблица User ID сотрудников */}
         {s.notify_max_enabled && (
           <div className="space-y-2">
-            <div className="text-sm font-semibold">Номера MAX у сотрудников</div>
+            <div className="flex items-center gap-2">
+              <div className="text-sm font-semibold">MAX User ID сотрудников</div>
+              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                Сотрудник пишет боту /start — получает свой ID
+              </span>
+            </div>
             {usersLoading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
                 <Icon name="Loader2" size={14} className="animate-spin" /> Загрузка...
@@ -344,7 +349,7 @@ export default function NotificationsTab({ s, setS, saved, save }: Props) {
                     <tr className="bg-muted/40 text-xs text-muted-foreground">
                       <th className="text-left px-4 py-2.5 font-semibold">Сотрудник</th>
                       <th className="text-left px-4 py-2.5 font-semibold">Роль</th>
-                      <th className="text-left px-4 py-2.5 font-semibold">Номер MAX</th>
+                      <th className="text-left px-4 py-2.5 font-semibold">User ID в MAX</th>
                       <th className="px-4 py-2.5"></th>
                     </tr>
                   </thead>
@@ -362,17 +367,17 @@ export default function NotificationsTab({ s, setS, saved, save }: Props) {
                         </td>
                         <td className="px-4 py-2.5">
                           <input
-                            type="tel"
+                            type="text"
                             className="w-full px-2 py-1.5 border rounded-lg text-sm font-mono focus:border-violet-400 outline-none"
-                            placeholder="+7 900 000 00 00"
-                            value={maxPhones[u.id] ?? ''}
-                            onChange={e => setMaxPhones(prev => ({ ...prev, [u.id]: e.target.value }))}
+                            placeholder="123456789"
+                            value={maxUserIds[u.id] ?? ''}
+                            onChange={e => setMaxUserIds(prev => ({ ...prev, [u.id]: e.target.value }))}
                           />
                         </td>
                         <td className="px-4 py-2.5">
                           <button
                             type="button"
-                            onClick={() => saveMaxPhone(u.id)}
+                            onClick={() => saveMaxUserId(u.id)}
                             className="px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 transition-colors whitespace-nowrap"
                           >
                             Сохранить
@@ -385,19 +390,19 @@ export default function NotificationsTab({ s, setS, saved, save }: Props) {
               </div>
             )}
 
-            {/* Дублирование на дополнительные номера */}
+            {/* Дублирование на дополнительные User ID */}
             <div className="pt-2">
               <label className="text-sm font-semibold block mb-1">
-                Дополнительные номера (дублирование)
+                Дополнительные User ID (дублирование)
               </label>
               <input
                 className="w-full px-3 py-2 border rounded-lg font-mono text-sm"
-                placeholder="+7 900 111 22 33, +7 900 444 55 66"
+                placeholder="123456789, 987654321"
                 value={s.notify_max_extra_phones || ''}
                 onChange={e => setS({ ...s, notify_max_extra_phones: e.target.value })}
               />
               <div className="text-xs text-muted-foreground mt-1">
-                Номера через запятую. Все уведомления будут дублироваться на эти номера — удобно для директора или AdminOffice.
+                User ID через запятую. Все уведомления будут дублироваться на эти аккаунты — удобно для директора.
               </div>
             </div>
           </div>

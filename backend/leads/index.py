@@ -132,14 +132,18 @@ def handler(event: dict, context) -> dict:
     finally:
         conn.close()
 
-    # Асинхронно отправляем push всем подписанным администраторам
+    # Асинхронные уведомления при заявке с сайта
     if initial_status == 'pending':
-        def _send_push_notifications():
+        def _send_notifications():
             try:
                 _notify_admins(name, phone, lead_id, dsn)
             except Exception:
                 pass
-        threading.Thread(target=_send_push_notifications, daemon=True).start()
+            try:
+                _notify_max(name, phone, message, lead_id, dsn)
+            except Exception:
+                pass
+        threading.Thread(target=_send_notifications, daemon=True).start()
 
     return {
         'statusCode': 200,
@@ -149,6 +153,77 @@ def handler(event: dict, context) -> dict:
         },
         'body': json.dumps({'success': True, 'id': lead_id}),
     }
+
+
+def _notify_max(name: str, phone: str, message, lead_id: int, dsn: str):
+    """
+    Отправляет уведомление о новой заявке через MAX Bot API
+    всем сотрудникам с max_user_id в разрешённых ролях.
+    """
+    import urllib.request
+
+    SCHEMA = 't_p71821556_real_estate_catalog_'
+    conn2 = psycopg2.connect(dsn)
+    try:
+        with conn2.cursor() as cur2:
+            cur2.execute(
+                f"SELECT notify_max_enabled, notify_max_on_lead, notify_max_bot_token, "
+                f"notify_max_roles, notify_max_extra_phones, company_name "
+                f"FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
+            )
+            row = cur2.fetchone()
+            if not row:
+                return
+            (enabled, on_lead, bot_token, roles_str, extra_phones_raw, company_name) = row
+            if not enabled or not on_lead:
+                return
+            bot_token = (bot_token or '').strip()
+            if not bot_token:
+                return
+
+            enabled_roles = [r.strip() for r in (roles_str or 'broker,admin,director,office_manager').split(',') if r.strip()]
+            roles_sql = ', '.join(f"'{r}'" for r in enabled_roles)
+            cur2.execute(
+                f"SELECT name, max_user_id FROM {SCHEMA}.users "
+                f"WHERE is_active = TRUE AND max_user_id IS NOT NULL AND max_user_id != '' "
+                f"AND role IN ({roles_sql})"
+            )
+            recipients = [(r[0], r[1]) for r in cur2.fetchall()]
+
+            # Дополнительные user_id через запятую
+            for extra in (extra_phones_raw or '').split(','):
+                uid = extra.strip()
+                if uid:
+                    recipients.append(('Доп. получатель', uid))
+    finally:
+        conn2.close()
+
+    if not recipients:
+        return
+
+    company = company_name or 'Система'
+    text = f'🔔 Новая заявка — {company}\n\n👤 {name}\n📞 {phone}'
+    if message:
+        text += f'\n💬 {message[:200]}'
+    text += f'\n\n🆔 Заявка #{lead_id}'
+
+    base_url = 'https://botapi.max.ru'
+    for uname, user_id in recipients:
+        try:
+            payload = json.dumps({'text': text}, ensure_ascii=False).encode('utf-8')
+            req = urllib.request.Request(
+                f'{base_url}/messages?user_id={user_id}',
+                data=payload,
+                headers={
+                    'Authorization': bot_token,
+                    'Content-Type': 'application/json',
+                },
+                method='POST',
+            )
+            with urllib.request.urlopen(req, timeout=8):
+                pass
+        except Exception:
+            pass
 
 
 def _notify_admins(name: str, phone: str, lead_id: int, dsn: str):

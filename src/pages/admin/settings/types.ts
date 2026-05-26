@@ -54,6 +54,8 @@ export interface S {
   notify_telegram_on_lead: boolean;
   notify_telegram_on_deal: boolean;
   notify_telegram_on_complaint: boolean;
+  // MAX Bot API
+  notify_max_bot_token: string;
   // MAX-уведомления
   notify_max_enabled: boolean;
   notify_max_on_lead: boolean;

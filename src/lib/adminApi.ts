@@ -52,6 +52,7 @@ export interface User {
   role: Role;
   phone?: string | null;
   max_phone?: string | null;
+  max_user_id?: string | null;
   avatar?: string | null;
   is_active?: boolean;
 }
