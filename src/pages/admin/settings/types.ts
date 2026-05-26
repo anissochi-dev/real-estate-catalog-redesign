@@ -54,6 +54,13 @@ export interface S {
   notify_telegram_on_lead: boolean;
   notify_telegram_on_deal: boolean;
   notify_telegram_on_complaint: boolean;
+  // MAX-уведомления
+  notify_max_enabled: boolean;
+  notify_max_on_lead: boolean;
+  notify_max_on_deal: boolean;
+  notify_max_on_complaint: boolean;
+  notify_max_roles: string;
+  notify_max_extra_phones: string;
   smtp_host: string;
   smtp_port: number;
   smtp_user: string;

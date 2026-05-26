@@ -1115,7 +1115,7 @@ def _leads(cur, conn, method, rid, action, event, user):
 def _users(cur, conn, method, rid, event, user):
     if method == 'GET':
         cur.execute(
-            f"SELECT id, email, name, phone, role, avatar, is_active, created_at "
+            f"SELECT id, email, name, phone, max_phone, role, avatar, is_active, created_at "
             f"FROM {SCHEMA}.users ORDER BY created_at DESC"
         )
         return _ok({'users': [dict(r) for r in cur.fetchall()]})
@@ -1124,7 +1124,7 @@ def _users(cur, conn, method, rid, event, user):
 
     if method == 'PUT' and rid:
         fields = []
-        for f, length in [('name', 150), ('phone', 30), ('role', 20)]:
+        for f, length in [('name', 150), ('phone', 30), ('max_phone', 30), ('role', 20)]:
             if f in body:
                 fields.append(f"{f} = {_str_or_null(body[f], length)}")
         if 'avatar' in body:
@@ -1251,9 +1251,13 @@ def _settings(cur, conn, method, event, user):
                 fields.append(f"{bool_field} = {_bool(body[bool_field])}")
         for bf in ('notify_email_enabled', 'notify_email_on_lead', 'notify_email_on_deal', 'notify_email_on_complaint',
                    'notify_telegram_enabled', 'notify_telegram_on_lead', 'notify_telegram_on_deal',
-                   'notify_telegram_on_complaint'):
+                   'notify_telegram_on_complaint',
+                   'notify_max_enabled', 'notify_max_on_lead', 'notify_max_on_deal', 'notify_max_on_complaint'):
             if bf in body:
                 fields.append(f"{bf} = {_bool(body[bf])}")
+        for f, length in [('notify_max_roles', 500), ('notify_max_extra_phones', 1000)]:
+            if f in body:
+                fields.append(f"{f} = {_str_or_null(body[f], length)}")
         if 'role_permissions' in body:
             rp = body['role_permissions']
             rp_json = _safe(json.dumps(rp, ensure_ascii=False), 50000)
@@ -1395,6 +1399,50 @@ def _notifications(cur, conn, method, action, event, user):
             return _ok({'success': True, 'message': f'Письмо отправлено на {len(to_list)} адрес(а)'})
         except Exception as ex:
             return _err(500, f'SMTP-ошибка: {str(ex)[:200]}')
+
+    if channel == 'max':
+        # Собираем номера из настроек (notify_max_roles) и users.max_phone
+        enabled_roles_str = (s.get('notify_max_roles') or 'broker,admin,director,office_manager').strip()
+        enabled_roles = [r.strip() for r in enabled_roles_str.split(',') if r.strip()]
+        cur.execute(
+            f"SELECT name, max_phone FROM {SCHEMA}.users "
+            f"WHERE is_active = TRUE AND max_phone IS NOT NULL AND max_phone != '' "
+            f"AND role = ANY(ARRAY[{', '.join(chr(39)+r+chr(39) for r in enabled_roles)}])"
+        )
+        users_phones = [(row['name'], row['max_phone']) for row in cur.fetchall()]
+        extra_raw = (s.get('notify_max_extra_phones') or '').strip()
+        extra_phones = [(f'Доп. номер {i+1}', p.strip()) for i, p in enumerate(extra_raw.split(',')) if p.strip()]
+        all_phones = users_phones + extra_phones
+        if not all_phones:
+            return _err(400, 'Нет номеров для отправки. Заполните номера MAX у пользователей или укажите дополнительные номера.')
+        try:
+            import urllib.request
+            import urllib.parse
+            company = s.get('company_name') or 'Система'
+            text = f'🧪 Тест от {company}. Уведомления MAX настроены правильно.'
+            sent = 0
+            errors = []
+            for uname, phone in all_phones:
+                clean = ''.join(c for c in phone if c.isdigit() or c == '+')
+                try:
+                    params = urllib.parse.urlencode({
+                        'phone': clean,
+                        'text': text,
+                        'appId': 'biznest',
+                    })
+                    req_url = f'https://max.ru/api/send?{params}'
+                    with urllib.request.urlopen(req_url, timeout=8) as r:
+                        if r.status == 200:
+                            sent += 1
+                        else:
+                            errors.append(f'{uname} ({clean}): HTTP {r.status}')
+                except Exception as ex:
+                    errors.append(f'{uname} ({clean}): {str(ex)[:80]}')
+            if sent == 0 and errors:
+                return _ok({'success': False, 'message': f'Не отправлено. Ошибки: {"; ".join(errors[:3])}'})
+            return _ok({'success': True, 'message': f'Отправлено: {sent} из {len(all_phones)} номеров', 'errors': errors})
+        except Exception as ex:
+            return _err(500, f'MAX ошибка: {str(ex)[:200]}')
 
     return _err(400, 'Неизвестный канал')
 

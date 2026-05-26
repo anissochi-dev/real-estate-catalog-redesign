@@ -51,7 +51,9 @@ export interface User {
   name: string;
   role: Role;
   phone?: string | null;
+  max_phone?: string | null;
   avatar?: string | null;
+  is_active?: boolean;
 }
 
 const TOKEN_KEY = 'biznest_token';
@@ -152,6 +154,11 @@ export const authApi = {
 };
 
 export const adminApi = {
+  // users
+  listUsers: () => req(`${ADMIN_URL}?resource=users`),
+  updateUser: (id: number, data: Record<string, unknown>) =>
+    req(`${ADMIN_URL}?resource=users&id=${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
   // listings
   listListings: () => req(`${ADMIN_URL}?resource=listings`),
   getListing: (id: number) => req(`${ADMIN_URL}?resource=listings&id=${id}`),
