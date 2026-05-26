@@ -253,45 +253,75 @@ export default function LeadsListPage() {
               {leads.map(lead => (
                 <article
                   key={lead.id}
-                  className="bg-white border border-border rounded-2xl p-4 sm:p-5 flex flex-col gap-2 hover:border-brand-blue/30 hover:shadow-md transition"
+                  className="bg-white border border-border rounded-2xl overflow-hidden flex flex-row md:flex-col hover:shadow-lg hover:border-brand-blue/20 md:hover:-translate-y-1 transition-all duration-200 group"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="font-semibold text-sm text-foreground truncate">
-                        {lead.name || `Клиент #${lead.id}`}
+                  {/* Десктоп: декоративный блок сверху (как у новостей) */}
+                  <div className="hidden md:flex relative h-36 bg-gradient-to-br from-brand-blue/10 to-brand-orange/10 shrink-0 items-center justify-center overflow-hidden">
+                    <div className="text-center px-4">
+                      <div className="text-4xl font-display font-900 text-brand-blue/20 leading-none mb-1">
+                        {fmtBudget(lead.budget)}
                       </div>
-                      {lead.company && (
-                        <div className="text-xs text-muted-foreground truncate">{lead.company}</div>
-                      )}
+                      <div className="text-xs text-muted-foreground">бюджет заявки</div>
                     </div>
-                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                    {lead.request_category && (
+                      <div className="absolute top-3 left-3">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full bg-brand-blue text-white">
+                          {CATEGORY_LABELS[lead.request_category] || lead.request_category}
+                        </span>
+                      </div>
+                    )}
+                    <div className="absolute bottom-3 right-3 text-[10px] text-muted-foreground">
                       {fmtDate(lead.created_at)}
-                    </span>
+                    </div>
                   </div>
 
-                  {lead.request_category && (
-                    <div className="inline-flex items-center gap-1 self-start text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue">
-                      {CATEGORY_LABELS[lead.request_category] || lead.request_category}
-                    </div>
-                  )}
+                  {/* Мобильный: цветная полоска слева */}
+                  <div className="md:hidden w-1.5 shrink-0 bg-gradient-to-b from-brand-blue to-brand-orange rounded-l-2xl" />
 
-                  {lead.message && (
-                    <p className="text-sm text-foreground/85 leading-relaxed whitespace-pre-wrap break-words">
-                      {lead.message}
-                    </p>
-                  )}
-
-                  <div className="flex items-center justify-between gap-2 mt-auto pt-2 border-t border-border/60">
-                    <div className="text-xs">
-                      <span className="text-muted-foreground">Бюджет:</span>{' '}
-                      <span className="font-semibold text-foreground">{fmtBudget(lead.budget)}</span>
+                  {/* Контент */}
+                  <div className="flex flex-col gap-1.5 p-4 sm:p-5 flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-sm text-foreground truncate group-hover:text-brand-blue transition-colors">
+                          {lead.name || `Клиент #${lead.id}`}
+                        </div>
+                        {lead.company && (
+                          <div className="text-xs text-muted-foreground truncate">{lead.company}</div>
+                        )}
+                      </div>
+                      {/* Дата — только на мобильном (на десктопе она в шапке карточки) */}
+                      <span className="md:hidden text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
+                        {fmtDate(lead.created_at)}
+                      </span>
                     </div>
-                    <button
-                      onClick={() => openContact(lead)}
-                      className="btn-orange text-white text-xs font-bold font-display px-3 py-1.5 rounded-lg inline-flex items-center gap-1"
-                    >
-                      Связаться <Icon name="ArrowRight" size={11} />
-                    </button>
+
+                    {/* Категория — только на мобильном */}
+                    {lead.request_category && (
+                      <div className="md:hidden inline-flex items-center gap-1 self-start text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue">
+                        {CATEGORY_LABELS[lead.request_category] || lead.request_category}
+                      </div>
+                    )}
+
+                    {lead.message && (
+                      <p className="text-sm text-foreground/85 leading-relaxed line-clamp-3">
+                        {lead.message}
+                      </p>
+                    )}
+
+                    <div className="flex items-center justify-between gap-2 mt-auto pt-2 border-t border-border/60">
+                      {/* Бюджет — только на мобильном */}
+                      <div className="md:hidden text-xs">
+                        <span className="text-muted-foreground">Бюджет:</span>{' '}
+                        <span className="font-semibold text-foreground">{fmtBudget(lead.budget)}</span>
+                      </div>
+                      <div className="hidden md:block" />
+                      <button
+                        onClick={() => openContact(lead)}
+                        className="btn-orange text-white text-xs font-bold font-display px-3 py-1.5 rounded-lg inline-flex items-center gap-1"
+                      >
+                        Связаться <Icon name="ArrowRight" size={11} />
+                      </button>
+                    </div>
                   </div>
                 </article>
               ))}
