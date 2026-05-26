@@ -14,37 +14,27 @@ export default function AnalyticsLoader() {
   const gsVerify = settings.google_search_console_verification;
 
   // Яндекс Вебмастер — мета-тег подтверждения
+  // index.html уже содержит статический <meta name="yandex-verification" content="">
+  // Обновляем его content напрямую по name, не создаём дубль
   useEffect(() => {
-    const id = 'ym-webmaster-meta';
-    let tag = document.getElementById(id) as HTMLMetaElement | null;
-    if (ymVerify) {
-      if (!tag) {
-        tag = document.createElement('meta');
-        tag.id = id;
-        tag.name = 'yandex-verification';
-        document.head.appendChild(tag);
-      }
-      tag.content = ymVerify;
-    } else if (tag) {
-      tag.remove();
+    let tag = document.querySelector<HTMLMetaElement>('meta[name="yandex-verification"]');
+    if (!tag) {
+      tag = document.createElement('meta');
+      tag.name = 'yandex-verification';
+      document.head.appendChild(tag);
     }
+    tag.content = ymVerify || '';
   }, [ymVerify]);
 
-  // Google Search Console — мета-тег подтверждения
+  // Google Search Console — аналогично
   useEffect(() => {
-    const id = 'gsc-webmaster-meta';
-    let tag = document.getElementById(id) as HTMLMetaElement | null;
-    if (gsVerify) {
-      if (!tag) {
-        tag = document.createElement('meta');
-        tag.id = id;
-        tag.name = 'google-site-verification';
-        document.head.appendChild(tag);
-      }
-      tag.content = gsVerify;
-    } else if (tag) {
-      tag.remove();
+    let tag = document.querySelector<HTMLMetaElement>('meta[name="google-site-verification"]');
+    if (!tag) {
+      tag = document.createElement('meta');
+      tag.name = 'google-site-verification';
+      document.head.appendChild(tag);
     }
+    tag.content = gsVerify || '';
   }, [gsVerify]);
 
   // Яндекс.Метрика

@@ -51,9 +51,8 @@ function StatusBadge({ value, check }: { value: string; check: CheckState }) {
   );
 }
 
-// Сайт — SPA: статический index.html всегда содержит пустой content="".
-// Тег заполняется динамически через AnalyticsLoader в браузере.
-// Поэтому единственный достоверный способ проверки — DOM текущей страницы.
+// AnalyticsLoader обновляет content у статического тега из index.html по name.
+// Проверяем тот же тег напрямую по name-атрибуту.
 function checkMetaTagInDom(metaName: string, expectedContent: string): CheckState {
   const tag = document.querySelector<HTMLMetaElement>(`meta[name="${metaName}"]`);
   const expected = expectedContent.trim();
@@ -61,7 +60,7 @@ function checkMetaTagInDom(metaName: string, expectedContent: string): CheckStat
   if (!tag) {
     return {
       status: 'err',
-      message: 'Мета-тег не найден в <head>. Убедитесь что сохранили настройки и перезагрузите страницу.',
+      message: 'Тег не найден в <head>. Сохраните настройки и проверьте снова.',
     };
   }
 
@@ -74,13 +73,13 @@ function checkMetaTagInDom(metaName: string, expectedContent: string): CheckStat
   if (!found) {
     return {
       status: 'mismatch',
-      message: 'Тег есть, но content пустой. Нажмите «Сохранить», дождитесь надписи «Сохранено» и проверьте снова.',
+      message: 'Тег найден, но content пустой. Нажмите «Сохранить», дождитесь «Сохранено» и проверьте снова.',
     };
   }
 
   return {
     status: 'mismatch',
-    message: `Тег есть, но значение не совпадает: «${found.slice(0, 80)}». Убедитесь, что скопировали правильный код.`,
+    message: `Тег найден, но значение не совпадает: «${found.slice(0, 80)}». Проверьте скопированный код.`,
   };
 }
 
@@ -92,7 +91,6 @@ export default function IntegrationsWebmasterSection({ s, setS, saved, save }: P
     const val = (s.yandex_webmaster_verification || '').trim();
     if (!val) { setYmCheck({ status: 'err', message: 'Введите код подтверждения' }); return; }
     setYmCheck({ status: 'checking', message: '' });
-    // Небольшая задержка чтобы AnalyticsLoader успел обновить тег если только что сохранили
     setTimeout(() => setYmCheck(checkMetaTagInDom('yandex-verification', val)), 400);
   };
 
