@@ -14,6 +14,7 @@ interface CatalogPageProps {
   compareList: number[];
   onToggleFavorite: (id: number) => void;
   onToggleCompare: (id: number) => void;
+  allLoaded?: boolean;
 }
 
 type SortOption = 'price_asc' | 'price_desc' | 'area_asc' | 'newest';
@@ -67,7 +68,7 @@ function buildCatalogH1(deal: string, type: string): string {
   return DEAL_H1[deal] || 'Каталог коммерческой недвижимости в Краснодаре';
 }
 
-export default function CatalogPage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare }: CatalogPageProps) {
+export default function CatalogPage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare, allLoaded = true }: CatalogPageProps) {
   const h1Base = useSeoH1('Каталог коммерческой недвижимости в Краснодаре');
   const { settings } = useSettings();
   const DEFAULT_PAGE_SIZE = settings.catalog_page_size ?? 25;
@@ -312,10 +313,16 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
         </div>
         <h1 className="font-display font-900 text-2xl md:text-3xl text-foreground mb-4">{h1}</h1>
         <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
-          <div className="text-sm text-muted-foreground">
+          <div className="text-sm text-muted-foreground flex items-center gap-2">
             Найдено <span className="font-semibold text-foreground">{filtered.length}</span> объектов
             {filtered.length > pageSize && (
               <span> · показаны {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filtered.length)}</span>
+            )}
+            {!allLoaded && (
+              <span className="inline-flex items-center gap-1 text-brand-blue/70 text-xs">
+                <span className="w-3 h-3 rounded-full border-2 border-brand-blue/30 border-t-brand-blue animate-spin" />
+                загружаем ещё…
+              </span>
             )}
           </div>
         </div>

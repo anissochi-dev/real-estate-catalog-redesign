@@ -102,11 +102,15 @@ async function fetchWithRetry(url: string, init?: RequestInit, retries = 3): Pro
   throw lastErr instanceof Error ? lastErr : new Error('Network error');
 }
 
-export async function fetchListings(): Promise<Property[]> {
-  const res = await fetchWithRetry(LISTINGS_URL);
+export async function fetchListings(limit?: number, offset?: number): Promise<{ listings: Property[]; total: number }> {
+  const params = new URLSearchParams();
+  if (limit) params.set('limit', String(limit));
+  if (offset) params.set('offset', String(offset));
+  const url = params.size ? `${LISTINGS_URL}?${params}` : LISTINGS_URL;
+  const res = await fetchWithRetry(url);
   if (!res.ok) throw new Error('Не удалось загрузить объекты');
   const data = await res.json();
-  return (data.listings || []).map(mapListing);
+  return { listings: (data.listings || []).map(mapListing), total: data.total ?? 0 };
 }
 
 export async function fetchSimilarListings(id: number): Promise<Property[]> {

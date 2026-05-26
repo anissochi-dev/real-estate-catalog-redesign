@@ -137,6 +137,7 @@ export default function App() {
   const [favorites, setFavorites] = useState<number[]>([]);
   const [compareList, setCompareList] = useState<number[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
+  const [allLoaded, setAllLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -181,16 +182,29 @@ export default function App() {
 
   useEffect(() => {
     setLoading(true);
-    fetchListings()
-      .then(data => {
-        setProperties(data);
+    // Шаг 1: быстро грузим первые 30 объектов — сайт показывается сразу
+    fetchListings(30, 0)
+      .then(({ listings, total }) => {
+        setProperties(listings);
         setError(null);
+        setLoading(false);
+        // Шаг 2: если объектов больше 30 — тихо догружаем остальные в фоне
+        if (total > 30) {
+          fetchListings()
+            .then(({ listings: all }) => {
+              setProperties(all);
+              setAllLoaded(true);
+            })
+            .catch(() => { setAllLoaded(true); });
+        } else {
+          setAllLoaded(true);
+        }
       })
       .catch(err => {
         console.error(err);
         setError('Не удалось загрузить объекты. Попробуйте обновить страницу.');
-      })
-      .finally(() => setLoading(false));
+        setLoading(false);
+      });
   }, []);
 
   const toggleFavorite = (id: number) => {
@@ -348,6 +362,7 @@ export default function App() {
               compareList={compareList}
               onToggleFavorite={toggleFavorite}
               onToggleCompare={toggleCompare}
+              allLoaded={allLoaded}
             />
           } />
           <Route path="/map" element={
@@ -357,6 +372,7 @@ export default function App() {
               compareList={compareList}
               onToggleFavorite={toggleFavorite}
               onToggleCompare={toggleCompare}
+              allLoaded={allLoaded}
             />
           } />
           <Route path="/favorites" element={

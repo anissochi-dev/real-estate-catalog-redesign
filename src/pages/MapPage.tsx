@@ -14,6 +14,7 @@ interface MapPageProps {
   compareList: number[];
   onToggleFavorite: (id: number) => void;
   onToggleCompare: (id: number) => void;
+  allLoaded?: boolean;
 }
 
 const TYPE_LABEL: Record<string, string> = {
@@ -25,7 +26,7 @@ const TYPE_LABEL: Record<string, string> = {
 const KRASNODAR_CENTER: [number, number] = [45.0355, 38.9753];
 
 export default function MapPage({
-  properties, favorites, compareList, onToggleFavorite, onToggleCompare,
+  properties, favorites, compareList, onToggleFavorite, onToggleCompare, allLoaded = true,
 }: MapPageProps) {
   const { settings } = useSettings();
   const navigate = useNavigate();
@@ -73,10 +74,11 @@ export default function MapPage({
       <div className="bg-white border-b border-border px-3 sm:px-4 py-2 sm:py-3 flex gap-1.5 sm:gap-2 overflow-x-auto flex-shrink-0">
         <button
           onClick={() => setActiveType('all')}
-          className={`flex-shrink-0 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-all duration-200
+          className={`flex-shrink-0 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-all duration-200 inline-flex items-center gap-1.5
             ${activeType === 'all' ? 'bg-brand-blue text-white' : 'bg-muted text-foreground hover:bg-brand-blue/10'}`}
         >
           Все ({properties.length})
+          {!allLoaded && <span className="w-2.5 h-2.5 rounded-full border-2 border-current border-t-transparent animate-spin opacity-70" />}
         </button>
         {types.map(type => {
           const count = properties.filter(p => String(p.type) === type).length;

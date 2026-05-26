@@ -425,6 +425,8 @@ def handler(event: dict, context) -> dict:
             search = params.get('search')
             min_area = params.get('min_area')
             max_price = params.get('max_price')
+            limit_param = params.get('limit')
+            offset_param = params.get('offset')
 
             if category and category != 'all':
                 cat_safe = category.replace("'", "''")
@@ -448,17 +450,35 @@ def handler(event: dict, context) -> dict:
                 except ValueError:
                     pass
 
-            sql = (
-                "SELECT * FROM t_p71821556_real_estate_catalog_.listings WHERE "
-                + " AND ".join(where)
-                + " ORDER BY last_edited_at DESC NULLS LAST, is_hot DESC, is_new DESC, "
-                + "updated_at DESC NULLS LAST, created_at DESC, id DESC"
+            where_clause = " AND ".join(where)
+            order_clause = (
+                " ORDER BY last_edited_at DESC NULLS LAST, is_hot DESC, is_new DESC, "
+                "updated_at DESC NULLS LAST, created_at DESC, id DESC"
             )
+
+            # Считаем total (RealDictCursor — обращаемся по имени колонки)
+            cur.execute(f"SELECT COUNT(*) AS cnt FROM t_p71821556_real_estate_catalog_.listings WHERE {where_clause}")
+            row_cnt = cur.fetchone()
+            total = int(row_cnt['cnt']) if row_cnt else 0
+
+            sql = f"SELECT * FROM t_p71821556_real_estate_catalog_.listings WHERE {where_clause}{order_clause}"
+
+            # Опциональная пагинация через limit/offset
+            try:
+                limit_val = int(limit_param) if limit_param else None
+                offset_val = int(offset_param) if offset_param else 0
+            except (ValueError, TypeError):
+                limit_val = None
+                offset_val = 0
+
+            if limit_val and limit_val > 0:
+                sql += f" LIMIT {limit_val} OFFSET {offset_val}"
+
             cur.execute(sql)
             rows = cur.fetchall()
             items = [_serialize(dict(r)) for r in rows]
 
-            return _ok({'listings': items, 'total': len(items)})
+            return _ok({'listings': items, 'total': total})
     finally:
         conn.close()
 
