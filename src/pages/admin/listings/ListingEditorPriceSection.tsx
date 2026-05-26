@@ -1,4 +1,12 @@
+import { useState, useEffect } from 'react';
 import { Listing, PARKING, ENTRANCE, perM2 } from './types';
+
+function formatPriceDisplay(val: number | string | undefined): string {
+  if (!val && val !== 0) return '';
+  const num = typeof val === 'string' ? parseInt(val.replace(/\D/g, ''), 10) : val;
+  if (isNaN(num)) return '';
+  return num.toLocaleString('ru');
+}
 
 interface Props {
   editing: Partial<Listing>;
@@ -9,14 +17,33 @@ interface Props {
 
 export default function ListingEditorPriceSection({ editing, setEditing, errors = {}, setErrors }: Props) {
   const err = (field: string) => errors[field] ? 'border-red-400 bg-red-50' : '';
+  const [priceDisplay, setPriceDisplay] = useState(() => formatPriceDisplay(editing.price));
+
+  useEffect(() => {
+    setPriceDisplay(formatPriceDisplay(editing.price));
+  }, [editing.price]);
+
+  const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/\D/g, '');
+    const num = raw ? parseInt(raw, 10) : 0;
+    setPriceDisplay(raw ? num.toLocaleString('ru') : '');
+    setEditing({ ...editing, price: num || 0 });
+    setErrors?.(v => ({ ...v, price: false }));
+  };
 
   return (
     <>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div>
           <label className="text-xs text-muted-foreground">Цена, ₽ *</label>
-          <input type="number" className={`w-full px-3 py-2 border rounded-lg ${err('price')}`}
-            value={editing.price || ''} onChange={e => { setEditing({ ...editing, price: +e.target.value }); setErrors?.(v => ({ ...v, price: false })); }} />
+          <input
+            type="text"
+            inputMode="numeric"
+            className={`w-full px-3 py-2 border rounded-lg font-mono tracking-wide ${err('price')}`}
+            placeholder="1 500 000"
+            value={priceDisplay}
+            onChange={handlePriceChange}
+          />
         </div>
         <div>
           <label className="text-xs text-muted-foreground">Площадь, м² *</label>
