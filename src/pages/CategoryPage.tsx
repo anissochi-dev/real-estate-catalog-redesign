@@ -387,6 +387,7 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
                   isCompare={compareList.includes(property.id)}
                   onToggleFavorite={onToggleFavorite}
                   onToggleCompare={onToggleCompare}
+                  index={i}
                   style={{ animationDelay: `${i * 0.03}s`, opacity: 0 }}
                 />
               ))}

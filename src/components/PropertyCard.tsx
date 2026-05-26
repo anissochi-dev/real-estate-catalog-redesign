@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Property } from '@/App';
 import Icon from '@/components/ui/icon';
 import { listingSlug } from '@/lib/slug';
@@ -15,6 +15,7 @@ interface PropertyCardProps {
   onToggleFavorite: (id: number) => void;
   onToggleCompare: (id: number) => void;
   style?: React.CSSProperties;
+  index?: number;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -108,7 +109,7 @@ function parseImages(property: PropertyCardProps['property']): string[] {
 }
 
 export default function PropertyCard({
-  property, isFavorite, isCompare, onToggleFavorite, onToggleCompare, style,
+  property, isFavorite, isCompare, onToggleFavorite, onToggleCompare, style, index = 99,
 }: PropertyCardProps) {
   const href = `/object/${listingSlug(property.title, property.id)}`;
   const { hint, rootRef } = usePredictHint(property.id);
@@ -130,12 +131,12 @@ export default function PropertyCard({
   const mapQuery = [property.district, property.address].filter(Boolean).join(', ');
   const hasCoords = !!(property.lat && property.lng);
 
-  const isAutoNew = (() => {
+  const isAutoNew = useMemo(() => {
     const dateStr = property.createdAt;
     if (!dateStr) return false;
     const created = new Date(dateStr).getTime();
     return (Date.now() - created) < 5 * 24 * 60 * 60 * 1000;
-  })();
+  }, [property.createdAt]);
   const showNew = property.isNew || isAutoNew;
 
   return (
@@ -155,7 +156,8 @@ export default function PropertyCard({
                 key={src + i}
                 src={src}
                 alt={property.title}
-                loading="lazy"
+                loading={index < 4 && i === 0 ? 'eager' : 'lazy'}
+                fetchPriority={index < 4 && i === 0 ? 'high' : 'low'}
                 className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${i === activeImg ? 'opacity-100' : 'opacity-0'}`}
               />
             ))

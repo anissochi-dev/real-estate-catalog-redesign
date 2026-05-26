@@ -309,6 +309,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
                 isCompare={compareList.includes(property.id)}
                 onToggleFavorite={onToggleFavorite}
                 onToggleCompare={onToggleCompare}
+                index={i}
                 style={{ animationDelay: `${i * 0.08}s` }}
               />
             ))}

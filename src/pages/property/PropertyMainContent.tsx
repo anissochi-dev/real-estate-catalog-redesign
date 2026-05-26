@@ -1,9 +1,11 @@
+import { lazy, Suspense } from 'react';
 import type { ListingDetail } from '@/lib/api';
 import Icon from '@/components/ui/icon';
 import PublicPhoneInput from '@/components/PublicPhoneInput';
 import PropertyMapInfrastructure from '@/components/PropertyMapInfrastructure';
-import InvestmentModel from '@/components/property/InvestmentModel';
 import SimilarListings from '@/components/SimilarListings';
+
+const InvestmentModel = lazy(() => import('@/components/property/InvestmentModel'));
 import {
   CONDITION_LABELS, FINISHING_LABELS, PARKING_LABELS,
   ENTRANCE_LABELS, UTILITY_ICONS, ROAD_LINE_LABELS,
@@ -52,12 +54,14 @@ export default function PropertyMainContent({
       </div>
 
       {/* Инвестиционная NOI-модель (AI) — между адресом и параметрами */}
-      <InvestmentModel
-        listingId={item.id}
-        price={item.price}
-        area={item.area}
-        deal={item.deal}
-      />
+      <Suspense fallback={null}>
+        <InvestmentModel
+          listingId={item.id}
+          price={item.price}
+          area={item.area}
+          deal={item.deal}
+        />
+      </Suspense>
 
       {/* Параметры объекта */}
       <div className="bg-white rounded-2xl p-5 shadow-sm">

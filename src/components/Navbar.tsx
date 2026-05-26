@@ -131,10 +131,8 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
       )}
 
       {/* Mobile Drawer */}
-      <div
-        className={`fixed top-0 right-0 h-full w-[280px] max-w-[85vw] z-[70] bg-white shadow-2xl flex flex-col transition-transform duration-300 md:hidden pb-safe ${
-          drawerOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
+      {drawerOpen && <div
+        className="fixed top-0 right-0 h-full w-[280px] max-w-[85vw] z-[70] bg-white shadow-2xl flex flex-col transition-transform duration-300 md:hidden pb-safe translate-x-0"
       >
         {/* Drawer header */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-border">
@@ -221,7 +219,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
             </button>
           )}
         </div>
-      </div>
+      </div>}
     </>
   );
 }

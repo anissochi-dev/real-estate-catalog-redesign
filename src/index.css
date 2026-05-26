@@ -249,10 +249,10 @@
 
 @keyframes shimmer {
   0% {
-    background-position: -200% 0;
+    transform: translateX(-100%);
   }
   100% {
-    background-position: 200% 0;
+    transform: translateX(100%);
   }
 }
 
@@ -293,6 +293,8 @@
   transition:
     transform 0.25s ease,
     box-shadow 0.25s ease;
+  content-visibility: auto;
+  contain-intrinsic-size: 0 380px;
 }
 .property-card:hover {
   transform: translateY(-4px);

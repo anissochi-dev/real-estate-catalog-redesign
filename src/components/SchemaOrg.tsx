@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 interface SchemaOrgProps {
   schema: Record<string, unknown> | Record<string, unknown>[];
@@ -12,6 +12,7 @@ interface SchemaOrgProps {
 export default function SchemaOrg({ schema, id }: SchemaOrgProps) {
   const scriptRef = useRef<HTMLScriptElement | null>(null);
   const scriptId = id ? `schema-org-${id}` : undefined;
+  const schemaJson = useMemo(() => JSON.stringify(schema, null, 0), [schema]);
 
   useEffect(() => {
     let script = scriptId
@@ -25,7 +26,7 @@ export default function SchemaOrg({ schema, id }: SchemaOrgProps) {
       document.head.appendChild(script);
     }
 
-    script.textContent = JSON.stringify(schema, null, 0);
+    script.textContent = schemaJson;
     scriptRef.current = script;
 
     return () => {
@@ -34,8 +35,7 @@ export default function SchemaOrg({ schema, id }: SchemaOrgProps) {
         scriptRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(schema), scriptId]);
+  }, [schemaJson, scriptId]);
 
   return null;
 }

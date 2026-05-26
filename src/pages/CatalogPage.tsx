@@ -344,6 +344,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
                   isCompare={compareList.includes(property.id)}
                   onToggleFavorite={onToggleFavorite}
                   onToggleCompare={onToggleCompare}
+                  index={i}
                   style={{ animationDelay: `${i * 0.03}s`, opacity: 0 }}
                 />
               ))}
