@@ -1,5 +1,6 @@
 import Icon from '@/components/ui/icon';
 import { Lead, Comment, STATUSES, LEAD_TYPES, SOURCE_LABELS } from './leadsTypes';
+import { formatPhone } from '@/lib/phone';
 
 interface Props {
   active: Lead;
@@ -27,8 +28,8 @@ export default function LeadDetail({
             <div className="font-display font-700 text-lg">{active.name}</div>
             <div className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
               <a href={`tel:${active.phone}`}
-                 className={`hover:underline ${active.phone_hidden ? 'text-muted-foreground' : 'text-brand-blue'}`}>
-                {active.phone}
+                 className={`font-mono hover:underline ${active.phone_hidden ? 'text-muted-foreground' : 'text-brand-blue'}`}>
+                {active.phone ? formatPhone(active.phone) : '—'}
               </a>
               {active.phone_hidden && (
                 <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded"

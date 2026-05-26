@@ -3,6 +3,7 @@ import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import PhoneCardModal from '@/components/admin/PhoneCardModal';
 import ListingInternalCard from './listings/ListingInternalCard';
+import { formatPhone, normalizePhone, extractDigits } from '@/lib/phone';
 
 interface PhoneContact {
   id: number;
@@ -28,15 +29,23 @@ function fmtDate(s: string) {
 
 function AddContactModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
   const [form, setForm] = useState({ phone: '', name: '', company: '', notes: '' });
+  const [phoneDisplay, setPhoneDisplay] = useState('');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = extractDigits(e.target.value).slice(0, 10);
+    const normalized = digits ? '+7' + digits : '';
+    setPhoneDisplay(digits ? formatPhone(normalized) : '');
+    setForm(f => ({ ...f, phone: normalized }));
+  };
 
   const save = async () => {
     if (!form.phone.trim()) { setErr('Введите номер телефона'); return; }
     setSaving(true);
     setErr('');
     try {
-      await adminApi.createPhone(form);
+      await adminApi.createPhone({ ...form, phone: normalizePhone(form.phone) });
       onAdded();
       onClose();
     } catch (e: unknown) {
@@ -53,7 +62,21 @@ function AddContactModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
           <div className="font-display font-700 text-base">Новый контакт</div>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted"><Icon name="X" size={18} /></button>
         </div>
-        {[['phone', 'Телефон *'], ['name', 'Имя'], ['company', 'Компания']].map(([k, l]) => (
+
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground mb-1 block">Телефон *</label>
+          <input
+            type="tel"
+            className="w-full border border-border rounded-lg px-3 py-2 text-sm font-mono tracking-wide"
+            placeholder="+7 900 000-00-00"
+            value={phoneDisplay}
+            onChange={handlePhoneChange}
+            autoComplete="off"
+          />
+          <div className="mt-1 text-[11px] text-muted-foreground">Пример: <span className="font-mono">+7 900 123-45-67</span></div>
+        </div>
+
+        {[['name', 'Имя'], ['company', 'Компания']].map(([k, l]) => (
           <div key={k}>
             <label className="text-xs font-semibold text-muted-foreground mb-1 block">{l}</label>
             <input
@@ -181,7 +204,7 @@ export default function PhoneBook() {
                         </div>
                     }
                   </td>
-                  <td className="px-4 py-3 font-mono font-semibold text-brand-blue">{c.phone}</td>
+                  <td className="px-4 py-3 font-mono font-semibold text-brand-blue">{formatPhone(c.phone)}</td>
                   <td className="px-4 py-3">
                     {c.name && <div>{c.name}</div>}
                     {c.company && <div className="text-xs text-muted-foreground">{c.company}</div>}

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { crmUrl, CRM_CHECKS_URL } from '@/lib/adminApi';
+import { formatPhone, normalizePhone, extractDigits } from '@/lib/phone';
 
 interface Owner {
   id: number;
@@ -67,6 +68,7 @@ export default function CrmOwners() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedOwner, setSelectedOwner] = useState<Owner | null>(null);
   const [form, setForm] = useState({ name: '', phone: '', email: '', company: '', inn: '', source: 'manual', notes: '' });
+  const [phoneDisplay, setPhoneDisplay] = useState('');
   const [dupWarning, setDupWarning] = useState<{ id: number; name: string } | null>(null);
   const [innCheckResult, setInnCheckResult] = useState<{ loading: boolean; data?: Record<string, unknown>; error?: string } | null>(null);
 
@@ -132,6 +134,7 @@ export default function CrmOwners() {
 
   const resetForm = () => {
     setForm({ name: '', phone: '', email: '', company: '', inn: '', source: 'manual', notes: '' });
+    setPhoneDisplay('');
     setDupWarning(null);
   };
 
@@ -190,7 +193,7 @@ export default function CrmOwners() {
                     <div className="text-xs text-muted-foreground">{o.created_at ? new Date(o.created_at).toLocaleDateString('ru') : ''}</div>
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell">
-                    <div>{o.phone}</div>
+                    <div className="font-mono text-sm">{o.phone ? formatPhone(o.phone) : '—'}</div>
                     {o.email && <div className="text-xs text-muted-foreground">{o.email}</div>}
                   </td>
                   <td className="px-4 py-3 hidden lg:table-cell">
@@ -264,7 +267,20 @@ export default function CrmOwners() {
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">Телефон *</label>
-                <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+7 (900) 123-45-67" />
+                <Input
+                  type="tel"
+                  className="font-mono tracking-wide"
+                  placeholder="+7 900 000-00-00"
+                  value={phoneDisplay}
+                  onChange={e => {
+                    const digits = extractDigits(e.target.value).slice(0, 10);
+                    const normalized = digits ? '+7' + digits : '';
+                    setPhoneDisplay(digits ? formatPhone(normalized) : '');
+                    setForm(f => ({ ...f, phone: normalizePhone(normalized) }));
+                  }}
+                  autoComplete="off"
+                />
+                <div className="mt-0.5 text-[11px] text-muted-foreground">Пример: <span className="font-mono">+7 900 123-45-67</span></div>
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">Email</label>

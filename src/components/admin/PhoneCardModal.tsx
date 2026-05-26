@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { adminApi, uploadFile } from '@/lib/adminApi';
 import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
+import { formatPhone } from '@/lib/phone';
 
 interface PhoneContact {
   id: number;
@@ -62,6 +63,14 @@ export default function PhoneCardModal({ contactId, onClose, onUpdate, onOpenLis
   const [form, setForm] = useState({ name: '', company: '', notes: '', tags: '', inn: '', photo_url: '' });
   const [saving, setSaving] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copyPhone = (phone: string) => {
+    navigator.clipboard.writeText(formatPhone(phone)).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
 
   const load = () => {
     adminApi.getPhone(contactId).then(r => {
@@ -151,7 +160,17 @@ export default function PhoneCardModal({ contactId, onClose, onUpdate, onOpenLis
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <div className="font-display font-700 text-base">{contact.phone}</div>
+            <div className="flex items-center gap-1.5">
+              <div className="font-display font-700 text-base font-mono tracking-wide">{formatPhone(contact.phone)}</div>
+              <button
+                type="button"
+                onClick={() => copyPhone(contact.phone)}
+                title="Скопировать номер"
+                className={`p-1 rounded transition ${copied ? 'text-emerald-600' : 'text-muted-foreground hover:text-brand-blue'}`}
+              >
+                <Icon name={copied ? 'Check' : 'Copy'} size={13} />
+              </button>
+            </div>
             <div className="text-sm text-muted-foreground truncate">
               {[contact.name, contact.company].filter(Boolean).join(' · ') || 'Без имени'}
             </div>

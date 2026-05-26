@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import { Lead, STATUSES, SOURCE_LABELS, LEAD_TYPES } from './leadsTypes';
+import { formatPhone } from '@/lib/phone';
 
 interface Props {
   leads: Lead[];
@@ -90,8 +91,8 @@ export default function LeadsTable({ leads, onOpen, onDelete }: Props) {
                   <td className="px-3 py-2.5 whitespace-nowrap">
                     <div className="inline-flex items-center gap-1.5">
                       <a href={`tel:${l.phone}`} onClick={e => e.stopPropagation()}
-                         className={`text-sm hover:underline ${l.phone_hidden ? 'text-muted-foreground' : 'text-brand-blue'}`}>
-                        {l.phone}
+                         className={`text-sm font-mono hover:underline ${l.phone_hidden ? 'text-muted-foreground' : 'text-brand-blue'}`}>
+                        {l.phone ? formatPhone(l.phone) : '—'}
                       </a>
                       {l.phone_hidden && (
                         <span title="Телефон скрыт: заявка брокера. Видят только админ, директор и сам брокер.">
