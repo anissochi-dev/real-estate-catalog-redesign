@@ -1764,6 +1764,14 @@ def _listings_bulk(cur, conn, event, user):
             )
             for lid in ids:
                 _write_history(cur, lid, user, 'broker_changed', {'broker_id': bid, 'broker_name': target['name']})
+    elif op == 'set_visible':
+        val = _bool(body.get('value', True))
+        cur.execute(
+            f"UPDATE {SCHEMA}.listings SET is_visible = {val}, updated_at = NOW() WHERE id IN ({ids_sql})"
+        )
+        action_label = 'shown' if body.get('value', True) else 'hidden'
+        for lid in ids:
+            _write_history(cur, lid, user, action_label, {'is_visible': body.get('value', True)})
     elif op == 'set_export':
         # Установить/снять флаги экспорта в XML-фиды: value = {'platform': 'yandex'|'avito'|'cian'|'all', 'enabled': bool}
         val = body.get('value') or {}

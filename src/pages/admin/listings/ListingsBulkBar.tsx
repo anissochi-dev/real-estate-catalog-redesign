@@ -14,12 +14,14 @@ interface BulkOp {
 }
 
 const BULK_OPS: BulkOp[] = [
-  { op: 'activate',    label: 'Активные',  icon: 'CheckCircle', className: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200', confirm: true },
-  { op: 'archive',     label: 'В архив',   icon: 'Archive',     className: 'bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200', confirm: true },
-  { op: 'set_hot',     label: 'Горячее',   icon: 'Flame',       className: 'bg-orange-50 text-orange-700 hover:bg-orange-100 border-orange-200', value: true },
-  { op: 'set_hot_off', label: 'Не горячее', icon: 'FlameOff',   className: 'bg-muted/40 text-muted-foreground hover:bg-muted border-border', value: false, realOp: 'set_hot' },
-  { op: 'set_new',     label: 'Новинка',   icon: 'Sparkles',    className: 'bg-sky-50 text-sky-700 hover:bg-sky-100 border-sky-200', value: true },
-  { op: 'set_new_off', label: 'Не новинка', icon: 'X',          className: 'bg-muted/40 text-muted-foreground hover:bg-muted border-border', value: false, realOp: 'set_new' },
+  { op: 'activate',        label: 'Активные',       icon: 'CheckCircle',  className: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200', confirm: true },
+  { op: 'archive',         label: 'В архив',        icon: 'Archive',      className: 'bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200', confirm: true },
+  { op: 'set_hot',         label: 'Горячее',        icon: 'Flame',        className: 'bg-orange-50 text-orange-700 hover:bg-orange-100 border-orange-200', value: true },
+  { op: 'set_hot_off',     label: 'Не горячее',     icon: 'FlameOff',     className: 'bg-muted/40 text-muted-foreground hover:bg-muted border-border', value: false, realOp: 'set_hot' },
+  { op: 'set_new',         label: 'Новинка',        icon: 'Sparkles',     className: 'bg-sky-50 text-sky-700 hover:bg-sky-100 border-sky-200', value: true },
+  { op: 'set_new_off',     label: 'Не новинка',     icon: 'X',            className: 'bg-muted/40 text-muted-foreground hover:bg-muted border-border', value: false, realOp: 'set_new' },
+  { op: 'set_visible',     label: 'Виден на сайте', icon: 'Eye',          className: 'bg-teal-50 text-teal-700 hover:bg-teal-100 border-teal-200', value: true },
+  { op: 'set_visible_off', label: 'Не виден на сайте', icon: 'EyeOff',   className: 'bg-rose-50 text-rose-700 hover:bg-rose-100 border-rose-200', value: false, realOp: 'set_visible' },
 ];
 
 interface Broker {
