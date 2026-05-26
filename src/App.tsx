@@ -1,19 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
-import HomePage from './pages/HomePage';
-import CatalogPage from './pages/CatalogPage';
-import MapPage from './pages/MapPage';
-import FavoritesPage from './pages/FavoritesPage';
-import ComparePage from './pages/ComparePage';
-import LoginPage from './pages/LoginPage';
-import AdminPage from './pages/AdminPage';
-import NetworkTenantsPage from './pages/NetworkTenantsPage';
-import PropertyPage from './pages/PropertyPage';
-import CategoryPage from './pages/CategoryPage';
-import NotFoundPage from './pages/NotFoundPage';
-import DeclinedPage from './pages/DeclinedPage';
-import { NewsListPage, NewsArticlePage } from './pages/NewsPage';
-import LeadsListPage from './pages/LeadsListPage';
+
+const HomePage         = lazy(() => import('./pages/HomePage'));
+const CatalogPage      = lazy(() => import('./pages/CatalogPage'));
+const MapPage          = lazy(() => import('./pages/MapPage'));
+const FavoritesPage    = lazy(() => import('./pages/FavoritesPage'));
+const ComparePage      = lazy(() => import('./pages/ComparePage'));
+const LoginPage        = lazy(() => import('./pages/LoginPage'));
+const AdminPage        = lazy(() => import('./pages/AdminPage'));
+const NetworkTenantsPage = lazy(() => import('./pages/NetworkTenantsPage'));
+const PropertyPage     = lazy(() => import('./pages/PropertyPage'));
+const CategoryPage     = lazy(() => import('./pages/CategoryPage'));
+const NotFoundPage     = lazy(() => import('./pages/NotFoundPage'));
+const DeclinedPage     = lazy(() => import('./pages/DeclinedPage'));
+const NewsListPage     = lazy(() => import('./pages/NewsPage').then(m => ({ default: m.NewsListPage })));
+const NewsArticlePage  = lazy(() => import('./pages/NewsPage').then(m => ({ default: m.NewsArticlePage })));
+const LeadsListPage    = lazy(() => import('./pages/LeadsListPage'));
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import CompareBar from './components/CompareBar';
@@ -205,8 +207,14 @@ export default function App() {
 
   const clearCompare = () => setCompareList([]);
 
-  const compareProperties = properties.filter(p => compareList.includes(p.id));
-  const favoriteProperties = properties.filter(p => favorites.includes(p.id));
+  const compareProperties = useMemo(
+    () => properties.filter(p => compareList.includes(p.id)),
+    [properties, compareList],
+  );
+  const favoriteProperties = useMemo(
+    () => properties.filter(p => favorites.includes(p.id)),
+    [properties, favorites],
+  );
 
   const ADMIN_ROLES = ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'];
 
@@ -319,6 +327,7 @@ export default function App() {
       />
 
       <main>
+        <Suspense fallback={<div className="min-h-[50vh] flex items-center justify-center"><div className="w-8 h-8 rounded-full border-4 border-brand-blue/20 border-t-brand-blue animate-spin" /></div>}>
         <Routes>
           <Route path="/" element={
             <HomePage
@@ -388,6 +397,7 @@ export default function App() {
           <Route path="/declined" element={<DeclinedPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
+        </Suspense>
       </main>
 
       <Footer onLogin={() => setView('login')} setCurrentPage={setCurrentPage} />

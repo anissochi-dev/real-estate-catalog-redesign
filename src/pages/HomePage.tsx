@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Property, Page } from '@/App';
 import PropertyCard from '@/components/PropertyCard';
@@ -56,32 +56,42 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   const [latestNews, setLatestNews] = useState<NewsPreview[]>([]);
 
   const newsLimit = settings.home_news_limit ?? 10;
-  useEffect(() => {
-    if (settings.show_news_on_home === false) return;
-    fetch(`${NEWS_URL}?action=list&limit=${newsLimit}`)
-      .then(r => r.json())
-      .then(d => setLatestNews(d.news || []))
-      .catch(() => undefined);
-  }, [newsLimit, settings.show_news_on_home]);
+  const showNewsOnHome = settings.show_news_on_home;
 
   useEffect(() => {
-    fetch(`${LISTINGS_URL}?resource=public_leads_full&limit=1`)
-      .then(r => r.json())
-      .then(d => setLeadsCount(d.total || 0))
-      .catch(() => undefined);
-  }, []);
+    const requests: Promise<void>[] = [];
 
-  useEffect(() => {
-    fetch(`${LISTINGS_URL}?resource=public_stats`)
-      .then(r => r.json())
-      .then(d => setStats({
-        total: d.total || 0,
-        main_city: d.main_city || 'Краснодар',
-        by_category: d.by_category || {},
-        by_deal: d.by_deal || {},
-      }))
-      .catch(() => undefined);
-  }, []);
+    // Статистика + счётчик заявок — всегда
+    requests.push(
+      fetch(`${LISTINGS_URL}?resource=public_stats`)
+        .then(r => r.json())
+        .then(d => setStats({
+          total: d.total || 0,
+          main_city: d.main_city || 'Краснодар',
+          by_category: d.by_category || {},
+          by_deal: d.by_deal || {},
+        }))
+        .catch(() => undefined),
+    );
+    requests.push(
+      fetch(`${LISTINGS_URL}?resource=public_leads_full&limit=1`)
+        .then(r => r.json())
+        .then(d => setLeadsCount(d.total || 0))
+        .catch(() => undefined),
+    );
+
+    // Новости — только если включены
+    if (showNewsOnHome !== false) {
+      requests.push(
+        fetch(`${NEWS_URL}?action=list&limit=${newsLimit}`)
+          .then(r => r.json())
+          .then(d => setLatestNews(d.news || []))
+          .catch(() => undefined),
+      );
+    }
+
+    Promise.all(requests);
+  }, [newsLimit, showNewsOnHome]);
 
   // Реальное число объектов по категории — из API, с фолбэком на текущий пропс properties
   const categoryCount = (type: string): number => {
@@ -103,7 +113,10 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
     return p.id;
   };
   const homeLimit = settings.home_listings_limit ?? 20;
-  const newObjects = [...properties].sort((a, b) => propTime(b) - propTime(a)).slice(0, homeLimit);
+  const newObjects = useMemo(
+    () => [...properties].sort((a, b) => propTime(b) - propTime(a)).slice(0, homeLimit),
+    [properties, homeLimit],
+  );
 
   const showNews = settings.show_news_on_home !== false;
   const homeNewsLimit = settings.home_news_limit ?? 10;
@@ -116,7 +129,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
     { value: `с ${settings.company_since_year || 2007}`, label: 'На рынке', icon: 'Award', deal: null },
   ];
 
-  const orgLd = {
+  const orgLdJson = useMemo(() => JSON.stringify({
     '@context': 'https://schema.org',
     '@type': 'RealEstateAgent',
     name: settings.company_name || 'Бизнес. Маркетинг. Недвижимость.',
@@ -132,13 +145,13 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
     email: settings.company_email,
     image: settings.logo_url,
     url: settings.site_url,
-  };
+  }), [settings.company_name, settings.seo_description, settings.company_since_year, settings.company_address, settings.main_city, settings.company_phone, settings.company_email, settings.logo_url, settings.site_url]);
 
   return (
     <div>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(orgLd) }}
+        dangerouslySetInnerHTML={{ __html: orgLdJson }}
       />
       {/* Hero — компактный */}
       <section className="hero-bg text-white py-10 md:py-14">
