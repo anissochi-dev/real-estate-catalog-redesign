@@ -303,7 +303,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
         </div>
       </section>
 
-      {showLeads && <ClientLeadsSection />}
+      {showLeads && <ClientLeadsSection limit={settings.home_leads_limit ?? 6} />}
 
       {/* Блок новостей — 5 в ряд, 2 строки */}
       {showNews && latestNews.length > 0 && (

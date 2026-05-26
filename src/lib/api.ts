@@ -240,6 +240,7 @@ export interface PublicSettings {
   show_news_on_home?: boolean;
   home_news_limit?: number;
   show_leads_on_home?: boolean;
+  home_leads_limit?: number;
 }
 
 export async function fetchPublicSettings(): Promise<PublicSettings> {

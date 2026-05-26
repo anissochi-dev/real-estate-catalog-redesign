@@ -67,6 +67,7 @@ export interface S {
   show_news_on_home: boolean;
   home_news_limit: number;
   show_leads_on_home: boolean;
+  home_leads_limit: number;
 }
 
 export interface City {

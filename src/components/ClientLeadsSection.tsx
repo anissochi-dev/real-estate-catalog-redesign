@@ -15,7 +15,11 @@ interface PubLead {
   created_at: string;
 }
 
-export default function ClientLeadsSection() {
+interface Props {
+  limit?: number;
+}
+
+export default function ClientLeadsSection({ limit = 6 }: Props) {
   const [leads, setLeads] = useState<PubLead[]>([]);
   const [offerLead, setOfferLead] = useState<PubLead | null>(null);
   const [form, setForm] = useState({ name: '', phone: '', message: '' });
@@ -25,11 +29,11 @@ export default function ClientLeadsSection() {
   const [captchaKey, setCaptchaKey] = useState(0);
 
   useEffect(() => {
-    fetch(`${LISTINGS_URL}?resource=public_leads`)
+    fetch(`${LISTINGS_URL}?resource=public_leads&limit=${limit}`)
       .then(r => r.json())
       .then(d => setLeads(d.leads || []))
       .catch(() => undefined);
-  }, []);
+  }, [limit]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -150,8 +150,13 @@ export default function GeneralTab({ tab, s, setS, cities, saved, save }: Props)
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-semibold">Блок заявок клиентов</div>
-                <div className="text-xs text-muted-foreground">Публичные заявки</div>
+                <div className="text-xs text-muted-foreground">Количество на главной</div>
               </div>
+              <input type="number" min={1} max={20}
+                disabled={s.show_leads_on_home === false}
+                className="w-20 px-2 py-1.5 border rounded-lg text-sm text-center disabled:opacity-40"
+                value={s.home_leads_limit ?? 6}
+                onChange={e => setS({ ...s, home_leads_limit: +e.target.value || 6 })} />
             </div>
 
           </div>
