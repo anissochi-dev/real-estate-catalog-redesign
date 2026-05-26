@@ -80,7 +80,7 @@ export default function ClientLeadsSection() {
           <Link
             to="/leads"
             aria-label="Смотреть все заявки клиентов"
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-brand-blue/10 text-brand-blue hover:bg-brand-blue hover:text-white font-semibold text-sm transition-colors whitespace-nowrap shrink-0 min-h-[40px] w-full sm:w-auto"
+            className="inline-flex items-center gap-1.5 text-brand-blue font-semibold text-sm hover:gap-3 transition-all duration-200 shrink-0"
           >
             Смотреть все заявки <Icon name="ArrowRight" size={14} />
           </Link>

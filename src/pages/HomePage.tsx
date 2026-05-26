@@ -271,7 +271,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
             <button
               onClick={() => onNavigate('catalog')}
               aria-label="Смотреть все объекты каталога"
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-brand-blue/10 text-brand-blue hover:bg-brand-blue hover:text-white font-semibold text-sm transition-colors whitespace-nowrap shrink-0 min-h-[40px] w-full sm:w-auto"
+              className="inline-flex items-center gap-1.5 text-brand-blue font-semibold text-sm hover:gap-3 transition-all duration-200 shrink-0"
             >
               Смотреть все объекты <Icon name="ArrowRight" size={14} />
             </button>
@@ -306,9 +306,9 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
               </div>
               <button
                 onClick={() => navigate('/news')}
-                className="flex items-center gap-1 text-brand-blue font-semibold text-xs hover:gap-2 transition-all duration-200 shrink-0"
+                className="inline-flex items-center gap-1.5 text-brand-blue font-semibold text-sm hover:gap-3 transition-all duration-200 shrink-0"
               >
-                Все новости <Icon name="ArrowRight" size={12} />
+                Смотреть все новости <Icon name="ArrowRight" size={14} />
               </button>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
