@@ -102,7 +102,6 @@ export const CATS = [
 export const DEALS: [string, string, string][] = [
   ['sale', 'Продажа', 'bg-emerald-100 text-emerald-700'],
   ['rent', 'Аренда', 'bg-blue-100 text-blue-700'],
-  ['business', 'Готовый бизнес', 'bg-violet-100 text-violet-700'],
 ];
 export const CONDITIONS = [
   ['new', 'Новое'], ['euro', 'Евроремонт'], ['good', 'Хорошее'],
