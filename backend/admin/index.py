@@ -1239,6 +1239,10 @@ def _settings(cur, conn, method, event, user):
             fields.append(f"watermark_opacity = {_int_or_null(body['watermark_opacity'])}")
         if 'smtp_port' in body:
             fields.append(f"smtp_port = {_int_or_null(body['smtp_port'])}")
+        for int_field in ('home_listings_limit', 'catalog_page_size', 'news_list_limit',
+                          'category_page_size', 'leads_page_size'):
+            if int_field in body:
+                fields.append(f"{int_field} = {_int_or_null(body[int_field])}")
         for bf in ('notify_email_enabled', 'notify_email_on_lead', 'notify_email_on_deal', 'notify_email_on_complaint',
                    'notify_telegram_enabled', 'notify_telegram_on_lead', 'notify_telegram_on_deal',
                    'notify_telegram_on_complaint'):
