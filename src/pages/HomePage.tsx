@@ -8,6 +8,8 @@ import ClientLeadsSection from '@/components/ClientLeadsSection';
 import AIMatchModal from '@/components/AIMatchModal';
 import { NEWS_URL } from '@/lib/adminApi';
 
+const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
+
 interface PublicStats {
   total: number;
   main_city: string;
@@ -51,6 +53,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [stats, setStats] = useState<PublicStats>({ total: 0, main_city: 'Краснодар' });
+  const [leadsCount, setLeadsCount] = useState(0);
   const [aiOpen, setAiOpen] = useState(false);
   const [latestNews, setLatestNews] = useState<NewsPreview[]>([]);
 
@@ -58,6 +61,13 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
     fetch(`${NEWS_URL}?action=list&limit=10`)
       .then(r => r.json())
       .then(d => setLatestNews(d.news || []))
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    fetch(`${LISTINGS_URL}?resource=public_leads_full&limit=1`)
+      .then(r => r.json())
+      .then(d => setLeadsCount(d.total || 0))
       .catch(() => undefined);
   }, []);
 
@@ -97,6 +107,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
 
   const STATS_VIEW = [
     { value: `${totalCount}+`, label: 'Объектов в базе', icon: 'Building2', deal: 'all' as const },
+    { value: leadsCount > 0 ? `${leadsCount}+` : '...', label: 'Заявок от клиентов', icon: 'MessageSquare', deal: null },
     { value: '98%', label: 'Успешных сделок', icon: 'TrendingUp', deal: null },
     { value: `с ${settings.company_since_year || 2007}`, label: 'На рынке', icon: 'Award', deal: null },
   ];
