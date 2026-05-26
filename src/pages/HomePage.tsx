@@ -122,6 +122,26 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   const homeNewsLimit = settings.home_news_limit ?? 10;
   const showLeads = settings.show_leads_on_home !== false;
 
+  // Preload LCP-изображения: первые 4 карточки — браузер начинает качать сразу,
+  // не дожидаясь парсинга JS и рендера компонентов.
+  useEffect(() => {
+    const lcpImgs = newObjects.slice(0, 4);
+    const added: HTMLLinkElement[] = [];
+    lcpImgs.forEach((p, i) => {
+      const src = p.image;
+      if (!src) return;
+      if (document.querySelector(`link[rel="preload"][href="${src}"]`)) return;
+      const link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'image';
+      link.href = src;
+      link.fetchPriority = i === 0 ? 'high' : 'low';
+      document.head.appendChild(link);
+      added.push(link);
+    });
+    return () => { added.forEach(l => l.remove()); };
+  }, [newObjects]);
+
   const STATS_VIEW = [
     { value: `${totalCount}+`, label: 'Объектов в базе', icon: 'Building2', deal: null },
     { value: leadsCount > 0 ? `${leadsCount}+` : '...', label: 'Заявок от клиентов', icon: 'MessageSquare', deal: null },
