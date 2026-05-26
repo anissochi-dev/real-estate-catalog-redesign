@@ -11,6 +11,7 @@ import PropertyMainContent from '@/components/property/PropertyMainContent';
 import PropertySidebar from '@/components/property/PropertySidebar';
 import { TYPE_LABELS, DEAL_LABELS } from '@/components/property/propertyLabels';
 import AIMatchModal from '@/components/AIMatchModal';
+import SchemaOrg, { makeRealEstateSchema, makeBreadcrumbSchema } from '@/components/SchemaOrg';
 
 interface Props {
   onToggleFavorite: (id: number) => void;
@@ -155,16 +156,41 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
     }
   };
 
-  const productLd: Record<string, unknown> = {
-    '@context': 'https://schema.org', '@type': 'Product',
-    name: item.title, description: (item.description || '').slice(0, 5000),
-    image: imgs, category: typeLabel,
-    offers: { '@type': 'Offer', priceCurrency: 'RUB', price: item.price, availability: 'https://schema.org/InStock', url: typeof window !== 'undefined' ? window.location.href : '', seller: { '@type': 'Organization', name: settings.company_name || 'BIZNEST' } },
-  };
+  const siteUrl = settings.site_url || 'https://bmn23.ru';
+  const pageUrl = typeof window !== 'undefined' ? window.location.href : `${siteUrl}/object/${slug}`;
+
+  const productSchema = makeRealEstateSchema({
+    title: item.title,
+    description: (item.description || '').slice(0, 5000),
+    url: pageUrl,
+    images: imgs,
+    price: item.price,
+    deal: item.deal,
+    type: typeLabel,
+    area: item.area,
+    address: item.address,
+    city: item.city,
+    lat: item.lat,
+    lng: item.lng,
+    floor: item.floor,
+    rooms: (item as ListingDetail & { rooms?: number }).rooms,
+    sellerName: settings.company_name || 'Бизнес. Маркетинг. Недвижимость.',
+    sellerUrl: siteUrl,
+    updatedAt: item.updatedAt || item.lastEditedAt,
+    publicCode: item.publicCode,
+  });
+
+  const breadcrumbSchema = makeBreadcrumbSchema([
+    { name: 'Главная', url: siteUrl },
+    { name: 'Каталог', url: `${siteUrl}/catalog` },
+    { name: `${typeLabel} · ${dealLabel}`, url: `${siteUrl}/catalog?type=${item.type}&deal=${item.deal}` },
+    { name: item.title, url: pageUrl },
+  ]);
 
   return (
     <div className="bg-background">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productLd) }} />
+      <SchemaOrg schema={productSchema} id="property" />
+      <SchemaOrg schema={breadcrumbSchema} id="breadcrumb" />
 
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between gap-3 mb-3">

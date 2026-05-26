@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import Icon from '@/components/ui/icon';
+import SchemaOrg from '@/components/SchemaOrg';
 
 export interface Crumb {
   label: string;
@@ -13,7 +14,8 @@ interface Props {
 
 export default function Breadcrumbs({ items, light }: Props) {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const jsonLd = {
+
+  const breadcrumbSchema = {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
     itemListElement: items.map((c, i) => {
@@ -29,6 +31,7 @@ export default function Breadcrumbs({ items, light }: Props) {
 
   return (
     <>
+      <SchemaOrg schema={breadcrumbSchema} />
       <nav aria-label="breadcrumb" className="text-sm">
         <ol className={`flex flex-wrap items-center gap-1.5 ${light ? 'text-white/70' : 'text-muted-foreground'}`}>
           {items.map((c, i) => {
@@ -46,10 +49,6 @@ export default function Breadcrumbs({ items, light }: Props) {
           })}
         </ol>
       </nav>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
     </>
   );
 }

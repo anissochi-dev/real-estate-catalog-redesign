@@ -6,6 +6,7 @@ import Breadcrumbs from '@/components/Breadcrumbs';
 import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
 import AIMatchModal from '@/components/AIMatchModal';
+import SchemaOrg, { makeItemListSchema, makeBreadcrumbSchema } from '@/components/SchemaOrg';
 
 interface Props {
   properties: Property[];
@@ -232,23 +233,28 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
     );
   }
 
-  const ldJson = {
-    '@context': 'https://schema.org',
-    '@type': 'ItemList',
-    name: meta.h1,
-    description: meta.description,
-    numberOfItems: items.length,
-    itemListElement: items.slice(0, 10).map((p, idx) => ({
-      '@type': 'ListItem',
-      position: idx + 1,
-      url: `${settings.site_url || ''}/object/${p.id}`,
+  const siteUrl = settings.site_url || 'https://bmn23.ru';
+
+  const itemListSchema = makeItemListSchema(
+    items.slice(0, 20).map(p => ({
       name: p.title,
+      url: `${siteUrl}/object/${p.id}`,
+      image: p.image || undefined,
+      description: p.description ? p.description.slice(0, 160) : undefined,
     })),
-  };
+    meta.h1,
+  );
+
+  const breadcrumbSchema = makeBreadcrumbSchema([
+    { name: 'Главная', url: siteUrl },
+    { name: 'Каталог', url: `${siteUrl}/catalog` },
+    { name: meta.labelRu, url: `${siteUrl}/catalog/${type}` },
+  ]);
 
   return (
     <div className="min-h-screen bg-background">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ldJson) }} />
+      <SchemaOrg schema={itemListSchema} id={`category-${type}`} />
+      <SchemaOrg schema={breadcrumbSchema} id={`category-bc-${type}`} />
 
       {/* Hero-шапка категории */}
       <div className={`bg-gradient-to-br ${meta.gradient} text-white`}>

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { NEWS_URL } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
+import SchemaOrg, { makeNewsArticleSchema, makeItemListSchema, makeBreadcrumbSchema } from '@/components/SchemaOrg';
 
 interface NewsItem {
   id: number;
@@ -48,8 +49,29 @@ export function NewsListPage() {
     document.title = `Новости коммерческой недвижимости | ${settings.company_name || 'BIZNEST'}`;
   }, [settings.company_name]);
 
+  const siteUrl = settings.site_url || 'https://bmn23.ru';
+
+  const newsListSchema = news.length > 0
+    ? makeItemListSchema(
+        news.map(n => ({
+          name: n.title,
+          url: `${siteUrl}/news/${n.slug}`,
+          image: n.image_url || undefined,
+          description: n.summary || undefined,
+        })),
+        'Новости коммерческой недвижимости',
+      )
+    : null;
+
+  const newsBcSchema = makeBreadcrumbSchema([
+    { name: 'Главная', url: siteUrl },
+    { name: 'Новости', url: `${siteUrl}/news` },
+  ]);
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
+      {newsListSchema && <SchemaOrg schema={newsListSchema} id="news-list" />}
+      <SchemaOrg schema={newsBcSchema} id="news-list-bc" />
       <div className="mb-8">
         <h1 className="font-display font-800 text-3xl text-foreground mb-1">Новости коммерческой недвижимости</h1>
         <h2 className="font-display font-600 text-lg text-brand-blue mb-2">Аналитика и обзоры рынка Краснодара и Краснодарского края</h2>
@@ -196,8 +218,30 @@ export function NewsArticlePage() {
   const h4text = article.seo_h4 || null;
   const h5text = article.seo_h5 || null;
 
+  const articleSiteUrl = settings.site_url || 'https://bmn23.ru';
+  const articlePageUrl = `${articleSiteUrl}/news/${article.slug}`;
+
+  const articleSchema = makeNewsArticleSchema({
+    title: article.title,
+    description: article.summary || (article.content || '').slice(0, 160),
+    url: articlePageUrl,
+    image: article.image_url || undefined,
+    publishedAt: article.published_at || article.created_at,
+    authorName: article.source_name || undefined,
+    publisherName: settings.company_name || 'Бизнес. Маркетинг. Недвижимость.',
+    publisherLogo: settings.logo_url || undefined,
+  });
+
+  const articleBcSchema = makeBreadcrumbSchema([
+    { name: 'Главная', url: articleSiteUrl },
+    { name: 'Новости', url: `${articleSiteUrl}/news` },
+    { name: article.title, url: articlePageUrl },
+  ]);
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-3xl">
+      <SchemaOrg schema={articleSchema} id={`article-${article.id}`} />
+      <SchemaOrg schema={articleBcSchema} id={`article-bc-${article.id}`} />
       <button
         onClick={() => navigate('/news')}
         className="flex items-center gap-2 text-sm text-muted-foreground hover:text-brand-blue transition mb-6"

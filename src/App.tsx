@@ -21,6 +21,8 @@ import AnalyticsLoader from './components/AnalyticsLoader';
 import ScrollToTop from './components/ScrollToTop';
 import ConsentBanner, { hasConsent } from './components/ConsentBanner';
 import SeoHead from './components/SeoHead';
+import SchemaOrg, { makeOrganizationSchema, makeWebSiteSchema } from './components/SchemaOrg';
+import { useSettings } from './contexts/SettingsContext';
 import { fetchListings } from './lib/api';
 import { useAuth } from './contexts/AuthContext';
 
@@ -114,6 +116,7 @@ function loadInitialView(): AppView {
 
 export default function App() {
   const { user, loading: authLoading } = useAuth();
+  const { settings } = useSettings();
   const location = useLocation();
   const navigate = useNavigate();
   const [view, setViewState] = useState<AppView>(() => loadInitialView());
@@ -281,6 +284,25 @@ export default function App() {
       <ScrollToTop />
       <AnalyticsLoader />
       <SeoHead />
+      <SchemaOrg
+        id="org"
+        schema={makeOrganizationSchema({
+          name: settings.company_name || 'Бизнес. Маркетинг. Недвижимость.',
+          url: settings.site_url || 'https://bmn23.ru',
+          phone: settings.company_phone,
+          email: settings.company_email,
+          address: settings.company_address,
+          city: settings.main_city || 'Краснодар',
+          logo: settings.logo_url,
+        })}
+      />
+      <SchemaOrg
+        id="website"
+        schema={makeWebSiteSchema({
+          name: settings.company_name || 'Бизнес. Маркетинг. Недвижимость.',
+          url: settings.site_url || 'https://bmn23.ru',
+        })}
+      />
       <Navbar
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}
