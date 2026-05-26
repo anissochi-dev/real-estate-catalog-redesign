@@ -35,7 +35,7 @@ export default function VBRetrainSchedule({
         <div className="space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
             <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Время запуска (UTC / МСК)</label>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Время запуска (МСК)</label>
               <div className="flex items-center gap-1.5">
                 <select
                   value={schedule.hour}
@@ -56,9 +56,6 @@ export default function VBRetrainSchedule({
                     <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
                   ))}
                 </select>
-                <span className="text-xs text-muted-foreground ml-1">
-                  = {String((schedule.hour + 3) % 24).padStart(2, '0')}:{String(schedule.minute).padStart(2, '0')} МСК
-                </span>
               </div>
             </div>
             <div className="flex-1 min-w-0">

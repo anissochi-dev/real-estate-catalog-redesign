@@ -77,7 +77,7 @@ export default function VBKnowledgeAdmin() {
   const loadSchedule = () => {
     setScheduleLoading(true);
     adminApi.getRetrainSchedule()
-      .then(d => setSchedule(d))
+      .then(d => setSchedule({ ...d, hour: (d.hour + 3) % 24 })) // UTC → МСК для отображения
       .catch(() => {})
       .finally(() => setScheduleLoading(false));
   };
@@ -85,7 +85,8 @@ export default function VBKnowledgeAdmin() {
   const saveSchedule = async () => {
     setScheduleSaving(true);
     try {
-      await adminApi.saveRetrainSchedule({ enabled: schedule.enabled, hour: schedule.hour, minute: schedule.minute, sources: schedule.sources });
+      const hourUtc = (schedule.hour + 21) % 24; // МСК → UTC для сохранения
+      await adminApi.saveRetrainSchedule({ enabled: schedule.enabled, hour: hourUtc, minute: schedule.minute, sources: schedule.sources });
       toast.success('Расписание сохранено');
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Ошибка сохранения');
