@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "name": "Redirect without id",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 302
+    },
+    {
+      "name": "Valid listing id",
+      "method": "GET",
+      "path": "/?id=1",
+      "expectedStatus": 200
+    }
+  ]
+}

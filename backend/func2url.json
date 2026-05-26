@@ -1,8 +1,7 @@
 {
-  "contract-bot": "https://functions.poehali.dev/3128fdf1-b90c-44a3-b580-3d5481d79a68",
+  "og-preview": "https://functions.poehali.dev/efd4ed37-ed36-44f6-8c4f-bdbb770a9a64",
   "social-post": "https://functions.poehali.dev/2f8f20f3-5dba-4a58-a1f6-aa6e886f4e5e",
   "news": "https://functions.poehali.dev/984cad3a-0783-4408-a614-52ed36f8c77f",
-  "chatbot": "https://functions.poehali.dev/f0ace57c-99c2-47b7-98f8-c60380842659",
   "migration": "https://functions.poehali.dev/35b499c9-243a-43e1-ac7b-2d6e84453233",
   "push": "https://functions.poehali.dev/0ec4537a-eb53-4f31-b9a4-19afa2eff83a",
   "auto-seo": "https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d",
@@ -14,7 +13,6 @@
   "crm-payments": "https://functions.poehali.dev/74ca5694-a05f-4053-992d-5e04cc5bc7a4",
   "crm-checks": "https://functions.poehali.dev/be6cb907-b50e-48fa-b9e2-092dd541a82a",
   "price-predict": "https://functions.poehali.dev/9986e5a6-c4d4-407a-919f-a303aa3eddf2",
-  "remove-watermark": "https://functions.poehali.dev/93965724-e0d4-411d-8100-b9468a1a0627",
   "xml-fix": "https://functions.poehali.dev/dfb481b7-8acb-4412-9643-9c9b18df8bbb",
   "uploads": "https://functions.poehali.dev/82b9e0bc-2ffa-4045-a74b-a09985cec2b5",
   "upload": "https://functions.poehali.dev/8983c0a8-a8c8-47ff-97ed-59cc1571aa15",

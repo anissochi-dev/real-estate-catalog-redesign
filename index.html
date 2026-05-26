@@ -46,6 +46,21 @@
 
     <!-- HMR/fetch перехват ОТКЛЮЧЁН — раньше ломал нативный fetch. Vite сам справится. -->
 
+    <!-- OG Preview: redirect social bots to server-side og-tags -->
+    <script>
+      (function() {
+        var ua = navigator.userAgent || '';
+        var bots = ['Twitterbot','facebookexternalhit','LinkedInBot','WhatsApp','TelegramBot','vkShare','Slackbot','Discordbot','Applebot'];
+        var isBot = bots.some(function(b){ return ua.indexOf(b) !== -1; });
+        if (isBot) {
+          var m = window.location.pathname.match(/\/property\/(\d+)/);
+          if (m) {
+            window.location.replace('https://functions.poehali.dev/efd4ed37-ed36-44f6-8c4f-bdbb770a9a64?id=' + m[1]);
+          }
+        }
+      })();
+    </script>
+
     <!-- Защита контента -->
     <script>
       (function() {
