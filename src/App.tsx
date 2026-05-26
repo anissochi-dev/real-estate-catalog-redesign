@@ -226,40 +226,42 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, authLoading]);
 
+  const pageFallback = <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 rounded-full border-4 border-brand-blue/20 border-t-brand-blue animate-spin" /></div>;
+
   if (view === 'login') {
     return (
-      <>
+      <Suspense fallback={pageFallback}>
         <SeoHead title="Вход для сотрудников" noindex />
         <LoginPage onSuccess={() => { /* переход сработает через useEffect выше */ }} onBack={() => setView('site')} />
-      </>
+      </Suspense>
     );
   }
 
   if (view === 'admin') {
     if (authLoading) {
-      return <div className="min-h-screen flex items-center justify-center">Загрузка...</div>;
+      return pageFallback;
     }
     if (!user) {
       return (
-        <>
+        <Suspense fallback={pageFallback}>
           <SeoHead title="Вход для сотрудников" noindex />
           <LoginPage onSuccess={() => setView(user && ADMIN_ROLES.includes((user as { role: string }).role) ? 'admin' : 'site')} onBack={() => setView('site')} />
-        </>
+        </Suspense>
       );
     }
     if (!ADMIN_ROLES.includes(user.role)) {
       return (
-        <>
+        <Suspense fallback={pageFallback}>
           <SeoHead title="Вход для сотрудников" noindex />
           <LoginPage onSuccess={() => setView('admin')} onBack={() => setView('site')} />
-        </>
+        </Suspense>
       );
     }
     return (
-      <>
+      <Suspense fallback={pageFallback}>
         <SeoHead title="Админ-панель" noindex />
         <AdminPage onExit={() => { setView('site'); setAdminInitialSection(undefined); }} initialSection={adminInitialSection as string | undefined} />
-      </>
+      </Suspense>
     );
   }
 
