@@ -81,6 +81,8 @@ export interface S {
   yandex_webmaster_token: string;
   yandex_webmaster_user_id: string;
   google_search_console_key: string;
+  // PageSpeed
+  google_pagespeed_api_key: string;
 }
 
 export interface City {

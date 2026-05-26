@@ -297,6 +297,69 @@ export default function IntegrationsSearchApiSection({ s, setS, saved, save }: P
         </div>
       </div>
 
+      {/* ── Google PageSpeed Insights API ──────────────────────────────── */}
+      <div className={`rounded-xl border p-4 space-y-3 transition-colors ${
+        s.google_pagespeed_api_key ? 'border-emerald-300 bg-emerald-50/30' : 'border-border'
+      }`}>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Google PageSpeed</span>
+            <span className="text-xs text-muted-foreground">Анализ производительности сайта</span>
+          </div>
+          {s.google_pagespeed_api_key ? (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+              <Icon name="CheckCircle2" size={11} /> Ключ добавлен
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted border border-border px-2 py-0.5 rounded-full">
+              <Icon name="Circle" size={11} /> Не настроено
+            </span>
+          )}
+        </div>
+
+        {/* Инструкция */}
+        <details className="border border-border rounded-lg">
+          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold flex items-center gap-2 select-none">
+            <Icon name="HelpCircle" size={12} className="text-green-600" /> Как получить API ключ
+          </summary>
+          <ol className="px-4 pb-3 pt-1 space-y-1 text-xs text-foreground list-decimal">
+            <li>Откройте <a href="https://console.cloud.google.com" target="_blank" rel="noreferrer" className="text-brand-blue underline">console.cloud.google.com</a> → выберите или создайте проект</li>
+            <li>APIs &amp; Services → Library → найдите <b>PageSpeed Insights API</b> → Enable</li>
+            <li>APIs &amp; Services → Credentials → «Create Credentials» → <b>API Key</b></li>
+            <li>Скопируйте ключ (вида <code className="bg-muted px-1 rounded">AIzaSy...</code>) и вставьте ниже</li>
+            <li>Опционально: нажмите «Edit API Key» → ограничьте по API «PageSpeed Insights API»</li>
+          </ol>
+        </details>
+
+        {/* API ключ */}
+        <div>
+          <label className="text-xs font-semibold block mb-1">API Key</label>
+          <div className="flex gap-2">
+            <input
+              className="flex-1 px-3 py-2 border rounded-lg font-mono text-sm focus:border-brand-blue outline-none"
+              type="password"
+              placeholder="AIzaSy..."
+              value={s.google_pagespeed_api_key || ''}
+              onChange={e => setS({ ...s, google_pagespeed_api_key: e.target.value })}
+            />
+          </div>
+          <div className="text-xs text-muted-foreground mt-1">
+            Бесплатно, лимит 25 000 запросов/сутки. Используется ИИ-ассистентом для автоматических замеров производительности.
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <a href="https://developers.google.com/speed/docs/insights/v5/get-started" target="_blank" rel="noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-brand-blue">
+            <Icon name="ExternalLink" size={12} /> Документация
+          </a>
+          <a href="https://pagespeed.web.dev" target="_blank" rel="noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-brand-blue">
+            <Icon name="ExternalLink" size={12} /> PageSpeed Insights
+          </a>
+        </div>
+      </div>
+
       {/* Кнопка сохранить */}
       <div className="flex items-center gap-3">
         <button onClick={save} className="btn-blue text-white px-5 py-2 rounded-xl font-semibold text-sm">
