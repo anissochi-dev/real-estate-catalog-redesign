@@ -194,6 +194,8 @@ def handler(event, context):
                 return _ad_platform_keys(cur, conn, method, rid, event, user)
             if resource == 'notifications':
                 return _notifications(cur, conn, method, action, event, user)
+            if resource == 'webmaster_check':
+                return _webmaster_check(cur, method, action, event, user)
             if resource == 'ai_inpaint':
                 return _ai_inpaint(cur, event, user)
             if resource == 'consent_log':
@@ -1233,7 +1235,11 @@ def _settings(cur, conn, method, event, user):
                           ('smtp_host', 255), ('smtp_user', 255), ('smtp_password', 500), ('smtp_from', 255),
                           # MAX Bot API
                           ('notify_max_bot_token', 500),
-                          ('notify_max_roles', 500), ('notify_max_extra_phones', 1000)]:
+                          ('notify_max_roles', 500), ('notify_max_extra_phones', 1000),
+                          # Вебмастер API
+                          ('yandex_webmaster_token', 1000),
+                          ('yandex_webmaster_user_id', 64),
+                          ('google_search_console_key', 10000)]:
             if f in body:
                 fields.append(f"{f} = {_str_or_null(body[f], length)}")
         if 'company_since_year' in body:
@@ -1446,6 +1452,184 @@ def _notifications(cur, conn, method, action, event, user):
         return _ok({'success': True, 'message': f'Отправлено {sent} из {len(recipients)} получателей', 'errors': errors})
 
     return _err(400, 'Неизвестный канал')
+
+
+def _webmaster_check(cur, method, action, event, user):
+    """Проверка токенов и отправка sitemap в Яндекс Вебмастер и Google Search Console."""
+    import urllib.request as _ureq
+    import json as _json
+
+    if method not in ('POST', 'GET'):
+        return _err(405, 'Method not allowed')
+
+    cur.execute(f"SELECT * FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
+    s = cur.fetchone()
+    if not s:
+        return _err(400, 'Настройки не найдены')
+
+    site_url = (s.get('site_url') or 'https://bmn.su').rstrip('/')
+    sitemap_url = site_url + '/sitemap.xml'
+
+    # ── Яндекс Вебмастер ──────────────────────────────────────────────────
+    if action == 'yandex_check':
+        token = (s.get('yandex_webmaster_token') or '').strip()
+        if not token:
+            return _err(400, 'Укажите OAuth-токен Яндекс Вебмастера')
+        try:
+            # Получаем список сайтов пользователя
+            req = _ureq.Request(
+                'https://api.webmaster.yandex.net/v4/user',
+                headers={'Authorization': f'OAuth {token}', 'Accept': 'application/json'},
+            )
+            with _ureq.urlopen(req, timeout=10) as r:
+                data = _json.loads(r.read().decode())
+            user_id = data.get('user_id')
+            if not user_id:
+                return _err(400, f'Не удалось получить user_id: {str(data)[:200]}')
+            return _ok({'success': True, 'user_id': str(user_id), 'message': f'Токен действителен, user_id: {user_id}'})
+        except Exception as ex:
+            return _err(400, f'Ошибка Яндекс API: {str(ex)[:200]}')
+
+    if action == 'yandex_sites':
+        token = (s.get('yandex_webmaster_token') or '').strip()
+        user_id = (s.get('yandex_webmaster_user_id') or '').strip()
+        if not token or not user_id:
+            return _err(400, 'Укажите токен и user_id')
+        try:
+            req = _ureq.Request(
+                f'https://api.webmaster.yandex.net/v4/user/{user_id}/hosts',
+                headers={'Authorization': f'OAuth {token}', 'Accept': 'application/json'},
+            )
+            with _ureq.urlopen(req, timeout=10) as r:
+                data = _json.loads(r.read().decode())
+            hosts = data.get('hosts', [])
+            return _ok({'success': True, 'hosts': hosts})
+        except Exception as ex:
+            return _err(400, f'Ошибка получения сайтов: {str(ex)[:200]}')
+
+    if action == 'yandex_submit':
+        token = (s.get('yandex_webmaster_token') or '').strip()
+        user_id = (s.get('yandex_webmaster_user_id') or '').strip()
+        if not token or not user_id:
+            return _err(400, 'Укажите токен и user_id (получите через «Проверить токен»)')
+        try:
+            # Ищем host_id для нашего сайта
+            req = _ureq.Request(
+                f'https://api.webmaster.yandex.net/v4/user/{user_id}/hosts',
+                headers={'Authorization': f'OAuth {token}', 'Accept': 'application/json'},
+            )
+            with _ureq.urlopen(req, timeout=10) as r:
+                hosts_data = _json.loads(r.read().decode())
+            hosts = hosts_data.get('hosts', [])
+            host_id = None
+            for h in hosts:
+                host_url = (h.get('unicode_host_url') or h.get('host_url') or '').rstrip('/')
+                if site_url in host_url or host_url in site_url:
+                    host_id = h.get('host_id')
+                    break
+            if not host_id and hosts:
+                host_id = hosts[0].get('host_id')
+            if not host_id:
+                return _err(400, f'Сайт {site_url} не найден в Яндекс Вебмастере. Сначала добавьте и подтвердите сайт.')
+            # Отправляем sitemap
+            payload = _json.dumps({'url': sitemap_url}).encode('utf-8')
+            req2 = _ureq.Request(
+                f'https://api.webmaster.yandex.net/v4/user/{user_id}/hosts/{host_id}/sitemaps',
+                data=payload,
+                headers={
+                    'Authorization': f'OAuth {token}',
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                method='POST',
+            )
+            with _ureq.urlopen(req2, timeout=10) as r2:
+                resp = _json.loads(r2.read().decode())
+            return _ok({'success': True, 'message': f'Sitemap {sitemap_url} отправлен в Яндекс Вебмастер', 'response': resp})
+        except Exception as ex:
+            return _err(400, f'Ошибка отправки sitemap в Яндекс: {str(ex)[:300]}')
+
+    # ── Google Search Console ──────────────────────────────────────────────
+    if action == 'google_check':
+        key_json = (s.get('google_search_console_key') or '').strip()
+        if not key_json:
+            return _err(400, 'Укажите JSON-ключ сервисного аккаунта Google')
+        try:
+            key_data = _json.loads(key_json)
+            client_email = key_data.get('client_email', '')
+            project_id = key_data.get('project_id', '')
+            if not client_email:
+                return _err(400, 'Неверный формат JSON: нет поля client_email')
+            return _ok({'success': True, 'client_email': client_email, 'project_id': project_id,
+                        'message': f'JSON-ключ корректен: {client_email}'})
+        except _json.JSONDecodeError:
+            return _err(400, 'Неверный JSON. Вставьте содержимое файла credentials.json полностью.')
+        except Exception as ex:
+            return _err(400, f'Ошибка проверки: {str(ex)[:200]}')
+
+    if action == 'google_submit':
+        key_json = (s.get('google_search_console_key') or '').strip()
+        if not key_json:
+            return _err(400, 'Укажите JSON-ключ сервисного аккаунта Google')
+        try:
+            import time, base64, hashlib, hmac
+            key_data = _json.loads(key_json)
+            client_email = key_data['client_email']
+            private_key_pem = key_data['private_key']
+
+            # Получаем access_token через JWT (service account)
+            try:
+                from cryptography.hazmat.primitives import hashes, serialization
+                from cryptography.hazmat.primitives.asymmetric import padding
+                from cryptography.hazmat.backends import default_backend
+            except ImportError:
+                return _err(500, 'Библиотека cryptography не установлена. Добавьте в requirements.txt.')
+
+            now = int(time.time())
+            header = base64.urlsafe_b64encode(_json.dumps({'alg': 'RS256', 'typ': 'JWT'}).encode()).rstrip(b'=')
+            payload_jwt = base64.urlsafe_b64encode(_json.dumps({
+                'iss': client_email,
+                'scope': 'https://www.googleapis.com/auth/webmasters',
+                'aud': 'https://oauth2.googleapis.com/token',
+                'exp': now + 3600,
+                'iat': now,
+            }).encode()).rstrip(b'=')
+            msg = header + b'.' + payload_jwt
+            private_key = serialization.load_pem_private_key(private_key_pem.encode(), password=None, backend=default_backend())
+            signature = base64.urlsafe_b64encode(private_key.sign(msg, padding.PKCS1v15(), hashes.SHA256())).rstrip(b'=')
+            jwt_token = (msg + b'.' + signature).decode()
+
+            # Обмениваем JWT на access_token
+            token_data = _json.dumps({
+                'grant_type': 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                'assertion': jwt_token,
+            }).encode()
+            token_req = _ureq.Request(
+                'https://oauth2.googleapis.com/token',
+                data=token_data,
+                headers={'Content-Type': 'application/json'},
+                method='POST',
+            )
+            with _ureq.urlopen(token_req, timeout=10) as tr:
+                token_resp = _json.loads(tr.read().decode())
+            access_token = token_resp.get('access_token')
+            if not access_token:
+                return _err(400, f'Не удалось получить access_token: {str(token_resp)[:200]}')
+
+            # Отправляем sitemap в Google Search Console
+            submit_req = _ureq.Request(
+                f'https://searchconsole.googleapis.com/webmasters/v3/sites/{_ureq.quote(site_url + "/", safe="")}/sitemaps/{_ureq.quote(sitemap_url, safe="")}',
+                data=b'',
+                headers={'Authorization': f'Bearer {access_token}', 'Content-Type': 'application/json'},
+                method='PUT',
+            )
+            with _ureq.urlopen(submit_req, timeout=10) as sr:
+                status_code = sr.status
+            return _ok({'success': True, 'message': f'Sitemap {sitemap_url} отправлен в Google Search Console (HTTP {status_code})'})
+        except Exception as ex:
+            return _err(400, f'Ошибка Google API: {str(ex)[:300]}')
+
+    return _err(400, 'Неизвестное действие')
 
 
 def _role_permissions(cur, conn, method, event, user, permissions):

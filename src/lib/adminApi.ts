@@ -341,6 +341,13 @@ export const adminApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  // webmaster API (Яндекс + Google)
+  webmasterCheck: (action: string) =>
+    req(`${ADMIN_URL}?resource=webmaster_check&action=${action}`, {
+      method: 'POST',
+      body: '{}',
+    }),
 };
 
 export interface UploadResult {

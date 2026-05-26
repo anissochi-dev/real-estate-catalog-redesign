@@ -77,6 +77,10 @@ export interface S {
   home_news_limit: number;
   show_leads_on_home: boolean;
   home_leads_limit: number;
+  // Вебмастер API
+  yandex_webmaster_token: string;
+  yandex_webmaster_user_id: string;
+  google_search_console_key: string;
 }
 
 export interface City {
