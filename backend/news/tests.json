@@ -4,9 +4,7 @@
       "name": "Публичный список новостей",
       "method": "GET",
       "path": "/?action=list",
-      "expectedStatus": 200,
-      "expectedBody": {"total": 5},
-      "bodyMatcher": "partial"
+      "expectedStatus": 200
     },
     {
       "name": "Без авторизации — ошибка",

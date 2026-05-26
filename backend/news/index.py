@@ -25,6 +25,7 @@ import json
 import os
 import re
 import urllib.request
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 import boto3
 import psycopg2
@@ -65,8 +66,10 @@ SYSTEM_PROMPT_TEMPLATE = """Ты — профессиональный копир
 
 СЕГОДНЯШНЯЯ ДАТА: {today}. Пиши статью актуальную именно на эту дату. Все ссылки на периоды, события, данные должны быть актуальны на дату публикации (не старше 10 дней от {today}).
 
+АКТУАЛЬНАЯ КЛЮЧЕВАЯ СТАВКА ЦБ РФ: {key_rate}% годовых (по данным cbr.ru на {today}). Используй ИМЕННО ЭТО значение — не придумывай другое.
+
 Твои источники для анализа:
-- Данные ЦБ РФ о ключевой ставке и ипотеке (cbr.ru) — актуальные на {today}
+- Данные ЦБ РФ о ключевой ставке и ипотеке (cbr.ru) — актуальные на {today}: ставка {key_rate}%
 - Новости застройщиков Краснодара (ЮСИ, Девелопмент-Юг, СКС) — события текущего месяца
 - Рынок коммерческой недвижимости (ЦИАН, Авито) — цены и тренды на {today}
 - Новости правительства Краснодарского края (kuban.ru) — актуальные решения
@@ -77,7 +80,7 @@ SYSTEM_PROMPT_TEMPLATE = """Ты — профессиональный копир
 1. Заголовок: конкретный, содержательный, до 100 символов, с указанием актуального периода (месяц/год: {month_year})
 2. Краткое описание (summary): 2-3 предложения, суть материала, 150-250 символов
 3. Текст статьи: 4-6 абзацев, факты и цифры, профессиональный тон
-4. Используй ТОЛЬКО актуальные данные на {today}: конкретные ставки ЦБ, цены, события
+4. Используй ТОЛЬКО актуальные данные на {today}: ключевая ставка ЦБ РФ = {key_rate}%, конкретные цены, события
 5. Не пиши обобщённо — пиши конкретно о текущей ситуации на {today}
 6. Завершай выводом или рекомендацией для инвесторов/арендаторов
 7. Пиши на русском языке, без markdown-разметки, только текст
@@ -89,7 +92,81 @@ SYSTEM_PROMPT_TEMPLATE = """Ты — профессиональный копир
   "content": "Полный текст статьи"
 }}"
 
-ВАЖНО: статья должна отражать реалии именно {today}, а не прошлого года."""
+ВАЖНО: статья должна отражать реалии именно {today}, а не прошлого года. Ключевая ставка = {key_rate}%."""
+
+
+def _fetch_cbr_key_rate() -> float | None:
+    """
+    Получает текущую ключевую ставку ЦБ РФ через официальный XML-сервис cbr.ru.
+    Возвращает float (например 21.0) или None при ошибке.
+    """
+    try:
+        url = 'https://www.cbr.ru/scripts/XML_val.asp?d=0'
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            xml_data = resp.read().decode('windows-1251', errors='replace')
+        # Метод 1: специализированный endpoint ставки
+    except Exception:
+        pass
+
+    # Метод 2: cbr.ru/hd_base/keyrate — страница с актуальной ставкой
+    try:
+        url2 = 'https://www.cbr.ru/hd_base/keyrate/'
+        req2 = urllib.request.Request(url2, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req2, timeout=8) as resp2:
+            html = resp2.read().decode('utf-8', errors='replace')
+        # Ищем паттерн вида "21,00" или "21.00" рядом со ставкой
+        m = re.search(r'(\d{1,2})[,.](\d{2})\s*%?\s*</td>', html)
+        if m:
+            rate = float(f"{m.group(1)}.{m.group(2)}")
+            if 1.0 <= rate <= 50.0:
+                return rate
+    except Exception:
+        pass
+
+    # Метод 3: официальный XML DailyInfo
+    try:
+        url3 = 'https://www.cbr.ru/scripts/XML_daily.asp'
+        req3 = urllib.request.Request(url3, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req3, timeout=8) as resp3:
+            xml3 = resp3.read().decode('windows-1251', errors='replace')
+        root = ET.fromstring(xml3)
+        # Ключевая ставка не в этом XML, но попробуем найти KeyRate через другой endpoint
+    except Exception:
+        pass
+
+    # Метод 4: cbr.ru/scripts/Key_Rate.asp
+    try:
+        url4 = 'https://www.cbr.ru/scripts/Key_Rate.asp'
+        req4 = urllib.request.Request(url4, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req4, timeout=8) as resp4:
+            xml4 = resp4.read().decode('windows-1251', errors='replace')
+        root4 = ET.fromstring(xml4)
+        # Ищем последнее значение
+        rates = []
+        for kr in root4.iter('KR'):
+            val_str = (kr.get('val') or kr.text or '').replace(',', '.').strip()
+            try:
+                rates.append(float(val_str))
+            except Exception:
+                pass
+        if rates:
+            return rates[-1]
+        # Ищем атрибуты Rate/rate
+        for elem in root4.iter():
+            for attr in ('Rate', 'rate', 'Val', 'val'):
+                v = elem.get(attr, '')
+                v = v.replace(',', '.').strip()
+                try:
+                    rate = float(v)
+                    if 1.0 <= rate <= 50.0:
+                        return rate
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    return None
 
 
 def _ok(body, status=200):
@@ -144,7 +221,7 @@ def _load_gpt_keys(cur):
     return os.environ.get('YANDEX_API_KEY', ''), os.environ.get('YANDEX_FOLDER_ID', '')
 
 
-def _gpt(api_key, folder_id, topic):
+def _gpt(api_key, folder_id, topic, key_rate: float | None = None):
     if not api_key or not folder_id:
         return None, 'YandexGPT не настроен'
     now = datetime.now(timezone.utc)
@@ -152,9 +229,11 @@ def _gpt(api_key, folder_id, topic):
                  'июля','августа','сентября','октября','ноября','декабря']
     today_str = f'{now.day} {MONTHS_RU[now.month-1]} {now.year}'
     month_year = f'{MONTHS_RU[now.month-1]} {now.year}'
+    key_rate_str = f'{key_rate:.2f}' if key_rate is not None else 'не определена'
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
         today=today_str,
         month_year=month_year,
+        key_rate=key_rate_str,
     )
     payload = {
         'modelUri': f'gpt://{folder_id}/{YANDEX_MODEL}',
@@ -270,7 +349,7 @@ def _load_logo_url(cur) -> str:
         return ''
 
 
-def _save_article(cur, conn, article, is_auto, user_id=None, auto_publish=False, logo_url=''):
+def _save_article(cur, conn, article, is_auto, user_id=None, auto_publish=False, logo_url='', key_rate: float | None = None):
     title = _safe(article.get('title', ''), 299)
     summary = _safe(article.get('summary', ''), 999)
     content = _safe(article.get('content', ''), 49999)
@@ -279,10 +358,11 @@ def _save_article(cur, conn, article, is_auto, user_id=None, auto_publish=False,
     img_val = f"'{_safe(image_url, 499)}'" if image_url else 'NULL'
     pub_val = 'TRUE' if auto_publish else 'FALSE'
     pub_at_val = f"'{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')}'" if auto_publish else 'NULL'
+    rate_val = str(key_rate) if key_rate is not None else 'NULL'
     cur.execute(
-        f"INSERT INTO {SCHEMA}.news (title, summary, content, image_url, is_auto, is_published, published_at, created_by) "
+        f"INSERT INTO {SCHEMA}.news (title, summary, content, image_url, is_auto, is_published, published_at, created_by, cb_key_rate) "
         f"VALUES ('{title}', '{summary}', '{content}', {img_val}, {is_auto}, {pub_val}, {pub_at_val}, "
-        f"{'NULL' if not user_id else user_id}) RETURNING id"
+        f"{'NULL' if not user_id else user_id}, {rate_val}) RETURNING id"
     )
     news_id = cur.fetchone()['id']
     slug = _slug(article.get('title', ''), news_id)
@@ -306,6 +386,7 @@ def _row_to_dict(r):
         'is_auto': r['is_auto'],
         'published_at': r['published_at'],
         'created_at': r['created_at'],
+        'cb_key_rate': float(r['cb_key_rate']) if r.get('cb_key_rate') is not None else None,
     }
 
 
@@ -351,14 +432,15 @@ def handler(event: dict, context) -> dict:
                 # Запускаем автогенерацию с картинками и автопубликацией
                 api_key, folder_id = _load_gpt_keys(cur)
                 logo_url = _load_logo_url(cur)
+                key_rate = _fetch_cbr_key_rate()
                 import random
                 count = int(sch.get('articles_per_run', 3))
                 topics = random.sample(AUTO_TOPICS, min(count, len(AUTO_TOPICS)))
                 generated = 0
                 for topic in topics:
-                    article, err = _gpt(api_key, folder_id, topic)
+                    article, err = _gpt(api_key, folder_id, topic, key_rate=key_rate)
                     if article:
-                        _save_article(cur, conn, article, True, auto_publish=True, logo_url=logo_url)
+                        _save_article(cur, conn, article, True, auto_publish=True, logo_url=logo_url, key_rate=key_rate)
                         generated += 1
                 ts = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')
                 cur.execute(
@@ -405,10 +487,16 @@ def handler(event: dict, context) -> dict:
             if action == 'admin_list' and method == 'GET':
                 cur.execute(
                     f"SELECT id, title, slug, summary, is_published, is_auto, "
-                    f"published_at, created_at, category FROM {SCHEMA}.news "
+                    f"published_at, created_at, category, cb_key_rate FROM {SCHEMA}.news "
                     f"ORDER BY created_at DESC LIMIT 100"
                 )
-                return _ok({'news': [dict(r) for r in cur.fetchall()]})
+                rows = []
+                for r in cur.fetchall():
+                    d = dict(r)
+                    if d.get('cb_key_rate') is not None:
+                        d['cb_key_rate'] = float(d['cb_key_rate'])
+                    rows.append(d)
+                return _ok({'news': rows})
 
             # ── СОЗДАТЬ ──────────────────────────────────────────────────
             if action == 'create':
@@ -420,19 +508,21 @@ def handler(event: dict, context) -> dict:
                 image_url = _safe(body.get('image_url', ''), 499)
                 source_url = _safe(body.get('source_url', ''), 499)
                 source_name = _safe(body.get('source_name', ''), 199)
+                key_rate = _fetch_cbr_key_rate()
+                rate_val = str(key_rate) if key_rate is not None else 'NULL'
                 cur.execute(
-                    f"INSERT INTO {SCHEMA}.news (title, summary, content, image_url, source_url, source_name, is_auto, created_by) "
+                    f"INSERT INTO {SCHEMA}.news (title, summary, content, image_url, source_url, source_name, is_auto, created_by, cb_key_rate) "
                     f"VALUES ('{title}', '{summary}', '{content}', "
                     f"{'NULL' if not image_url else chr(39)+image_url+chr(39)}, "
                     f"{'NULL' if not source_url else chr(39)+source_url+chr(39)}, "
                     f"{'NULL' if not source_name else chr(39)+source_name+chr(39)}, "
-                    f"FALSE, {user['id']}) RETURNING id"
+                    f"FALSE, {user['id']}, {rate_val}) RETURNING id"
                 )
                 nid = cur.fetchone()['id']
                 slug = _slug(body.get('title', ''), nid)
                 cur.execute(f"UPDATE {SCHEMA}.news SET slug = '{_safe(slug,319)}' WHERE id = {nid}")
                 conn.commit()
-                return _ok({'id': nid, 'slug': slug}, 201)
+                return _ok({'id': nid, 'slug': slug, 'cb_key_rate': key_rate}, 201)
 
             # ── ОБНОВИТЬ ─────────────────────────────────────────────────
             if action == 'update':
@@ -481,29 +571,44 @@ def handler(event: dict, context) -> dict:
                 api_key, folder_id = _load_gpt_keys(cur)
                 logo_url = _load_logo_url(cur)
                 auto_pub = bool(body.get('auto_publish', False))
-                article, err = _gpt(api_key, folder_id, topic)
+                key_rate = _fetch_cbr_key_rate()
+                article, err = _gpt(api_key, folder_id, topic, key_rate=key_rate)
                 if err:
                     return _err(f'Ошибка генерации: {err}')
-                nid, slug = _save_article(cur, conn, article, True, user['id'], auto_publish=auto_pub, logo_url=logo_url)
-                return _ok({'id': nid, 'slug': slug, 'title': article.get('title'), 'topic': topic})
+                nid, slug = _save_article(cur, conn, article, True, user['id'], auto_publish=auto_pub, logo_url=logo_url, key_rate=key_rate)
+                return _ok({'id': nid, 'slug': slug, 'title': article.get('title'), 'topic': topic, 'cb_key_rate': key_rate})
 
             # ── АВТОЗАПУСК ВРУЧНУЮ с картинками ──────────────────────────
             if action == 'run_auto':
                 api_key, folder_id = _load_gpt_keys(cur)
                 logo_url = _load_logo_url(cur)
+                key_rate = _fetch_cbr_key_rate()
                 count = min(int(body.get('count', 3)), 10)
                 auto_pub = bool(body.get('auto_publish', True))
                 import random
                 topics = random.sample(AUTO_TOPICS, min(count, len(AUTO_TOPICS)))
                 results = []
                 for topic in topics:
-                    article, err = _gpt(api_key, folder_id, topic)
+                    article, err = _gpt(api_key, folder_id, topic, key_rate=key_rate)
                     if article:
-                        nid, slug = _save_article(cur, conn, article, True, user['id'], auto_publish=auto_pub, logo_url=logo_url)
-                        results.append({'id': nid, 'slug': slug, 'title': article.get('title'), 'topic': topic})
+                        nid, slug = _save_article(cur, conn, article, True, user['id'], auto_publish=auto_pub, logo_url=logo_url, key_rate=key_rate)
+                        results.append({'id': nid, 'slug': slug, 'title': article.get('title'), 'topic': topic, 'cb_key_rate': key_rate})
                     else:
                         results.append({'error': err, 'topic': topic})
-                return _ok({'results': results, 'generated': len([r for r in results if 'id' in r])})
+                return _ok({'results': results, 'generated': len([r for r in results if 'id' in r]), 'cb_key_rate': key_rate})
+
+            # ── ОБНОВИТЬ СТАВКИ В СУЩЕСТВУЮЩИХ СТАТЬЯХ ───────────────────
+            if action == 'update_rates':
+                key_rate = _fetch_cbr_key_rate()
+                if key_rate is None:
+                    return _err('Не удалось получить ставку ЦБ РФ')
+                cur.execute(
+                    f"UPDATE {SCHEMA}.news SET cb_key_rate = {key_rate}, updated_at = NOW() "
+                    f"WHERE cb_key_rate IS NULL"
+                )
+                updated = cur.rowcount
+                conn.commit()
+                return _ok({'ok': True, 'cb_key_rate': key_rate, 'updated': updated})
 
             # ── РАСПИСАНИЕ GET ───────────────────────────────────────────
             if action == 'schedule' and method == 'GET':
