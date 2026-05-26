@@ -318,18 +318,6 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
               <span> · показаны {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filtered.length)}</span>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground whitespace-nowrap">Показывать по:</span>
-            {[25, 50, 100].map(n => (
-              <button
-                key={n}
-                onClick={() => { setPageSize(n); setPage(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${pageSize === n ? 'bg-brand-blue text-white border-brand-blue' : 'border-border text-muted-foreground hover:border-brand-blue hover:text-brand-blue'}`}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
         </div>
 
         {filtered.length === 0 ? (
