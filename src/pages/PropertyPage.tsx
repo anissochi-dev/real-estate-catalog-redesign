@@ -317,7 +317,15 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
               onSubmit={submit}
             />
           </div>
-          <PropertySidebar item={item} agents={agents} />
+          <PropertySidebar
+            item={item}
+            agents={agents}
+            sent={sent}
+            sending={sending}
+            form={form}
+            setForm={setForm}
+            onSubmit={submit}
+          />
         </div>
       </div>
 

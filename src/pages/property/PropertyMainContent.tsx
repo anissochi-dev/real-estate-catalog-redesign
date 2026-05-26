@@ -138,8 +138,8 @@ export default function PropertyMainContent({
         </div>
       )}
 
-      {/* Форма заявки */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm">
+      {/* Форма заявки — только мобильный */}
+      <div className="lg:hidden bg-white rounded-2xl p-5 shadow-sm">
         <div className="font-display font-700 text-lg mb-4 flex items-center gap-2">
           <Icon name="CalendarCheck" size={18} className="text-brand-blue" /> Заказать просмотр
         </div>
