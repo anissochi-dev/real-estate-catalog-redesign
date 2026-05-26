@@ -17,6 +17,11 @@ export interface Lead {
   broker_id?: number | null;
   /** true — телефон замаскирован сервером (нет прав видеть полностью) */
   phone_hidden?: boolean;
+  seo_h1?: string | null;
+  seo_h2?: string | null;
+  seo_h3?: string | null;
+  seo_h4?: string | null;
+  seo_h5?: string | null;
 }
 
 export const LEAD_TYPES: [string, string, string][] = [

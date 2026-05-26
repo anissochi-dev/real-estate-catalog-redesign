@@ -1,6 +1,35 @@
 import Icon from '@/components/ui/icon';
 import CharCount from '@/components/ui/CharCount';
 import { Listing, BUILDING_CLASSES, PROPERTY_RIGHTS, LAND_STATUSES, FINISHING } from './types';
+import SeoHeadingsBlock, { SeoHeadings } from '@/components/admin/SeoHeadingsBlock';
+
+const DEAL_LABEL: Record<string, string> = {
+  sale: 'Продажа', rent: 'Аренда', business: 'Готовый бизнес',
+};
+const TYPE_LABEL: Record<string, string> = {
+  office: 'офиса', retail: 'торгового помещения', warehouse: 'склада',
+  restaurant: 'помещения под общепит', hotel: 'гостиницы', business: 'готового бизнеса',
+  gab: 'готового арендного бизнеса', production: 'производственного помещения',
+  land: 'земельного участка', building: 'здания', free_purpose: 'помещения',
+  car_service: 'помещения под автосервис',
+};
+
+function generateHeadings(e: Partial<Listing>): SeoHeadings {
+  const city = e.city || 'Краснодар';
+  const deal = DEAL_LABEL[e.deal || ''] || 'Аренда';
+  const type = TYPE_LABEL[e.category || ''] || 'объекта';
+  const area = e.area ? `${e.area} м²` : '';
+  const addr = e.district || e.address || city;
+  const price = e.price ? `${(e.price / 1_000_000).toFixed(e.price >= 10_000_000 ? 0 : 1)} млн ₽` : '';
+
+  return {
+    h1: e.title || `${deal} ${type} в ${city}`,
+    h2: [deal, type, area, `в ${city}`].filter(Boolean).join(' '),
+    h3: addr ? `${deal} ${type} — ${addr}` : `${deal} ${type} в ${city}`,
+    h4: [area, price].filter(Boolean).join(' · ') || `Параметры ${type}`,
+    h5: price ? `Стоимость: ${price}` : `Цена по запросу — ${city}`,
+  };
+}
 
 interface Props {
   editing: Partial<Listing>;
@@ -217,6 +246,28 @@ export default function ListingEditorExtraSection({
         <div className="text-[11px] text-muted-foreground">
           Если поля пустые — поисковики возьмут текст из названия и описания объекта.
         </div>
+      </div>
+
+      {/* ─── H1-H5 ─── */}
+      <div className="pt-2">
+        <SeoHeadingsBlock
+          generated={generateHeadings(editing)}
+          value={{
+            h1: editing.seo_h1 || undefined,
+            h2: editing.seo_h2 || undefined,
+            h3: editing.seo_h3 || undefined,
+            h4: editing.seo_h4 || undefined,
+            h5: editing.seo_h5 || undefined,
+          }}
+          onChange={(v: Partial<SeoHeadings>) => setEditing({
+            ...editing,
+            seo_h1: v.h1 || null,
+            seo_h2: v.h2 || null,
+            seo_h3: v.h3 || null,
+            seo_h4: v.h4 || null,
+            seo_h5: v.h5 || null,
+          })}
+        />
       </div>
     </div>
   );

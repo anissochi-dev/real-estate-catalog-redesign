@@ -36,6 +36,11 @@ export interface Listing {
   slug: string | null;
   seo_title: string | null;
   seo_description: string | null;
+  seo_h1: string | null;
+  seo_h2: string | null;
+  seo_h3: string | null;
+  seo_h4: string | null;
+  seo_h5: string | null;
   public_code?: number | null;
   tenant_name?: string | null;
   monthly_rent?: number | null;

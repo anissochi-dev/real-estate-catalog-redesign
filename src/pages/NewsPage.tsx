@@ -46,7 +46,8 @@ export function NewsListPage() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
       <div className="mb-8">
-        <h1 className="font-display font-800 text-3xl text-foreground mb-2">Новости коммерческой недвижимости</h1>
+        <h1 className="font-display font-800 text-3xl text-foreground mb-1">Новости коммерческой недвижимости</h1>
+        <h2 className="font-display font-600 text-lg text-brand-blue mb-2">Аналитика и обзоры рынка Краснодара и Краснодарского края</h2>
         <p className="text-muted-foreground">Актуальные новости рынка, аналитика и обзоры Краснодара и Краснодарского края</p>
       </div>
 
@@ -222,15 +223,19 @@ export function NewsArticlePage() {
         )}
 
         {article.summary && (
-          <div className="text-base font-medium text-foreground mb-6 pb-6 border-b border-border leading-relaxed">
+          <h2 className="text-base font-medium text-foreground mb-6 pb-6 border-b border-border leading-relaxed">
             {article.summary}
-          </div>
+          </h2>
         )}
 
         <div className="prose prose-sm max-w-none space-y-4">
-          {paragraphs.map((p, i) => (
-            <p key={i} className="text-foreground leading-relaxed">{p}</p>
-          ))}
+          {paragraphs.map((p, i) => {
+            if (i === 0) return <p key={i} className="text-foreground leading-relaxed font-medium">{p}</p>;
+            if (p.length < 80 && !p.endsWith('.') && !p.endsWith('…')) {
+              return <h3 key={i} className="font-display font-700 text-base text-foreground mt-6 mb-1">{p}</h3>;
+            }
+            return <p key={i} className="text-foreground leading-relaxed">{p}</p>;
+          })}
         </div>
 
         {article.source_url && (

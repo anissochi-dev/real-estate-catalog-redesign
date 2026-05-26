@@ -3,6 +3,26 @@ import Icon from '@/components/ui/icon';
 import PhonePickerInput from '@/components/admin/PhonePickerInput';
 import CharCount from '@/components/ui/CharCount';
 import { Lead, Listing, STATUSES } from './leadsTypes';
+import SeoHeadingsBlock, { SeoHeadings } from '@/components/admin/SeoHeadingsBlock';
+
+function generateLeadHeadings(lead: Partial<Lead>): SeoHeadings {
+  const name = lead.name || 'Клиент';
+  const budget = lead.budget
+    ? `бюджет ${(lead.budget / 1_000_000).toFixed(lead.budget >= 10_000_000 ? 0 : 1)} млн ₽`
+    : '';
+  const company = lead.company ? ` — ${lead.company}` : '';
+  return {
+    h1: `Заявка от ${name}${company}`,
+    h2: budget
+      ? `Подбор коммерческой недвижимости — ${budget}`
+      : 'Подбор коммерческой недвижимости в Краснодаре',
+    h3: lead.message
+      ? lead.message.slice(0, 80)
+      : 'Запрос на аренду или покупку объекта',
+    h4: budget || 'Бюджет уточняется',
+    h5: `Контакт: ${name}`,
+  };
+}
 
 interface Props {
   editing: Partial<Lead>;
@@ -145,6 +165,25 @@ export default function LeadEditModal({
               onChange={e => setEditing({ ...editing, show_on_main: e.target.checked })} />
             Показывать на главной странице
           </label>
+
+          <SeoHeadingsBlock
+            generated={generateLeadHeadings(editing)}
+            value={{
+              h1: editing.seo_h1 || undefined,
+              h2: editing.seo_h2 || undefined,
+              h3: editing.seo_h3 || undefined,
+              h4: editing.seo_h4 || undefined,
+              h5: editing.seo_h5 || undefined,
+            }}
+            onChange={(v: Partial<SeoHeadings>) => setEditing({
+              ...editing,
+              seo_h1: v.h1 || null,
+              seo_h2: v.h2 || null,
+              seo_h3: v.h3 || null,
+              seo_h4: v.h4 || null,
+              seo_h5: v.h5 || null,
+            })}
+          />
         </div>
         <div className="p-5 border-t border-border flex justify-end gap-3 flex-shrink-0 bg-white rounded-b-2xl">
           <button onClick={() => setEditing(null)} className="px-4 py-2 rounded-xl text-sm">Отмена</button>

@@ -2,6 +2,22 @@ import { useEffect, useState } from 'react';
 import { NEWS_URL, getToken } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
+import SeoHeadingsBlock, { SeoHeadings } from '@/components/admin/SeoHeadingsBlock';
+
+function generateNewsHeadings(title: string, summary: string): SeoHeadings {
+  const city = 'Краснодар';
+  return {
+    h1: title || `Новости коммерческой недвижимости ${city}`,
+    h2: summary
+      ? summary.split('.')[0].slice(0, 90)
+      : `Аналитика рынка недвижимости ${city}`,
+    h3: title
+      ? `${title} — подробности`
+      : `Обзор рынка коммерческой недвижимости`,
+    h4: `Рынок коммерческой недвижимости ${city}`,
+    h5: `Аренда и продажа объектов — актуальные данные`,
+  };
+}
 
 interface NewsItem {
   id: number;
@@ -71,6 +87,7 @@ export default function NewsAdmin() {
   const [customTopic, setCustomTopic] = useState('');
 
   const [form, setForm] = useState({ title: '', summary: '', content: '', image_url: '', source_url: '', source_name: '' });
+  const [seoHeadings, setSeoHeadings] = useState<Partial<SeoHeadings>>({});
   const [saving, setSaving] = useState(false);
 
   const loadNews = () => {
@@ -98,11 +115,20 @@ export default function NewsAdmin() {
     if (!form.title || !form.content) { toast.error('Заполните заголовок и текст'); return; }
     setSaving(true);
     try {
-      const r = await fetch(NEWS_URL, { method: 'POST', headers, body: JSON.stringify({ action: 'create', ...form }) });
+      const gen = generateNewsHeadings(form.title, form.summary);
+      const headings = {
+        seo_h1: seoHeadings.h1 || gen.h1,
+        seo_h2: seoHeadings.h2 || gen.h2,
+        seo_h3: seoHeadings.h3 || gen.h3,
+        seo_h4: seoHeadings.h4 || gen.h4,
+        seo_h5: seoHeadings.h5 || gen.h5,
+      };
+      const r = await fetch(NEWS_URL, { method: 'POST', headers, body: JSON.stringify({ action: 'create', ...form, ...headings }) });
       const d = await r.json();
       if (d.error) { toast.error(d.error); return; }
       toast.success('Статья создана');
       setForm({ title: '', summary: '', content: '', image_url: '', source_url: '', source_name: '' });
+      setSeoHeadings({});
       setTab('list');
       loadNews();
     } finally {
@@ -274,6 +300,11 @@ export default function NewsAdmin() {
                   className="w-full px-3 py-2 border rounded-lg text-sm" />
               </div>
             </div>
+            <SeoHeadingsBlock
+              generated={generateNewsHeadings(form.title, form.summary)}
+              value={seoHeadings}
+              onChange={setSeoHeadings}
+            />
             <button onClick={create} disabled={saving || !form.title || !form.content}
               className="btn-blue text-white px-5 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 w-full inline-flex items-center justify-center gap-2">
               {saving ? <Icon name="Loader2" size={15} className="animate-spin" /> : <Icon name="Save" size={15} />}
