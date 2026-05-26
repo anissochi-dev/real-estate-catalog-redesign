@@ -1,0 +1,39 @@
+# Статические ресурсы со встроенным хэшем в имени файла —
+# кэшируются на год, браузер не перепроверяет до истечения срока.
+# При новом деплое имя файла меняется → кэш автоматически сбрасывается.
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Шрифты
+*.woff2
+  Cache-Control: public, max-age=31536000, immutable
+
+*.woff
+  Cache-Control: public, max-age=31536000, immutable
+
+# Изображения (статические, из папки public)
+*.png
+  Cache-Control: public, max-age=31536000, immutable
+
+*.jpg
+  Cache-Control: public, max-age=31536000, immutable
+
+*.jpeg
+  Cache-Control: public, max-age=31536000, immutable
+
+*.svg
+  Cache-Control: public, max-age=31536000, immutable
+
+*.webp
+  Cache-Control: public, max-age=31536000, immutable
+
+*.ico
+  Cache-Control: public, max-age=31536000, immutable
+
+# HTML — никогда не кэшируем, браузер всегда берёт свежий
+/*.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/
+  Cache-Control: no-cache, no-store, must-revalidate
