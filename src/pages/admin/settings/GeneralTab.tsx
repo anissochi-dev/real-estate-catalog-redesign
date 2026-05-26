@@ -83,6 +83,42 @@ export default function GeneralTab({ tab, s, setS, cities, saved, save }: Props)
           {field('about_text', 'О компании', true)}
         </div>
 
+        <div className="bg-white rounded-2xl p-6 shadow-sm space-y-3">
+          <div className="font-display font-700 text-lg mb-2">Количество объектов</div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm font-semibold block mb-1">На главной странице</label>
+              <input type="number" min={1} max={200} className="w-full px-3 py-2 border rounded-lg"
+                value={s.home_listings_limit ?? 20}
+                onChange={e => setS({ ...s, home_listings_limit: +e.target.value || 20 })} />
+            </div>
+            <div>
+              <label className="text-sm font-semibold block mb-1">В каталоге (на странице)</label>
+              <input type="number" min={1} max={200} className="w-full px-3 py-2 border rounded-lg"
+                value={s.catalog_page_size ?? 20}
+                onChange={e => setS({ ...s, catalog_page_size: +e.target.value || 20 })} />
+            </div>
+            <div>
+              <label className="text-sm font-semibold block mb-1">В категориях (на странице)</label>
+              <input type="number" min={1} max={200} className="w-full px-3 py-2 border rounded-lg"
+                value={s.category_page_size ?? 20}
+                onChange={e => setS({ ...s, category_page_size: +e.target.value || 20 })} />
+            </div>
+            <div>
+              <label className="text-sm font-semibold block mb-1">Новостей на странице</label>
+              <input type="number" min={1} max={100} className="w-full px-3 py-2 border rounded-lg"
+                value={s.news_list_limit ?? 12}
+                onChange={e => setS({ ...s, news_list_limit: +e.target.value || 12 })} />
+            </div>
+            <div>
+              <label className="text-sm font-semibold block mb-1">Заявок на странице</label>
+              <input type="number" min={1} max={200} className="w-full px-3 py-2 border rounded-lg"
+                value={s.leads_page_size ?? 24}
+                onChange={e => setS({ ...s, leads_page_size: +e.target.value || 24 })} />
+            </div>
+          </div>
+        </div>
+
         <div className="flex items-center gap-3 sticky bottom-4 bg-white p-3 rounded-xl shadow z-20">
           <button onClick={save} className="btn-blue text-white px-6 py-3 rounded-xl font-semibold">Сохранить</button>
           {saved && <span className="text-emerald-600 text-sm">Сохранено</span>}

@@ -5,8 +5,7 @@ import Breadcrumbs from '@/components/Breadcrumbs';
 import SmartCaptcha, { CaptchaResult } from '@/components/SmartCaptcha';
 import { fetchPublicLeads, aiSearchLeads, sendLead, PublicLead } from '@/lib/api';
 import { useSeoH1 } from '@/components/SeoHead';
-
-const PAGE_SIZE = 24;
+import { useSettings } from '@/contexts/SettingsContext';
 
 function fmtBudget(b: number | null): string {
   if (!b) return 'не указан';
@@ -41,6 +40,8 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export default function LeadsListPage() {
   const h1 = useSeoH1('Заявки клиентов');
+  const { settings } = useSettings();
+  const PAGE_SIZE = settings.leads_page_size ?? 24;
 
   const [leads, setLeads] = useState<PublicLead[]>([]);
   const [total, setTotal] = useState(0);

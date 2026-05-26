@@ -92,7 +92,8 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
     }
     return p.id;
   };
-  const newObjects = [...properties].sort((a, b) => propTime(b) - propTime(a)).slice(0, 20);
+  const homeLimit = settings.home_listings_limit ?? 20;
+  const newObjects = [...properties].sort((a, b) => propTime(b) - propTime(a)).slice(0, homeLimit);
 
   const STATS_VIEW = [
     { value: `${totalCount}+`, label: 'Объектов в базе', icon: 'Building2', deal: 'all' as const },

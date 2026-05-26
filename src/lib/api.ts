@@ -232,6 +232,11 @@ export interface PublicSettings {
   watermark_enabled?: boolean;
   watermark_position?: string;
   watermark_opacity?: number;
+  home_listings_limit?: number;
+  catalog_page_size?: number;
+  news_list_limit?: number;
+  category_page_size?: number;
+  leads_page_size?: number;
 }
 
 export async function fetchPublicSettings(): Promise<PublicSettings> {

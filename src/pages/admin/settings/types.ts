@@ -59,6 +59,11 @@ export interface S {
   smtp_user: string;
   smtp_password: string;
   smtp_from: string;
+  home_listings_limit: number;
+  catalog_page_size: number;
+  news_list_limit: number;
+  category_page_size: number;
+  leads_page_size: number;
 }
 
 export interface City {

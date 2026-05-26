@@ -34,7 +34,7 @@ export function NewsListPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const LIMIT = 12;
+  const LIMIT = settings.news_list_limit ?? 12;
 
   useEffect(() => {
     setLoading(true);

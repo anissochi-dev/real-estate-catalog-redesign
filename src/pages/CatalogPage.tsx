@@ -6,8 +6,7 @@ import Icon from '@/components/ui/icon';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import { useSeoH1 } from '@/components/SeoHead';
 import AIMatchModal from '@/components/AIMatchModal';
-
-const PAGE_SIZE = 20;
+import { useSettings } from '@/contexts/SettingsContext';
 
 interface CatalogPageProps {
   properties: Property[];
@@ -72,6 +71,8 @@ function buildCatalogH1(deal: string, type: string): string {
 
 export default function CatalogPage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare }: CatalogPageProps) {
   const h1Base = useSeoH1('Каталог коммерческой недвижимости в Краснодаре');
+  const { settings } = useSettings();
+  const PAGE_SIZE = settings.catalog_page_size ?? 20;
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [dealFilter, setDealFilter] = useState('all');

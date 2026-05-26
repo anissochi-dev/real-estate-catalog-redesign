@@ -180,6 +180,8 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
   const city = settings.main_city || 'Краснодар';
   const [aiQuery, setAiQuery] = useState('');
   const [aiOpen, setAiOpen] = useState(false);
+  const [catPage, setCatPage] = useState(1);
+  const CAT_PAGE_SIZE = settings.category_page_size ?? 20;
 
   const meta = type ? CATEGORY_META[type] : null;
 
@@ -212,6 +214,9 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
     if (!type) return [];
     return properties.filter(p => String(p.type) === type);
   }, [properties, type]);
+
+  const totalPages = Math.ceil(items.length / CAT_PAGE_SIZE);
+  const pagedItems = items.slice((catPage - 1) * CAT_PAGE_SIZE, catPage * CAT_PAGE_SIZE);
 
   if (!meta) {
     return (
@@ -368,7 +373,7 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {items.map((property, i) => (
+              {pagedItems.map((property, i) => (
                 <PropertyCard
                   key={property.id}
                   property={property}
@@ -380,6 +385,25 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
                 />
               ))}
             </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-8">
+                <button disabled={catPage === 1} onClick={() => { setCatPage(p => p - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                  className="px-3 py-2 rounded-lg border border-border hover:border-brand-blue disabled:opacity-30 transition-colors">
+                  <Icon name="ChevronLeft" size={16} />
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <button key={p} onClick={() => { setCatPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    className={`w-9 h-9 rounded-lg text-sm font-semibold transition-colors ${p === catPage ? 'btn-blue text-white' : 'border border-border hover:border-brand-blue'}`}>
+                    {p}
+                  </button>
+                ))}
+                <button disabled={catPage === totalPages} onClick={() => { setCatPage(p => p + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                  className="px-3 py-2 rounded-lg border border-border hover:border-brand-blue disabled:opacity-30 transition-colors">
+                  <Icon name="ChevronRight" size={16} />
+                </button>
+              </div>
+            )}
 
             {/* SEO-текст внизу */}
             <div className="mt-12 p-6 bg-white rounded-2xl border border-border">
