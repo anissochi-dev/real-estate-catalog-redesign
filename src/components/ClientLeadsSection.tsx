@@ -68,9 +68,15 @@ export default function ClientLeadsSection() {
             На мобиле — две строки, ссылка отдельной кнопкой во всю ширину.
             На sm+ — в одну строку справа. */}
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-3">
-          <p className="text-xs text-muted-foreground max-w-xl">
-            Есть подходящий объект? Предложите его клиенту — заявка попадёт нашему менеджеру.
-          </p>
+          <div>
+            <h2 className="font-display font-700 text-base text-foreground flex items-center gap-2 mb-1">
+              <Icon name="Users" size={16} className="text-brand-blue" />
+              Заявки клиентов
+            </h2>
+            <p className="text-xs text-muted-foreground max-w-xl">
+              Есть подходящий объект? Предложите его клиенту — заявка попадёт нашему менеджеру.
+            </p>
+          </div>
           <Link
             to="/leads"
             aria-label="Смотреть все заявки клиентов"
@@ -88,7 +94,7 @@ export default function ClientLeadsSection() {
                   <div className="w-9 h-9 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center font-semibold">
                     {l.name.charAt(0).toUpperCase()}
                   </div>
-                  <div className="font-semibold">{l.name}</div>
+                  <h3 className="font-semibold text-base">{l.name}</h3>
                 </div>
                 {l.budget && (
                   <span className="text-xs font-semibold bg-brand-blue/10 text-brand-blue px-2 py-1 rounded-lg">

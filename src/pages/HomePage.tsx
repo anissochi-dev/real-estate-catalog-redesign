@@ -205,11 +205,11 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
                     <Icon name={stat.icon} size={16} className="text-brand-blue" />
                   </div>
                   <div>
-                    <div className="font-display font-800 text-lg text-brand-blue leading-none flex items-center gap-1">
+                    <h4 className="font-display font-800 text-lg text-brand-blue leading-none flex items-center gap-1">
                       {stat.value}
                       {clickable && <Icon name="ArrowRight" size={12} className="text-brand-blue/60" />}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground mt-0.5">{stat.label}</div>
+                    </h4>
+                    <h5 className="text-[11px] text-muted-foreground mt-0.5 font-normal">{stat.label}</h5>
                   </div>
                 </>
               );
@@ -261,12 +261,17 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
       {/* Новые объекты */}
       <section className="py-6 bg-muted/40">
         <div className="container mx-auto px-4">
-          <div className="flex items-end justify-end mb-3">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2">
+              <Icon name="Building2" size={16} className="text-brand-blue" />
+              <h2 className="font-display font-700 text-base text-foreground">Новые объекты</h2>
+            </div>
             <button
               onClick={() => onNavigate('catalog')}
-              className="flex items-center gap-1.5 text-brand-blue font-semibold text-xs hover:gap-2 transition-all duration-200"
+              aria-label="Смотреть все объекты каталога"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-brand-blue/10 text-brand-blue hover:bg-brand-blue hover:text-white font-semibold text-sm transition-colors whitespace-nowrap shrink-0 min-h-[40px] w-full sm:w-auto"
             >
-              Смотреть все <Icon name="ArrowRight" size={14} />
+              Смотреть все объекты <Icon name="ArrowRight" size={14} />
             </button>
           </div>
 
@@ -295,7 +300,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Icon name="Newspaper" size={16} className="text-brand-blue" />
-                <span className="font-display font-700 text-base text-foreground">Новости коммерческой недвижимости</span>
+                <h2 className="font-display font-700 text-base text-foreground">Новости коммерческой недвижимости</h2>
               </div>
               <button
                 onClick={() => navigate('/news')}
@@ -326,9 +331,9 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
                   </div>
                   <div className="p-2.5">
                     <h3 className="font-medium text-xs leading-snug line-clamp-2 group-hover:text-brand-blue transition-colors">{n.title}</h3>
-                    <div className="text-[10px] text-muted-foreground mt-1.5">
+                    <h6 className="text-[10px] text-muted-foreground mt-1.5 font-normal">
                       {new Date(n.published_at || n.created_at).toLocaleDateString('ru', { day: 'numeric', month: 'short' })}
-                    </div>
+                    </h6>
                   </div>
                 </article>
               ))}
