@@ -10,6 +10,7 @@ import PropertyMediaGallery from '@/components/property/PropertyMediaGallery';
 import PropertyMainContent from '@/components/property/PropertyMainContent';
 import PropertySidebar from '@/components/property/PropertySidebar';
 import { TYPE_LABELS, DEAL_LABELS } from '@/components/property/propertyLabels';
+import AIMatchModal from '@/components/AIMatchModal';
 
 interface Props {
   onToggleFavorite: (id: number) => void;
@@ -32,6 +33,8 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   const [agents, setAgents] = useState<Agent[]>([]);
   const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [aiQuery, setAiQuery] = useState('');
+  const [aiOpen, setAiOpen] = useState(false);
 
   const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
 
@@ -229,6 +232,36 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
               dealLabel={dealLabel}
               typeLabel={typeLabel}
             />
+            {/* ИИ-подбор похожих */}
+            <div className="bg-gradient-to-r from-brand-blue to-indigo-600 rounded-2xl px-4 py-3">
+              <form
+                onSubmit={e => { e.preventDefault(); setAiOpen(true); }}
+                className="flex items-center gap-2"
+              >
+                <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+                  <Icon name="Sparkles" size={14} className="text-white" />
+                </div>
+                <input
+                  value={aiQuery}
+                  onChange={e => setAiQuery(e.target.value)}
+                  placeholder={`Найти похожие на «${item.title.slice(0, 40)}${item.title.length > 40 ? '…' : ''}»`}
+                  className="flex-1 bg-transparent text-white placeholder:text-white/50 outline-none text-sm min-w-0"
+                />
+                {aiQuery && (
+                  <button type="button" onClick={() => setAiQuery('')} className="text-white/50 hover:text-white/80 flex-shrink-0">
+                    <Icon name="X" size={13} />
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  className="flex-shrink-0 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1.5"
+                >
+                  <Icon name="Sparkles" size={12} />
+                  Найти с ИИ
+                </button>
+              </form>
+            </div>
+
             <PropertyMainContent
               item={item}
               dealLabel={dealLabel}
@@ -243,6 +276,13 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
           <PropertySidebar item={item} agents={agents} />
         </div>
       </div>
+
+      <AIMatchModal
+        open={aiOpen}
+        onClose={() => setAiOpen(false)}
+        initialPrompt={aiQuery || `${dealLabel} ${typeLabel} ${item.area} м² ${item.city || 'Краснодар'}`}
+        autoSubmit
+      />
     </div>
   );
 }
