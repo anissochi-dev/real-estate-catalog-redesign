@@ -279,7 +279,7 @@ export default function NewsAdmin() {
                             Опубл.
                           </button>
                         )}
-                        <a href={`/news/${n.slug}`} target="_blank" rel="noopener noreferrer"
+                        <a href={`${window.location.origin}/news/${n.slug}`} target="_blank" rel="noopener noreferrer"
                           className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-brand-blue transition">
                           <Icon name="ExternalLink" size={14} />
                         </a>
