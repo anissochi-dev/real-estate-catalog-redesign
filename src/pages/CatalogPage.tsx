@@ -70,7 +70,8 @@ function buildCatalogH1(deal: string, type: string): string {
 export default function CatalogPage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare }: CatalogPageProps) {
   const h1Base = useSeoH1('Каталог коммерческой недвижимости в Краснодаре');
   const { settings } = useSettings();
-  const PAGE_SIZE = settings.catalog_page_size ?? 20;
+  const DEFAULT_PAGE_SIZE = settings.catalog_page_size ?? 25;
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [dealFilter, setDealFilter] = useState('all');
@@ -140,11 +141,11 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
     return result;
   }, [properties, search, dealFilter, typeFilter, sortBy, minArea, maxPrice]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageItems = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return filtered.slice(start, start + PAGE_SIZE);
-  }, [filtered, page]);
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
 
   useEffect(() => {
     if (page > totalPages) setPage(1);
@@ -310,12 +311,24 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
           ]} />
         </div>
         <h1 className="font-display font-900 text-2xl md:text-3xl text-foreground mb-4">{h1}</h1>
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
           <div className="text-sm text-muted-foreground">
             Найдено <span className="font-semibold text-foreground">{filtered.length}</span> объектов
-            {filtered.length > PAGE_SIZE && (
-              <span> · показаны {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)}</span>
+            {filtered.length > pageSize && (
+              <span> · показаны {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filtered.length)}</span>
             )}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">Показывать по:</span>
+            {[25, 50, 100].map(n => (
+              <button
+                key={n}
+                onClick={() => { setPageSize(n); setPage(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${pageSize === n ? 'bg-brand-blue text-white border-brand-blue' : 'border-border text-muted-foreground hover:border-brand-blue hover:text-brand-blue'}`}
+              >
+                {n}
+              </button>
+            ))}
           </div>
         </div>
 

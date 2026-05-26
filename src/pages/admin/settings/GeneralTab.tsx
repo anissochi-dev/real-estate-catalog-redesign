@@ -95,8 +95,8 @@ export default function GeneralTab({ tab, s, setS, cities, saved, save }: Props)
             <div>
               <label className="text-sm font-semibold block mb-1">В каталоге (на странице)</label>
               <input type="number" min={1} max={200} className="w-full px-3 py-2 border rounded-lg"
-                value={s.catalog_page_size ?? 20}
-                onChange={e => setS({ ...s, catalog_page_size: +e.target.value || 20 })} />
+                value={s.catalog_page_size ?? 25}
+                onChange={e => setS({ ...s, catalog_page_size: +e.target.value || 25 })} />
             </div>
             <div>
               <label className="text-sm font-semibold block mb-1">В категориях (на странице)</label>
