@@ -237,6 +237,9 @@ export interface PublicSettings {
   news_list_limit?: number;
   category_page_size?: number;
   leads_page_size?: number;
+  show_news_on_home?: boolean;
+  home_news_limit?: number;
+  show_leads_on_home?: boolean;
 }
 
 export async function fetchPublicSettings(): Promise<PublicSettings> {

@@ -83,7 +83,7 @@ export default function GeneralTab({ tab, s, setS, cities, saved, save }: Props)
           {field('about_text', 'О компании', true)}
         </div>
 
-        <div className="bg-white rounded-2xl p-6 shadow-sm space-y-3">
+        <div className="bg-white rounded-2xl p-6 shadow-sm space-y-4">
           <div className="font-display font-700 text-lg mb-2">Количество объектов</div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -115,6 +115,53 @@ export default function GeneralTab({ tab, s, setS, cities, saved, save }: Props)
               <input type="number" min={1} max={200} className="w-full px-3 py-2 border rounded-lg"
                 value={s.leads_page_size ?? 24}
                 onChange={e => setS({ ...s, leads_page_size: +e.target.value || 24 })} />
+            </div>
+          </div>
+
+          <div className="border-t border-border pt-4">
+            <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Блоки на главной странице</div>
+            <div className="space-y-4">
+
+              {/* Новости */}
+              <div className="flex items-start justify-between gap-4 p-3 rounded-xl bg-muted/40">
+                <div>
+                  <div className="text-sm font-semibold">Блок новостей</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">Показывать новости на главной странице</div>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer flex-shrink-0">
+                  <div
+                    onClick={() => setS({ ...s, show_news_on_home: !s.show_news_on_home })}
+                    className={`relative w-10 h-5 rounded-full transition-colors cursor-pointer ${s.show_news_on_home ? 'bg-brand-blue' : 'bg-muted-foreground/30'}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${s.show_news_on_home ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </div>
+                </label>
+              </div>
+              {s.show_news_on_home && (
+                <div className="pl-3">
+                  <label className="text-sm font-semibold block mb-1">Количество новостей на главной</label>
+                  <input type="number" min={2} max={20} className="w-40 px-3 py-2 border rounded-lg text-sm"
+                    value={s.home_news_limit ?? 10}
+                    onChange={e => setS({ ...s, home_news_limit: +e.target.value || 10 })} />
+                </div>
+              )}
+
+              {/* Заявки */}
+              <div className="flex items-start justify-between gap-4 p-3 rounded-xl bg-muted/40">
+                <div>
+                  <div className="text-sm font-semibold">Блок заявок клиентов</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">Показывать публичные заявки на главной странице</div>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer flex-shrink-0">
+                  <div
+                    onClick={() => setS({ ...s, show_leads_on_home: !s.show_leads_on_home })}
+                    className={`relative w-10 h-5 rounded-full transition-colors cursor-pointer ${s.show_leads_on_home ? 'bg-brand-blue' : 'bg-muted-foreground/30'}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${s.show_leads_on_home ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </div>
+                </label>
+              </div>
+
             </div>
           </div>
         </div>

@@ -55,12 +55,14 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   const [aiOpen, setAiOpen] = useState(false);
   const [latestNews, setLatestNews] = useState<NewsPreview[]>([]);
 
+  const newsLimit = settings.home_news_limit ?? 10;
   useEffect(() => {
-    fetch(`${NEWS_URL}?action=list&limit=10`)
+    if (settings.show_news_on_home === false) return;
+    fetch(`${NEWS_URL}?action=list&limit=${newsLimit}`)
       .then(r => r.json())
       .then(d => setLatestNews(d.news || []))
       .catch(() => undefined);
-  }, []);
+  }, [newsLimit, settings.show_news_on_home]);
 
   useEffect(() => {
     fetch(`${LISTINGS_URL}?resource=public_leads_full&limit=1`)
@@ -102,6 +104,10 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   };
   const homeLimit = settings.home_listings_limit ?? 20;
   const newObjects = [...properties].sort((a, b) => propTime(b) - propTime(a)).slice(0, homeLimit);
+
+  const showNews = settings.show_news_on_home !== false;
+  const homeNewsLimit = settings.home_news_limit ?? 10;
+  const showLeads = settings.show_leads_on_home !== false;
 
   const STATS_VIEW = [
     { value: `${totalCount}+`, label: 'Объектов в базе', icon: 'Building2', deal: null },
@@ -297,10 +303,10 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
         </div>
       </section>
 
-      <ClientLeadsSection />
+      {showLeads && <ClientLeadsSection />}
 
       {/* Блок новостей — 5 в ряд, 2 строки */}
-      {latestNews.length > 0 && (
+      {showNews && latestNews.length > 0 && (
         <section className="py-6 bg-muted/30 border-t border-border">
           <div className="container mx-auto px-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
@@ -316,7 +322,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
               </button>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-              {latestNews.slice(0, 10).map(n => (
+              {latestNews.slice(0, homeNewsLimit).map(n => (
                 <article
                   key={n.id}
                   onClick={() => navigate(`/news/${n.slug}`)}
