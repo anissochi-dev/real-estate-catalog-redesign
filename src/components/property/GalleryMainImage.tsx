@@ -51,7 +51,7 @@ export function GalleryMainImage({
       {isVideoActive ? (
         <VideoEmbed url={item.videoUrl!} />
       ) : mainImg !== null && mainImg !== undefined ? (
-        <div className="w-full h-full cursor-zoom-in" onClick={onOpenLightbox}>
+        <div className="w-full h-full cursor-pointer" onClick={onOpenLightbox}>
           <img
             key={fadeKey}
             src={mainImg}
@@ -63,13 +63,6 @@ export function GalleryMainImage({
           {!imgLoaded && (
             <div className="absolute inset-0 bg-muted animate-pulse" />
           )}
-          {/* Zoom hint — desktop only */}
-          <div
-            className="absolute bottom-3 right-3 bg-black/50 text-white rounded-lg px-2 py-1 text-xs hidden sm:flex items-center gap-1 pointer-events-none transition-opacity"
-            style={{ opacity: showArrows ? 1 : 0, transition: 'opacity 0.2s' }}
-          >
-            <Icon name="ZoomIn" size={12} /> Увеличить
-          </div>
         </div>
       ) : (
         <div className="w-full h-full flex items-center justify-center">
