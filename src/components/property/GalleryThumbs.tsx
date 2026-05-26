@@ -12,17 +12,20 @@ interface GalleryThumbsProps {
 export function GalleryThumbs({
   photoThumbs, activeImg, hasVideo, videoIndex, mediaTab, onSelect,
 }: GalleryThumbsProps) {
-  const thumbsRef = useRef<HTMLDivElement>(null);
+  const desktopRef = useRef<HTMLDivElement>(null);
+  const mobileRef = useRef<HTMLDivElement>(null);
 
   const photoActiveIdx = hasVideo && activeImg > videoIndex
     ? activeImg - 1
     : (hasVideo && activeImg === videoIndex ? 0 : activeImg);
 
-  // Scroll active thumb into view
+  // Scroll active thumb into view on both strips
   useEffect(() => {
-    if (!thumbsRef.current) return;
-    const active = thumbsRef.current.querySelector('[data-active="true"]') as HTMLElement | null;
-    if (active) active.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    [desktopRef, mobileRef].forEach(ref => {
+      if (!ref.current) return;
+      const active = ref.current.querySelector('[data-active="true"]') as HTMLElement | null;
+      if (active) active.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    });
   }, [photoActiveIdx]);
 
   if (mediaTab !== 'photos' || photoThumbs.length <= 1) return null;
@@ -31,7 +34,7 @@ export function GalleryThumbs({
     <>
       {/* Desktop thumbnails strip */}
       <div
-        ref={thumbsRef}
+        ref={desktopRef}
         className="hidden sm:flex gap-2 overflow-x-auto pb-1 scrollbar-thin"
         style={{ scrollbarWidth: 'thin' }}
       >
@@ -54,31 +57,30 @@ export function GalleryThumbs({
         })}
       </div>
 
-      {/* Mobile: scrollable thumbs strip (for many photos) */}
-      {photoThumbs.length > 15 && (
-        <div
-          className="flex sm:hidden gap-2 overflow-x-auto pb-1"
-          style={{ WebkitOverflowScrolling: 'touch' }}
-        >
-          {photoThumbs.map((u, i) => {
-            const mediaIdx = hasVideo && i >= videoIndex ? i + 1 : i;
-            const isActive = mediaIdx === activeImg;
-            return (
-              <button
-                key={u + i}
-                data-active={isActive}
-                onClick={() => onSelect(mediaIdx, i)}
-                className={`flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all ${
-                  isActive ? 'border-brand-blue' : 'border-transparent opacity-60'
-                }`}
-                style={{ width: 60, height: 45 }}
-              >
-                <img src={u} alt="" loading="lazy" className="w-full h-full object-cover" />
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {/* Mobile: scrollable thumbs strip */}
+      <div
+        ref={mobileRef}
+        className="flex sm:hidden gap-2 overflow-x-auto pb-1"
+        style={{ WebkitOverflowScrolling: 'touch' }}
+      >
+        {photoThumbs.map((u, i) => {
+          const mediaIdx = hasVideo && i >= videoIndex ? i + 1 : i;
+          const isActive = mediaIdx === activeImg;
+          return (
+            <button
+              key={u + i}
+              data-active={isActive}
+              onClick={() => onSelect(mediaIdx, i)}
+              className={`flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all ${
+                isActive ? 'border-brand-blue' : 'border-transparent opacity-60'
+              }`}
+              style={{ width: 60, height: 45 }}
+            >
+              <img src={u} alt="" loading="lazy" className="w-full h-full object-cover" />
+            </button>
+          );
+        })}
+      </div>
     </>
   );
 }
