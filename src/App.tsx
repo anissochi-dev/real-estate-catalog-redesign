@@ -103,7 +103,7 @@ function loadInitialView(): AppView {
     if (v === 'admin' || v === 'login') return v;
 
     // 2. Иначе если URL — публичная страница, открываем сайт.
-    const publicPaths = ['/object/', '/catalog', '/map', '/favorites', '/compare', '/network-tenants', '/news', '/leads', '/declined'];
+    const publicPaths = ['/object', '/catalog', '/map', '/favorites', '/compare', '/network-tenants', '/news', '/leads', '/declined'];
     if (publicPaths.some(p => window.location.pathname.startsWith(p))) return 'site';
 
     // 3. Иначе берём что есть в localStorage (или site по умолчанию).

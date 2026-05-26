@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AdminLayout, { AdminSection } from './admin/AdminLayout';
 import Dashboard from './admin/Dashboard';
 import ListingsAdmin from './admin/ListingsAdmin';
@@ -20,8 +20,17 @@ interface Props {
   initialSection?: string;
 }
 
+const SECTION_KEY = 'biznest_admin_section';
+
 export default function AdminPage({ onExit, initialSection }: Props) {
-  const [section, setSection] = useState<AdminSection>((initialSection as AdminSection) || 'dashboard');
+  const [section, setSection] = useState<AdminSection>(() => {
+    if (initialSection) return initialSection as AdminSection;
+    try { return (localStorage.getItem(SECTION_KEY) as AdminSection) || 'dashboard'; } catch { return 'dashboard'; }
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem(SECTION_KEY, section); } catch { /* ignore */ }
+  }, [section]);
 
   return (
     <AdminLayout section={section} setSection={setSection} onExit={onExit}>
