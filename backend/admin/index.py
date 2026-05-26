@@ -1702,6 +1702,22 @@ def _listings_bulk(cur, conn, event, user):
             )
             for lid in ids:
                 _write_history(cur, lid, user, 'broker_changed', {'broker_id': bid, 'broker_name': target['name']})
+    elif op == 'set_export':
+        # Установить/снять флаги экспорта в XML-фиды: value = {'platform': 'yandex'|'avito'|'cian'|'all', 'enabled': bool}
+        val = body.get('value') or {}
+        platform = str(val.get('platform') or '').lower()
+        enabled = bool(val.get('enabled', True))
+        enabled_sql = 'TRUE' if enabled else 'FALSE'
+        allowed = {'yandex': 'export_yandex', 'avito': 'export_avito', 'cian': 'export_cian'}
+        if platform == 'all':
+            fields_sql = ', '.join(f"{col} = {enabled_sql}" for col in allowed.values())
+        elif platform in allowed:
+            fields_sql = f"{allowed[platform]} = {enabled_sql}"
+        else:
+            return _err(400, f'Неизвестная платформа: {platform}')
+        cur.execute(
+            f"UPDATE {SCHEMA}.listings SET {fields_sql}, updated_at = NOW() WHERE id IN ({ids_sql})"
+        )
     else:
         return _err(400, f'Неизвестная операция: {op}')
     conn.commit()

@@ -48,6 +48,9 @@ export default function ListingsBulkBar({
   const [brokerQuery, setBrokerQuery] = useState('');
   const brokerBtnRef = useRef<HTMLDivElement>(null);
 
+  const [showXml, setShowXml] = useState(false);
+  const xmlBtnRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!canAssignBroker) return;
     adminApi.listUsers()
@@ -71,6 +74,17 @@ export default function ListingsBulkBar({
     window.addEventListener('mousedown', onClick);
     return () => window.removeEventListener('mousedown', onClick);
   }, [showBrokers]);
+
+  useEffect(() => {
+    if (!showXml) return;
+    const onClick = (e: MouseEvent) => {
+      if (xmlBtnRef.current && !xmlBtnRef.current.contains(e.target as Node)) {
+        setShowXml(false);
+      }
+    };
+    window.addEventListener('mousedown', onClick);
+    return () => window.removeEventListener('mousedown', onClick);
+  }, [showXml]);
 
   const filteredBrokers = useMemo(() => {
     const q = brokerQuery.trim().toLowerCase();
@@ -123,6 +137,53 @@ export default function ListingsBulkBar({
           {op.label}
         </button>
       ))}
+
+      {/* XML-выгрузка */}
+      <div className="relative" ref={xmlBtnRef}>
+        <button
+          disabled={bulkLoading}
+          onClick={() => setShowXml(s => !s)}
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border bg-teal-50 text-teal-700 hover:bg-teal-100 border-teal-200 disabled:opacity-50"
+          title="Добавить/убрать из XML-выгрузки"
+        >
+          <Icon name="FileCode2" size={11} />
+          XML-выгрузка
+          <Icon name={showXml ? 'ChevronUp' : 'ChevronDown'} size={10} />
+        </button>
+
+        {showXml && (
+          <div className="absolute z-30 mt-1 w-64 bg-white border border-border rounded-xl shadow-xl overflow-hidden">
+            <div className="px-3 py-2 border-b border-border bg-muted/30">
+              <div className="text-xs font-semibold text-foreground">Выбрать площадку</div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">Добавить или убрать {selected.size} объект(ов)</div>
+            </div>
+
+            {[
+              { platform: 'yandex', label: 'Яндекс.Недвижимость', icon: 'Building2' },
+              { platform: 'avito',  label: 'Авито',               icon: 'ShoppingBag' },
+              { platform: 'cian',   label: 'ЦИАН',                icon: 'MapPin' },
+              { platform: 'all',    label: 'Все площадки',        icon: 'Globe' },
+            ].map(({ platform, label, icon }) => (
+              <div key={platform} className="flex items-center justify-between px-3 py-2 border-b border-border/40 last:border-0">
+                <div className="flex items-center gap-2">
+                  <Icon name={icon} size={13} className="text-muted-foreground" />
+                  <span className="text-xs font-medium">{label}</span>
+                </div>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => { onBulk('set_export', { platform, enabled: true }); setShowXml(false); }}
+                    className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 font-medium"
+                  >+ Добавить</button>
+                  <button
+                    onClick={() => { onBulk('set_export', { platform, enabled: false }); setShowXml(false); }}
+                    className="text-[10px] px-2 py-0.5 rounded bg-red-50 text-red-600 hover:bg-red-100 font-medium"
+                  >− Убрать</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {canAssignBroker && (
         <div className="relative" ref={brokerBtnRef}>
