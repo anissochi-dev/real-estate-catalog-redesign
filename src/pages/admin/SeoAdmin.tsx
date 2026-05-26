@@ -199,11 +199,11 @@ export default function SeoAdmin() {
           )}
 
           {activeTab === 'pages' && (
-            <SeoPagesTab token={token || ''} gptOk={gptOk} />
+            <SeoPagesTab token={refreshToken() || ''} gptOk={gptOk} />
           )}
 
           {activeTab === 'files' && (
-            <SeoFilesTab token={token || ''} />
+            <SeoFilesTab token={refreshToken() || ''} />
           )}
 
           {activeTab === 'schedule' && (
