@@ -73,7 +73,7 @@ def handler(event: dict, context) -> dict:
 def _cron_check(cur, conn) -> dict:
     """Проверяет расписание и запускает переобучение если пора."""
     cur.execute(
-        f"SELECT vb_retrain_enabled, vb_retrain_hour, vb_retrain_sources, "
+        f"SELECT vb_retrain_enabled, vb_retrain_hour, vb_retrain_minute, vb_retrain_sources, "
         f"vb_retrain_last_at FROM {SCHEMA}.settings ORDER BY id LIMIT 1"
     )
     s = cur.fetchone()
@@ -83,11 +83,14 @@ def _cron_check(cur, conn) -> dict:
     import datetime
     now = datetime.datetime.utcnow()
     target_hour = int(s.get('vb_retrain_hour') or 3)
+    target_minute = int(s.get('vb_retrain_minute') or 0)
     last_at = s.get('vb_retrain_last_at')
 
-    # Запускаем если: сейчас нужный час И (не запускались сегодня)
+    # Запускаем если: сейчас нужный час И минута попадает в 5-минутное окно
     if now.hour != target_hour:
-        return _ok({'skipped': True, 'reason': f'not time yet, target hour={target_hour} UTC, now={now.hour} UTC'})
+        return _ok({'skipped': True, 'reason': f'not time yet, target={target_hour:02d}:{target_minute:02d} UTC, now={now.hour:02d}:{now.minute:02d} UTC'})
+    if abs(now.minute - target_minute) > 5:
+        return _ok({'skipped': True, 'reason': f'minute mismatch, target={target_minute}, now={now.minute}'})
 
     if last_at:
         last_date = last_at.date() if hasattr(last_at, 'date') else None
@@ -107,7 +110,7 @@ def _cron_check(cur, conn) -> dict:
 
 def _get_status(cur) -> dict:
     cur.execute(
-        f"SELECT vb_retrain_enabled, vb_retrain_hour, vb_retrain_sources, "
+        f"SELECT vb_retrain_enabled, vb_retrain_hour, vb_retrain_minute, vb_retrain_sources, "
         f"vb_retrain_last_at, vb_retrain_last_status, vb_retrain_last_saved "
         f"FROM {SCHEMA}.settings ORDER BY id LIMIT 1"
     )
@@ -117,6 +120,7 @@ def _get_status(cur) -> dict:
     return _ok({
         'enabled': row.get('vb_retrain_enabled', False),
         'hour': row.get('vb_retrain_hour', 3),
+        'minute': row.get('vb_retrain_minute', 0),
         'sources': row.get('vb_retrain_sources') or [],
         'last_at': str(row['vb_retrain_last_at']) if row.get('vb_retrain_last_at') else None,
         'last_status': row.get('vb_retrain_last_status'),

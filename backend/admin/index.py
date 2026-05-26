@@ -1275,13 +1275,13 @@ def _vb_retrain_schedule(cur, conn, method, event, user):
 
     if method == 'GET':
         cur.execute(
-            f"SELECT vb_retrain_enabled, vb_retrain_hour, vb_retrain_sources, "
+            f"SELECT vb_retrain_enabled, vb_retrain_hour, vb_retrain_minute, vb_retrain_sources, "
             f"vb_retrain_last_at, vb_retrain_last_status, vb_retrain_last_saved "
             f"FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
         )
         row = cur.fetchone()
         if not row:
-            return _ok({'enabled': False, 'hour': 3, 'sources': []})
+            return _ok({'enabled': False, 'hour': 3, 'minute': 0, 'sources': []})
         sources = row.get('vb_retrain_sources') or []
         if isinstance(sources, str):
             try:
@@ -1291,6 +1291,7 @@ def _vb_retrain_schedule(cur, conn, method, event, user):
         return _ok({
             'enabled': row.get('vb_retrain_enabled', False),
             'hour': row.get('vb_retrain_hour', 3),
+            'minute': row.get('vb_retrain_minute', 0),
             'sources': sources,
             'last_at': str(row['vb_retrain_last_at']) if row.get('vb_retrain_last_at') else None,
             'last_status': row.get('vb_retrain_last_status'),
@@ -1305,6 +1306,9 @@ def _vb_retrain_schedule(cur, conn, method, event, user):
         if 'hour' in body:
             h = max(0, min(23, int(body['hour'] or 3)))
             fields.append(f"vb_retrain_hour = {h}")
+        if 'minute' in body:
+            m = max(0, min(59, int(body['minute'] or 0)))
+            fields.append(f"vb_retrain_minute = {m}")
         if 'sources' in body:
             sources_json = json.dumps(body['sources'], ensure_ascii=False).replace("'", "''")
             fields.append(f"vb_retrain_sources = '{sources_json}'::jsonb")

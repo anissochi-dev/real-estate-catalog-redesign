@@ -45,6 +45,7 @@ const TRAINING_SOURCES = [
 interface RetrainSchedule {
   enabled: boolean;
   hour: number;
+  minute: number;
   sources: string[];
   last_at: string | null;
   last_status: string | null;
@@ -87,7 +88,7 @@ export default function VBKnowledgeAdmin() {
   const [trainOpen, setTrainOpen] = useState(false);
   const [selectedSources, setSelectedSources] = useState<string[]>(['news']);
   const [schedule, setSchedule] = useState<RetrainSchedule>({
-    enabled: false, hour: 3, sources: ['news', 'listings', 'invest', 'demand', 'terms', 'market_prices'],
+    enabled: false, hour: 3, minute: 0, sources: ['news', 'listings', 'invest', 'demand', 'terms', 'market_prices'],
     last_at: null, last_status: null, last_saved: null,
   });
   const [scheduleLoading, setScheduleLoading] = useState(false);
@@ -154,7 +155,7 @@ export default function VBKnowledgeAdmin() {
   const saveSchedule = async () => {
     setScheduleSaving(true);
     try {
-      await adminApi.saveRetrainSchedule({ enabled: schedule.enabled, hour: schedule.hour, sources: schedule.sources });
+      await adminApi.saveRetrainSchedule({ enabled: schedule.enabled, hour: schedule.hour, minute: schedule.minute, sources: schedule.sources });
       toast.success('Расписание сохранено');
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Ошибка сохранения');
@@ -324,16 +325,31 @@ export default function VBKnowledgeAdmin() {
           <div className="space-y-4">
             <div className="flex items-center gap-3 flex-wrap">
               <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Время запуска (UTC)</label>
-                <select
-                  value={schedule.hour}
-                  onChange={e => setSchedule(s => ({ ...s, hour: +e.target.value }))}
-                  className="px-3 py-2 border rounded-lg text-sm"
-                >
-                  {Array.from({ length: 24 }, (_, i) => (
-                    <option key={i} value={i}>{String(i).padStart(2, '0')}:00 UTC ({String((i + 3) % 24).padStart(2, '0')}:00 МСК)</option>
-                  ))}
-                </select>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Время запуска (UTC / МСК)</label>
+                <div className="flex items-center gap-1.5">
+                  <select
+                    value={schedule.hour}
+                    onChange={e => setSchedule(s => ({ ...s, hour: +e.target.value }))}
+                    className="px-3 py-2 border rounded-lg text-sm w-20"
+                  >
+                    {Array.from({ length: 24 }, (_, i) => (
+                      <option key={i} value={i}>{String(i).padStart(2, '0')}</option>
+                    ))}
+                  </select>
+                  <span className="text-muted-foreground font-bold">:</span>
+                  <select
+                    value={schedule.minute}
+                    onChange={e => setSchedule(s => ({ ...s, minute: +e.target.value }))}
+                    className="px-3 py-2 border rounded-lg text-sm w-20"
+                  >
+                    {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map(m => (
+                      <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
+                    ))}
+                  </select>
+                  <span className="text-xs text-muted-foreground ml-1">
+                    = {String((schedule.hour + 3) % 24).padStart(2, '0')}:{String(schedule.minute).padStart(2, '0')} МСК
+                  </span>
+                </div>
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Источники</div>

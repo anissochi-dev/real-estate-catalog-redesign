@@ -186,10 +186,10 @@ export const adminApi = {
 
   // Расписание автопереобучения ВБ
   getRetrainSchedule: (): Promise<{
-    enabled: boolean; hour: number; sources: string[];
+    enabled: boolean; hour: number; minute: number; sources: string[];
     last_at: string | null; last_status: string | null; last_saved: number | null;
   }> => req(`${ADMIN_URL}?resource=vb_retrain_schedule`),
-  saveRetrainSchedule: (data: { enabled: boolean; hour: number; sources: string[] }) =>
+  saveRetrainSchedule: (data: { enabled: boolean; hour: number; minute: number; sources: string[] }) =>
     req(`${ADMIN_URL}?resource=vb_retrain_schedule`, { method: 'PUT', body: JSON.stringify(data) }),
 
   // leads
