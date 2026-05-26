@@ -27,7 +27,7 @@ function ParamCard({ icon, label, value }: { icon: string; label: string; value:
       </div>
       <div className="min-w-0">
         <div className="text-[10px] text-muted-foreground leading-tight">{label}</div>
-        <div className="font-display font-700 text-sm leading-tight mt-0.5 truncate">{value}</div>
+        <div className="font-display font-700 text-sm leading-tight mt-0.5 break-words">{value}</div>
       </div>
     </div>
   );

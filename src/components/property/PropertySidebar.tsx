@@ -11,7 +11,7 @@ export default function PropertySidebar({ item, agents }: Props) {
   const agent = agents[0] || null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 hidden lg:block">
       {/* Единый sticky блок: цена + аналитика + агент */}
       <div className="sticky top-20 space-y-3">
 
