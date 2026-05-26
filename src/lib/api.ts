@@ -135,6 +135,11 @@ export interface ListingDetail extends Property {
   seoTitle?: string;
   seoDescription?: string;
   rooms?: number | null;
+  seoH1?: string | null;
+  seoH2?: string | null;
+  seoH3?: string | null;
+  seoH4?: string | null;
+  seoH5?: string | null;
 }
 
 export async function fetchListingById(id: number): Promise<ListingDetail | null> {
@@ -169,6 +174,11 @@ export async function fetchListingById(id: number): Promise<ListingDetail | null
       seoTitle: it.seo_title,
       seoDescription: it.seo_description,
       rooms: it.rooms ?? null,
+      seoH1: it.seo_h1 ?? null,
+      seoH2: it.seo_h2 ?? null,
+      seoH3: it.seo_h3 ?? null,
+      seoH4: it.seo_h4 ?? null,
+      seoH5: it.seo_h5 ?? null,
     };
   } catch {
     return null;

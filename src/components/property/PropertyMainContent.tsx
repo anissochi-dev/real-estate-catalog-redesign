@@ -41,11 +41,20 @@ export default function PropertyMainContent({
   const itemExt = item as ListingDetail & { condition?: string; parking?: string; entrance?: string };
   const addressStr = [item.city || 'Краснодар', item.district, item.address].filter(Boolean).join(', ');
 
+  const h1 = item.seoH1 || item.title;
+  const h2 = item.seoH2 || `${dealLabel} · ${typeLabel} · ${item.area} м²`;
+  const h3params = item.seoH3 || null;
+  const h4comms = item.seoH4 || null;
+  const h5price = item.seoH5 || null;
+
   return (
     <>
       {/* Название */}
       <div className="bg-white rounded-2xl px-4 py-3 shadow-sm">
-        <h1 className="font-display font-800 text-xl md:text-2xl text-foreground">{item.title}</h1>
+        <h1 className="font-display font-800 text-xl md:text-2xl text-foreground">{h1}</h1>
+        {item.seoH2 && (
+          <p className="text-sm text-muted-foreground mt-1 leading-snug">{h2}</p>
+        )}
       </div>
 
       {/* Адрес — отдельный блок между названием и параметрами */}
@@ -76,7 +85,7 @@ export default function PropertyMainContent({
 
       {/* Параметры объекта */}
       <div className="bg-white rounded-2xl px-4 py-3 shadow-sm">
-        <h2 className="font-display font-700 text-base mb-3">Параметры объекта</h2>
+        <h2 className="font-display font-700 text-base mb-3">{h3params || 'Параметры объекта'}</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           <ParamCard icon="Maximize" label="Площадь" value={`${item.area} м²`} />
           <ParamCard icon="Briefcase" label="Тип сделки" value={dealLabel} />
@@ -111,7 +120,7 @@ export default function PropertyMainContent({
         {/* Коммуникации */}
         {item.utilities && (
           <div className="mt-3 pt-3 border-t border-border">
-            <h3 className="font-display font-700 text-sm mb-2">Коммуникации</h3>
+            <h3 className="font-display font-700 text-sm mb-2">{h4comms || 'Коммуникации'}</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               {item.utilities.split(',').map(u => u.trim()).filter(Boolean).map(u => {
                 const [key, val] = u.includes(':') ? u.split(':').map(s => s.trim()) : [u, ''];

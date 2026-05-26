@@ -21,9 +21,12 @@ export default function PropertySidebar({ item, agents }: Props) {
             <div className="text-[10px] text-muted-foreground mb-0.5 font-medium uppercase tracking-wide">
               {DEAL_LABELS[item.deal] || item.deal}
             </div>
-            <div className="font-display font-900 text-2xl text-brand-blue leading-none tracking-tight">
-              {item.price.toLocaleString('ru')} ₽{item.deal === 'rent' ? '/мес' : ''}
-            </div>
+            <h5 className="font-display font-900 text-2xl text-brand-blue leading-none tracking-tight">
+              {item.seoH5
+                ? <><span className="sr-only">{item.seoH5} — </span>{item.price.toLocaleString('ru')} ₽{item.deal === 'rent' ? '/мес' : ''}</>
+                : <>{item.price.toLocaleString('ru')} ₽{item.deal === 'rent' ? '/мес' : ''}</>
+              }
+            </h5>
             {item.pricePerM2 ? (
               <div className="flex items-center gap-1 mt-1.5">
                 <Icon name="Scaling" size={11} className="text-muted-foreground" />

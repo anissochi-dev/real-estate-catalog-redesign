@@ -15,6 +15,11 @@ interface NewsItem {
   published_at?: string;
   created_at: string;
   content?: string;
+  seo_h1?: string | null;
+  seo_h2?: string | null;
+  seo_h3?: string | null;
+  seo_h4?: string | null;
+  seo_h5?: string | null;
 }
 
 function fmtDate(s?: string | null) {
@@ -185,6 +190,12 @@ export function NewsArticlePage() {
 
   const paragraphs = (article.content || '').split('\n').filter(Boolean);
 
+  const h1 = article.seo_h1 || article.title;
+  const h2text = article.seo_h2 || article.summary || null;
+  const h3text = article.seo_h3 || null;
+  const h4text = article.seo_h4 || null;
+  const h5text = article.seo_h5 || null;
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-3xl">
       <button
@@ -196,15 +207,22 @@ export function NewsArticlePage() {
       </button>
 
       <article>
-        <div className="mb-6">
+        <div className="mb-6 flex items-center justify-between flex-wrap gap-2">
           <span className="text-xs px-2.5 py-1 rounded-full bg-brand-blue/10 text-brand-blue font-semibold">
-            Аналитика
+            {article.category || 'Аналитика'}
           </span>
+          {h5text && (
+            <h5 className="text-xs text-muted-foreground font-normal">{h5text}</h5>
+          )}
         </div>
 
         <h1 className="font-display font-800 text-2xl md:text-3xl text-foreground mb-4 leading-tight">
-          {article.title}
+          {h1}
         </h1>
+
+        {h3text && (
+          <h3 className="font-display font-600 text-base text-brand-blue mb-3 leading-snug">{h3text}</h3>
+        )}
 
         <div className="flex items-center gap-3 text-sm text-muted-foreground mb-6">
           <span>{fmtDate(article.published_at || article.created_at)}</span>
@@ -218,14 +236,18 @@ export function NewsArticlePage() {
 
         {article.image_url && (
           <div className="rounded-2xl overflow-hidden mb-8">
-            <img src={article.image_url} alt={article.title} className="w-full max-h-80 object-cover" />
+            <img src={article.image_url} alt={h1} className="w-full max-h-80 object-cover" />
           </div>
         )}
 
-        {article.summary && (
+        {h2text && (
           <h2 className="text-base font-medium text-foreground mb-6 pb-6 border-b border-border leading-relaxed">
-            {article.summary}
+            {h2text}
           </h2>
+        )}
+
+        {h4text && (
+          <h4 className="text-sm font-semibold text-muted-foreground mb-4">{h4text}</h4>
         )}
 
         <div className="prose prose-sm max-w-none space-y-4">
