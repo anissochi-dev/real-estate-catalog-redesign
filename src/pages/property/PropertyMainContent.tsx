@@ -4,12 +4,12 @@ import Icon from '@/components/ui/icon';
 import PublicPhoneInput from '@/components/PublicPhoneInput';
 import PropertyMapInfrastructure from '@/components/PropertyMapInfrastructure';
 import SimilarListings from '@/components/SimilarListings';
-
-const InvestmentModel = lazy(() => import('@/components/property/InvestmentModel'));
 import {
   CONDITION_LABELS, FINISHING_LABELS, PARKING_LABELS,
   ENTRANCE_LABELS, UTILITY_ICONS, ROAD_LINE_LABELS,
 } from './propertyLabels';
+
+const InvestmentModel = lazy(() => import('@/components/property/InvestmentModel'));
 
 interface Props {
   item: ListingDetail;
