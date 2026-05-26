@@ -97,7 +97,6 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
 
   const STATS_VIEW = [
     { value: `${totalCount}+`, label: 'Объектов в базе', icon: 'Building2', deal: 'all' as const },
-    { value: `${properties.filter(p => p.type === 'business').length}+`, label: 'Готовых бизнесов', icon: 'Briefcase', deal: 'business' as const },
     { value: '98%', label: 'Успешных сделок', icon: 'TrendingUp', deal: null },
     { value: `с ${settings.company_since_year || 2007}`, label: 'На рынке', icon: 'Award', deal: null },
   ];
@@ -176,7 +175,6 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
               {[
                 ['Продажа', '/catalog?deal=sale'],
                 ['Аренда', '/catalog?deal=rent'],
-                ['Готовый бизнес', '/catalog?deal=business'],
               ].map(([label, to]) => (
                 <button
                   key={label}
@@ -197,10 +195,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {STATS_VIEW.map((stat, i) => {
               const clickable = stat.deal !== null;
-              const goCatalog = () => {
-                if (stat.deal === 'business') navigate('/catalog?deal=business');
-                else navigate('/catalog');
-              };
+              const goCatalog = () => { navigate('/catalog'); };
               const inner = (
                 <>
                   <div className="w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">

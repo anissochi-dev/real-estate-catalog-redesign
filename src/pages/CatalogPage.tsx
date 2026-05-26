@@ -22,7 +22,6 @@ const DEAL_TYPES = [
   { value: 'all', label: 'Все' },
   { value: 'sale', label: 'Продажа' },
   { value: 'rent', label: 'Аренда' },
-  { value: 'business', label: 'Готовый бизнес' },
 ];
 
 const PROPERTY_TYPES = [
@@ -44,7 +43,6 @@ const PROPERTY_TYPES = [
 const DEAL_H1: Record<string, string> = {
   sale: 'Продажа коммерческой недвижимости в Краснодаре',
   rent: 'Аренда коммерческой недвижимости в Краснодаре',
-  business: 'Готовый бизнес в Краснодаре — актуальные предложения',
 };
 
 const TYPE_H1: Record<string, Record<string, string>> = {
