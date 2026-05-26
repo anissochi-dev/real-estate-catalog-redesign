@@ -134,7 +134,8 @@ def handler(event: dict, context) -> dict:
                     "company_since_year, site_url, seo_keywords, seo_description, "
                     "legal_personal_data, legal_privacy_policy, legal_marketing_consent, "
                     "footer_description, footer_catalog_links, footer_extra_links, footer_legal_info, "
-                    "home_listings_limit, catalog_page_size, news_list_limit, category_page_size, leads_page_size "
+                    "home_listings_limit, catalog_page_size, news_list_limit, category_page_size, leads_page_size, "
+                    "show_news_on_home, home_news_limit, show_leads_on_home, home_leads_limit "
                     "FROM t_p71821556_real_estate_catalog_.settings ORDER BY id ASC LIMIT 1"
                 )
                 row = cur.fetchone()

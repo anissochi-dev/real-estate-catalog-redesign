@@ -1240,9 +1240,13 @@ def _settings(cur, conn, method, event, user):
         if 'smtp_port' in body:
             fields.append(f"smtp_port = {_int_or_null(body['smtp_port'])}")
         for int_field in ('home_listings_limit', 'catalog_page_size', 'news_list_limit',
-                          'category_page_size', 'leads_page_size'):
+                          'category_page_size', 'leads_page_size',
+                          'home_news_limit', 'home_leads_limit'):
             if int_field in body:
                 fields.append(f"{int_field} = {_int_or_null(body[int_field])}")
+        for bool_field in ('show_news_on_home', 'show_leads_on_home'):
+            if bool_field in body:
+                fields.append(f"{bool_field} = {_bool(body[bool_field])}")
         for bf in ('notify_email_enabled', 'notify_email_on_lead', 'notify_email_on_deal', 'notify_email_on_complaint',
                    'notify_telegram_enabled', 'notify_telegram_on_lead', 'notify_telegram_on_deal',
                    'notify_telegram_on_complaint'):
