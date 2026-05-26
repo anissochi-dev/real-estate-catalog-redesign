@@ -4,10 +4,12 @@ Args: event с httpMethod (POST), body {action, prompt, context_data}, headers X
 Returns: HTTP-ответ с текстом от YandexGPT и логом в БД
 """
 
+import io
 import json
 import os
 import urllib.request
 
+import boto3
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -15,6 +17,85 @@ SCHEMA = 't_p71821556_real_estate_catalog_'
 YANDEX_GPT_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
 # YandexGPT 5 Pro (актуальная версия с Алисой). RC = release candidate последней Pro-модели.
 YANDEX_MODEL_NAME = 'yandexgpt/rc'
+
+# S3 настройки для оптимизации изображений
+S3_BUCKET = 'files'
+S3_ENDPOINT = 'https://bucket.poehali.dev'
+IMG_COMPRESS_THRESHOLD = 200 * 1024   # 200 KB — кандидат на сжатие
+IMG_JPEG_QUALITY = 85
+IMG_MAX_SIDE = 2000
+
+
+def _s3():
+    return boto3.client(
+        's3',
+        endpoint_url=S3_ENDPOINT,
+        aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+        aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+    )
+
+
+def _cdn_url(key: str) -> str:
+    return f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
+
+
+def _key_from_url(url: str) -> str | None:
+    if not url:
+        return None
+    for m in ('/bucket/', '/files/'):
+        idx = url.find(m)
+        if idx != -1:
+            return url[idx + len(m):]
+    if not url.startswith('http') and '/' in url:
+        return url
+    return None
+
+
+def _used_image_keys(cur) -> set:
+    used = set()
+    for q in [
+        f"SELECT image FROM {SCHEMA}.listings WHERE image IS NOT NULL AND image != ''",
+        f"SELECT images FROM {SCHEMA}.listings WHERE images IS NOT NULL AND images != ''",
+    ]:
+        try:
+            cur.execute(q)
+            for row in cur.fetchall():
+                v = list(row.values())[0]
+                if not v:
+                    continue
+                if isinstance(v, list):
+                    urls = v
+                else:
+                    sep = '|' if '|' in str(v) else ','
+                    urls = [u.strip() for u in str(v).split(sep) if u.strip()]
+                for url in urls:
+                    k = _key_from_url(url)
+                    if k:
+                        used.add(k)
+        except Exception:
+            pass
+    try:
+        cur.execute(
+            f"SELECT logo_url, watermark_url, og_image_url, favicon_url, apple_touch_icon_url "
+            f"FROM {SCHEMA}.settings LIMIT 1"
+        )
+        row = cur.fetchone()
+        if row:
+            for v in row.values():
+                k = _key_from_url(v or '')
+                if k:
+                    used.add(k)
+    except Exception:
+        pass
+    try:
+        cur.execute(f"SELECT image_url FROM {SCHEMA}.news WHERE image_url IS NOT NULL AND image_url != ''")
+        for row in cur.fetchall():
+            k = _key_from_url(row['image_url'])
+            if k:
+                used.add(k)
+    except Exception:
+        pass
+    return used
 
 SYSTEM_PROMPTS = {
     'describe': (
@@ -173,6 +254,10 @@ SYSTEM_PROMPTS = {
         '- analytics_report — сформировать аналитический отчёт. params: {"period": "week|month|all"?}. risk: low.\n'
         '- marketing_tips — маркетинговые советы по каталогу. params: {}. risk: low.\n'
         '- note — совет без действия. params: {"text": str}. risk: low.\n\n'
+        '== Оптимизация фотографий ==\n'
+        '- scan_images — сканировать S3: найти неиспользуемые фото и кандидатов на сжатие. params: {}. risk: low.\n'
+        '- optimize_images — сжать фотографии без потери качества (замена по тому же URL). params: {"keys": ["photos/xxx.jpg", ...]}. risk: medium.\n'
+        '- delete_unused_images — удалить неиспользуемые фотографии из хранилища. params: {"keys": ["photos/xxx.jpg", ...]}. risk: high.\n\n'
         'Ответь СТРОГО в формате JSON без markdown:\n'
         '{"reasoning": "1-2 предложения", "actions": [{"type": str, "title": str, '
         '"description": str, "risk": "low|medium|high", "params": {...}}]}\n\n'
@@ -854,6 +939,145 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         if issue == 'duplicate':
             return {'ok': True, 'message': f'Дубли требуют ручной проверки — найдено {len(ids)} кандидатов'}
         return {'error': f'Неизвестный тип проблемы: {issue}'}
+
+    # ── Оптимизация изображений ──────────────────────────────────────────
+    if act_type == 'scan_images':
+        try:
+            s3 = _s3()
+            all_keys = {}
+            paginator = s3.get_paginator('list_objects_v2')
+            for page in paginator.paginate(Bucket=S3_BUCKET, Prefix='photos/'):
+                for obj in page.get('Contents', []):
+                    all_keys[obj['Key']] = obj['Size']
+
+            used_keys = _used_image_keys(cur)
+            unused, to_compress, ok_count = [], [], 0
+
+            for key, size in all_keys.items():
+                if key not in used_keys:
+                    unused.append({'key': key, 'size_kb': round(size / 1024), 'url': _cdn_url(key)})
+                elif size > IMG_COMPRESS_THRESHOLD:
+                    to_compress.append({'key': key, 'size_kb': round(size / 1024), 'url': _cdn_url(key)})
+                else:
+                    ok_count += 1
+
+            return {
+                'ok': True,
+                'total_in_s3': len(all_keys),
+                'total_used': len(used_keys),
+                'unused_count': len(unused),
+                'unused_size_kb': sum(f['size_kb'] for f in unused),
+                'compress_candidates': len(to_compress),
+                'compress_total_kb': sum(f['size_kb'] for f in to_compress),
+                'ok_count': ok_count,
+                'unused': unused[:30],
+                'to_compress': to_compress[:30],
+                'message': (
+                    f"Найдено {len(unused)} неиспользуемых файлов ({sum(f['size_kb'] for f in unused)} KB) "
+                    f"и {len(to_compress)} кандидатов на сжатие ({sum(f['size_kb'] for f in to_compress)} KB)"
+                ),
+            }
+        except Exception as e:
+            return {'error': f'Ошибка сканирования: {e}'}
+
+    if act_type == 'optimize_images':
+        keys = params.get('keys') or []
+        if not keys:
+            return {'error': 'Нужен список keys'}
+        try:
+            from PIL import Image as _PIL
+        except ImportError:
+            return {'error': 'Pillow не установлен на сервере'}
+        try:
+            s3 = _s3()
+            results, total_saved = [], 0
+            for key in keys[:20]:
+                try:
+                    obj = s3.get_object(Bucket=S3_BUCKET, Key=key)
+                    orig_bytes = obj['Body'].read()
+                    orig_size = len(orig_bytes)
+
+                    img = _PIL.open(io.BytesIO(orig_bytes))
+                    w, h = img.size
+                    if max(w, h) > IMG_MAX_SIDE:
+                        ratio = IMG_MAX_SIDE / max(w, h)
+                        img = img.resize((int(w * ratio), int(h * ratio)), _PIL.LANCZOS)
+
+                    if img.mode in ('RGBA', 'P', 'LA'):
+                        bg = _PIL.new('RGB', img.size, (255, 255, 255))
+                        bg.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+                        img = bg
+                    elif img.mode != 'RGB':
+                        img = img.convert('RGB')
+
+                    out = io.BytesIO()
+                    img.save(out, format='JPEG', quality=IMG_JPEG_QUALITY, optimize=True, progressive=True)
+                    new_bytes = out.getvalue()
+                    new_size = len(new_bytes)
+
+                    if new_size >= orig_size * 0.95:
+                        results.append({'key': key, 'skipped': True, 'reason': 'уже оптимально', 'size_kb': round(orig_size / 1024)})
+                        continue
+
+                    s3.put_object(Bucket=S3_BUCKET, Key=key, Body=new_bytes, ContentType='image/jpeg')
+                    saved = orig_size - new_size
+                    total_saved += saved
+                    results.append({
+                        'key': key, 'ok': True,
+                        'original_kb': round(orig_size / 1024),
+                        'new_kb': round(new_size / 1024),
+                        'saved_kb': round(saved / 1024),
+                    })
+                except Exception as e:
+                    results.append({'key': key, 'error': str(e)})
+
+            optimized = [r for r in results if r.get('ok')]
+            return {
+                'ok': True,
+                'processed': len(results),
+                'optimized': len(optimized),
+                'total_saved_kb': round(total_saved / 1024),
+                'results': results,
+                'message': f"Сжато {len(optimized)} фото, сэкономлено {round(total_saved / 1024)} KB",
+            }
+        except Exception as e:
+            return {'error': f'Ошибка сжатия: {e}'}
+
+    if act_type == 'delete_unused_images':
+        keys = params.get('keys') or []
+        if not keys:
+            return {'error': 'Нужен список keys'}
+        if user['role'] not in ('admin', 'editor', 'manager', 'director', 'broker', 'office_manager'):
+            return {'error': 'Недостаточно прав'}
+        try:
+            s3 = _s3()
+            # Финальная проверка — не удаляем то, что сейчас используется
+            used_keys = _used_image_keys(cur)
+            safe_keys = [k for k in keys[:100] if k not in used_keys]
+            protected = [k for k in keys if k in used_keys]
+
+            deleted, errors = [], []
+            for key in safe_keys:
+                try:
+                    s3.delete_object(Bucket=S3_BUCKET, Key=key)
+                    deleted.append(key)
+                except Exception as e:
+                    errors.append({'key': key, 'error': str(e)})
+
+            return {
+                'ok': True,
+                'deleted_count': len(deleted),
+                'deleted': deleted,
+                'protected_count': len(protected),
+                'protected': protected,
+                'errors': errors,
+                'message': (
+                    f"Удалено {len(deleted)} файлов. "
+                    + (f"Защищено от удаления {len(protected)} (ещё используются)." if protected else "")
+                ),
+            }
+        except Exception as e:
+            return {'error': f'Ошибка удаления: {e}'}
 
     return {'error': f'Неизвестное действие: {act_type}'}
 

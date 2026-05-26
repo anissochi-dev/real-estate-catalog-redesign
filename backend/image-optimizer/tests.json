@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "name": "Сканирование без авторизации — отклонено",
+      "method": "GET",
+      "path": "/?action=scan",
+      "expectedStatus": 401
+    },
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    }
+  ]
+}
