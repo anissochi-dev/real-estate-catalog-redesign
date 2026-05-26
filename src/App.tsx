@@ -169,6 +169,11 @@ export default function App() {
         localStorage.setItem('news_cron_last_ping', String(Date.now()));
         fetch(`${NEWS_CRON_URL}?action=ping_cron`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {});
       }
+      const retrainLast = parseInt(localStorage.getItem('retrain_cron_last_ping') || '0', 10);
+      if (Date.now() - retrainLast > THROTTLE_MS) {
+        localStorage.setItem('retrain_cron_last_ping', String(Date.now()));
+        fetch('https://functions.poehali.dev/e2f1d357-fb83-4fbb-8d8b-6fb063357afc?action=cron').catch(() => {});
+      }
     } catch { /* ignore */ }
   }, []);
 

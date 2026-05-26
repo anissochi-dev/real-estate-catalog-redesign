@@ -39,7 +39,17 @@ const TRAINING_SOURCES = [
   { id: 'invest', label: 'Инвест-модель', icon: 'TrendingUp', hint: 'Средние цены, окупаемость, ставки по категориям' },
   { id: 'demand', label: 'Заявки клиентов', icon: 'Inbox', hint: 'Что ищут — тренды спроса (60 заявок)' },
   { id: 'terms', label: 'Термины из описаний', icon: 'Quote', hint: 'Популярные ключевые слова и понятия' },
+  { id: 'market_prices', label: 'Цены с агрегаторов', icon: 'Globe', hint: 'Парсинг Аякс, Этажи, ЦИАН — актуальные цены рынка' },
 ];
+
+interface RetrainSchedule {
+  enabled: boolean;
+  hour: number;
+  sources: string[];
+  last_at: string | null;
+  last_status: string | null;
+  last_saved: number | null;
+}
 
 function fmtBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} Б`;
@@ -76,6 +86,12 @@ export default function VBKnowledgeAdmin() {
   const [trainingNews, setTrainingNews] = useState(false);
   const [trainOpen, setTrainOpen] = useState(false);
   const [selectedSources, setSelectedSources] = useState<string[]>(['news']);
+  const [schedule, setSchedule] = useState<RetrainSchedule>({
+    enabled: false, hour: 3, sources: ['news', 'listings', 'invest', 'demand', 'terms', 'market_prices'],
+    last_at: null, last_status: null, last_saved: null,
+  });
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleSaving, setScheduleSaving] = useState(false);
 
   const trainFromNews = async () => {
     if (trainingNews) return;
@@ -127,7 +143,27 @@ export default function VBKnowledgeAdmin() {
     );
   };
 
-  useEffect(() => { load(); }, []);
+  const loadSchedule = () => {
+    setScheduleLoading(true);
+    adminApi.getRetrainSchedule()
+      .then(d => setSchedule(d))
+      .catch(() => {})
+      .finally(() => setScheduleLoading(false));
+  };
+
+  const saveSchedule = async () => {
+    setScheduleSaving(true);
+    try {
+      await adminApi.saveRetrainSchedule({ enabled: schedule.enabled, hour: schedule.hour, sources: schedule.sources });
+      toast.success('Расписание сохранено');
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Ошибка сохранения');
+    } finally {
+      setScheduleSaving(false);
+    }
+  };
+
+  useEffect(() => { load(); loadSchedule(); }, []);
 
   const filtered = items.filter(it => {
     if (!filter.trim()) return true;
@@ -263,6 +299,84 @@ export default function VBKnowledgeAdmin() {
             {filtered.length} из {items.length}
           </div>
         </div>
+      </div>
+
+      {/* Расписание автопереобучения */}
+      <div className="bg-white rounded-2xl p-5 shadow-sm">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2">
+            <Icon name="CalendarClock" size={18} className="text-brand-blue" />
+            <h3 className="font-display font-700 text-base">Автопереобучение по расписанию</h3>
+          </div>
+          <div
+            onClick={() => setSchedule(s => ({ ...s, enabled: !s.enabled }))}
+            className={`relative w-10 h-5 rounded-full transition-colors cursor-pointer flex-shrink-0 ${schedule.enabled ? 'bg-brand-blue' : 'bg-muted-foreground/30'}`}
+          >
+            <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${schedule.enabled ? 'translate-x-5' : 'translate-x-0'}`} />
+          </div>
+        </div>
+
+        {scheduleLoading ? (
+          <div className="text-sm text-muted-foreground flex items-center gap-2">
+            <Icon name="Loader2" size={14} className="animate-spin" /> Загрузка…
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 flex-wrap">
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Время запуска (UTC)</label>
+                <select
+                  value={schedule.hour}
+                  onChange={e => setSchedule(s => ({ ...s, hour: +e.target.value }))}
+                  className="px-3 py-2 border rounded-lg text-sm"
+                >
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={i}>{String(i).padStart(2, '0')}:00 UTC ({String((i + 3) % 24).padStart(2, '0')}:00 МСК)</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Источники</div>
+                <div className="flex flex-wrap gap-2">
+                  {TRAINING_SOURCES.map(src => {
+                    const active = schedule.sources.includes(src.id);
+                    return (
+                      <button
+                        key={src.id}
+                        type="button"
+                        onClick={() => setSchedule(s => ({
+                          ...s,
+                          sources: active ? s.sources.filter(x => x !== src.id) : [...s.sources, src.id],
+                        }))}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors ${active ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30' : 'bg-muted/40 text-muted-foreground border-border'}`}
+                        title={src.hint}
+                      >
+                        {src.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {schedule.last_at && (
+              <div className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2 flex items-center gap-2">
+                <Icon name="CheckCircle2" size={13} className="text-emerald-500 shrink-0" />
+                Последний запуск: {fmtDate(schedule.last_at)}
+                {schedule.last_saved != null && ` — сохранено ${schedule.last_saved} фактов`}
+              </div>
+            )}
+
+            <button
+              onClick={saveSchedule}
+              disabled={scheduleSaving}
+              className="btn-blue text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-60"
+            >
+              <Icon name={scheduleSaving ? 'Loader2' : 'Save'} size={14} className={scheduleSaving ? 'animate-spin' : ''} />
+              {scheduleSaving ? 'Сохранение…' : 'Сохранить расписание'}
+            </button>
+          </div>
+        )}
       </div>
 
       {loading && (

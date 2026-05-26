@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "name": "Cron check (no auth needed)",
+      "method": "GET",
+      "path": "/?action=cron",
+      "expectedStatus": 200,
+      "expectedBody": {"skipped": true},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

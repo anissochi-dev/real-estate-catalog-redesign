@@ -1,5 +1,6 @@
 const AUTH_URL = 'https://functions.poehali.dev/e5d9d96a-a3ca-45cd-9ea3-3e2982b626f7';
 const ADMIN_URL = 'https://functions.poehali.dev/aeccc0fe-9c55-4933-b292-432cec9cc09d';
+export const AI_RETRAIN_URL = 'https://functions.poehali.dev/e2f1d357-fb83-4fbb-8d8b-6fb063357afc';
 const AI_URL = 'https://functions.poehali.dev/34bfc4a2-89b9-4c89-bcbc-d82314730aef';
 // Используем функцию upload/ (поддерживает водяной знак и возвращает original_url)
 const UPLOADS_URL = 'https://functions.poehali.dev/8983c0a8-a8c8-47ff-97ed-59cc1571aa15';
@@ -182,6 +183,14 @@ export const adminApi = {
       method: 'POST',
       body: JSON.stringify({ sources }),
     }),
+
+  // Расписание автопереобучения ВБ
+  getRetrainSchedule: (): Promise<{
+    enabled: boolean; hour: number; sources: string[];
+    last_at: string | null; last_status: string | null; last_saved: number | null;
+  }> => req(`${ADMIN_URL}?resource=vb_retrain_schedule`),
+  saveRetrainSchedule: (data: { enabled: boolean; hour: number; sources: string[] }) =>
+    req(`${ADMIN_URL}?resource=vb_retrain_schedule`, { method: 'PUT', body: JSON.stringify(data) }),
 
   // leads
   listLeads: () => req(`${ADMIN_URL}?resource=leads`),

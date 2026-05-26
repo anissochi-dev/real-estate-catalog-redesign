@@ -200,6 +200,8 @@ def handler(event, context):
                 return _consent_log(cur, conn, method, event, user)
             if resource == 'ai_memory':
                 return _ai_memory(cur, conn, method, rid, event, user)
+            if resource == 'vb_retrain_schedule':
+                return _vb_retrain_schedule(cur, conn, method, event, user)
 
             return _err(400, 'Неизвестный ресурс')
     finally:
@@ -1260,6 +1262,58 @@ def _settings(cur, conn, method, event, user):
             return _err(400, 'Нет полей')
         fields.append("updated_at = NOW()")
         cur.execute(f"UPDATE {SCHEMA}.settings SET {', '.join(fields)} WHERE id = (SELECT id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1)")
+        conn.commit()
+        return _ok({'success': True})
+
+    return _err(400, 'Bad request')
+
+
+def _vb_retrain_schedule(cur, conn, method, event, user):
+    """Управление расписанием автопереобучения ВБ."""
+    if user['role'] not in ('admin', 'director'):
+        return _err(403, 'Только admin и director')
+
+    if method == 'GET':
+        cur.execute(
+            f"SELECT vb_retrain_enabled, vb_retrain_hour, vb_retrain_sources, "
+            f"vb_retrain_last_at, vb_retrain_last_status, vb_retrain_last_saved "
+            f"FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
+        )
+        row = cur.fetchone()
+        if not row:
+            return _ok({'enabled': False, 'hour': 3, 'sources': []})
+        sources = row.get('vb_retrain_sources') or []
+        if isinstance(sources, str):
+            try:
+                sources = json.loads(sources)
+            except Exception:
+                sources = []
+        return _ok({
+            'enabled': row.get('vb_retrain_enabled', False),
+            'hour': row.get('vb_retrain_hour', 3),
+            'sources': sources,
+            'last_at': str(row['vb_retrain_last_at']) if row.get('vb_retrain_last_at') else None,
+            'last_status': row.get('vb_retrain_last_status'),
+            'last_saved': row.get('vb_retrain_last_saved'),
+        })
+
+    if method == 'PUT':
+        body = json.loads(event.get('body') or '{}')
+        fields = []
+        if 'enabled' in body:
+            fields.append(f"vb_retrain_enabled = {_bool(body['enabled'])}")
+        if 'hour' in body:
+            h = max(0, min(23, int(body['hour'] or 3)))
+            fields.append(f"vb_retrain_hour = {h}")
+        if 'sources' in body:
+            sources_json = json.dumps(body['sources'], ensure_ascii=False).replace("'", "''")
+            fields.append(f"vb_retrain_sources = '{sources_json}'::jsonb")
+        if not fields:
+            return _err(400, 'Нет полей')
+        cur.execute(
+            f"UPDATE {SCHEMA}.settings SET {', '.join(fields)} "
+            f"WHERE id = (SELECT id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1)"
+        )
         conn.commit()
         return _ok({'success': True})
 
