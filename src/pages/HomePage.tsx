@@ -299,10 +299,10 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
       {latestNews.length > 0 && (
         <section className="py-6 bg-muted/30 border-t border-border">
           <div className="container mx-auto px-4">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
               <div className="flex items-center gap-2">
                 <Icon name="Newspaper" size={16} className="text-brand-blue" />
-              <h2 className="font-display font-700 text-base text-foreground">Новости коммерческой недвижимости Краснодара</h2>
+                <h2 className="font-display font-700 text-base text-foreground">Новости коммерческой недвижимости Краснодара</h2>
               </div>
               <button
                 onClick={() => navigate('/news')}
