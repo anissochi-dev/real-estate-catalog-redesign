@@ -240,49 +240,6 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
           </form>
         </div>
 
-        {/* Цена + агент — только мобильный, между заголовком и галереей */}
-        <div className="lg:hidden bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
-          <div className="px-4 pt-3 pb-3">
-            <div className="text-[10px] text-muted-foreground mb-0.5 font-medium uppercase tracking-wide">
-              {dealLabel}
-            </div>
-            <div className="font-display font-900 text-2xl text-brand-blue leading-none tracking-tight">
-              {item.price.toLocaleString('ru')} ₽{item.deal === 'rent' ? '/мес' : ''}
-            </div>
-            {item.pricePerM2 ? (
-              <div className="flex items-center gap-1 mt-1.5">
-                <Icon name="Scaling" size={11} className="text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">{item.pricePerM2.toLocaleString('ru')} ₽/м²</span>
-              </div>
-            ) : null}
-          </div>
-          {agents[0] && (
-            <div className="px-4 py-3 border-t border-border flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5 min-w-0">
-                {agents[0].avatar ? (
-                  <img src={agents[0].avatar} alt={agents[0].name} referrerPolicy="no-referrer"
-                    className="w-8 h-8 rounded-full object-cover flex-shrink-0 border-2 border-border" />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
-                    <Icon name="User" size={15} className="text-brand-blue" />
-                  </div>
-                )}
-                <div className="min-w-0">
-                  <div className="font-display font-700 text-sm truncate">{agents[0].name}</div>
-                  <div className="text-[10px] text-muted-foreground">Представитель собственника</div>
-                </div>
-              </div>
-              {agents[0].phone && (
-                <a href={`tel:${agents[0].phone}`}
-                  className="flex-shrink-0 inline-flex items-center gap-1.5 bg-brand-blue text-white text-xs font-semibold px-3 py-2 rounded-xl">
-                  <Icon name="Phone" size={13} />
-                  Позвонить
-                </a>
-              )}
-            </div>
-          )}
-        </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 space-y-3">
             <PropertyMediaGallery
@@ -305,6 +262,50 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
               dealLabel={dealLabel}
               typeLabel={typeLabel}
             />
+
+            {/* Цена + агент — только мобильный, после галереи */}
+            <div className="lg:hidden bg-white rounded-2xl shadow-sm overflow-hidden">
+              <div className="px-4 pt-3 pb-3">
+                <div className="text-[10px] text-muted-foreground mb-0.5 font-medium uppercase tracking-wide">
+                  {dealLabel}
+                </div>
+                <div className="font-display font-900 text-2xl text-brand-blue leading-none tracking-tight">
+                  {item.price.toLocaleString('ru')} ₽{item.deal === 'rent' ? '/мес' : ''}
+                </div>
+                {item.pricePerM2 ? (
+                  <div className="flex items-center gap-1 mt-1.5">
+                    <Icon name="Scaling" size={11} className="text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">{item.pricePerM2.toLocaleString('ru')} ₽/м²</span>
+                  </div>
+                ) : null}
+              </div>
+              {agents[0] && (
+                <div className="px-4 py-3 border-t border-border flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {agents[0].avatar ? (
+                      <img src={agents[0].avatar} alt={agents[0].name} referrerPolicy="no-referrer"
+                        className="w-8 h-8 rounded-full object-cover flex-shrink-0 border-2 border-border" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
+                        <Icon name="User" size={15} className="text-brand-blue" />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="font-display font-700 text-sm truncate">{agents[0].name}</div>
+                      <div className="text-[10px] text-muted-foreground">Представитель собственника</div>
+                    </div>
+                  </div>
+                  {agents[0].phone && (
+                    <a href={`tel:${agents[0].phone}`}
+                      className="flex-shrink-0 inline-flex items-center gap-1.5 bg-brand-blue text-white text-xs font-semibold px-3 py-2 rounded-xl">
+                      <Icon name="Phone" size={13} />
+                      Позвонить
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+
             <PropertyMainContent
               item={item}
               dealLabel={dealLabel}
