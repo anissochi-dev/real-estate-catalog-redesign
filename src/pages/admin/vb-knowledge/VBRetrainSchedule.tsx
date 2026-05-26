@@ -84,13 +84,13 @@ export default function VBRetrainSchedule({
             </div>
           </div>
 
-          {schedule.last_at && (
-            <div className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2 flex items-center gap-2">
-              <Icon name="CheckCircle2" size={13} className="text-emerald-500 shrink-0" />
-              Последний запуск: {fmtDate(schedule.last_at)}
-              {schedule.last_saved != null && ` — сохранено ${schedule.last_saved} фактов`}
-            </div>
-          )}
+          <div className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2 flex items-center gap-2">
+            <Icon name={schedule.last_at ? 'CheckCircle2' : 'Clock'} size={13} className={schedule.last_at ? 'text-emerald-500 shrink-0' : 'text-muted-foreground shrink-0'} />
+            {schedule.last_at
+              ? <>Последний запуск: <b className="text-foreground">{fmtDate(schedule.last_at)}</b>{schedule.last_saved != null && ` — сохранено ${schedule.last_saved} фактов`}</>
+              : 'Переобучение ещё не запускалось'
+            }
+          </div>
 
           <button
             onClick={onSave}
