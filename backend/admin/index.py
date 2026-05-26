@@ -1258,9 +1258,6 @@ def _settings(cur, conn, method, event, user):
                    'notify_max_enabled', 'notify_max_on_lead', 'notify_max_on_deal', 'notify_max_on_complaint'):
             if bf in body:
                 fields.append(f"{bf} = {_bool(body[bf])}")
-        for f, length in [('notify_max_roles', 500), ('notify_max_extra_phones', 1000)]:
-            if f in body:
-                fields.append(f"{f} = {_str_or_null(body[f], length)}")
         if 'role_permissions' in body:
             rp = body['role_permissions']
             rp_json = _safe(json.dumps(rp, ensure_ascii=False), 50000)
