@@ -51,79 +51,36 @@ function StatusBadge({ value, check }: { value: string; check: CheckState }) {
   );
 }
 
-async function checkMetaTag(
-  siteUrl: string,
-  metaName: string,
-  expectedContent: string,
-): Promise<CheckState> {
-  const base = siteUrl.replace(/\/$/, '');
-  // Пробуем через CORS-прокси чтобы получить HTML страницы
-  const urls = [base + '/', base];
-  let html = '';
-  let fetchErr = '';
-  for (const url of urls) {
-    try {
-      const res = await fetch(url, { method: 'GET', cache: 'no-store' });
-      if (res.ok) {
-        html = await res.text();
-        break;
-      }
-    } catch (e) {
-      fetchErr = e instanceof Error ? e.message : 'Ошибка запроса';
-    }
-  }
-
-  if (!html) {
-    // SPA — пробуем проверить через браузерный DOM (текущий документ)
-    const domTag = document.querySelector<HTMLMetaElement>(`meta[name="${metaName}"]`);
-    if (domTag) {
-      const domContent = (domTag.content || '').trim();
-      if (domContent === expectedContent.trim()) {
-        return { status: 'ok', message: 'Мета-тег найден на текущей странице' };
-      }
-      if (domContent) {
-        return { status: 'mismatch', message: `Тег есть, но содержимое: «${domContent.slice(0, 60)}»` };
-      }
-    }
-    return {
-      status: 'err',
-      message: fetchErr || 'Не удалось загрузить страницу. Проверьте URL сайта в настройках.',
-    };
-  }
-
-  // Ищем мета-тег в полученном HTML
-  const re = new RegExp(
-    `<meta[^>]+name=["']${metaName}["'][^>]*content=["']([^"']*)["']`,
-    'i',
-  );
-  const re2 = new RegExp(
-    `<meta[^>]+content=["']([^"']*)["'][^>]*name=["']${metaName}["']`,
-    'i',
-  );
-  const match = html.match(re) || html.match(re2);
-
-  if (!match) {
-    return {
-      status: 'err',
-      message: 'Мета-тег не найден в HTML страницы. Убедитесь, что сохранили настройки.',
-    };
-  }
-
-  const found = (match[1] || '').trim();
+// Сайт — SPA: статический index.html всегда содержит пустой content="".
+// Тег заполняется динамически через AnalyticsLoader в браузере.
+// Поэтому единственный достоверный способ проверки — DOM текущей страницы.
+function checkMetaTagInDom(metaName: string, expectedContent: string): CheckState {
+  const tag = document.querySelector<HTMLMetaElement>(`meta[name="${metaName}"]`);
   const expected = expectedContent.trim();
+
+  if (!tag) {
+    return {
+      status: 'err',
+      message: 'Мета-тег не найден в <head>. Убедитесь что сохранили настройки и перезагрузите страницу.',
+    };
+  }
+
+  const found = (tag.content || '').trim();
 
   if (found === expected) {
     return { status: 'ok', message: 'Мета-тег найден и совпадает — поисковая система может подтвердить сайт' };
   }
+
   if (!found) {
     return {
       status: 'mismatch',
-      message: 'Тег найден, но content пустой. Сохраните настройки и дождитесь обновления.',
+      message: 'Тег есть, но content пустой. Нажмите «Сохранить», дождитесь надписи «Сохранено» и проверьте снова.',
     };
   }
+
   return {
     status: 'mismatch',
-    message: `Тег найден, но значение не совпадает: «${found.slice(0, 80)}»`,
+    message: `Тег есть, но значение не совпадает: «${found.slice(0, 80)}». Убедитесь, что скопировали правильный код.`,
   };
 }
 
@@ -131,22 +88,19 @@ export default function IntegrationsWebmasterSection({ s, setS, saved, save }: P
   const [ymCheck,  setYmCheck]  = useState<CheckState>(idleState);
   const [gscCheck, setGscCheck] = useState<CheckState>(idleState);
 
-  const siteUrl = s.site_url || window.location.origin;
-
-  const runYmCheck = async () => {
+  const runYmCheck = () => {
     const val = (s.yandex_webmaster_verification || '').trim();
     if (!val) { setYmCheck({ status: 'err', message: 'Введите код подтверждения' }); return; }
     setYmCheck({ status: 'checking', message: '' });
-    const result = await checkMetaTag(siteUrl, 'yandex-verification', val);
-    setYmCheck(result);
+    // Небольшая задержка чтобы AnalyticsLoader успел обновить тег если только что сохранили
+    setTimeout(() => setYmCheck(checkMetaTagInDom('yandex-verification', val)), 400);
   };
 
-  const runGscCheck = async () => {
+  const runGscCheck = () => {
     const val = (s.google_search_console_verification || '').trim();
     if (!val) { setGscCheck({ status: 'err', message: 'Введите код подтверждения' }); return; }
     setGscCheck({ status: 'checking', message: '' });
-    const result = await checkMetaTag(siteUrl, 'google-site-verification', val);
-    setGscCheck(result);
+    setTimeout(() => setGscCheck(checkMetaTagInDom('google-site-verification', val)), 400);
   };
 
   return (
