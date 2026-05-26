@@ -21,9 +21,11 @@ YANDEX_MODEL_NAME = 'yandexgpt/rc'
 # S3 настройки для оптимизации изображений
 S3_BUCKET = 'files'
 S3_ENDPOINT = 'https://bucket.poehali.dev'
-IMG_COMPRESS_THRESHOLD = 200 * 1024   # 200 KB — кандидат на сжатие
+S3_PREFIXES = ['photos/', 'logos/', 'watermarks/', 'files/']
+IMG_COMPRESS_THRESHOLD = 150 * 1024   # 150 KB — кандидат на сжатие
 IMG_JPEG_QUALITY = 85
 IMG_MAX_SIDE = 2000
+IMG_MIN_SAVINGS_PCT = 0.05
 
 
 def _s3():
@@ -39,41 +41,93 @@ def _cdn_url(key: str) -> str:
     return f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
 
 
-def _key_from_url(url: str) -> str | None:
-    if not url:
+def _extract_urls_from_value(v) -> list:
+    """Извлекает все URL из любого формата поля: строка, строка с |, JSON-строка массива."""
+    import re as _re
+    if not v:
+        return []
+    if isinstance(v, list):
+        return [str(x) for x in v if x]
+    s = str(v).strip()
+    if not s or s in ('[]', '{}', 'null', 'None', ''):
+        return []
+    # JSON-строка массива: ['url'] или ["url"]
+    if s.startswith('['):
+        try:
+            import json as _json
+            parsed = _json.loads(s)
+            if isinstance(parsed, list):
+                return [str(x) for x in parsed if x]
+        except Exception:
+            pass
+        try:
+            import json as _json
+            parsed = _json.loads(s.replace("'", '"'))
+            if isinstance(parsed, list):
+                return [str(x) for x in parsed if x]
+        except Exception:
+            pass
+        return _re.findall(r'https?://[^\s\'">,\]]+', s)
+    # Разделитель |
+    if '|' in s:
+        return [u.strip() for u in s.split('|') if u.strip()]
+    # Разделитель , (только если несколько http)
+    if ',' in s and s.count('http') > 1:
+        return [u.strip() for u in s.split(',') if u.strip().startswith('http')]
+    if s.startswith('http'):
+        return [s]
+    return []
+
+
+def _key_from_url(url: str):
+    """Извлекает S3-ключ из CDN-URL нашего проекта. Возвращает None для внешних URL."""
+    if not url or not isinstance(url, str):
         return None
-    for m in ('/bucket/', '/files/'):
-        idx = url.find(m)
-        if idx != -1:
-            return url[idx + len(m):]
-    if not url.startswith('http') and '/' in url:
-        return url
+    url = url.strip()
+    if 'cdn.poehali.dev' not in url:
+        return None
+    marker = '/bucket/'
+    idx = url.find(marker)
+    if idx != -1:
+        key = url[idx + len(marker):].split('?')[0].split('#')[0]
+        if key:
+            return key
     return None
 
 
 def _used_image_keys(cur) -> set:
+    """Собирает S3-ключи всех файлов нашего CDN, которые реально используются в БД."""
     used = set()
-    for q in [
-        f"SELECT image FROM {SCHEMA}.listings WHERE image IS NOT NULL AND image != ''",
-        f"SELECT images FROM {SCHEMA}.listings WHERE images IS NOT NULL AND images != ''",
-    ]:
-        try:
-            cur.execute(q)
-            for row in cur.fetchall():
-                v = list(row.values())[0]
-                if not v:
-                    continue
-                if isinstance(v, list):
-                    urls = v
-                else:
-                    sep = '|' if '|' in str(v) else ','
-                    urls = [u.strip() for u in str(v).split(sep) if u.strip()]
-                for url in urls:
-                    k = _key_from_url(url)
-                    if k:
-                        used.add(k)
-        except Exception:
-            pass
+
+    def _add(v):
+        for url in _extract_urls_from_value(v):
+            k = _key_from_url(url)
+            if k:
+                used.add(k)
+
+    # listings.image
+    try:
+        cur.execute(
+            f"SELECT image FROM {SCHEMA}.listings "
+            f"WHERE image IS NOT NULL AND image != '' AND image LIKE '%cdn.poehali%'"
+        )
+        for row in cur.fetchall():
+            _add(row['image'])
+    except Exception:
+        pass
+
+    # listings.images
+    try:
+        cur.execute(
+            f"SELECT images FROM {SCHEMA}.listings "
+            f"WHERE images IS NOT NULL AND images != '' AND images LIKE '%cdn.poehali%'"
+        )
+        for row in cur.fetchall():
+            _add(row['images'])
+    except Exception:
+        pass
+
+    # settings
     try:
         cur.execute(
             f"SELECT logo_url, watermark_url, og_image_url, favicon_url, apple_touch_icon_url "
@@ -82,19 +136,32 @@ def _used_image_keys(cur) -> set:
         row = cur.fetchone()
         if row:
             for v in row.values():
-                k = _key_from_url(v or '')
-                if k:
-                    used.add(k)
+                _add(v)
     except Exception:
         pass
+
+    # news
     try:
-        cur.execute(f"SELECT image_url FROM {SCHEMA}.news WHERE image_url IS NOT NULL AND image_url != ''")
+        cur.execute(
+            f"SELECT image_url FROM {SCHEMA}.news "
+            f"WHERE image_url IS NOT NULL AND image_url != '' AND image_url LIKE '%cdn.poehali%'"
+        )
         for row in cur.fetchall():
-            k = _key_from_url(row['image_url'])
-            if k:
-                used.add(k)
+            _add(row['image_url'])
     except Exception:
         pass
+
+    # seo_pages
+    try:
+        cur.execute(
+            f"SELECT og_image FROM {SCHEMA}.seo_pages "
+            f"WHERE og_image IS NOT NULL AND og_image != '' AND og_image LIKE '%cdn.poehali%'"
+        )
+        for row in cur.fetchall():
+            _add(row['og_image'])
+    except Exception:
+        pass
+
     return used
 
 SYSTEM_PROMPTS = {
@@ -944,11 +1011,16 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
     if act_type == 'scan_images':
         try:
             s3 = _s3()
+            # Сканируем все папки: photos/, logos/, watermarks/, files/
             all_keys = {}
             paginator = s3.get_paginator('list_objects_v2')
-            for page in paginator.paginate(Bucket=S3_BUCKET, Prefix='photos/'):
-                for obj in page.get('Contents', []):
-                    all_keys[obj['Key']] = obj['Size']
+            for prefix in S3_PREFIXES:
+                try:
+                    for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+                        for obj in page.get('Contents', []):
+                            all_keys[obj['Key']] = obj['Size']
+                except Exception:
+                    pass
 
             used_keys = _used_image_keys(cur)
             unused, to_compress, ok_count = [], [], 0
@@ -961,20 +1033,24 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
                 else:
                     ok_count += 1
 
+            unused_kb = sum(f['size_kb'] for f in unused)
+            compress_kb = sum(f['size_kb'] for f in to_compress)
             return {
                 'ok': True,
                 'total_in_s3': len(all_keys),
-                'total_used': len(used_keys),
+                'total_used_our_cdn': len(used_keys),
                 'unused_count': len(unused),
-                'unused_size_kb': sum(f['size_kb'] for f in unused),
+                'unused_size_kb': unused_kb,
                 'compress_candidates': len(to_compress),
-                'compress_total_kb': sum(f['size_kb'] for f in to_compress),
-                'ok_count': ok_count,
-                'unused': unused[:30],
-                'to_compress': to_compress[:30],
+                'compress_total_kb': compress_kb,
+                'already_ok_count': ok_count,
+                'unused': unused[:50],
+                'to_compress': to_compress[:50],
                 'message': (
-                    f"Найдено {len(unused)} неиспользуемых файлов ({sum(f['size_kb'] for f in unused)} KB) "
-                    f"и {len(to_compress)} кандидатов на сжатие ({sum(f['size_kb'] for f in to_compress)} KB)"
+                    f"В S3: {len(all_keys)} файлов. "
+                    f"Неиспользуемых: {len(unused)} ({unused_kb} KB). "
+                    f"Кандидатов на сжатие: {len(to_compress)} ({compress_kb} KB). "
+                    f"Уже оптимальных: {ok_count}."
                 ),
             }
         except Exception as e:
@@ -991,11 +1067,21 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         try:
             s3 = _s3()
             results, total_saved = [], 0
-            for key in keys[:20]:
+            for key in keys[:50]:  # макс 50 за раз
                 try:
                     obj = s3.get_object(Bucket=S3_BUCKET, Key=key)
                     orig_bytes = obj['Body'].read()
                     orig_size = len(orig_bytes)
+                    content_type = obj.get('ContentType', '')
+
+                    # Пропускаем не-изображения и GIF (анимация)
+                    is_img = content_type.startswith('image/') or key.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))
+                    if not is_img:
+                        results.append({'key': key, 'skipped': True, 'reason': 'не изображение'})
+                        continue
+                    if key.lower().endswith('.gif') or content_type == 'image/gif':
+                        results.append({'key': key, 'skipped': True, 'reason': 'GIF — пропущен'})
+                        continue
 
                     img = _PIL.open(io.BytesIO(orig_bytes))
                     w, h = img.size
@@ -1003,9 +1089,14 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
                         ratio = IMG_MAX_SIDE / max(w, h)
                         img = img.resize((int(w * ratio), int(h * ratio)), _PIL.LANCZOS)
 
-                    if img.mode in ('RGBA', 'P', 'LA'):
+                    if img.mode in ('RGBA', 'LA'):
                         bg = _PIL.new('RGB', img.size, (255, 255, 255))
-                        bg.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+                        bg.paste(img, mask=img.split()[-1])
+                        img = bg
+                    elif img.mode == 'P':
+                        img = img.convert('RGBA')
+                        bg = _PIL.new('RGB', img.size, (255, 255, 255))
+                        bg.paste(img, mask=img.split()[-1])
                         img = bg
                     elif img.mode != 'RGB':
                         img = img.convert('RGB')
@@ -1015,11 +1106,16 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
                     new_bytes = out.getvalue()
                     new_size = len(new_bytes)
 
-                    if new_size >= orig_size * 0.95:
+                    if new_size >= orig_size * (1 - IMG_MIN_SAVINGS_PCT):
                         results.append({'key': key, 'skipped': True, 'reason': 'уже оптимально', 'size_kb': round(orig_size / 1024)})
                         continue
 
-                    s3.put_object(Bucket=S3_BUCKET, Key=key, Body=new_bytes, ContentType='image/jpeg')
+                    # Загружаем обратно под тем же ключом — URL не меняется!
+                    s3.put_object(
+                        Bucket=S3_BUCKET, Key=key, Body=new_bytes,
+                        ContentType='image/jpeg',
+                        CacheControl='public, max-age=31536000',
+                    )
                     saved = orig_size - new_size
                     total_saved += saved
                     results.append({
@@ -1027,6 +1123,7 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
                         'original_kb': round(orig_size / 1024),
                         'new_kb': round(new_size / 1024),
                         'saved_kb': round(saved / 1024),
+                        'saved_pct': round((saved / orig_size) * 100),
                     })
                 except Exception as e:
                     results.append({'key': key, 'error': str(e)})
@@ -1038,7 +1135,10 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
                 'optimized': len(optimized),
                 'total_saved_kb': round(total_saved / 1024),
                 'results': results,
-                'message': f"Сжато {len(optimized)} фото, сэкономлено {round(total_saved / 1024)} KB",
+                'message': (
+                    f"Обработано {len(results)}: сжато {len(optimized)}, "
+                    f"сэкономлено {round(total_saved / 1024)} KB."
+                ),
             }
         except Exception as e:
             return {'error': f'Ошибка сжатия: {e}'}
@@ -1051,9 +1151,9 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
             return {'error': 'Недостаточно прав'}
         try:
             s3 = _s3()
-            # Финальная проверка — не удаляем то, что сейчас используется
+            # Финальная двойная проверка — не удаляем используемые файлы
             used_keys = _used_image_keys(cur)
-            safe_keys = [k for k in keys[:100] if k not in used_keys]
+            safe_keys = [k for k in keys[:200] if k not in used_keys]
             protected = [k for k in keys if k in used_keys]
 
             deleted, errors = [], []
@@ -1073,7 +1173,8 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
                 'errors': errors,
                 'message': (
                     f"Удалено {len(deleted)} файлов. "
-                    + (f"Защищено от удаления {len(protected)} (ещё используются)." if protected else "")
+                    + (f"Защищено {len(protected)} (используются в БД). " if protected else "")
+                    + (f"Ошибок: {len(errors)}." if errors else "")
                 ),
             }
         except Exception as e:
