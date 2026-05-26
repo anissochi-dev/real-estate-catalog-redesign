@@ -49,9 +49,34 @@ export default function NotificationsTab({ s, setS, saved, save }: Props) {
     <div className="space-y-4">
       {/* EMAIL */}
       <div className="bg-white rounded-2xl p-6 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="font-display font-700 text-lg flex items-center gap-2">
-            <Icon name="Mail" size={18} /> Email-уведомления
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="font-display font-700 text-lg flex items-center gap-2">
+              <Icon name="Mail" size={18} /> Email-уведомления
+            </div>
+            {s.notify_email_enabled && s.smtp_host && s.smtp_user ? (
+              emailTest.status === 'ok' ? (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                  <Icon name="CheckCircle2" size={11} /> Работает
+                </span>
+              ) : emailTest.status === 'err' ? (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
+                  <Icon name="XCircle" size={11} /> Ошибка
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                  <Icon name="Clock" size={11} /> Настроено, не проверено
+                </span>
+              )
+            ) : s.notify_email_enabled ? (
+              <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                <Icon name="AlertTriangle" size={11} /> Нет SMTP
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted border border-border px-2 py-0.5 rounded-full">
+                <Icon name="Circle" size={11} /> Выключено
+              </span>
+            )}
           </div>
           <Toggle
             checked={!!s.notify_email_enabled}
@@ -131,9 +156,34 @@ export default function NotificationsTab({ s, setS, saved, save }: Props) {
 
       {/* TELEGRAM */}
       <div className="bg-white rounded-2xl p-6 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="font-display font-700 text-lg flex items-center gap-2">
-            <Icon name="Send" size={18} /> Telegram-уведомления
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="font-display font-700 text-lg flex items-center gap-2">
+              <Icon name="Send" size={18} /> Telegram-уведомления
+            </div>
+            {s.notify_telegram_enabled && s.notify_telegram_bot_token && s.notify_telegram_chat_ids ? (
+              tgTest.status === 'ok' ? (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                  <Icon name="CheckCircle2" size={11} /> Работает
+                </span>
+              ) : tgTest.status === 'err' ? (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
+                  <Icon name="XCircle" size={11} /> Ошибка
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                  <Icon name="Clock" size={11} /> Настроено, не проверено
+                </span>
+              )
+            ) : s.notify_telegram_enabled ? (
+              <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                <Icon name="AlertTriangle" size={11} /> Нет токена/Chat ID
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted border border-border px-2 py-0.5 rounded-full">
+                <Icon name="Circle" size={11} /> Выключено
+              </span>
+            )}
           </div>
           <Toggle
             checked={!!s.notify_telegram_enabled}

@@ -144,11 +144,25 @@ export default function AdPlatformsTab() {
                 <div className={`w-9 h-9 rounded-xl flex items-center justify-center border ${meta.color}`}>
                   <Icon name={meta.icon} size={18} />
                 </div>
-                <div className="flex-1">
-                  <div className="font-semibold text-sm">{meta.label}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {p.is_active ? 'Активна' : 'Отключена'}
-                    {p.updated_at ? ` · обновлено ${new Date(p.updated_at).toLocaleDateString('ru')}` : ''}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="font-semibold text-sm">{meta.label}</div>
+                    {p.is_active && p.api_key ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">
+                        <Icon name="CheckCircle2" size={10} /> Подключено
+                      </span>
+                    ) : p.api_key ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
+                        <Icon name="PauseCircle" size={10} /> Ключ есть, выключено
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted border border-border px-1.5 py-0.5 rounded-full">
+                        <Icon name="Circle" size={10} /> Не настроено
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {p.updated_at ? `Обновлено ${new Date(p.updated_at).toLocaleDateString('ru')}` : 'Ключи не заданы'}
                   </div>
                 </div>
                 <button

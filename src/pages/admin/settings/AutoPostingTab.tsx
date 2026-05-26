@@ -145,11 +145,35 @@ export default function AutoPostingTab() {
               <div className={`w-9 h-9 rounded-xl bg-muted/50 flex items-center justify-center ${meta.color}`}>
                 <Icon name={meta.icon} size={18} />
               </div>
-              <div className="flex-1">
-                <div className="font-semibold text-sm">{meta.label}</div>
-                <div className="text-xs text-muted-foreground">
-                  {meta.has_api ? 'Прямой API' : 'Подготовка текста'} ·
-                  {ps.has_token ? ' Токен настроен' : ' Токен не настроен'}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="font-semibold text-sm">{meta.label}</div>
+                  {tr ? (
+                    tr.ok ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">
+                        <Icon name="CheckCircle2" size={10} /> Работает
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-700 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full">
+                        <Icon name="XCircle" size={10} /> Ошибка
+                      </span>
+                    )
+                  ) : ps.is_enabled && ps.has_token ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
+                      <Icon name="Clock" size={10} /> Не проверено
+                    </span>
+                  ) : ps.has_token ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted border border-border px-1.5 py-0.5 rounded-full">
+                      <Icon name="PauseCircle" size={10} /> Выключено
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted border border-border px-1.5 py-0.5 rounded-full">
+                      <Icon name="Circle" size={10} /> Не настроено
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {meta.has_api ? 'Прямой API' : 'Подготовка текста'}
                 </div>
               </div>
 
@@ -185,11 +209,11 @@ export default function AutoPostingTab() {
               </div>
             </div>
 
-            {/* Результат теста */}
+            {/* Детали результата теста */}
             {tr && (
-              <div className={`mx-5 mb-3 px-3 py-2 rounded-lg text-xs flex items-center gap-2 ${tr.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'}`}>
-                <Icon name={tr.ok ? 'CheckCircle2' : 'AlertCircle'} size={13} />
-                {tr.message}
+              <div className={`mx-5 mb-2 px-3 py-2 rounded-lg text-xs flex items-start gap-2 ${tr.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'}`}>
+                <Icon name={tr.ok ? 'CheckCircle2' : 'AlertCircle'} size={13} className="mt-0.5 shrink-0" />
+                <span>{tr.message}</span>
               </div>
             )}
 
