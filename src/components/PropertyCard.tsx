@@ -157,7 +157,7 @@ export default function PropertyCard({
                 src={src}
                 alt={property.title}
                 loading={index < 4 && i === 0 ? 'eager' : 'lazy'}
-                fetchPriority={index < 4 && i === 0 ? 'high' : 'low'}
+                fetchpriority={index < 4 && i === 0 ? 'high' : 'low'}
                 className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${i === activeImg ? 'opacity-100' : 'opacity-0'}`}
               />
             ))
