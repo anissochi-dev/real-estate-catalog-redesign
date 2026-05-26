@@ -343,7 +343,7 @@ def _site_base_url(cur) -> str:
                 return url
     except Exception:
         pass
-    return os.environ.get('SITE_URL', 'https://biznest-krd.ru').rstrip('/')
+    return os.environ.get('SITE_URL', 'https://bmn.su').rstrip('/')
 
 
 def _build_sitemap_xml(cur) -> tuple:

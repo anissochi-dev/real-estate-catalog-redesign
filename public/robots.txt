@@ -27,6 +27,5 @@ Disallow: /auth
 Disallow: /signin
 Disallow: /api/
 
-Sitemap: /sitemap.xml
-Sitemap: /sitemap_index.xml
-Sitemap: https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d?file=sitemap
+Sitemap: https://bmn.su/sitemap.xml
+Sitemap: https://bmn.su/sitemap_index.xml
