@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { crmUrl } from '@/lib/adminApi';
+import { crmUrl, CRM_CHECKS_URL } from '@/lib/adminApi';
 
 interface Owner {
   id: number;
@@ -24,6 +24,31 @@ interface Owner {
   deals_count: number;
   listings?: { id: number; title: string; address?: string; price?: number; status?: string }[];
   deals?: { id: number; title: string; stage?: string; amount?: number; commission?: number; created_at?: string }[];
+}
+
+function InnResultCard({ data }: { data: Record<string, unknown> }) {
+  const status = String(data.status || '');
+  const isActive = status.toLowerCase().includes('действу') || status.toLowerCase().includes('активн') || status === '1';
+  const isLiquidated = status.toLowerCase().includes('ликвид') || status.toLowerCase().includes('прекращ');
+  const statusColor = isLiquidated ? 'text-red-600' : isActive ? 'text-emerald-600' : 'text-amber-600';
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <Icon name={isLiquidated ? 'XCircle' : isActive ? 'CheckCircle2' : 'AlertCircle'} size={15} className={statusColor} />
+        <span className="font-semibold">{String(data.name || '—')}</span>
+      </div>
+      <div className={`text-xs font-semibold ${statusColor}`}>{status}</div>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs mt-1">
+        {data.ogrn && <div><span className="text-muted-foreground">ОГРН:</span> {String(data.ogrn)}</div>}
+        {data._type && <div><span className="text-muted-foreground">Тип:</span> {data._type === 'ip' ? 'ИП' : 'Юрлицо'}</div>}
+        {data.reg_date && <div><span className="text-muted-foreground">Рег.:</span> {String(data.reg_date)}</div>}
+        {data.director && <div><span className="text-muted-foreground">Рук.:</span> {String(data.director)}</div>}
+        {data.address && <div className="col-span-2"><span className="text-muted-foreground">Адрес:</span> {String(data.address)}</div>}
+        {data.okved && <div className="col-span-2"><span className="text-muted-foreground">ОКВЭД:</span> {String(data.okved)}{data.okved_name ? ` — ${String(data.okved_name)}` : ''}</div>}
+      </div>
+    </div>
+  );
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -43,6 +68,25 @@ export default function CrmOwners() {
   const [selectedOwner, setSelectedOwner] = useState<Owner | null>(null);
   const [form, setForm] = useState({ name: '', phone: '', email: '', company: '', inn: '', source: 'manual', notes: '' });
   const [dupWarning, setDupWarning] = useState<{ id: number; name: string } | null>(null);
+  const [innCheckResult, setInnCheckResult] = useState<{ loading: boolean; data?: Record<string, unknown>; error?: string } | null>(null);
+
+  const checkInn = async (inn: string) => {
+    setInnCheckResult({ loading: true });
+    try {
+      const r = await fetch(`${CRM_CHECKS_URL}/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token || '' },
+        body: JSON.stringify({ check_type: 'company', query: inn, sources: ['zachestny'] }),
+      });
+      const json = await r.json();
+      if (!r.ok) throw new Error(json.error || 'Ошибка');
+      const res = json.results?.zachestny;
+      if (res?.error) setInnCheckResult({ loading: false, error: res.error });
+      else setInnCheckResult({ loading: false, data: res?.data as Record<string, unknown> });
+    } catch (e) {
+      setInnCheckResult({ loading: false, error: e instanceof Error ? e.message : 'Ошибка' });
+    }
+  };
 
   const headers = { 'Content-Type': 'application/json', 'X-Auth-Token': token || '' };
 
@@ -163,7 +207,7 @@ export default function CrmOwners() {
                     <Badge variant="secondary" className="text-xs">{SOURCE_LABELS[o.source] || o.source}</Badge>
                   </td>
                   <td className="px-4 py-3">
-                    <Button variant="ghost" size="sm" onClick={() => setSelectedOwner(o)}>
+                    <Button variant="ghost" size="sm" onClick={() => { setSelectedOwner(o); setInnCheckResult(null); }}>
                       <Icon name="Eye" size={15} />
                     </Button>
                   </td>
@@ -270,10 +314,44 @@ export default function CrmOwners() {
                 <div><span className="text-muted-foreground">Телефон:</span> <strong>{ownerDetail.phone}</strong></div>
                 {ownerDetail.email && <div><span className="text-muted-foreground">Email:</span> {ownerDetail.email}</div>}
                 {ownerDetail.company && <div><span className="text-muted-foreground">Компания:</span> {ownerDetail.company}</div>}
-                {ownerDetail.inn && <div><span className="text-muted-foreground">ИНН:</span> {ownerDetail.inn}</div>}
+                {ownerDetail.inn && (
+                  <div className="col-span-2 flex items-center gap-2 flex-wrap">
+                    <span className="text-muted-foreground">ИНН:</span>
+                    <strong>{ownerDetail.inn}</strong>
+                    <button
+                      onClick={() => checkInn(ownerDetail.inn)}
+                      disabled={innCheckResult?.loading}
+                      className="inline-flex items-center gap-1 text-xs text-brand-blue hover:underline disabled:opacity-50"
+                    >
+                      <Icon name={innCheckResult?.loading ? 'Loader2' : 'ShieldCheck'} size={13} className={innCheckResult?.loading ? 'animate-spin' : ''} />
+                      {innCheckResult?.loading ? 'Проверяем...' : 'Проверить по ИНН'}
+                    </button>
+                    <a
+                      href={`https://zachestnyibiznes.ru/company/ul/${ownerDetail.inn}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      <Icon name="ExternalLink" size={12} />
+                      ЧестныйБизнес
+                    </a>
+                  </div>
+                )}
                 <div><span className="text-muted-foreground">Источник:</span> {SOURCE_LABELS[ownerDetail.source] || ownerDetail.source}</div>
                 <div><span className="text-muted-foreground">Добавил:</span> {ownerDetail.creator || '—'}</div>
               </div>
+              {innCheckResult && !innCheckResult.loading && (
+                <div className={`rounded-xl border p-3 text-sm ${innCheckResult.error ? 'border-red-200 bg-red-50' : 'border-emerald-200 bg-emerald-50/60'}`}>
+                  {innCheckResult.error ? (
+                    <div className="text-red-600 flex items-center gap-2">
+                      <Icon name="AlertCircle" size={14} />
+                      {innCheckResult.error}
+                    </div>
+                  ) : innCheckResult.data ? (
+                    <InnResultCard data={innCheckResult.data} />
+                  ) : null}
+                </div>
+              )}
+
               {ownerDetail.notes && (
                 <div className="bg-muted/40 rounded-xl p-3 text-sm">{ownerDetail.notes}</div>
               )}
