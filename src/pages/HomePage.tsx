@@ -8,8 +8,6 @@ import ClientLeadsSection from '@/components/ClientLeadsSection';
 import AIMatchModal from '@/components/AIMatchModal';
 import { NEWS_URL } from '@/lib/adminApi';
 
-const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
-
 interface PublicStats {
   total: number;
   main_city: string;
