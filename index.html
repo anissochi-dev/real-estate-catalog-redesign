@@ -40,10 +40,14 @@
     <link rel="icon" type="image/png" href="https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/favicon-1779570860558.png">
     <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
     <link rel="canonical" href="https://bmn23.ru/">
-    <link rel="dns-prefetch" href="https://functions.poehali.dev">
-    <link rel="dns-prefetch" href="https://cdn.poehali.dev">
+    <link rel="preconnect" href="https://cdn.poehali.dev">
+    <link rel="preconnect" href="https://functions.poehali.dev">
     <link rel="dns-prefetch" href="https://mc.yandex.ru">
     <link rel="dns-prefetch" href="https://www.googletagmanager.com">
+    <!-- Preload системных CDN-скриптов — браузер начинает качать до парсинга body -->
+    <link rel="preload" as="script" href="https://cdn.poehali.dev/intertnal/js/pp-min-2.js">
+    <link rel="preload" as="script" href="https://cdn.poehali.dev/intertnal/js/route-min.js">
+    <link rel="preload" as="script" href="https://cdn.poehali.dev/intertnal/js/telemetry-min.js">
     <!-- Preconnect к серверу с фотографиями объектов — устраняет задержку DNS+TCP+TLS для LCP -->
     <link rel="preconnect" href="https://2bishop.ru">
     <link rel="dns-prefetch" href="https://2bishop.ru">

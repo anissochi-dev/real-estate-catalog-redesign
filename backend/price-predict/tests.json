@@ -15,6 +15,22 @@
       "bodyMatcher": "partial"
     },
     {
+      "name": "GET ?ids= с некорректными значениями — 400",
+      "method": "GET",
+      "path": "/?ids=abc,xyz",
+      "expectedStatus": 400,
+      "expectedBody": {"error": "Не переданы корректные ids"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET ?ids= батч-режим — возвращает объект",
+      "method": "GET",
+      "path": "/?ids=1,2",
+      "expectedStatus": 200,
+      "expectedBody": {},
+      "bodyMatcher": "partial"
+    },
+    {
       "name": "POST без площади — 400",
       "method": "POST",
       "path": "/",

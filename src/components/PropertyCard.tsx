@@ -62,6 +62,48 @@ interface PredictHint {
 }
 
 const predictCache = new Map<number, PredictHint | null>();
+// Подписчики: id → список колбэков (может быть несколько карточек с одним id)
+const predictListeners = new Map<number, Array<(h: PredictHint | null) => void>>();
+
+// Батч-очередь: собираем id в течение BATCH_DELAY мс, затем один запрос
+let batchQueue: number[] = [];
+let batchTimer: ReturnType<typeof setTimeout> | null = null;
+const BATCH_DELAY = 80;
+
+function flushBatch() {
+  batchTimer = null;
+  const ids = [...new Set(batchQueue)];
+  batchQueue = [];
+  if (ids.length === 0) return;
+
+  fetch(`${PREDICT_URL}?ids=${ids.join(',')}`)
+    .then(r => r.json())
+    .then((data: Record<string, { price_assessment?: PredictHint['price_assessment'] }>) => {
+      ids.forEach(id => {
+        const d = data[String(id)];
+        const val: PredictHint | null = d?.price_assessment ? { price_assessment: d.price_assessment } : null;
+        predictCache.set(id, val);
+        predictListeners.get(id)?.forEach(cb => cb(val));
+        predictListeners.delete(id);
+      });
+    })
+    .catch(() => {
+      ids.forEach(id => {
+        predictCache.set(id, null);
+        predictListeners.get(id)?.forEach(cb => cb(null));
+        predictListeners.delete(id);
+      });
+    });
+}
+
+function schedulePredictFetch(id: number, cb: (h: PredictHint | null) => void) {
+  if (predictCache.has(id)) { cb(predictCache.get(id) ?? null); return; }
+  const listeners = predictListeners.get(id) ?? [];
+  listeners.push(cb);
+  predictListeners.set(id, listeners);
+  if (!batchQueue.includes(id)) batchQueue.push(id);
+  if (!batchTimer) batchTimer = setTimeout(flushBatch, BATCH_DELAY);
+}
 
 function usePredictHint(listingId: number) {
   const [hint, setHint] = useState<PredictHint | null | undefined>(
@@ -80,16 +122,8 @@ function usePredictHint(listingId: number) {
       observer.disconnect();
       if (fetched.current) return;
       fetched.current = true;
-      fetch(`${PREDICT_URL}?id=${listingId}`)
-        .then(r => r.json())
-        .then(d => {
-          const val: PredictHint | null = d.price_assessment
-            ? { price_assessment: d.price_assessment } : null;
-          predictCache.set(listingId, val);
-          setHint(val);
-        })
-        .catch(() => { predictCache.set(listingId, null); setHint(null); });
-    }, { rootMargin: '300px' });
+      schedulePredictFetch(listingId, val => setHint(val));
+    }, { rootMargin: '100px' });
     observer.observe(el);
     return () => observer.disconnect();
   }, [listingId]);

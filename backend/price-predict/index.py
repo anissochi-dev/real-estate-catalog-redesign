@@ -415,6 +415,37 @@ def handler(event: dict, context) -> dict:
 
             if method == 'GET':
                 params = params_all
+
+                # Батч-режим: ?ids=54,62,59 — один запрос вместо N
+                ids_str = params.get('ids') or ''
+                if ids_str:
+                    raw_ids = [s.strip() for s in ids_str.split(',') if s.strip().isdigit()]
+                    if not raw_ids:
+                        return _err(400, 'Не переданы корректные ids')
+                    ids_list = [int(x) for x in raw_ids[:20]]  # лимит 20
+                    ids_sql = ','.join(str(i) for i in ids_list)
+                    cur.execute(
+                        f"SELECT id, category, deal, area, price, district, city, payback, profit, monthly_rent, condition "
+                        f"FROM {SCHEMA}.listings WHERE id IN ({ids_sql}) AND status = 'active'"
+                    )
+                    rows_batch = cur.fetchall()
+                    batch_result = {}
+                    for row in rows_batch:
+                        rid = row['id']
+                        batch_result[str(rid)] = _predict(
+                            cur,
+                            category=row['category'],
+                            deal=row['deal'],
+                            area=float(row['area'] or 0),
+                            price=float(row['price'] or 0),
+                            district=row.get('district') or '',
+                            city=row.get('city') or 'Краснодар',
+                            listing_id=rid,
+                            condition=row.get('condition') or '',
+                        )
+                    return _ok(batch_result)
+
+                # Одиночный режим: ?id=54
                 listing_id_str = params.get('id') or ''
                 if not listing_id_str.isdigit():
                     return _err(400, 'Не передан id объекта')

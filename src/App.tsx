@@ -155,29 +155,39 @@ export default function App() {
     } catch { /* ignore */ }
   }, [navigate]);
 
-  // Тихий cron-пинг: при каждой загрузке сайта проверяем, не пора ли запустить SEO-оптимизацию.
-  // Throttle на стороне клиента — не чаще раза в 60 мин. Сервер дополнительно проверяет расписание.
+  // Тихий cron-пинг: запускаем только после полной загрузки страницы (window load),
+  // чтобы не конкурировать с критическими запросами на старте.
   useEffect(() => {
-    const SEO_CRON_URL = 'https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d';
-    const NEWS_CRON_URL = 'https://functions.poehali.dev/984cad3a-0783-4408-a614-52ed36f8c77f';
-    const THROTTLE_MS = 60 * 60 * 1000; // 1 час
-    try {
-      const seoLast = parseInt(localStorage.getItem('seo_cron_last_ping') || '0', 10);
-      if (Date.now() - seoLast > THROTTLE_MS) {
-        localStorage.setItem('seo_cron_last_ping', String(Date.now()));
-        fetch(SEO_CRON_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ping' }) }).catch(() => {});
-      }
-      const newsLast = parseInt(localStorage.getItem('news_cron_last_ping') || '0', 10);
-      if (Date.now() - newsLast > THROTTLE_MS) {
-        localStorage.setItem('news_cron_last_ping', String(Date.now()));
-        fetch(`${NEWS_CRON_URL}?action=ping_cron`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {});
-      }
-      const retrainLast = parseInt(localStorage.getItem('retrain_cron_last_ping') || '0', 10);
-      if (Date.now() - retrainLast > THROTTLE_MS) {
-        localStorage.setItem('retrain_cron_last_ping', String(Date.now()));
-        fetch('https://functions.poehali.dev/e2f1d357-fb83-4fbb-8d8b-6fb063357afc?action=cron').catch(() => {});
-      }
-    } catch { /* ignore */ }
+    const runCrons = () => {
+      const SEO_CRON_URL = 'https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d';
+      const NEWS_CRON_URL = 'https://functions.poehali.dev/984cad3a-0783-4408-a614-52ed36f8c77f';
+      const THROTTLE_MS = 60 * 60 * 1000;
+      try {
+        const seoLast = parseInt(localStorage.getItem('seo_cron_last_ping') || '0', 10);
+        if (Date.now() - seoLast > THROTTLE_MS) {
+          localStorage.setItem('seo_cron_last_ping', String(Date.now()));
+          fetch(SEO_CRON_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ping' }) }).catch(() => {});
+        }
+        const newsLast = parseInt(localStorage.getItem('news_cron_last_ping') || '0', 10);
+        if (Date.now() - newsLast > THROTTLE_MS) {
+          localStorage.setItem('news_cron_last_ping', String(Date.now()));
+          fetch(`${NEWS_CRON_URL}?action=ping_cron`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {});
+        }
+        const retrainLast = parseInt(localStorage.getItem('retrain_cron_last_ping') || '0', 10);
+        if (Date.now() - retrainLast > THROTTLE_MS) {
+          localStorage.setItem('retrain_cron_last_ping', String(Date.now()));
+          fetch('https://functions.poehali.dev/e2f1d357-fb83-4fbb-8d8b-6fb063357afc?action=cron').catch(() => {});
+        }
+      } catch { /* ignore */ }
+    };
+
+    if (document.readyState === 'complete') {
+      setTimeout(runCrons, 3000);
+    } else {
+      const onLoad = () => setTimeout(runCrons, 3000);
+      window.addEventListener('load', onLoad, { once: true });
+      return () => window.removeEventListener('load', onLoad);
+    }
   }, []);
 
   useEffect(() => {
