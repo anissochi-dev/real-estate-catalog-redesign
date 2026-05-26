@@ -1,6 +1,8 @@
 import type { ListingDetail, Agent } from '@/lib/api';
 import Icon from '@/components/ui/icon';
 import { DEAL_LABELS } from './propertyLabels';
+import { formatPhone } from '@/lib/phone';
+import PublicPhoneInput from '@/components/PublicPhoneInput';
 
 interface Props {
   item: ListingDetail;
@@ -66,9 +68,9 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
                   <div className="font-display font-700 text-sm truncate">{agent.name}</div>
                   {agent.phone ? (
                     <a href={`tel:${agent.phone}`}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-brand-blue hover:underline mt-0.5">
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-brand-blue hover:underline mt-0.5 font-mono">
                       <Icon name="Phone" size={11} />
-                      {agent.phone}
+                      {formatPhone(agent.phone)}
                     </a>
                   ) : (
                     <span className="text-xs text-muted-foreground mt-0.5 block">Телефон не указан</span>
@@ -95,8 +97,8 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
               <input required placeholder="Ваше имя" value={form.name}
                 onChange={e => setForm({ ...form, name: e.target.value })}
                 className="w-full px-3 py-2.5 border rounded-lg text-sm" />
-              <input required placeholder="Телефон" value={form.phone}
-                onChange={e => setForm({ ...form, phone: e.target.value })}
+              <PublicPhoneInput required value={form.phone}
+                onChange={v => setForm({ ...form, phone: v })}
                 className="w-full px-3 py-2.5 border rounded-lg text-sm" />
               <textarea placeholder="Комментарий (необязательно)" rows={2}
                 value={form.message} onChange={e => setForm({ ...form, message: e.target.value })}

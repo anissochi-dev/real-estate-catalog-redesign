@@ -1,5 +1,6 @@
 import type { ListingDetail } from '@/lib/api';
 import Icon from '@/components/ui/icon';
+import PublicPhoneInput from '@/components/PublicPhoneInput';
 import PropertyMapInfrastructure from '@/components/PropertyMapInfrastructure';
 import InvestmentModel from '@/components/property/InvestmentModel';
 import SimilarListings from '@/components/SimilarListings';
@@ -199,8 +200,8 @@ export default function PropertyMainContent({
             <input required placeholder="Ваше имя" value={form.name}
               onChange={e => setForm({ ...form, name: e.target.value })}
               className="w-full px-3 py-2 border rounded-lg text-sm" />
-            <input required placeholder="Телефон" value={form.phone}
-              onChange={e => setForm({ ...form, phone: e.target.value })}
+            <PublicPhoneInput required value={form.phone}
+              onChange={v => setForm({ ...form, phone: v })}
               className="w-full px-3 py-2 border rounded-lg text-sm" />
             <div className="sm:col-span-2">
               <CharCount as="textarea" placeholder="Комментарий (необязательно)" rows={2} max={500} warnAt={400}

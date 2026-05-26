@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '@/components/ui/icon';
 import SmartCaptcha, { CaptchaResult } from '@/components/SmartCaptcha';
+import PublicPhoneInput from '@/components/PublicPhoneInput';
 
 const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
 const LEADS_URL = 'https://functions.poehali.dev/45673fe4-a39d-4193-b529-174d4c8c8f97';
@@ -141,8 +142,8 @@ export default function ClientLeadsSection({ limit = 6 }: Props) {
                 <input required placeholder="Ваше имя" value={form.name}
                   onChange={e => setForm({ ...form, name: e.target.value })}
                   className="w-full px-3 py-2 border rounded-lg" />
-                <input required placeholder="Телефон" value={form.phone}
-                  onChange={e => setForm({ ...form, phone: e.target.value })}
+                <PublicPhoneInput required value={form.phone}
+                  onChange={v => setForm({ ...form, phone: v })}
                   className="w-full px-3 py-2 border rounded-lg" />
                 <textarea placeholder="Описание вашего объекта (адрес, площадь, цена)" rows={3}
                   value={form.message} onChange={e => setForm({ ...form, message: e.target.value })}

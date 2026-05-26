@@ -6,6 +6,7 @@ import SmartCaptcha, { CaptchaResult } from '@/components/SmartCaptcha';
 import { fetchPublicLeads, aiSearchLeads, sendLead, PublicLead } from '@/lib/api';
 import { useSeoH1 } from '@/components/SeoHead';
 import { useSettings } from '@/contexts/SettingsContext';
+import PublicPhoneInput from '@/components/PublicPhoneInput';
 
 function fmtBudget(b: number | null): string {
   if (!b) return 'не указан';
@@ -403,12 +404,10 @@ export default function LeadsListPage() {
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground block mb-1">Телефон *</label>
-                  <input
+                  <PublicPhoneInput
                     required
-                    type="tel"
                     value={contactForm.phone}
-                    onChange={e => setContactForm({ ...contactForm, phone: e.target.value })}
-                    placeholder="+7 999 000-00-00"
+                    onChange={v => setContactForm({ ...contactForm, phone: v })}
                     className="w-full px-3 py-2 border rounded-xl text-sm"
                   />
                 </div>
