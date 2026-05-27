@@ -20,6 +20,7 @@ import AdPlatformsTab from './settings/AdPlatformsTab';
 import AutoPostingTab from './settings/AutoPostingTab';
 import BrandKitTab from './settings/BrandKitTab';
 import NotificationsTab from './settings/NotificationsTab';
+import SiteHealthTab from './settings/SiteHealthTab';
 
 export default function SettingsAdmin() {
   const { reload } = useSettings();
@@ -30,7 +31,7 @@ export default function SettingsAdmin() {
   const [cityAdding, setCityAdding] = useState(false);
   type TabId = 'general' | 'watermark' | 'brand-kit' | 'seo' | 'seo-ai' | 'footer' | 'legal'
     | 'integrations' | 'ad-platforms' | 'autoposting' | 'feeds' | 'notifications'
-    | 'cities' | 'purposes' | 'pages' | 'roles' | 'migration' | 'photo-optimize';
+    | 'cities' | 'purposes' | 'pages' | 'roles' | 'migration' | 'photo-optimize' | 'site-health';
   const [tab, setTab] = useState<TabId>('general');
   const [showKey, setShowKey] = useState(false);
   const [showMapsKey, setShowMapsKey] = useState(false);
@@ -212,6 +213,7 @@ export default function SettingsAdmin() {
         ['roles', 'Роли и доступы', 'ShieldHalf'],
         ['migration', 'Экспорт/импорт', 'DatabaseBackup'],
         ['photo-optimize', 'Сжатие фото', 'ImageDown'],
+        ['site-health', 'Диагностика', 'HeartPulse'],
       ],
     },
   ];
@@ -293,6 +295,7 @@ export default function SettingsAdmin() {
       {tab === 'notifications' && <NotificationsTab s={s} setS={setS} saved={saved} save={save} />}
       {tab === 'migration' && <MigrationTab />}
       {tab === 'photo-optimize' && <PhotoOptimizeTab />}
+      {tab === 'site-health' && <SiteHealthTab />}
       {tab === 'pages' && <PagesAdmin />}
     </div>
   );

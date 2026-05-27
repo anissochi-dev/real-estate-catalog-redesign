@@ -208,6 +208,8 @@ def handler(event, context):
                 return _vb_stop_words(cur, conn, method, rid, event, user)
             if resource == 'vb_learn_sources':
                 return _vb_learn_sources(cur, conn, method, rid, event, user)
+            if resource == 'site_health':
+                return _site_health(cur, conn, method, action, event, user)
 
             return _err(400, 'Неизвестный ресурс')
     finally:
@@ -721,6 +723,234 @@ def _vb_learn_sources(cur, conn, method, rid, event, user):
         return _ok({'success': True})
 
     return _err(405, 'Метод не поддерживается')
+
+
+def _site_health(cur, conn, method, action, event, user):
+    """Диагностика и обслуживание сайта.
+    GET ?resource=site_health&action=check  — полная проверка здоровья
+    POST ?resource=site_health&action=clear_ai_logs  — очистить логи ИИ старше 30 дней
+    POST ?resource=site_health&action=clear_old_sessions  — удалить истёкшие сессии
+    POST ?resource=site_health&action=clear_orphan_leads  — удалить висящие лиды без телефона
+    POST ?resource=site_health&action=vacuum_stats  — очистить старую статистику просмотров (>90 дней)
+    POST ?resource=site_health&action=fix_slugs  — регенерировать пустые slugs новостей
+    """
+    import urllib.request as _ur
+    if user['role'] not in ('admin', 'director'):
+        return _err(403, 'Только admin/director')
+
+    # ── ПОЛНАЯ ПРОВЕРКА ──────────────────────────────────────────────────────
+    if action == 'check' or method == 'GET':
+        checks = []
+
+        def _chk(name, ok, detail=''):
+            checks.append({'name': name, 'ok': ok, 'detail': detail})
+
+        # 1. БД — таблицы
+        try:
+            cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.listings")
+            n = cur.fetchone()['c']
+            _chk('База данных', True, f'{n} объявлений')
+        except Exception as e:
+            _chk('База данных', False, str(e)[:120])
+
+        # 2. Активные объявления без описания
+        try:
+            cur.execute(
+                f"SELECT COUNT(*) AS c FROM {SCHEMA}.listings "
+                f"WHERE status='active' AND COALESCE(LENGTH(description),0) < 30"
+            )
+            n = cur.fetchone()['c']
+            _chk('Объявления с описанием', n == 0, f'{n} активных без описания' if n else 'Все заполнены')
+        except Exception as e:
+            _chk('Объявления с описанием', False, str(e)[:80])
+
+        # 3. Объявления без цены
+        try:
+            cur.execute(
+                f"SELECT COUNT(*) AS c FROM {SCHEMA}.listings "
+                f"WHERE status='active' AND (price IS NULL OR price = 0)"
+            )
+            n = cur.fetchone()['c']
+            _chk('Цены объявлений', n == 0, f'{n} без цены' if n else 'Всё заполнено')
+        except Exception as e:
+            _chk('Цены объявлений', False, str(e)[:80])
+
+        # 4. Висящие лиды (без телефона > 7 дней)
+        try:
+            cur.execute(
+                f"SELECT COUNT(*) AS c FROM {SCHEMA}.leads "
+                f"WHERE (phone IS NULL OR phone='') AND created_at < NOW() - INTERVAL '7 days'"
+            )
+            n = cur.fetchone()['c']
+            _chk('Лиды без телефона', n == 0, f'{n} старых без телефона' if n else 'Чисто')
+        except Exception as e:
+            _chk('Лиды без телефона', False, str(e)[:80])
+
+        # 5. Сессии — просроченные
+        try:
+            cur.execute(
+                f"SELECT COUNT(*) AS c FROM {SCHEMA}.sessions WHERE expires_at < NOW()"
+            )
+            n = cur.fetchone()['c']
+            _chk('Истёкшие сессии', n < 500, f'{n} истёкших сессий')
+        except Exception as e:
+            _chk('Истёкшие сессии', False, str(e)[:80])
+
+        # 6. Логи ИИ — размер
+        try:
+            cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.ai_logs")
+            n = cur.fetchone()['c']
+            _chk('Логи ИИ', n < 5000, f'{n} записей{"  — рекомендуем очистку" if n >= 5000 else ""}')
+        except Exception as e:
+            _chk('Логи ИИ', True, 'таблица не найдена')
+
+        # 7. База знаний ВБ
+        try:
+            cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.ai_memory")
+            n = cur.fetchone()['c']
+            _chk('База знаний ВБ', True, f'{n} фактов')
+        except Exception as e:
+            _chk('База знаний ВБ', False, str(e)[:80])
+
+        # 8. Дубли объявлений (одинаковый заголовок + цена + активные)
+        try:
+            cur.execute(
+                f"SELECT COUNT(*) AS c FROM ("
+                f"  SELECT title, price FROM {SCHEMA}.listings "
+                f"  WHERE status='active' AND title IS NOT NULL AND title != '' "
+                f"  GROUP BY title, price HAVING COUNT(*) > 1"
+                f") AS dups"
+            )
+            n = cur.fetchone()['c']
+            _chk('Дубли объявлений', n == 0, f'{n} групп дублей' if n else 'Дублей нет')
+        except Exception as e:
+            _chk('Дубли объявлений', False, str(e)[:80])
+
+        # 9. XSS-уязвимости в текстах
+        try:
+            cur.execute(
+                f"SELECT COUNT(*) AS c FROM {SCHEMA}.listings "
+                f"WHERE LOWER(COALESCE(description,'')) LIKE '%<script%' "
+                f"OR LOWER(COALESCE(title,'')) LIKE '%<script%' "
+                f"OR LOWER(COALESCE(description,'')) LIKE '%javascript:%'"
+            )
+            n = cur.fetchone()['c']
+            _chk('XSS-уязвимости', n == 0, f'{n} объектов с подозрительным кодом' if n else 'Чисто')
+        except Exception as e:
+            _chk('XSS-уязвимости', False, str(e)[:80])
+
+        # 10. Настройки сайта заполнены
+        try:
+            cur.execute(
+                f"SELECT company_name, company_phone, meta_title "
+                f"FROM {SCHEMA}.settings ORDER BY id LIMIT 1"
+            )
+            row = cur.fetchone() or {}
+            missing = [k for k in ('company_name', 'company_phone', 'meta_title') if not row.get(k)]
+            _chk('Настройки сайта', len(missing) == 0,
+                 f'Не заполнено: {", ".join(missing)}' if missing else 'Все заполнены')
+        except Exception as e:
+            _chk('Настройки сайта', False, str(e)[:80])
+
+        # 11. SEO — объявления без мета
+        try:
+            cur.execute(
+                f"SELECT COUNT(*) AS c FROM {SCHEMA}.listings "
+                f"WHERE status='active' AND (seo_title IS NULL OR seo_title='')"
+            )
+            n = cur.fetchone()['c']
+            _chk('SEO объявлений', n == 0, f'{n} без seo_title' if n else 'SEO заполнено')
+        except Exception as e:
+            _chk('SEO объявлений', False, str(e)[:80])
+
+        # 12. Новости — опубликованные
+        try:
+            cur.execute(
+                f"SELECT COUNT(*) AS c FROM {SCHEMA}.news WHERE is_published=TRUE "
+                f"AND created_at > NOW() - INTERVAL '30 days'"
+            )
+            n = cur.fetchone()['c']
+            _chk('Свежие новости', n > 0, f'{n} за последние 30 дней' if n else 'Нет новостей за месяц')
+        except Exception as e:
+            _chk('Свежие новости', True, 'нет данных')
+
+        total = len(checks)
+        passed = sum(1 for c in checks if c['ok'])
+        score = round(passed / total * 100) if total else 0
+        return _ok({'checks': checks, 'score': score, 'passed': passed, 'total': total})
+
+    # ── ДЕЙСТВИЯ ОБСЛУЖИВАНИЯ ────────────────────────────────────────────────
+    if method != 'POST':
+        return _err(405, 'Метод не поддерживается')
+
+    if action == 'clear_ai_logs':
+        try:
+            cur.execute(
+                f"DELETE FROM {SCHEMA}.ai_logs "
+                f"WHERE created_at < NOW() - INTERVAL '30 days'"
+            )
+            deleted = cur.rowcount
+            conn.commit()
+            return _ok({'success': True, 'deleted': deleted, 'message': f'Удалено {deleted} старых записей логов ИИ'})
+        except Exception as e:
+            return _err(500, str(e)[:200])
+
+    if action == 'clear_old_sessions':
+        try:
+            cur.execute(f"DELETE FROM {SCHEMA}.sessions WHERE expires_at < NOW()")
+            deleted = cur.rowcount
+            conn.commit()
+            return _ok({'success': True, 'deleted': deleted, 'message': f'Удалено {deleted} истёкших сессий'})
+        except Exception as e:
+            return _err(500, str(e)[:200])
+
+    if action == 'clear_orphan_leads':
+        try:
+            cur.execute(
+                f"DELETE FROM {SCHEMA}.leads "
+                f"WHERE (phone IS NULL OR phone='') "
+                f"AND created_at < NOW() - INTERVAL '7 days'"
+            )
+            deleted = cur.rowcount
+            conn.commit()
+            return _ok({'success': True, 'deleted': deleted, 'message': f'Удалено {deleted} лидов без телефона'})
+        except Exception as e:
+            return _err(500, str(e)[:200])
+
+    if action == 'vacuum_stats':
+        try:
+            cur.execute(
+                f"DELETE FROM {SCHEMA}.listing_stats "
+                f"WHERE recorded_at < NOW() - INTERVAL '90 days'"
+            )
+            deleted = cur.rowcount
+            conn.commit()
+            return _ok({'success': True, 'deleted': deleted, 'message': f'Удалено {deleted} старых записей статистики'})
+        except Exception as e:
+            return _err(500, str(e)[:200])
+
+    if action == 'fix_slugs':
+        try:
+            cur.execute(
+                f"SELECT id, title FROM {SCHEMA}.news WHERE slug IS NULL OR slug=''"
+            )
+            rows = cur.fetchall()
+            fixed = 0
+            for r in rows:
+                raw = (r['title'] or '').lower()
+                import re as _re
+                slug = _re.sub(r'[^a-z0-9а-яё]+', '-', raw, flags=_re.I).strip('-')[:60]
+                slug = slug + f'-{r["id"]}'
+                cur.execute(
+                    f"UPDATE {SCHEMA}.news SET slug='{_safe(slug, 100)}' WHERE id={r['id']}"
+                )
+                fixed += 1
+            conn.commit()
+            return _ok({'success': True, 'fixed': fixed, 'message': f'Исправлено {fixed} slug новостей'})
+        except Exception as e:
+            return _err(500, str(e)[:200])
+
+    return _err(400, 'Неизвестное действие')
 
 
 def _consent_log(cur, conn, method, event, user):
