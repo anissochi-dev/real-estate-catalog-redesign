@@ -59,6 +59,10 @@ export const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
   bulk_seo_optimize: { label: 'Массовое SEO', icon: 'SearchCheck' },
   bulk_shorten_titles: { label: 'Сократить названия', icon: 'Scissors' },
   scan_long_titles: { label: 'Сканер длинных названий', icon: 'Ruler' },
+  update_listing_full: { label: 'Редактировать объект', icon: 'Edit3' },
+  update_news: { label: 'Редактировать новость', icon: 'Newspaper' },
+  create_news: { label: 'Создать новость', icon: 'FilePlus' },
+  update_lead: { label: 'Редактировать заявку', icon: 'UserCog' },
   fix_data_quality: { label: 'Исправить качество', icon: 'Wrench' },
   update_settings: { label: 'Обновить настройки', icon: 'Settings' },
   create_listing: { label: 'Создать объект', icon: 'PlusCircle' },
@@ -102,6 +106,43 @@ export const AUTO_APPLY_ACTIONS = new Set([
   'note',
   'scan_long_titles',
 ]);
+
+/** Поля объекта/лида/новости, безопасные для автоприменения (без подтверждения).
+ *  Цена, статус, адрес, контакты — сюда НЕ входят. */
+export const SAFE_LISTING_FIELDS = new Set([
+  'description', 'tags', 'seo_title', 'seo_description',
+  'purpose', 'condition', 'parking', 'entrance', 'finishing',
+  'road_line', 'utilities', 'building_class', 'broker_commission',
+  'video_url', 'video_type',
+  'is_hot', 'is_new', 'is_exclusive', 'is_urgent', 'is_apartments',
+  'has_furniture', 'has_equipment', 'use_watermark',
+  'export_yandex', 'export_avito', 'export_cian',
+  'is_visible', 'is_pinned',
+]);
+
+export const SAFE_NEWS_FIELDS = new Set([
+  'summary', 'content', 'image_url', 'source_url', 'source_name', 'category',
+]);
+
+export const SAFE_LEAD_FIELDS = new Set([
+  'message', 'source', 'request_category', 'lead_type',
+  'is_public', 'show_on_main', 'is_network', 'is_network_tenant',
+]);
+
+/** Проверяет можно ли автоматически применить действие (без подтверждения).
+ *  Для update_listing_full / update_news / update_lead — true только если ВСЕ
+ *  изменяемые поля — из безопасного списка. */
+export function isAutoApplicableAction(type: string, params?: Record<string, unknown>): boolean {
+  if (AUTO_APPLY_ACTIONS.has(type)) return true;
+  const fields = (params?.fields as Record<string, unknown>) || null;
+  if (!fields || typeof fields !== 'object') return false;
+  const keys = Object.keys(fields);
+  if (keys.length === 0) return false;
+  if (type === 'update_listing_full') return keys.every(k => SAFE_LISTING_FIELDS.has(k));
+  if (type === 'update_news') return keys.every(k => SAFE_NEWS_FIELDS.has(k));
+  if (type === 'update_lead') return keys.every(k => SAFE_LEAD_FIELDS.has(k));
+  return false;
+}
 
 export const RISK_STYLES: Record<string, string> = {
   low: 'bg-emerald-100 text-emerald-700',

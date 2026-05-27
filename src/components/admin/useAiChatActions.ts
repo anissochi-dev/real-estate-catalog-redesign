@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { aiApi, AiAction } from '@/lib/adminApi';
 import {
   Msg, Suggestion, QuickCmd,
-  AUTO_APPLY_ACTIONS,
+  isAutoApplicableAction,
   detectSuggestion,
 } from './AiChatTypes';
 import { MemoryData } from './AiChatAdminOpsTab';
@@ -157,7 +157,10 @@ export function useAiChatActions({
           const newMsgIdx = next.length - 1;
           const autoIdxs = incomingActions
             .map((a, i) => ({ a, i }))
-            .filter(({ a }) => a.risk === 'low' && AUTO_APPLY_ACTIONS.has(a.type))
+            .filter(({ a }) => (a.risk === 'low' && isAutoApplicableAction(a.type, a.params))
+              // Для update_* — авто-применяем только если все поля из safe-списка,
+              // даже если модель пометила high (безопасность пользователя выше)
+              || isAutoApplicableAction(a.type, a.params))
             .map(({ i }) => i);
           if (autoIdxs.length > 0) {
             setTimeout(() => {

@@ -343,6 +343,12 @@ SYSTEM_PROMPTS = {
         '- bulk_shorten_titles: {"items":[{"id":int}],"max_len":65} risk:high — массово ПЕРЕПИСЫВАЕТ длинные title через GPT в SEO-стиле (50-65 симв). Можно передать и готовые new_title: {"items":[{"id":int,"new_title":str},...]}\n'
         '- scan_long_titles: {"max_len":70,"limit":100} risk:low — сканирует объекты с длинными title и возвращает список с id + длина\n'
         '- create_listing: {"title":str,"category":str,"deal":str,"price":int,"area":float,"city":str} risk:medium\n'
+        '- update_listing_full: {"id":int,"fields":{...любые из ниже...}} — ПОЛНОЕ редактирование объекта. risk зависит от полей:\n'
+        '    БЕЗОПАСНЫЕ (risk:low — авто): description, tags, seo_title, seo_description, purpose, condition, parking, entrance, finishing, road_line, utilities, building_class, broker_commission, video_url, video_type, is_hot, is_new, is_exclusive, is_urgent, is_apartments, has_furniture, has_equipment, use_watermark, export_yandex, export_avito, export_cian, is_visible, is_pinned\n'
+        '    ЧУВСТВИТЕЛЬНЫЕ (risk:high — требуют подтверждения): title, price, price_per_m2, area, monthly_rent, yearly_rent, status, category, deal, address, district, city, lat, lng, owner_name, owner_phone, owner_phone2, tenant_name, slug, image, images, floor, total_floors, ceiling_height, electricity_kw, land_area, land_status, property_rights, building_year, subway_station, subway_distance, rooms, min_area, public_code, broker_id, author_id, payback, profit, price_unit\n'
+        '- update_news: {"id":int,"fields":{title?,summary?,content?,image_url?,source_url?,source_name?,category?,is_published?,cb_key_rate?}} risk:medium (high если меняем is_published)\n'
+        '- create_news: {"title":str,"summary":str,"content":str,"image_url"?,"category"?,"is_published":bool?} risk:medium\n'
+        '- update_lead: {"id":int,"fields":{name?,phone?,email?,message?,status?,source?,company?,request_category?,lead_type?,assigned_to?,broker_id?,budget?,listing_id?,is_public?,show_on_main?,...}} risk:medium (high если меняем phone/email/status=closed)\n'
         'Лиды:\n'
         '- reply_lead: {"id":int,"message":str} risk:medium\n'
         '- close_lead: {"id":int,"reason":str} risk:medium\n'
@@ -373,6 +379,10 @@ SYSTEM_PROMPTS = {
         '- Если в данных есть listings_no_desc или listings_no_seo > 0 — предложи bulk-исправление с реальными id из списка listings.\n'
         '- Если в данных listings_long_titles > 0 или пользователь просит «исправить названия / длинные title / переписать заголовки» — '
         'сначала scan_long_titles (low risk, выполнится автоматически), потом bulk_shorten_titles с id первых 10-20 объектов из long_titles_sample.\n'
+        '- Если пользователь просит «измени/обнови/поправь объект #ID» — используй update_listing_full с полем fields. '
+        'Определяй risk правильно: если меняешь только description/tags/seo_*/condition/флаги — risk:low (применится авто). '
+        'Если меняешь price/title/status/category/deal/address/owner_phone — risk:high (требует подтверждения).\n'
+        '- Для редактирования новостей используй update_news, для лидов — update_lead. Передавай ТОЛЬКО изменившиеся поля.\n'
         '- Если запрос общий ("что нужно сделать?") — начни с get_listings_summary + get_leads_summary.'
     ),
     'security': (
@@ -931,6 +941,239 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
             return {'error': 'Нет SEO данных для обновления'}
         cur.execute(f"UPDATE {SCHEMA}.listings SET {', '.join(sets)}, updated_at = NOW() WHERE id = {listing_id}")
         return {'ok': True, 'message': f'SEO объекта #{listing_id} обновлено'}
+
+    # ── Полное редактирование объекта (любые разрешённые поля) ──────────
+    if act_type == 'update_listing_full':
+        listing_id = int(params.get('id') or 0)
+        if not listing_id:
+            return {'error': 'Не указан id объекта'}
+        fields = params.get('fields') or {}
+        if not isinstance(fields, dict) or not fields:
+            return {'error': 'Не переданы fields для обновления'}
+
+        # Типы полей (для корректного SQL-литерала)
+        TEXT_FIELDS = {
+            'title': 200, 'description': 8000, 'category': 50, 'deal': 50,
+            'address': 255, 'district': 100, 'city': 100, 'image': 500,
+            'tags': 1000, 'status': 30, 'owner_name': 200, 'owner_phone': 50,
+            'owner_phone2': 50, 'price_unit': 30, 'images': 8000, 'purpose': 200,
+            'condition': 100, 'parking': 100, 'entrance': 100,
+            'video_url': 500, 'video_type': 30, 'slug': 200,
+            'seo_title': 200, 'seo_description': 500, 'tenant_name': 200,
+            'finishing': 100, 'utilities': 100, 'road_line': 100,
+            'broker_commission': 100, 'building_class': 30,
+            'subway_station': 100, 'land_status': 100, 'property_rights': 100,
+        }
+        INT_FIELDS = {
+            'price', 'price_per_m2', 'area', 'payback', 'profit',
+            'floor', 'total_floors', 'public_code', 'views_site',
+            'rooms', 'subway_distance', 'building_year', 'broker_id', 'author_id',
+        }
+        NUMERIC_FIELDS = {
+            'lat', 'lng', 'monthly_rent', 'yearly_rent',
+            'ceiling_height', 'electricity_kw', 'land_area', 'min_area',
+        }
+        BOOL_FIELDS = {
+            'is_hot', 'is_new', 'is_exclusive', 'is_urgent', 'is_visible',
+            'is_pinned', 'is_apartments', 'has_furniture', 'has_equipment',
+            'export_yandex', 'export_avito', 'export_cian', 'use_watermark',
+        }
+        # Поля, которые ВБ менять НЕ может (опасные/служебные)
+        FORBIDDEN = {'id', 'created_at', 'updated_at', 'last_edited_at', 'last_edited_by',
+                     'owner_phone_contact_id', 'owner_phone2_contact_id',
+                     'pinned_at', 'pinned_by'}
+
+        sets = []
+        changed = []
+        skipped = []
+        for k, v in fields.items():
+            if k in FORBIDDEN:
+                skipped.append(k)
+                continue
+            if k in TEXT_FIELDS:
+                max_l = TEXT_FIELDS[k]
+                val = _sanitize_text(str(v) if v is not None else '', max_l)
+                sets.append(f"{k}='{val}'")
+                changed.append(k)
+            elif k in INT_FIELDS:
+                try:
+                    iv = int(v) if v not in (None, '') else 0
+                    sets.append(f"{k}={iv}")
+                    changed.append(k)
+                except Exception:
+                    skipped.append(k)
+            elif k in NUMERIC_FIELDS:
+                try:
+                    fv = float(v) if v not in (None, '') else 0
+                    sets.append(f"{k}={fv}")
+                    changed.append(k)
+                except Exception:
+                    skipped.append(k)
+            elif k in BOOL_FIELDS:
+                bv = bool(v) if not isinstance(v, str) else v.lower() in ('1', 'true', 'yes', 'да', 'on')
+                sets.append(f"{k}={'TRUE' if bv else 'FALSE'}")
+                changed.append(k)
+            else:
+                skipped.append(k)
+
+        if not sets:
+            return {'error': 'Нет валидных полей для обновления'}
+
+        # Валидация значений категорий/сделки/статуса
+        if 'category' in fields:
+            allowed_cats = {'office', 'warehouse', 'retail', 'production',
+                            'land', 'gab', 'building', 'free_purpose', 'flat', 'commercial'}
+            v = str(fields.get('category') or '').lower()
+            if v and v not in allowed_cats:
+                return {'error': f'Недопустимая category: {v}. Допустимо: {", ".join(sorted(allowed_cats))}'}
+        if 'deal' in fields:
+            allowed_deals = {'sale', 'rent', 'lease'}
+            v = str(fields.get('deal') or '').lower()
+            if v and v not in allowed_deals:
+                return {'error': f'Недопустимая deal: {v}'}
+        if 'status' in fields:
+            allowed_status = {'active', 'archived', 'draft'}
+            v = str(fields.get('status') or '').lower()
+            if v and v not in allowed_status:
+                return {'error': f'Недопустимый status: {v}'}
+
+        # Сохраняем историю — для безопасности (если таблица listing_history существует)
+        try:
+            user_id = user.get('id') if user else 0
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.listing_history (listing_id, changed_by, change_type, payload, changed_at) "
+                f"VALUES ({listing_id}, {user_id or 'NULL'}, 'ai_edit', "
+                f"'{_sanitize_text(json.dumps({'fields': changed}, ensure_ascii=False), 2000)}', NOW())"
+            )
+        except Exception:
+            pass  # таблицы может не быть — не критично
+
+        cur.execute(
+            f"UPDATE {SCHEMA}.listings SET {', '.join(sets)}, updated_at=NOW() "
+            f"WHERE id={listing_id}"
+        )
+        msg = f"Объект #{listing_id}: обновлено полей — {len(changed)} ({', '.join(changed[:8])}"
+        if len(changed) > 8:
+            msg += f' и ещё {len(changed) - 8}'
+        msg += ')'
+        if skipped:
+            msg += f". Пропущено: {', '.join(skipped[:5])}"
+        return {'ok': True, 'message': msg, 'changed': changed, 'skipped': skipped}
+
+    # ── Полное редактирование новости ─────────────────────────────────────
+    if act_type == 'update_news':
+        news_id = int(params.get('id') or 0)
+        if not news_id:
+            return {'error': 'Не указан id новости'}
+        fields = params.get('fields') or {}
+        if not isinstance(fields, dict) or not fields:
+            return {'error': 'Не переданы fields для обновления'}
+
+        NEWS_TEXT = {
+            'title': 300, 'slug': 200, 'summary': 1000, 'content': 30000,
+            'image_url': 500, 'source_url': 500, 'source_name': 200, 'category': 50,
+        }
+        NEWS_BOOL = {'is_published', 'is_auto'}
+        NEWS_NUMERIC = {'cb_key_rate'}
+        FORBIDDEN = {'id', 'created_at', 'updated_at', 'created_by', 'published_at'}
+
+        sets = []
+        changed = []
+        for k, v in fields.items():
+            if k in FORBIDDEN:
+                continue
+            if k in NEWS_TEXT:
+                val = _sanitize_text(str(v) if v is not None else '', NEWS_TEXT[k])
+                sets.append(f"{k}='{val}'")
+                changed.append(k)
+            elif k in NEWS_BOOL:
+                bv = bool(v) if not isinstance(v, str) else v.lower() in ('1', 'true', 'yes', 'да', 'on')
+                sets.append(f"{k}={'TRUE' if bv else 'FALSE'}")
+                changed.append(k)
+            elif k in NEWS_NUMERIC:
+                try:
+                    sets.append(f"{k}={float(v)}")
+                    changed.append(k)
+                except Exception:
+                    pass
+        if not sets:
+            return {'error': 'Нет валидных полей для новости'}
+        # Если выставили is_published=true — обновим published_at
+        if 'is_published' in fields and (str(fields['is_published']).lower() in ('1', 'true', 'yes', 'да', 'on')):
+            sets.append("published_at = COALESCE(published_at, NOW())")
+        cur.execute(
+            f"UPDATE {SCHEMA}.news SET {', '.join(sets)}, updated_at=NOW() WHERE id={news_id}"
+        )
+        return {'ok': True, 'message': f'Новость #{news_id}: обновлено полей — {len(changed)} ({", ".join(changed[:6])})', 'changed': changed}
+
+    # ── Полное редактирование лида (заявки) ───────────────────────────────
+    if act_type == 'update_lead':
+        lead_id = int(params.get('id') or 0)
+        if not lead_id:
+            return {'error': 'Не указан id лида'}
+        fields = params.get('fields') or {}
+        if not isinstance(fields, dict) or not fields:
+            return {'error': 'Не переданы fields для обновления'}
+
+        LEAD_TEXT = {
+            'name': 200, 'phone': 50, 'email': 200, 'message': 4000,
+            'source': 100, 'status': 30, 'company': 200,
+            'request_category': 100, 'lead_type': 50,
+        }
+        LEAD_INT = {'listing_id', 'assigned_to', 'broker_id', 'budget', 'user_id'}
+        LEAD_BOOL = {'is_network', 'is_public', 'is_network_tenant', 'show_on_main'}
+        FORBIDDEN = {'id', 'created_at', 'updated_at', 'phone_contact_id'}
+
+        sets = []
+        changed = []
+        for k, v in fields.items():
+            if k in FORBIDDEN:
+                continue
+            if k in LEAD_TEXT:
+                val = _sanitize_text(str(v) if v is not None else '', LEAD_TEXT[k])
+                sets.append(f"{k}='{val}'")
+                changed.append(k)
+            elif k in LEAD_INT:
+                try:
+                    sets.append(f"{k}={int(v)}")
+                    changed.append(k)
+                except Exception:
+                    pass
+            elif k in LEAD_BOOL:
+                bv = bool(v) if not isinstance(v, str) else v.lower() in ('1', 'true', 'yes', 'да', 'on')
+                sets.append(f"{k}={'TRUE' if bv else 'FALSE'}")
+                changed.append(k)
+        if not sets:
+            return {'error': 'Нет валидных полей для лида'}
+        if 'status' in fields:
+            allowed = {'new', 'pending', 'in_progress', 'closed', 'rejected', 'archived'}
+            v = str(fields.get('status') or '').lower()
+            if v and v not in allowed:
+                return {'error': f'Недопустимый status лида: {v}'}
+        cur.execute(
+            f"UPDATE {SCHEMA}.leads SET {', '.join(sets)}, updated_at=NOW() WHERE id={lead_id}"
+        )
+        return {'ok': True, 'message': f'Лид #{lead_id}: обновлено — {", ".join(changed[:6])}', 'changed': changed}
+
+    # ── Создание новости ─────────────────────────────────────────────────
+    if act_type == 'create_news':
+        title = _sanitize_text(str(params.get('title') or ''), 300)
+        if not title:
+            return {'error': 'Нужен title новости'}
+        summary = _sanitize_text(str(params.get('summary') or ''), 1000)
+        content = _sanitize_text(str(params.get('content') or ''), 30000)
+        image_url = _sanitize_text(str(params.get('image_url') or ''), 500)
+        category = _sanitize_text(str(params.get('category') or 'market'), 50)
+        is_published = bool(params.get('is_published', False))
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.news (title, summary, content, image_url, category, is_published, is_auto, "
+            f"created_by, created_at, updated_at, published_at) "
+            f"VALUES ('{title}', '{summary}', '{content}', '{image_url}', '{category}', "
+            f"{'TRUE' if is_published else 'FALSE'}, FALSE, {user['id'] if user else 0}, NOW(), NOW(), "
+            f"{'NOW()' if is_published else 'NULL'}) RETURNING id"
+        )
+        new_id = cur.fetchone()['id']
+        return {'ok': True, 'message': f'Новость #{new_id} «{title[:50]}» создана', 'id': new_id}
 
     if act_type == 'bulk_update_status':
         ids = params.get('ids') or []
