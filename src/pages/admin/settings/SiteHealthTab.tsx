@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
+import { getToken } from '@/lib/adminApi';
 
 interface Check { name: string; ok: boolean; detail: string; }
 interface HealthResult { checks: Check[]; score: number; passed: number; total: number; }
@@ -51,8 +52,9 @@ const CLEAN_ACTIONS: CleanAction[] = [
 const ADMIN_URL = 'https://functions.poehali.dev/aeccc0fe-9c55-4933-b292-432cec9cc09d';
 
 function req(resource: string, opts?: RequestInit) {
-  const token = localStorage.getItem('auth_token') || '';
-  return fetch(`${ADMIN_URL}?resource=${resource}`, {
+  const token = getToken();
+  const url = `${ADMIN_URL}?resource=${resource}${token ? `&auth_token=${encodeURIComponent(token)}` : ''}`;
+  return fetch(url, {
     ...opts,
     headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token, ...(opts?.headers || {}) },
   }).then(r => r.json());
