@@ -204,8 +204,8 @@ export default function App() {
 
   useEffect(() => {
     setLoading(true);
-    // Шаг 1: быстро грузим первые 30 объектов — сайт показывается сразу
-    fetchListings(30, 0)
+    // Шаг 1: быстро грузим первые 8 объектов — сайт показывается сразу
+    fetchListings(8, 0)
       .then(({ listings, total }) => {
         setProperties(listings);
         setError(null);
@@ -221,8 +221,8 @@ export default function App() {
           link.setAttribute('fetchpriority', 'high');
           document.head.appendChild(link);
         }
-        // Шаг 2: если объектов больше 30 — тихо догружаем остальные в фоне
-        if (total > 30) {
+        // Шаг 2: тихо догружаем остальные в фоне
+        if (total > 8) {
           fetchListings()
             .then(({ listings: all }) => {
               setProperties(all);
