@@ -456,14 +456,7 @@ def handler(event: dict, context) -> dict:
                 "updated_at DESC NULLS LAST, created_at DESC, id DESC"
             )
 
-            # Считаем total (RealDictCursor — обращаемся по имени колонки)
-            cur.execute(f"SELECT COUNT(*) AS cnt FROM t_p71821556_real_estate_catalog_.listings WHERE {where_clause}")
-            row_cnt = cur.fetchone()
-            total = int(row_cnt['cnt']) if row_cnt else 0
-
-            sql = f"SELECT * FROM t_p71821556_real_estate_catalog_.listings WHERE {where_clause}{order_clause}"
-
-            # Опциональная пагинация через limit/offset
+            # Пагинация
             try:
                 limit_val = int(limit_param) if limit_param else None
                 offset_val = int(offset_param) if offset_param else 0
@@ -471,12 +464,20 @@ def handler(event: dict, context) -> dict:
                 limit_val = None
                 offset_val = 0
 
+            # Один запрос: COUNT(*) OVER() + данные — без второго round-trip к БД
+            pagination = ""
             if limit_val and limit_val > 0:
-                sql += f" LIMIT {limit_val} OFFSET {offset_val}"
+                pagination = f" LIMIT {limit_val} OFFSET {offset_val}"
 
+            sql = (
+                f"SELECT *, COUNT(*) OVER() AS _total_count "
+                f"FROM t_p71821556_real_estate_catalog_.listings "
+                f"WHERE {where_clause}{order_clause}{pagination}"
+            )
             cur.execute(sql)
             rows = cur.fetchall()
-            items = [_serialize(dict(r)) for r in rows]
+            total = int(rows[0]['_total_count']) if rows else 0
+            items = [_serialize({k: v for k, v in dict(r).items() if k != '_total_count'}) for r in rows]
 
             return _ok({'listings': items, 'total': total})
     finally:

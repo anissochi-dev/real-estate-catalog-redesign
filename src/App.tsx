@@ -198,6 +198,17 @@ export default function App() {
         setProperties(listings);
         setError(null);
         setLoading(false);
+        // Preload LCP: инжектируем <link rel="preload"> сразу как узнали URL первой картинки,
+        // до рендера HomePage — браузер начинает скачивать параллельно с JS-рендером.
+        const lcpSrc = listings[0]?.image;
+        if (lcpSrc && !document.querySelector(`link[rel="preload"][href="${lcpSrc}"]`)) {
+          const link = document.createElement('link');
+          link.rel = 'preload';
+          link.as = 'image';
+          link.href = lcpSrc;
+          link.setAttribute('fetchpriority', 'high');
+          document.head.appendChild(link);
+        }
         // Шаг 2: если объектов больше 30 — тихо догружаем остальные в фоне
         if (total > 30) {
           fetchListings()

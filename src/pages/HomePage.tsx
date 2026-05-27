@@ -123,12 +123,12 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   const homeNewsLimit = settings.home_news_limit ?? 10;
   const showLeads = settings.show_leads_on_home !== false;
 
-  // Preload LCP-изображения: первые 4 карточки — браузер начинает качать сразу,
-  // не дожидаясь парсинга JS и рендера компонентов.
+  // Preload LCP-изображения 2-4: первое уже preload-ится в App.tsx сразу после fetchListings.
+  // Здесь добавляем следующие 3 — с низким приоритетом, чтобы браузер знал о них заранее.
   useEffect(() => {
-    const lcpImgs = newObjects.slice(0, 4);
+    const lcpImgs = newObjects.slice(1, 4);
     const added: HTMLLinkElement[] = [];
-    lcpImgs.forEach((p, i) => {
+    lcpImgs.forEach((p) => {
       const src = p.image;
       if (!src) return;
       if (document.querySelector(`link[rel="preload"][href="${src}"]`)) return;
@@ -136,7 +136,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
       link.rel = 'preload';
       link.as = 'image';
       link.href = src;
-      link.fetchPriority = i === 0 ? 'high' : 'low';
+      link.setAttribute('fetchpriority', 'low');
       document.head.appendChild(link);
       added.push(link);
     });
