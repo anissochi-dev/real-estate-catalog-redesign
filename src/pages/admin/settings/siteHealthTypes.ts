@@ -1,7 +1,27 @@
 import { getToken } from '@/lib/adminApi';
 
-export interface Check { name: string; ok: boolean; detail: string; }
+export interface Check {
+  name: string;
+  ok: boolean;
+  detail: string;
+  fix_action?: string | null;
+  view_action?: string | null;
+}
 export interface HealthResult { checks: Check[]; score: number; passed: number; total: number; }
+
+export interface ViewItem {
+  id?: number;
+  title?: string;
+  name?: string;
+  email?: string;
+  comment?: string;
+  price?: number;
+  created_at?: string;
+  description_preview?: string;
+  cnt?: number;
+  ids?: number[];
+}
+export interface ViewResult { items: ViewItem[]; total: number; }
 
 export interface SecurityResult {
   threats: { type: string; where: string }[];

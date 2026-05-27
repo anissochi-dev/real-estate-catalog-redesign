@@ -747,8 +747,9 @@ def _site_health(cur, conn, method, action, event, user):
     if action == 'check' or method == 'GET':
         checks = []
 
-        def _chk(name, ok, detail=''):
-            checks.append({'name': name, 'ok': ok, 'detail': detail})
+        def _chk(name, ok, detail='', fix_action=None, view_action=None):
+            checks.append({'name': name, 'ok': ok, 'detail': detail,
+                           'fix_action': fix_action, 'view_action': view_action})
 
         # 1. БД — таблицы
         try:
@@ -765,7 +766,9 @@ def _site_health(cur, conn, method, action, event, user):
                 f"WHERE status='active' AND COALESCE(LENGTH(description),0) < 30"
             )
             n = cur.fetchone()['c']
-            _chk('Объявления с описанием', n == 0, f'{n} активных без описания' if n else 'Все заполнены')
+            _chk('Объявления с описанием', n == 0,
+                 f'{n} активных без описания' if n else 'Все заполнены',
+                 view_action='view_listings_no_desc' if n else None)
         except Exception as e:
             _chk('Объявления с описанием', False, str(e)[:80])
 
@@ -776,7 +779,9 @@ def _site_health(cur, conn, method, action, event, user):
                 f"WHERE status='active' AND (price IS NULL OR price = 0)"
             )
             n = cur.fetchone()['c']
-            _chk('Цены объявлений', n == 0, f'{n} без цены' if n else 'Всё заполнено')
+            _chk('Цены объявлений', n == 0,
+                 f'{n} без цены' if n else 'Всё заполнено',
+                 view_action='view_listings_no_price' if n else None)
         except Exception as e:
             _chk('Цены объявлений', False, str(e)[:80])
 
@@ -787,7 +792,10 @@ def _site_health(cur, conn, method, action, event, user):
                 f"WHERE (phone IS NULL OR phone='') AND created_at < NOW() - INTERVAL '7 days'"
             )
             n = cur.fetchone()['c']
-            _chk('Лиды без телефона', n == 0, f'{n} старых без телефона' if n else 'Чисто')
+            _chk('Лиды без телефона', n == 0,
+                 f'{n} старых без телефона' if n else 'Чисто',
+                 fix_action='clear_orphan_leads' if n else None,
+                 view_action='view_orphan_leads' if n else None)
         except Exception as e:
             _chk('Лиды без телефона', False, str(e)[:80])
 
@@ -797,7 +805,9 @@ def _site_health(cur, conn, method, action, event, user):
                 f"SELECT COUNT(*) AS c FROM {SCHEMA}.sessions WHERE expires_at < NOW()"
             )
             n = cur.fetchone()['c']
-            _chk('Истёкшие сессии', n < 500, f'{n} истёкших сессий')
+            _chk('Истёкшие сессии', n < 500,
+                 f'{n} истёкших сессий',
+                 fix_action='clear_old_sessions' if n >= 500 else None)
         except Exception as e:
             _chk('Истёкшие сессии', False, str(e)[:80])
 
@@ -805,7 +815,9 @@ def _site_health(cur, conn, method, action, event, user):
         try:
             cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.ai_logs")
             n = cur.fetchone()['c']
-            _chk('Логи ИИ', n < 5000, f'{n} записей{"  — рекомендуем очистку" if n >= 5000 else ""}')
+            _chk('Логи ИИ', n < 5000,
+                 f'{n} записей{"  — рекомендуем очистку" if n >= 5000 else ""}',
+                 fix_action='clear_ai_logs' if n >= 5000 else None)
         except Exception as e:
             _chk('Логи ИИ', True, 'таблица не найдена')
 
@@ -827,7 +839,9 @@ def _site_health(cur, conn, method, action, event, user):
                 f") AS dups"
             )
             n = cur.fetchone()['c']
-            _chk('Дубли объявлений', n == 0, f'{n} групп дублей' if n else 'Дублей нет')
+            _chk('Дубли объявлений', n == 0,
+                 f'{n} групп дублей' if n else 'Дублей нет',
+                 view_action='view_duplicates' if n else None)
         except Exception as e:
             _chk('Дубли объявлений', False, str(e)[:80])
 
@@ -840,7 +854,9 @@ def _site_health(cur, conn, method, action, event, user):
                 f"OR LOWER(COALESCE(description,'')) LIKE '%javascript:%'"
             )
             n = cur.fetchone()['c']
-            _chk('XSS-уязвимости', n == 0, f'{n} объектов с подозрительным кодом' if n else 'Чисто')
+            _chk('XSS-уязвимости', n == 0,
+                 f'{n} объектов с подозрительным кодом' if n else 'Чисто',
+                 view_action='view_xss' if n else None)
         except Exception as e:
             _chk('XSS-уязвимости', False, str(e)[:80])
 
@@ -853,7 +869,8 @@ def _site_health(cur, conn, method, action, event, user):
             row = cur.fetchone() or {}
             missing = [k for k in ('company_name', 'company_phone', 'meta_title') if not row.get(k)]
             _chk('Настройки сайта', len(missing) == 0,
-                 f'Не заполнено: {", ".join(missing)}' if missing else 'Все заполнены')
+                 f'Не заполнено: {", ".join(missing)}' if missing else 'Все заполнены',
+                 fix_action='open_settings' if missing else None)
         except Exception as e:
             _chk('Настройки сайта', False, str(e)[:80])
 
@@ -864,7 +881,10 @@ def _site_health(cur, conn, method, action, event, user):
                 f"WHERE status='active' AND (seo_title IS NULL OR seo_title='')"
             )
             n = cur.fetchone()['c']
-            _chk('SEO объявлений', n == 0, f'{n} без seo_title' if n else 'SEO заполнено')
+            _chk('SEO объявлений', n == 0,
+                 f'{n} без seo_title' if n else 'SEO заполнено',
+                 fix_action='fix_seo_titles' if n else None,
+                 view_action='view_listings_no_seo' if n else None)
         except Exception as e:
             _chk('SEO объявлений', False, str(e)[:80])
 
@@ -875,7 +895,8 @@ def _site_health(cur, conn, method, action, event, user):
                 f"AND created_at > NOW() - INTERVAL '30 days'"
             )
             n = cur.fetchone()['c']
-            _chk('Свежие новости', n > 0, f'{n} за последние 30 дней' if n else 'Нет новостей за месяц')
+            _chk('Свежие новости', n > 0,
+                 f'{n} за последние 30 дней' if n else 'Нет новостей за месяц')
         except Exception as e:
             _chk('Свежие новости', True, 'нет данных')
 
@@ -1264,6 +1285,94 @@ def _site_health(cur, conn, method, action, event, user):
             return _ok({'success': True, 'fixed': fixed, 'message': f'Обработано {fixed} объявлений — битые фото удалены'})
         except Exception as e:
             return _err(500, str(e)[:200])
+
+    # ── VIEW-ACTIONS (GET-запросы для просмотра деталей) ─────────────────────
+    if action == 'view_listings_no_desc':
+        cur.execute(
+            f"SELECT id, title, status, price, created_at FROM {SCHEMA}.listings "
+            f"WHERE status='active' AND COALESCE(LENGTH(description),0) < 30 "
+            f"ORDER BY created_at DESC LIMIT 50"
+        )
+        rows = cur.fetchall()
+        return _ok({'items': rows, 'total': len(rows)})
+
+    if action == 'view_listings_no_price':
+        cur.execute(
+            f"SELECT id, title, status, created_at FROM {SCHEMA}.listings "
+            f"WHERE status='active' AND (price IS NULL OR price = 0) "
+            f"ORDER BY created_at DESC LIMIT 50"
+        )
+        rows = cur.fetchall()
+        return _ok({'items': rows, 'total': len(rows)})
+
+    if action == 'view_orphan_leads':
+        cur.execute(
+            f"SELECT id, name, email, comment, created_at FROM {SCHEMA}.leads "
+            f"WHERE (phone IS NULL OR phone='') AND created_at < NOW() - INTERVAL '7 days' "
+            f"ORDER BY created_at DESC LIMIT 50"
+        )
+        rows = cur.fetchall()
+        return _ok({'items': rows, 'total': len(rows)})
+
+    if action == 'view_duplicates':
+        cur.execute(
+            f"SELECT title, price, COUNT(*) AS cnt, "
+            f"ARRAY_AGG(id ORDER BY id) AS ids "
+            f"FROM {SCHEMA}.listings "
+            f"WHERE status='active' AND title IS NOT NULL AND title != '' "
+            f"GROUP BY title, price HAVING COUNT(*) > 1 "
+            f"ORDER BY cnt DESC LIMIT 30"
+        )
+        rows = cur.fetchall()
+        return _ok({'items': rows, 'total': len(rows)})
+
+    if action == 'view_xss':
+        cur.execute(
+            f"SELECT id, title, "
+            f"SUBSTRING(COALESCE(description,''),1,200) AS description_preview "
+            f"FROM {SCHEMA}.listings "
+            f"WHERE LOWER(COALESCE(description,'')) LIKE '%<script%' "
+            f"OR LOWER(COALESCE(title,'')) LIKE '%<script%' "
+            f"OR LOWER(COALESCE(description,'')) LIKE '%javascript:%' "
+            f"ORDER BY id DESC LIMIT 30"
+        )
+        rows = cur.fetchall()
+        return _ok({'items': rows, 'total': len(rows)})
+
+    if action == 'view_listings_no_seo':
+        cur.execute(
+            f"SELECT id, title, price, created_at FROM {SCHEMA}.listings "
+            f"WHERE status='active' AND (seo_title IS NULL OR seo_title='') "
+            f"ORDER BY created_at DESC LIMIT 50"
+        )
+        rows = cur.fetchall()
+        return _ok({'items': rows, 'total': len(rows)})
+
+    # ── FIX-ACTIONS ───────────────────────────────────────────────────────────
+    if action == 'fix_seo_titles':
+        if method != 'POST':
+            return _err(405, 'Метод не поддерживается')
+        try:
+            cur.execute(
+                f"SELECT id, title FROM {SCHEMA}.listings "
+                f"WHERE status='active' AND (seo_title IS NULL OR seo_title='')"
+            )
+            rows = cur.fetchall()
+            fixed = 0
+            for r in rows:
+                title = (r['title'] or 'Объявление')[:70]
+                cur.execute(
+                    f"UPDATE {SCHEMA}.listings SET seo_title='{_safe(title)}' WHERE id={r['id']}"
+                )
+                fixed += 1
+            conn.commit()
+            return _ok({'success': True, 'fixed': fixed,
+                        'message': f'SEO-заголовки проставлены для {fixed} объявлений'})
+        except Exception as e:
+            return _err(500, str(e)[:200])
+
+    if action == 'open_settings':
+        return _ok({'redirect': '/admin/settings', 'message': 'Перейдите в настройки сайта'})
 
     return _err(400, 'Неизвестное действие')
 

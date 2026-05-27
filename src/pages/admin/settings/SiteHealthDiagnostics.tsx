@@ -1,6 +1,101 @@
+import { useState } from 'react';
 import Icon from '@/components/ui/icon';
-import { HealthResult, SecurityResult } from './siteHealthTypes';
+import { toast } from 'sonner';
+import { HealthResult, SecurityResult, ViewItem, ViewResult, req } from './siteHealthTypes';
 
+// ── Метки для view/fix действий ──────────────────────────────────────────────
+const VIEW_LABELS: Record<string, string> = {
+  view_listings_no_desc:  'Объявления без описания',
+  view_listings_no_price: 'Объявления без цены',
+  view_orphan_leads:      'Заявки без телефона',
+  view_duplicates:        'Дубли объявлений',
+  view_xss:               'Подозрительный код',
+  view_listings_no_seo:   'Объявления без SEO',
+};
+
+const FIX_LABELS: Record<string, string> = {
+  clear_orphan_leads: 'Удалить',
+  clear_old_sessions: 'Очистить',
+  clear_ai_logs:      'Очистить',
+  fix_seo_titles:     'Проставить SEO',
+  open_settings:      'Перейти',
+};
+
+const FIX_CONFIRMS: Record<string, string> = {
+  clear_orphan_leads: 'Удалить заявки без телефона старше 7 дней?',
+  clear_old_sessions: 'Удалить все истёкшие сессии?',
+  clear_ai_logs:      'Очистить логи ИИ старше 30 дней?',
+  fix_seo_titles:     'Автоматически проставить SEO-заголовки из названий объявлений?',
+};
+
+// ── Панель просмотра деталей ──────────────────────────────────────────────────
+interface ViewPanelProps {
+  title: string;
+  items: ViewItem[];
+  onClose: () => void;
+}
+
+function ViewPanel({ title, items, onClose }: ViewPanelProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
+          <h4 className="font-semibold text-base">{title}</h4>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition">
+            <Icon name="X" size={18} />
+          </button>
+        </div>
+        <div className="overflow-y-auto flex-1 px-5 py-3 space-y-2">
+          {items.length === 0 && (
+            <div className="text-sm text-muted-foreground py-6 text-center">Записи не найдены</div>
+          )}
+          {items.map((item, i) => (
+            <div key={i} className="px-3 py-2.5 rounded-xl border border-border bg-muted/20 text-sm">
+              {/* Дубли */}
+              {item.cnt !== undefined ? (
+                <div>
+                  <div className="font-semibold">{item.title || '—'}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {item.cnt} копий · цена {item.price ?? '—'} · ID: {item.ids?.join(', ')}
+                  </div>
+                </div>
+              ) : item.email !== undefined ? (
+                /* Лиды */
+                <div>
+                  <div className="font-semibold">{item.name || 'Без имени'}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{item.email} · {new Date(item.created_at!).toLocaleDateString('ru')}</div>
+                  {item.comment && <div className="text-xs mt-0.5 text-foreground/60">{item.comment}</div>}
+                </div>
+              ) : item.description_preview !== undefined ? (
+                /* XSS */
+                <div>
+                  <div className="font-semibold">#{item.id} {item.title}</div>
+                  <div className="text-xs text-red-600 mt-0.5 font-mono truncate">{item.description_preview}</div>
+                </div>
+              ) : (
+                /* Объявления */
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <span className="font-semibold">#{item.id}</span>
+                    <span className="ml-2 text-foreground/80">{item.title || '—'}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground flex-shrink-0">
+                    {item.price ? `${Number(item.price).toLocaleString('ru')} ₽` : 'без цены'}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="px-5 py-3 border-t border-border flex-shrink-0">
+          <div className="text-xs text-muted-foreground">Показано: {items.length} записей</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── HealthSection ─────────────────────────────────────────────────────────────
 interface HealthSectionProps {
   health: HealthResult | null;
   healthLoading: boolean;
@@ -11,51 +106,121 @@ export function HealthSection({ health, healthLoading, loadHealth }: HealthSecti
   const scoreColor = !health ? '' : health.score >= 90 ? 'text-emerald-600' : health.score >= 70 ? 'text-amber-600' : 'text-red-600';
   const barColor   = !health ? 'bg-muted' : health.score >= 90 ? 'bg-emerald-500' : health.score >= 70 ? 'bg-amber-500' : 'bg-red-500';
 
+  const [viewData, setViewData] = useState<{ title: string; items: ViewItem[] } | null>(null);
+  const [loadingAction, setLoadingAction] = useState<string | null>(null);
+
+  const handleView = async (viewAction: string) => {
+    setLoadingAction(viewAction);
+    try {
+      const d = await req(`site_health&action=${viewAction}`) as ViewResult & { error?: string };
+      if (d.error) { toast.error(d.error); return; }
+      setViewData({ title: VIEW_LABELS[viewAction] || viewAction, items: d.items });
+    } catch { toast.error('Ошибка загрузки'); }
+    finally { setLoadingAction(null); }
+  };
+
+  const handleFix = async (fixAction: string, checkName: string) => {
+    const confirmMsg = FIX_CONFIRMS[fixAction];
+    if (confirmMsg && !confirm(confirmMsg)) return;
+
+    if (fixAction === 'open_settings') {
+      window.location.hash = '#settings';
+      toast.info('Перейдите в раздел «Настройки сайта»');
+      return;
+    }
+
+    setLoadingAction(fixAction);
+    try {
+      const d = await req(`site_health&action=${fixAction}`, { method: 'POST', body: '{}' });
+      if (d.error) { toast.error(d.error); return; }
+      toast.success(d.message || 'Исправлено');
+      loadHealth();
+    } catch { toast.error('Ошибка'); }
+    finally { setLoadingAction(null); }
+  };
+
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-border space-y-4">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h3 className="font-semibold text-base flex items-center gap-2">
-            <Icon name="HeartPulse" size={18} className="text-brand-blue" /> Диагностика сайта
-          </h3>
-          <p className="text-sm text-muted-foreground mt-0.5">База данных, контент, SEO и безопасность — 12 проверок</p>
-        </div>
-        <button onClick={loadHealth} disabled={healthLoading}
-          className="bg-brand-blue text-white px-5 py-2.5 rounded-xl text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-60">
-          <Icon name={healthLoading ? 'Loader2' : 'ScanSearch'} size={16} className={healthLoading ? 'animate-spin' : ''} />
-          {healthLoading ? 'Проверка…' : 'Запустить'}
-        </button>
-      </div>
-      {health && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-4">
-            <div className={`text-4xl font-bold ${scoreColor}`}>{health.score}%</div>
-            <div className="flex-1">
-              <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
-                <span>Здоровье сайта</span><span>{health.passed}/{health.total} пройдено</span>
-              </div>
-              <div className="h-2.5 bg-muted rounded-full overflow-hidden">
-                <div className={`h-full ${barColor} transition-all duration-700 rounded-full`} style={{ width: `${health.score}%` }} />
-              </div>
-            </div>
+    <>
+      {viewData && <ViewPanel title={viewData.title} items={viewData.items} onClose={() => setViewData(null)} />}
+
+      <div className="bg-white rounded-2xl p-5 shadow-sm border border-border space-y-4">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h3 className="font-semibold text-base flex items-center gap-2">
+              <Icon name="HeartPulse" size={18} className="text-brand-blue" /> Диагностика сайта
+            </h3>
+            <p className="text-sm text-muted-foreground mt-0.5">База данных, контент, SEO и безопасность — 12 проверок</p>
           </div>
-          <div className="grid gap-2">
-            {health.checks.map((c, i) => (
-              <div key={i} className={`flex items-start gap-3 px-4 py-3 rounded-xl border text-sm ${c.ok ? 'bg-emerald-50/60 border-emerald-200' : 'bg-red-50/60 border-red-200'}`}>
-                <Icon name={c.ok ? 'CheckCircle2' : 'AlertCircle'} size={16} className={`flex-shrink-0 mt-0.5 ${c.ok ? 'text-emerald-500' : 'text-red-500'}`} />
-                <div>
-                  <span className={`font-semibold ${c.ok ? 'text-emerald-800' : 'text-red-800'}`}>{c.name}</span>
-                  {c.detail && <span className="text-muted-foreground ml-2 text-xs">{c.detail}</span>}
+          <button onClick={loadHealth} disabled={healthLoading}
+            className="bg-brand-blue text-white px-5 py-2.5 rounded-xl text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-60">
+            <Icon name={healthLoading ? 'Loader2' : 'ScanSearch'} size={16} className={healthLoading ? 'animate-spin' : ''} />
+            {healthLoading ? 'Проверка…' : 'Запустить'}
+          </button>
+        </div>
+
+        {health && (
+          <div className="space-y-4">
+            {/* Скор */}
+            <div className="flex items-center gap-4">
+              <div className={`text-4xl font-bold ${scoreColor}`}>{health.score}%</div>
+              <div className="flex-1">
+                <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
+                  <span>Здоровье сайта</span><span>{health.passed}/{health.total} пройдено</span>
+                </div>
+                <div className="h-2.5 bg-muted rounded-full overflow-hidden">
+                  <div className={`h-full ${barColor} transition-all duration-700 rounded-full`} style={{ width: `${health.score}%` }} />
                 </div>
               </div>
-            ))}
+            </div>
+
+            {/* Список проверок */}
+            <div className="grid gap-2">
+              {health.checks.map((c, i) => {
+                const isFixLoading = loadingAction === c.fix_action;
+                const isViewLoading = loadingAction === c.view_action;
+                return (
+                  <div key={i} className={`flex items-start gap-3 px-4 py-3 rounded-xl border text-sm ${c.ok ? 'bg-emerald-50/60 border-emerald-200' : 'bg-red-50/60 border-red-200'}`}>
+                    <Icon name={c.ok ? 'CheckCircle2' : 'AlertCircle'} size={16}
+                      className={`flex-shrink-0 mt-0.5 ${c.ok ? 'text-emerald-500' : 'text-red-500'}`} />
+                    <div className="flex-1 min-w-0">
+                      <span className={`font-semibold ${c.ok ? 'text-emerald-800' : 'text-red-800'}`}>{c.name}</span>
+                      {c.detail && <span className="text-muted-foreground ml-2 text-xs">{c.detail}</span>}
+                    </div>
+                    {/* Кнопки действий — только для проваленных проверок */}
+                    {!c.ok && (c.view_action || c.fix_action) && (
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {c.view_action && (
+                          <button
+                            onClick={() => handleView(c.view_action!)}
+                            disabled={!!loadingAction}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50 transition">
+                            <Icon name={isViewLoading ? 'Loader2' : 'Eye'} size={12} className={isViewLoading ? 'animate-spin' : ''} />
+                            Просмотр
+                          </button>
+                        )}
+                        {c.fix_action && (
+                          <button
+                            onClick={() => handleFix(c.fix_action!, c.name)}
+                            disabled={!!loadingAction}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition">
+                            <Icon name={isFixLoading ? 'Loader2' : 'Wrench'} size={12} className={isFixLoading ? 'animate-spin' : ''} />
+                            {FIX_LABELS[c.fix_action] || 'Исправить'}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   );
 }
 
+// ── SecuritySection ───────────────────────────────────────────────────────────
 interface SecuritySectionProps {
   security: SecurityResult | null;
   secLoading: boolean;
