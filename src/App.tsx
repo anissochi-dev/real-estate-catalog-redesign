@@ -31,15 +31,30 @@ import type { Property, Page, AppView } from './types';
 
 export type { PropertyType, DealType, Property, Page, AppView } from './types';
 
+const RELOAD_KEY = 'admin_chunk_reload_at';
+
 class AdminErrorBoundary extends Component<{ children: ReactNode }, { error: boolean }> {
   constructor(props: { children: ReactNode }) { super(props); this.state = { error: false }; }
   static getDerivedStateFromError() { return { error: true }; }
+  componentDidCatch(error: Error) {
+    const msg = String(error?.message || error || '');
+    const isChunkError = /Failed to fetch dynamically imported module|Loading chunk|ChunkLoadError|Importing a module script failed/i.test(msg);
+    if (!isChunkError) return;
+    try {
+      const last = Number(sessionStorage.getItem(RELOAD_KEY) || '0');
+      if (Date.now() - last > 10000) {
+        sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
+        window.location.reload();
+      }
+    } catch { /* ignore */ }
+  }
   render() {
     if (this.state.error) return (
       <div className="min-h-screen flex items-center justify-center flex-col gap-4 text-center p-8">
         <div className="text-4xl">⚠️</div>
         <div className="font-semibold text-lg">Не удалось загрузить панель управления</div>
-        <button className="px-4 py-2 bg-brand-blue text-white rounded-xl" onClick={() => window.location.reload()}>Обновить страницу</button>
+        <div className="text-sm text-muted-foreground max-w-md">Это могло произойти из-за устаревшего кеша после обновления сайта.</div>
+        <button className="px-4 py-2 bg-brand-blue text-white rounded-xl" onClick={() => { try { sessionStorage.removeItem(RELOAD_KEY); } catch { /* ignore */ } window.location.reload(); }}>Обновить страницу</button>
       </div>
     );
     return this.props.children;
