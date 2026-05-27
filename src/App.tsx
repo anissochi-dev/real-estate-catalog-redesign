@@ -124,6 +124,14 @@ export default function App() {
   const [view, setViewState] = useState<AppView>(() => loadInitialView());
   const [adminInitialSection, setAdminInitialSection] = useState<string | undefined>();
   const [consentGiven, setConsentGiven] = useState<boolean>(() => hasConsent());
+  const [consentVisible, setConsentVisible] = useState(false);
+
+  useEffect(() => {
+    if (!hasConsent()) {
+      const t = setTimeout(() => setConsentVisible(true), 2000);
+      return () => clearTimeout(t);
+    }
+  }, []);
 
   const setView = (v: AppView) => {
     setViewState(v);
@@ -463,7 +471,7 @@ export default function App() {
         />
       )}
 
-      {!consentGiven && location.pathname !== '/declined'
+      {!consentGiven && consentVisible && location.pathname !== '/declined'
         && !location.pathname.startsWith('/admin')
         && !location.pathname.startsWith('/login') && (
         <ConsentBanner onAccept={() => setConsentGiven(true)} />
