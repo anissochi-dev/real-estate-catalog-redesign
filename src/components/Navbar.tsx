@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Page } from '@/types';
+import { Page } from '@/App';
 import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';

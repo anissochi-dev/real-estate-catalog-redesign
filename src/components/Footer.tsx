@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
-import { Page } from '@/types';
+import { Page } from '@/App';
 
 interface Props {
   onLogin: () => void;

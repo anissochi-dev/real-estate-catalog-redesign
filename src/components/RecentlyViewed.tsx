@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Property } from '@/types';
+import { Property } from '@/App';
 import { listingSlug } from '@/lib/slug';
-import { formatPrice } from '@/lib/formatPrice';
+import { formatPrice } from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
 
 const STORAGE_KEY = 'recently_viewed';

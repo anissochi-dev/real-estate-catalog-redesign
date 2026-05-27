@@ -1,11 +1,10 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Property } from '@/types';
+import { Property } from '@/App';
 import Icon from '@/components/ui/icon';
 import { listingSlug } from '@/lib/slug';
 import YandexMap from '@/components/YandexMap';
 import { useSettings } from '@/contexts/SettingsContext';
-import { formatPrice } from '@/lib/formatPrice';
 
 const PREDICT_URL = 'https://functions.poehali.dev/9986e5a6-c4d4-407a-919f-a303aa3eddf2';
 
@@ -36,6 +35,18 @@ const DEAL_COLORS: Record<string, string> = {
   business: 'bg-violet-600 text-white',
 };
 
+export function formatPrice(price: number, deal: string): string {
+  const fmtMln = (v: number) => {
+    const n = v / 1000000;
+    return Number.isInteger(n) || n % 1 === 0 ? `${n.toFixed(0)}` : `${parseFloat(n.toFixed(1))}`;
+  };
+  if (deal === 'rent') {
+    if (price >= 1000000) return `${fmtMln(price)} млн ₽/мес`;
+    return `${(price / 1000).toFixed(0)} тыс ₽/мес`;
+  }
+  if (price >= 1000000) return `${fmtMln(price)} млн ₽`;
+  return `${(price / 1000).toFixed(0)} тыс ₽`;
+}
 
 const ASSESS_STYLES: Record<string, string> = {
   emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -57,39 +68,32 @@ const predictListeners = new Map<number, Array<(h: PredictHint | null) => void>>
 // Батч-очередь: собираем id в течение BATCH_DELAY мс, затем один запрос
 let batchQueue: number[] = [];
 let batchTimer: ReturnType<typeof setTimeout> | null = null;
-const BATCH_DELAY = 200;
-
-async function fetchPredictBatch(ids: number[], attempt = 0): Promise<void> {
-  try {
-    const r = await fetch(`${PREDICT_URL}?ids=${ids.join(',')}`);
-    if (!r.ok) throw new Error(`${r.status}`);
-    const data: Record<string, { price_assessment?: PredictHint['price_assessment'] }> = await r.json();
-    ids.forEach(id => {
-      const d = data[String(id)];
-      const val: PredictHint | null = d?.price_assessment ? { price_assessment: d.price_assessment } : null;
-      predictCache.set(id, val);
-      predictListeners.get(id)?.forEach(cb => cb(val));
-      predictListeners.delete(id);
-    });
-  } catch {
-    if (attempt < 2) {
-      setTimeout(() => fetchPredictBatch(ids, attempt + 1), 1000 * (attempt + 1));
-    } else {
-      ids.forEach(id => {
-        predictCache.set(id, null);
-        predictListeners.get(id)?.forEach(cb => cb(null));
-        predictListeners.delete(id);
-      });
-    }
-  }
-}
+const BATCH_DELAY = 80;
 
 function flushBatch() {
   batchTimer = null;
   const ids = [...new Set(batchQueue)];
   batchQueue = [];
   if (ids.length === 0) return;
-  fetchPredictBatch(ids);
+
+  fetch(`${PREDICT_URL}?ids=${ids.join(',')}`)
+    .then(r => r.json())
+    .then((data: Record<string, { price_assessment?: PredictHint['price_assessment'] }>) => {
+      ids.forEach(id => {
+        const d = data[String(id)];
+        const val: PredictHint | null = d?.price_assessment ? { price_assessment: d.price_assessment } : null;
+        predictCache.set(id, val);
+        predictListeners.get(id)?.forEach(cb => cb(val));
+        predictListeners.delete(id);
+      });
+    })
+    .catch(() => {
+      ids.forEach(id => {
+        predictCache.set(id, null);
+        predictListeners.get(id)?.forEach(cb => cb(null));
+        predictListeners.delete(id);
+      });
+    });
 }
 
 function schedulePredictFetch(id: number, cb: (h: PredictHint | null) => void) {

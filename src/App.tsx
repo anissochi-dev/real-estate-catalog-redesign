@@ -1,34 +1,13 @@
-import { useEffect, useState, useMemo, lazy, Suspense, Component } from 'react';
-import type { ReactNode, ComponentType } from 'react';
+import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import HomePage from './pages/HomePage';
-
-function lazyWithRetry<T extends { default: ComponentType<Record<string, unknown>> }>(
-  factory: () => Promise<T>,
-  retries = 3,
-  delay = 600,
-) {
-  return lazy(() => {
-    let attempt = 0;
-    const tryLoad = (): Promise<T> =>
-      factory().catch((err: Error) => {
-        attempt++;
-        if (attempt > retries) throw err;
-        return new Promise<T>((resolve, reject) => {
-          setTimeout(() => tryLoad().then(resolve, reject), delay * attempt);
-        });
-      });
-    return tryLoad();
-  });
-}
-
-const AdminPage = lazyWithRetry(() => import('./pages/AdminPage'));
 const PropertyPage     = lazy(() => import('./pages/PropertyPage'));
 const CatalogPage      = lazy(() => import('./pages/CatalogPage'));
 const MapPage          = lazy(() => import('./pages/MapPage'));
 const FavoritesPage    = lazy(() => import('./pages/FavoritesPage'));
 const ComparePage      = lazy(() => import('./pages/ComparePage'));
 const LoginPage        = lazy(() => import('./pages/LoginPage'));
+const AdminPage        = lazy(() => import('./pages/AdminPage'));
 const NetworkTenantsPage = lazy(() => import('./pages/NetworkTenantsPage'));
 const CategoryPage     = lazy(() => import('./pages/CategoryPage'));
 const NotFoundPage     = lazy(() => import('./pages/NotFoundPage'));
@@ -47,39 +26,51 @@ import SchemaOrg, { makeOrganizationSchema, makeWebSiteSchema } from './componen
 import { useSettings } from './contexts/SettingsContext';
 import { fetchListings } from './lib/api';
 import { useAuth } from './contexts/AuthContext';
-import type { Property, Page, AppView } from './types';
 
-export type { PropertyType, DealType, Property, Page, AppView } from './types';
 
-const RELOAD_KEY = 'admin_chunk_reload_at';
+export type PropertyType = 'office' | 'retail' | 'warehouse' | 'restaurant' | 'business' | 'production' | 'hotel' | 'gab';
+export type DealType = 'sale' | 'rent' | 'business';
 
-class AdminErrorBoundary extends Component<{ children: ReactNode }, { error: boolean }> {
-  constructor(props: { children: ReactNode }) { super(props); this.state = { error: false }; }
-  static getDerivedStateFromError() { return { error: true }; }
-  componentDidCatch(error: Error) {
-    const msg = String(error?.message || error || '');
-    const isChunkError = /Failed to fetch dynamically imported module|Loading chunk|ChunkLoadError|Importing a module script failed/i.test(msg);
-    if (!isChunkError) return;
-    try {
-      const last = Number(sessionStorage.getItem(RELOAD_KEY) || '0');
-      if (Date.now() - last > 10000) {
-        sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
-        window.location.reload();
-      }
-    } catch { /* ignore */ }
-  }
-  render() {
-    if (this.state.error) return (
-      <div className="min-h-screen flex items-center justify-center flex-col gap-4 text-center p-8">
-        <div className="text-4xl">⚠️</div>
-        <div className="font-semibold text-lg">Не удалось загрузить панель управления</div>
-        <div className="text-sm text-muted-foreground max-w-md">Это могло произойти из-за устаревшего кеша после обновления сайта.</div>
-        <button className="px-4 py-2 bg-brand-blue text-white rounded-xl" onClick={() => { try { sessionStorage.removeItem(RELOAD_KEY); } catch { /* ignore */ } window.location.reload(); }}>Обновить страницу</button>
-      </div>
-    );
-    return this.props.children;
-  }
+export interface Property {
+  id: number;
+  title: string;
+  type: PropertyType;
+  deal: DealType;
+  address: string;
+  district: string;
+  area: number;
+  price: number;
+  pricePerM2?: number;
+  payback?: number;
+  profit?: number;
+  image: string;
+  tags: string[];
+  description: string;
+  floor?: number;
+  totalFloors?: number;
+  lat: number;
+  lng: number;
+  isHot?: boolean;
+  isNew?: boolean;
+  isExclusive?: boolean;
+  isUrgent?: boolean;
+  publicCode?: number;
+  tenantName?: string;
+  monthlyRent?: number;
+  yearlyRent?: number;
+  purpose?: string;
+  finishing?: string;
+  ceilingHeight?: number;
+  electricityKw?: number;
+  utilities?: string;
+  roadLine?: string;
+  updatedAt?: string;
+  createdAt?: string;
+  lastEditedAt?: string;
 }
+
+export type Page = 'home' | 'catalog' | 'map' | 'favorites' | 'compare' | 'network-tenants' | 'news';
+export type AppView = 'site' | 'login' | 'admin';
 
 const PATH_BY_PAGE: Record<Page, string> = {
   home: '/',
@@ -369,12 +360,10 @@ export default function App() {
       );
     }
     return (
-      <AdminErrorBoundary>
-        <Suspense fallback={pageFallback}>
-          <SeoHead title="Админ-панель" noindex />
-          <AdminPage onExit={() => { setView('site'); setAdminInitialSection(undefined); }} initialSection={adminInitialSection as string | undefined} />
-        </Suspense>
-      </AdminErrorBoundary>
+      <Suspense fallback={pageFallback}>
+        <SeoHead title="Админ-панель" noindex />
+        <AdminPage onExit={() => { setView('site'); setAdminInitialSection(undefined); }} initialSection={adminInitialSection as string | undefined} />
+      </Suspense>
     );
   }
 

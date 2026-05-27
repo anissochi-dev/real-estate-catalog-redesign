@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Property } from '@/types';
+import { Property } from '@/App';
 import PropertyCard from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
 
