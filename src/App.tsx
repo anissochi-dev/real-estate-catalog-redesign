@@ -258,8 +258,8 @@ export default function App() {
         document.head.appendChild(link);
       }
       if (total > 8) {
-        const loadAll = () => fetchListings()
-          .then(({ listings: all }) => { setProperties(all); setAllLoaded(true); })
+        const loadAll = () => fetchListings(20, 0)
+          .then(({ listings: top }) => { setProperties(top); setAllLoaded(true); })
           .catch(() => setAllLoaded(true));
         if (document.readyState === 'complete') {
           loadAll();

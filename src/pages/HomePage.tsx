@@ -377,8 +377,8 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
               {latestNews === null
                 ? Array.from({ length: Math.min(homeNewsLimit, 5) }).map((_, i) => (
                   <div key={i} className="bg-white rounded-xl overflow-hidden border border-border">
-                    <div className="h-24 bg-muted" />
-                    <div className="p-2.5 space-y-1.5">
+                    <div className="p-3 space-y-2">
+                      <div className="h-2.5 bg-muted rounded w-1/3" />
                       <div className="h-3 bg-muted rounded w-full" />
                       <div className="h-3 bg-muted rounded w-3/4" />
                     </div>
@@ -390,24 +390,12 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
                     onClick={() => navigate(`/news/${n.slug}`)}
                     className="group cursor-pointer bg-white rounded-xl overflow-hidden border border-border hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
                   >
-                    <div className="h-24 relative overflow-hidden bg-gradient-to-br from-brand-blue/10 to-brand-blue/20" style={{minHeight: 96}}>
-                      {n.image_url ? (
-                        <img src={n.image_url} alt={n.title} width={240} height={96} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                      ) : settings.logo_url ? (
-                        <div className="w-full h-full flex items-center justify-center bg-brand-blue/5">
-                          <img src={settings.logo_url} alt="лого" width={40} height={40} loading="lazy" decoding="async" className="w-10 h-10 object-contain opacity-40" />
-                        </div>
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Icon name="Newspaper" size={20} className="text-brand-blue/30" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-2.5">
-                      <h3 className="font-medium text-xs leading-snug line-clamp-2 group-hover:text-brand-blue transition-colors">{n.title}</h3>
-                      <h6 className="text-[10px] text-muted-foreground mt-1.5 font-normal">
+                    <div className="p-3 flex flex-col gap-1.5 h-full">
+                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                        <Icon name="Newspaper" size={12} className="text-brand-blue/50 shrink-0" />
                         {new Date(n.published_at || n.created_at).toLocaleDateString('ru', { day: 'numeric', month: 'short' })}
-                      </h6>
+                      </div>
+                      <h3 className="font-medium text-xs leading-snug line-clamp-3 group-hover:text-brand-blue transition-colors">{n.title}</h3>
                     </div>
                   </article>
                 ))
