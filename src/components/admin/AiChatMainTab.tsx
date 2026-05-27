@@ -65,26 +65,26 @@ export default function AiChatMainTab({
         </div>
       </div>
 
-      {/* Панель памяти */}
+      {/* Быстрый просмотр Базы знаний */}
       {showMemory && (
         <div className="mx-3 mt-2 shrink-0 bg-white border border-brand-blue/20 rounded-xl overflow-hidden">
           <div className="flex items-center justify-between px-4 py-2.5 bg-brand-blue/5 border-b border-brand-blue/10">
             <div className="flex items-center gap-2 text-sm font-semibold text-brand-blue">
-              <Icon name="Brain" size={15} />
-              Память ВБ
+              <Icon name="BookOpen" size={15} />
+              База знаний ВБ — быстрый просмотр
             </div>
             <button onClick={onCloseMemory} className="text-muted-foreground hover:text-foreground">
               <Icon name="X" size={15} />
             </button>
           </div>
           {!memoryData ? (
-            <div className="px-4 py-3 text-xs text-muted-foreground">Не удалось загрузить память</div>
+            <div className="px-4 py-3 text-xs text-muted-foreground">Не удалось загрузить базу знаний</div>
           ) : (
             <div className="px-4 py-3 space-y-2 max-h-52 overflow-y-auto">
               <div className="text-xs text-muted-foreground">Взаимодействий: <strong>{memoryData.interaction_count}</strong></div>
               {memoryData.learned_facts.length > 0 && (
                 <div>
-                  <div className="text-xs font-semibold mb-1">Что я помню</div>
+                  <div className="text-xs font-semibold mb-1">Знания (последние)</div>
                   {memoryData.learned_facts.slice(-8).map((f, i) => (
                     <div key={i} className="text-xs bg-muted/40 rounded-lg px-3 py-1.5 mb-1">{f}</div>
                   ))}
@@ -101,7 +101,7 @@ export default function AiChatMainTab({
                 </div>
               )}
               {!memoryData.learned_facts.length && !memoryData.tech_decisions.length && (
-                <div className="text-xs text-muted-foreground">Память пока пуста — начни общаться!</div>
+                <div className="text-xs text-muted-foreground">База знаний пока пуста — начни общаться или открой полный раздел вверху.</div>
               )}
             </div>
           )}

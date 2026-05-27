@@ -26,7 +26,7 @@ interface UseAiChatActionsParams {
   opsLoading: boolean;
   setOpsLoading: React.Dispatch<React.SetStateAction<boolean>>;
   opsScrollRef: React.RefObject<HTMLDivElement>;
-  // Память
+  // База знаний (quick-look панель)
   setShowMemory: React.Dispatch<React.SetStateAction<boolean>>;
   setMemoryData: React.Dispatch<React.SetStateAction<MemoryData | null>>;
   setMemoryLoading: React.Dispatch<React.SetStateAction<boolean>>;

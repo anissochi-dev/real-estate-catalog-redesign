@@ -63,20 +63,20 @@ export default function AiChatAdminOpsTab({
         </div>
       </div>
 
-      {/* Панель памяти */}
+      {/* Быстрый просмотр Базы знаний ВБ */}
       {showMemory && (
         <div className="mx-3 mt-2 shrink-0 bg-white border border-red-200 rounded-xl overflow-hidden">
           <div className="flex items-center justify-between px-4 py-2.5 bg-red-50 border-b border-red-100">
             <div className="flex items-center gap-2 text-sm font-semibold text-red-800">
-              <Icon name="Brain" size={15} />
-              Память Виртуального брокера
+              <Icon name="BookOpen" size={15} />
+              База знаний ВБ — быстрый просмотр
             </div>
             <button onClick={onCloseMemory} className="text-red-400 hover:text-red-700">
               <Icon name="X" size={15} />
             </button>
           </div>
           {!memoryData ? (
-            <div className="px-4 py-3 text-xs text-muted-foreground">Не удалось загрузить память</div>
+            <div className="px-4 py-3 text-xs text-muted-foreground">Не удалось загрузить базу знаний</div>
           ) : (
             <div className="px-4 py-3 space-y-3 max-h-64 overflow-y-auto">
               <div className="text-xs text-muted-foreground">
@@ -84,7 +84,7 @@ export default function AiChatAdminOpsTab({
               </div>
               {memoryData.learned_facts.length > 0 && (
                 <div>
-                  <div className="text-xs font-semibold text-foreground mb-1.5">Важные факты</div>
+                  <div className="text-xs font-semibold text-foreground mb-1.5">Знания</div>
                   <div className="space-y-1">
                     {memoryData.learned_facts.map((f, i) => (
                       <div key={i} className="text-xs bg-muted/40 rounded-lg px-3 py-1.5">{f}</div>
@@ -107,7 +107,7 @@ export default function AiChatAdminOpsTab({
                 </div>
               )}
               {memoryData.learned_facts.length === 0 && memoryData.tech_decisions.length === 0 && (
-                <div className="text-xs text-muted-foreground">Память пока пуста — начни общаться!</div>
+                <div className="text-xs text-muted-foreground">База знаний пока пуста — начни общаться или открой полный раздел.</div>
               )}
             </div>
           )}

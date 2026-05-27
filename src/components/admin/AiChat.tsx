@@ -21,6 +21,8 @@ interface Props {
   onApply?: (text: string, kind: Suggestion['kind']) => void;
   title?: string;
   currentText?: string;
+  /** Открыть раздел «База знаний ВБ» (закрывает чат). */
+  onOpenKnowledge?: () => void;
 }
 
 export default function AiChat({
@@ -32,6 +34,7 @@ export default function AiChat({
   onApply,
   title,
   currentText,
+  onOpenKnowledge,
 }: Props) {
   const [action, setAction] = useState<AiAction>(initialAction);
   const [input, setInput] = useState(initialPrompt);
@@ -103,6 +106,7 @@ export default function AiChat({
           memoryLoading={memoryLoading}
           onClearHistory={clearHistory}
           onLoadMemory={loadMemory}
+          onOpenKnowledge={onOpenKnowledge}
           onClose={onClose}
           isWorking={loading}
           currentRole={

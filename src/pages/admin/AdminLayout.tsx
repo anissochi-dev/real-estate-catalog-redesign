@@ -374,7 +374,12 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
         <div className="p-4 lg:p-8">{children}</div>
       </main>
 
-      {aiOpen && <AiChat onClose={() => setAiOpen(false)} />}
+      {aiOpen && (
+        <AiChat
+          onClose={() => setAiOpen(false)}
+          onOpenKnowledge={() => { setAiOpen(false); setSection('vb-knowledge'); }}
+        />
+      )}
 
       {idleWarning && (
         <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">

@@ -6,6 +6,8 @@ interface Props {
   memoryLoading: boolean;
   onClearHistory: () => void;
   onLoadMemory: () => void;
+  /** Открыть полноценный раздел «База знаний ВБ». */
+  onOpenKnowledge?: () => void;
   onClose: () => void;
   /** ВБ сейчас обрабатывает запрос. */
   isWorking?: boolean;
@@ -39,6 +41,7 @@ export default function AiChatHeader({
   memoryLoading,
   onClearHistory,
   onLoadMemory,
+  onOpenKnowledge,
   onClose,
   isWorking = false,
   currentRole,
@@ -73,10 +76,20 @@ export default function AiChatHeader({
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          {onOpenKnowledge && (
+            <button
+              onClick={onOpenKnowledge}
+              title="Открыть Базу знаний ВБ"
+              className="hover:bg-white/10 rounded-lg p-1.5 inline-flex items-center gap-1"
+            >
+              <Icon name="BookOpen" size={16} />
+              <span className="hidden md:inline text-xs font-600">База знаний</span>
+            </button>
+          )}
           <button
             onClick={onLoadMemory}
             disabled={memoryLoading}
-            title="Память ВБ"
+            title="Быстрый просмотр базы знаний"
             className="hover:bg-white/10 rounded-lg p-1.5"
           >
             {memoryLoading ? <Icon name="Loader2" size={16} className="animate-spin" /> : <Icon name="Brain" size={16} />}
