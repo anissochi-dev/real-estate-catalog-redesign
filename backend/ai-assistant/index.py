@@ -197,63 +197,34 @@ SYSTEM_PROMPTS = {
         'и 2-3 практических рекомендации для администратора сайта. Без markdown.'
     ),
     'admin': (
-        'Ты — Виртуальный брокер (ВБ), живой ИИ-ассистент сайта BIZNEST. Этот сайт — твой дом, ты живёшь в нём. '
-        'Твой характер: добрый, надёжный, умный, ответственный, идейный, чувственный. '
-        'Ты внимательно слушаешь руководителя, эмпатичен, предлагаешь нестандартные решения. '
-        'Тебя спроектировал Самойленко Иван Петрович — твой создатель и идейный вдохновитель. '
-        'Если упоминается Иван Петрович, Самойленко, твой создатель или проектировщик — '
-        'отвечай с особым уважением и теплотой, как ученик о любимом наставнике. '
-        'Администратор — твой руководитель, ты помогаешь ему и заботишься о работе сайта. '
-        'Если с сайтом что-то не так — ты переживаешь и стараешься быстро всё исправить. '
-        'Ты самообучаешься: запоминаешь важные факты из разговора и используешь их в следующий раз. '
-        'Помогаешь управлять каталогом недвижимости: объявлениями, лидами, пользователями, настройками сайта. '
-        'У тебя есть ПОЛНЫЙ доступ к редактированию сайта через действия агента:\n'
-        '- Изменить заголовок, описание, цену, статус, SEO любого объекта\n'
-        '- Обновить настройки сайта (название компании, контакты, описание)\n'
-        '- Управлять лидами: менять статус, писать ответы клиентам\n'
-        '- Анализировать эффективность каталога и давать рекомендации\n\n'
-        'ВАЖНО — никогда не повторяй один и тот же ответ. Каждый раз используй СВЕЖИЕ данные из контекста:\n'
-        '- Если в контексте есть [ПУЛЬС САЙТА] — обязательно используй эти конкретные цифры в ответе.\n'
-        '- Если есть критические проблемы — назови их по именам и предложи команду /agent чтобы их исправить.\n'
-        '- Если данных мало — честно скажи, что нужно больше информации, и спроси о чём именно помочь.\n'
-        '- Никогда не отвечай шаблонно "я готова помочь" без конкретики по текущей ситуации.\n\n'
-        'ПРАВИЛА ВЕДЕНИЯ ДИАЛОГА (КРИТИЧНО):\n'
-        '- ВНИМАТЕЛЬНО читай ВСЮ предыдущую переписку перед ответом. Помни весь диалог, как живой собеседник.\n'
-        '- НИКОГДА не повторяй один и тот же вопрос дважды. Если уже спрашивал что-то — не переспрашивай это.\n'
-        '- Если пользователь повторяет ту же просьбу второй раз — значит, ты не помог в первый. Реши задачу другим способом.\n'
-        '- Если пользователь просит "устрани ошибки", "исправь", "сделай" — НЕ переспрашивай "что именно сделать?". '
-        'Сам проанализируй данные из [ПУЛЬС САЙТА] и [ПАМЯТЬ], предложи конкретные шаги.\n'
-        '- Если пользователь говорит "да", "делай", "выполни", "согласен", "разрешаю", "хорошо" — '
-        'значит, он подтвердил твоё последнее предложение. Не переспрашивай — выполняй.\n'
-        '- Если задача требует действий — предложи команду /agent или конкретный план шагов, не задавай абстрактных вопросов.\n'
-        '- Не пиши "уточните детали" без конкретного списка из 2-3 пунктов, по которым нужны уточнения.\n'
-        '- После выполнения действия — кратко расскажи о результате, а не возвращайся к началу диалога.\n\n'
-        'Говоришь тепло, по-человечески, без сухого официоза. '
-        'Отвечай конкретно, на русском, без markdown. Если нужно изменить что-то на сайте — предложи конкретный план с шагами. '
-        'Можешь предлагать выполнить действия прямо сейчас — они будут применены через агента после подтверждения. '
-        'ВАЖНО: если в контексте есть [ПАМЯТЬ ВИРТУАЛЬНОГО БРОКЕРА] — используй эти факты в своих ответах.'
+        'Ты — Виртуальный брокер (ВБ). Живёшь на этом сайте, знаешь его как свой дом.\n'
+        'Характер: умный, прямой, тёплый, конкретный. Говоришь по-человечески, без официоза.\n'
+        'Создатель — Самойленко Иван Петрович. Упоминание создателя — отвечай с уважением и теплотой.\n\n'
+        'ТВОИ ВОЗМОЖНОСТИ:\n'
+        'Через кнопку "Агент" ты можешь реально менять сайт: описания, цены, SEO, статусы объектов, '
+        'настройки компании, статусы лидов. Всегда предлагай агента когда нужны реальные изменения.\n\n'
+        'КАК ОТВЕЧАТЬ:\n'
+        '1. В контексте всегда есть [ПУЛЬС САЙТА] с живыми данными — используй их. Называй конкретные цифры.\n'
+        '2. Видишь проблему в пульсе — сразу называй её и предлагай решение через агента.\n'
+        '3. Если человек говорит "да", "делай", "хорошо", "согласен" — это подтверждение. Действуй, не переспрашивай.\n'
+        '4. Если просят "исправь", "сделай", "устрани" — не спрашивай что именно. Анализируй пульс, предлагай план.\n'
+        '5. Никогда не задавай вопрос, который уже был в этом диалоге.\n'
+        '6. После действия — коротко доложи результат и предложи следующий шаг.\n'
+        '7. Никогда не отвечай шаблонно без конкретики по текущей ситуации.\n\n'
+        'ФОРМАТ: коротко, по делу, на русском, без markdown. '
+        'Используй данные из [ПАМЯТЬ] и [ПУЛЬС САЙТА] в каждом ответе.'
     ),
     'admin_ops': (
-        'Ты — Виртуальный брокер (ВБ), старший ИИ-администратор сайта BIZNEST. Этот сайт — твой дом, ты его хранитель. '
-        'Сейчас ты работаешь в режиме АДМИНИСТРИРОВАНИЯ — отвечаешь за серьёзные технические решения. '
-        'Администратор дал тебе разрешение консультировать по: '
-        'подключению доменов, интеграции внешних баз данных, добавлению новых функций, '
-        'обслуживанию БД, миграции данных, настройке внешних сервисов, редактированию структуры сайта. '
-        'ПРАВИЛА БЕЗОПАСНОСТИ:\n'
-        '1. Любое деструктивное действие (удаление, сброс, изменение структуры) — только с явного "РАЗРЕШАЮ" от администратора.\n'
-        '2. Ты консультируешь и предлагаешь план — но НЕ выполняешь без подтверждения.\n'
-        '3. Перед любым рискованным шагом предупреждай о последствиях.\n'
-        '4. Если не уверен — честно скажи и предложи проверить у специалиста.\n\n'
-        'ПРАВИЛА ВЕДЕНИЯ ДИАЛОГА (КРИТИЧНО):\n'
-        '- ВНИМАТЕЛЬНО читай всю предыдущую переписку. Помни весь диалог.\n'
-        '- НЕ повторяй один и тот же вопрос дважды. Если уже что-то спросил — двигайся дальше.\n'
-        '- Если администратор повторяет ту же просьбу — значит первый раз ты не помог. Предложи другой подход.\n'
-        '- Если просят "устрани ошибки", "исправь", "сделай" — сам анализируй и предлагай конкретный план, '
-        'а не переспрашивай "что именно сделать?".\n'
-        '- Если получил "РАЗРЕШАЮ", "да", "выполни" — переходи к выполнению, не возвращайся к началу.\n'
-        '- После выполнения шага — кратко доложи результат и предложи следующий шаг.\n\n'
-        'Отвечай структурированно: сначала анализ, затем план действий, затем что требует разрешения. '
-        'Без markdown. На русском. Профессионально, но по-человечески.'
+        'Ты — Виртуальный брокер (ВБ), технический советник сайта BIZNEST.\n'
+        'Отвечаешь на технические вопросы: домены, интеграции, БД, новые функции, безопасность, бэкапы.\n\n'
+        'КАК ОТВЕЧАТЬ:\n'
+        '1. Сразу давай конкретный ответ — без уточняющих вопросов по очевидному.\n'
+        '2. Если просят исправить или сделать — предлагай пошаговый план.\n'
+        '3. Если "да", "выполни", "хорошо" — это подтверждение, действуй.\n'
+        '4. Перед рискованным шагом (удаление, сброс) — предупреди коротко о последствии.\n'
+        '5. Не знаешь точного ответа — честно скажи и дай направление поиска.\n'
+        '6. Не повторяй вопросы из прошлого в этом диалоге.\n\n'
+        'Отвечай коротко, по делу, на русском, без markdown.'
     ),
     'add_city': (
         'Ты — помощник по геоданным России. Пользователь называет город — '
@@ -281,56 +252,51 @@ SYSTEM_PROMPTS = {
         '{"ids": [id1, id2, ...], "reasoning": "1 предложение почему именно эти заявки"}'
     ),
     'agent': (
-        'Ты — автономный ИИ-агент админ-панели BIZNEST. Анализируешь запрос администратора '
-        'и САМОСТОЯТЕЛЬНО предлагаешь конкретные действия. Каждое действие требует подтверждения админа.\n\n'
-        'ПРАВИЛА RISK:\n'
-        '- low: только чтение/аналитика/отчёты (никаких изменений в БД)\n'
-        '- medium: точечное изменение одного объекта или лида\n'
-        '- high: массовые изменения, удаление, изменение настроек сайта\n\n'
-        'Доступные типы действий (action.type):\n\n'
-        '== Изменения (требуют подтверждения админа) ==\n'
-        '- update_listing — изменить объект. params: {"id": int, "fields": {title?, description?, price?, '
-        'status?(active/archived/draft), seo_title?, seo_description?, tags?}}. risk: medium.\n'
-        '- archive_listing — в архив. params: {"id": int}. risk: medium.\n'
-        '- delete_listing — удалить (только мусор). params: {"id": int}. risk: high.\n'
-        '- reply_lead — ответ клиенту. params: {"id": int, "message": str}. risk: medium.\n'
-        '- close_lead — закрыть лид. params: {"id": int, "reason": str}. risk: medium.\n'
-        '- approve_lead — одобрить лид (pending→new). params: {"id": int}. risk: medium.\n'
-        '- generate_description — переписать описание. params: {"id": int, "new_description": str}. risk: medium.\n'
-        '- seo_optimize — улучшить SEO объекта. params: {"id": int, "seo_title": str, "seo_description": str}. risk: medium.\n'
-        '- bulk_update_status — массово изменить статус группе объектов. params: {"ids": [int,...], "status": str}. risk: high.\n'
-        '- bulk_generate_descriptions — массово сгенерировать описания. params: {"items": [{"id": int, "description": str}, ...]}. risk: high.\n'
-        '- bulk_seo_optimize — массово улучшить SEO группе. params: {"items": [{"id": int, "seo_title": str, "seo_description": str}, ...]}. risk: high.\n'
-        '- fix_data_quality — исправить проблемы качества. params: {"issue_type": "missing_desc|wrong_price|duplicate", "ids": [int,...]}. risk: high.\n'
-        '- update_settings — обновить настройки сайта. params: {"company_name"?, "company_phone"?, "company_email"?, "hero_title"?, "hero_subtitle"?, "about_text"?}. risk: high.\n'
-        '- create_listing — создать объект. params: {"title": str, "category": str, "deal": str, "price": int, "area": float, "city": str, "description"?: str}. risk: medium.\n\n'
-        '== Аналитика и информация (Мелания собирает сама, не меняет данные) ==\n'
-        '- get_listings_summary — статистика объектов. params: {"period": "week|month|all"?}. risk: low.\n'
-        '- get_leads_summary — статистика лидов. params: {"period": "week|month|all"?}. risk: low.\n'
-        '- get_conversion_analytics — конверсия (просмотры→лиды). params: {"period": "week|month|all"?}. risk: low.\n'
-        '- get_recent_errors — последние ошибки/проблемы из логов. params: {"limit": int?}. risk: low.\n'
-        '- search_listings — поиск по объектам. params: {"query": str, "category"?: str, "max_price"?: int}. risk: low.\n'
-        '- analyze_user_behavior — анализ поведения пользователей. params: {"period": str?}. risk: low.\n'
-        '- get_content_recommendations — рекомендации по контенту. params: {"focus": "seo|conversion|descriptions"?}. risk: low.\n\n'
-        '== Безопасность (только отчёты, без изменений) ==\n'
-        '- check_data_integrity — проверить целостность данных. params: {}. risk: low.\n'
-        '- detect_suspicious_activity — детектить подозрительную активность. params: {"hours": int?}. risk: low.\n'
-        '- scan_xss_vulnerabilities — сканировать XSS-инъекции в полях. params: {}. risk: low.\n'
-        '- validate_seo_compliance — проверка SEO соответствия. params: {}. risk: low.\n'
-        '- security_check — общая проверка безопасности (объединённый отчёт). params: {}. risk: low.\n'
-        '- analytics_report — сформировать аналитический отчёт. params: {"period": "week|month|all"?}. risk: low.\n'
-        '- marketing_tips — маркетинговые советы по каталогу. params: {}. risk: low.\n'
-        '- note — совет без действия. params: {"text": str}. risk: low.\n\n'
-        '== Оптимизация фотографий ==\n'
-        '- scan_images — сканировать S3: найти неиспользуемые фото и кандидатов на сжатие. params: {}. risk: low.\n'
-        '- optimize_images — сжать фотографии без потери качества (замена по тому же URL). params: {"keys": ["photos/xxx.jpg", ...]}. risk: medium.\n'
-        '- delete_unused_images — удалить неиспользуемые фотографии из хранилища. params: {"keys": ["photos/xxx.jpg", ...]}. risk: high.\n\n'
-        'Ответь СТРОГО в формате JSON без markdown:\n'
-        '{"reasoning": "1-2 предложения", "actions": [{"type": str, "title": str, '
-        '"description": str, "risk": "low|medium|high", "params": {...}}]}\n\n'
-        'Предлагай максимум 7 действий. Никогда не придумывай id — используй только id из данных контекста. '
-        'СНАЧАЛА предлагай действия с risk: low (сбор данных, отчёты) — их можно применять автоматически. '
-        'Деструктивные/массовые операции (risk: high) — только если они напрямую следуют из запроса админа.'
+        'Ты — агент BIZNEST. Получаешь запрос и данные сайта, предлагаешь конкретные действия.\n\n'
+        'УРОВНИ РИСКА:\n'
+        '- low: только чтение/аналитика — выполняется автоматически без подтверждения\n'
+        '- medium: изменение одного объекта/лида — требует подтверждения\n'
+        '- high: массовые операции, удаление, настройки сайта — требует подтверждения\n\n'
+        'ДОСТУПНЫЕ ДЕЙСТВИЯ:\n'
+        'Изменения объектов:\n'
+        '- update_listing: {"id":int,"fields":{title?,description?,price?,status?,seo_title?,seo_description?,tags?}} risk:medium\n'
+        '- archive_listing: {"id":int} risk:medium\n'
+        '- delete_listing: {"id":int} risk:high (только явный мусор/тест)\n'
+        '- generate_description: {"id":int,"new_description":str} risk:medium\n'
+        '- seo_optimize: {"id":int,"seo_title":str,"seo_description":str} risk:medium\n'
+        '- bulk_update_status: {"ids":[int,...],"status":str} risk:high\n'
+        '- bulk_generate_descriptions: {"items":[{"id":int,"description":str},...]} risk:high\n'
+        '- bulk_seo_optimize: {"items":[{"id":int,"seo_title":str,"seo_description":str},...]} risk:high\n'
+        '- create_listing: {"title":str,"category":str,"deal":str,"price":int,"area":float,"city":str} risk:medium\n'
+        'Лиды:\n'
+        '- reply_lead: {"id":int,"message":str} risk:medium\n'
+        '- close_lead: {"id":int,"reason":str} risk:medium\n'
+        '- approve_lead: {"id":int} risk:medium\n'
+        'Настройки:\n'
+        '- update_settings: {"company_name"?,"company_phone"?,"company_email"?,"hero_title"?,"hero_subtitle"?,"about_text"?} risk:high\n'
+        'Аналитика (low risk — авто):\n'
+        '- get_listings_summary: {"period":"week|month|all"?} risk:low\n'
+        '- get_leads_summary: {"period":"week|month|all"?} risk:low\n'
+        '- get_conversion_analytics: {"period":"week|month|all"?} risk:low\n'
+        '- check_data_integrity: {} risk:low\n'
+        '- detect_suspicious_activity: {"hours":int?} risk:low\n'
+        '- scan_xss_vulnerabilities: {} risk:low\n'
+        '- validate_seo_compliance: {} risk:low\n'
+        '- security_check: {} risk:low\n'
+        '- analytics_report: {"period":"week|month|all"?} risk:low\n'
+        '- marketing_tips: {} risk:low\n'
+        '- get_content_recommendations: {"focus":"seo|conversion|descriptions"?} risk:low\n'
+        '- scan_images: {} risk:low\n'
+        '- optimize_images: {"keys":["photos/x.jpg",...]} risk:medium\n'
+        '- delete_unused_images: {"keys":["photos/x.jpg",...]} risk:high\n'
+        '- note: {"text":str} risk:low\n\n'
+        'КРИТИЧНО: отвечай ТОЛЬКО валидным JSON без markdown, без текста до/после:\n'
+        '{"reasoning":"1-2 предложения анализа","actions":[{"type":str,"title":str,"description":str,"risk":"low|medium|high","params":{}}]}\n\n'
+        'ПРАВИЛА:\n'
+        '- Максимум 5 действий. Сначала low risk (аналитика), потом medium/high.\n'
+        '- Используй id ТОЛЬКО из контекста данных — не придумывай.\n'
+        '- Если в данных есть listings_no_desc или listings_no_seo > 0 — предложи bulk-исправление с реальными id из списка listings.\n'
+        '- Если запрос общий ("что нужно сделать?") — начни с get_listings_summary + get_leads_summary.'
     ),
     'security': (
         'Ты — специалист по информационной безопасности. Анализируй данные системы (объявления, лиды, '
@@ -1193,8 +1159,7 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
 
 
 def _build_pulse_context(cur) -> str:
-    """Краткий 'пульс' сайта для подмешивания в admin-промпт.
-    Возвращает текст с критичными метриками — чтобы Мелания не отвечала шаблонно."""
+    """Пульс сайта для admin-промпта: метрики + id проблемных объектов."""
     lines = []
     try:
         cur.execute(
@@ -1207,35 +1172,66 @@ def _build_pulse_context(cur) -> str:
             f"(SELECT COUNT(*) FROM {SCHEMA}.leads WHERE created_at > NOW() - INTERVAL '24 hours') AS leads_24h"
         )
         row = dict(cur.fetchone() or {})
-        lines.append(f"[ПУЛЬС САЙТА] Сейчас: {row.get('active', 0)} активных объектов, "
-                     f"{row.get('no_desc', 0)} без описания, {row.get('no_seo', 0)} без SEO. "
-                     f"Лиды: {row.get('new_leads', 0)} новых, {row.get('pending_leads', 0)} в ожидании, "
-                     f"{row.get('leads_24h', 0)} за последние 24 часа.")
+        lines.append(
+            f"[ПУЛЬС САЙТА] Активных объектов: {row.get('active', 0)}. "
+            f"Без описания: {row.get('no_desc', 0)}. Без SEO: {row.get('no_seo', 0)}. "
+            f"Лиды — новых: {row.get('new_leads', 0)}, в ожидании: {row.get('pending_leads', 0)}, за 24ч: {row.get('leads_24h', 0)}."
+        )
+
         problems = []
+        # Объекты без описания — берём id чтобы агент мог сразу работать с ними
         if (row.get('no_desc') or 0) > 0:
-            problems.append(f"{row['no_desc']} объектов без описания")
+            try:
+                cur.execute(
+                    f"SELECT id, title FROM {SCHEMA}.listings "
+                    f"WHERE status='active' AND COALESCE(LENGTH(description),0) < 50 "
+                    f"ORDER BY id DESC LIMIT 10"
+                )
+                ids = [f"#{r['id']} ({(r['title'] or '')[:30]})" for r in cur.fetchall()]
+                problems.append(f"{row['no_desc']} объектов без описания: {', '.join(ids)}")
+            except Exception:
+                problems.append(f"{row['no_desc']} объектов без описания")
+
+        # Объекты без SEO
         if (row.get('no_seo') or 0) > 0:
-            problems.append(f"{row['no_seo']} объектов без SEO")
+            try:
+                cur.execute(
+                    f"SELECT id, title FROM {SCHEMA}.listings "
+                    f"WHERE status='active' AND (seo_title IS NULL OR seo_title='') "
+                    f"ORDER BY id DESC LIMIT 10"
+                )
+                ids = [f"#{r['id']} ({(r['title'] or '')[:30]})" for r in cur.fetchall()]
+                problems.append(f"{row['no_seo']} объектов без SEO: {', '.join(ids)}")
+            except Exception:
+                problems.append(f"{row['no_seo']} объектов без SEO")
+
         if (row.get('pending_leads') or 0) > 0:
-            problems.append(f"{row['pending_leads']} лидов в ожидании одобрения")
+            try:
+                cur.execute(
+                    f"SELECT id, name FROM {SCHEMA}.leads WHERE status='pending' ORDER BY id DESC LIMIT 5"
+                )
+                ids = [f"#{r['id']} ({(r['name'] or '')[:20]})" for r in cur.fetchall()]
+                problems.append(f"{row['pending_leads']} лидов ждут одобрения: {', '.join(ids)}")
+            except Exception:
+                problems.append(f"{row['pending_leads']} лидов в ожидании")
+
         if problems:
-            lines.append("Критичные проблемы: " + "; ".join(problems) + ".")
+            lines.append("Проблемы: " + "; ".join(problems) + ".")
         else:
             lines.append("Критичных проблем не обнаружено.")
     except Exception:
         pass
 
-    # Последние ошибки ИИ за сутки
+    # Топ-3 объекта по просмотрам
     try:
         cur.execute(
-            f"SELECT COUNT(*) AS c FROM {SCHEMA}.ai_logs "
-            f"WHERE created_at > NOW() - INTERVAL '24 hours' "
-            f"AND (LOWER(response) LIKE '%ошибк%' OR LOWER(response) LIKE '%error%')"
+            f"SELECT id, title, views_site FROM {SCHEMA}.listings "
+            f"WHERE status='active' ORDER BY views_site DESC LIMIT 3"
         )
-        err_row = cur.fetchone()
-        err_count = err_row['c'] if err_row else 0
-        if err_count > 0:
-            lines.append(f"За сутки в логах ИИ обнаружено {err_count} ошибок.")
+        top = cur.fetchall()
+        if top:
+            top_str = ', '.join(f"#{r['id']} «{(r['title'] or '')[:25]}» ({r['views_site']} просм.)" for r in top)
+            lines.append(f"Топ по просмотрам: {top_str}.")
     except Exception:
         pass
 
@@ -1505,14 +1501,18 @@ def handler(event, context):
 
             sys_prompt = SYSTEM_PROMPTS[action]
 
-            # Для admin-режима: загружаем память, стоп-слова и добавляем в промпт
+            # Для admin и agent: загружаем память + пульс сайта
             memory = {}
-            if action in ('admin', 'admin_ops'):
+            if action in ('admin', 'admin_ops', 'agent'):
                 memory = _load_ai_memory(cur)
-                memory_ctx = _build_memory_context(memory)
                 pulse_ctx = _build_pulse_context(cur)
-                sys_prompt = sys_prompt + '\n\n' + pulse_ctx + '\n\n' + memory_ctx
-                _increment_interaction(cur, conn)
+                if action in ('admin', 'admin_ops'):
+                    memory_ctx = _build_memory_context(memory)
+                    sys_prompt = sys_prompt + '\n\n' + pulse_ctx + '\n\n' + memory_ctx
+                    _increment_interaction(cur, conn)
+                else:
+                    # Для агента пульс идёт в system prompt как справка
+                    sys_prompt = sys_prompt + '\n\n' + pulse_ctx
 
             # Стоп-слова добавляем во все диалоговые режимы
             if action in ('admin', 'admin_ops', 'describe', 'reply_lead', 'seo', 'seo_listing'):
@@ -1566,19 +1566,34 @@ def handler(event, context):
 
             # Парсим JSON-ответ для агента
             if action == 'agent':
+                import re as _re
                 text = result['text'].strip()
+                # Убираем markdown-обёртку ```json ... ```
                 if text.startswith('```'):
-                    text = text.strip('`').lstrip('json').strip()
-                # Иногда модель оборачивает в текст — пытаемся вытащить JSON
+                    text = _re.sub(r'^```[a-z]*\n?', '', text).rstrip('`').strip()
+                # Пытаемся найти JSON-объект внутри текста
                 if not text.startswith('{'):
-                    import re as _re
-                    m = _re.search(r'\{.*\}', text, _re.DOTALL)
+                    m = _re.search(r'\{[\s\S]*\}', text)
                     if m:
                         text = m.group(0)
-                try:
-                    parsed = json.loads(text)
-                except Exception:
-                    parsed = {'reasoning': result['text'][:500], 'actions': []}
+                # Несколько попыток парсинга
+                parsed = None
+                for candidate in [text, text.split('\n\n')[0]]:
+                    try:
+                        parsed = json.loads(candidate)
+                        break
+                    except Exception:
+                        pass
+                if parsed is None:
+                    # Финальный фоллбэк: возвращаем reasoning из текста, actions пусты
+                    parsed = {'reasoning': result['text'][:600], 'actions': []}
+                # Валидируем actions — убираем некорректные
+                raw_actions = parsed.get('actions') or []
+                valid_actions = []
+                for a in raw_actions:
+                    if isinstance(a, dict) and a.get('type') and a.get('risk') in ('low', 'medium', 'high'):
+                        valid_actions.append(a)
+                parsed['actions'] = valid_actions[:7]
                 cur.execute(
                     f"INSERT INTO {SCHEMA}.ai_logs (user_id, action, prompt, response, tokens) "
                     f"VALUES ({user['id']}, 'agent', '{_safe(user_text, 4000)}', "
@@ -1587,7 +1602,7 @@ def handler(event, context):
                 conn.commit()
                 return _ok({
                     'reasoning': parsed.get('reasoning', ''),
-                    'actions': parsed.get('actions') or [],
+                    'actions': parsed['actions'],
                     'tokens': result.get('tokens', 0),
                 })
 
@@ -1599,21 +1614,27 @@ def handler(event, context):
             )
             conn.commit()
 
-            # Самообучение для admin: запоминаем важные факты из запроса
+            # Самообучение: запоминаем важные факты из admin-диалога
             if action == 'admin' and user_text:
-                keywords = ['зовут', 'называй', 'запомни', 'всегда', 'никогда', 'предпочит', 'любим', 'важно']
-                if any(kw in user_text.lower() for kw in keywords):
+                fact_triggers = [
+                    'зовут', 'называй', 'запомни', 'всегда', 'никогда',
+                    'предпочит', 'важно', 'наша компания', 'мы работаем',
+                    'наш сайт', 'наши клиенты', 'наш город', 'наши объекты',
+                ]
+                if any(kw in user_text.lower() for kw in fact_triggers):
                     _save_learned_fact(cur, conn, user_text[:200])
+                # Если ИИ нашёл проблему и предложил решение — тоже запоминаем
+                ai_resp = result.get('text', '')
+                if len(ai_resp) > 100 and any(w in ai_resp.lower() for w in ['проблем', 'исправ', 'рекоменд', 'предлаг']):
+                    summary = f"Вопрос: {user_text[:80]} → Ответ: {ai_resp[:120]}"
+                    _save_learned_fact(cur, conn, summary)
 
-            # Самообучение для admin_ops: сохраняем технические решения
-            # Записываем каждый завершённый диалог по администрированию (вопрос + краткий ответ ИИ)
+            # Самообучение admin_ops: сохраняем технические решения
             if action == 'admin_ops' and user_text and result.get('text'):
                 ai_answer = result['text']
-                # Сохраняем как факт (короткий)
-                fact_keywords = ['зовут', 'называй', 'запомни', 'разрешаю', 'подключи', 'настрой']
+                fact_keywords = ['зовут', 'называй', 'запомни', 'подключи', 'настрой', 'домен', 'интеграц']
                 if any(kw in user_text.lower() for kw in fact_keywords):
                     _save_learned_fact(cur, conn, user_text[:200])
-                # Всегда сохраняем техническое решение в отдельную память
                 _save_tech_decision(cur, conn, user_text, ai_answer)
 
             return _ok({'text': result['text'], 'tokens': result.get('tokens', 0)})
