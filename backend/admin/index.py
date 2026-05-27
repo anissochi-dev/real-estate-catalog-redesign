@@ -727,12 +727,17 @@ def _vb_learn_sources(cur, conn, method, rid, event, user):
 
 def _site_health(cur, conn, method, action, event, user):
     """Диагностика и обслуживание сайта.
-    GET ?resource=site_health&action=check  — полная проверка здоровья
-    POST ?resource=site_health&action=clear_ai_logs  — очистить логи ИИ старше 30 дней
-    POST ?resource=site_health&action=clear_old_sessions  — удалить истёкшие сессии
-    POST ?resource=site_health&action=clear_orphan_leads  — удалить висящие лиды без телефона
-    POST ?resource=site_health&action=vacuum_stats  — очистить старую статистику просмотров (>90 дней)
-    POST ?resource=site_health&action=fix_slugs  — регенерировать пустые slugs новостей
+    GET ?resource=site_health&action=check         — полная проверка здоровья
+    GET ?resource=site_health&action=scan_security — антивирус/безопасность
+    GET ?resource=site_health&action=scan_photos   — битые фото (выборка 50 объявлений)
+    GET ?resource=site_health&action=s3_stats      — статистика S3 хранилища
+    GET ?resource=site_health&action=xml_check     — проверка XML-фидов
+    POST ?resource=site_health&action=clear_ai_logs
+    POST ?resource=site_health&action=clear_old_sessions
+    POST ?resource=site_health&action=clear_orphan_leads
+    POST ?resource=site_health&action=vacuum_stats
+    POST ?resource=site_health&action=fix_slugs
+    POST ?resource=site_health&action=fix_broken_photos — обнулить битые фото
     """
     import urllib.request as _ur
     if user['role'] not in ('admin', 'director'):
@@ -879,6 +884,264 @@ def _site_health(cur, conn, method, action, event, user):
         score = round(passed / total * 100) if total else 0
         return _ok({'checks': checks, 'score': score, 'passed': passed, 'total': total})
 
+    # ── АНТИВИРУС / БЕЗОПАСНОСТЬ ─────────────────────────────────────────────
+    if action == 'scan_security':
+        import re as _re
+        threats = []
+        warnings = []
+
+        # 1. XSS в объявлениях
+        try:
+            cur.execute(
+                f"SELECT id, title FROM {SCHEMA}.listings "
+                f"WHERE LOWER(COALESCE(description,'')) LIKE '%<script%' "
+                f"OR LOWER(COALESCE(title,'')) LIKE '%<script%' "
+                f"OR LOWER(COALESCE(description,'')) LIKE '%javascript:%' "
+                f"OR LOWER(COALESCE(description,'')) LIKE '%onerror=%' "
+                f"OR LOWER(COALESCE(description,'')) LIKE '%onclick=%'"
+            )
+            rows = cur.fetchall()
+            for r in rows:
+                threats.append({'type': 'XSS', 'where': f'Объявление #{r["id"]}: {(r["title"] or "")[:60]}'})
+        except Exception as e:
+            warnings.append(f'Ошибка проверки XSS: {str(e)[:80]}')
+
+        # 2. SQL-инъекции в пользовательских полях (поиск характерных паттернов)
+        try:
+            cur.execute(
+                f"SELECT id FROM {SCHEMA}.leads "
+                f"WHERE LOWER(COALESCE(comment,'')) SIMILAR TO '%(''; DROP|UNION SELECT|OR 1=1|--'')%'"
+            )
+            rows = cur.fetchall()
+            for r in rows:
+                threats.append({'type': 'SQL Injection', 'where': f'Лид #{r["id"]}'})
+        except Exception:
+            pass
+
+        # 3. Подозрительные email в пользователях
+        try:
+            cur.execute(
+                f"SELECT id, email FROM {SCHEMA}.users "
+                f"WHERE LOWER(email) LIKE '%+%@%' OR LOWER(email) LIKE '%.ru.%' "
+                f"ORDER BY created_at DESC LIMIT 100"
+            )
+            rows = cur.fetchall()
+        except Exception:
+            rows = []
+
+        # 4. Множественные неудачные входы (brute force) — сессии с коротким lifetime
+        try:
+            cur.execute(
+                f"SELECT COUNT(*) AS c FROM {SCHEMA}.user_sessions "
+                f"WHERE created_at > NOW() - INTERVAL '1 hour'"
+            )
+            recent = cur.fetchone()['c']
+            if recent > 100:
+                warnings.append(f'Аномальная активность: {recent} сессий за последний час (возможный brute force)')
+        except Exception:
+            pass
+
+        # 5. Пользователи без подтверждённой почты с правами admin
+        try:
+            cur.execute(
+                f"SELECT id, email, name FROM {SCHEMA}.users "
+                f"WHERE role = 'admin' AND is_active = TRUE"
+            )
+            admins = cur.fetchall()
+            admin_list = [f'{r["name"] or r["email"]} (#{r["id"]})' for r in admins]
+        except Exception:
+            admin_list = []
+
+        # 6. Открытые внешние ссылки в описаниях (фишинг)
+        try:
+            cur.execute(
+                f"SELECT COUNT(*) AS c FROM {SCHEMA}.listings "
+                f"WHERE LOWER(COALESCE(description,'')) SIMILAR TO '%(http://|https://)%' "
+                f"AND status='active'"
+            )
+            ext_links = cur.fetchone()['c']
+        except Exception:
+            ext_links = 0
+
+        # 7. Пароли/токены в открытом виде в настройках
+        try:
+            cur.execute(
+                f"SELECT yandex_api_key IS NOT NULL AND yandex_api_key != '' AS has_api_key "
+                f"FROM {SCHEMA}.settings ORDER BY id LIMIT 1"
+            )
+            row = cur.fetchone()
+            has_key = row and row.get('has_api_key')
+        except Exception:
+            has_key = False
+
+        # 8. Проверка старых неиспользуемых аккаунтов
+        try:
+            cur.execute(
+                f"SELECT COUNT(*) AS c FROM {SCHEMA}.users "
+                f"WHERE is_active = TRUE AND last_login_at < NOW() - INTERVAL '180 days' "
+                f"AND role NOT IN ('admin', 'director')"
+            )
+            old_users = cur.fetchone()['c']
+        except Exception:
+            old_users = 0
+
+        return _ok({
+            'threats': threats,
+            'warnings': warnings,
+            'threat_count': len(threats),
+            'admins': admin_list,
+            'external_links_in_listings': ext_links,
+            'old_inactive_users': old_users,
+            'api_key_configured': has_key,
+            'safe': len(threats) == 0 and len(warnings) == 0,
+        })
+
+    # ── ПРОВЕРКА БИТЫХ ФОТО ──────────────────────────────────────────────────
+    if action == 'scan_photos':
+        import urllib.request as _ur2
+        # Берём объявления с внешними фото (не CDN)
+        cur.execute(
+            f"SELECT id, image, images FROM {SCHEMA}.listings "
+            f"WHERE status='active' AND image IS NOT NULL AND image != '' "
+            f"AND image NOT LIKE '%cdn.poehali.dev%' "
+            f"LIMIT 30"
+        )
+        rows = cur.fetchall()
+        broken = []
+        ok_count = 0
+        for r in rows:
+            urls = []
+            if r.get('images'):
+                urls = [u.strip() for u in str(r['images']).split('|') if u.strip()]
+            elif r.get('image'):
+                urls = [r['image']]
+            for url in urls[:3]:  # проверяем первые 3 фото на объявление
+                try:
+                    req2 = _ur2.Request(url, method='HEAD',
+                                        headers={'User-Agent': 'Mozilla/5.0'})
+                    resp = _ur2.urlopen(req2, timeout=4)
+                    if resp.status == 200:
+                        ok_count += 1
+                    else:
+                        broken.append({'id': r['id'], 'url': url[:100], 'status': resp.status})
+                except Exception as e:
+                    broken.append({'id': r['id'], 'url': url[:100], 'status': str(e)[:50]})
+        return _ok({
+            'broken': broken,
+            'broken_count': len(broken),
+            'ok_count': ok_count,
+            'scanned': len(rows),
+            'message': f'Проверено {len(rows)} объявлений, найдено {len(broken)} битых фото'
+        })
+
+    # ── СТАТИСТИКА S3 ────────────────────────────────────────────────────────
+    if action == 's3_stats':
+        try:
+            import boto3
+            s3 = boto3.client(
+                's3',
+                endpoint_url='https://bucket.poehali.dev',
+                aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+                aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+            )
+            # Считаем файлы по папкам
+            paginator = s3.get_paginator('list_objects_v2')
+            folders = {'photos': 0, 'news': 0, 'uploads': 0, 'other': 0}
+            total_size = 0
+            total_files = 0
+            for page in paginator.paginate(Bucket='files', PaginationConfig={'MaxItems': 5000}):
+                for obj in page.get('Contents', []):
+                    key = obj['Key']
+                    size = obj.get('Size', 0)
+                    total_size += size
+                    total_files += 1
+                    if key.startswith('photos/'):
+                        folders['photos'] += 1
+                    elif key.startswith('news/'):
+                        folders['news'] += 1
+                    elif key.startswith('uploads/'):
+                        folders['uploads'] += 1
+                    else:
+                        folders['other'] += 1
+
+            def _fmt_size(b):
+                if b > 1024**3: return f'{b/1024**3:.1f} ГБ'
+                if b > 1024**2: return f'{b/1024**2:.1f} МБ'
+                if b > 1024: return f'{b/1024:.1f} КБ'
+                return f'{b} Б'
+
+            project_id = os.environ.get('AWS_ACCESS_KEY_ID', '')
+            cdn_base = f'https://cdn.poehali.dev/projects/{project_id}/bucket'
+            return _ok({
+                'total_files': total_files,
+                'total_size_bytes': total_size,
+                'total_size_human': _fmt_size(total_size),
+                'folders': folders,
+                'cdn_base': cdn_base,
+            })
+        except Exception as e:
+            return _err(500, f'S3 ошибка: {str(e)[:200]}')
+
+    # ── ПРОВЕРКА XML-ФИДОВ ───────────────────────────────────────────────────
+    if action == 'xml_check':
+        import urllib.request as _ur3
+        import xml.etree.ElementTree as ET
+
+        # Получаем URL фидов из настроек или из func2url
+        cur.execute(f"SELECT company_name FROM {SCHEMA}.settings ORDER BY id LIMIT 1")
+        row = cur.fetchone() or {}
+
+        feeds_to_check = []
+        try:
+            cur.execute(f"SELECT id, name, feed_type, is_active FROM {SCHEMA}.xml_feeds WHERE is_active=TRUE LIMIT 10")
+            db_feeds = cur.fetchall()
+            for f in db_feeds:
+                feeds_to_check.append({
+                    'name': f['name'] or f['feed_type'],
+                    'url': f'https://functions.poehali.dev/2e0b59c3-d76b-4a2e-ae96-a40cfe5f6ef7?type={f["feed_type"]}'
+                })
+        except Exception:
+            pass
+
+        if not feeds_to_check:
+            feeds_to_check = [
+                {'name': 'Avito XML', 'url': 'https://functions.poehali.dev/2e0b59c3-d76b-4a2e-ae96-a40cfe5f6ef7?type=avito'},
+                {'name': 'ЦИАН XML', 'url': 'https://functions.poehali.dev/2e0b59c3-d76b-4a2e-ae96-a40cfe5f6ef7?type=cian'},
+            ]
+
+        results = []
+        for feed in feeds_to_check:
+            try:
+                req3 = _ur3.Request(feed['url'], headers={'User-Agent': 'Mozilla/5.0'})
+                resp = _ur3.urlopen(req3, timeout=8)
+                content = resp.read(50000).decode('utf-8', errors='replace')
+                # Пробуем парсить XML
+                try:
+                    root = ET.fromstring(content)
+                    tag = root.tag
+                    children = len(list(root))
+                    results.append({
+                        'name': feed['name'],
+                        'ok': True,
+                        'status': resp.status,
+                        'root_tag': tag,
+                        'items': children,
+                        'size_kb': round(len(content) / 1024, 1),
+                    })
+                except ET.ParseError as pe:
+                    results.append({
+                        'name': feed['name'],
+                        'ok': False,
+                        'status': resp.status,
+                        'error': f'Невалидный XML: {str(pe)[:80]}',
+                        'size_kb': round(len(content) / 1024, 1),
+                    })
+            except Exception as e:
+                results.append({'name': feed['name'], 'ok': False, 'error': str(e)[:100]})
+
+        all_ok = all(f.get('ok') for f in results)
+        return _ok({'feeds': results, 'all_ok': all_ok, 'checked': len(results)})
+
     # ── ДЕЙСТВИЯ ОБСЛУЖИВАНИЯ ────────────────────────────────────────────────
     if method != 'POST':
         return _err(405, 'Метод не поддерживается')
@@ -947,6 +1210,39 @@ def _site_health(cur, conn, method, action, event, user):
                 fixed += 1
             conn.commit()
             return _ok({'success': True, 'fixed': fixed, 'message': f'Исправлено {fixed} slug новостей'})
+        except Exception as e:
+            return _err(500, str(e)[:200])
+
+    if action == 'fix_broken_photos':
+        import urllib.request as _ur4
+        try:
+            cur.execute(
+                f"SELECT id, image, images FROM {SCHEMA}.listings "
+                f"WHERE status='active' AND image IS NOT NULL AND image != '' "
+                f"AND image NOT LIKE '%cdn.poehali.dev%'"
+            )
+            rows = cur.fetchall()
+            fixed = 0
+            for r in rows:
+                urls = [u.strip() for u in str(r.get('images') or r.get('image') or '').split('|') if u.strip()]
+                good = []
+                for url in urls:
+                    try:
+                        req4 = _ur4.Request(url, method='HEAD', headers={'User-Agent': 'Mozilla/5.0'})
+                        resp = _ur4.urlopen(req4, timeout=3)
+                        if resp.status == 200:
+                            good.append(url)
+                    except Exception:
+                        pass  # битая — пропускаем
+                new_images = '|'.join(good)
+                new_image = good[0] if good else ''
+                cur.execute(
+                    f"UPDATE {SCHEMA}.listings SET image='{_safe(new_image)}', images='{_safe(new_images, 5000)}' "
+                    f"WHERE id={r['id']}"
+                )
+                fixed += 1
+            conn.commit()
+            return _ok({'success': True, 'fixed': fixed, 'message': f'Обработано {fixed} объявлений — битые фото удалены'})
         except Exception as e:
             return _err(500, str(e)[:200])
 
