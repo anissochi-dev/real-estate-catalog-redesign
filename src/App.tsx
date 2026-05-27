@@ -258,9 +258,14 @@ export default function App() {
         document.head.appendChild(link);
       }
       if (total > 8) {
-        fetchListings()
+        const loadAll = () => fetchListings()
           .then(({ listings: all }) => { setProperties(all); setAllLoaded(true); })
           .catch(() => setAllLoaded(true));
+        if (document.readyState === 'complete') {
+          loadAll();
+        } else {
+          window.addEventListener('load', loadAll, { once: true });
+        }
       } else {
         setAllLoaded(true);
       }
