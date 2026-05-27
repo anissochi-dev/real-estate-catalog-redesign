@@ -106,6 +106,68 @@
 
     <!-- HMR/fetch перехват ОТКЛЮЧЁН — раньше ломал нативный fetch. Vite сам справится. -->
 
+    <!-- Авто-восстановление при ошибке загрузки модуля (устаревший кеш браузера после деплоя) -->
+    <script>
+      (function() {
+        var RELOAD_KEY = '__chunk_reload_at__';
+        var CLEAR_KEY = '__chunk_cache_cleared__';
+
+        function isChunkError(msg) {
+          msg = String(msg || '');
+          return /Failed to fetch dynamically imported module|Loading chunk|ChunkLoadError|Importing a module script failed|error loading dynamically imported module/i.test(msg);
+        }
+
+        async function clearAllCaches() {
+          try {
+            if ('caches' in window) {
+              var keys = await caches.keys();
+              await Promise.all(keys.map(function(k){ return caches.delete(k); }));
+            }
+          } catch(e) {}
+          try {
+            if ('serviceWorker' in navigator) {
+              var regs = await navigator.serviceWorker.getRegistrations();
+              await Promise.all(regs.map(function(r){ return r.unregister(); }));
+            }
+          } catch(e) {}
+        }
+
+        function recover() {
+          try {
+            var last = Number(sessionStorage.getItem(RELOAD_KEY) || '0');
+            if (Date.now() - last < 15000) return;
+            sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
+          } catch(e) {}
+
+          var alreadyCleared = false;
+          try { alreadyCleared = sessionStorage.getItem(CLEAR_KEY) === '1'; } catch(e) {}
+
+          if (!alreadyCleared) {
+            try { sessionStorage.setItem(CLEAR_KEY, '1'); } catch(e) {}
+            clearAllCaches().finally(function(){
+              var url = new URL(window.location.href);
+              url.searchParams.set('_cb', String(Date.now()));
+              window.location.replace(url.toString());
+            });
+          } else {
+            try { sessionStorage.removeItem(CLEAR_KEY); } catch(e) {}
+            var url = new URL(window.location.href);
+            url.searchParams.set('_cb', String(Date.now()));
+            window.location.replace(url.toString());
+          }
+        }
+
+        window.addEventListener('error', function(e) {
+          if (isChunkError(e && (e.message || (e.error && e.error.message)))) recover();
+        });
+        window.addEventListener('unhandledrejection', function(e) {
+          var reason = e && e.reason;
+          var msg = reason && (reason.message || reason.toString && reason.toString());
+          if (isChunkError(msg)) recover();
+        });
+      })();
+    </script>
+
     <!-- OG Preview: redirect social bots to server-side og-tags -->
     <script>
       (function() {
