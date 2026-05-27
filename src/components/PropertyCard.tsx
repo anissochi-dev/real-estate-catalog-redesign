@@ -192,6 +192,7 @@ export default function PropertyCard({
                 alt={property.title}
                 width={400}
                 height={300}
+                sizes="(max-width: 640px) calc(100vw - 32px), (max-width: 768px) calc(50vw - 24px), (max-width: 1024px) calc(33vw - 24px), 300px"
                 loading={index < 4 && i === 0 ? 'eager' : 'lazy'}
                 fetchpriority={index === 0 && i === 0 ? 'high' : index < 4 && i === 0 ? 'auto' : 'low'}
                 decoding={index === 0 && i === 0 ? 'sync' : 'async'}
