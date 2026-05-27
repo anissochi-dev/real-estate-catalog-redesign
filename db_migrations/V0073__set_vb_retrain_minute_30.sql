@@ -1,0 +1,1 @@
+UPDATE t_p71821556_real_estate_catalog_.settings SET vb_retrain_minute = 30 WHERE id = (SELECT id FROM t_p71821556_real_estate_catalog_.settings ORDER BY id LIMIT 1);

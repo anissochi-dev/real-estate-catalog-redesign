@@ -420,57 +420,81 @@ def handler(event: dict, context) -> dict:
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
 
-            # ── КРОН-ПИНГ (без авторизации) ─────────────────────────────
+            # ── КРОН-ПИНГ (без авторизации, вызывается каждый час) ──────
             if action == 'ping_cron':
+                now_utc = datetime.now(timezone.utc)
+                result = {'hour': now_utc.hour, 'minute': now_utc.minute}
+
+                # ── Автогенерация новостей ────────────────────────────────
                 cur.execute(f"SELECT * FROM {SCHEMA}.news_schedule ORDER BY id LIMIT 1")
                 sch = cur.fetchone()
-                if not sch or not sch.get('is_enabled'):
-                    return _ok({'skipped': True, 'reason': 'schedule disabled'})
-                now_utc = datetime.now(timezone.utc)
-                run_hour = sch.get('run_hour', 9)
-                run_minute = sch.get('run_minute', 0)
-                if now_utc.hour != run_hour or now_utc.minute < run_minute:
-                    return _ok({'skipped': True, 'reason': 'not time yet', 'current_hour': now_utc.hour, 'current_minute': now_utc.minute})
-                last_run = sch.get('last_run_at')
-                if last_run and (now_utc - last_run).total_seconds() < 3600 * 20:
-                    return _ok({'skipped': True, 'reason': 'already ran today'})
+                news_generated = 0
+                if sch and sch.get('is_enabled'):
+                    run_hour = sch.get('run_hour', 9)
+                    run_minute = sch.get('run_minute', 0)
+                    last_run = sch.get('last_run_at')
+                    time_ok = (now_utc.hour == run_hour and now_utc.minute >= run_minute)
+                    already_ran = last_run and (now_utc - last_run).total_seconds() < 3600 * 20
+                    if time_ok and not already_ran:
+                        api_key, folder_id = _load_gpt_keys(cur)
+                        logo_url = _load_logo_url(cur)
+                        key_rate = _fetch_cbr_key_rate()
+                        import random
+                        count = int(sch.get('articles_per_run', 3))
+                        # Берём темы из расписания если заданы, иначе из AUTO_TOPICS
+                        custom_topics_raw = (sch.get('topics') or '').strip()
+                        if custom_topics_raw:
+                            pool = [t.strip() for t in custom_topics_raw.splitlines() if t.strip()]
+                        else:
+                            pool = AUTO_TOPICS
+                        topics = random.sample(pool, min(count, len(pool)))
+                        for topic in topics:
+                            article, err = _gpt(api_key, folder_id, topic, key_rate=key_rate)
+                            if article:
+                                _save_article(cur, conn, article, True, auto_publish=True, logo_url=logo_url, key_rate=key_rate)
+                                news_generated += 1
+                        ts = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')
+                        cur.execute(
+                            f"UPDATE {SCHEMA}.news_schedule SET last_run_at = '{ts}', "
+                            f"last_run_count = {news_generated}, updated_at = '{ts}' WHERE id = {sch['id']}"
+                        )
+                        conn.commit()
+                result['news_generated'] = news_generated
 
-                # Запускаем автогенерацию с картинками и автопубликацией
-                api_key, folder_id = _load_gpt_keys(cur)
-                logo_url = _load_logo_url(cur)
-                key_rate = _fetch_cbr_key_rate()
-                import random
-                count = int(sch.get('articles_per_run', 3))
-                topics = random.sample(AUTO_TOPICS, min(count, len(AUTO_TOPICS)))
-                generated = 0
-                for topic in topics:
-                    article, err = _gpt(api_key, folder_id, topic, key_rate=key_rate)
-                    if article:
-                        _save_article(cur, conn, article, True, auto_publish=True, logo_url=logo_url, key_rate=key_rate)
-                        generated += 1
-                ts = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')
-                cur.execute(
-                    f"UPDATE {SCHEMA}.news_schedule SET last_run_at = '{ts}', "
-                    f"last_run_count = {generated}, updated_at = '{ts}' WHERE id = {sch['id']}"
-                )
-                conn.commit()
-
-                # Запускаем переобучение ВБ если настроено (fire-and-forget)
+                # ── Автопереобучение ВБ (независимо от новостей) ─────────
+                vb_retrained = False
                 try:
                     cur.execute(
-                        f"SELECT vb_retrain_enabled FROM {SCHEMA}.settings ORDER BY id LIMIT 1"
+                        f"SELECT vb_retrain_enabled, vb_retrain_hour, vb_retrain_minute, "
+                        f"vb_retrain_last_at, vb_retrain_last_status "
+                        f"FROM {SCHEMA}.settings ORDER BY id LIMIT 1"
                     )
-                    vb_row = cur.fetchone()
-                    if vb_row and vb_row.get('vb_retrain_enabled'):
-                        retrain_req = urllib.request.Request(
-                            'https://functions.poehali.dev/e2f1d357-fb83-4fbb-8d8b-6fb063357afc?action=cron',
-                            method='GET',
-                        )
-                        urllib.request.urlopen(retrain_req, timeout=5)
-                except Exception:
-                    pass
+                    vb = cur.fetchone()
+                    if vb and vb.get('vb_retrain_enabled'):
+                        vb_hour = int(vb.get('vb_retrain_hour') or 3)
+                        vb_minute = int(vb.get('vb_retrain_minute') or 0)
+                        vb_last = vb.get('vb_retrain_last_at')
+                        status_raw = vb.get('vb_retrain_last_status') or ''
+                        in_progress = '"in_progress": true' in str(status_raw) or '"in_progress":true' in str(status_raw)
+                        vb_time_ok = (now_utc.hour == vb_hour and abs(now_utc.minute - vb_minute) <= 30)
+                        vb_done_today = vb_last and hasattr(vb_last, 'date') and vb_last.date() >= now_utc.date()
+                        # Запускаем: либо пришло время, либо уже идёт (in_progress)
+                        if (vb_time_ok and not vb_done_today) or in_progress:
+                            try:
+                                urllib.request.urlopen(
+                                    urllib.request.Request(
+                                        'https://functions.poehali.dev/e2f1d357-fb83-4fbb-8d8b-6fb063357afc?action=cron',
+                                        method='GET',
+                                    ), timeout=25
+                                )
+                            except Exception:
+                                pass
+                            vb_retrained = True
+                except Exception as e:
+                    result['vb_retrain_error'] = str(e)[:100]
 
-                return _ok({'generated': generated, 'topics': topics})
+                result['vb_retrain_triggered'] = vb_retrained
+                return _ok(result)
 
             # ── ПУБЛИЧНЫЙ СПИСОК ─────────────────────────────────────────
             if action == 'list' and method == 'GET':

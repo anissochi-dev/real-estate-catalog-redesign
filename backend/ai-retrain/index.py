@@ -71,41 +71,121 @@ def handler(event: dict, context) -> dict:
 
 
 def _cron_check(cur, conn) -> dict:
-    """Проверяет расписание и запускает переобучение если пора."""
+    """Обрабатывает ОДИН источник за вызов (укладывается в 30 сек таймаут).
+    Прогресс сохраняется в vb_retrain_last_status.
+    Каждый последующий cron-вызов берёт следующий источник по очереди.
+    Когда все источники обработаны — выставляет vb_retrain_last_at = today."""
+    import datetime
+
     cur.execute(
         f"SELECT vb_retrain_enabled, vb_retrain_hour, vb_retrain_minute, vb_retrain_sources, "
-        f"vb_retrain_last_at FROM {SCHEMA}.settings ORDER BY id LIMIT 1"
+        f"vb_retrain_last_at, vb_retrain_last_status "
+        f"FROM {SCHEMA}.settings ORDER BY id LIMIT 1"
     )
     s = cur.fetchone()
     if not s or not s.get('vb_retrain_enabled'):
         return _ok({'skipped': True, 'reason': 'disabled'})
 
-    import datetime
     now = datetime.datetime.utcnow()
     target_hour = int(s.get('vb_retrain_hour') or 3)
     target_minute = int(s.get('vb_retrain_minute') or 0)
     last_at = s.get('vb_retrain_last_at')
 
-    # Запускаем если: сейчас нужный час И минута попадает в 5-минутное окно
-    if now.hour != target_hour:
-        return _ok({'skipped': True, 'reason': f'not time yet, target={target_hour:02d}:{target_minute:02d} UTC, now={now.hour:02d}:{now.minute:02d} UTC'})
-    if abs(now.minute - target_minute) > 5:
-        return _ok({'skipped': True, 'reason': f'minute mismatch, target={target_minute}, now={now.minute}'})
+    # Проверяем: либо сейчас время старта, либо уже идёт обработка (in_progress)
+    status_raw = s.get('vb_retrain_last_status') or ''
+    in_progress = '"in_progress":true' in str(status_raw)
 
-    if last_at:
-        last_date = last_at.date() if hasattr(last_at, 'date') else None
-        if last_date and last_date >= now.date():
-            return _ok({'skipped': True, 'reason': 'already run today'})
+    if not in_progress:
+        # Не начато — проверяем что пора запускать
+        if now.hour != target_hour:
+            return _ok({'skipped': True, 'reason': f'not time, target={target_hour:02d}:{target_minute:02d}, now={now.hour:02d}:{now.minute:02d}'})
+        if abs(now.minute - target_minute) > 30:  # широкое окно — 30 минут
+            return _ok({'skipped': True, 'reason': f'minute out of window, target={target_minute}, now={now.minute}'})
+        if last_at:
+            last_date = last_at.date() if hasattr(last_at, 'date') else None
+            if last_date and last_date >= now.date():
+                return _ok({'skipped': True, 'reason': 'already done today'})
 
+    # Определяем список источников
     sources_raw = s.get('vb_retrain_sources') or []
     if isinstance(sources_raw, str):
         try:
             sources_raw = json.loads(sources_raw)
         except Exception:
             sources_raw = ['news', 'listings', 'invest', 'demand', 'terms', 'market_prices']
+    if not sources_raw:
+        sources_raw = ['news', 'listings', 'invest', 'demand', 'terms', 'market_prices']
 
-    result = _run_retrain(cur, conn, sources_raw)
-    return _ok({'auto': True, **result})
+    # Читаем прогресс из last_status
+    progress = {}
+    if status_raw and '{' in str(status_raw):
+        try:
+            progress = json.loads(status_raw) if isinstance(status_raw, str) else (status_raw or {})
+        except Exception:
+            progress = {}
+
+    done_sources = progress.get('done_sources') or []
+    total_saved_so_far = int(progress.get('total_saved') or 0)
+
+    # Берём следующий не обработанный источник
+    remaining = [src for src in sources_raw if src not in done_sources]
+    if not remaining:
+        # Все источники обработаны — финализируем
+        cur.execute(
+            f"UPDATE {SCHEMA}.settings SET "
+            f"vb_retrain_last_at = NOW(), "
+            f"vb_retrain_last_status = '{_esc(json.dumps({'done': True, 'in_progress': False, 'total_saved': total_saved_so_far, 'done_sources': done_sources}, ensure_ascii=False))}', "
+            f"vb_retrain_last_saved = {total_saved_so_far} "
+            f"WHERE id = (SELECT id FROM {SCHEMA}.settings ORDER BY id LIMIT 1)"
+        )
+        conn.commit()
+        return _ok({'auto': True, 'done': True, 'total_saved': total_saved_so_far})
+
+    src = remaining[0]
+
+    # Загружаем ключи GPT
+    cur.execute(f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings ORDER BY id LIMIT 1")
+    keys = cur.fetchone() or {}
+    api_key = keys.get('yandex_api_key') or os.environ.get('YANDEX_API_KEY', '')
+    folder_id = keys.get('yandex_folder_id') or os.environ.get('YANDEX_FOLDER_ID', '')
+    if not api_key or not folder_id:
+        return _ok({'skipped': True, 'reason': 'YandexGPT not configured'})
+
+    # Обрабатываем один источник
+    try:
+        saved, input_count, error = _process_source(cur, src, api_key, folder_id)
+        conn.commit()
+    except Exception as e:
+        saved, input_count, error = 0, 0, str(e)
+
+    done_sources.append(src)
+    total_saved_so_far += saved
+    new_remaining = [x for x in sources_raw if x not in done_sources]
+
+    new_progress = {
+        'in_progress': len(new_remaining) > 0,
+        'done_sources': done_sources,
+        'total_saved': total_saved_so_far,
+        'last_source': src,
+        'last_saved': saved,
+        'last_error': error,
+    }
+
+    cur.execute(
+        f"UPDATE {SCHEMA}.settings SET "
+        f"vb_retrain_last_status = '{_esc(json.dumps(new_progress, ensure_ascii=False))}' "
+        f"WHERE id = (SELECT id FROM {SCHEMA}.settings ORDER BY id LIMIT 1)"
+    )
+    conn.commit()
+
+    return _ok({
+        'auto': True,
+        'source': src,
+        'saved': saved,
+        'error': error,
+        'remaining': new_remaining,
+        'total_saved': total_saved_so_far,
+    })
 
 
 def _get_status(cur) -> dict:
