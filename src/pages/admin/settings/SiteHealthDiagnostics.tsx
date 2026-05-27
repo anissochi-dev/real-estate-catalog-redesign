@@ -15,19 +15,24 @@ const VIEW_LABELS: Record<string, string> = {
 };
 
 const FIX_LABELS: Record<string, string> = {
-  clear_orphan_leads: 'Удалить',
-  clear_old_sessions: 'Очистить',
-  clear_ai_logs:      'Очистить',
-  fix_seo_titles:     'Проставить SEO',
-  open_settings:      'Перейти',
-  ai_fix_settings:    'Заполнить через ИИ',
+  clear_orphan_leads:   'Удалить',
+  clear_old_sessions:   'Очистить',
+  clear_ai_logs:        'Очистить',
+  fix_seo_titles:       'Проставить SEO',
+  open_settings:        'Перейти',
+  ai_fix_settings:      'Заполнить через ИИ',
+  ai_fix_descriptions:  'Написать через ИИ',
+  fix_duplicates:       'Убрать дубли',
 };
+
+const FIX_AI_ACTIONS = new Set(['ai_fix_settings', 'ai_fix_descriptions']);
 
 const FIX_CONFIRMS: Record<string, string> = {
   clear_orphan_leads: 'Удалить заявки без телефона старше 7 дней?',
   clear_old_sessions: 'Удалить все истёкшие сессии?',
   clear_ai_logs:      'Очистить логи ИИ старше 30 дней?',
   fix_seo_titles:     'Автоматически проставить SEO-заголовки из названий объявлений?',
+  fix_duplicates:     'Оставить первое объявление в каждой группе, остальные убрать в архив?',
 };
 
 // ── Интерфейс ответа настроек ─────────────────────────────────────────────────
@@ -231,24 +236,20 @@ export function HealthSection({ health, healthLoading, loadHealth }: HealthSecti
   };
 
   const handleFix = async (fixAction: string) => {
-    if (fixAction === 'ai_fix_settings') {
-      await handleAiFix();
-      return;
-    }
+    if (fixAction === 'ai_fix_settings') { await handleAiFix(); return; }
+    if (fixAction === 'open_settings') { toast.info('Перейдите в раздел «Настройки сайта»'); return; }
     const confirmMsg = FIX_CONFIRMS[fixAction];
     if (confirmMsg && !confirm(confirmMsg)) return;
-    if (fixAction === 'open_settings') {
-      toast.info('Перейдите в раздел «Настройки сайта»');
-      return;
-    }
-    setLoadingAction(fixAction);
+
+    const isAi = FIX_AI_ACTIONS.has(fixAction);
+    if (isAi) setAiFilling(true); else setLoadingAction(fixAction);
     try {
       const d = await req(`site_health&action=${fixAction}`, { method: 'POST', body: '{}' });
       if (d.error) { toast.error(d.error); return; }
       toast.success(d.message || 'Исправлено');
       loadHealth();
     } catch { toast.error('Ошибка'); }
-    finally { setLoadingAction(null); }
+    finally { if (isAi) setAiFilling(false); else setLoadingAction(null); }
   };
 
   return (
@@ -296,9 +297,9 @@ export function HealthSection({ health, healthLoading, loadHealth }: HealthSecti
             {/* Список проверок */}
             <div className="grid gap-2">
               {health.checks.map((c, i) => {
-                const isFixLoading = loadingAction === c.fix_action || (c.fix_action === 'ai_fix_settings' && aiFilling);
+                const isAiFix = !!c.fix_action && FIX_AI_ACTIONS.has(c.fix_action);
+                const isFixLoading = isAiFix ? aiFilling : loadingAction === c.fix_action;
                 const isViewLoading = loadingAction === c.view_action;
-                const isAiFix = c.fix_action === 'ai_fix_settings';
                 return (
                   <div key={i} className={`flex items-start gap-3 px-4 py-3 rounded-xl border text-sm ${c.ok ? 'bg-emerald-50/60 border-emerald-200' : 'bg-red-50/60 border-red-200'}`}>
                     <Icon name={c.ok ? 'CheckCircle2' : 'AlertCircle'} size={16}

@@ -768,6 +768,7 @@ def _site_health(cur, conn, method, action, event, user):
             n = cur.fetchone()['c']
             _chk('Объявления с описанием', n == 0,
                  f'{n} активных без описания' if n else 'Все заполнены',
+                 fix_action='ai_fix_descriptions' if n else None,
                  view_action='view_listings_no_desc' if n else None)
         except Exception as e:
             _chk('Объявления с описанием', False, str(e)[:80])
@@ -841,6 +842,7 @@ def _site_health(cur, conn, method, action, event, user):
             n = cur.fetchone()['c']
             _chk('Дубли объявлений', n == 0,
                  f'{n} групп дублей' if n else 'Дублей нет',
+                 fix_action='fix_duplicates' if n else None,
                  view_action='view_duplicates' if n else None)
         except Exception as e:
             _chk('Дубли объявлений', False, str(e)[:80])
@@ -1499,6 +1501,95 @@ def _site_health(cur, conn, method, action, event, user):
                 'applied': applied,
                 'message': f'ИИ заполнил {len(applied)} полей: {", ".join(applied.keys())}' if applied else 'ИИ не нашёл что заполнять — все поля уже заполнены'
             })
+        except Exception as e:
+            return _err(500, str(e)[:300])
+
+    # ── FIX: дубли — деактивируем все кроме первого в каждой группе ──────────
+    if action == 'fix_duplicates':
+        try:
+            cur.execute(
+                f"SELECT title, price, ARRAY_AGG(id ORDER BY id) AS ids "
+                f"FROM {SCHEMA}.listings "
+                f"WHERE status='active' AND title IS NOT NULL AND title != '' "
+                f"GROUP BY title, price HAVING COUNT(*) > 1"
+            )
+            groups = cur.fetchall()
+            deactivated = []
+            for g in groups:
+                # Оставляем первый (минимальный id), остальные → archived
+                to_deactivate = g['ids'][1:]
+                for lid in to_deactivate:
+                    cur.execute(
+                        f"UPDATE {SCHEMA}.listings SET status='archived' WHERE id={int(lid)}"
+                    )
+                    deactivated.append(lid)
+            conn.commit()
+            return _ok({
+                'success': True,
+                'deactivated': deactivated,
+                'message': f'Убрано {len(deactivated)} дублей из {len(groups)} групп — оставлен первый экземпляр каждого'
+            })
+        except Exception as e:
+            return _err(500, str(e)[:200])
+
+    # ── FIX: описания — ИИ генерирует текст для пустых объявлений ────────────
+    if action == 'ai_fix_descriptions':
+        import urllib.request as _ur3
+        _hdrs = event.get('headers') or {}
+        token = (_hdrs.get('X-Auth-Token') or _hdrs.get('x-auth-token') or
+                 (event.get('queryStringParameters') or {}).get('auth_token') or '')
+        try:
+            cur.execute(
+                f"SELECT id, title, price, address, area FROM {SCHEMA}.listings "
+                f"WHERE status='active' AND COALESCE(LENGTH(description),0) < 30 "
+                f"LIMIT 20"
+            )
+            rows = cur.fetchall()
+            fixed = 0
+            errors = []
+            ai_url = 'https://functions.poehali.dev/34bfc4a2-89b9-4c89-bcbc-d82314730aef'
+            for r in rows:
+                parts = []
+                if r.get('title'): parts.append(f"Название: {r['title']}")
+                if r.get('price'): parts.append(f"Цена: {r['price']} руб.")
+                if r.get('address'): parts.append(f"Адрес: {r['address']}")
+                if r.get('area'): parts.append(f"Площадь: {r['area']} кв.м.")
+                if not parts:
+                    parts.append(f"Коммерческая недвижимость, ID {r['id']}")
+                prompt_text = (
+                    "Напиши продающее описание объекта недвижимости (4-6 предложений). "
+                    "Только текст, без заголовков и списков. "
+                    "Данные объекта:\n" + '\n'.join(parts)
+                )
+                ai_body = json.dumps({
+                    'action': 'describe',
+                    'prompt': prompt_text,
+                    'context_data': {}
+                }).encode()
+                ai_req = _ur3.Request(
+                    ai_url, data=ai_body,
+                    headers={'Content-Type': 'application/json', 'X-Auth-Token': token},
+                    method='POST'
+                )
+                try:
+                    with _ur3.urlopen(ai_req, timeout=30) as resp:
+                        ai_raw = json.loads(resp.read().decode())
+                    desc = (ai_raw.get('text') or '').strip()
+                    if desc and len(desc) >= 30:
+                        cur.execute(
+                            f"UPDATE {SCHEMA}.listings SET description='{_safe(desc, 3000)}' "
+                            f"WHERE id={int(r['id'])}"
+                        )
+                        fixed += 1
+                    else:
+                        errors.append(r['id'])
+                except Exception as ex:
+                    errors.append(r['id'])
+            conn.commit()
+            msg = f'ИИ написал описание для {fixed} объявлений'
+            if errors:
+                msg += f', не удалось: {len(errors)} шт.'
+            return _ok({'success': True, 'fixed': fixed, 'errors': errors, 'message': msg})
         except Exception as e:
             return _err(500, str(e)[:300])
 
