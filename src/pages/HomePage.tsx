@@ -340,11 +340,10 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
             ))}
             {newObjects.length < homeLimit && Array.from({ length: homeLimit - newObjects.length }).map((_, i) => (
               <div key={`sk-${i}`} className="rounded-xl overflow-hidden border border-border bg-white">
-                <div className="aspect-[4/3] bg-muted animate-pulse" />
+                <div className="aspect-[4/3] bg-muted" />
                 <div className="p-3 space-y-2">
-                  <div className="h-4 bg-muted animate-pulse rounded w-3/4" />
-                  <div className="h-3 bg-muted animate-pulse rounded w-1/2" />
-                  <div className="h-3 bg-muted animate-pulse rounded w-2/3" />
+                  <div className="h-4 bg-muted rounded w-3/4" />
+                  <div className="h-3 bg-muted rounded w-1/2" />
                 </div>
               </div>
             ))}
@@ -378,11 +377,10 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
               {latestNews === null
                 ? Array.from({ length: Math.min(homeNewsLimit, 5) }).map((_, i) => (
                   <div key={i} className="bg-white rounded-xl overflow-hidden border border-border">
-                    <div className="h-24 bg-muted animate-pulse" />
+                    <div className="h-24 bg-muted" />
                     <div className="p-2.5 space-y-1.5">
-                      <div className="h-3 bg-muted animate-pulse rounded w-full" />
-                      <div className="h-3 bg-muted animate-pulse rounded w-3/4" />
-                      <div className="h-2.5 bg-muted animate-pulse rounded w-1/3 mt-1" />
+                      <div className="h-3 bg-muted rounded w-full" />
+                      <div className="h-3 bg-muted rounded w-3/4" />
                     </div>
                   </div>
                 ))
