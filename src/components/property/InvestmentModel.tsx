@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Icon from '@/components/ui/icon';
 import KpiCards from './investmentModel/KpiCards';
 import ParametersPanel from './investmentModel/ParametersPanel';
-import CashFlowChart from './investmentModel/CashFlowChart';
 import ScenarioCards from './investmentModel/ScenarioCards';
+
+const CashFlowChart = lazy(() => import('./investmentModel/CashFlowChart'));
 import { fmtMoneyFull } from './investmentModel/modelMath';
 import { computeModel } from './investmentModel/modelMath';
 import { NoiApiResponse, PRICE_PREDICT_URL, UserParams } from './investmentModel/types';
@@ -137,7 +138,9 @@ export default function InvestmentModel({ listingId, price, area, deal }: Props)
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                 <ParametersPanel bench={data.benchmarks} params={params} setParam={setParam} onReset={reset} />
                 <div className="space-y-3">
-                  <CashFlowChart yearly={liveResult.yearly} />
+                  <Suspense fallback={<div className="h-[200px] bg-muted/30 rounded-xl animate-pulse" />}>
+                    <CashFlowChart yearly={liveResult.yearly} />
+                  </Suspense>
 
                   <button
                     onClick={() => setShowAdvanced(s => !s)}
