@@ -183,7 +183,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
       <section className="hero-bg text-white py-10 md:py-14">
         <div className="container mx-auto px-4 relative z-10">
           <div className="max-w-3xl">
-            <h1 className="font-display font-900 text-2xl sm:text-3xl md:text-4xl leading-tight mb-3 animate-fade-in-up stagger-1">
+            <h1 className="font-display font-900 text-2xl sm:text-3xl md:text-4xl leading-tight mb-3" elementtiming="lcp-heading">
               Коммерческая недвижимость и готовый бизнес в Краснодаре
             </h1>
             <p className="text-white/75 text-sm sm:text-base mb-5 animate-fade-in-up stagger-2 max-w-xl">

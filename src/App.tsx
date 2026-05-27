@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
-const HomePage         = lazy(() => import('./pages/HomePage'));
+import HomePage from './pages/HomePage';
 const PropertyPage     = lazy(() => import('./pages/PropertyPage'));
 const CatalogPage      = lazy(() => import('./pages/CatalogPage'));
 const MapPage          = lazy(() => import('./pages/MapPage'));
@@ -126,10 +126,20 @@ export default function App() {
   const [consentVisible, setConsentVisible] = useState(false);
 
   useEffect(() => {
-    if (!hasConsent()) {
-      const t = setTimeout(() => setConsentVisible(true), 2000);
-      return () => clearTimeout(t);
+    if (hasConsent()) return;
+    const show = () => {
+      const t = setTimeout(() => setConsentVisible(true), 3500);
+      return t;
+    };
+    let timer: ReturnType<typeof setTimeout>;
+    if (document.readyState === 'complete') {
+      timer = show();
+    } else {
+      const onLoad = () => { timer = show(); };
+      window.addEventListener('load', onLoad, { once: true });
+      return () => { window.removeEventListener('load', onLoad); if (timer) clearTimeout(timer); };
     }
+    return () => { if (timer) clearTimeout(timer); };
   }, []);
 
   const setView = (v: AppView) => {
@@ -385,7 +395,7 @@ export default function App() {
       />
 
       <main>
-        <Suspense fallback={<div className="min-h-[50vh] flex items-center justify-center"><div className="w-8 h-8 rounded-full border-4 border-brand-blue/20 border-t-brand-blue animate-spin" /></div>}>
+        <Suspense fallback={<div style={{minHeight: 'calc(100vh - 64px)'}} />}>
         <Routes>
           <Route path="/" element={
             <HomePage
