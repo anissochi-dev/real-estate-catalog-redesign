@@ -1,8 +1,8 @@
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import HomePage from './pages/HomePage';
-import PropertyPage from './pages/PropertyPage';
 
+const PropertyPage     = lazy(() => import('./pages/PropertyPage'));
 const CatalogPage      = lazy(() => import('./pages/CatalogPage'));
 const MapPage          = lazy(() => import('./pages/MapPage'));
 const FavoritesPage    = lazy(() => import('./pages/FavoritesPage'));
@@ -155,9 +155,12 @@ export default function App() {
     } catch { /* ignore */ }
   }, [navigate]);
 
-  // Тихий cron-пинг: запускаем только после полной загрузки страницы (window load),
-  // чтобы не конкурировать с критическими запросами на старте.
   useEffect(() => {
+    const fireCron = (url: string, opts?: RequestInit) => {
+      const ac = new AbortController();
+      setTimeout(() => ac.abort(), 8000);
+      fetch(url, { ...opts, signal: ac.signal, keepalive: false }).catch(() => {});
+    };
     const runCrons = () => {
       const SEO_CRON_URL = 'https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d';
       const NEWS_CRON_URL = 'https://functions.poehali.dev/984cad3a-0783-4408-a614-52ed36f8c77f';
@@ -166,25 +169,34 @@ export default function App() {
         const seoLast = parseInt(localStorage.getItem('seo_cron_last_ping') || '0', 10);
         if (Date.now() - seoLast > THROTTLE_MS) {
           localStorage.setItem('seo_cron_last_ping', String(Date.now()));
-          fetch(SEO_CRON_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ping' }) }).catch(() => {});
+          fireCron(SEO_CRON_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ping' }) });
         }
         const newsLast = parseInt(localStorage.getItem('news_cron_last_ping') || '0', 10);
         if (Date.now() - newsLast > THROTTLE_MS) {
           localStorage.setItem('news_cron_last_ping', String(Date.now()));
-          fetch(`${NEWS_CRON_URL}?action=ping_cron`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {});
+          fireCron(`${NEWS_CRON_URL}?action=ping_cron`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
         }
         const retrainLast = parseInt(localStorage.getItem('retrain_cron_last_ping') || '0', 10);
         if (Date.now() - retrainLast > THROTTLE_MS) {
           localStorage.setItem('retrain_cron_last_ping', String(Date.now()));
-          fetch('https://functions.poehali.dev/e2f1d357-fb83-4fbb-8d8b-6fb063357afc?action=cron').catch(() => {});
+          fireCron('https://functions.poehali.dev/e2f1d357-fb83-4fbb-8d8b-6fb063357afc?action=cron');
         }
       } catch { /* ignore */ }
     };
 
+    const schedule = () => {
+      if ('requestIdleCallback' in window) {
+        (window as Window & { requestIdleCallback: (cb: () => void, opts?: { timeout: number }) => void })
+          .requestIdleCallback(runCrons, { timeout: 10000 });
+      } else {
+        setTimeout(runCrons, 5000);
+      }
+    };
+
     if (document.readyState === 'complete') {
-      setTimeout(runCrons, 3000);
+      setTimeout(schedule, 3000);
     } else {
-      const onLoad = () => setTimeout(runCrons, 3000);
+      const onLoad = () => setTimeout(schedule, 3000);
       window.addEventListener('load', onLoad, { once: true });
       return () => window.removeEventListener('load', onLoad);
     }
