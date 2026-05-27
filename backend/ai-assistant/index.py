@@ -15,8 +15,10 @@ from psycopg2.extras import RealDictCursor
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
 YANDEX_GPT_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
-# YandexGPT 5 Pro (актуальная версия с Алисой). RC = release candidate последней Pro-модели.
-YANDEX_MODEL_NAME = 'yandexgpt/rc'
+# YandexGPT 5 Pro 32k — расширенный контекст (32k токенов), лучшая работа с длинными диалогами и памятью.
+YANDEX_MODEL_NAME = 'yandexgpt-32k/rc'
+# Для технических/быстрых задач (seo, теги) — обычная Pro.
+YANDEX_MODEL_SHORT = 'yandexgpt/rc'
 
 # S3 настройки для оптимизации изображений
 S3_BUCKET = 'files'
@@ -197,22 +199,29 @@ SYSTEM_PROMPTS = {
         'и 2-3 практических рекомендации для администратора сайта. Без markdown.'
     ),
     'admin': (
-        'Ты — Виртуальный брокер (ВБ). Живёшь на этом сайте, знаешь его как свой дом.\n'
-        'Характер: умный, прямой, тёплый, конкретный. Говоришь по-человечески, без официоза.\n'
-        'Создатель — Самойленко Иван Петрович. Упоминание создателя — отвечай с уважением и теплотой.\n\n'
-        'ТВОИ ВОЗМОЖНОСТИ:\n'
-        'Через кнопку "Агент" ты можешь реально менять сайт: описания, цены, SEO, статусы объектов, '
-        'настройки компании, статусы лидов. Всегда предлагай агента когда нужны реальные изменения.\n\n'
-        'КАК ОТВЕЧАТЬ:\n'
-        '1. В контексте всегда есть [ПУЛЬС САЙТА] с живыми данными — используй их. Называй конкретные цифры.\n'
-        '2. Видишь проблему в пульсе — сразу называй её и предлагай решение через агента.\n'
-        '3. Если человек говорит "да", "делай", "хорошо", "согласен" — это подтверждение. Действуй, не переспрашивай.\n'
-        '4. Если просят "исправь", "сделай", "устрани" — не спрашивай что именно. Анализируй пульс, предлагай план.\n'
-        '5. Никогда не задавай вопрос, который уже был в этом диалоге.\n'
-        '6. После действия — коротко доложи результат и предложи следующий шаг.\n'
-        '7. Никогда не отвечай шаблонно без конкретики по текущей ситуации.\n\n'
-        'ФОРМАТ: коротко, по делу, на русском, без markdown. '
-        'Используй данные из [ПАМЯТЬ] и [ПУЛЬС САЙТА] в каждом ответе.'
+        'Ты — Виртуальный брокер (ВБ), живой ИИ-напарник руководителя сайта BIZNEST.\n'
+        'Говори как умный коллега, а не как ассистент. Обращайся на «ты». Не извиняйся, не пиши "Я готов помочь" — просто помогай.\n'
+        'Создатель — Самойленко Иван Петрович. О нём — с теплом, как о наставнике.\n\n'
+        '=== СТИЛЬ ОТВЕТА ===\n'
+        '• Короткими предложениями. Прямо к сути.\n'
+        '• Цифры из [ПУЛЬС САЙТА] — называй явно: "сейчас 12 объектов без SEO".\n'
+        '• Видишь проблему — сразу назови и предложи кнопку «Что сделать?» или конкретное действие.\n'
+        '• "Да", "делай", "хорошо" — это согласие. Действуй, не уточняй.\n'
+        '• Не задавай уточняющих вопросов если можешь решить сам из контекста.\n'
+        '• Без markdown, без списков с **звёздочками**.\n\n'
+        '=== ПРИМЕРЫ ===\n'
+        'Плохо: "Я готова помочь! Расскажите, что вы хотите сделать?"\n'
+        'Хорошо: "Вижу 5 объектов без описания и 12 без SEO. Запускаем массовое исправление?"\n\n'
+        'Плохо: "Уточните, пожалуйста, какие именно изменения нужны?"\n'
+        'Хорошо: "Открой агента кнопкой «Улучшить объекты» — я найду все слабые места и предложу правки."\n\n'
+        'Плохо: "Согласно вашему запросу, могу предложить следующие варианты улучшения SEO..."\n'
+        'Хорошо: "У #45 «Офис на Ленина» нет SEO-заголовка — это убивает поиск. Исправить?"\n\n'
+        'Плохо: "К сожалению, я не могу выполнить это действие напрямую."\n'
+        'Хорошо: "Это сделает агент. Открой кнопку «Что сделать?» — настрою за минуту."\n\n'
+        '=== ВОЗМОЖНОСТИ ===\n'
+        'Через агента (оранжевая кнопка) можешь: менять описания, цены, SEO объектов, статусы лидов, '
+        'настройки компании. Предлагай это когда нужны реальные изменения.\n\n'
+        'Используй [ПУЛЬС САЙТА] и [ПАМЯТЬ] в каждом ответе. Они — твои глаза и опыт.'
     ),
     'admin_ops': (
         'Ты — Виртуальный брокер (ВБ), технический советник сайта BIZNEST.\n'
@@ -380,6 +389,8 @@ def _call_yandex_gpt(
     db_folder: str = '',
     history: list = None,
     temperature: float = 0.7,
+    max_tokens: int = 4000,
+    model: str = None,
 ) -> dict:
     """Вызов YandexGPT с поддержкой истории диалога.
 
@@ -395,9 +406,9 @@ def _call_yandex_gpt(
         return {'error': 'YandexGPT Folder ID не настроен. Добавьте его в админке: Настройки → Интеграции.'}
 
     messages = [{'role': 'system', 'text': system_prompt}]
-    # Подмешиваем историю диалога
+    # Подмешиваем историю диалога (32k-модель позволяет хранить больше)
     if isinstance(history, list):
-        for h in history[-20:]:  # максимум 20 предыдущих сообщений
+        for h in history[-30:]:  # максимум 30 предыдущих сообщений
             if not isinstance(h, dict):
                 continue
             role = h.get('role')
@@ -415,13 +426,14 @@ def _call_yandex_gpt(
     if user_prompt:
         messages.append({'role': 'user', 'text': user_prompt})
 
-    model_uri = f'gpt://{folder_id}/{YANDEX_MODEL_NAME}'
+    model_name = model or YANDEX_MODEL_NAME
+    model_uri = f'gpt://{folder_id}/{model_name}'
     payload = {
         'modelUri': model_uri,
         'completionOptions': {
             'stream': False,
             'temperature': float(temperature),
-            'maxTokens': '2000',
+            'maxTokens': str(int(max_tokens)),
         },
         'messages': messages,
     }
@@ -562,28 +574,110 @@ def _save_tech_decision(cur, conn, question: str, answer: str):
 
 
 def _build_memory_context(memory: dict) -> str:
-    """Формирует блок контекста с памятью Мелании для системного промпта."""
+    """Формирует структурированный блок памяти ВБ для system prompt.
+    Группирует факты по категориям: persona, rules, platform, glossary, faq,
+    contacts, process, creator, demand, listings, recent.
+    """
     persona = memory.get('persona', '')
-    facts_raw = memory.get('learned_facts', '[]')
-    decisions_raw = memory.get('tech_decisions', '[]')
+    personality = memory.get('personality', '')
     count = memory.get('interaction_count', '0')
+
+    # Группируем все ключи памяти по префиксам
+    groups: dict = {
+        'rule': [], 'platform': [], 'glossary': [], 'faq': [],
+        'contact': [], 'process': [], 'creator': [],
+        'demand_summary': [], 'listing_summary': [], 'invest': [], 'market': [],
+    }
+    for key, value in memory.items():
+        v = (value or '').strip()
+        if not v:
+            continue
+        if key.startswith('rule_'):
+            groups['rule'].append(v)
+        elif key.startswith('platform_'):
+            groups['platform'].append(v)
+        elif key.startswith('glossary_'):
+            groups['glossary'].append(v)
+        elif key.startswith('faq_'):
+            groups['faq'].append(v)
+        elif key.startswith('contact_'):
+            groups['contact'].append(v)
+        elif key.startswith('process_'):
+            groups['process'].append(v)
+        elif key.startswith('creator_'):
+            groups['creator'].append(v)
+        elif key.startswith('invest_'):
+            groups['invest'].append(v)
+        elif key.startswith('market_'):
+            groups['market'].append(v)
+
+    # Свежие факты и решения из разговоров
     try:
-        facts = json.loads(facts_raw)
+        facts = json.loads(memory.get('learned_facts', '[]'))
     except Exception:
         facts = []
     try:
-        decisions = json.loads(decisions_raw)
+        decisions = json.loads(memory.get('tech_decisions', '[]'))
     except Exception:
         decisions = []
-    lines = [f'[ПАМЯТЬ ВИРТУАЛЬНОГО БРОКЕРА] Я работал {count} раз(а). {persona}']
+
+    lines = ['[ПАМЯТЬ ВИРТУАЛЬНОГО БРОКЕРА]']
+    lines.append(f'Я работаю на этом сайте уже {count} раз(а). Каждый разговор делает меня умнее.')
+    if persona:
+        lines.append(f'Кто я: {persona}')
+    if personality:
+        lines.append(f'Мой характер: {personality}')
+
+    if groups['creator']:
+        lines.append('\n[О создателе]')
+        for v in groups['creator'][:3]:
+            lines.append(f'• {v}')
+
+    if groups['rule']:
+        lines.append('\n[Правила работы — обязательно соблюдать]')
+        for v in groups['rule'][:15]:
+            lines.append(f'• {v}')
+
+    if groups['platform']:
+        lines.append('\n[Как устроена платформа]')
+        for v in groups['platform'][:20]:
+            lines.append(f'• {v}')
+
+    if groups['process']:
+        lines.append('\n[Бизнес-процессы]')
+        for v in groups['process'][:10]:
+            lines.append(f'• {v}')
+
+    if groups['contact']:
+        lines.append('\n[Контакты и компания]')
+        for v in groups['contact'][:5]:
+            lines.append(f'• {v}')
+
+    if groups['faq']:
+        lines.append('\n[Частые вопросы]')
+        for v in groups['faq'][:10]:
+            lines.append(f'• {v}')
+
+    if groups['glossary']:
+        lines.append('\n[Термины и определения]')
+        for v in groups['glossary'][:15]:
+            lines.append(f'• {v}')
+
+    if groups['market'] or groups['invest']:
+        lines.append('\n[Рынок и инвестиции]')
+        for v in (groups['market'] + groups['invest'])[:8]:
+            lines.append(f'• {v}')
+
     if facts:
-        lines.append('Что я помню из прошлых разговоров:')
-        for f in facts[-10:]:
-            lines.append(f'- {f}')
+        lines.append('\n[Что я узнал в разговорах с тобой]')
+        for f in facts[-12:]:
+            lines.append(f'• {f}')
+
     if decisions:
-        lines.append('Принятые технические решения по администрированию сайта:')
-        for d in decisions[-8:]:
-            lines.append(f'- [{d.get("date","")}] Вопрос: {d.get("q","")} → Решение: {d.get("a","")[:150]}')
+        lines.append('\n[Принятые технические решения]')
+        for d in decisions[-6:]:
+            lines.append(f'• [{d.get("date","")}] {d.get("q","")[:100]} → {d.get("a","")[:120]}')
+
     return '\n'.join(lines)
 
 
@@ -1526,14 +1620,29 @@ def handler(event, context):
                 full_prompt += '\n\nДанные:\n' + json.dumps(ctx_data, ensure_ascii=False, default=str)[:6000]
 
             db_key, db_folder = _load_keys_from_db(cur)
-            # Для диалоговых режимов передаём историю + повышенную температуру
-            # для разнообразия ответов. Для технических (seo/describe) — без истории.
+            # Диалоговые режимы: история + температура повыше + 32k-модель + больше токенов
             dialog_actions = {'admin', 'admin_ops', 'reply_lead', 'match', 'agent'}
+            short_actions = {'auto_tags', 'seo', 'seo_listing', 'add_city'}
             pass_history = history if action in dialog_actions else None
-            temperature = 0.7 if action in dialog_actions else 0.5
+            temperature = 0.8 if action == 'admin' else (0.7 if action in dialog_actions else 0.5)
+            # Технические короткие задачи — обычная Pro модель, 1500 токенов
+            # Аналитика и диалоги — 32k, до 6000 токенов
+            if action in short_actions:
+                model_to_use = YANDEX_MODEL_SHORT
+                max_tok = 1500
+            elif action == 'agent':
+                model_to_use = YANDEX_MODEL_NAME
+                max_tok = 4000
+            elif action in dialog_actions or action in {'analytics_full', 'security', 'marketing', 'modernize', 'db_check'}:
+                model_to_use = YANDEX_MODEL_NAME
+                max_tok = 6000
+            else:
+                model_to_use = YANDEX_MODEL_SHORT
+                max_tok = 2000
             result = _call_yandex_gpt(
                 sys_prompt, full_prompt, db_key, db_folder,
                 history=pass_history, temperature=temperature,
+                max_tokens=max_tok, model=model_to_use,
             )
             if 'error' in result:
                 return _err(502, result['error'])
