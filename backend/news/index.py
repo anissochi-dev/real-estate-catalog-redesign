@@ -169,10 +169,11 @@ def _fetch_cbr_key_rate() -> float | None:
     return None
 
 
-def _ok(body, status=200):
+def _ok(body, status=200, cache: str = 'no-store'):
+    headers = {**CORS, 'Content-Type': 'application/json', 'Cache-Control': cache}
     return {
         'statusCode': status,
-        'headers': {**CORS, 'Content-Type': 'application/json'},
+        'headers': headers,
         'body': json.dumps(body, ensure_ascii=False, default=str),
     }
 
@@ -463,7 +464,7 @@ def handler(event: dict, context) -> dict:
                 rows = cur.fetchall()
                 cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.news WHERE is_published = TRUE")
                 total = cur.fetchone()['c']
-                return _ok({'news': [dict(r) for r in rows], 'total': total, 'page': page, 'limit': limit})
+                return _ok({'news': [dict(r) for r in rows], 'total': total, 'page': page, 'limit': limit}, cache='public, max-age=120, stale-while-revalidate=30')
 
             # ── ПУБЛИЧНАЯ СТАТЬЯ ─────────────────────────────────────────
             if action == 'get' and method == 'GET':
@@ -476,7 +477,7 @@ def handler(event: dict, context) -> dict:
                 r = cur.fetchone()
                 if not r:
                     return _err('Не найдено', 404)
-                return _ok({'article': _row_to_dict(r)})
+                return _ok({'article': _row_to_dict(r)}, cache='public, max-age=300, stale-while-revalidate=60')
 
             # ── ТРЕБУЕТСЯ АВТОРИЗАЦИЯ ────────────────────────────────────
             user = _get_user(cur, token)
