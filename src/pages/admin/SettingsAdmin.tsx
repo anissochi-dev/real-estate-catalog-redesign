@@ -21,6 +21,7 @@ import AutoPostingTab from './settings/AutoPostingTab';
 import BrandKitTab from './settings/BrandKitTab';
 import NotificationsTab from './settings/NotificationsTab';
 import SiteHealthTab from './settings/SiteHealthTab';
+import AIAssistantAdmin from './AIAssistantAdmin';
 
 export default function SettingsAdmin() {
   const { reload } = useSettings();
@@ -31,7 +32,7 @@ export default function SettingsAdmin() {
   const [cityAdding, setCityAdding] = useState(false);
   type TabId = 'general' | 'watermark' | 'brand-kit' | 'seo' | 'seo-ai' | 'footer' | 'legal'
     | 'integrations' | 'ad-platforms' | 'autoposting' | 'feeds' | 'notifications'
-    | 'cities' | 'purposes' | 'pages' | 'roles' | 'migration' | 'photo-optimize' | 'site-health';
+    | 'cities' | 'purposes' | 'pages' | 'roles' | 'migration' | 'photo-optimize' | 'site-health' | 'ai-admin';
   const [tab, setTab] = useState<TabId>('general');
   const [showKey, setShowKey] = useState(false);
   const [showMapsKey, setShowMapsKey] = useState(false);
@@ -210,6 +211,7 @@ export default function SettingsAdmin() {
     },
     {
       id: 'admin', label: 'Администрирование', icon: 'Shield', tabs: [
+        ['ai-admin', 'ИИ-администрирование', 'Sparkles'],
         ['roles', 'Роли и доступы', 'ShieldHalf'],
         ['migration', 'Экспорт/импорт', 'DatabaseBackup'],
         ['photo-optimize', 'Сжатие фото', 'ImageDown'],
@@ -297,6 +299,11 @@ export default function SettingsAdmin() {
       {tab === 'photo-optimize' && <PhotoOptimizeTab />}
       {tab === 'site-health' && <SiteHealthTab />}
       {tab === 'pages' && <PagesAdmin />}
+      {tab === 'ai-admin' && (
+        <div className="-mx-0 -mt-0">
+          <AIAssistantAdmin />
+        </div>
+      )}
     </div>
   );
 }
