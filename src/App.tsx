@@ -1,7 +1,8 @@
-import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
+import { useEffect, useState, useMemo, lazy, Suspense, Component } from 'react';
+import type { ReactNode } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import HomePage from './pages/HomePage';
-import AdminPage from './pages/AdminPage';
+const AdminPage = lazy(() => import('./pages/AdminPage'));
 const PropertyPage     = lazy(() => import('./pages/PropertyPage'));
 const CatalogPage      = lazy(() => import('./pages/CatalogPage'));
 const MapPage          = lazy(() => import('./pages/MapPage'));
@@ -29,6 +30,21 @@ import { useAuth } from './contexts/AuthContext';
 import type { Property, Page, AppView } from './types';
 
 export type { PropertyType, DealType, Property, Page, AppView } from './types';
+
+class AdminErrorBoundary extends Component<{ children: ReactNode }, { error: boolean }> {
+  constructor(props: { children: ReactNode }) { super(props); this.state = { error: false }; }
+  static getDerivedStateFromError() { return { error: true }; }
+  render() {
+    if (this.state.error) return (
+      <div className="min-h-screen flex items-center justify-center flex-col gap-4 text-center p-8">
+        <div className="text-4xl">⚠️</div>
+        <div className="font-semibold text-lg">Не удалось загрузить панель управления</div>
+        <button className="px-4 py-2 bg-brand-blue text-white rounded-xl" onClick={() => window.location.reload()}>Обновить страницу</button>
+      </div>
+    );
+    return this.props.children;
+  }
+}
 
 const PATH_BY_PAGE: Record<Page, string> = {
   home: '/',
@@ -318,10 +334,12 @@ export default function App() {
       );
     }
     return (
-      <>
-        <SeoHead title="Админ-панель" noindex />
-        <AdminPage onExit={() => { setView('site'); setAdminInitialSection(undefined); }} initialSection={adminInitialSection as string | undefined} />
-      </>
+      <AdminErrorBoundary>
+        <Suspense fallback={pageFallback}>
+          <SeoHead title="Админ-панель" noindex />
+          <AdminPage onExit={() => { setView('site'); setAdminInitialSection(undefined); }} initialSection={adminInitialSection as string | undefined} />
+        </Suspense>
+      </AdminErrorBoundary>
     );
   }
 
