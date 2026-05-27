@@ -66,21 +66,20 @@ SYSTEM_PROMPT_TEMPLATE = """Ты — профессиональный копир
 
 СЕГОДНЯШНЯЯ ДАТА: {today}. Пиши статью актуальную именно на эту дату. Все ссылки на периоды, события, данные должны быть актуальны на дату публикации (не старше 10 дней от {today}).
 
-АКТУАЛЬНАЯ КЛЮЧЕВАЯ СТАВКА ЦБ РФ: {key_rate}% годовых (по данным cbr.ru на {today}). Используй ИМЕННО ЭТО значение — не придумывай другое.
+{key_rate_block}
 
 Твои источники для анализа:
-- Данные ЦБ РФ о ключевой ставке и ипотеке (cbr.ru) — актуальные на {today}: ставка {key_rate}%
+- Данные ЦБ РФ о ключевой ставке и ипотеке (cbr.ru) — актуальные на {today}
 - Новости застройщиков Краснодара (ЮСИ, Девелопмент-Юг, СКС) — события текущего месяца
 - Рынок коммерческой недвижимости (ЦИАН, Авито) — цены и тренды на {today}
 - Новости правительства Краснодарского края (kuban.ru) — актуальные решения
 - Банки: Сбербанк, ВТБ, Альфа-Банк — текущие ставки и программы
-- Страховые компании — текущие условия
 
 Правила написания статьи:
 1. Заголовок: конкретный, содержательный, до 100 символов, с указанием актуального периода (месяц/год: {month_year})
 2. Краткое описание (summary): 2-3 предложения, суть материала, 150-250 символов
 3. Текст статьи: 4-6 абзацев, факты и цифры, профессиональный тон
-4. Используй ТОЛЬКО актуальные данные на {today}: ключевая ставка ЦБ РФ = {key_rate}%, конкретные цены, события
+4. Если в статье упоминается ключевая ставка ЦБ — {key_rate_rule}
 5. Не пиши обобщённо — пиши конкретно о текущей ситуации на {today}
 6. Завершай выводом или рекомендацией для инвесторов/арендаторов
 7. Пиши на русском языке, без markdown-разметки, только текст
@@ -90,9 +89,9 @@ SYSTEM_PROMPT_TEMPLATE = """Ты — профессиональный копир
   "title": "Заголовок статьи",
   "summary": "Краткое описание",
   "content": "Полный текст статьи"
-}}"
+}}
 
-ВАЖНО: статья должна отражать реалии именно {today}, а не прошлого года. Ключевая ставка = {key_rate}%."""
+ВАЖНО: статья должна отражать реалии именно {today}, а не прошлого года."""
 
 
 def _fetch_cbr_key_rate() -> float | None:
@@ -230,11 +229,17 @@ def _gpt(api_key, folder_id, topic, key_rate: float | None = None):
                  'июля','августа','сентября','октября','ноября','декабря']
     today_str = f'{now.day} {MONTHS_RU[now.month-1]} {now.year}'
     month_year = f'{MONTHS_RU[now.month-1]} {now.year}'
-    key_rate_str = f'{key_rate:.2f}' if key_rate is not None else 'не определена'
+    if key_rate is not None:
+        key_rate_block = f'АКТУАЛЬНАЯ КЛЮЧЕВАЯ СТАВКА ЦБ РФ: {key_rate:.2f}% годовых. Используй ИМЕННО ЭТО значение — не придумывай другое.'
+        key_rate_rule = f'используй только точное значение {key_rate:.2f}% — не придумывай другую цифру'
+    else:
+        key_rate_block = 'Ключевая ставка ЦБ РФ: уточни актуальное значение на сайте cbr.ru или опиши влияние ставки без конкретной цифры (например: "в условиях высокой ключевой ставки", "при текущей ставке ЦБ").'
+        key_rate_rule = 'не указывай конкретный процент — напиши "при текущей ключевой ставке ЦБ" или "в условиях высоких ставок по кредитам"'
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
         today=today_str,
         month_year=month_year,
-        key_rate=key_rate_str,
+        key_rate_block=key_rate_block,
+        key_rate_rule=key_rate_rule,
     )
     payload = {
         'modelUri': f'gpt://{folder_id}/{YANDEX_MODEL}',
@@ -449,6 +454,22 @@ def handler(event: dict, context) -> dict:
                     f"last_run_count = {generated}, updated_at = '{ts}' WHERE id = {sch['id']}"
                 )
                 conn.commit()
+
+                # Запускаем переобучение ВБ если настроено (fire-and-forget)
+                try:
+                    cur.execute(
+                        f"SELECT vb_retrain_enabled FROM {SCHEMA}.settings ORDER BY id LIMIT 1"
+                    )
+                    vb_row = cur.fetchone()
+                    if vb_row and vb_row.get('vb_retrain_enabled'):
+                        retrain_req = urllib.request.Request(
+                            'https://functions.poehali.dev/e2f1d357-fb83-4fbb-8d8b-6fb063357afc?action=cron',
+                            method='GET',
+                        )
+                        urllib.request.urlopen(retrain_req, timeout=5)
+                except Exception:
+                    pass
+
                 return _ok({'generated': generated, 'topics': topics})
 
             # ── ПУБЛИЧНЫЙ СПИСОК ─────────────────────────────────────────

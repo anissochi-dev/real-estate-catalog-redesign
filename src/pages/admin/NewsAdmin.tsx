@@ -91,21 +91,6 @@ export default function NewsAdmin() {
   const [form, setForm] = useState({ title: '', summary: '', content: '', image_url: '', source_url: '', source_name: '' });
   const [seoHeadings, setSeoHeadings] = useState<Partial<SeoHeadings>>({});
   const [saving, setSaving] = useState(false);
-  const [updatingRates, setUpdatingRates] = useState(false);
-
-  const updateRates = async () => {
-    setUpdatingRates(true);
-    try {
-      const r = await fetch(NEWS_URL, { method: 'POST', headers, body: JSON.stringify({ action: 'update_rates' }) });
-      const d = await r.json();
-      if (d.error) { toast.error(d.error); return; }
-      toast.success(`Ставка ЦБ РФ ${d.cb_key_rate}% проставлена в ${d.updated} статьях`);
-      loadNews();
-    } finally {
-      setUpdatingRates(false);
-    }
-  };
-
   const loadNews = () => {
     fetch(`${NEWS_URL}?action=admin_list`, { headers })
       .then(r => r.json())
@@ -208,15 +193,7 @@ export default function NewsAdmin() {
             <Icon name="Clock" size={14} className="inline mr-1" />
             Расписание
           </button>
-          <button
-            onClick={updateRates}
-            disabled={updatingRates}
-            title="Загрузить текущую ключевую ставку ЦБ РФ и проставить в статьи, где она не указана"
-            className="px-4 py-2 rounded-xl text-sm font-medium transition bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 disabled:opacity-50 flex items-center gap-1.5"
-          >
-            <Icon name={updatingRates ? 'Loader2' : 'TrendingUp'} size={14} className={updatingRates ? 'animate-spin' : ''} />
-            Обновить ставки ЦБ
-          </button>
+
         </div>
       </div>
 
@@ -238,7 +215,6 @@ export default function NewsAdmin() {
                 <tr>
                   <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Заголовок</th>
                   <th className="px-4 py-3 text-left font-semibold text-muted-foreground w-24">Тип</th>
-                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground w-24 hidden sm:table-cell">Ставка ЦБ</th>
                   <th className="px-4 py-3 text-left font-semibold text-muted-foreground w-36">Дата</th>
                   <th className="px-4 py-3 text-right font-semibold text-muted-foreground w-32">Действия</th>
                 </tr>
@@ -256,15 +232,6 @@ export default function NewsAdmin() {
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${n.is_auto ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
                         {n.is_auto ? 'Авто' : 'Ручная'}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 hidden sm:table-cell">
-                      {n.cb_key_rate != null ? (
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
-                          {n.cb_key_rate}%
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{fmtDate(n.published_at || n.created_at)}</td>
                     <td className="px-4 py-3">
