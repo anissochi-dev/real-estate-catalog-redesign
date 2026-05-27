@@ -8,6 +8,16 @@ import { AuthProvider } from './contexts/AuthContext';
 import { SettingsProvider } from './contexts/SettingsContext';
 import './index.css';
 
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault();
+  try {
+    const last = Number(sessionStorage.getItem('__vite_preload_reload__') || '0');
+    if (Date.now() - last < 15000) return;
+    sessionStorage.setItem('__vite_preload_reload__', String(Date.now()));
+  } catch { /* ignore */ }
+  window.location.reload();
+});
+
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 5 * 60_000 } },
 });
