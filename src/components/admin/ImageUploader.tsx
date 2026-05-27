@@ -16,7 +16,7 @@ interface Props {
 }
 
 const MAX_SIDE = 1920;
-const JPEG_QUALITY = 0.9;
+const JPEG_QUALITY = 0.82;
 
 async function compressImage(file: File): Promise<File> {
   if (file.type === 'image/gif' || file.type === 'image/svg+xml') return file;

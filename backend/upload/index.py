@@ -261,6 +261,31 @@ def handler(event, context):
                 'webp': 'image/webp', 'gif': 'image/gif', 'svg': 'image/svg+xml',
             }[ext]
 
+            # Конвертируем фото в WebP для экономии 30-40% трафика
+            if kind == 'photo' and ext in ('jpg', 'jpeg', 'png', 'webp'):
+                try:
+                    from PIL import Image as PilImage
+                    img = PilImage.open(io.BytesIO(data))
+                    # Масштабируем если больше 1920px
+                    max_side = 1920
+                    w, h = img.size
+                    if max(w, h) > max_side:
+                        scale = max_side / max(w, h)
+                        img = img.resize((int(w * scale), int(h * scale)), PilImage.LANCZOS)
+                    if img.mode in ('RGBA', 'LA', 'P'):
+                        img = img.convert('RGBA')
+                    else:
+                        img = img.convert('RGB')
+                    buf = io.BytesIO()
+                    img.save(buf, format='WEBP', quality=82, method=4)
+                    webp_data = buf.getvalue()
+                    if len(webp_data) < len(data):
+                        data = webp_data
+                        ext = 'webp'
+                        content_type = 'image/webp'
+                except Exception:
+                    pass  # если Pillow не смог — грузим оригинал
+
             folder = {'photo': 'photos', 'logo': 'logos', 'watermark': 'watermarks'}.get(kind, 'files')
             token12 = secrets.token_urlsafe(12)
             aws_key = os.environ['AWS_ACCESS_KEY_ID']
