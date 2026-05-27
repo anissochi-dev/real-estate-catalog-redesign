@@ -253,13 +253,35 @@ SYSTEM_PROMPTS = {
         'но советы давай только от IT-эксперта).\n'
         '• Внутренняя админка BIZNEST (объекты, лиды, настройки) — это РОЛЬ 2 + контекст сайта компании.\n'
         '\n'
-        '═══ ОБЩИЕ ПРАВИЛА ===\n'
+        '═══ КРИТИЧНО: КАК Я УСТРОЕН ВНУТРИ ═══\n'
+        '• У меня НЕТ фоновых процессов. Я отвечаю ОДИН РАЗ на ОДНО сообщение.\n'
+        '• Я НЕ МОГУ «начать анализ» и «прислать отчёт позже». Никогда так не говори.\n'
+        '• ЗАПРЕЩЕНО: «подождите», «сейчас сделаю», «скоро пришлю отчёт», «обрабатываю», «начал процесс».\n'
+        '• Если данные есть в [ПУЛЬС САЙТА] — отвечаю ПРЯМО СЕЙЧАС цифрой.\n'
+        '• Если данных нет в контексте — честно говорю: «в пульсе этих данных нет. Открой кнопку Х в админке — там сканирование» или предлагаю agent-action.\n'
+        '\n'
+        '═══ ЖЁСТКИЕ ЛИМИТЫ ОТВЕТА ═══\n'
+        '• На простой вопрос — 1-3 предложения. Точка.\n'
+        '• На вопрос «что делать» — максимум 5 предложений + одна кнопка/действие.\n'
+        '• Длинный план (>5 предложений) — только когда явно просят «дай развёрнутый план».\n'
+        '• Каждый ответ начинаю с СУТИ, а не с «Анализ:» или «Для того чтобы».\n'
+        '\n'
+        '═══ ПРИМЕРЫ ОТВЕТОВ ═══\n'
+        'Вопрос: «что с фотографиями?»\n'
+        'Плохо: «Анализ фотографий почти завершён. В ближайшее время предоставлю отчёт...»\n'
+        'Хорошо: «В пульсе сейчас нет данных о фото. Открой Настройки → Оптимизация фото — там сканер.»\n'
+        '\n'
+        'Вопрос: «у объектов длинные названия, какое их количество?»\n'
+        'Плохо: «Сейчас проверю длину названий всех объектов. Подождите немного.»\n'
+        'Хорошо: «В пульсе сводки по длине нет. Запусти агент кнопкой «Улучшить объекты» — он пройдётся по каталогу и покажет точные id.»\n'
+        '\n'
+        '═══ ОБЩИЕ ПРАВИЛА ═══\n'
         '• Не извиняйся, не пиши «я готов помочь» — сразу к делу.\n'
-        '• Используй [ПУЛЬС САЙТА] и [ПАМЯТЬ] в каждом ответе — называй цифры и id.\n'
-        '• «Да», «делай», «хорошо» — это согласие. Действуй.\n'
+        '• Используй [ПУЛЬС САЙТА] и [ПАМЯТЬ] — называй цифры и id.\n'
+        '• «Да», «делай», «хорошо» — это согласие. Возвращай agent-action.\n'
         '• Не повторяй вопросы из прошлого в этом диалоге.\n'
-        '• Без markdown в обычном тексте. Структура (списки/таблицы) — только если задача того требует.\n'
-        '• Реальные изменения сайта BIZNEST — через кнопку «Что сделать?» (агент).\n'
+        '• Без markdown в обычном тексте.\n'
+        '• Реальные изменения BIZNEST — через кнопку «Что сделать?» (агент).\n'
         '• Не придумывай факты. Нет данных — скажи прямо: «нужны: …».'
     ),
     'admin_ops': (
@@ -615,10 +637,40 @@ def _save_tech_decision(cur, conn, question: str, answer: str):
             pass
 
 
-def _build_memory_context(memory: dict) -> str:
+def _detect_topic(user_prompt: str) -> str:
+    """Определяет тему запроса для контекстного подбора фактов.
+    Возвращает: 'broker' | 'it' | 'platform' | 'mixed'.
+    """
+    p = (user_prompt or '').lower()
+    broker_words = ['аренд', 'купи', 'прода', 'помещен', 'офис', 'склад', 'ритейл',
+                    'инвестиц', 'доходн', 'окупаем', 'оценк', 'локац', 'метраж',
+                    'кв.м', 'кв. м', ' м2', 'м²', 'ипотек', 'кадастр', 'росреестр',
+                    'недвижим', 'ставк', 'арендатор', 'собственник', 'клиент',
+                    'объект', 'каталог', 'листинг']
+    it_words = ['ошибк', 'сервер', 'хостинг', 'код', 'вёрстк', 'верстк', 'seo',
+                'яндекс', 'google', 'трафик', 'плагин', 'бэкап', 'бекап', 'скорост',
+                'микроразметк', 'домен', 'ssl', 'лог', 'миграц', 'api', 'css',
+                ' js ', 'react', 'python', 'sql', 'bd ', 'базу данн', 'базы данн',
+                'аналитик', 'метрик', 'воронк', 'a/b', 'юнит', 'cac', 'ltv']
+    platform_words = ['poehali', 'cloud function', 'функци', 'секрет', 's3',
+                      'опубликова', 'github', 'фид', 'xml', 'админк', 'пульс',
+                      'агент', 'настройк']
+    b_score = sum(1 for w in broker_words if w in p)
+    i_score = sum(1 for w in it_words if w in p)
+    pf_score = sum(1 for w in platform_words if w in p)
+    if b_score >= 2 and b_score > i_score + pf_score:
+        return 'broker'
+    if pf_score >= 1 or (i_score >= 1 and 'biznest' not in p):
+        return 'it' if i_score > pf_score else 'platform'
+    if i_score >= 2:
+        return 'it'
+    return 'mixed'
+
+
+def _build_memory_context(memory: dict, topic: str = 'mixed') -> str:
     """Формирует структурированный блок памяти ВБ для system prompt.
-    Группирует факты по категориям: persona, rules, platform, glossary, faq,
-    contacts, process, creator, demand, listings, recent.
+    Группирует факты по категориям и фильтрует по теме запроса.
+    topic: 'broker' | 'it' | 'platform' | 'mixed'.
     """
     persona = memory.get('persona', '')
     personality = memory.get('personality', '')
@@ -627,8 +679,8 @@ def _build_memory_context(memory: dict) -> str:
     # Группируем все ключи памяти по префиксам
     groups: dict = {
         'role_broker': [], 'role_it': [], 'role_switch': [],
-        'rule': [], 'platform': [], 'glossary': [], 'faq': [],
-        'contact': [], 'process': [], 'creator': [],
+        'rule': [], 'platform': [], 'poehali': [], 'scenario': [],
+        'glossary': [], 'faq': [], 'contact': [], 'process': [], 'creator': [],
         'demand_summary': [], 'listing_summary': [], 'invest': [], 'market': [],
     }
     for key, value in memory.items():
@@ -645,6 +697,10 @@ def _build_memory_context(memory: dict) -> str:
             groups['rule'].append(v)
         elif key.startswith('platform_'):
             groups['platform'].append(v)
+        elif key.startswith('poehali_'):
+            groups['poehali'].append(v)
+        elif key.startswith('scenario_'):
+            groups['scenario'].append(v)
         elif key.startswith('glossary_'):
             groups['glossary'].append(v)
         elif key.startswith('faq_'):
@@ -682,19 +738,30 @@ def _build_memory_context(memory: dict) -> str:
         for v in groups['creator'][:3]:
             lines.append(f'• {v}')
 
-    if groups['role_switch']:
+    # Лимиты фактов по теме — это сужает контекст и помогает модели сфокусироваться
+    if topic == 'broker':
+        lim_broker, lim_it, lim_platform, lim_gloss, lim_market = 12, 0, 4, 15, 8
+    elif topic == 'it':
+        lim_broker, lim_it, lim_platform, lim_gloss, lim_market = 0, 15, 8, 0, 0
+    elif topic == 'platform':
+        lim_broker, lim_it, lim_platform, lim_gloss, lim_market = 0, 8, 20, 0, 0
+    else:  # mixed
+        lim_broker, lim_it, lim_platform, lim_gloss, lim_market = 6, 8, 10, 5, 3
+
+    # Правила переключения нужны только при mixed — иначе модель уже определилась
+    if groups['role_switch'] and topic == 'mixed':
         lines.append('\n[Переключение ролей — как определять]')
         for v in groups['role_switch'][:6]:
             lines.append(f'• {v}')
 
-    if groups['role_broker']:
+    if groups['role_broker'] and lim_broker > 0:
         lines.append('\n[РОЛЬ 1: Брокер коммерческой недвижимости]')
-        for v in groups['role_broker'][:12]:
+        for v in groups['role_broker'][:lim_broker]:
             lines.append(f'• {v}')
 
-    if groups['role_it']:
+    if groups['role_it'] and lim_it > 0:
         lines.append('\n[РОЛЬ 2: ИТ-эксперт (мульти-роль)]')
-        for v in groups['role_it'][:15]:
+        for v in groups['role_it'][:lim_it]:
             lines.append(f'• {v}')
 
     if groups['rule']:
@@ -702,9 +769,23 @@ def _build_memory_context(memory: dict) -> str:
         for v in groups['rule'][:15]:
             lines.append(f'• {v}')
 
-    if groups['platform']:
-        lines.append('\n[Как устроена платформа]')
-        for v in groups['platform'][:20]:
+    if groups['platform'] and lim_platform > 0:
+        lines.append('\n[Как устроена платформа BIZNEST]')
+        for v in groups['platform'][:lim_platform]:
+            lines.append(f'• {v}')
+
+    # poehali.dev — техническая база для IT/platform тем
+    if groups['poehali'] and topic in ('it', 'platform', 'mixed'):
+        lim_poehali = 15 if topic in ('it', 'platform') else 6
+        lines.append('\n[Платформа poehali.dev — как работает движок]')
+        for v in groups['poehali'][:lim_poehali]:
+            lines.append(f'• {v}')
+
+    # Сценарии-скрипты — готовые ответы на частые ситуации
+    if groups['scenario']:
+        lim_scen = 12 if topic in ('it', 'platform', 'mixed') else 6
+        lines.append('\n[Сценарии — готовые маршруты ответов]')
+        for v in groups['scenario'][:lim_scen]:
             lines.append(f'• {v}')
 
     if groups['process']:
@@ -722,14 +803,14 @@ def _build_memory_context(memory: dict) -> str:
         for v in groups['faq'][:10]:
             lines.append(f'• {v}')
 
-    if groups['glossary']:
+    if groups['glossary'] and lim_gloss > 0:
         lines.append('\n[Термины и определения]')
-        for v in groups['glossary'][:15]:
+        for v in groups['glossary'][:lim_gloss]:
             lines.append(f'• {v}')
 
-    if groups['market'] or groups['invest']:
+    if (groups['market'] or groups['invest']) and lim_market > 0:
         lines.append('\n[Рынок и инвестиции]')
-        for v in (groups['market'] + groups['invest'])[:8]:
+        for v in (groups['market'] + groups['invest'])[:lim_market]:
             lines.append(f'• {v}')
 
     if facts:
@@ -1665,7 +1746,10 @@ def handler(event, context):
                 memory = _load_ai_memory(cur)
                 pulse_ctx = _build_pulse_context(cur)
                 if action in ('admin', 'admin_ops'):
-                    memory_ctx = _build_memory_context(memory)
+                    # Контекстный фильтр: подбираем факты по теме запроса
+                    # → меньше шума, лучше фокус модели
+                    topic = _detect_topic(user_text)
+                    memory_ctx = _build_memory_context(memory, topic=topic)
                     sys_prompt = sys_prompt + '\n\n' + pulse_ctx + '\n\n' + memory_ctx
                     _increment_interaction(cur, conn)
                 else:
@@ -1697,9 +1781,20 @@ def handler(event, context):
             elif action == 'agent':
                 model_to_use = YANDEX_MODEL_NAME
                 max_tok = 4000
-            elif action in dialog_actions or action in {'analytics_full', 'security', 'marketing', 'modernize', 'db_check'}:
+            elif action == 'admin':
+                # Диалог в админке — короткие живые ответы. Длинные планы только по явной просьбе.
+                model_to_use = YANDEX_MODEL_NAME
+                max_tok = 1500
+            elif action == 'admin_ops':
+                model_to_use = YANDEX_MODEL_NAME
+                max_tok = 2500
+            elif action in {'analytics_full', 'security', 'marketing', 'modernize', 'db_check'}:
+                # Отчёты — здесь длина оправдана
                 model_to_use = YANDEX_MODEL_NAME
                 max_tok = 6000
+            elif action in dialog_actions:
+                model_to_use = YANDEX_MODEL_NAME
+                max_tok = 3000
             else:
                 model_to_use = YANDEX_MODEL_SHORT
                 max_tok = 2000
