@@ -128,7 +128,7 @@ def _rehost_listing(listing, s3_client):
     if not external:
         return {'id': listing_id, 'skipped': True, 'reason': 'все фото уже на CDN'}
 
-    url_map = {}  # old_url -> new_url
+    url_map = {}   # old_url -> new_url or None (None = битая ссылка, убрать)
     errors = []
 
     for url in all_urls:
@@ -138,22 +138,23 @@ def _rehost_listing(listing, s3_client):
         try:
             raw = _fetch_image(url)
             if len(raw) < 100:
-                errors.append(f"{url}: слишком маленький файл")
-                url_map[url] = url
+                errors.append(f"id={listing_id} {url}: слишком маленький файл — удалена")
+                url_map[url] = None  # убираем битую ссылку
                 continue
             webp_data, mime = _to_webp(raw)
             new_url = _upload(s3_client, webp_data, mime)
             url_map[url] = new_url
         except Exception as e:
-            errors.append(f"{url}: {str(e)[:80]}")
-            url_map[url] = url  # при ошибке оставляем старый URL
+            err_str = str(e)[:120]
+            errors.append(f"id={listing_id} {url}: {err_str} — удалена")
+            url_map[url] = None  # 404/таймаут — убираем битую ссылку
 
-    # Собираем новые списки
-    new_urls = [url_map.get(u, u) for u in all_urls]
+    # Собираем новые списки, пропуская None (битые)
+    new_urls = [url_map[u] for u in all_urls if url_map.get(u) is not None]
     new_images = '|'.join(new_urls)
-    new_image = new_urls[0] if new_urls else orig_image
+    new_image = new_urls[0] if new_urls else ''
 
-    converted = sum(1 for u in all_urls if not _is_our_cdn(u) and _is_our_cdn(url_map.get(u, u)))
+    converted = sum(1 for u in all_urls if _is_our_cdn(url_map.get(u, '') or ''))
 
     return {
         'id': listing_id,

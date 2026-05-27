@@ -29,6 +29,7 @@ interface BatchResult {
   remaining_listings: number;
   next_offset: number;
   summary: string;
+  results?: { id: number; converted?: number; errors?: string[]; skipped?: boolean; reason?: string }[];
 }
 
 export default function PhotoOptimizeTab() {
@@ -78,6 +79,14 @@ export default function PhotoOptimizeTab() {
         setTotalConverted(c => c + result.converted_photos);
         setTotalErrors(e => e + result.errors);
         setLog(l => [...l, result.summary]);
+        // Показываем детали ошибок по каждому объявлению
+        if (result.results) {
+          for (const r of result.results) {
+            if (r.errors && r.errors.length > 0) {
+              setLog(l => [...l, `  ↳ Объявление #${r.id}: ${r.errors!.join('; ')}`]);
+            }
+          }
+        }
         setStatus(s => s ? { ...s, external_photos: result.remaining_listings } : s);
 
         if (result.done || result.processed === 0) {
