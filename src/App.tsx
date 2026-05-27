@@ -1,20 +1,76 @@
-import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
+import { useEffect, useState, useMemo, lazy, Suspense, Component } from 'react';
+import type { ReactNode, ComponentType } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import HomePage from './pages/HomePage';
-const PropertyPage     = lazy(() => import('./pages/PropertyPage'));
-const CatalogPage      = lazy(() => import('./pages/CatalogPage'));
-const MapPage          = lazy(() => import('./pages/MapPage'));
-const FavoritesPage    = lazy(() => import('./pages/FavoritesPage'));
-const ComparePage      = lazy(() => import('./pages/ComparePage'));
-const LoginPage        = lazy(() => import('./pages/LoginPage'));
-const AdminPage        = lazy(() => import('./pages/AdminPage'));
-const NetworkTenantsPage = lazy(() => import('./pages/NetworkTenantsPage'));
-const CategoryPage     = lazy(() => import('./pages/CategoryPage'));
-const NotFoundPage     = lazy(() => import('./pages/NotFoundPage'));
-const DeclinedPage     = lazy(() => import('./pages/DeclinedPage'));
-const NewsListPage     = lazy(() => import('./pages/NewsPage').then(m => ({ default: m.NewsListPage })));
-const NewsArticlePage  = lazy(() => import('./pages/NewsPage').then(m => ({ default: m.NewsArticlePage })));
-const LeadsListPage    = lazy(() => import('./pages/LeadsListPage'));
+
+function lazyWithRetry<T extends { default: ComponentType<Record<string, unknown>> }>(
+  factory: () => Promise<T>,
+  retries = 3,
+  delay = 600,
+) {
+  return lazy(() => {
+    let attempt = 0;
+    const tryLoad = (): Promise<T> =>
+      factory().catch((err: Error) => {
+        attempt++;
+        if (attempt > retries) throw err;
+        return new Promise<T>((resolve, reject) => {
+          setTimeout(() => tryLoad().then(resolve, reject), delay * attempt);
+        });
+      });
+    return tryLoad();
+  });
+}
+
+const PropertyPage     = lazyWithRetry(() => import('./pages/PropertyPage'));
+const CatalogPage      = lazyWithRetry(() => import('./pages/CatalogPage'));
+const MapPage          = lazyWithRetry(() => import('./pages/MapPage'));
+const FavoritesPage    = lazyWithRetry(() => import('./pages/FavoritesPage'));
+const ComparePage      = lazyWithRetry(() => import('./pages/ComparePage'));
+const LoginPage        = lazyWithRetry(() => import('./pages/LoginPage'));
+const AdminPage        = lazyWithRetry(() => import('./pages/AdminPage'));
+const NetworkTenantsPage = lazyWithRetry(() => import('./pages/NetworkTenantsPage'));
+const CategoryPage     = lazyWithRetry(() => import('./pages/CategoryPage'));
+const NotFoundPage     = lazyWithRetry(() => import('./pages/NotFoundPage'));
+const DeclinedPage     = lazyWithRetry(() => import('./pages/DeclinedPage'));
+const NewsListPage     = lazyWithRetry(() => import('./pages/NewsPage').then(m => ({ default: m.NewsListPage })));
+const NewsArticlePage  = lazyWithRetry(() => import('./pages/NewsPage').then(m => ({ default: m.NewsArticlePage })));
+const LeadsListPage    = lazyWithRetry(() => import('./pages/LeadsListPage'));
+
+class ChunkErrorBoundary extends Component<{ children: ReactNode; fallback?: ReactNode }, { error: boolean }> {
+  constructor(props: { children: ReactNode; fallback?: ReactNode }) { super(props); this.state = { error: false }; }
+  static getDerivedStateFromError() { return { error: true }; }
+  componentDidCatch(error: Error) {
+    const msg = String(error?.message || error || '');
+    if (/Failed to fetch dynamically imported module|Loading chunk|ChunkLoadError|Importing a module script failed/i.test(msg)) {
+      try {
+        const last = Number(sessionStorage.getItem('__chunk_reload_at__') || '0');
+        if (Date.now() - last > 15000) {
+          sessionStorage.setItem('__chunk_reload_at__', String(Date.now()));
+          if ('caches' in window) caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).finally(() => window.location.reload());
+          else window.location.reload();
+        }
+      } catch { window.location.reload(); }
+    }
+  }
+  render() {
+    if (this.state.error) {
+      if (this.props.fallback) return this.props.fallback;
+      return (
+        <div className="min-h-screen flex items-center justify-center flex-col gap-4 text-center p-8">
+          <div className="text-4xl">⚠️</div>
+          <div className="font-semibold text-lg">Не удалось загрузить страницу</div>
+          <div className="text-sm text-muted-foreground max-w-md">Возможно, кеш браузера устарел после обновления сайта.</div>
+          <button className="px-4 py-2 bg-brand-blue text-white rounded-xl" onClick={() => {
+            try { sessionStorage.removeItem('__chunk_reload_at__'); } catch { /* ignore */ }
+            window.location.reload();
+          }}>Обновить страницу</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import CompareBar from './components/CompareBar';
@@ -360,10 +416,12 @@ export default function App() {
       );
     }
     return (
-      <Suspense fallback={pageFallback}>
-        <SeoHead title="Админ-панель" noindex />
-        <AdminPage onExit={() => { setView('site'); setAdminInitialSection(undefined); }} initialSection={adminInitialSection as string | undefined} />
-      </Suspense>
+      <ChunkErrorBoundary>
+        <Suspense fallback={pageFallback}>
+          <SeoHead title="Админ-панель" noindex />
+          <AdminPage onExit={() => { setView('site'); setAdminInitialSection(undefined); }} initialSection={adminInitialSection as string | undefined} />
+        </Suspense>
+      </ChunkErrorBoundary>
     );
   }
 
