@@ -68,32 +68,39 @@ const predictListeners = new Map<number, Array<(h: PredictHint | null) => void>>
 // Батч-очередь: собираем id в течение BATCH_DELAY мс, затем один запрос
 let batchQueue: number[] = [];
 let batchTimer: ReturnType<typeof setTimeout> | null = null;
-const BATCH_DELAY = 80;
+const BATCH_DELAY = 200;
+
+async function fetchPredictBatch(ids: number[], attempt = 0): Promise<void> {
+  try {
+    const r = await fetch(`${PREDICT_URL}?ids=${ids.join(',')}`);
+    if (!r.ok) throw new Error(`${r.status}`);
+    const data: Record<string, { price_assessment?: PredictHint['price_assessment'] }> = await r.json();
+    ids.forEach(id => {
+      const d = data[String(id)];
+      const val: PredictHint | null = d?.price_assessment ? { price_assessment: d.price_assessment } : null;
+      predictCache.set(id, val);
+      predictListeners.get(id)?.forEach(cb => cb(val));
+      predictListeners.delete(id);
+    });
+  } catch {
+    if (attempt < 2) {
+      setTimeout(() => fetchPredictBatch(ids, attempt + 1), 1000 * (attempt + 1));
+    } else {
+      ids.forEach(id => {
+        predictCache.set(id, null);
+        predictListeners.get(id)?.forEach(cb => cb(null));
+        predictListeners.delete(id);
+      });
+    }
+  }
+}
 
 function flushBatch() {
   batchTimer = null;
   const ids = [...new Set(batchQueue)];
   batchQueue = [];
   if (ids.length === 0) return;
-
-  fetch(`${PREDICT_URL}?ids=${ids.join(',')}`)
-    .then(r => r.json())
-    .then((data: Record<string, { price_assessment?: PredictHint['price_assessment'] }>) => {
-      ids.forEach(id => {
-        const d = data[String(id)];
-        const val: PredictHint | null = d?.price_assessment ? { price_assessment: d.price_assessment } : null;
-        predictCache.set(id, val);
-        predictListeners.get(id)?.forEach(cb => cb(val));
-        predictListeners.delete(id);
-      });
-    })
-    .catch(() => {
-      ids.forEach(id => {
-        predictCache.set(id, null);
-        predictListeners.get(id)?.forEach(cb => cb(null));
-        predictListeners.delete(id);
-      });
-    });
+  fetchPredictBatch(ids);
 }
 
 function schedulePredictFetch(id: number, cb: (h: PredictHint | null) => void) {
