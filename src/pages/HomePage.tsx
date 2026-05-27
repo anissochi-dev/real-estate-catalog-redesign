@@ -1,13 +1,14 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Property, Page } from '@/App';
 import PropertyCard from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
-import ClientLeadsSection from '@/components/ClientLeadsSection';
-import AIMatchModal from '@/components/AIMatchModal';
 import { NEWS_URL } from '@/lib/adminApi';
 import SeoHead from '@/components/SeoHead';
+
+const ClientLeadsSection = lazy(() => import('@/components/ClientLeadsSection'));
+const AIMatchModal = lazy(() => import('@/components/AIMatchModal'));
 
 interface PublicStats {
   total: number;
@@ -342,7 +343,11 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
         </div>
       </section>
 
-      {showLeads && <ClientLeadsSection limit={settings.home_leads_limit ?? 6} />}
+      {showLeads && (
+        <Suspense fallback={null}>
+          <ClientLeadsSection limit={settings.home_leads_limit ?? 6} />
+        </Suspense>
+      )}
 
       {/* Блок новостей — 5 в ряд, 2 строки */}
       {showNews && latestNews.length > 0 && (
@@ -393,12 +398,16 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
         </section>
       )}
 
-      <AIMatchModal
-        open={aiOpen}
-        onClose={() => setAiOpen(false)}
-        initialPrompt={searchQuery}
-        autoSubmit={!!searchQuery.trim()}
-      />
+      {aiOpen && (
+        <Suspense fallback={null}>
+          <AIMatchModal
+            open={aiOpen}
+            onClose={() => setAiOpen(false)}
+            initialPrompt={searchQuery}
+            autoSubmit={!!searchQuery.trim()}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

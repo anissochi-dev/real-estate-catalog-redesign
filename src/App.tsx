@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
-import HomePage from './pages/HomePage';
-
+const HomePage         = lazy(() => import('./pages/HomePage'));
 const PropertyPage     = lazy(() => import('./pages/PropertyPage'));
 const CatalogPage      = lazy(() => import('./pages/CatalogPage'));
 const MapPage          = lazy(() => import('./pages/MapPage'));
