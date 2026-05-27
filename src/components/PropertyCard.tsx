@@ -193,8 +193,8 @@ export default function PropertyCard({
                 width={400}
                 height={300}
                 loading={index < 4 && i === 0 ? 'eager' : 'lazy'}
-                fetchpriority={index < 4 && i === 0 ? 'high' : 'low'}
-                decoding={index < 4 && i === 0 ? 'sync' : 'async'}
+                fetchpriority={index === 0 && i === 0 ? 'high' : index < 4 && i === 0 ? 'auto' : 'low'}
+                decoding={index === 0 && i === 0 ? 'sync' : 'async'}
                 className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${i === activeImg ? 'opacity-100' : 'opacity-0'}`}
               />
             ))
