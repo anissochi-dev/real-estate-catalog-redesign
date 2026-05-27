@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import HomePage from './pages/HomePage';
+import PropertyPage from './pages/PropertyPage';
 
 const CatalogPage      = lazy(() => import('./pages/CatalogPage'));
 const MapPage          = lazy(() => import('./pages/MapPage'));
@@ -9,7 +10,6 @@ const ComparePage      = lazy(() => import('./pages/ComparePage'));
 const LoginPage        = lazy(() => import('./pages/LoginPage'));
 const AdminPage        = lazy(() => import('./pages/AdminPage'));
 const NetworkTenantsPage = lazy(() => import('./pages/NetworkTenantsPage'));
-const PropertyPage     = lazy(() => import('./pages/PropertyPage'));
 const CategoryPage     = lazy(() => import('./pages/CategoryPage'));
 const NotFoundPage     = lazy(() => import('./pages/NotFoundPage'));
 const DeclinedPage     = lazy(() => import('./pages/DeclinedPage'));
