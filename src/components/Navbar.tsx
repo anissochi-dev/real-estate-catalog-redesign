@@ -51,7 +51,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
               className="flex items-center gap-2 group shrink-0"
             >
               {logoUrl ? (
-                <img src={logoUrl} alt={brandName} className="w-8 h-8 md:w-9 md:h-9 rounded-lg object-contain bg-white" />
+                <img src={logoUrl} alt={brandName} width={36} height={36} className="w-8 h-8 md:w-9 md:h-9 rounded-lg object-contain bg-white" />
               ) : (
                 <div className="w-8 h-8 md:w-9 md:h-9 rounded-lg btn-blue flex items-center justify-center">
                   <Icon name="Building" size={18} className="text-white" />
@@ -138,7 +138,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
         <div className="flex items-center justify-between px-4 py-4 border-b border-border">
           <div className="flex items-center gap-2">
             {logoUrl ? (
-              <img src={logoUrl} alt={brandName} className="w-8 h-8 rounded-lg object-contain" />
+              <img src={logoUrl} alt={brandName} width={32} height={32} className="w-8 h-8 rounded-lg object-contain" />
             ) : (
               <div className="w-8 h-8 rounded-lg btn-blue flex items-center justify-center">
                 <Icon name="Building" size={16} className="text-white" />

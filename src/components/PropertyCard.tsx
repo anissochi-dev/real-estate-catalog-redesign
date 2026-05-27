@@ -190,8 +190,11 @@ export default function PropertyCard({
                 key={src + i}
                 src={src}
                 alt={property.title}
+                width={400}
+                height={300}
                 loading={index < 4 && i === 0 ? 'eager' : 'lazy'}
                 fetchpriority={index < 4 && i === 0 ? 'high' : 'low'}
+                decoding={index < 4 && i === 0 ? 'sync' : 'async'}
                 className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${i === activeImg ? 'opacity-100' : 'opacity-0'}`}
               />
             ))

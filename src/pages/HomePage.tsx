@@ -51,8 +51,8 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   const { settings } = useSettings();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
-  const [stats, setStats] = useState<PublicStats>({ total: 0, main_city: 'Краснодар' });
-  const [leadsCount, setLeadsCount] = useState(0);
+  const [stats, setStats] = useState<PublicStats>({ total: 500, main_city: 'Краснодар' });
+  const [leadsCount, setLeadsCount] = useState(300);
   const [aiOpen, setAiOpen] = useState(false);
   const [latestNews, setLatestNews] = useState<NewsPreview[]>([]);
 
@@ -145,7 +145,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
 
   const STATS_VIEW = [
     { value: `${totalCount}+`, label: 'Объектов в базе', icon: 'Building2', deal: null },
-    { value: leadsCount > 0 ? `${leadsCount}+` : '...', label: 'Заявок от клиентов', icon: 'MessageSquare', deal: null },
+    { value: `${leadsCount}+`, label: 'Заявок от клиентов', icon: 'MessageSquare', deal: null },
     { value: '98%', label: 'Успешных сделок', icon: 'TrendingUp', deal: null },
     { value: `с ${settings.company_since_year || 2007}`, label: 'На рынке', icon: 'Award', deal: null },
   ];
@@ -367,12 +367,12 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
                   onClick={() => navigate(`/news/${n.slug}`)}
                   className="group cursor-pointer bg-white rounded-xl overflow-hidden border border-border hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
                 >
-                  <div className="h-24 relative overflow-hidden bg-gradient-to-br from-brand-blue/10 to-brand-blue/20">
+                  <div className="h-24 relative overflow-hidden bg-gradient-to-br from-brand-blue/10 to-brand-blue/20" style={{minHeight: 96}}>
                     {n.image_url ? (
-                      <img src={n.image_url} alt={n.title} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      <img src={n.image_url} alt={n.title} width={240} height={96} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                     ) : settings.logo_url ? (
                       <div className="w-full h-full flex items-center justify-center bg-brand-blue/5">
-                        <img src={settings.logo_url} alt="лого" loading="lazy" className="w-10 h-10 object-contain opacity-40" />
+                        <img src={settings.logo_url} alt="лого" width={40} height={40} loading="lazy" decoding="async" className="w-10 h-10 object-contain opacity-40" />
                       </div>
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
