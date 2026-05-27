@@ -221,14 +221,16 @@ export default function App() {
           link.setAttribute('fetchpriority', 'high');
           document.head.appendChild(link);
         }
-        // Шаг 2: тихо догружаем остальные в фоне
+        // Шаг 2: тихо догружаем остальные в фоне после рендера LCP
         if (total > 8) {
-          fetchListings()
-            .then(({ listings: all }) => {
-              setProperties(all);
-              setAllLoaded(true);
-            })
-            .catch(() => { setAllLoaded(true); });
+          setTimeout(() => {
+            fetchListings()
+              .then(({ listings: all }) => {
+                setProperties(all);
+                setAllLoaded(true);
+              })
+              .catch(() => { setAllLoaded(true); });
+          }, 500);
         } else {
           setAllLoaded(true);
         }
