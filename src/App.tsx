@@ -1,76 +1,19 @@
-import { useEffect, useState, useMemo, lazy, Suspense, Component } from 'react';
-import type { ReactNode, ComponentType } from 'react';
-import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
-import HomePage from './pages/HomePage';
+import { useEffect, useState, useMemo, Suspense } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import AdminPage from './pages/AdminPage';
+import { LoginPage } from './app/lazyPages';
+import ChunkErrorBoundary from './app/ChunkErrorBoundary';
+import AppRoutes from './app/AppRoutes';
+import {
+  type Property,
+  type Page,
+  type AppView,
+  PATH_BY_PAGE,
+  pageFromPath,
+  VIEW_KEY,
+  loadInitialView,
+} from './app/appTypes';
 
-function lazyWithRetry<T extends { default: ComponentType<Record<string, unknown>> }>(
-  factory: () => Promise<T>,
-  retries = 3,
-  delay = 600,
-) {
-  return lazy(() => {
-    let attempt = 0;
-    const tryLoad = (): Promise<T> =>
-      factory().catch((err: Error) => {
-        attempt++;
-        if (attempt > retries) throw err;
-        return new Promise<T>((resolve, reject) => {
-          setTimeout(() => tryLoad().then(resolve, reject), delay * attempt);
-        });
-      });
-    return tryLoad();
-  });
-}
-
-const PropertyPage     = lazyWithRetry(() => import('./pages/PropertyPage'));
-const CatalogPage      = lazyWithRetry(() => import('./pages/CatalogPage'));
-const MapPage          = lazyWithRetry(() => import('./pages/MapPage'));
-const FavoritesPage    = lazyWithRetry(() => import('./pages/FavoritesPage'));
-const ComparePage      = lazyWithRetry(() => import('./pages/ComparePage'));
-const LoginPage        = lazyWithRetry(() => import('./pages/LoginPage'));
-const NetworkTenantsPage = lazyWithRetry(() => import('./pages/NetworkTenantsPage'));
-const CategoryPage     = lazyWithRetry(() => import('./pages/CategoryPage'));
-const NotFoundPage     = lazyWithRetry(() => import('./pages/NotFoundPage'));
-const DeclinedPage     = lazyWithRetry(() => import('./pages/DeclinedPage'));
-const NewsListPage     = lazyWithRetry(() => import('./pages/NewsPage').then(m => ({ default: m.NewsListPage })));
-const NewsArticlePage  = lazyWithRetry(() => import('./pages/NewsPage').then(m => ({ default: m.NewsArticlePage })));
-const LeadsListPage    = lazyWithRetry(() => import('./pages/LeadsListPage'));
-
-class ChunkErrorBoundary extends Component<{ children: ReactNode; fallback?: ReactNode }, { error: boolean }> {
-  constructor(props: { children: ReactNode; fallback?: ReactNode }) { super(props); this.state = { error: false }; }
-  static getDerivedStateFromError() { return { error: true }; }
-  componentDidCatch(error: Error) {
-    const msg = String(error?.message || error || '');
-    if (/Failed to fetch dynamically imported module|Loading chunk|ChunkLoadError|Importing a module script failed/i.test(msg)) {
-      try {
-        const last = Number(sessionStorage.getItem('__chunk_reload_at__') || '0');
-        if (Date.now() - last > 15000) {
-          sessionStorage.setItem('__chunk_reload_at__', String(Date.now()));
-          if ('caches' in window) caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).finally(() => window.location.reload());
-          else window.location.reload();
-        }
-      } catch { window.location.reload(); }
-    }
-  }
-  render() {
-    if (this.state.error) {
-      if (this.props.fallback) return this.props.fallback;
-      return (
-        <div className="min-h-screen flex items-center justify-center flex-col gap-4 text-center p-8">
-          <div className="text-4xl">⚠️</div>
-          <div className="font-semibold text-lg">Не удалось загрузить страницу</div>
-          <div className="text-sm text-muted-foreground max-w-md">Возможно, кеш браузера устарел после обновления сайта.</div>
-          <button className="px-4 py-2 bg-brand-blue text-white rounded-xl" onClick={() => {
-            try { sessionStorage.removeItem('__chunk_reload_at__'); } catch { /* ignore */ }
-            window.location.reload();
-          }}>Обновить страницу</button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import CompareBar from './components/CompareBar';
@@ -83,93 +26,7 @@ import { useSettings } from './contexts/SettingsContext';
 import { fetchListings } from './lib/api';
 import { useAuth } from './contexts/AuthContext';
 
-
-export type PropertyType = 'office' | 'retail' | 'warehouse' | 'restaurant' | 'business' | 'production' | 'hotel' | 'gab';
-export type DealType = 'sale' | 'rent' | 'business';
-
-export interface Property {
-  id: number;
-  title: string;
-  type: PropertyType;
-  deal: DealType;
-  address: string;
-  district: string;
-  area: number;
-  price: number;
-  pricePerM2?: number;
-  payback?: number;
-  profit?: number;
-  image: string;
-  tags: string[];
-  description: string;
-  floor?: number;
-  totalFloors?: number;
-  lat: number;
-  lng: number;
-  isHot?: boolean;
-  isNew?: boolean;
-  isExclusive?: boolean;
-  isUrgent?: boolean;
-  publicCode?: number;
-  tenantName?: string;
-  monthlyRent?: number;
-  yearlyRent?: number;
-  purpose?: string;
-  finishing?: string;
-  ceilingHeight?: number;
-  electricityKw?: number;
-  utilities?: string;
-  roadLine?: string;
-  updatedAt?: string;
-  createdAt?: string;
-  lastEditedAt?: string;
-}
-
-export type Page = 'home' | 'catalog' | 'map' | 'favorites' | 'compare' | 'network-tenants' | 'news';
-export type AppView = 'site' | 'login' | 'admin';
-
-const PATH_BY_PAGE: Record<Page, string> = {
-  home: '/',
-  catalog: '/catalog',
-  map: '/map',
-  favorites: '/favorites',
-  compare: '/compare',
-  'network-tenants': '/network-tenants',
-  news: '/news',
-};
-
-function pageFromPath(pathname: string): Page {
-  if (pathname.startsWith('/catalog')) return 'catalog';
-  if (pathname.startsWith('/map')) return 'map';
-  if (pathname.startsWith('/favorites')) return 'favorites';
-  if (pathname.startsWith('/compare')) return 'compare';
-  if (pathname.startsWith('/network-tenants')) return 'network-tenants';
-  if (pathname.startsWith('/news')) return 'news';
-  return 'home';
-}
-
-const VIEW_KEY = 'biznest_view';
-
-function loadInitialView(): AppView {
-  try {
-    // 1. Если в localStorage сохранён admin/login — приоритет за ним.
-    //    Это нужно чтобы при перезагрузке страницы (особенно на мобиле,
-    //    где URL не меняется при переходе в админку) пользователь оставался
-    //    в админ-панели, а не выкидывался на публичный сайт.
-    const v = localStorage.getItem(VIEW_KEY);
-    if (v === 'admin' || v === 'login') return v;
-
-    // 2. Иначе если URL — публичная страница, открываем сайт.
-    const publicPaths = ['/object', '/catalog', '/map', '/favorites', '/compare', '/network-tenants', '/news', '/leads', '/declined'];
-    if (publicPaths.some(p => window.location.pathname.startsWith(p))) return 'site';
-
-    // 3. Иначе берём что есть в localStorage (или site по умолчанию).
-    if (v === 'site') return v;
-  } catch {
-    // ignore localStorage errors
-  }
-  return 'site';
-}
+export type { PropertyType, DealType, Property, Page, AppView } from './app/appTypes';
 
 export default function App() {
   const { user, loading: authLoading } = useAuth();
@@ -479,77 +336,17 @@ export default function App() {
 
       <main>
         <Suspense fallback={<div style={{minHeight: 'calc(100vh - 64px)'}} />}>
-        <Routes>
-          <Route path="/" element={
-            <HomePage
-              properties={properties}
-              favorites={favorites}
-              compareList={compareList}
-              onToggleFavorite={toggleFavorite}
-              onToggleCompare={toggleCompare}
-              onNavigate={setCurrentPage}
-            />
-          } />
-          <Route path="/catalog" element={
-            <CatalogPage
-              properties={properties}
-              favorites={favorites}
-              compareList={compareList}
-              onToggleFavorite={toggleFavorite}
-              onToggleCompare={toggleCompare}
-              allLoaded={allLoaded}
-            />
-          } />
-          <Route path="/map" element={
-            <MapPage
-              properties={properties}
-              favorites={favorites}
-              compareList={compareList}
-              onToggleFavorite={toggleFavorite}
-              onToggleCompare={toggleCompare}
-              allLoaded={allLoaded}
-            />
-          } />
-          <Route path="/favorites" element={
-            <FavoritesPage
-              properties={favoriteProperties}
-              favorites={favorites}
-              compareList={compareList}
-              onToggleFavorite={toggleFavorite}
-              onToggleCompare={toggleCompare}
-            />
-          } />
-          <Route path="/compare" element={
-            <ComparePage
-              properties={compareProperties}
-              onRemove={id => toggleCompare(id)}
-              onNavigate={setCurrentPage}
-            />
-          } />
-          <Route path="/catalog/:type" element={
-            <CategoryPage
-              properties={properties}
-              favorites={favorites}
-              compareList={compareList}
-              onToggleFavorite={toggleFavorite}
-              onToggleCompare={toggleCompare}
-            />
-          } />
-          <Route path="/network-tenants" element={<NetworkTenantsPage />} />
-          <Route path="/object/:slug" element={
-            <PropertyPage
-              favorites={favorites}
-              compareList={compareList}
-              onToggleFavorite={toggleFavorite}
-              onToggleCompare={toggleCompare}
-            />
-          } />
-          <Route path="/news" element={<NewsListPage />} />
-          <Route path="/news/:slug" element={<NewsArticlePage />} />
-          <Route path="/leads" element={<LeadsListPage />} />
-          <Route path="/declined" element={<DeclinedPage />} />
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
+          <AppRoutes
+            properties={properties}
+            favorites={favorites}
+            compareList={compareList}
+            compareProperties={compareProperties}
+            favoriteProperties={favoriteProperties}
+            allLoaded={allLoaded}
+            toggleFavorite={toggleFavorite}
+            toggleCompare={toggleCompare}
+            setCurrentPage={setCurrentPage}
+          />
         </Suspense>
       </main>
 
