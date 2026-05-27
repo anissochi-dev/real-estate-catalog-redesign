@@ -1,13 +1,13 @@
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import HomePage from './pages/HomePage';
+import AdminPage from './pages/AdminPage';
 const PropertyPage     = lazy(() => import('./pages/PropertyPage'));
 const CatalogPage      = lazy(() => import('./pages/CatalogPage'));
 const MapPage          = lazy(() => import('./pages/MapPage'));
 const FavoritesPage    = lazy(() => import('./pages/FavoritesPage'));
 const ComparePage      = lazy(() => import('./pages/ComparePage'));
 const LoginPage        = lazy(() => import('./pages/LoginPage'));
-const AdminPage        = lazy(() => import('./pages/AdminPage').catch(() => new Promise<typeof import('./pages/AdminPage')>((res, rej) => setTimeout(() => import('./pages/AdminPage').then(res).catch(rej), 1500))));
 const NetworkTenantsPage = lazy(() => import('./pages/NetworkTenantsPage'));
 const CategoryPage     = lazy(() => import('./pages/CategoryPage'));
 const NotFoundPage     = lazy(() => import('./pages/NotFoundPage'));
@@ -318,10 +318,10 @@ export default function App() {
       );
     }
     return (
-      <Suspense fallback={pageFallback}>
+      <>
         <SeoHead title="Админ-панель" noindex />
         <AdminPage onExit={() => { setView('site'); setAdminInitialSection(undefined); }} initialSection={adminInitialSection as string | undefined} />
-      </Suspense>
+      </>
     );
   }
 
