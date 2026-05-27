@@ -38,6 +38,14 @@
       "path": "/",
       "body": { "foo": "bar" },
       "expectedStatus": 405
+    },
+    {
+      "name": "Данные для главной страницы одним запросом",
+      "method": "GET",
+      "path": "/?resource=public_home_data",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial",
+      "expectedBody": { "leads_count": 14 }
     }
   ]
 }

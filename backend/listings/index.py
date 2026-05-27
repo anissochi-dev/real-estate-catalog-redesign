@@ -362,6 +362,43 @@ def handler(event: dict, context) -> dict:
                     'by_deal': by_deal,
                 }, cache='public, max-age=300, stale-while-revalidate=60')
 
+            if params.get('resource') == 'public_home_data':
+                # Все данные для главной страницы одним запросом
+                cur.execute(
+                    "SELECT COUNT(*) AS c FROM t_p71821556_real_estate_catalog_.listings WHERE status = 'active'"
+                )
+                total = cur.fetchone()['c']
+                cur.execute(
+                    "SELECT main_city FROM t_p71821556_real_estate_catalog_.settings ORDER BY id ASC LIMIT 1"
+                )
+                row = cur.fetchone()
+                cur.execute(
+                    "SELECT category, COUNT(*) AS c "
+                    "FROM t_p71821556_real_estate_catalog_.listings "
+                    "WHERE status = 'active' GROUP BY category"
+                )
+                by_cat = {r['category']: r['c'] for r in cur.fetchall()}
+                cur.execute(
+                    "SELECT deal, COUNT(*) AS c "
+                    "FROM t_p71821556_real_estate_catalog_.listings "
+                    "WHERE status = 'active' GROUP BY deal"
+                )
+                by_deal = {r['deal']: r['c'] for r in cur.fetchall()}
+                cur.execute(
+                    "SELECT COUNT(*) AS c FROM t_p71821556_real_estate_catalog_.leads "
+                    "WHERE show_on_main = TRUE AND status IN ('new','in_progress')"
+                )
+                leads_total = int(cur.fetchone()['c'] or 0)
+                return _ok({
+                    'stats': {
+                        'total': total,
+                        'main_city': (row['main_city'] if row else 'Краснодар'),
+                        'by_category': by_cat,
+                        'by_deal': by_deal,
+                    },
+                    'leads_count': leads_total,
+                }, cache='public, max-age=300, stale-while-revalidate=60')
+
             if params.get('resource') == 'similar' and params.get('id'):
                 try:
                     sid = int(params.get('id'))

@@ -66,28 +66,23 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   const showNewsOnHome = settings.show_news_on_home;
 
   useEffect(() => {
-    // stats и leadsCount — берём из prefetch, только если нет — запрашиваем
     const cached = (window as Window & { __PREFETCH__?: Pf }).__PREFETCH__;
     const requests: Promise<void>[] = [];
 
-    if (!cached?.stats) {
+    // stats + leadsCount — один запрос вместо двух
+    if (!cached?.stats || !cached?.leadsCount) {
       requests.push(
-        fetch(`${LISTINGS_URL}?resource=public_stats`)
+        fetch(`${LISTINGS_URL}?resource=public_home_data`)
           .then(r => r.json())
-          .then(d => setStats({ total: d.total || 0, main_city: d.main_city || 'Краснодар', by_category: d.by_category || {}, by_deal: d.by_deal || {} }))
-          .catch(() => undefined),
-      );
-    }
-    if (!cached?.leadsCount) {
-      requests.push(
-        fetch(`${LISTINGS_URL}?resource=public_leads_full&limit=1`)
-          .then(r => r.json())
-          .then(d => setLeadsCount(d.total || 0))
+          .then(d => {
+            if (d.stats) setStats({ total: d.stats.total || 0, main_city: d.stats.main_city || 'Краснодар', by_category: d.stats.by_category || {}, by_deal: d.stats.by_deal || {} });
+            if (typeof d.leads_count === 'number') setLeadsCount(d.leads_count);
+          })
           .catch(() => undefined),
       );
     }
 
-    // Новости — отдельный URL, всегда грузим один раз
+    // Новости — отдельный URL
     if (showNewsOnHome !== false) {
       requests.push(
         fetch(`${NEWS_URL}?action=list&limit=${newsLimit}`)
