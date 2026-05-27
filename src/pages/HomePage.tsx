@@ -52,8 +52,13 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   const { settings } = useSettings();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
-  const [stats, setStats] = useState<PublicStats>({ total: 500, main_city: 'Краснодар' });
-  const [leadsCount, setLeadsCount] = useState(300);
+
+  // Инициализируем из prefetch если уже готово — нулевого мигания не будет
+  type Pf = { stats?: PublicStats; leadsCount?: number };
+  const pf = (window as Window & { __PREFETCH__?: Pf }).__PREFETCH__;
+  const [stats, setStats] = useState<PublicStats>(pf?.stats ?? { total: 500, main_city: 'Краснодар' });
+  const [leadsCount, setLeadsCount] = useState(pf?.leadsCount ?? 300);
+
   const [aiOpen, setAiOpen] = useState(false);
   const [latestNews, setLatestNews] = useState<NewsPreview[] | null>(null);
 
@@ -61,28 +66,28 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   const showNewsOnHome = settings.show_news_on_home;
 
   useEffect(() => {
+    // stats и leadsCount — берём из prefetch, только если нет — запрашиваем
+    const cached = (window as Window & { __PREFETCH__?: Pf }).__PREFETCH__;
     const requests: Promise<void>[] = [];
 
-    // Статистика + счётчик заявок — всегда
-    requests.push(
-      fetch(`${LISTINGS_URL}?resource=public_stats`)
-        .then(r => r.json())
-        .then(d => setStats({
-          total: d.total || 0,
-          main_city: d.main_city || 'Краснодар',
-          by_category: d.by_category || {},
-          by_deal: d.by_deal || {},
-        }))
-        .catch(() => undefined),
-    );
-    requests.push(
-      fetch(`${LISTINGS_URL}?resource=public_leads_full&limit=1`)
-        .then(r => r.json())
-        .then(d => setLeadsCount(d.total || 0))
-        .catch(() => undefined),
-    );
+    if (!cached?.stats) {
+      requests.push(
+        fetch(`${LISTINGS_URL}?resource=public_stats`)
+          .then(r => r.json())
+          .then(d => setStats({ total: d.total || 0, main_city: d.main_city || 'Краснодар', by_category: d.by_category || {}, by_deal: d.by_deal || {} }))
+          .catch(() => undefined),
+      );
+    }
+    if (!cached?.leadsCount) {
+      requests.push(
+        fetch(`${LISTINGS_URL}?resource=public_leads_full&limit=1`)
+          .then(r => r.json())
+          .then(d => setLeadsCount(d.total || 0))
+          .catch(() => undefined),
+      );
+    }
 
-    // Новости — только если включены
+    // Новости — отдельный URL, всегда грузим один раз
     if (showNewsOnHome !== false) {
       requests.push(
         fetch(`${NEWS_URL}?action=list&limit=${newsLimit}`)
@@ -92,8 +97,8 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
       );
     }
 
-    Promise.all(requests);
-  }, [newsLimit, showNewsOnHome]);
+    if (requests.length > 0) Promise.all(requests);
+  }, []);
 
   // Реальное число объектов по категории — из API, с фолбэком на текущий пропс properties
   const categoryCount = (type: string): number => {

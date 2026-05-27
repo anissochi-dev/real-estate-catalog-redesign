@@ -235,42 +235,61 @@ export default function App() {
 
   useEffect(() => {
     setLoading(true);
-    // Шаг 1: быстро грузим первые 8 объектов — сайт показывается сразу
+
+    type PrefetchData = {
+      listings: Property[]; total: number;
+      settings: Record<string, unknown>; stats: unknown; leadsCount: number;
+    };
+    const w = window as Window & {
+      __PREFETCH__?: PrefetchData;
+      __PREFETCH_PROMISE__?: Promise<void>;
+      __PREFETCH_RESOLVE__?: (d: PrefetchData) => void;
+    };
+
+    function applyListings(listings: Property[], total: number) {
+      setProperties(listings);
+      setError(null);
+      setLoading(false);
+      const lcpSrc = listings[0]?.image;
+      if (lcpSrc && !document.querySelector(`link[rel="preload"][href="${lcpSrc}"]`)) {
+        const link = document.createElement('link');
+        link.rel = 'preload'; link.as = 'image';
+        link.href = lcpSrc; link.setAttribute('fetchpriority', 'high');
+        document.head.appendChild(link);
+      }
+      if (total > 8) {
+        setTimeout(() => {
+          fetchListings()
+            .then(({ listings: all }) => { setProperties(all); setAllLoaded(true); })
+            .catch(() => setAllLoaded(true));
+        }, 800);
+      } else {
+        setAllLoaded(true);
+      }
+    }
+
+    // Prefetch уже завершился до монтирования React — рендерим мгновенно
+    if (w.__PREFETCH__) {
+      applyListings(w.__PREFETCH__.listings, w.__PREFETCH__.total);
+      return;
+    }
+
+    // Prefetch в процессе — подписываемся, не дублируем запрос
+    if (w.__PREFETCH_PROMISE__) {
+      let done = false;
+      w.__PREFETCH_RESOLVE__ = (d: PrefetchData) => { done = true; applyListings(d.listings, d.total); };
+      const guard = setTimeout(() => {
+        if (!done) fetchListings(8, 0)
+          .then(({ listings, total }) => applyListings(listings, total))
+          .catch(() => { setError('Не удалось загрузить объекты.'); setLoading(false); });
+      }, 4000);
+      return () => clearTimeout(guard);
+    }
+
+    // Нет prefetch (старый браузер) — обычный fetch
     fetchListings(8, 0)
-      .then(({ listings, total }) => {
-        setProperties(listings);
-        setError(null);
-        setLoading(false);
-        // Preload LCP: инжектируем <link rel="preload"> сразу как узнали URL первой картинки,
-        // до рендера HomePage — браузер начинает скачивать параллельно с JS-рендером.
-        const lcpSrc = listings[0]?.image;
-        if (lcpSrc && !document.querySelector(`link[rel="preload"][href="${lcpSrc}"]`)) {
-          const link = document.createElement('link');
-          link.rel = 'preload';
-          link.as = 'image';
-          link.href = lcpSrc;
-          link.setAttribute('fetchpriority', 'high');
-          document.head.appendChild(link);
-        }
-        // Шаг 2: тихо догружаем остальные в фоне после рендера LCP
-        if (total > 8) {
-          setTimeout(() => {
-            fetchListings()
-              .then(({ listings: all }) => {
-                setProperties(all);
-                setAllLoaded(true);
-              })
-              .catch(() => { setAllLoaded(true); });
-          }, 500);
-        } else {
-          setAllLoaded(true);
-        }
-      })
-      .catch(err => {
-        console.error(err);
-        setError('Не удалось загрузить объекты. Попробуйте обновить страницу.');
-        setLoading(false);
-      });
+      .then(({ listings, total }) => applyListings(listings, total))
+      .catch(err => { console.error(err); setError('Не удалось загрузить объекты.'); setLoading(false); });
   }, []);
 
   const toggleFavorite = (id: number) => {

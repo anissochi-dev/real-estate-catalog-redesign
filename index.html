@@ -56,6 +56,53 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
     <noscript><link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet"></noscript>
 
+    <!-- Early prefetch: 4 запроса стартуют параллельно с загрузкой JS-бандла.
+         React читает window.__PREFETCH__ — если данные готовы, рендер без ожидания сети. -->
+    <script>
+      (function() {
+        var BASE = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
+        var CACHE_KEY = '__pf_v1__';
+        var CACHE_TTL = 5 * 60 * 1000;
+
+        // Мгновенное чтение из sessionStorage (предыдущее посещение)
+        try {
+          var raw = sessionStorage.getItem(CACHE_KEY);
+          if (raw) {
+            var cached = JSON.parse(raw);
+            if (cached && Date.now() - cached.ts < CACHE_TTL) {
+              window.__PREFETCH__ = cached.data;
+            }
+          }
+        } catch(e) {}
+
+        // 4 параллельных запроса — стартуют пока браузер грузит JS-бандл
+        window.__PREFETCH_PROMISE__ = Promise.all([
+          fetch(BASE + '?limit=8&offset=0').then(function(r){ return r.json(); }),
+          fetch(BASE + '?resource=public_settings').then(function(r){ return r.json(); }),
+          fetch(BASE + '?resource=public_stats').then(function(r){ return r.json(); }),
+          fetch(BASE + '?resource=public_leads_full&limit=1').then(function(r){ return r.json(); })
+        ]).then(function(res) {
+          var data = {
+            listings: (res[0].listings || []),
+            total: (res[0].total || 0),
+            settings: (res[1].settings || {}),
+            stats: { total: res[2].total || 0, main_city: res[2].main_city || '', by_category: res[2].by_category || {}, by_deal: res[2].by_deal || {} },
+            leadsCount: (res[3].total || 0)
+          };
+          window.__PREFETCH__ = data;
+          try {
+            // settings → в ключ который читает SettingsContext
+            sessionStorage.setItem('bmn_settings_cache', JSON.stringify({ ts: Date.now(), data: data.settings }));
+            // всё остальное
+            sessionStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: data }));
+          } catch(e) {}
+          if (typeof window.__PREFETCH_RESOLVE__ === 'function') {
+            window.__PREFETCH_RESOLVE__(data);
+          }
+        }).catch(function(){});
+      })();
+    </script>
+
     <!-- HMR/fetch перехват ОТКЛЮЧЁН — раньше ломал нативный fetch. Vite сам справится. -->
 
     <!-- OG Preview: redirect social bots to server-side og-tags -->
