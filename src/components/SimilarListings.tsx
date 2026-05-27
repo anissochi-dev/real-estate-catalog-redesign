@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Property } from '@/App';
+import { Property } from '@/types';
 import { fetchSimilarListings } from '@/lib/api';
 import { listingSlug } from '@/lib/slug';
 import { formatPrice } from '@/lib/formatPrice';

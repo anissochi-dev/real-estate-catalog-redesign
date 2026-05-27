@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Property, Page } from '@/App';
+import { Property, Page } from '@/types';
 import { formatPrice } from '@/lib/formatPrice';
 import Icon from '@/components/ui/icon';
 import { listingSlug } from '@/lib/slug';

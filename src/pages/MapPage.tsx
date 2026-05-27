@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Property } from '@/App';
+import { Property } from '@/types';
 import { formatPrice } from '@/lib/formatPrice';
 import Icon from '@/components/ui/icon';
 import YandexMap from '@/components/YandexMap';

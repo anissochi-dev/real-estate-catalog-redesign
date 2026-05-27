@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Property } from '@/App';
+import { Property } from '@/types';
 import Icon from '@/components/ui/icon';
 import { listingSlug } from '@/lib/slug';
 import YandexMap from '@/components/YandexMap';
