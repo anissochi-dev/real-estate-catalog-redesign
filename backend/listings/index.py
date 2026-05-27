@@ -139,14 +139,14 @@ def handler(event: dict, context) -> dict:
                     "FROM t_p71821556_real_estate_catalog_.settings ORDER BY id ASC LIMIT 1"
                 )
                 row = cur.fetchone()
-                return _ok({'settings': dict(row) if row else {}})
+                return _ok({'settings': dict(row) if row else {}}, cache='public, max-age=300, stale-while-revalidate=60')
 
             if params.get('resource') == 'public_purposes':
                 cur.execute(
                     "SELECT id, name, slug, icon FROM t_p71821556_real_estate_catalog_.purposes "
                     "WHERE is_active = TRUE ORDER BY sort_order ASC, name ASC"
                 )
-                return _ok({'purposes': [dict(r) for r in cur.fetchall()]})
+                return _ok({'purposes': [dict(r) for r in cur.fetchall()]}, cache='public, max-age=3600, stale-while-revalidate=300')
 
             if params.get('resource') == 'public_leads':
                 cur.execute(
@@ -161,7 +161,7 @@ def handler(event: dict, context) -> dict:
                     if d.get('created_at') is not None:
                         d['created_at'] = d['created_at'].isoformat()
                     rows.append(d)
-                return _ok({'leads': rows})
+                return _ok({'leads': rows}, cache='public, max-age=120, stale-while-revalidate=30')
 
             if params.get('resource') == 'public_leads_full':
                 # Полный список заявок с пагинацией, фильтрами и поиском.
@@ -317,7 +317,7 @@ def handler(event: dict, context) -> dict:
                     "WHERE is_active = TRUE AND role IN ('admin','editor','manager','broker','director','office_manager') "
                     "ORDER BY id ASC"
                 )
-                return _ok({'agents': [dict(r) for r in cur.fetchall()]})
+                return _ok({'agents': [dict(r) for r in cur.fetchall()]}, cache='public, max-age=300, stale-while-revalidate=60')
 
             if params.get('resource') == 'public_stats':
                 cur.execute(
@@ -345,7 +345,7 @@ def handler(event: dict, context) -> dict:
                     'main_city': (row['main_city'] if row else 'Краснодар'),
                     'by_category': by_cat,
                     'by_deal': by_deal,
-                })
+                }, cache='public, max-age=300, stale-while-revalidate=60')
 
             if params.get('resource') == 'similar' and params.get('id'):
                 try:
@@ -389,7 +389,7 @@ def handler(event: dict, context) -> dict:
                         f"ORDER BY {order_by} LIMIT 12"
                     )
                     rows = cur.fetchall()
-                return _ok({'listings': [_serialize(dict(r)) for r in rows]})
+                return _ok({'listings': [_serialize(dict(r)) for r in rows]}, cache='public, max-age=120, stale-while-revalidate=30')
 
             listing_id = params.get('id')
             if listing_id:
@@ -417,7 +417,7 @@ def handler(event: dict, context) -> dict:
                     d['owner_phone'] = d['owner_phone_final']
                 d.pop('owner_name_final', None)
                 d.pop('owner_phone_final', None)
-                return _ok({'listing': _serialize(d)})
+                return _ok({'listing': _serialize(d)}, cache='public, max-age=120, stale-while-revalidate=30')
 
             where = ["status = 'active'", "(is_visible IS NULL OR is_visible = TRUE)"]
             category = params.get('category')
@@ -553,12 +553,13 @@ def _serialize(row: dict) -> dict:
     return row
 
 
-def _ok(body: dict) -> dict:
+def _ok(body: dict, cache: str = 'public, max-age=60, stale-while-revalidate=30') -> dict:
     return {
         'statusCode': 200,
         'headers': {
             'Access-Control-Allow-Origin': '*',
             'Content-Type': 'application/json',
+            'Cache-Control': cache,
         },
         'body': json.dumps(body, ensure_ascii=False, default=str),
     }
