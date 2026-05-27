@@ -170,6 +170,9 @@ def _process_source(cur, src: str, api_key: str, folder_id: str):
     if src == 'market_prices':
         return _process_market_prices(cur, api_key, folder_id)
 
+    if src == 'web_sources':
+        return _process_web_sources(cur, api_key, folder_id)
+
     source_configs = {
         'news': {
             'prefix': 'news_',
@@ -274,6 +277,52 @@ def _process_market_prices(cur, api_key: str, folder_id: str):
     return saved, len(sites), None
 
 
+def _process_web_sources(cur, api_key: str, folder_id: str):
+    """Обучает ВБ из пользовательских ссылок (vb_learn_sources)."""
+    cur.execute(
+        f"SELECT id, title, url FROM {SCHEMA}.vb_learn_sources "
+        f"WHERE is_active = TRUE ORDER BY id ASC LIMIT 10"
+    )
+    sources_rows = cur.fetchall() or []
+    if not sources_rows:
+        return 0, 0, 'Нет активных источников-ссылок'
+
+    all_snippets = []
+    fetched_ids = []
+    for row in sources_rows:
+        try:
+            snippet = _fetch_site_text(row['url'], max_chars=2500)
+            if snippet:
+                all_snippets.append(f"=== {row['title']} ({row['url']}) ===\n{snippet}")
+                fetched_ids.append(row['id'])
+        except Exception as e:
+            all_snippets.append(f"=== {row['title']} === Ошибка: {str(e)[:100]}")
+
+    if not any('===' in s and 'Ошибка' not in s for s in all_snippets):
+        return 0, len(sources_rows), 'Не удалось загрузить ни один источник'
+
+    combined = '\n\n'.join(all_snippets)[:9000]
+    system_prompt = (
+        'Ты — помощник ВБ брокера коммерческой недвижимости. '
+        'На входе — контент сайтов, добавленных как источники знаний. '
+        'Извлеки 5-15 полезных фактов для базы знаний брокера.\n'
+        'Формат: JSON-массив без markdown: [{"key": "web_slug", "value": "факт 1-3 предложения"}, ...]\n'
+        'key начинается с web_, латиница нижний регистр через _.'
+    )
+    raw = _call_gpt(api_key, folder_id, system_prompt, combined)
+    facts = _parse_facts(raw)
+    saved = _save_facts(cur, facts, 'web_')
+
+    # Обновляем время последней загрузки
+    if fetched_ids:
+        ids_str = ','.join(str(i) for i in fetched_ids)
+        cur.execute(
+            f"UPDATE {SCHEMA}.vb_learn_sources SET last_fetched_at = NOW() WHERE id IN ({ids_str})"
+        )
+
+    return saved, len(sources_rows), None
+
+
 def _fetch_site_text(url: str, max_chars: int = 3000) -> str:
     """Загружает страницу и извлекает текстовый контент."""
     req = urllib.request.Request(
@@ -284,7 +333,7 @@ def _fetch_site_text(url: str, max_chars: int = 3000) -> str:
             'Accept-Language': 'ru-RU,ru;q=0.9',
         }
     )
-    with urllib.request.urlopen(req, timeout=15) as resp:
+    with urllib.request.urlopen(req, timeout=8) as resp:
         raw_bytes = resp.read(500_000)
 
     encoding = 'utf-8'
@@ -343,7 +392,7 @@ def _fetch_db_source(cur, src: str):
     if src == 'news':
         cur.execute(
             f"SELECT title, summary, content FROM {SCHEMA}.news "
-            f"WHERE published = TRUE ORDER BY COALESCE(published_at, created_at) DESC LIMIT 15"
+            f"WHERE is_published = TRUE ORDER BY COALESCE(published_at, created_at) DESC LIMIT 15"
         )
         rows = cur.fetchall() or []
         parts = []
@@ -436,7 +485,7 @@ def _call_gpt(api_key: str, folder_id: str, system_prompt: str, user_text: str) 
         },
         method='POST',
     )
-    with urllib.request.urlopen(req_obj, timeout=60) as resp:
+    with urllib.request.urlopen(req_obj, timeout=25) as resp:
         gpt_data = json.loads(resp.read().decode('utf-8'))
     alts = (gpt_data.get('result') or {}).get('alternatives') or []
     return ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''

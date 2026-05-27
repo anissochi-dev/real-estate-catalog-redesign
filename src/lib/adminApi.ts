@@ -200,6 +200,24 @@ export const adminApi = {
   saveRetrainSchedule: (data: { enabled: boolean; hour: number; minute: number; sources: string[] }) =>
     req(`${ADMIN_URL}?resource=vb_retrain_schedule`, { method: 'PUT', body: JSON.stringify(data) }),
 
+  // Стоп-слова ВБ
+  listVbStopWords: (): Promise<{ items: { id: number; word: string; created_at: string }[] }> =>
+    req(`${ADMIN_URL}?resource=vb_stop_words`),
+  createVbStopWord: (data: { word: string }) =>
+    req(`${ADMIN_URL}?resource=vb_stop_words`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteVbStopWord: (id: number) =>
+    req(`${ADMIN_URL}?resource=vb_stop_words&id=${id}`, { method: 'DELETE' }),
+
+  // Источники для самообучения ВБ
+  listVbLearnSources: (): Promise<{ items: { id: number; title: string; url: string; is_active: boolean; last_fetched_at: string | null }[] }> =>
+    req(`${ADMIN_URL}?resource=vb_learn_sources`),
+  createVbLearnSource: (data: { title: string; url: string }) =>
+    req(`${ADMIN_URL}?resource=vb_learn_sources`, { method: 'POST', body: JSON.stringify(data) }),
+  updateVbLearnSource: (id: number, data: { title?: string; url?: string; is_active?: boolean }) =>
+    req(`${ADMIN_URL}?resource=vb_learn_sources&id=${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteVbLearnSource: (id: number) =>
+    req(`${ADMIN_URL}?resource=vb_learn_sources&id=${id}`, { method: 'DELETE' }),
+
   // leads
   listLeads: () => req(`${ADMIN_URL}?resource=leads`),
   getLead: (id: number) => req(`${ADMIN_URL}?resource=leads&id=${id}`),

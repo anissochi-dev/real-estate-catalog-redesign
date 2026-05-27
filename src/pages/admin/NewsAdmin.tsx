@@ -38,6 +38,7 @@ interface Schedule {
   run_hour: number;
   run_minute: number;
   articles_per_run: number;
+  topics?: string;
   last_run_at?: string;
   last_run_count?: number;
 }
@@ -440,6 +441,20 @@ export default function NewsAdmin() {
             <input type="number" min={1} max={10} value={schedule.articles_per_run}
               onChange={e => setSchedule(s => ({ ...s, articles_per_run: +e.target.value }))}
               className="w-full px-3 py-2 border rounded-lg text-sm" />
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">Темы для автогенерации (каждая с новой строки)</label>
+            <textarea
+              value={schedule.topics ?? ''}
+              onChange={e => setSchedule(s => ({ ...s, topics: e.target.value }))}
+              placeholder={'Аренда офисов в Краснодаре\nСклады Краснодарского края\nГотовый бизнес 2025'}
+              rows={4}
+              className="w-full px-3 py-2 border rounded-lg text-sm resize-y font-mono"
+            />
+            <div className="text-xs text-muted-foreground mt-1">
+              Если темы не заданы — ВБ выбирает их случайно из встроенного списка.
+            </div>
           </div>
 
           {schedule.last_run_at && (

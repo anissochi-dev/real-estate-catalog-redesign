@@ -517,6 +517,15 @@ def _load_ai_memory(cur) -> dict:
         return {}
 
 
+def _load_stop_words(cur) -> list:
+    """Загружает стоп-слова ВБ из БД."""
+    try:
+        cur.execute(f"SELECT word FROM {SCHEMA}.vb_stop_words ORDER BY id ASC")
+        return [r['word'] for r in cur.fetchall()]
+    except Exception:
+        return []
+
+
 def _increment_interaction(cur, conn):
     """Увеличивает счётчик взаимодействий."""
     try:
@@ -1496,7 +1505,7 @@ def handler(event, context):
 
             sys_prompt = SYSTEM_PROMPTS[action]
 
-            # Для admin-режима: загружаем память Алисы и добавляем в промпт
+            # Для admin-режима: загружаем память, стоп-слова и добавляем в промпт
             memory = {}
             if action in ('admin', 'admin_ops'):
                 memory = _load_ai_memory(cur)
@@ -1504,6 +1513,13 @@ def handler(event, context):
                 pulse_ctx = _build_pulse_context(cur)
                 sys_prompt = sys_prompt + '\n\n' + pulse_ctx + '\n\n' + memory_ctx
                 _increment_interaction(cur, conn)
+
+            # Стоп-слова добавляем во все диалоговые режимы
+            if action in ('admin', 'admin_ops', 'describe', 'reply_lead', 'seo', 'seo_listing'):
+                stop_words = _load_stop_words(cur)
+                if stop_words:
+                    stop_list = ', '.join(f'«{w}»' for w in stop_words[:50])
+                    sys_prompt += f'\n\nСТОП-СЛОВА (ЗАПРЕЩЕНО использовать в ответах): {stop_list}. Никогда не используй эти слова и фразы ни в каком контексте.'
 
             full_prompt = user_text
             if ctx_data:

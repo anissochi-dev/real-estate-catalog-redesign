@@ -45,6 +45,7 @@ export const TRAINING_SOURCES = [
   { id: 'demand', label: 'Заявки клиентов', icon: 'Inbox', hint: 'Что ищут — тренды спроса (60 заявок)' },
   { id: 'terms', label: 'Термины из описаний', icon: 'Quote', hint: 'Популярные ключевые слова и понятия' },
   { id: 'market_prices', label: 'Цены с агрегаторов', icon: 'Globe', hint: 'Парсинг Аякс, Этажи, ЦИАН — актуальные цены рынка' },
+  { id: 'web_sources', label: 'Мои ссылки', icon: 'Link', hint: 'Сайты, добавленные вами для обучения ВБ' },
 ];
 
 export function fmtBytes(bytes: number): string {

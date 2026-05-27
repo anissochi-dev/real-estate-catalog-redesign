@@ -204,6 +204,10 @@ def handler(event, context):
                 return _ai_memory(cur, conn, method, rid, event, user)
             if resource == 'vb_retrain_schedule':
                 return _vb_retrain_schedule(cur, conn, method, event, user)
+            if resource == 'vb_stop_words':
+                return _vb_stop_words(cur, conn, method, rid, event, user)
+            if resource == 'vb_learn_sources':
+                return _vb_learn_sources(cur, conn, method, rid, event, user)
 
             return _err(400, 'Неизвестный ресурс')
     finally:
@@ -574,6 +578,145 @@ def _ai_memory(cur, conn, method, rid, event, user):
 
     if method == 'DELETE' and rid:
         cur.execute(f"DELETE FROM {SCHEMA}.ai_memory WHERE id = {int(rid)}")
+        conn.commit()
+        return _ok({'success': True})
+
+    return _err(405, 'Метод не поддерживается')
+
+
+def _vb_retrain_schedule(cur, conn, method, event, user):
+    """GET/PUT расписания автопереобучения ВБ."""
+    if user['role'] not in ('admin', 'director'):
+        return _err(403, 'Доступ только для admin/director')
+
+    if method == 'GET':
+        cur.execute(
+            f"SELECT vb_retrain_enabled, vb_retrain_hour, vb_retrain_minute, "
+            f"vb_retrain_sources, vb_retrain_last_at, vb_retrain_last_status, vb_retrain_last_saved "
+            f"FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
+        )
+        row = cur.fetchone() or {}
+        sources = row.get('vb_retrain_sources') or []
+        if isinstance(sources, str):
+            try:
+                import json as _j
+                sources = _j.loads(sources)
+            except Exception:
+                sources = []
+        return _ok({
+            'enabled': bool(row.get('vb_retrain_enabled')),
+            'hour': int(row.get('vb_retrain_hour') or 3),
+            'minute': int(row.get('vb_retrain_minute') or 0),
+            'sources': sources if isinstance(sources, list) else [],
+            'last_at': row['vb_retrain_last_at'].isoformat() if row.get('vb_retrain_last_at') else None,
+            'last_status': row.get('vb_retrain_last_status'),
+            'last_saved': row.get('vb_retrain_last_saved'),
+        })
+
+    if method == 'PUT':
+        import json as _j
+        body = _j.loads(event.get('body') or '{}')
+        enabled = 'TRUE' if body.get('enabled') else 'FALSE'
+        hour = max(0, min(23, int(body.get('hour') or 3)))
+        minute = max(0, min(59, int(body.get('minute') or 0)))
+        sources = body.get('sources') or []
+        sources_json = _safe(_j.dumps(sources, ensure_ascii=False), 2000)
+        cur.execute(
+            f"UPDATE {SCHEMA}.settings SET "
+            f"vb_retrain_enabled = {enabled}, "
+            f"vb_retrain_hour = {hour}, "
+            f"vb_retrain_minute = {minute}, "
+            f"vb_retrain_sources = '{sources_json}' "
+            f"WHERE id = (SELECT id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1)"
+        )
+        conn.commit()
+        return _ok({'success': True})
+
+    return _err(405, 'Метод не поддерживается')
+
+
+def _vb_stop_words(cur, conn, method, rid, event, user):
+    """CRUD стоп-слов ВБ."""
+    import json as _j
+    if user['role'] not in ('admin', 'director', 'editor'):
+        return _err(403, 'Доступ только для admin/director/editor')
+
+    if method == 'GET':
+        cur.execute(f"SELECT id, word, created_at FROM {SCHEMA}.vb_stop_words ORDER BY id ASC")
+        rows = []
+        for r in cur.fetchall():
+            d = dict(r)
+            if d.get('created_at'):
+                d['created_at'] = d['created_at'].isoformat()
+            rows.append(d)
+        return _ok({'items': rows})
+
+    body = _j.loads(event.get('body') or '{}')
+
+    if method == 'POST':
+        word = _safe((body.get('word') or '').strip(), 200)
+        if not word:
+            return _err(400, 'Слово обязательно')
+        cur.execute(f"INSERT INTO {SCHEMA}.vb_stop_words (word) VALUES ('{word}') ON CONFLICT DO NOTHING RETURNING id")
+        row = cur.fetchone()
+        conn.commit()
+        return _ok({'success': True, 'id': row['id'] if row else None})
+
+    if method == 'DELETE' and rid:
+        cur.execute(f"DELETE FROM {SCHEMA}.vb_stop_words WHERE id = {int(rid)}")
+        conn.commit()
+        return _ok({'success': True})
+
+    return _err(405, 'Метод не поддерживается')
+
+
+def _vb_learn_sources(cur, conn, method, rid, event, user):
+    """CRUD источников для самообучения ВБ (URL сайтов)."""
+    import json as _j
+    if user['role'] not in ('admin', 'director', 'editor'):
+        return _err(403, 'Доступ только для admin/director/editor')
+
+    if method == 'GET':
+        cur.execute(f"SELECT id, title, url, is_active, last_fetched_at, created_at FROM {SCHEMA}.vb_learn_sources ORDER BY id ASC")
+        rows = []
+        for r in cur.fetchall():
+            d = dict(r)
+            for f in ('last_fetched_at', 'created_at'):
+                if d.get(f):
+                    d[f] = d[f].isoformat()
+            rows.append(d)
+        return _ok({'items': rows})
+
+    body = _j.loads(event.get('body') or '{}')
+
+    if method == 'POST':
+        title = _safe((body.get('title') or '').strip(), 200)
+        url = _safe((body.get('url') or '').strip(), 500)
+        if not title or not url:
+            return _err(400, 'Нужны title и url')
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.vb_learn_sources (title, url) VALUES ('{title}', '{url}') RETURNING id"
+        )
+        new_id = cur.fetchone()['id']
+        conn.commit()
+        return _ok({'success': True, 'id': new_id})
+
+    if method == 'PUT' and rid:
+        fields = []
+        if 'title' in body:
+            fields.append(f"title = '{_safe((body['title'] or ''), 200)}'")
+        if 'url' in body:
+            fields.append(f"url = '{_safe((body['url'] or ''), 500)}'")
+        if 'is_active' in body:
+            fields.append(f"is_active = {'TRUE' if body['is_active'] else 'FALSE'}")
+        if not fields:
+            return _err(400, 'Нет полей')
+        cur.execute(f"UPDATE {SCHEMA}.vb_learn_sources SET {', '.join(fields)} WHERE id = {int(rid)}")
+        conn.commit()
+        return _ok({'success': True})
+
+    if method == 'DELETE' and rid:
+        cur.execute(f"DELETE FROM {SCHEMA}.vb_learn_sources WHERE id = {int(rid)}")
         conn.commit()
         return _ok({'success': True})
 
