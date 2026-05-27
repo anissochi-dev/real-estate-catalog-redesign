@@ -7,7 +7,7 @@ const MapPage          = lazy(() => import('./pages/MapPage'));
 const FavoritesPage    = lazy(() => import('./pages/FavoritesPage'));
 const ComparePage      = lazy(() => import('./pages/ComparePage'));
 const LoginPage        = lazy(() => import('./pages/LoginPage'));
-const AdminPage        = lazy(() => import('./pages/AdminPage'));
+const AdminPage        = lazy(() => import('./pages/AdminPage').catch(() => new Promise<typeof import('./pages/AdminPage')>(res => setTimeout(() => res(import('./pages/AdminPage')), 1500))));
 const NetworkTenantsPage = lazy(() => import('./pages/NetworkTenantsPage'));
 const CategoryPage     = lazy(() => import('./pages/CategoryPage'));
 const NotFoundPage     = lazy(() => import('./pages/NotFoundPage'));
