@@ -24,8 +24,8 @@ S3_ENDPOINT = 'https://bucket.poehali.dev'
 CDN_BASE = 'https://cdn.poehali.dev'
 WEBP_QUALITY = 82
 MAX_SIDE = 1920
-MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
-FETCH_TIMEOUT = 15
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+FETCH_TIMEOUT = 8  # жёсткий таймаут на одно фото
 
 
 def _ok(body, status=200):
@@ -238,7 +238,7 @@ def handler(event: dict, context) -> dict:
             # ── Пакетная перезаливка ───────────────────────────────────────
             elif action == 'rehost_batch':
                 offset = int(params.get('offset') or body.get('offset') or 0)
-                batch_size = min(int(params.get('batch_size') or body.get('batch_size') or 15), 20)
+                batch_size = min(int(params.get('batch_size') or body.get('batch_size') or 3), 5)
 
                 # Берём объявления с внешними фото
                 cur.execute(

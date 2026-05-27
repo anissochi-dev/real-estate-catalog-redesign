@@ -63,8 +63,9 @@ export default function PhotoOptimizeTab() {
     setTotalErrors(0);
 
     let offset = 0;
-    const batchSize = 10;
+    const batchSize = 3;
 
+    let retries = 0;
     while (true) {
       try {
         const result: BatchResult = await rehostReq({
@@ -73,6 +74,7 @@ export default function PhotoOptimizeTab() {
           batch_size: batchSize,
         });
 
+        retries = 0;
         setTotalConverted(c => c + result.converted_photos);
         setTotalErrors(e => e + result.errors);
         setLog(l => [...l, result.summary]);
@@ -85,10 +87,16 @@ export default function PhotoOptimizeTab() {
         }
 
         offset = result.next_offset;
-        // небольшая пауза между батчами
-        await new Promise(r => setTimeout(r, 800));
+        await new Promise(r => setTimeout(r, 1500));
       } catch (e) {
-        setLog(l => [...l, `Ошибка батча offset=${offset}: ${e instanceof Error ? e.message : 'неизвестная'}`]);
+        const msg = e instanceof Error ? e.message : 'неизвестная';
+        if ((msg.includes('504') || msg.includes('timeout')) && retries < 3) {
+          retries++;
+          setLog(l => [...l, `Таймаут, повтор ${retries}/3 (offset=${offset})...`]);
+          await new Promise(r => setTimeout(r, 3000));
+          continue;
+        }
+        setLog(l => [...l, `Ошибка батча offset=${offset}: ${msg}`]);
         break;
       }
     }
