@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Property } from '@/App';
 import { fetchSimilarListings } from '@/lib/api';
 import { listingSlug } from '@/lib/slug';
-import { formatPrice } from '@/components/PropertyCard';
+import { formatPrice } from '@/lib/formatPrice';
 import Icon from '@/components/ui/icon';
 
 interface Props {

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Property } from '@/App';
-import { formatPrice } from '@/components/PropertyCard';
+import { formatPrice } from '@/lib/formatPrice';
 import Icon from '@/components/ui/icon';
 import YandexMap from '@/components/YandexMap';
 import { listingSlug } from '@/lib/slug';

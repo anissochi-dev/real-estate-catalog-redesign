@@ -5,6 +5,7 @@ import Icon from '@/components/ui/icon';
 import { listingSlug } from '@/lib/slug';
 import YandexMap from '@/components/YandexMap';
 import { useSettings } from '@/contexts/SettingsContext';
+import { formatPrice } from '@/lib/formatPrice';
 
 const PREDICT_URL = 'https://functions.poehali.dev/9986e5a6-c4d4-407a-919f-a303aa3eddf2';
 
@@ -35,18 +36,6 @@ const DEAL_COLORS: Record<string, string> = {
   business: 'bg-violet-600 text-white',
 };
 
-export function formatPrice(price: number, deal: string): string {
-  const fmtMln = (v: number) => {
-    const n = v / 1000000;
-    return Number.isInteger(n) || n % 1 === 0 ? `${n.toFixed(0)}` : `${parseFloat(n.toFixed(1))}`;
-  };
-  if (deal === 'rent') {
-    if (price >= 1000000) return `${fmtMln(price)} млн ₽/мес`;
-    return `${(price / 1000).toFixed(0)} тыс ₽/мес`;
-  }
-  if (price >= 1000000) return `${fmtMln(price)} млн ₽`;
-  return `${(price / 1000).toFixed(0)} тыс ₽`;
-}
 
 const ASSESS_STYLES: Record<string, string> = {
   emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
