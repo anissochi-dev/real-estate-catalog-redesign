@@ -7,6 +7,7 @@ import SeoAdmin from './SeoAdmin';
 import RolesAdmin from './RolesAdmin';
 import PagesAdmin from './PagesAdmin';
 import MigrationTab from './settings/MigrationTab';
+import PhotoOptimizeTab from './settings/PhotoOptimizeTab';
 import Icon from '@/components/ui/icon';
 import { S, City, PingState } from './settings/types';
 import GeneralTab from './settings/GeneralTab';
@@ -29,7 +30,7 @@ export default function SettingsAdmin() {
   const [cityAdding, setCityAdding] = useState(false);
   type TabId = 'general' | 'watermark' | 'brand-kit' | 'seo' | 'seo-ai' | 'footer' | 'legal'
     | 'integrations' | 'ad-platforms' | 'autoposting' | 'feeds' | 'notifications'
-    | 'cities' | 'purposes' | 'pages' | 'roles' | 'migration';
+    | 'cities' | 'purposes' | 'pages' | 'roles' | 'migration' | 'photo-optimize';
   const [tab, setTab] = useState<TabId>('general');
   const [showKey, setShowKey] = useState(false);
   const [showMapsKey, setShowMapsKey] = useState(false);
@@ -210,6 +211,7 @@ export default function SettingsAdmin() {
       id: 'admin', label: 'Администрирование', icon: 'Shield', tabs: [
         ['roles', 'Роли и доступы', 'ShieldHalf'],
         ['migration', 'Экспорт/импорт', 'DatabaseBackup'],
+        ['photo-optimize', 'Сжатие фото', 'ImageDown'],
       ],
     },
   ];
@@ -290,6 +292,7 @@ export default function SettingsAdmin() {
       {tab === 'brand-kit' && <BrandKitTab s={s} setS={setS} saved={saved} save={save} />}
       {tab === 'notifications' && <NotificationsTab s={s} setS={setS} saved={saved} save={save} />}
       {tab === 'migration' && <MigrationTab />}
+      {tab === 'photo-optimize' && <PhotoOptimizeTab />}
       {tab === 'pages' && <PagesAdmin />}
     </div>
   );

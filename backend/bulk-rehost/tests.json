@@ -1,0 +1,10 @@
+{
+  "tests": [
+    {
+      "name": "Статус без авторизации — 401",
+      "method": "GET",
+      "path": "/?action=status",
+      "expectedStatus": 401
+    }
+  ]
+}
