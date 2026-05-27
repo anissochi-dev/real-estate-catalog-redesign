@@ -31,20 +31,14 @@ export interface QuickCmd {
 }
 
 export const QUICK_CMDS: QuickCmd[] = [
-  { id: 'agent', label: 'Агент', icon: 'Bot', action: 'agent', prompt: 'Проанализируй текущее состояние каталога и лидов. Предложи самые важные действия, которые нужно выполнить прямо сейчас.' },
-  { id: 'edit_site', label: 'Редактировать сайт', icon: 'Pencil', action: 'agent', prompt: 'Ты имеешь полный доступ к редактированию сайта. Проанализируй объекты каталога и предложи конкретные улучшения: обнови устаревшие описания, исправь SEO, обнови цены если нужно. Предложи действия через агента.' },
-  { id: 'analytics_full', label: 'Полная аналитика', icon: 'BarChart3', action: 'analytics_full', prompt: 'Проведи полный анализ системы: объекты, лиды, конверсия, тренды. Дай структурированный отчёт.' },
-  { id: 'improve_listings', label: 'Улучшить объекты', icon: 'Sparkles', action: 'agent', prompt: 'Найди объекты с пустыми описаниями, плохим SEO или некорректными данными. Предложи конкретные изменения для каждого — обнови через агента.' },
-  { id: 'security', label: 'Безопасность', icon: 'ShieldCheck', action: 'security', prompt: 'Проверь данные системы на XSS-инъекции, подозрительные паттерны и угрозы безопасности.' },
-  { id: 'marketing', label: 'Маркетинг', icon: 'TrendingUp', action: 'marketing', prompt: 'Дай маркетинговые рекомендации по каталогу: конверсия, ЦА, ценообразование, позиционирование.' },
-  { id: 'modernize', label: 'Оптимизация', icon: 'Zap', action: 'modernize', prompt: 'Предложи план улучшений контента каталога для повышения конверсии и SEO.' },
-  { id: 'db_check', label: 'Проверка БД', icon: 'Database', action: 'db_check', prompt: 'Найди проблемы в данных: дубли, пустые поля, некорректные значения, устаревшие статусы.' },
-  { id: 'help', label: 'Помощь', icon: 'MessageCircle', action: 'admin', prompt: '' },
-  { id: 'desc', label: 'Описание', icon: 'PenLine', action: 'describe', prompt: '' },
-  { id: 'reply', label: 'Ответ клиенту', icon: 'Mail', action: 'reply_lead', prompt: '' },
-  { id: 'seo', label: 'SEO meta', icon: 'Search', action: 'seo', prompt: '' },
-  { id: 'tags', label: 'Авто-теги', icon: 'Tags', action: 'auto_tags', prompt: '' },
-  { id: 'moderate', label: 'Модерация', icon: 'CheckCircle2', action: 'moderate', prompt: '' },
+  { id: 'what_to_do', label: 'Что сделать?', icon: 'Sparkles', action: 'agent', prompt: 'Проанализируй текущее состояние сайта: каталог, лиды, SEO, данные. Предложи самые важные действия прямо сейчас — по приоритету.' },
+  { id: 'edit_site', label: 'Улучшить объекты', icon: 'Pencil', action: 'agent', prompt: 'Найди объекты с пустыми описаниями, плохим SEO или некорректными данными. Предложи конкретные улучшения для каждого и выполни их.' },
+  { id: 'analytics_full', label: 'Аналитика', icon: 'BarChart3', action: 'agent', prompt: 'Проведи полный анализ: объекты, лиды, конверсия, тренды, проблемные зоны. Дай структурированный отчёт с рекомендациями.' },
+  { id: 'leads', label: 'Лиды', icon: 'Inbox', action: 'agent', prompt: 'Проверь все новые и ожидающие лиды. Предложи ответы клиентам, одобри подходящие заявки, закрой нерелевантные.' },
+  { id: 'security', label: 'Безопасность', icon: 'ShieldCheck', action: 'agent', prompt: 'Проверь сайт: целостность данных, XSS-уязвимости, подозрительная активность, SEO-соответствие. Дай отчёт.' },
+  { id: 'marketing', label: 'Маркетинг', icon: 'TrendingUp', action: 'agent', prompt: 'Проанализируй каталог с маркетинговой точки зрения: конверсия, ЦА, ценообразование, позиционирование. Предложи конкретные шаги.' },
+  { id: 'seo_fix', label: 'SEO', icon: 'Search', action: 'agent', prompt: 'Найди все объекты без SEO-заголовков и описаний. Сгенерируй и примени SEO для каждого.' },
+  { id: 'photos', label: 'Фото', icon: 'Image', action: 'agent', prompt: 'Сканируй фотографии: найди неиспользуемые и большие файлы-кандидаты на сжатие. Предложи оптимизацию.' },
 ];
 
 export const ACTION_LABELS: Record<string, { label: string; icon: string }> = {

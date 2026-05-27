@@ -6,11 +6,11 @@ import {
 } from './AiChatTypes';
 import AiChatHeader from './AiChatHeader';
 import AiChatMainTab from './AiChatMainTab';
-import AiChatAdminOpsTab, { MemoryData } from './AiChatAdminOpsTab';
 import AiChatLimitIndicator from './AiChatLimitIndicator';
 import AiChatLimitModal from './AiChatLimitModal';
 import { useAiChatHistory } from './useAiChatHistory';
 import { useAiChatActions } from './useAiChatActions';
+import { MemoryData } from './AiChatAdminOpsTab';
 
 interface Props {
   onClose: () => void;
@@ -25,7 +25,7 @@ interface Props {
 
 export default function AiChat({
   onClose,
-  initialAction = 'admin',
+  initialAction = 'agent',
   initialPrompt = '',
   contextData,
   onResult,
@@ -37,19 +37,17 @@ export default function AiChat({
   const [input, setInput] = useState(initialPrompt);
   const [messages, setMessages] = useState<Msg[]>(() => loadHistory());
   const [loading, setLoading] = useState(false);
-  const [chatTab, setChatTab] = useState<'main' | 'admin_ops'>('main');
-  // Режим «Администрирование»: история отдельная, требует подтверждения перед каждым запросом
-  const [opsMessages, setOpsMessages] = useState<Msg[]>([]);
-  const [opsInput, setOpsInput] = useState('');
-  const [opsLoading, setOpsLoading] = useState(false);
-
   const [showMemory, setShowMemory] = useState(false);
   const [memoryData, setMemoryData] = useState<MemoryData | null>(null);
   const [memoryLoading, setMemoryLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const opsScrollRef = useRef<HTMLDivElement>(null);
 
-  // Хук истории: лимит, предупреждения, очистка, увеличение лимита.
+  // Заглушки для ops-режима (не используется, но нужен хуку)
+  const [opsMessages, setOpsMessages] = useState<Msg[]>([]);
+  const [opsInput, setOpsInput] = useState('');
+  const [opsLoading, setOpsLoading] = useState(false);
+
   const {
     historyLimit,
     limitModalOpen,
@@ -61,10 +59,8 @@ export default function AiChat({
     handleIncreaseLimit,
   } = useAiChatHistory(messages, setMessages, scrollRef);
 
-  // Хук действий: отправка, agent-actions, suggestions, режим Администрирование, память.
   const {
     loadMemory,
-    sendOps,
     send,
     confirmAgentAction,
     rejectAgentAction,
@@ -103,8 +99,6 @@ export default function AiChat({
       />
       <aside className="w-full sm:max-w-md md:max-w-lg lg:max-w-xl h-full bg-white shadow-2xl flex flex-col animate-slide-in-right">
         <AiChatHeader
-          chatTab={chatTab}
-          setChatTab={setChatTab}
           title={title}
           memoryLoading={memoryLoading}
           onClearHistory={clearHistory}
@@ -112,7 +106,6 @@ export default function AiChat({
           onClose={onClose}
         />
 
-        {/* Индикатор лимита истории — показываем только при ≥80% */}
         <AiChatLimitIndicator
           usagePercent={usagePercent}
           totalMessages={totalMessages}
@@ -120,42 +113,28 @@ export default function AiChat({
           onOpen={() => setLimitModalOpen(true)}
         />
 
-        {chatTab === 'main' && (
-          <AiChatMainTab
-            scrollRef={scrollRef}
-            messages={messages}
-            loading={loading}
-            action={action}
-            input={input}
-            setInput={setInput}
-            onSend={send}
-            onRunQuick={runQuick}
-            onApplySuggestion={applySuggestion}
-            onRejectSuggestion={rejectSuggestion}
-            onRequestEdit={requestEdit}
-            onConfirmAgentAction={confirmAgentAction}
-            onRejectAgentAction={rejectAgentAction}
-            onConfirmAllAgentActions={confirmAllAgentActions}
-            formatTime={formatTime}
-          />
-        )}
-
-        {chatTab === 'admin_ops' && (
-          <AiChatAdminOpsTab
-            opsScrollRef={opsScrollRef}
-            opsMessages={opsMessages}
-            opsLoading={opsLoading}
-            opsInput={opsInput}
-            setOpsInput={setOpsInput}
-            showMemory={showMemory}
-            memoryData={memoryData}
-            onSendOps={sendOps}
-            onCloseMemory={() => setShowMemory(false)}
-          />
-        )}
+        <AiChatMainTab
+          scrollRef={scrollRef}
+          messages={messages}
+          loading={loading}
+          action={action}
+          input={input}
+          setInput={setInput}
+          onSend={send}
+          onRunQuick={runQuick}
+          onApplySuggestion={applySuggestion}
+          onRejectSuggestion={rejectSuggestion}
+          onRequestEdit={requestEdit}
+          onConfirmAgentAction={confirmAgentAction}
+          onRejectAgentAction={rejectAgentAction}
+          onConfirmAllAgentActions={confirmAllAgentActions}
+          formatTime={formatTime}
+          showMemory={showMemory}
+          memoryData={memoryData}
+          onCloseMemory={() => setShowMemory(false)}
+        />
       </aside>
 
-      {/* Модалка лимита истории */}
       <AiChatLimitModal
         open={limitModalOpen}
         usagePercent={usagePercent}

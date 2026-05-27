@@ -262,9 +262,10 @@ export function useAiChatActions({
   const clearHistory = handleClearAll;
 
   const runQuick = (q: QuickCmd) => {
-    setAction(q.action);
+    // Все быстрые команды всегда идут через агента
+    setAction('agent');
     if (q.prompt) {
-      send(q.prompt, q.action);
+      send(q.prompt, 'agent');
     } else {
       setInput('');
     }
