@@ -35,6 +35,7 @@ export interface QuickCmd {
 export const QUICK_CMDS: QuickCmd[] = [
   { id: 'what_to_do', label: 'Что сделать?', icon: 'Sparkles', action: 'agent', prompt: 'Проанализируй текущее состояние сайта: каталог, лиды, SEO, данные. Предложи самые важные действия прямо сейчас — по приоритету.' },
   { id: 'edit_site', label: 'Улучшить объекты', icon: 'Pencil', action: 'agent', prompt: 'Найди объекты с пустыми описаниями, плохим SEO или некорректными данными. Предложи конкретные улучшения для каждого и выполни их.' },
+  { id: 'shorten_titles', label: 'Сократить названия', icon: 'Scissors', action: 'agent', prompt: 'Найди все активные объекты с длинными названиями (более 70 символов) и перепиши их через bulk_shorten_titles в короткие SEO-заголовки 50-65 символов. Сначала запусти scan_long_titles, затем bulk_shorten_titles с первыми 15-20 id.' },
   { id: 'analytics_full', label: 'Аналитика', icon: 'BarChart3', action: 'agent', prompt: 'Проведи полный анализ: объекты, лиды, конверсия, тренды, проблемные зоны. Дай структурированный отчёт с рекомендациями.' },
   { id: 'leads', label: 'Лиды', icon: 'Inbox', action: 'agent', prompt: 'Проверь все новые и ожидающие лиды. Предложи ответы клиентам, одобри подходящие заявки, закрой нерелевантные.' },
   { id: 'security', label: 'Безопасность', icon: 'ShieldCheck', action: 'agent', prompt: 'Проверь сайт: целостность данных, XSS-уязвимости, подозрительная активность, SEO-соответствие. Дай отчёт.' },
@@ -56,6 +57,8 @@ export const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
   bulk_update_status: { label: 'Массовый статус', icon: 'Layers' },
   bulk_generate_descriptions: { label: 'Массовые описания', icon: 'PenSquare' },
   bulk_seo_optimize: { label: 'Массовое SEO', icon: 'SearchCheck' },
+  bulk_shorten_titles: { label: 'Сократить названия', icon: 'Scissors' },
+  scan_long_titles: { label: 'Сканер длинных названий', icon: 'Ruler' },
   fix_data_quality: { label: 'Исправить качество', icon: 'Wrench' },
   update_settings: { label: 'Обновить настройки', icon: 'Settings' },
   create_listing: { label: 'Создать объект', icon: 'PlusCircle' },
@@ -97,6 +100,7 @@ export const AUTO_APPLY_ACTIONS = new Set([
   'analytics_report',
   'marketing_tips',
   'note',
+  'scan_long_titles',
 ]);
 
 export const RISK_STYLES: Record<string, string> = {
