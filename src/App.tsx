@@ -1,8 +1,28 @@
 import { useEffect, useState, useMemo, lazy, Suspense, Component } from 'react';
-import type { ReactNode } from 'react';
+import type { ReactNode, ComponentType } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import HomePage from './pages/HomePage';
-const AdminPage = lazy(() => import('./pages/AdminPage'));
+
+function lazyWithRetry<T extends { default: ComponentType<Record<string, unknown>> }>(
+  factory: () => Promise<T>,
+  retries = 3,
+  delay = 600,
+) {
+  return lazy(() => {
+    let attempt = 0;
+    const tryLoad = (): Promise<T> =>
+      factory().catch((err: Error) => {
+        attempt++;
+        if (attempt > retries) throw err;
+        return new Promise<T>((resolve, reject) => {
+          setTimeout(() => tryLoad().then(resolve, reject), delay * attempt);
+        });
+      });
+    return tryLoad();
+  });
+}
+
+const AdminPage = lazyWithRetry(() => import('./pages/AdminPage'));
 const PropertyPage     = lazy(() => import('./pages/PropertyPage'));
 const CatalogPage      = lazy(() => import('./pages/CatalogPage'));
 const MapPage          = lazy(() => import('./pages/MapPage'));
