@@ -1183,9 +1183,6 @@ def _site_health(cur, conn, method, action, event, user):
         return _ok({'feeds': results, 'all_ok': all_ok, 'checked': len(results)})
 
     # ── ДЕЙСТВИЯ ОБСЛУЖИВАНИЯ ────────────────────────────────────────────────
-    if method != 'POST':
-        return _err(405, 'Метод не поддерживается')
-
     if action == 'clear_ai_logs':
         try:
             cur.execute(
@@ -1349,6 +1346,9 @@ def _site_health(cur, conn, method, action, event, user):
         return _ok({'items': rows, 'total': len(rows)})
 
     # ── FIX-ACTIONS ───────────────────────────────────────────────────────────
+    if method != 'POST':
+        return _err(405, 'Метод не поддерживается')
+
     if action == 'fix_seo_titles':
         if method != 'POST':
             return _err(405, 'Метод не поддерживается')
