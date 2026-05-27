@@ -6,8 +6,23 @@ Returns: HTTP-ответ с JSON массивом объектов или одн
 
 import json
 import os
+import time
 import psycopg2
 from psycopg2.extras import RealDictCursor
+
+_MEM_CACHE: dict = {}
+_CACHE_TTL = 180
+
+
+def _cache_get(key: str):
+    entry = _MEM_CACHE.get(key)
+    if entry and time.time() - entry['ts'] < _CACHE_TTL:
+        return entry['data']
+    return None
+
+
+def _cache_set(key: str, data):
+    _MEM_CACHE[key] = {'ts': time.time(), 'data': data}
 
 
 def handler(event: dict, context) -> dict:
@@ -464,6 +479,15 @@ def handler(event: dict, context) -> dict:
                 limit_val = None
                 offset_val = 0
 
+            # In-memory кеш для простых запросов без фильтров
+            is_simple = not any([category, deal, search, min_area, max_price])
+            cache_key = f"listings:{limit_val}:{offset_val}" if is_simple else None
+            if cache_key:
+                cached = _cache_get(cache_key)
+                if cached:
+                    conn.close()
+                    return _ok(cached, cache='public, max-age=180, stale-while-revalidate=60')
+
             # Один запрос: COUNT(*) OVER() + данные — без второго round-trip к БД
             pagination = ""
             if limit_val and limit_val > 0:
@@ -479,7 +503,10 @@ def handler(event: dict, context) -> dict:
             total = int(rows[0]['_total_count']) if rows else 0
             items = [_serialize({k: v for k, v in dict(r).items() if k != '_total_count'}) for r in rows]
 
-            return _ok({'listings': items, 'total': total})
+            result = {'listings': items, 'total': total}
+            if cache_key:
+                _cache_set(cache_key, result)
+            return _ok(result, cache='public, max-age=180, stale-while-revalidate=60')
     finally:
         conn.close()
 
