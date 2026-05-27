@@ -151,6 +151,7 @@ export default function PropertyCard({
 
   const imgs = parseImages(property);
   const [activeImg, setActiveImg] = useState(0);
+  const [hovered, setHovered] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
 
   const ppm2 = property.pricePerM2
@@ -179,16 +180,17 @@ export default function PropertyCard({
         ref={rootRef}
         className="property-card group bg-white rounded-2xl overflow-hidden border border-border shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up flex flex-col"
         style={style}
+        onMouseEnter={() => setHovered(true)}
       >
         {/* ── Фотослайдер ── */}
         <div className="relative aspect-[4/3] overflow-hidden bg-muted">
 
-          {/* Картинки */}
+          {/* Картинки: src доп.фото подставляем только после hover, чтобы не качать лишнее */}
           {imgs.length > 0 ? (
             imgs.map((src, i) => (
               <img
-                key={src + i}
-                src={src}
+                key={i}
+                src={i === 0 || hovered ? src : undefined}
                 alt={property.title}
                 width={400}
                 height={300}
