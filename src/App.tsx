@@ -258,9 +258,9 @@ export default function App() {
         document.head.appendChild(link);
       }
       if (total > 8) {
-        const loadAll = () => setTimeout(() => fetchListings(20, 0)
-          .then(({ listings: top }) => { setProperties(top); setAllLoaded(true); })
-          .catch(() => setAllLoaded(true)), 1500);
+        const loadAll = () => setTimeout(() => fetchListings()
+          .then(({ listings: all }) => { setProperties(all); setAllLoaded(true); })
+          .catch(() => setAllLoaded(true)), 2000);
         if (document.readyState === 'complete') {
           loadAll();
         } else {
