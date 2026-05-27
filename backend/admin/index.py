@@ -865,7 +865,7 @@ def _site_health(cur, conn, method, action, event, user):
         # 10. Настройки сайта заполнены
         try:
             cur.execute(
-                f"SELECT id, company_name, company_phone, meta_title "
+                f"SELECT id, company_name, company_phone, seo_description "
                 f"FROM {SCHEMA}.settings ORDER BY id LIMIT 1"
             )
             row = cur.fetchone()
@@ -876,9 +876,9 @@ def _site_health(cur, conn, method, action, event, user):
                 SETTINGS_LABELS = {
                     'company_name': 'название компании',
                     'company_phone': 'телефон',
-                    'meta_title': 'SEO-заголовок сайта',
+                    'seo_description': 'SEO-описание сайта',
                 }
-                missing = [k for k in ('company_name', 'company_phone', 'meta_title') if not row.get(k)]
+                missing = [k for k in ('company_name', 'company_phone', 'seo_description') if not row.get(k)]
                 _chk('Настройки сайта', len(missing) == 0,
                      f'Не заполнено: {", ".join(SETTINGS_LABELS.get(m, m) for m in missing)}' if missing else 'Все заполнены',
                      fix_action='ai_fix_settings' if missing else None,
@@ -1389,7 +1389,7 @@ def _site_health(cur, conn, method, action, event, user):
     if action == 'view_settings':
         cur.execute(
             f"SELECT id, company_name, company_phone, company_email, company_address, "
-            f"meta_title, seo_description, hero_title, hero_subtitle, about_text, main_city "
+            f"seo_description, hero_title, hero_subtitle, about_text, main_city "
             f"FROM {SCHEMA}.settings ORDER BY id LIMIT 1"
         )
         row = cur.fetchone()
@@ -1401,8 +1401,7 @@ def _site_health(cur, conn, method, action, event, user):
             'company_phone': 'Телефон',
             'company_email': 'Email',
             'company_address': 'Адрес',
-            'meta_title': 'SEO-заголовок сайта',
-            'seo_description': 'SEO-описание',
+            'seo_description': 'SEO-описание сайта',
             'hero_title': 'Заголовок главной страницы',
             'hero_subtitle': 'Подзаголовок главной',
             'about_text': 'О компании',
