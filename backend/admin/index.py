@@ -1113,31 +1113,50 @@ def _site_health(cur, conn, method, action, event, user):
         for feed in feeds_to_check:
             try:
                 req3 = _ur3.Request(feed['url'], headers={'User-Agent': 'Mozilla/5.0'})
-                resp = _ur3.urlopen(req3, timeout=8)
-                content = resp.read(50000).decode('utf-8', errors='replace')
-                # Пробуем парсить XML
+                resp = _ur3.urlopen(req3, timeout=15)
+                http_status = resp.status
+
+                # Потоковый подсчёт элементов — не грузим весь файл в память
+                item_count = 0
+                root_tag = ''
+                total_bytes = 0
+                parser = ET.XMLPullParser(events=('start',))
+                depth0_tag = ''
+                child_tags = set()
                 try:
-                    root = ET.fromstring(content)
-                    tag = root.tag
-                    children = len(list(root))
+                    while True:
+                        chunk = resp.read(32768)  # читаем по 32 КБ
+                        if not chunk:
+                            break
+                        total_bytes += len(chunk)
+                        parser.feed(chunk)
+                        for event, elem in parser.read_events():
+                            if not root_tag:
+                                root_tag = elem.tag
+                            elif elem.tag != root_tag:
+                                child_tags.add(elem.tag)
+                                item_count += 1
+                            elem.clear()  # не держим в памяти
+                        if total_bytes > 10 * 1024 * 1024:  # стоп после 10 МБ
+                            break
                     results.append({
                         'name': feed['name'],
                         'ok': True,
-                        'status': resp.status,
-                        'root_tag': tag,
-                        'items': children,
-                        'size_kb': round(len(content) / 1024, 1),
+                        'status': http_status,
+                        'root_tag': root_tag.split('}')[-1] if root_tag else '',
+                        'items': item_count,
+                        'size_kb': round(total_bytes / 1024, 1),
                     })
                 except ET.ParseError as pe:
                     results.append({
                         'name': feed['name'],
                         'ok': False,
-                        'status': resp.status,
-                        'error': f'Невалидный XML: {str(pe)[:80]}',
-                        'size_kb': round(len(content) / 1024, 1),
+                        'status': http_status,
+                        'error': f'Невалидный XML: {str(pe)[:100]}',
+                        'size_kb': round(total_bytes / 1024, 1),
                     })
             except Exception as e:
-                results.append({'name': feed['name'], 'ok': False, 'error': str(e)[:100]})
+                results.append({'name': feed['name'], 'ok': False, 'error': str(e)[:120]})
 
         all_ok = all(f.get('ok') for f in results)
         return _ok({'feeds': results, 'all_ok': all_ok, 'checked': len(results)})
