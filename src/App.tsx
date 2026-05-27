@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, lazy, Suspense, Component } from 'react';
 import type { ReactNode, ComponentType } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import HomePage from './pages/HomePage';
+import AdminPage from './pages/AdminPage';
 
 function lazyWithRetry<T extends { default: ComponentType<Record<string, unknown>> }>(
   factory: () => Promise<T>,
@@ -28,7 +29,6 @@ const MapPage          = lazyWithRetry(() => import('./pages/MapPage'));
 const FavoritesPage    = lazyWithRetry(() => import('./pages/FavoritesPage'));
 const ComparePage      = lazyWithRetry(() => import('./pages/ComparePage'));
 const LoginPage        = lazyWithRetry(() => import('./pages/LoginPage'));
-const AdminPage        = lazyWithRetry(() => import('./pages/AdminPage'));
 const NetworkTenantsPage = lazyWithRetry(() => import('./pages/NetworkTenantsPage'));
 const CategoryPage     = lazyWithRetry(() => import('./pages/CategoryPage'));
 const NotFoundPage     = lazyWithRetry(() => import('./pages/NotFoundPage'));
