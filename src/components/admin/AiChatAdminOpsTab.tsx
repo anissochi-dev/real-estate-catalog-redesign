@@ -27,7 +27,6 @@ interface Props {
   opsLoading: boolean;
   opsInput: string;
   setOpsInput: (v: string) => void;
-  opsPendingText: string | null;
   showMemory: boolean;
   memoryData: MemoryData | null;
   onSendOps: (text?: string, skipConfirm?: boolean) => void;
@@ -40,7 +39,6 @@ export default function AiChatAdminOpsTab({
   opsLoading,
   opsInput,
   setOpsInput,
-  opsPendingText,
   showMemory,
   memoryData,
   onSendOps,
@@ -62,14 +60,6 @@ export default function AiChatAdminOpsTab({
               {cmd.label}
             </button>
           ))}
-        </div>
-      </div>
-
-      {/* Предупреждение */}
-      <div className="mx-3 mt-3 shrink-0 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 flex items-start gap-2 text-xs text-amber-800">
-        <Icon name="ShieldAlert" size={14} className="shrink-0 mt-0.5 text-amber-600" />
-        <div>
-          <strong>Режим администрирования.</strong> Консультации — сразу. Изменения в системе — только после вашего «РАЗРЕШАЮ».
         </div>
       </div>
 
@@ -165,18 +155,12 @@ export default function AiChatAdminOpsTab({
 
       {/* Инпут */}
       <div className="p-3 border-t border-border bg-white shrink-0">
-        {opsPendingText && (
-          <div className="mb-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-center gap-2">
-            <Icon name="AlertTriangle" size={13} />
-            Введите <strong>РАЗРЕШАЮ</strong> для подтверждения или другой текст для отмены
-          </div>
-        )}
         <div className="flex gap-2">
           <input
             value={opsInput}
             onChange={e => setOpsInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), onSendOps())}
-            placeholder={opsPendingText ? 'Введите РАЗРЕШАЮ или отмените...' : 'Задайте технический вопрос...'}
+            placeholder="Задайте технический вопрос..."
             disabled={opsLoading}
             className="flex-1 px-4 py-2.5 border border-red-200 rounded-xl text-sm focus:outline-none focus:border-red-500 disabled:opacity-50"
           />

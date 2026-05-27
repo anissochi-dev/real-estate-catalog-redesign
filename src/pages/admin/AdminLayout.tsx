@@ -10,7 +10,7 @@ const IDLE_WARNING_MS = 2 * 60 * 1000;
 
 export type AdminSection = 'dashboard' | 'listings' | 'leads' | 'network-tenants' | 'users' | 'pages' | 'settings' | 'ai-logs'
   | 'crm-owners' | 'crm-kanban' | 'crm-gamification' | 'crm-checks' | 'crm-payments'
-  | 'phones' | 'news' | 'vb-knowledge' | 'ai-assistant';
+  | 'phones' | 'news' | 'vb-knowledge';
 
 interface Props {
   section: AdminSection;
@@ -23,7 +23,6 @@ const CRM_ROLES = ['admin', 'director', 'broker', 'office_manager', 'manager'];
 
 const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; group?: string }[] = [
   { id: 'dashboard', label: 'Дашборд', icon: 'LayoutDashboard', roles: ['admin', 'editor', 'manager'] },
-  { id: 'ai-assistant', label: 'ИИ-ассистент', icon: 'Sparkles', roles: ['admin', 'editor', 'director', 'manager'] },
   { id: 'listings', label: 'Объекты', icon: 'Building2', roles: ['admin', 'editor', 'manager'] },
   { id: 'leads', label: 'Заявки', icon: 'Inbox', roles: ['admin', 'editor', 'manager'] },
   { id: 'users', label: 'Пользователи', icon: 'Users', roles: ['admin'] },
@@ -372,7 +371,7 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
             </div>
           </div>
         </header>
-        <div className={section === 'ai-assistant' ? '' : 'p-4 lg:p-8'}>{children}</div>
+        <div className="p-4 lg:p-8">{children}</div>
       </main>
 
       {aiOpen && <AiChat onClose={() => setAiOpen(false)} />}

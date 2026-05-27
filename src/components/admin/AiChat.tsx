@@ -42,7 +42,7 @@ export default function AiChat({
   const [opsMessages, setOpsMessages] = useState<Msg[]>([]);
   const [opsInput, setOpsInput] = useState('');
   const [opsLoading, setOpsLoading] = useState(false);
-  const [opsPendingText, setOpsPendingText] = useState<string | null>(null); // ожидает РАЗРЕШАЮ
+
   const [showMemory, setShowMemory] = useState(false);
   const [memoryData, setMemoryData] = useState<MemoryData | null>(null);
   const [memoryLoading, setMemoryLoading] = useState(false);
@@ -83,7 +83,6 @@ export default function AiChat({
     opsInput, setOpsInput,
     opsMessages, setOpsMessages,
     opsLoading, setOpsLoading,
-    opsPendingText, setOpsPendingText,
     opsScrollRef,
     setShowMemory,
     setMemoryData,
@@ -148,7 +147,6 @@ export default function AiChat({
             opsLoading={opsLoading}
             opsInput={opsInput}
             setOpsInput={setOpsInput}
-            opsPendingText={opsPendingText}
             showMemory={showMemory}
             memoryData={memoryData}
             onSendOps={sendOps}

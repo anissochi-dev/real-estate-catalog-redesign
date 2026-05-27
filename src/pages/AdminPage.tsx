@@ -14,7 +14,6 @@ import PhoneBook from './admin/PhoneBook';
 import NetworkTenantsAdmin from './admin/NetworkTenantsAdmin';
 import NewsAdmin from './admin/NewsAdmin';
 import VBKnowledgeAdmin from './admin/VBKnowledgeAdmin';
-import AIAssistantAdmin from './admin/AIAssistantAdmin';
 
 interface Props {
   onExit: () => void;
@@ -49,7 +48,6 @@ export default function AdminPage({ onExit, initialSection }: Props) {
       {section === 'network-tenants' && <NetworkTenantsAdmin />}
       {section === 'news' && <NewsAdmin />}
       {section === 'vb-knowledge' && <VBKnowledgeAdmin />}
-      {section === 'ai-assistant' && <AIAssistantAdmin />}
     </AdminLayout>
   );
 }

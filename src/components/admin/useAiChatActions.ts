@@ -25,8 +25,6 @@ interface UseAiChatActionsParams {
   setOpsMessages: React.Dispatch<React.SetStateAction<Msg[]>>;
   opsLoading: boolean;
   setOpsLoading: React.Dispatch<React.SetStateAction<boolean>>;
-  opsPendingText: string | null;
-  setOpsPendingText: React.Dispatch<React.SetStateAction<string | null>>;
   opsScrollRef: React.RefObject<HTMLDivElement>;
   // Память
   setShowMemory: React.Dispatch<React.SetStateAction<boolean>>;
@@ -63,8 +61,6 @@ export function useAiChatActions({
   setOpsMessages,
   opsLoading,
   setOpsLoading,
-  opsPendingText,
-  setOpsPendingText,
   opsScrollRef,
   setShowMemory,
   setMemoryData,
@@ -95,37 +91,13 @@ export function useAiChatActions({
     }
   };
 
-  // Отправка в режиме Администрирование: требует явного подтверждения «РАЗРЕШАЮ»
-  const sendOps = async (text?: string, skipConfirm = false) => {
+  // Отправка в режиме Администрирование — выполняем сразу без подтверждений
+  const sendOps = async (text?: string, _skipConfirm = false) => {
     const msg = (text ?? opsInput).trim();
     if (!msg || opsLoading) return;
-
-    // Если это подтверждение «РАЗРЕШАЮ» — выполняем отложенный запрос
-    if (!skipConfirm && opsPendingText && msg.toUpperCase().includes('РАЗРЕШАЮ')) {
-      setOpsMessages(m => [...m, { role: 'user', text: '✅ РАЗРЕШАЮ', ts: Date.now() }]);
-      setOpsInput('');
-      setOpsPendingText(null);
-      await _doOpsRequest(opsPendingText);
-      return;
-    }
-
     setOpsMessages(m => [...m, { role: 'user', text: msg, ts: Date.now() }]);
     setOpsInput('');
-
-    // Консультационные запросы — выполняем сразу
-    const directKeywords = ['как', 'что', 'почему', 'объясни', 'расскажи', 'помоги', 'подскажи', 'покажи', 'проанализируй', 'аудит', 'проконсультируй'];
-    const isDirectQuery = directKeywords.some(k => msg.toLowerCase().includes(k));
-    if (isDirectQuery || skipConfirm) {
-      await _doOpsRequest(msg);
-    } else {
-      // Потенциально деструктивный — требует подтверждения
-      setOpsPendingText(msg);
-      setOpsMessages(m => [...m, {
-        role: 'ai',
-        text: `⚠️ Этот запрос касается изменений в системе.\n\nЗапрос: «${msg.slice(0, 100)}»\n\nДля выполнения введите: РАЗРЕШАЮ\nДля отмены введите что угодно другое.`,
-        ts: Date.now(),
-      }]);
-    }
+    await _doOpsRequest(msg);
   };
 
   const _doOpsRequest = async (msg: string) => {

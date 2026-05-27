@@ -21,7 +21,52 @@ import AutoPostingTab from './settings/AutoPostingTab';
 import BrandKitTab from './settings/BrandKitTab';
 import NotificationsTab from './settings/NotificationsTab';
 import SiteHealthTab from './settings/SiteHealthTab';
-import AIAssistantAdmin from './AIAssistantAdmin';
+import AiChat from '@/components/admin/AiChat';
+
+function AiAdminTab() {
+  const [open, setOpen] = useState(false);
+  const QUICK = [
+    { icon: 'Globe', label: 'Домен', prompt: 'Как подключить собственный домен к этому сайту?' },
+    { icon: 'Database', label: 'База данных', prompt: 'Проконсультируй по обслуживанию базы данных: оптимизация, очистка, резервные копии.' },
+    { icon: 'ShieldCheck', label: 'Безопасность', prompt: 'Проведи аудит безопасности сайта: доступы, уязвимости, рекомендации.' },
+    { icon: 'Zap', label: 'Производительность', prompt: 'Как улучшить скорость и стабильность работы сайта?' },
+    { icon: 'Link', label: 'Интеграция', prompt: 'Как подключить внешний сервис или API?' },
+    { icon: 'HardDrive', label: 'Бэкап', prompt: 'Какие данные нужно регулярно бэкапить и как это делать?' },
+  ];
+  return (
+    <div className="bg-white rounded-2xl border border-border p-6 space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+          <Icon name="BrainCircuit" size={20} className="text-red-700" />
+        </div>
+        <div>
+          <div className="font-semibold text-foreground">ИИ-администрирование</div>
+          <div className="text-sm text-muted-foreground">Технические вопросы: домен, БД, интеграции, безопасность</div>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {QUICK.map(q => (
+          <button
+            key={q.label}
+            onClick={() => setOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-muted/40 hover:bg-muted text-sm transition"
+          >
+            <Icon name={q.icon} size={14} className="text-muted-foreground" />
+            {q.label}
+          </button>
+        ))}
+      </div>
+      <button
+        onClick={() => setOpen(true)}
+        className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-red-700 text-white font-semibold text-sm hover:bg-red-800 transition"
+      >
+        <Icon name="MessageSquare" size={16} />
+        Открыть чат с ВБ (режим администрирования)
+      </button>
+      {open && <AiChat onClose={() => setOpen(false)} initialAction="admin" />}
+    </div>
+  );
+}
 
 export default function SettingsAdmin() {
   const { reload } = useSettings();
@@ -299,11 +344,7 @@ export default function SettingsAdmin() {
       {tab === 'photo-optimize' && <PhotoOptimizeTab />}
       {tab === 'site-health' && <SiteHealthTab />}
       {tab === 'pages' && <PagesAdmin />}
-      {tab === 'ai-admin' && (
-        <div className="-mx-0 -mt-0">
-          <AIAssistantAdmin />
-        </div>
-      )}
+      {tab === 'ai-admin' && <AiAdminTab />}
     </div>
   );
 }
