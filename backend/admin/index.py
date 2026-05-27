@@ -863,14 +863,24 @@ def _site_health(cur, conn, method, action, event, user):
         # 10. Настройки сайта заполнены
         try:
             cur.execute(
-                f"SELECT company_name, company_phone, meta_title "
+                f"SELECT id, company_name, company_phone, meta_title "
                 f"FROM {SCHEMA}.settings ORDER BY id LIMIT 1"
             )
-            row = cur.fetchone() or {}
-            missing = [k for k in ('company_name', 'company_phone', 'meta_title') if not row.get(k)]
-            _chk('Настройки сайта', len(missing) == 0,
-                 f'Не заполнено: {", ".join(missing)}' if missing else 'Все заполнены',
-                 fix_action='open_settings' if missing else None)
+            row = cur.fetchone()
+            if row is None:
+                _chk('Настройки сайта', False, 'Строка настроек не найдена — требуется инициализация',
+                     fix_action='ai_fix_settings')
+            else:
+                SETTINGS_LABELS = {
+                    'company_name': 'название компании',
+                    'company_phone': 'телефон',
+                    'meta_title': 'SEO-заголовок сайта',
+                }
+                missing = [k for k in ('company_name', 'company_phone', 'meta_title') if not row.get(k)]
+                _chk('Настройки сайта', len(missing) == 0,
+                     f'Не заполнено: {", ".join(SETTINGS_LABELS.get(m, m) for m in missing)}' if missing else 'Все заполнены',
+                     fix_action='ai_fix_settings' if missing else None,
+                     view_action='view_settings' if missing else None)
         except Exception as e:
             _chk('Настройки сайта', False, str(e)[:80])
 
@@ -1373,6 +1383,124 @@ def _site_health(cur, conn, method, action, event, user):
 
     if action == 'open_settings':
         return _ok({'redirect': '/admin/settings', 'message': 'Перейдите в настройки сайта'})
+
+    if action == 'view_settings':
+        cur.execute(
+            f"SELECT id, company_name, company_phone, company_email, company_address, "
+            f"meta_title, seo_description, hero_title, hero_subtitle, about_text, main_city "
+            f"FROM {SCHEMA}.settings ORDER BY id LIMIT 1"
+        )
+        row = cur.fetchone()
+        if not row:
+            return _ok({'fields': [], 'exists': False,
+                        'message': 'Строка настроек не создана'})
+        FIELD_LABELS = {
+            'company_name': 'Название компании',
+            'company_phone': 'Телефон',
+            'company_email': 'Email',
+            'company_address': 'Адрес',
+            'meta_title': 'SEO-заголовок сайта',
+            'seo_description': 'SEO-описание',
+            'hero_title': 'Заголовок главной страницы',
+            'hero_subtitle': 'Подзаголовок главной',
+            'about_text': 'О компании',
+            'main_city': 'Основной город',
+        }
+        fields = []
+        for k, label in FIELD_LABELS.items():
+            val = row.get(k) or ''
+            fields.append({'key': k, 'label': label, 'value': val, 'filled': bool(val)})
+        return _ok({'fields': fields, 'exists': True})
+
+    if action == 'ai_fix_settings':
+        import urllib.request as _ur2
+        _headers = event.get('headers') or {}
+        token = (_headers.get('X-Auth-Token') or _headers.get('x-auth-token') or
+                 (event.get('queryStringParameters') or {}).get('auth_token') or '')
+        try:
+            # Берём контекст: объявления, новости, лиды
+            ctx_parts = []
+            try:
+                cur.execute(f"SELECT title, description, price FROM {SCHEMA}.listings WHERE status='active' ORDER BY id DESC LIMIT 5")
+                rows = cur.fetchall()
+                if rows:
+                    ctx_parts.append('Объявления: ' + '; '.join(
+                        f"{r['title']} ({r['price']} руб.)" for r in rows if r.get('title')
+                    ))
+            except Exception:
+                pass
+            try:
+                cur.execute(f"SELECT title, body FROM {SCHEMA}.news WHERE is_published=TRUE ORDER BY id DESC LIMIT 3")
+                rows = cur.fetchall()
+                if rows:
+                    ctx_parts.append('Новости: ' + '; '.join(r['title'] for r in rows if r.get('title')))
+            except Exception:
+                pass
+            try:
+                cur.execute(f"SELECT company_name, company_phone, company_email, company_address, main_city FROM {SCHEMA}.settings ORDER BY id LIMIT 1")
+                s = cur.fetchone() or {}
+                existing = {k: v for k, v in s.items() if v}
+                if existing:
+                    ctx_parts.append('Уже заполнено: ' + ', '.join(f"{k}={v}" for k, v in existing.items()))
+            except Exception:
+                pass
+
+            context_str = '\n'.join(ctx_parts) if ctx_parts else 'Нет данных'
+            prompt = (
+                "На основе контекста сайта сгенерируй реалистичные значения для незаполненных настроек. "
+                "Верни строго JSON (без markdown, без пояснений) с полями которые нужно заполнить из списка: "
+                "company_name, meta_title, seo_description, hero_title, hero_subtitle, about_text. "
+                "Заполни только те поля, для которых можно угадать значение из контекста. "
+                f"Контекст:\n{context_str}"
+            )
+
+            ai_url = 'https://functions.poehali.dev/34bfc4a2-89b9-4c89-bcbc-d82314730aef'
+            ai_body = json.dumps({'action': 'describe', 'prompt': prompt, 'context_data': {}}).encode()
+            ai_req = _ur2.Request(ai_url, data=ai_body,
+                                  headers={'Content-Type': 'application/json', 'X-Auth-Token': token},
+                                  method='POST')
+            with _ur2.urlopen(ai_req, timeout=45) as resp:
+                ai_raw = json.loads(resp.read().decode())
+
+            ai_text = ai_raw.get('text') or ''
+            # Парсим JSON из ответа ИИ
+            import re as _re2
+            json_match = _re2.search(r'\{[\s\S]+\}', ai_text)
+            if not json_match:
+                return _err(500, f'ИИ не вернул JSON: {ai_text[:200]}')
+            suggested = json.loads(json_match.group())
+
+            # Обновляем только пустые поля
+            ALLOWED = {'company_name', 'meta_title', 'seo_description', 'hero_title', 'hero_subtitle', 'about_text'}
+            cur.execute(f"SELECT id, company_name, meta_title, seo_description, hero_title, hero_subtitle, about_text FROM {SCHEMA}.settings ORDER BY id LIMIT 1")
+            cur_row = cur.fetchone()
+            if not cur_row:
+                return _err(404, 'Строка настроек не найдена')
+
+            updates = []
+            applied = {}
+            for k, v in suggested.items():
+                if k not in ALLOWED:
+                    continue
+                if cur_row.get(k):
+                    continue  # не перезаписываем заполненные
+                v_clean = str(v).strip()[:500]
+                if not v_clean:
+                    continue
+                updates.append(f"{k}='{_safe(v_clean, 500)}'")
+                applied[k] = v_clean
+
+            if updates:
+                cur.execute(f"UPDATE {SCHEMA}.settings SET {', '.join(updates)} WHERE id={cur_row['id']}")
+                conn.commit()
+
+            return _ok({
+                'success': True,
+                'applied': applied,
+                'message': f'ИИ заполнил {len(applied)} полей: {", ".join(applied.keys())}' if applied else 'ИИ не нашёл что заполнять — все поля уже заполнены'
+            })
+        except Exception as e:
+            return _err(500, str(e)[:300])
 
     return _err(400, 'Неизвестное действие')
 
