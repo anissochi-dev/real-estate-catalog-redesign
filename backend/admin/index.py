@@ -1357,13 +1357,40 @@ def _site_health(cur, conn, method, action, event, user):
         rows = cur.fetchall()
         return _ok({'items': rows, 'total': len(rows)})
 
+    if action == 'open_settings':
+        return _ok({'redirect': '/admin/settings', 'message': 'Перейдите в настройки сайта'})
+
+    if action == 'view_settings':
+        cur.execute(
+            f"SELECT id, company_name, company_phone, company_email, company_address, "
+            f"seo_description, hero_title, hero_subtitle, about_text, main_city "
+            f"FROM {SCHEMA}.settings ORDER BY id LIMIT 1"
+        )
+        row = cur.fetchone()
+        if not row:
+            return _ok({'fields': [], 'exists': False, 'message': 'Строка настроек не создана'})
+        FIELD_LABELS = {
+            'company_name': 'Название компании',
+            'company_phone': 'Телефон',
+            'company_email': 'Email',
+            'company_address': 'Адрес',
+            'seo_description': 'SEO-описание сайта',
+            'hero_title': 'Заголовок главной страницы',
+            'hero_subtitle': 'Подзаголовок главной',
+            'about_text': 'О компании',
+            'main_city': 'Основной город',
+        }
+        fields = []
+        for k, label in FIELD_LABELS.items():
+            val = row.get(k) or ''
+            fields.append({'key': k, 'label': label, 'value': val, 'filled': bool(val)})
+        return _ok({'fields': fields, 'exists': True})
+
     # ── FIX-ACTIONS ───────────────────────────────────────────────────────────
     if method != 'POST':
         return _err(405, 'Метод не поддерживается')
 
     if action == 'fix_seo_titles':
-        if method != 'POST':
-            return _err(405, 'Метод не поддерживается')
         try:
             cur.execute(
                 f"SELECT id, title FROM {SCHEMA}.listings "
@@ -1382,36 +1409,6 @@ def _site_health(cur, conn, method, action, event, user):
                         'message': f'SEO-заголовки проставлены для {fixed} объявлений'})
         except Exception as e:
             return _err(500, str(e)[:200])
-
-    if action == 'open_settings':
-        return _ok({'redirect': '/admin/settings', 'message': 'Перейдите в настройки сайта'})
-
-    if action == 'view_settings':
-        cur.execute(
-            f"SELECT id, company_name, company_phone, company_email, company_address, "
-            f"seo_description, hero_title, hero_subtitle, about_text, main_city "
-            f"FROM {SCHEMA}.settings ORDER BY id LIMIT 1"
-        )
-        row = cur.fetchone()
-        if not row:
-            return _ok({'fields': [], 'exists': False,
-                        'message': 'Строка настроек не создана'})
-        FIELD_LABELS = {
-            'company_name': 'Название компании',
-            'company_phone': 'Телефон',
-            'company_email': 'Email',
-            'company_address': 'Адрес',
-            'seo_description': 'SEO-описание сайта',
-            'hero_title': 'Заголовок главной страницы',
-            'hero_subtitle': 'Подзаголовок главной',
-            'about_text': 'О компании',
-            'main_city': 'Основной город',
-        }
-        fields = []
-        for k, label in FIELD_LABELS.items():
-            val = row.get(k) or ''
-            fields.append({'key': k, 'label': label, 'value': val, 'filled': bool(val)})
-        return _ok({'fields': fields, 'exists': True})
 
     if action == 'ai_fix_settings':
         import urllib.request as _ur2
