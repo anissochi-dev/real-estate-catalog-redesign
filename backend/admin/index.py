@@ -744,7 +744,7 @@ def _site_health(cur, conn, method, action, event, user):
         return _err(403, 'Только admin/director')
 
     # ── ПОЛНАЯ ПРОВЕРКА ──────────────────────────────────────────────────────
-    if action == 'check' or method == 'GET':
+    if action == 'check' or (method == 'GET' and not action):
         checks = []
 
         def _chk(name, ok, detail='', fix_action=None, view_action=None):
