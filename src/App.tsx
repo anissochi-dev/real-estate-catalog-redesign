@@ -258,11 +258,9 @@ export default function App() {
         document.head.appendChild(link);
       }
       if (total > 8) {
-        setTimeout(() => {
-          fetchListings()
-            .then(({ listings: all }) => { setProperties(all); setAllLoaded(true); })
-            .catch(() => setAllLoaded(true));
-        }, 800);
+        fetchListings()
+          .then(({ listings: all }) => { setProperties(all); setAllLoaded(true); })
+          .catch(() => setAllLoaded(true));
       } else {
         setAllLoaded(true);
       }

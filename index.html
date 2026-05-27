@@ -75,19 +75,19 @@
           }
         } catch(e) {}
 
-        // 4 параллельных запроса — стартуют пока браузер грузит JS-бандл
+        // 3 параллельных запроса — стартуют пока браузер грузит JS-бандл
         window.__PREFETCH_PROMISE__ = Promise.all([
           fetch(BASE + '?limit=8&offset=0').then(function(r){ return r.json(); }),
           fetch(BASE + '?resource=public_settings').then(function(r){ return r.json(); }),
-          fetch(BASE + '?resource=public_stats').then(function(r){ return r.json(); }),
-          fetch(BASE + '?resource=public_leads_full&limit=1').then(function(r){ return r.json(); })
+          fetch(BASE + '?resource=public_home_data').then(function(r){ return r.json(); })
         ]).then(function(res) {
+          var hd = res[2] || {};
           var data = {
             listings: (res[0].listings || []),
             total: (res[0].total || 0),
             settings: (res[1].settings || {}),
-            stats: { total: res[2].total || 0, main_city: res[2].main_city || '', by_category: res[2].by_category || {}, by_deal: res[2].by_deal || {} },
-            leadsCount: (res[3].total || 0)
+            stats: hd.stats || { total: 0, main_city: '', by_category: {}, by_deal: {} },
+            leadsCount: (hd.leads_count || 0)
           };
           window.__PREFETCH__ = data;
           try {
