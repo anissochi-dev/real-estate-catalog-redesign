@@ -335,7 +335,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
                 onToggleFavorite={onToggleFavorite}
                 onToggleCompare={onToggleCompare}
                 index={i}
-                style={{ animationDelay: `${i * 0.08}s` }}
+
               />
             ))}
           </div>
