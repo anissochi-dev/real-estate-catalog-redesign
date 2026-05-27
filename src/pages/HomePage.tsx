@@ -55,7 +55,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   const [stats, setStats] = useState<PublicStats>({ total: 500, main_city: 'Краснодар' });
   const [leadsCount, setLeadsCount] = useState(300);
   const [aiOpen, setAiOpen] = useState(false);
-  const [latestNews, setLatestNews] = useState<NewsPreview[]>([]);
+  const [latestNews, setLatestNews] = useState<NewsPreview[] | null>(null);
 
   const newsLimit = settings.home_news_limit ?? 10;
   const showNewsOnHome = settings.show_news_on_home;
@@ -336,21 +336,30 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
                 onToggleFavorite={onToggleFavorite}
                 onToggleCompare={onToggleCompare}
                 index={i}
-
               />
+            ))}
+            {newObjects.length < homeLimit && Array.from({ length: homeLimit - newObjects.length }).map((_, i) => (
+              <div key={`sk-${i}`} className="rounded-xl overflow-hidden border border-border bg-white">
+                <div className="aspect-[4/3] bg-muted animate-pulse" />
+                <div className="p-3 space-y-2">
+                  <div className="h-4 bg-muted animate-pulse rounded w-3/4" />
+                  <div className="h-3 bg-muted animate-pulse rounded w-1/2" />
+                  <div className="h-3 bg-muted animate-pulse rounded w-2/3" />
+                </div>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
       {showLeads && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<div className="py-8 bg-muted/20 border-t border-border" style={{minHeight: 200}} />}>
           <ClientLeadsSection limit={settings.home_leads_limit ?? 6} />
         </Suspense>
       )}
 
       {/* Блок новостей — 5 в ряд, 2 строки */}
-      {showNews && latestNews.length > 0 && (
+      {showNews && (latestNews === null || latestNews.length > 0) && (
         <section className="py-6 bg-muted/30 border-t border-border">
           <div className="container mx-auto px-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
@@ -366,33 +375,45 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
               </button>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-              {latestNews.slice(0, homeNewsLimit).map(n => (
-                <article
-                  key={n.id}
-                  onClick={() => navigate(`/news/${n.slug}`)}
-                  className="group cursor-pointer bg-white rounded-xl overflow-hidden border border-border hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-                >
-                  <div className="h-24 relative overflow-hidden bg-gradient-to-br from-brand-blue/10 to-brand-blue/20" style={{minHeight: 96}}>
-                    {n.image_url ? (
-                      <img src={n.image_url} alt={n.title} width={240} height={96} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                    ) : settings.logo_url ? (
-                      <div className="w-full h-full flex items-center justify-center bg-brand-blue/5">
-                        <img src={settings.logo_url} alt="лого" width={40} height={40} loading="lazy" decoding="async" className="w-10 h-10 object-contain opacity-40" />
-                      </div>
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Icon name="Newspaper" size={20} className="text-brand-blue/30" />
-                      </div>
-                    )}
+              {latestNews === null
+                ? Array.from({ length: Math.min(homeNewsLimit, 5) }).map((_, i) => (
+                  <div key={i} className="bg-white rounded-xl overflow-hidden border border-border">
+                    <div className="h-24 bg-muted animate-pulse" />
+                    <div className="p-2.5 space-y-1.5">
+                      <div className="h-3 bg-muted animate-pulse rounded w-full" />
+                      <div className="h-3 bg-muted animate-pulse rounded w-3/4" />
+                      <div className="h-2.5 bg-muted animate-pulse rounded w-1/3 mt-1" />
+                    </div>
                   </div>
-                  <div className="p-2.5">
-                    <h3 className="font-medium text-xs leading-snug line-clamp-2 group-hover:text-brand-blue transition-colors">{n.title}</h3>
-                    <h6 className="text-[10px] text-muted-foreground mt-1.5 font-normal">
-                      {new Date(n.published_at || n.created_at).toLocaleDateString('ru', { day: 'numeric', month: 'short' })}
-                    </h6>
-                  </div>
-                </article>
-              ))}
+                ))
+                : latestNews.slice(0, homeNewsLimit).map(n => (
+                  <article
+                    key={n.id}
+                    onClick={() => navigate(`/news/${n.slug}`)}
+                    className="group cursor-pointer bg-white rounded-xl overflow-hidden border border-border hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                  >
+                    <div className="h-24 relative overflow-hidden bg-gradient-to-br from-brand-blue/10 to-brand-blue/20" style={{minHeight: 96}}>
+                      {n.image_url ? (
+                        <img src={n.image_url} alt={n.title} width={240} height={96} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      ) : settings.logo_url ? (
+                        <div className="w-full h-full flex items-center justify-center bg-brand-blue/5">
+                          <img src={settings.logo_url} alt="лого" width={40} height={40} loading="lazy" decoding="async" className="w-10 h-10 object-contain opacity-40" />
+                        </div>
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Icon name="Newspaper" size={20} className="text-brand-blue/30" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-2.5">
+                      <h3 className="font-medium text-xs leading-snug line-clamp-2 group-hover:text-brand-blue transition-colors">{n.title}</h3>
+                      <h6 className="text-[10px] text-muted-foreground mt-1.5 font-normal">
+                        {new Date(n.published_at || n.created_at).toLocaleDateString('ru', { day: 'numeric', month: 'short' })}
+                      </h6>
+                    </div>
+                  </article>
+                ))
+              }
             </div>
           </div>
         </section>

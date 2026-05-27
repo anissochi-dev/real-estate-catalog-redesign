@@ -127,19 +127,25 @@ export default function App() {
 
   useEffect(() => {
     if (hasConsent()) return;
+    let shown = false;
     const show = () => {
-      const t = setTimeout(() => setConsentVisible(true), 3500);
-      return t;
+      if (shown) return;
+      shown = true;
+      setConsentVisible(true);
     };
-    let timer: ReturnType<typeof setTimeout>;
-    if (document.readyState === 'complete') {
-      timer = show();
-    } else {
-      const onLoad = () => { timer = show(); };
-      window.addEventListener('load', onLoad, { once: true });
-      return () => { window.removeEventListener('load', onLoad); if (timer) clearTimeout(timer); };
-    }
-    return () => { if (timer) clearTimeout(timer); };
+    // Показываем баннер только после первого взаимодействия пользователя
+    const events = ['scroll', 'mousemove', 'touchstart', 'keydown', 'click'] as const;
+    const onInteract = () => {
+      events.forEach(e => window.removeEventListener(e, onInteract));
+      show();
+    };
+    events.forEach(e => window.addEventListener(e, onInteract, { passive: true }));
+    // Страховка: показать через 8 сек даже без взаимодействия
+    const fallback = setTimeout(show, 8000);
+    return () => {
+      events.forEach(e => window.removeEventListener(e, onInteract));
+      clearTimeout(fallback);
+    };
   }, []);
 
   const setView = (v: AppView) => {
