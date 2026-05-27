@@ -18,8 +18,20 @@ export default function AiChatMessage({
   onApplySuggestion, onRejectSuggestion, onRequestEdit,
   onConfirmAgentAction, onRejectAgentAction, onConfirmAllAgentActions,
 }: Props) {
+  const roleBadge = m.role === 'ai' && m.vbRole ? (
+    m.vbRole === 'broker' ? { label: 'Брокер', icon: 'Briefcase', cls: 'bg-amber-100 text-amber-800 border-amber-200' }
+    : m.vbRole === 'it' ? { label: 'ИТ-эксперт', icon: 'Code2', cls: 'bg-sky-100 text-sky-800 border-sky-200' }
+    : { label: 'Универсал', icon: 'Sparkles', cls: 'bg-slate-100 text-slate-700 border-slate-200' }
+  ) : null;
+
   return (
     <div className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
+      {roleBadge && (
+        <div className={`mb-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-600 border ${roleBadge.cls}`}>
+          <Icon name={roleBadge.icon} size={10} />
+          {roleBadge.label}
+        </div>
+      )}
       <div
         className={`max-w-[90%] px-4 py-2.5 rounded-2xl text-sm whitespace-pre-wrap break-words ${
           m.role === 'user'

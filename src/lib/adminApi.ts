@@ -467,12 +467,16 @@ export interface ExecuteResult {
 /** История диалога: формат [{role: 'user'|'ai', text: '...'}], последние 15-20 сообщений. */
 export interface AiHistoryItem { role: 'user' | 'ai'; text: string }
 
+/** Роль, которую ВБ применил к последнему ответу — определяется по тексту запроса.
+ *  broker — Коммерческий брокер, it — ИТ-эксперт, mixed — универсальный. */
+export type VbRole = 'broker' | 'it' | 'mixed';
+
 export const aiApi = {
   ask: (action: AiAction, prompt: string, context_data?: unknown, history?: AiHistoryItem[]) =>
     req(AI_URL, {
       method: 'POST',
       body: JSON.stringify({ action, prompt, context_data, history: history || [] }),
-    }) as Promise<{ text: string; tokens: number }>,
+    }) as Promise<{ text: string; tokens: number; role?: VbRole; topic?: string }>,
   ping: (api_key?: string, folder_id?: string) =>
     req(AI_URL, { method: 'POST', body: JSON.stringify({ action: 'ping', api_key, folder_id }) }) as Promise<{ success: boolean; message: string; reply: string; tokens: number }>,
   agent: (prompt: string, context_data?: unknown, history?: AiHistoryItem[]) =>

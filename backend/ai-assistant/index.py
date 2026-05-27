@@ -1742,14 +1742,15 @@ def handler(event, context):
 
             # Для admin и agent: загружаем память + пульс сайта
             memory = {}
+            current_topic = 'mixed'
             if action in ('admin', 'admin_ops', 'agent'):
                 memory = _load_ai_memory(cur)
                 pulse_ctx = _build_pulse_context(cur)
                 if action in ('admin', 'admin_ops'):
                     # Контекстный фильтр: подбираем факты по теме запроса
                     # → меньше шума, лучше фокус модели
-                    topic = _detect_topic(user_text)
-                    memory_ctx = _build_memory_context(memory, topic=topic)
+                    current_topic = _detect_topic(user_text)
+                    memory_ctx = _build_memory_context(memory, topic=current_topic)
                     sys_prompt = sys_prompt + '\n\n' + pulse_ctx + '\n\n' + memory_ctx
                     _increment_interaction(cur, conn)
                 else:
@@ -1905,6 +1906,19 @@ def handler(event, context):
                     _save_learned_fact(cur, conn, user_text[:200])
                 _save_tech_decision(cur, conn, user_text, ai_answer)
 
-            return _ok({'text': result['text'], 'tokens': result.get('tokens', 0)})
+            # role: для фронта — какую роль ВБ применил
+            #   broker = Брокер (РОЛЬ 1), it = ИТ-эксперт (РОЛЬ 2), platform = по платформе, mixed = универсальный
+            role_label = {
+                'broker': 'broker',
+                'it': 'it',
+                'platform': 'it',
+                'mixed': 'mixed',
+            }.get(current_topic, 'mixed')
+            return _ok({
+                'text': result['text'],
+                'tokens': result.get('tokens', 0),
+                'role': role_label,
+                'topic': current_topic,
+            })
     finally:
         conn.close()

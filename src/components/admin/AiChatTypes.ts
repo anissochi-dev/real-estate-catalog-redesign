@@ -1,4 +1,4 @@
-import { AiAction, AgentAction } from '@/lib/adminApi';
+import { AiAction, AgentAction, VbRole } from '@/lib/adminApi';
 
 export interface AgentActionState extends AgentAction {
   status: 'pending' | 'applied' | 'rejected' | 'failed';
@@ -14,6 +14,8 @@ export interface Msg {
   status?: 'pending' | 'applied' | 'rejected';
   agentActions?: AgentActionState[];
   reasoning?: string;
+  /** Какую роль ВБ применил к этому ответу (только у сообщений ai) */
+  vbRole?: VbRole;
 }
 
 export interface Suggestion {

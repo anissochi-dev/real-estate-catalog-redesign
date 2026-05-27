@@ -104,6 +104,10 @@ export default function AiChat({
           onClearHistory={clearHistory}
           onLoadMemory={loadMemory}
           onClose={onClose}
+          isWorking={loading}
+          currentRole={
+            [...messages].reverse().find(m => m.role === 'ai' && m.vbRole)?.vbRole
+          }
         />
 
         <AiChatLimitIndicator

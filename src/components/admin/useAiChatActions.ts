@@ -109,7 +109,7 @@ export function useAiChatActions({
         .filter(m => (m.role === 'user' || m.role === 'ai') && (m.text || '').trim().length > 0)
         .map(m => ({ role: m.role as 'user' | 'ai', text: m.text }));
       const r = await aiApi.ask('admin_ops', msg, undefined, opsHistory);
-      setOpsMessages(m => [...m, { role: 'ai', text: r.text, ts: Date.now() }]);
+      setOpsMessages(m => [...m, { role: 'ai', text: r.text, ts: Date.now(), vbRole: r.role }]);
     } catch (e: unknown) {
       const errMsg = e instanceof Error ? e.message : 'неизвестно';
       setOpsMessages(m => [...m, {
@@ -178,6 +178,7 @@ export function useAiChatActions({
           ts: Date.now(),
           suggestion: detectSuggestion(r.text, act, currentText),
           status: 'pending',
+          vbRole: r.role,
         };
         setMessages(m => [...m, aiMsg]);
         onResult?.(r.text);
