@@ -197,9 +197,9 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
                 e.preventDefault();
                 setAiOpen(true);
               }}
-              className="flex gap-2 animate-fade-in-up stagger-3"
+              className="flex flex-col sm:flex-row gap-2 animate-fade-in-up stagger-3"
             >
-              <div className="flex-1 flex items-center gap-2 bg-white/10 border border-white/25 rounded-xl px-3 py-2 backdrop-blur-sm focus-within:border-white/60 transition-colors">
+              <div className="w-full sm:flex-1 flex items-center gap-2 bg-white/10 border border-white/25 rounded-xl px-3 py-3 sm:py-2 backdrop-blur-sm focus-within:border-white/60 transition-colors">
                 <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-orange to-rose-500 flex items-center justify-center flex-shrink-0">
                   <Icon name="Sparkles" size={14} className="text-white" />
                 </div>
@@ -208,36 +208,20 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="Опишите объект…"
                   aria-label="ИИ-поиск объекта"
-                  className="bg-transparent text-white placeholder:text-white/55 outline-none w-full text-sm min-w-0"
+                  className="bg-transparent text-white placeholder:text-white/55 outline-none w-full text-base sm:text-sm min-w-0"
                 />
               </div>
               <button
                 type="submit"
                 aria-label="Найти с ИИ"
-                className="btn-orange text-white px-3 sm:px-5 py-2.5 rounded-xl font-semibold font-display text-sm flex-shrink-0 inline-flex items-center gap-1.5 min-h-[44px]"
+                className="btn-orange text-white w-full sm:w-auto px-3 sm:px-5 py-3 sm:py-2.5 rounded-xl font-semibold font-display text-base sm:text-sm flex-shrink-0 inline-flex items-center justify-center gap-1.5 min-h-[48px] sm:min-h-[44px]"
               >
-                <Icon name="Sparkles" size={14} />
+                <Icon name="Sparkles" size={16} />
                 Найти с ИИ
               </button>
             </form>
             <div className="text-[11px] text-white/55 mt-1.5 animate-fade-in-up stagger-3">
               Опишите задачу обычным языком — ИИ подберёт подходящие объекты
-            </div>
-
-            {/* Quick filters */}
-            <div className="flex flex-wrap gap-1.5 mt-3 animate-fade-in-up stagger-4">
-              {[
-                ['Продажа', '/catalog?deal=sale'],
-                ['Аренда', '/catalog?deal=rent'],
-              ].map(([label, to]) => (
-                <button
-                  key={label}
-                  onClick={() => navigate(to)}
-                  className="px-2.5 py-1 rounded-full bg-white/10 border border-white/20 text-xs text-white/85 hover:bg-white/20 transition-all duration-200"
-                >
-                  {label}
-                </button>
-              ))}
             </div>
           </div>
         </div>
