@@ -170,7 +170,11 @@ export default function App() {
         link.href = lcpSrc; link.setAttribute('fetchpriority', 'high');
         document.head.appendChild(link);
       }
-      if (total > 8) {
+      // На главной НЕ догружаем все объекты — только когда пользователь
+      // перейдёт на каталог/категорию/избранное/сравнение. Это исключает
+      // мигание объектов и экономит трафик.
+      const onHome = window.location.pathname === '/';
+      if (total > listings.length && !onHome) {
         const loadAll = () => setTimeout(() => fetchListings()
           .then(({ listings: all }) => { setProperties(all); setAllLoaded(true); })
           .catch(() => setAllLoaded(true)), 2000);
@@ -180,7 +184,9 @@ export default function App() {
           window.addEventListener('load', loadAll, { once: true });
         }
       } else {
-        setAllLoaded(true);
+        // На главной считаем что загрузка «завершена» (показываем что есть).
+        // Полная подгрузка триггерится отдельным эффектом по смене пути.
+        setAllLoaded(onHome ? false : true);
       }
     }
 
@@ -207,6 +213,32 @@ export default function App() {
       .then(({ listings, total }) => applyListings(listings, total))
       .catch(err => { console.error(err); setError('Не удалось загрузить объекты.'); setLoading(false); });
   }, []);
+
+  // Ленивая догрузка всех объектов: триггерится при переходе со «/» на
+  // любую страницу, где нужен полный список (каталог, категории, избранное,
+  // сравнение, поиск). На странице одного объекта догрузка не нужна — данные
+  // подтягиваются отдельным fetchListingById.
+  useEffect(() => {
+    if (allLoaded) return;
+    const path = location.pathname;
+    const needsFullList = path === '/catalog'
+      || path.startsWith('/catalog/')
+      || path === '/favorites'
+      || path === '/compare'
+      || path === '/search'
+      || path === '/map'
+      || path === '/network-tenants';
+    if (!needsFullList) return;
+    let cancelled = false;
+    fetchListings()
+      .then(({ listings }) => {
+        if (cancelled) return;
+        setProperties(listings);
+        setAllLoaded(true);
+      })
+      .catch(() => { if (!cancelled) setAllLoaded(true); });
+    return () => { cancelled = true; };
+  }, [location.pathname, allLoaded]);
 
   const toggleFavorite = (id: number) => {
     setFavorites(prev => (prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]));
