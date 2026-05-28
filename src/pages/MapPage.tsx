@@ -18,10 +18,54 @@ interface MapPageProps {
 }
 
 const TYPE_LABEL: Record<string, string> = {
-  office: 'Офис', retail: 'Магазин/торговое', warehouse: 'Склад',
-  restaurant: 'Общепит', business: 'Бизнес', production: 'Производство',
-  hotel: 'Отель', gab: 'ГАБ',
+  office: 'Офис',
+  retail: 'Магазин/торговое',
+  warehouse: 'Склад',
+  restaurant: 'Общепит',
+  business: 'Готовый бизнес',
+  production: 'Производство',
+  hotel: 'Гостиница',
+  gab: 'ГАБ',
+  land: 'Земля',
+  building: 'Здание',
+  free_purpose: 'Своб. назнач.',
+  car_service: 'Автосервис',
 };
+
+const TYPE_ICON: Record<string, string> = {
+  office: 'Building2',
+  retail: 'ShoppingBag',
+  warehouse: 'Warehouse',
+  restaurant: 'UtensilsCrossed',
+  business: 'Briefcase',
+  production: 'Factory',
+  hotel: 'BedDouble',
+  gab: 'TrendingUp',
+  land: 'Trees',
+  building: 'Building',
+  free_purpose: 'LayoutGrid',
+  car_service: 'Wrench',
+};
+
+const TYPE_COLOR: Record<string, string> = {
+  office: 'bg-blue-500',
+  retail: 'bg-orange-500',
+  warehouse: 'bg-slate-500',
+  restaurant: 'bg-red-500',
+  business: 'bg-violet-500',
+  production: 'bg-stone-600',
+  hotel: 'bg-pink-500',
+  gab: 'bg-emerald-500',
+  land: 'bg-lime-600',
+  building: 'bg-cyan-600',
+  free_purpose: 'bg-amber-500',
+  car_service: 'bg-yellow-600',
+};
+
+const ALL_TYPES: string[] = [
+  'office', 'retail', 'warehouse', 'restaurant', 'business', 'gab',
+  'production', 'hotel', 'land', 'building', 'free_purpose', 'car_service',
+];
 
 const KRASNODAR_CENTER: [number, number] = [45.0355, 38.9753];
 
@@ -63,7 +107,6 @@ export default function MapPage({
     [filtered],
   );
 
-  const types: string[] = ['office', 'retail', 'warehouse', 'restaurant', 'hotel', 'business', 'gab'];
   const isFav: boolean = selected ? favorites.includes(selected.id) : false;
   const inCompare: boolean = selected ? compareList.includes(selected.id) : false;
 
@@ -80,16 +123,17 @@ export default function MapPage({
           Все ({properties.length})
           {!allLoaded && <span className="w-2.5 h-2.5 rounded-full border-2 border-current border-t-transparent animate-spin opacity-70" />}
         </button>
-        {types.map(type => {
+        {ALL_TYPES.map(type => {
           const count = properties.filter(p => String(p.type) === type).length;
           if (!count) return null;
           return (
             <button
               key={type}
               onClick={() => setActiveType(type)}
-              className={`flex-shrink-0 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-all duration-200
+              className={`flex-shrink-0 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-all duration-200 inline-flex items-center gap-1.5
                 ${activeType === type ? 'bg-brand-blue text-white' : 'bg-muted text-foreground hover:bg-brand-blue/10'}`}
             >
+              <Icon name={TYPE_ICON[type] || 'MapPin'} size={13} />
               {TYPE_LABEL[type] || type} ({count})
             </button>
           );
@@ -117,22 +161,16 @@ export default function MapPage({
             }}
           />
 
-          {/* Легенда категорий */}
+          {/* Легенда категорий — показываем только те, у которых есть объекты */}
           <div className="absolute bottom-3 left-3 z-10 bg-white/95 backdrop-blur-sm rounded-lg px-3 py-2 shadow-sm max-w-[calc(100%-1.5rem)]">
             <div className="text-[10px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Категории</div>
             <div className="flex flex-wrap gap-x-3 gap-y-1">
-              {[
-                { type: 'office', color: 'bg-blue-500', label: 'Офис' },
-                { type: 'retail', color: 'bg-orange-500', label: 'Магазин/торговое' },
-                { type: 'warehouse', color: 'bg-slate-500', label: 'Склад' },
-                { type: 'restaurant', color: 'bg-red-500', label: 'Общепит' },
-                { type: 'hotel', color: 'bg-pink-500', label: 'Отель' },
-                { type: 'business', color: 'bg-violet-500', label: 'Бизнес' },
-                { type: 'gab', color: 'bg-emerald-500', label: 'ГАБ' },
-              ].map(c => (
-                <div key={c.type} className="flex items-center gap-1.5 text-[11px]">
-                  <span className={`w-2.5 h-2.5 rounded-full ${c.color} flex-shrink-0`} />
-                  <span className="text-foreground">{c.label}</span>
+              {ALL_TYPES.filter(t => properties.some(p => String(p.type) === t)).map(t => (
+                <div key={t} className="flex items-center gap-1.5 text-[11px]">
+                  <span className={`w-5 h-5 rounded-full ${TYPE_COLOR[t] || 'bg-slate-400'} flex items-center justify-center flex-shrink-0`}>
+                    <Icon name={TYPE_ICON[t] || 'MapPin'} size={11} className="text-white" />
+                  </span>
+                  <span className="text-foreground">{TYPE_LABEL[t] || t}</span>
                 </div>
               ))}
             </div>

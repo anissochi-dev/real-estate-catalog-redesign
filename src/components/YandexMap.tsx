@@ -12,8 +12,11 @@ interface MapPoint {
   isHot?: boolean;
 }
 
-// Соответствие типа объекта → preset иконки Yandex Maps (со значком категории)
-// Доступные значки: Office, Shopping, Food, Hotel, Factory, Money, Education и др.
+// Соответствие типа объекта → preset иконки Yandex Maps (со значком категории).
+// Доступные значки: Office, Shopping, Food, Hotel, Factory, Money, Auto, Education,
+// Sport, Theater, MassTransit, Park, Health, Beauty, Government, Service, Home.
+// Цвета: blue, darkBlue, lightBlue, red, darkOrange, orange, yellow, green,
+// darkGreen, night, violet, pink, brown, grey, black.
 const TYPE_PRESET: Record<string, { glyph: string; color: string }> = {
   office: { glyph: 'Office', color: 'blue' },
   retail: { glyph: 'Shopping', color: 'orange' },
@@ -23,6 +26,10 @@ const TYPE_PRESET: Record<string, { glyph: string; color: string }> = {
   business: { glyph: 'Money', color: 'violet' },
   gab: { glyph: 'Money', color: 'green' },
   production: { glyph: 'Factory', color: 'darkOrange' },
+  land: { glyph: 'Park', color: 'darkGreen' },
+  building: { glyph: 'Government', color: 'lightBlue' },
+  free_purpose: { glyph: 'Home', color: 'yellow' },
+  car_service: { glyph: 'Auto', color: 'brown' },
 };
 
 function presetFor(type?: string, isHot?: boolean): string {
