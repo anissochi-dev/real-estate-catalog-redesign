@@ -304,7 +304,7 @@ export default function LeadsListPage() {
                     )}
 
                     {lead.message && (
-                      <p className="text-sm text-foreground/85 leading-relaxed line-clamp-3">
+                      <p className="text-sm text-foreground/85 leading-relaxed whitespace-pre-wrap break-words">
                         {lead.message}
                       </p>
                     )}

@@ -107,7 +107,7 @@ export default function ClientLeadsSection({ limit = 6 }: Props) {
                   </span>
                 )}
               </div>
-              <div className="text-sm text-foreground flex-1 mb-4 line-clamp-4 whitespace-pre-wrap">
+              <div className="text-sm text-foreground flex-1 mb-4 whitespace-pre-wrap break-words">
                 {l.message || 'Без подробностей. Свяжитесь, чтобы уточнить.'}
               </div>
               <button onClick={() => setOfferLead(l)}

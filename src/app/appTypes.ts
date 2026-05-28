@@ -39,7 +39,7 @@ export interface Property {
   lastEditedAt?: string;
 }
 
-export type Page = 'home' | 'catalog' | 'map' | 'favorites' | 'compare' | 'network-tenants' | 'news';
+export type Page = 'home' | 'catalog' | 'map' | 'favorites' | 'compare' | 'network-tenants' | 'news' | 'leads';
 export type AppView = 'site' | 'login' | 'admin';
 
 export const PATH_BY_PAGE: Record<Page, string> = {
@@ -50,6 +50,7 @@ export const PATH_BY_PAGE: Record<Page, string> = {
   compare: '/compare',
   'network-tenants': '/network-tenants',
   news: '/news',
+  leads: '/leads',
 };
 
 export function pageFromPath(pathname: string): Page {
@@ -59,6 +60,7 @@ export function pageFromPath(pathname: string): Page {
   if (pathname.startsWith('/compare')) return 'compare';
   if (pathname.startsWith('/network-tenants')) return 'network-tenants';
   if (pathname.startsWith('/news')) return 'news';
+  if (pathname.startsWith('/leads')) return 'leads';
   return 'home';
 }
 
