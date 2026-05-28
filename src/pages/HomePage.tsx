@@ -105,18 +105,13 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   const mainCity = settings.main_city || stats.main_city || 'Краснодар';
   const totalCount = stats.total || properties.length;
 
-  // Новые объекты — приоритет: недавно отредактированные > обновлённые > новые по id
-  const propTime = (p: Property): number => {
-    const src = p.lastEditedAt || p.updatedAt || p.createdAt;
-    if (src) {
-      const t = new Date(src).getTime();
-      if (Number.isFinite(t)) return t;
-    }
-    return p.id;
-  };
+  // Новые объекты — берём в том порядке, в каком пришли с сервера.
+  // Бэкенд уже сортирует по: last_edited_at, is_hot, is_new, updated_at, created_at, id.
+  // Свою пересортировку НЕ делаем — иначе при подгрузке полного списка
+  // топ-N меняется и пользователь видит «дерганье» объектов.
   const homeLimit = settings.home_listings_limit ?? 20;
   const newObjects = useMemo(
-    () => [...properties].sort((a, b) => propTime(b) - propTime(a)).slice(0, homeLimit),
+    () => properties.slice(0, homeLimit),
     [properties, homeLimit],
   );
 
