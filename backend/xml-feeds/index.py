@@ -268,6 +268,31 @@ PROPERTY_RIGHTS_AVITO = {
 }
 
 
+def _total_price(l):
+    """Возвращает итоговую цену объекта в рублях.
+
+    Если price_unit == 'm2' — умножаем на площадь. НО защищаемся от кривых данных:
+    если price уже больше 200 000 ₽ (явно не цена за м²), считаем что это уже итоговая цена.
+    Это предотвращает выгрузку нереальных сумм (миллиарды) при ошибочно проставленном
+    price_unit на объектах с уже общей ценой.
+    """
+    raw = l.get('price') or 0
+    try:
+        price = float(raw)
+    except (TypeError, ValueError):
+        return 0
+    if l.get('price_unit') == 'm2' and l.get('area'):
+        try:
+            area = float(l['area'])
+        except (TypeError, ValueError):
+            area = 0
+        # Адекватная цена за м² для коммерческой недвижимости — до 200 000 ₽.
+        # Если price > 200 000 при unit=m2, значит данные кривые и в price уже итоговая сумма.
+        if 0 < price <= 200_000 and area > 0:
+            return int(price * area)
+    return int(price)
+
+
 def _build_yandex(listings, company):
     company_name = _xml_escape(company.get('company_name', 'BIZNEST'))
     phone = _xml_escape(company.get('company_phone', ''))
@@ -313,9 +338,7 @@ def _build_yandex(listings, company):
 
         # Цена
         out.append('<price>')
-        price_val = l.get('price', 0)
-        if l.get('price_unit') == 'm2' and l.get('area'):
-            price_val = int(float(l['price']) * float(l['area']))
+        price_val = _total_price(l)
         out.append(f'<value>{price_val}</value>')
         out.append('<currency>RUB</currency>')
         if l.get('deal') == 'rent':
@@ -411,9 +434,7 @@ def _build_avito(listings, company):
         out.append(f'<Description><![CDATA[{l.get("description", "")}]]></Description>')
 
         # Цена
-        price_val = l.get('price', 0)
-        if l.get('price_unit') == 'm2' and l.get('area'):
-            price_val = int(float(l['price']) * float(l['area']))
+        price_val = _total_price(l)
         out.append(f'<Price>{price_val}</Price>')
 
         # Адрес
@@ -612,9 +633,7 @@ def _build_cian(listings, company):
 
         # Цена
         out.append('<BargainTerms>')
-        price_val = l.get('price', 0)
-        if l.get('price_unit') == 'm2' and l.get('area'):
-            price_val = int(float(l['price']) * float(l['area']))
+        price_val = _total_price(l)
         out.append(f'<Price>{price_val}</Price>')
         out.append('<Currency>rur</Currency>')
         if deal == 'rent':
