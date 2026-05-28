@@ -131,15 +131,18 @@ function usePredictHint(listingId: number) {
   return { hint, rootRef };
 }
 
-function parseImages(property: PropertyCardProps['property']): string[] {
+function getCoverImage(property: PropertyCardProps['property']): string | null {
+  // В карточке всегда показываем ТОЛЬКО обложку. Доп. фото грузятся
+  // на странице объекта. Это экономит трафик и ускоряет загрузку списков.
+  if (property.image) return property.image;
   const raw = (property as { images?: string | string[] }).images;
-  if (Array.isArray(raw) && raw.length > 0) return raw.slice(0, 5);
+  if (Array.isArray(raw) && raw[0]) return raw[0];
   if (typeof raw === 'string' && raw) {
     const sep = raw.includes('|') ? '|' : ',';
-    const arr = raw.split(sep).map(s => s.trim()).filter(Boolean).slice(0, 5);
-    if (arr.length > 0) return arr;
+    const first = raw.split(sep).map(s => s.trim()).filter(Boolean)[0];
+    if (first) return first;
   }
-  return property.image ? [property.image] : [];
+  return null;
 }
 
 export default function PropertyCard({
@@ -149,9 +152,7 @@ export default function PropertyCard({
   const { hint, rootRef } = usePredictHint(property.id);
   const { settings } = useSettings();
 
-  const imgs = parseImages(property);
-  const [activeImg, setActiveImg] = useState(0);
-  const [hovered, setHovered] = useState(false);
+  const cover = getCoverImage(property);
   const [mapOpen, setMapOpen] = useState(false);
 
   const ppm2 = property.pricePerM2
@@ -180,27 +181,23 @@ export default function PropertyCard({
         ref={rootRef}
         className="property-card group bg-white rounded-2xl overflow-hidden border border-border shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up flex flex-col"
         style={style}
-        onMouseEnter={() => setHovered(true)}
       >
-        {/* ── Фотослайдер ── */}
+        {/* ── Обложка (только 1 фото) ── */}
         <div className="relative aspect-[4/3] overflow-hidden bg-muted">
 
-          {/* Картинки: src доп.фото подставляем только после hover, чтобы не качать лишнее */}
-          {imgs.length > 0 ? (
-            imgs.map((src, i) => (
-              <img
-                key={i}
-                src={i === 0 || hovered ? src : undefined}
-                alt={property.title}
-                width={400}
-                height={300}
-                sizes="(max-width: 640px) calc(100vw - 32px), (max-width: 768px) calc(50vw - 24px), (max-width: 1024px) calc(33vw - 24px), 300px"
-                loading={index < 4 && i === 0 ? 'eager' : 'lazy'}
-                fetchpriority={index === 0 && i === 0 ? 'high' : index < 4 && i === 0 ? 'auto' : 'low'}
-                decoding={index === 0 && i === 0 ? 'sync' : 'async'}
-                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${i === activeImg ? 'opacity-100' : 'opacity-0'}`}
-              />
-            ))
+          {/* Только обложка — доп. фото загружаются на странице объекта */}
+          {cover ? (
+            <img
+              src={cover}
+              alt={property.title}
+              width={400}
+              height={300}
+              sizes="(max-width: 640px) calc(100vw - 32px), (max-width: 768px) calc(50vw - 24px), (max-width: 1024px) calc(33vw - 24px), 300px"
+              loading={index < 4 ? 'eager' : 'lazy'}
+              fetchpriority={index === 0 ? 'high' : index < 4 ? 'auto' : 'low'}
+              decoding={index === 0 ? 'sync' : 'async'}
+              className="absolute inset-0 w-full h-full object-cover"
+            />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-muted-foreground">
               <Icon name="Image" size={36} />
@@ -210,56 +207,9 @@ export default function PropertyCard({
           {/* Градиент снизу */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/5 to-transparent pointer-events-none" />
 
-          {/* Кликабельные зоны: если фото больше одного — клик по левой/правой половине листает.
-              Если фото одно — клик по всему фото открывает страницу объекта. */}
-          {imgs.length > 1 ? (
-            <>
-              <button
-                type="button"
-                aria-label="Предыдущее фото"
-                onClick={e => { e.preventDefault(); e.stopPropagation(); setActiveImg(i => (i - 1 + imgs.length) % imgs.length); }}
-                className="absolute left-0 top-0 bottom-0 w-1/2 z-[1] cursor-pointer"
-              />
-              <button
-                type="button"
-                aria-label="Следующее фото"
-                onClick={e => { e.preventDefault(); e.stopPropagation(); setActiveImg(i => (i + 1) % imgs.length); }}
-                className="absolute right-0 top-0 bottom-0 w-1/2 z-[1] cursor-pointer"
-              />
-            </>
-          ) : (
-            <Link to={href} className="absolute inset-0" aria-label={property.title} />
-          )}
+          {/* Клик по фото открывает страницу объекта */}
+          <Link to={href} className="absolute inset-0" aria-label={property.title} />
 
-          {/* Видимые стрелки-подсказки */}
-          {imgs.length > 1 && (
-            <>
-              <div
-                aria-hidden="true"
-                className="absolute left-2 top-1/2 -translate-y-1/2 z-[2] w-8 h-8 sm:w-7 sm:h-7 rounded-full bg-black/50 text-white flex items-center justify-center opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-opacity pointer-events-none"
-              >
-                <Icon name="ChevronLeft" size={14} />
-              </div>
-              <div
-                aria-hidden="true"
-                className="absolute right-2 top-1/2 -translate-y-1/2 z-[2] w-8 h-8 sm:w-7 sm:h-7 rounded-full bg-black/50 text-white flex items-center justify-center opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-opacity pointer-events-none"
-              >
-                <Icon name="ChevronRight" size={14} />
-              </div>
-              {/* Точки */}
-              <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
-                {imgs.map((_, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    aria-label={`Фото ${i + 1}`}
-                    onClick={e => { e.preventDefault(); e.stopPropagation(); setActiveImg(i); }}
-                    className={`w-2.5 h-2.5 sm:w-2 sm:h-2 rounded-full transition-all ${i === activeImg ? 'bg-white scale-125' : 'bg-white/50'}`}
-                  />
-                ))}
-              </div>
-            </>
-          )}
 
           {/* Badges сверху-слева */}
           <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1 z-10">

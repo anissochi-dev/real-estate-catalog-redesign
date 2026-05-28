@@ -428,15 +428,24 @@ def handler(event: dict, context) -> dict:
                     f"CASE WHEN district = '{district}' THEN 0 ELSE 1 END, "
                     f"ABS(price - {int(price) if price else 0}), created_at DESC"
                 )
+                # Без тяжёлых полей images / video_url — нужна только обложка
+                similar_cols = (
+                    "id, title, description, category, deal, price, price_per_m2, area, "
+                    "payback, profit, floor, total_floors, address, district, lat, lng, "
+                    "image, tags, is_hot, is_new, is_exclusive, is_urgent, public_code, "
+                    "tenant_name, monthly_rent, yearly_rent, purpose, finishing, "
+                    "ceiling_height, electricity_kw, utilities, road_line, "
+                    "updated_at, created_at, last_edited_at"
+                )
                 cur.execute(
-                    "SELECT * FROM t_p71821556_real_estate_catalog_.listings WHERE "
+                    f"SELECT {similar_cols} FROM t_p71821556_real_estate_catalog_.listings WHERE "
                     + base_where + " ORDER BY " + order_by + " LIMIT 12"
                 )
                 rows = cur.fetchall()
                 if len(rows) < 4:
                     # добиваем без фильтра по цене
                     cur.execute(
-                        "SELECT * FROM t_p71821556_real_estate_catalog_.listings WHERE "
+                        f"SELECT {similar_cols} FROM t_p71821556_real_estate_catalog_.listings WHERE "
                         f"status = 'active' AND id <> {sid} AND category = '{cat}' AND deal = '{deal}' "
                         f"ORDER BY {order_by} LIMIT 12"
                     )
@@ -530,8 +539,20 @@ def handler(event: dict, context) -> dict:
             if limit_val and limit_val > 0:
                 pagination = f" LIMIT {limit_val} OFFSET {offset_val}"
 
+            # Явный список полей БЕЗ тяжёлых images / video_url / SEO-полей.
+            # Карточкам нужна только обложка `image`. Доп. фото и галерея
+            # подтягиваются на странице объекта через fetchListingById.
+            cols = (
+                "id, title, description, category, deal, price, price_per_m2, area, "
+                "payback, profit, floor, total_floors, address, district, lat, lng, "
+                "image, tags, is_hot, is_new, is_exclusive, is_urgent, public_code, "
+                "tenant_name, monthly_rent, yearly_rent, purpose, finishing, "
+                "ceiling_height, electricity_kw, utilities, road_line, "
+                "updated_at, created_at, last_edited_at"
+            )
+
             sql = (
-                f"SELECT *, COUNT(*) OVER() AS _total_count "
+                f"SELECT {cols}, COUNT(*) OVER() AS _total_count "
                 f"FROM t_p71821556_real_estate_catalog_.listings "
                 f"WHERE {where_clause}{order_clause}{pagination}"
             )
