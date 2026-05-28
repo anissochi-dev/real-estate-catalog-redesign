@@ -109,7 +109,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   // Бэкенд уже сортирует по: last_edited_at, is_hot, is_new, updated_at, created_at, id.
   // Свою пересортировку НЕ делаем — иначе при подгрузке полного списка
   // топ-N меняется и пользователь видит «дерганье» объектов.
-  const homeLimit = settings.home_listings_limit ?? 20;
+  const homeLimit = settings.home_listings_limit ?? 8;
   const newObjects = useMemo(
     () => properties.slice(0, homeLimit),
     [properties, homeLimit],

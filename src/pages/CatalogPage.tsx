@@ -129,13 +129,9 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
       case 'price_desc': result.sort((a, b) => b.price - a.price); break;
       case 'area_asc': result.sort((a, b) => a.area - b.area); break;
       case 'newest':
-        result.sort((a, b) => {
-          // Приоритет: недавно отредактированные → обновлённые → созданные
-          const tSrc = (p: typeof a) => p.lastEditedAt || p.updatedAt || p.createdAt;
-          const ta = tSrc(a) ? new Date(tSrc(a)!).getTime() : 0;
-          const tb = tSrc(b) ? new Date(tSrc(b)!).getTime() : 0;
-          return tb - ta;
-        });
+        // Не сортируем — берём порядок с сервера (last_edited_at, is_hot, is_new, ...).
+        // Иначе при двухэтапной загрузке (быстрые 8 → полный список) топ-N меняется
+        // и пользователь видит «дерганье» объектов.
         break;
     }
 
