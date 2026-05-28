@@ -33,7 +33,6 @@ function LegalModal({ title, content, onClose }: { title: string; content: strin
 const DEFAULT_CATALOG: { label: string; page?: Page; href?: string }[] = [
   { label: 'Все объекты', page: 'catalog' },
   { label: 'На карте', page: 'map' },
-  { label: 'Заявки', page: 'network-tenants' },
 ];
 
 const DEFAULT_CATEGORIES: { label: string; href: string }[] = [
