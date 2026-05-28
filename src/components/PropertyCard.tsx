@@ -358,10 +358,7 @@ export default function PropertyCard({
           */}
 
           {/* Футер */}
-          <div className="mt-auto flex items-center justify-between gap-2 pt-1.5 border-t border-border/50">
-            <span className="text-[10px] text-muted-foreground/60">
-              {imgs.length > 1 ? `${imgs.length} фото` : ''}
-            </span>
+          <div className="mt-auto flex items-center justify-end gap-2 pt-1.5 border-t border-border/50">
             <Link to={href}
               className="btn-orange text-white text-[11px] font-bold font-display px-3 py-1.5 rounded-lg inline-flex items-center gap-1 flex-shrink-0">
               Подробнее <Icon name="ArrowRight" size={11} />
