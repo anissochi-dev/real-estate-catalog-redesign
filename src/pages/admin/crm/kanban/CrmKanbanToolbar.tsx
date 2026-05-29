@@ -2,6 +2,7 @@ import Icon from '@/components/ui/icon';
 
 export type StatusFilter = 'all' | 'active' | 'closed' | 'overdue';
 export type SortKey = 'updated' | 'created' | 'amount' | 'title';
+export type ViewMode = 'board' | 'list';
 
 interface Props {
   statusFilter: StatusFilter;
@@ -11,13 +12,38 @@ interface Props {
   sortKey: SortKey;
   setSortKey: (v: SortKey) => void;
   dealsCount: number;
+  viewMode: ViewMode;
+  setViewMode: (v: ViewMode) => void;
 }
 
 export default function CrmKanbanToolbar({
   statusFilter, setStatusFilter, search, setSearch, sortKey, setSortKey, dealsCount,
+  viewMode, setViewMode,
 }: Props) {
   return (
     <div className="bg-white rounded-2xl p-3 shadow-sm flex flex-wrap items-center gap-3">
+      {/* Переключатель Воронка / Список */}
+      <div className="flex items-center gap-1 bg-muted/40 rounded-lg p-0.5">
+        {([
+          { key: 'board', label: 'Воронка', icon: 'Columns3' },
+          { key: 'list', label: 'Список', icon: 'List' },
+        ] as { key: ViewMode; label: string; icon: string }[]).map(opt => (
+          <button
+            key={opt.key}
+            type="button"
+            onClick={() => setViewMode(opt.key)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition ${
+              viewMode === opt.key
+                ? 'bg-white text-brand-blue shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Icon name={opt.icon} size={14} />
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
       <div className="flex items-center gap-1 bg-muted/40 rounded-lg p-0.5">
         {([
           { key: 'all', label: 'Все' },

@@ -6,8 +6,9 @@ import { toast } from 'sonner';
 import { Deal } from './crmKanbanTypes';
 import CrmCreateDealModal, { CreateDealForm } from './CrmCreateDealModal';
 import CrmDealDetailModal from './CrmDealDetailModal';
-import CrmKanbanToolbar, { StatusFilter, SortKey } from './kanban/CrmKanbanToolbar';
+import CrmKanbanToolbar, { StatusFilter, SortKey, ViewMode } from './kanban/CrmKanbanToolbar';
 import CrmKanbanBoard from './kanban/CrmKanbanBoard';
+import CrmDealsList from './kanban/CrmDealsList';
 import { useCrmKanbanData } from './kanban/useCrmKanbanData';
 
 const EMPTY_FORM: CreateDealForm = {
@@ -32,6 +33,7 @@ export default function CrmKanban() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
   const [sortKey, setSortKey] = useState<SortKey>('updated');
   const [search, setSearch] = useState('');
+  const [viewMode, setViewMode] = useState<ViewMode>('board');
 
   const canReopen = user?.role === 'admin' || user?.role === 'director';
   const headers = { 'Content-Type': 'application/json', 'X-Auth-Token': token || '' };
@@ -43,6 +45,7 @@ export default function CrmKanban() {
       if (pendingId) {
         localStorage.removeItem('crm_open_deal_id');
         setDetailId(Number(pendingId));
+        setViewMode('list');
       }
     } catch { /* ignore */ }
   }, []);
@@ -115,7 +118,9 @@ export default function CrmKanban() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-2xl font-display font-700">Воронка сделок</h2>
-          <p className="text-sm text-muted-foreground">Перетащите карточки между этапами</p>
+          <p className="text-sm text-muted-foreground">
+            {viewMode === 'board' ? 'Перетащите карточки между этапами' : 'Все сделки списком — по 10 на странице'}
+          </p>
         </div>
         <Button onClick={() => setModalOpen(true)} className="bg-brand-blue text-white">
           <Icon name="Plus" size={16} className="mr-2" />
@@ -131,17 +136,27 @@ export default function CrmKanban() {
         sortKey={sortKey}
         setSortKey={setSortKey}
         dealsCount={deals.length}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
       />
 
-      <CrmKanbanBoard
-        isLoading={isLoading}
-        stages={stages}
-        deals={deals}
-        onDragStart={setDragDeal}
-        onDragEnd={() => setDragDeal(null)}
-        onDrop={handleDrop}
-        onCardClick={setDetailId}
-      />
+      {viewMode === 'board' ? (
+        <CrmKanbanBoard
+          isLoading={isLoading}
+          stages={stages}
+          deals={deals}
+          onDragStart={setDragDeal}
+          onDragEnd={() => setDragDeal(null)}
+          onDrop={handleDrop}
+          onCardClick={setDetailId}
+        />
+      ) : (
+        <CrmDealsList
+          isLoading={isLoading}
+          deals={deals}
+          onCardClick={setDetailId}
+        />
+      )}
 
       <CrmCreateDealModal
         open={modalOpen}
