@@ -25,11 +25,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return;
     }
+    // Страховка: если проверка авторизации зависнет, через 8 сек снимаем
+    // загрузку, чтобы не висело бесконечное колесо.
+    let done = false;
+    const t = setTimeout(() => { if (!done) setLoading(false); }, 8000);
     authApi
       .me()
       .then(d => setUser(d.user))
       .catch(() => { clearToken(); setTokenState(''); })
-      .finally(() => setLoading(false));
+      .finally(() => { done = true; clearTimeout(t); setLoading(false); });
+    return () => clearTimeout(t);
   }, []);
 
   const login = async (email: string, password: string) => {
