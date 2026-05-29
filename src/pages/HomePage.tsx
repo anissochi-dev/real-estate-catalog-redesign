@@ -56,8 +56,8 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   // Инициализируем из prefetch если уже готово — нулевого мигания не будет
   type Pf = { stats?: PublicStats; leadsCount?: number };
   const pf = (window as Window & { __PREFETCH__?: Pf }).__PREFETCH__;
-  const [stats, setStats] = useState<PublicStats>(pf?.stats ?? { total: 500, main_city: 'Краснодар' });
-  const [leadsCount, setLeadsCount] = useState(pf?.leadsCount ?? 300);
+  const [stats, setStats] = useState<PublicStats>(pf?.stats ?? { total: 0, main_city: 'Краснодар' });
+  const [leadsCount, setLeadsCount] = useState(pf?.leadsCount ?? 0);
 
   const [aiOpen, setAiOpen] = useState(false);
   const [latestNews, setLatestNews] = useState<NewsPreview[] | null>(null);
@@ -140,8 +140,8 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   }, [newObjects]);
 
   const STATS_VIEW = [
-    { value: `${totalCount}+`, label: 'Объектов в базе', icon: 'Building2', deal: null },
-    { value: `${leadsCount}+`, label: 'Заявок от клиентов', icon: 'MessageSquare', deal: null },
+    { value: totalCount > 0 ? `${totalCount}+` : '…', label: 'Объектов в базе', icon: 'Building2', deal: null },
+    { value: leadsCount > 0 ? `${leadsCount}+` : '…', label: 'Заявок от клиентов', icon: 'MessageSquare', deal: null },
     { value: '98%', label: 'Успешных сделок', icon: 'TrendingUp', deal: null },
     { value: `с ${settings.company_since_year || 2007}`, label: 'На рынке', icon: 'Award', deal: null },
   ];
