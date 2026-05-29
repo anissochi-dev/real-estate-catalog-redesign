@@ -49,7 +49,7 @@ export function NewsListPage() {
     document.title = `Новости коммерческой недвижимости | ${settings.company_name || 'BIZNEST'}`;
   }, [settings.company_name]);
 
-  const siteUrl = settings.site_url || 'https://bmn23.ru';
+  const siteUrl = settings.site_url || 'https://bmn.su';
 
   const newsListSchema = news.length > 0
     ? makeItemListSchema(
@@ -221,7 +221,7 @@ export function NewsArticlePage() {
   const h4text = article.seo_h4 ? clip(article.seo_h4, 50) : null;
   const h5text = article.seo_h5 ? clip(article.seo_h5, 50) : null;
 
-  const articleSiteUrl = settings.site_url || 'https://bmn23.ru';
+  const articleSiteUrl = settings.site_url || 'https://bmn.su';
   const articlePageUrl = `${articleSiteUrl}/news/${article.slug}`;
 
   const articleSchema = makeNewsArticleSchema({

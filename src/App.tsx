@@ -368,7 +368,7 @@ export default function App() {
         id="org"
         schema={makeOrganizationSchema({
           name: settings.company_name || 'Бизнес. Маркетинг. Недвижимость.',
-          url: settings.site_url || 'https://bmn23.ru',
+          url: settings.site_url || 'https://bmn.su',
           phone: settings.company_phone,
           email: settings.company_email,
           address: settings.company_address,
@@ -380,7 +380,7 @@ export default function App() {
         id="website"
         schema={makeWebSiteSchema({
           name: settings.company_name || 'Бизнес. Маркетинг. Недвижимость.',
-          url: settings.site_url || 'https://bmn23.ru',
+          url: settings.site_url || 'https://bmn.su',
         })}
       />
       <Navbar

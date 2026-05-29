@@ -300,7 +300,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
       <AIMatchModal open={aiOpen} onClose={() => setAiOpen(false)} initialPrompt={aiQuery} autoSubmit={!!aiQuery.trim()} />
 
       {/* Results */}
-      <div className="container mx-auto px-4 py-8">
+      <section className="container mx-auto px-4 py-8" aria-label="Каталог объектов">
         <div className="mb-4">
           <Breadcrumbs items={[
             { label: 'Главная', to: '/' },
@@ -371,7 +371,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
             )}
           </>
         )}
-      </div>
+      </section>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
 import { NEWS_URL } from '@/lib/adminApi';
 import SeoHead from '@/components/SeoHead';
+import SchemaOrg, { makeFaqSchema } from '@/components/SchemaOrg';
 
 const ClientLeadsSection = lazy(() => import('@/components/ClientLeadsSection'));
 const AIMatchModal = lazy(() => import('@/components/AIMatchModal'));
@@ -166,6 +167,33 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
 
   // Первый объект с фото — используем как og:image главной страницы
   const lcpImage = newObjects.find(p => p.image)?.image;
+
+  // Частые вопросы — данные берём из информации о компании.
+  // Используются и в FAQPage Schema (для AI и поисковиков), и в видимом блоке.
+  const cityName = mainCity || 'Краснодар';
+  const sinceYear = settings.company_since_year || '2007';
+  const faqItems = [
+    {
+      question: `Какую коммерческую недвижимость можно подобрать в ${cityName}е?`,
+      answer: `В каталоге — офисы, торговые помещения, склады, помещения под общепит, производства, готовый бизнес и земельные участки в ${cityName}е и пригороде. Всего более ${totalCount} актуальных объектов.`,
+    },
+    {
+      question: 'Сколько лет компания работает на рынке?',
+      answer: `Агентство «Бизнес. Маркетинг. Недвижимость.» работает на рынке коммерческой недвижимости ${cityName}а с ${sinceYear} года.`,
+    },
+    {
+      question: 'Как быстро подобрать подходящее помещение?',
+      answer: 'Воспользуйтесь умным подбором с искусственным интеллектом — опишите задачу простыми словами, и система предложит подходящие объекты за 2 минуты.',
+    },
+    {
+      question: 'Нужно ли платить комиссию за подбор объекта?',
+      answer: 'Многие объекты сдаются и продаются напрямую от собственника — без комиссий и процентов. Условия по каждому объекту указаны в его карточке.',
+    },
+    {
+      question: 'Можно ли арендовать и купить помещение?',
+      answer: 'Да. В каталоге есть объекты как для аренды, так и для покупки — используйте фильтр по типу сделки.',
+    },
+  ];
 
   return (
     <div>
@@ -383,6 +411,27 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
           </div>
         </section>
       )}
+
+      {/* Частые вопросы — FAQ Schema + видимый блок (полезно для AI и поиска) */}
+      <SchemaOrg id="faq" schema={makeFaqSchema(faqItems)} />
+      <section className="py-8 bg-white" aria-labelledby="faq-title">
+        <div className="container mx-auto px-4 max-w-3xl">
+          <h2 id="faq-title" className="font-display font-800 text-xl sm:text-2xl text-foreground mb-5">
+            Частые вопросы
+          </h2>
+          <div className="space-y-3">
+            {faqItems.map((f, i) => (
+              <details key={i} className="group bg-muted/30 rounded-xl border border-border px-4 py-3">
+                <summary className="flex items-center justify-between cursor-pointer list-none font-medium text-sm text-foreground">
+                  {f.question}
+                  <Icon name="ChevronDown" size={16} className="text-muted-foreground transition-transform group-open:rotate-180 shrink-0 ml-3" />
+                </summary>
+                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{f.answer}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {aiOpen && (
         <Suspense fallback={null}>

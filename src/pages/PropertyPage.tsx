@@ -157,7 +157,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
     }
   };
 
-  const siteUrl = settings.site_url || 'https://bmn23.ru';
+  const siteUrl = settings.site_url || 'https://bmn.su';
   const pageUrl = typeof window !== 'undefined' ? window.location.href : `${siteUrl}/object/${slug}`;
 
   const productSchema = makeRealEstateSchema({
@@ -189,7 +189,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   ]);
 
   return (
-    <div className="bg-background">
+    <article className="bg-background">
       <SchemaOrg schema={productSchema} id="property" />
       <SchemaOrg schema={breadcrumbSchema} id="breadcrumb" />
 
@@ -362,6 +362,6 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
         initialPrompt={aiQuery || `${dealLabel} ${typeLabel} ${item.area} м² ${item.city || 'Краснодар'}`}
         autoSubmit
       />
-    </div>
+    </article>
   );
 }

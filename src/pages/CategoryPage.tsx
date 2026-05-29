@@ -233,7 +233,7 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
     );
   }
 
-  const siteUrl = settings.site_url || 'https://bmn23.ru';
+  const siteUrl = settings.site_url || 'https://bmn.su';
 
   const itemListSchema = makeItemListSchema(
     items.slice(0, 20).map(p => ({

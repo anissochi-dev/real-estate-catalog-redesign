@@ -11,7 +11,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
-SITE_URL = 'https://bmn23.ru'
+SITE_URL = 'https://bmn.su'
 SITE_NAME = 'Бизнес. Маркетинг. Недвижимость.'
 DEFAULT_IMAGE = 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/og-image-1779575751349.png'
 
