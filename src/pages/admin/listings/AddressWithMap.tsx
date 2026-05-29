@@ -14,18 +14,13 @@ declare global {
 let ymapsLoadPromise: Promise<void> | null = null;
 function loadYmaps(apiKey: string): Promise<void> {
   if (typeof window === 'undefined') return Promise.reject();
-  // Уже загружено и suggest доступен
-  if (window.ymaps && typeof window.ymaps.suggest === 'function') return Promise.resolve();
+  if (window.ymaps) return Promise.resolve();
   if (ymapsLoadPromise) return ymapsLoadPromise;
   ymapsLoadPromise = new Promise<void>((resolve, reject) => {
-    // Если ymaps уже есть (без suggest) — не вставляем второй скрипт, просто ждём ready
-    if (window.ymaps) {
-      window.ymaps.ready(() => resolve());
-      return;
-    }
     const s = document.createElement('script');
-    // Явно подключаем модули Map/Placemark/geocode/suggest, чтобы suggest точно был доступен.
-    s.src = `https://api-maps.yandex.ru/2.1/?lang=ru_RU&load=Map,Placemark,geocode,suggest${apiKey ? `&apikey=${apiKey}` : ''}`;
+    // Грузим полный пакет по умолчанию (без явного load) — карта инициализируется
+    // надёжно даже если у ключа нет доступа к отдельным сервисам (suggest/geocode).
+    s.src = `https://api-maps.yandex.ru/2.1/?lang=ru_RU${apiKey ? `&apikey=${apiKey}` : ''}`;
     s.async = true;
     s.onload = () => window.ymaps ? window.ymaps.ready(() => resolve()) : (ymapsLoadPromise = null, reject());
     s.onerror = () => { ymapsLoadPromise = null; reject(); };
