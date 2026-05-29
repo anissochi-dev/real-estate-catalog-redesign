@@ -26,13 +26,7 @@ export default function ListingEditorContentSection({
       <div className="space-y-1" data-field-error={descError ? 'true' : undefined}>
         <div className="flex items-center justify-between">
           <label className="text-sm font-semibold flex items-center gap-1.5">
-            Описание <span className="text-red-500">*</span>
-            {descError && (
-              <span className="text-xs font-normal text-red-600 inline-flex items-center gap-1">
-                <Icon name="AlertCircle" size={11} />
-                обязательно, минимум 30 символов
-              </span>
-            )}
+            Описание *
           </label>
           <button onClick={onDescribe} disabled={aiLoading}
             className="text-xs text-brand-orange hover:underline inline-flex items-center gap-1">

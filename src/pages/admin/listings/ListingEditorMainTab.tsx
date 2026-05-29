@@ -51,13 +51,13 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
         <div className="relative">
           <input className={`w-full px-3 py-2 border rounded-lg pr-16 ${err('title')}`}
             placeholder="Аренда офиса, продажа склада..."
-            maxLength={120}
+            maxLength={70}
             value={editing.title || ''}
             onChange={e => { setEditing({ ...editing, title: e.target.value }); setErrors(v => ({ ...v, title: false })); }} />
           <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs tabular-nums ${
-            (editing.title?.length || 0) >= 110 ? 'text-red-500' : 'text-muted-foreground'
+            (editing.title?.length || 0) >= 60 ? 'text-red-500' : 'text-muted-foreground'
           }`}>
-            {editing.title?.length || 0}/120
+            {editing.title?.length || 0}/70
           </span>
         </div>
         {editing.deal && editing.category && (() => {
