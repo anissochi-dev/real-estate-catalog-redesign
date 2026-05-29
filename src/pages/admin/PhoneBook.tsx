@@ -144,6 +144,20 @@ export default function PhoneBook() {
     }
   };
 
+  // После добавления нового телефона автоматически синхронизируем с общей базой
+  // (связываем номер с объектами и лидами) и обновляем список — без кнопки.
+  const handleAdded = async () => {
+    setSyncing(true);
+    try {
+      await adminApi.syncPhones();
+    } catch {
+      // даже если синхронизация не удалась — список всё равно обновим
+    } finally {
+      setSyncing(false);
+      load(1, search);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -265,7 +279,7 @@ export default function PhoneBook() {
       {adding && (
         <AddContactModal
           onClose={() => setAdding(false)}
-          onAdded={() => load(1, search)}
+          onAdded={handleAdded}
         />
       )}
     </div>
