@@ -14,12 +14,18 @@ declare global {
 let ymapsLoadPromise: Promise<void> | null = null;
 function loadYmaps(apiKey: string): Promise<void> {
   if (typeof window === 'undefined') return Promise.reject();
-  if (window.ymaps) return Promise.resolve();
+  // Уже загружено и suggest доступен
+  if (window.ymaps && typeof window.ymaps.suggest === 'function') return Promise.resolve();
   if (ymapsLoadPromise) return ymapsLoadPromise;
   ymapsLoadPromise = new Promise<void>((resolve, reject) => {
+    // Если ymaps уже есть (без suggest) — не вставляем второй скрипт, просто ждём ready
+    if (window.ymaps) {
+      window.ymaps.ready(() => resolve());
+      return;
+    }
     const s = document.createElement('script');
-    // Без load=package.full — карта быстрее грузится, нам нужны только Map, Placemark, geocode/suggest.
-    s.src = `https://api-maps.yandex.ru/2.1/?lang=ru_RU${apiKey ? `&apikey=${apiKey}` : ''}`;
+    // Явно подключаем модули Map/Placemark/geocode/suggest, чтобы suggest точно был доступен.
+    s.src = `https://api-maps.yandex.ru/2.1/?lang=ru_RU&load=Map,Placemark,geocode,suggest${apiKey ? `&apikey=${apiKey}` : ''}`;
     s.async = true;
     s.onload = () => window.ymaps ? window.ymaps.ready(() => resolve()) : (ymapsLoadPromise = null, reject());
     s.onerror = () => { ymapsLoadPromise = null; reject(); };
@@ -144,8 +150,44 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey]);
 
+  /* Очистка текста подсказки от страны/региона/города. */
+  const cleanSuggestion = (raw: string): string => raw
+    .replace(/^Россия,\s*/i, '')
+    .replace(new RegExp(`(^|,\\s*)(${currentCity}(\\s+\\(.+?\\))?)(,\\s*|$)`, 'gi'), '$1')
+    .replace(/(^|,\s*)(Краснодарский край|[^,]+ область|[^,]+ край|[^,]+ Республика)(,\s*|$)/gi, '$1')
+    .replace(/^,\s*/, '')
+    .replace(/,\s*,/g, ',')
+    .trim();
+
+  const applySuggestions = (rawItems: string[]) => {
+    const list: Suggestion[] = rawItems
+      .map(raw => { const c = cleanSuggestion(raw); return { value: c || raw, displayName: c || raw }; })
+      .filter((s: Suggestion) => s.value);
+    setSuggestions(list);
+    setShowSuggestions(list.length > 0);
+    setHighlightIdx(-1);
+  };
+
+  /* HTTP-фолбэк подсказок через геокодер (если suggest недоступен). */
+  const fetchSuggestionsHttp = (fullQuery: string) => {
+    const url = `https://geocode-maps.yandex.ru/1.x/?format=json&lang=ru_RU&results=8`
+      + (apiKey ? `&apikey=${encodeURIComponent(apiKey)}` : '')
+      + `&geocode=${encodeURIComponent(fullQuery)}`;
+    fetch(url)
+      .then(r => r.json())
+      .then((data: any) => {
+        const features = data?.response?.GeoObjectCollection?.featureMember || [];
+        const raws: string[] = features.map((f: any) => {
+          const obj = f.GeoObject || {};
+          return obj?.metaDataProperty?.GeocoderMetaData?.text || obj?.name || '';
+        });
+        applySuggestions(raws);
+      })
+      .catch(() => setSuggestions([]));
+  };
+
   /* Подсказки через встроенный ymaps.suggest (часть JS API Карт).
-   * Работает с тем же ключом yandex_maps_api_key и НЕ требует отдельного ключа HTTP-геокодера. */
+   * Работает с тем же ключом yandex_maps_api_key. При недоступности — HTTP-фолбэк. */
   const fetchSuggestions = (query: string) => {
     if (suggestTimer.current) clearTimeout(suggestTimer.current);
     const q = query.trim();
@@ -155,29 +197,18 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
       return;
     }
     suggestTimer.current = setTimeout(() => {
-      if (!window.ymaps || typeof window.ymaps.suggest !== 'function') {
-        setSuggestions([]);
-        return;
-      }
       const fullQuery = `${currentCity}, ${q}`;
-      window.ymaps.suggest(fullQuery, { results: 8 })
-        .then((items: any[]) => {
-          const list: Suggestion[] = (items || []).map((it) => {
-            const raw = it.displayName || it.value || '';
-            const cleaned = raw
-              .replace(/^Россия,\s*/i, '')
-              .replace(new RegExp(`(^|,\\s*)(${currentCity}(\\s+\\(.+?\\))?)(,\\s*|$)`, 'gi'), '$1')
-              .replace(/(^|,\s*)(Краснодарский край|[^,]+ область|[^,]+ край|[^,]+ Республика)(,\s*|$)/gi, '$1')
-              .replace(/^,\s*/, '')
-              .replace(/,\s*,/g, ',')
-              .trim();
-            return { value: cleaned || raw, displayName: cleaned || raw };
-          }).filter((s: Suggestion) => s.value);
-          setSuggestions(list);
-          setShowSuggestions(list.length > 0);
-          setHighlightIdx(-1);
-        })
-        .catch(() => setSuggestions([]));
+      if (window.ymaps && typeof window.ymaps.suggest === 'function') {
+        window.ymaps.suggest(fullQuery, { results: 8 })
+          .then((items: any[]) => {
+            const raws = (items || []).map((it) => it.displayName || it.value || '');
+            if (raws.length > 0) applySuggestions(raws);
+            else fetchSuggestionsHttp(fullQuery);
+          })
+          .catch(() => fetchSuggestionsHttp(fullQuery));
+      } else {
+        fetchSuggestionsHttp(fullQuery);
+      }
     }, 250);
   };
 
