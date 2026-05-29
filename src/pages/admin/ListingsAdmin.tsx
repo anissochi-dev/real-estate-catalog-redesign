@@ -152,10 +152,12 @@ export default function ListingsAdmin() {
           cities={s.cities}
           landVri={s.landVri}
           aiLoading={s.aiLoading}
+          aiTitleLoading={s.aiTitleLoading}
           aiTagsLoading={s.aiTagsLoading}
           aiSeoLoading={s.aiSeoLoading}
           aiAllLoading={s.aiAllLoading}
           onDescribe={s.aiDescribe}
+          onGenerateTitle={s.aiTitle}
           onGenerateTags={s.generateTags}
           onGenerateSeo={s.generateSeo}
           onGenerateAll={s.generateAll}

@@ -8,11 +8,13 @@ interface Props {
   setEditing: (l: Partial<Listing>) => void;
   errors: Record<string, boolean>;
   setErrors: (fn: (v: Record<string, boolean>) => Record<string, boolean>) => void;
+  onGenerateTitle?: () => void;
+  aiTitleLoading?: boolean;
 }
 
 const MAX_PURPOSES = 10;
 
-export default function ListingEditorMainTab({ editing, setEditing, errors, setErrors }: Props) {
+export default function ListingEditorMainTab({ editing, setEditing, errors, setErrors, onGenerateTitle, aiTitleLoading }: Props) {
   const [purposeOpen, setPurposeOpen] = useState(false);
   const [purposeSearch, setPurposeSearch] = useState('');
   const purposeRef = useRef<HTMLDivElement>(null);
@@ -47,7 +49,21 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
     <div className="space-y-4">
       {/* Название */}
       <div className="space-y-1.5" {...errWrap('title')}>
-        <label className="text-xs text-muted-foreground">Название объекта *</label>
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-xs text-muted-foreground">Название объекта *</label>
+          {onGenerateTitle && (
+            <button
+              type="button"
+              onClick={onGenerateTitle}
+              disabled={aiTitleLoading || !editing.deal || !editing.category}
+              title={!editing.deal || !editing.category ? 'Сначала выберите тип сделки и категорию' : 'Сгенерировать заголовок с ИИ'}
+              className="btn-orange text-white px-2.5 py-1 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <Icon name={aiTitleLoading ? 'Loader2' : 'Sparkles'} size={12} className={aiTitleLoading ? 'animate-spin' : ''} />
+              {aiTitleLoading ? 'Генерация...' : 'ИИ заголовок'}
+            </button>
+          )}
+        </div>
         <div className="relative">
           <input className={`w-full px-3 py-2 border rounded-lg pr-16 ${err('title')}`}
             placeholder="Аренда офиса, продажа склада..."

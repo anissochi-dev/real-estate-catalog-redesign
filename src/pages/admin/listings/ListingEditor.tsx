@@ -19,10 +19,12 @@ interface Props {
   cities: City[];
   landVri: LandVri[];
   aiLoading: boolean;
+  aiTitleLoading: boolean;
   aiTagsLoading: boolean;
   aiSeoLoading: boolean;
   aiAllLoading: boolean;
   onDescribe: () => void;
+  onGenerateTitle: () => void;
   onGenerateTags: () => void;
   onGenerateSeo: () => void;
   onGenerateAll: () => void;
@@ -32,8 +34,8 @@ interface Props {
 
 export default function ListingEditor({
   editing, setEditing, photos, setPhotos, cities, landVri,
-  aiLoading, aiTagsLoading, aiSeoLoading, aiAllLoading,
-  onDescribe, onGenerateTags, onGenerateSeo, onGenerateAll, onClose, onSave,
+  aiLoading, aiTitleLoading, aiTagsLoading, aiSeoLoading, aiAllLoading,
+  onDescribe, onGenerateTitle, onGenerateTags, onGenerateSeo, onGenerateAll, onClose, onSave,
 }: Props) {
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [tab, setTab] = useState<EditorTab>('main');
@@ -185,6 +187,8 @@ export default function ListingEditor({
               setEditing={setEditing}
               errors={errors}
               setErrors={setErrors}
+              onGenerateTitle={onGenerateTitle}
+              aiTitleLoading={aiTitleLoading}
             />
           )}
 

@@ -36,6 +36,7 @@ export function useListingsState() {
   const [historyListing, setHistoryListing] = useState<Listing | null>(null);
   const [photoPickListing, setPhotoPickListing] = useState<Listing | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiTitleLoading, setAiTitleLoading] = useState(false);
   const [aiTagsLoading, setAiTagsLoading] = useState(false);
   const [aiSeoLoading, setAiSeoLoading] = useState(false);
   const [aiAllLoading, setAiAllLoading] = useState(false);
@@ -203,17 +204,65 @@ export function useListingsState() {
     });
   };
 
+  // Собирает все заполненные поля объекта в текст для ИИ.
+  // Пустые поля пропускаются. Цену для описания НЕ передаём (по требованию).
+  const buildListingContext = (e: Partial<Listing>, includePrice: boolean): string => {
+    const dealLabel = e.deal === 'rent' ? 'аренда (сдаём)' : e.deal === 'business' ? 'готовый бизнес' : 'продажа (продаём)';
+    const parkingLabel: Record<string, string> = { none: 'нет', street: 'на улице', building: 'в здании' };
+    const parts: string[] = [];
+    if (e.deal) parts.push(`Тип сделки: ${dealLabel}`);
+    if (e.category) parts.push(`Категория: ${e.category}`);
+    if (e.city) parts.push(`Город: ${e.city}`);
+    if (e.district) parts.push(`Район: ${e.district}`);
+    if (e.address) parts.push(`Адрес: ${e.address}`);
+    if (e.area) parts.push(`Площадь: ${e.area} м²`);
+    if (e.land_area) parts.push(`Площадь участка: ${e.land_area} сот.`);
+    if (e.floor) parts.push(`Этаж: ${e.floor}${e.total_floors ? ` из ${e.total_floors}` : ''}`);
+    if (e.ceiling_height) parts.push(`Высота потолков: ${e.ceiling_height} м`);
+    if (e.condition) parts.push(`Состояние: ${e.condition}`);
+    if (e.finishing) parts.push(`Отделка: ${e.finishing}`);
+    if (e.electricity_kw) parts.push(`Электричество: ${e.electricity_kw} кВт`);
+    if (e.utilities) parts.push(`Коммуникации: ${e.utilities}`);
+    if (e.parking) parts.push(`Парковка: ${parkingLabel[e.parking] || e.parking}`);
+    if (e.road_line) parts.push(`Линия дороги: ${e.road_line}`);
+    if (e.purpose) parts.push(`Назначение (направления использования): ${e.purpose}`);
+    // Доходность — важно для аренды/готового бизнеса
+    if (e.monthly_rent) parts.push(`Доход в месяц: ${e.monthly_rent} ₽`);
+    if (e.yearly_rent) parts.push(`Доход в год: ${e.yearly_rent} ₽`);
+    if (e.profit) parts.push(`Чистая прибыль: ${e.profit} ₽`);
+    if (e.payback) parts.push(`Окупаемость: ${e.payback} мес.`);
+    if (includePrice && e.price) parts.push(`Цена: ${e.price} ₽`);
+    return parts.join('; ');
+  };
+
   const aiDescribe = async () => {
     if (!editing) return;
     setAiLoading(true);
     try {
-      const prompt = `Город: ${editing.city || 'Краснодар'}, категория: ${editing.category}, назначение: ${editing.purpose || '-'}, площадь: ${editing.area} м², адрес: ${editing.address || '-'}, цена: ${editing.price}`;
+      // Цену в описание НЕ передаём — по требованию её не должно быть в тексте
+      const prompt = buildListingContext(editing, false);
       const r = await aiApi.ask('describe', prompt);
-      setEditing({ ...editing, description: r.text });
+      setEditing({ ...editing, description: (r.text || '').slice(0, 3000) });
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Ошибка ИИ');
     } finally {
       setAiLoading(false);
+    }
+  };
+
+  const aiTitle = async () => {
+    if (!editing) return;
+    setAiTitleLoading(true);
+    try {
+      const prompt = buildListingContext(editing, false);
+      const r = await aiApi.ask('title', prompt);
+      // Заголовок: одна строка, без кавычек, максимум 70 символов
+      const title = (r.text || '').split('\n')[0].trim().replace(/^["«]|["»]$/g, '').slice(0, 70);
+      setEditing({ ...editing, title });
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Ошибка ИИ');
+    } finally {
+      setAiTitleLoading(false);
     }
   };
 
@@ -256,9 +305,9 @@ export function useListingsState() {
     setAiAllLoading(true);
     try {
       const dealLabel = editing.deal === 'rent' ? 'аренда' : editing.deal === 'business' ? 'готовый бизнес' : 'продажа';
-      const descPrompt = `Город: ${editing.city || 'Краснодар'}, категория: ${editing.category}, назначение: ${editing.purpose || '-'}, площадь: ${editing.area} м², адрес: ${editing.address || '-'}, цена: ${editing.price}`;
+      const descPrompt = buildListingContext(editing, false);
       const descRes = await aiApi.ask('describe', descPrompt);
-      const description = descRes.text || editing.description || '';
+      const description = (descRes.text || editing.description || '').slice(0, 3000);
       const tagsCtx = `Название: ${editing.title}, категория: ${editing.category}, назначение: ${editing.purpose || ''}, состояние: ${editing.condition || ''}, парковка: ${editing.parking || ''}, описание: ${description}`;
       const tagsRes = await aiApi.ask('auto_tags', tagsCtx);
       const tags = (tagsRes.text || '').replace(/\n/g, ',').replace(/\s+,/g, ',');
@@ -286,7 +335,7 @@ export function useListingsState() {
     historyListing, setHistoryListing,
     photoPickListing, setPhotoPickListing,
     // ai
-    aiLoading, aiTagsLoading, aiSeoLoading, aiAllLoading,
+    aiLoading, aiTitleLoading, aiTagsLoading, aiSeoLoading, aiAllLoading,
     // bulk
     selected, setSelected, bulkLoading,
     // filters
@@ -297,6 +346,6 @@ export function useListingsState() {
     isAdmin, SITE_URL,
     // actions
     load, openEdit, save, archive, runBulk, bulkDelete, toggleSelect,
-    aiDescribe, generateTags, generateSeo, generateAll,
+    aiDescribe, aiTitle, generateTags, generateSeo, generateAll,
   };
 }
