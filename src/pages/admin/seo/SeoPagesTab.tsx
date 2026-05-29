@@ -8,21 +8,26 @@ interface SeoPage {
   title: string;
   description: string;
   h1: string;
+  h2?: string;
+  h3?: string;
+  h4?: string;
+  h5?: string;
+  h6?: string;
+  alt_text?: string;
   keywords?: string;
   og_image?: string;
   auto_generated?: boolean;
   updated_at?: string | null;
 }
 
+const blank = (path: string): SeoPage => ({
+  path, title: '', description: '', h1: '',
+  h2: '', h3: '', h4: '', h5: '', h6: '', alt_text: '',
+});
+
 const DEFAULT_PAGES: SeoPage[] = [
-  { path: '/', title: '', description: '', h1: '' },
-  { path: '/catalog', title: '', description: '', h1: '' },
-  { path: '/map', title: '', description: '', h1: '' },
-  { path: '/favorites', title: '', description: '', h1: '' },
-  { path: '/compare', title: '', description: '', h1: '' },
-  { path: '/about', title: '', description: '', h1: '' },
-  { path: '/contacts', title: '', description: '', h1: '' },
-];
+  '/', '/catalog', '/map', '/favorites', '/compare', '/about', '/contacts',
+].map(blank);
 
 interface Props {
   token: string;
@@ -125,7 +130,7 @@ export default function SeoPagesTab({ token, gptOk }: Props) {
             Мета-теги страниц сайта
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Title, Description и H1 для статических страниц. Можно править вручную или сгенерировать ИИ.
+            Title, Description, H1–H6, alt-текст и ключевые слова для страниц. Можно править вручную или сгенерировать ИИ.
           </p>
         </div>
         <button
@@ -185,6 +190,53 @@ export default function SeoPagesTab({ token, gptOk }: Props) {
               onChange={e => updateCurrent({ h1: e.target.value })}
               maxLength={120}
               placeholder="Например: Коммерческая недвижимость в Краснодаре"
+              className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+            />
+          </div>
+
+          {/* Подзаголовки H2–H6 */}
+          {([
+            ['h2', 'H2 (подзаголовок раздела)', 60],
+            ['h3', 'H3 (подподзаголовок)', 50],
+            ['h4', 'H4 (подзаголовок)', 50],
+            ['h5', 'H5 (подзаголовок)', 50],
+            ['h6', 'H6 (подзаголовок)', 50],
+          ] as [keyof SeoPage, string, number][]).map(([key, label, limit]) => {
+            const val = (current[key] as string) || '';
+            return (
+              <div key={key}>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold">{label}</label>
+                  <span className={`text-[10px] font-semibold ${val.length > limit ? 'text-red-600' : 'text-muted-foreground'}`}>
+                    {val.length}/{limit}
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  value={val}
+                  onChange={e => updateCurrent({ [key]: e.target.value } as Partial<SeoPage>)}
+                  maxLength={limit + 20}
+                  placeholder={`Текст ${String(key).toUpperCase()} (опционально)`}
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                />
+              </div>
+            );
+          })}
+
+          {/* Alt-текст изображения */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-semibold">Alt-текст изображения</label>
+              <span className={`text-[10px] font-semibold ${(current.alt_text || '').length > 125 ? 'text-red-600' : 'text-muted-foreground'}`}>
+                {(current.alt_text || '').length}/125
+              </span>
+            </div>
+            <input
+              type="text"
+              value={current.alt_text || ''}
+              onChange={e => updateCurrent({ alt_text: e.target.value })}
+              maxLength={145}
+              placeholder="Описание главного изображения страницы"
               className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
             />
           </div>
@@ -253,7 +305,7 @@ export default function SeoPagesTab({ token, gptOk }: Props) {
             <button
               onClick={generateAi}
               disabled={generating || !gptOk}
-              title={!gptOk ? 'ИИ не настроен' : 'Сгенерировать title и description через ИИ'}
+              title={!gptOk ? 'ИИ не настроен' : 'Сгенерировать все SEO-поля (H1–H6, title, description, alt, ключевые слова) через ИИ'}
               className="px-4 py-2 rounded-lg border border-amber-300 bg-amber-50 text-amber-700 text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50 hover:bg-amber-100"
             >
               <Icon name={generating ? 'Loader2' : 'Sparkles'} size={14} className={generating ? 'animate-spin' : ''} />

@@ -40,12 +40,22 @@ SEO_SYSTEM_PROMPT = (
 
 PAGE_SYSTEM_PROMPT = (
     'Ты — SEO-специалист агентства коммерческой недвижимости BIZNEST в Краснодаре. '
-    'По описанию страницы сайта сгенерируй H1, Title и Description.\n'
+    'По описанию страницы сайта сгенерируй полный набор SEO-полей.\n'
     '- H1 — главный заголовок (до 70 символов).\n'
+    '- H2 — подзаголовок раздела (до 60 символов).\n'
+    '- H3 — подподзаголовок (до 50 символов).\n'
+    '- H4 — подзаголовок (до 50 символов).\n'
+    '- H5 — подзаголовок (до 50 символов).\n'
+    '- H6 — подзаголовок (до 50 символов).\n'
     '- TITLE — заголовок вкладки браузера до 65 символов с упоминанием бренда BIZNEST.\n'
     '- DESCRIPTION — мета-описание для выдачи до 155 символов, с УТП и призывом.\n'
+    '- ALT — alt-текст главного изображения страницы (до 125 символов).\n'
+    '- KEYWORDS — 5-8 ключевых слов через запятую.\n'
+    'Заголовки H2-H6 должны быть осмысленными и тематически связаны со страницей. '
     'Без markdown, без кавычек, на русском.\n'
-    'Формат строго:\nH1: <заголовок>\nTITLE: <title>\nDESCRIPTION: <description>'
+    'Формат строго (каждое поле с новой строки):\n'
+    'H1: <...>\nH2: <...>\nH3: <...>\nH4: <...>\nH5: <...>\nH6: <...>\n'
+    'TITLE: <...>\nDESCRIPTION: <...>\nALT: <...>\nKEYWORDS: <...>'
 )
 
 PAGE_HINTS = {
@@ -118,7 +128,7 @@ def _gpt(system: str, user_text: str, api_key: str, folder_id: str) -> dict:
         return {'error': 'YandexGPT не настроен'}
     payload = {
         'modelUri': f'gpt://{folder_id}/{YANDEX_MODEL_NAME}',
-        'completionOptions': {'stream': False, 'temperature': 0.4, 'maxTokens': '500'},
+        'completionOptions': {'stream': False, 'temperature': 0.4, 'maxTokens': '800'},
         'messages': [{'role': 'system', 'text': system}, {'role': 'user', 'text': user_text}],
     }
     req = urllib.request.Request(
@@ -318,18 +328,30 @@ def _should_run_now(schedule: dict) -> bool:
     return True
 
 
-def _parse_page_seo(text: str) -> tuple:
-    h1, title, desc = '', '', ''
+def _parse_page_seo(text: str) -> dict:
+    """Парсит ответ ИИ для страницы во все SEO-поля."""
+    fields = {
+        'h1': '', 'h2': '', 'h3': '', 'h4': '', 'h5': '', 'h6': '',
+        'title': '', 'description': '', 'alt_text': '', 'keywords': '',
+    }
+    # Лимиты длины по SEO-рекомендациям
+    limits = {
+        'h1': 70, 'h2': 60, 'h3': 50, 'h4': 50, 'h5': 50, 'h6': 50,
+        'title': 120, 'description': 300, 'alt_text': 125, 'keywords': 500,
+    }
+    prefixes = [
+        ('H1:', 'h1'), ('H2:', 'h2'), ('H3:', 'h3'), ('H4:', 'h4'),
+        ('H5:', 'h5'), ('H6:', 'h6'), ('TITLE:', 'title'),
+        ('DESCRIPTION:', 'description'), ('ALT:', 'alt_text'), ('KEYWORDS:', 'keywords'),
+    ]
     for line in text.splitlines():
         line = line.strip()
         up = line.upper()
-        if up.startswith('H1:'):
-            h1 = line[3:].strip()[:150]
-        elif up.startswith('TITLE:'):
-            title = line[6:].strip()[:120]
-        elif up.startswith('DESCRIPTION:'):
-            desc = line[12:].strip()[:300]
-    return h1, title, desc
+        for prefix, key in prefixes:
+            if up.startswith(prefix):
+                fields[key] = line[len(prefix):].strip().strip('"«»')[:limits[key]]
+                break
+    return fields
 
 
 def _site_base_url(cur) -> str:
@@ -501,7 +523,7 @@ def handler(event: dict, context) -> dict:
                 path = (body.get('path') or qs.get('path') or '/').strip()
                 p = _safe(path, 255)
                 cur.execute(
-                    f"SELECT path, title, description, h1, keywords, og_image, noindex "
+                    f"SELECT path, title, description, h1, h2, h3, h4, h5, h6, alt_text, keywords, og_image, noindex "
                     f"FROM {SCHEMA}.seo_pages WHERE path = '{p}'"
                 )
                 row = cur.fetchone()
@@ -656,7 +678,7 @@ def handler(event: dict, context) -> dict:
             # ── Мета-теги статических страниц ──────────────────────────────────
             if action == 'pages_list':
                 cur.execute(
-                    f"SELECT id, path, title, description, h1, keywords, og_image, "
+                    f"SELECT id, path, title, description, h1, h2, h3, h4, h5, h6, alt_text, keywords, og_image, "
                     f"noindex, auto_generated, manual_override, page_label, updated_at "
                     f"FROM {SCHEMA}.seo_pages ORDER BY path"
                 )
@@ -667,7 +689,8 @@ def handler(event: dict, context) -> dict:
                     if default_path not in existing:
                         pages.append({
                             'path': default_path, 'title': '', 'description': '',
-                            'h1': '', 'keywords': '', 'og_image': '',
+                            'h1': '', 'h2': '', 'h3': '', 'h4': '', 'h5': '', 'h6': '',
+                            'alt_text': '', 'keywords': '', 'og_image': '',
                             'noindex': False, 'auto_generated': False,
                             'manual_override': False, 'updated_at': None,
                         })
@@ -681,16 +704,24 @@ def handler(event: dict, context) -> dict:
                 t = _safe(body.get('title') or '', 500)
                 d = _safe(body.get('description') or '', 1000)
                 h = _safe(body.get('h1') or '', 500)
+                h2 = _safe(body.get('h2') or '', 500)
+                h3 = _safe(body.get('h3') or '', 500)
+                h4 = _safe(body.get('h4') or '', 500)
+                h5 = _safe(body.get('h5') or '', 500)
+                h6 = _safe(body.get('h6') or '', 500)
+                alt = _safe(body.get('alt_text') or '', 500)
                 kw = _safe(body.get('keywords') or '', 500)
                 og = _safe(body.get('og_image') or '', 500)
                 noindex = 'TRUE' if body.get('noindex') else 'FALSE'
 
                 cur.execute(
                     f"INSERT INTO {SCHEMA}.seo_pages "
-                    f"(path, title, description, h1, keywords, og_image, noindex, auto_generated, manual_override, updated_at) "
-                    f"VALUES ('{p}', '{t}', '{d}', '{h}', '{kw}', '{og}', {noindex}, FALSE, TRUE, NOW()) "
+                    f"(path, title, description, h1, h2, h3, h4, h5, h6, alt_text, keywords, og_image, noindex, auto_generated, manual_override, updated_at) "
+                    f"VALUES ('{p}', '{t}', '{d}', '{h}', '{h2}', '{h3}', '{h4}', '{h5}', '{h6}', '{alt}', '{kw}', '{og}', {noindex}, FALSE, TRUE, NOW()) "
                     f"ON CONFLICT (path) DO UPDATE SET "
                     f"title=EXCLUDED.title, description=EXCLUDED.description, h1=EXCLUDED.h1, "
+                    f"h2=EXCLUDED.h2, h3=EXCLUDED.h3, h4=EXCLUDED.h4, h5=EXCLUDED.h5, h6=EXCLUDED.h6, "
+                    f"alt_text=EXCLUDED.alt_text, "
                     f"keywords=EXCLUDED.keywords, og_image=EXCLUDED.og_image, noindex=EXCLUDED.noindex, "
                     f"auto_generated=FALSE, manual_override=TRUE, updated_at=NOW()"
                 )
@@ -714,23 +745,27 @@ def handler(event: dict, context) -> dict:
                 gpt = _gpt(PAGE_SYSTEM_PROMPT, user_text, api_key, folder_id)
                 if 'error' in gpt:
                     return _err(502, gpt['error'])
-                h1, t, d = _parse_page_seo(gpt['text'])
-                if not h1 and not t:
+                f = _parse_page_seo(gpt['text'])
+                if not f['h1'] and not f['title']:
                     return _err(502, 'Не удалось распарсить ответ ИИ')
 
                 p_safe = _safe(path, 255)
                 cur.execute(
                     f"INSERT INTO {SCHEMA}.seo_pages "
-                    f"(path, title, description, h1, auto_generated, manual_override, updated_at) "
-                    f"VALUES ('{p_safe}', '{_safe(t, 500)}', '{_safe(d, 1000)}', '{_safe(h1, 500)}', TRUE, FALSE, NOW()) "
+                    f"(path, title, description, h1, h2, h3, h4, h5, h6, alt_text, keywords, auto_generated, manual_override, updated_at) "
+                    f"VALUES ('{p_safe}', '{_safe(f['title'], 500)}', '{_safe(f['description'], 1000)}', "
+                    f"'{_safe(f['h1'], 500)}', '{_safe(f['h2'], 500)}', '{_safe(f['h3'], 500)}', "
+                    f"'{_safe(f['h4'], 500)}', '{_safe(f['h5'], 500)}', '{_safe(f['h6'], 500)}', "
+                    f"'{_safe(f['alt_text'], 500)}', '{_safe(f['keywords'], 500)}', TRUE, FALSE, NOW()) "
                     f"ON CONFLICT (path) DO UPDATE SET "
                     f"title=EXCLUDED.title, description=EXCLUDED.description, h1=EXCLUDED.h1, "
+                    f"h2=EXCLUDED.h2, h3=EXCLUDED.h3, h4=EXCLUDED.h4, h5=EXCLUDED.h5, h6=EXCLUDED.h6, "
+                    f"alt_text=EXCLUDED.alt_text, keywords=EXCLUDED.keywords, "
                     f"auto_generated=TRUE, manual_override=FALSE, updated_at=NOW()"
                 )
                 conn.commit()
                 return _ok({'ok': True, 'page': {
-                    'path': path, 'title': t, 'description': d, 'h1': h1,
-                    'auto_generated': True,
+                    'path': path, 'auto_generated': True, **f,
                 }})
 
             # ── robots.txt и sitemap.xml ───────────────────────────────────────
