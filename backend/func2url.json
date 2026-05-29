@@ -1,6 +1,5 @@
 {
   "prerender": "https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff",
-  "push": "https://functions.poehali.dev/a21c221f-55c0-412f-8a17-03151868e59b",
   "bulk-rehost": "https://functions.poehali.dev/d86482e4-0555-457a-8063-0d3305c171ff",
   "image-optimizer": "https://functions.poehali.dev/3cadfe27-12e9-4228-a820-abf2eb79943a",
   "ai-retrain": "https://functions.poehali.dev/e2f1d357-fb83-4fbb-8d8b-6fb063357afc",
