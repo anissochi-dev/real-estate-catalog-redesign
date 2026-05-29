@@ -3,6 +3,7 @@ import { Page } from '@/App';
 import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
+import { prefetchPage } from '@/app/lazyPages';
 
 interface NavbarProps {
   currentPage: Page;
@@ -67,6 +68,8 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
                 <button
                   key={item.id}
                   onClick={() => handleNav(item.id)}
+                  onMouseEnter={() => prefetchPage(item.id)}
+                  onFocus={() => prefetchPage(item.id)}
                   className={`relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200
                     ${currentPage === item.id
                       ? 'bg-brand-blue text-white'
@@ -109,7 +112,10 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
               )}
               {/* Hamburger — mobile */}
               <button
-                onClick={() => setDrawerOpen(true)}
+                onClick={() => {
+                  setDrawerOpen(true);
+                  navItems.forEach(i => prefetchPage(i.id));
+                }}
                 className="md:hidden p-2.5 rounded-lg hover:bg-muted transition-colors relative min-h-[44px] min-w-[44px] flex items-center justify-center"
                 aria-label="Открыть меню"
               >
@@ -162,6 +168,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
             <button
               key={item.id}
               onClick={() => handleNav(item.id)}
+              onTouchStart={() => prefetchPage(item.id)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 text-left
                 ${currentPage === item.id
                   ? 'bg-brand-blue text-white'
