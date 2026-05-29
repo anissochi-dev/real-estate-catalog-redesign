@@ -236,23 +236,24 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
       .catch(() => undefined);
   }
 
-  /** Парсер geoObject из ymaps.geocode. Район всегда берём из нового адреса. */
+  /** Парсер geoObject из ymaps.geocode. Микрорайон всегда берём из нового адреса. */
   function parseYmapsGeoObject(obj: any, coords: [number, number], streetOverride?: string) {
-    // Район: административная единица уровня района города
-    let district = '';
+    // Микрорайон: берём самый нижний (последний) компонент уровня district —
+    // в иерархии Яндекса это микрорайон/квартал, а не административный округ.
+    let microdistrict = '';
     try {
-      const adminAreas = obj.getAdministrativeAreas?.() || [];
-      // Последний элемент обычно — район/округ города
-      district = (adminAreas.length ? adminAreas[adminAreas.length - 1] : '') || '';
+      const meta = obj.properties?.get?.('metaDataProperty')?.GeocoderMetaData;
+      const comps: { kind: string; name: string }[] = meta?.Address?.Components || [];
+      const districts = comps.filter(p => p.kind === 'district').map(p => p.name);
+      // Предпочитаем название, содержащее «микрорайон»/«мкр»/«квартал», иначе — последний district
+      microdistrict = districts.find(n => /микрорайон|мкр|квартал|жилмассив/i.test(n))
+        || (districts.length ? districts[districts.length - 1] : '');
     } catch { /* ignore */ }
-    // Запасной способ — через metaData компоненты
-    if (!district) {
+    // Запасной способ — через getAdministrativeAreas (последний элемент)
+    if (!microdistrict) {
       try {
-        const meta = obj.properties?.get?.('metaDataProperty')?.GeocoderMetaData;
-        const comps: { kind: string; name: string }[] = meta?.Address?.Components || [];
-        for (const p of comps) {
-          if (p.kind === 'district') district = p.name;
-        }
+        const adminAreas = obj.getAdministrativeAreas?.() || [];
+        microdistrict = (adminAreas.length ? adminAreas[adminAreas.length - 1] : '') || '';
       } catch { /* ignore */ }
     }
     const street = obj.getThoroughfare?.() || '';
@@ -262,8 +263,8 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     const cur = editingRef.current;
     setEditing({
       ...cur,
-      // Район всегда переопределяем новым адресом (пустой — значит для нового адреса район не определён)
-      district: district || '',
+      // Микрорайон всегда переопределяем новым адресом
+      district: microdistrict || '',
       address: finalAddress,
       lat: coords[0],
       lng: coords[1],
@@ -418,7 +419,7 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
 
       {editing.district && (
         <div className="text-xs text-muted-foreground">
-          Район: <span className="font-medium text-foreground">{editing.district}</span>
+          Микрорайон: <span className="font-medium text-foreground">{editing.district}</span>
         </div>
       )}
 

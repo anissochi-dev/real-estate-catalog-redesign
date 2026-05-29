@@ -74,6 +74,9 @@ export default function PropertyMainContent({
           <span className="flex-1">
             <span className="block text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Адрес</span>
             <span className="font-medium leading-snug group-hover:underline underline-offset-2">{addressStr}</span>
+            {item.district && (
+              <span className="block text-xs text-muted-foreground mt-0.5">Микрорайон: <span className="text-foreground font-medium">{item.district}</span></span>
+            )}
           </span>
           {item.lat && item.lng ? (
             <Icon name="Map" size={14} className="opacity-50 group-hover:opacity-100 transition-opacity mt-0.5" />
