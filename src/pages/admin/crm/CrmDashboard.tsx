@@ -15,10 +15,16 @@ const fmtMoney = (n: number) => {
   return `${n.toLocaleString('ru')} ₽`;
 };
 
-export default function CrmDashboard() {
+export default function CrmDashboard({ setSection }: { setSection?: (s: string) => void }) {
   const { token } = useAuth();
   const [period, setPeriod] = useState<Period>('month');
   const headers = { 'X-Auth-Token': token || '' };
+
+  // Клик по сделке — запоминаем id и открываем воронку с этой сделкой
+  const openDealInKanban = (dealId: number) => {
+    try { localStorage.setItem('crm_open_deal_id', String(dealId)); } catch { /* ignore */ }
+    setSection?.('crm-kanban');
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ['crm-dashboard', period],
@@ -152,39 +158,52 @@ export default function CrmDashboard() {
         ) : !data?.deals_list || data.deals_list.length === 0 ? (
           <div className="text-center text-muted-foreground py-8">Нет сделок за период</div>
         ) : (
-          <div className="space-y-2 border-t border-border pt-4">
-            {data.deals_list.map((d: {
-              id: number; title: string; amount: number; commission: number;
-              source?: string; created_at?: string; stage_name?: string;
-              stage_color?: string; is_win?: boolean; manager_name?: string; listing_title?: string;
-            }) => (
-              <div key={d.id} className="flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-muted/30 transition">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-sm truncate">{d.title}</span>
-                    {d.stage_name && (
-                      <span
-                        className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-white shrink-0"
-                        style={{ backgroundColor: d.stage_color || '#64748b' }}
-                      >
-                        {d.stage_name}
-                      </span>
+          <div className="border-t border-border pt-4">
+            {/* До 5 сделок видно сразу, остальные — прокруткой */}
+            <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+              {data.deals_list.map((d: {
+                id: number; title: string; amount: number; commission: number;
+                source?: string; created_at?: string; stage_name?: string;
+                stage_color?: string; is_win?: boolean; manager_name?: string; listing_title?: string;
+              }) => (
+                <button
+                  key={d.id}
+                  onClick={() => openDealInKanban(d.id)}
+                  className="w-full text-left flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-brand-blue/[0.04] hover:border-brand-blue/30 transition cursor-pointer"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm truncate">{d.title}</span>
+                      {d.stage_name && (
+                        <span
+                          className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-white shrink-0"
+                          style={{ backgroundColor: d.stage_color || '#64748b' }}
+                        >
+                          {d.stage_name}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
+                      {d.manager_name && <span className="inline-flex items-center gap-1"><Icon name="User" size={11} />{d.manager_name}</span>}
+                      {d.listing_title && <span className="inline-flex items-center gap-1 truncate"><Icon name="Building2" size={11} />{d.listing_title}</span>}
+                      {d.created_at && <span className="inline-flex items-center gap-1"><Icon name="Calendar" size={11} />{new Date(d.created_at).toLocaleDateString('ru', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="font-bold text-sm font-display">{fmtMoney(d.amount)}</div>
+                    {d.commission > 0 && (
+                      <div className="text-[11px] text-brand-orange">комиссия {fmtMoney(d.commission)}</div>
                     )}
                   </div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
-                    {d.manager_name && <span className="inline-flex items-center gap-1"><Icon name="User" size={11} />{d.manager_name}</span>}
-                    {d.listing_title && <span className="inline-flex items-center gap-1 truncate"><Icon name="Building2" size={11} />{d.listing_title}</span>}
-                    {d.created_at && <span className="inline-flex items-center gap-1"><Icon name="Calendar" size={11} />{new Date(d.created_at).toLocaleDateString('ru', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>}
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="font-bold text-sm font-display">{fmtMoney(d.amount)}</div>
-                  {d.commission > 0 && (
-                    <div className="text-[11px] text-brand-orange">комиссия {fmtMoney(d.commission)}</div>
-                  )}
-                </div>
+                  <Icon name="ChevronRight" size={16} className="text-muted-foreground shrink-0" />
+                </button>
+              ))}
+            </div>
+            {data.deals_list.length > 5 && (
+              <div className="text-[11px] text-muted-foreground text-center mt-2">
+                Прокрутите список — всего сделок: {data.deals_list.length}
               </div>
-            ))}
+            )}
           </div>
         )}
       </div>

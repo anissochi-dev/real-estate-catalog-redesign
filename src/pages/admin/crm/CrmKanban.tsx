@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,17 @@ export default function CrmKanban() {
 
   const canReopen = user?.role === 'admin' || user?.role === 'director';
   const headers = { 'Content-Type': 'application/json', 'X-Auth-Token': token || '' };
+
+  // Если на дашборде кликнули по сделке — открываем её карточку при заходе в воронку
+  useEffect(() => {
+    try {
+      const pendingId = localStorage.getItem('crm_open_deal_id');
+      if (pendingId) {
+        localStorage.removeItem('crm_open_deal_id');
+        setDetailId(Number(pendingId));
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   const {
     stages, deals, isLoading, dealDetail,

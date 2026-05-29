@@ -34,7 +34,7 @@ export default function AdminPage({ onExit, initialSection }: Props) {
 
   return (
     <AdminLayout section={section} setSection={setSection} onExit={onExit}>
-      {section === 'dashboard' && <Dashboard />}
+      {section === 'dashboard' && <Dashboard setSection={(s) => setSection(s as AdminSection)} />}
       {section === 'listings' && <ListingsAdmin />}
       {section === 'leads' && <LeadsAdmin />}
       {section === 'users' && <UsersAdmin />}

@@ -36,7 +36,7 @@ const STATUS_LABELS: Record<string, string> = {
   rejected: 'Отказ',
 };
 
-export default function Dashboard() {
+export default function Dashboard({ setSection }: { setSection?: (s: string) => void }) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState('');
 
@@ -104,7 +104,7 @@ export default function Dashboard() {
 
       <CrmCalendar />
 
-      <CrmDashboard />
+      <CrmDashboard setSection={setSection} />
     </div>
   );
 }
