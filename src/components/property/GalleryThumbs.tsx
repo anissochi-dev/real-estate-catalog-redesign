@@ -7,11 +7,14 @@ interface GalleryThumbsProps {
   videoIndex: number;
   mediaTab: 'photos' | 'video';
   onSelect: (mediaIdx: number, thumbIdx: number) => void;
+  title?: string;
 }
 
 export function GalleryThumbs({
-  photoThumbs, activeImg, hasVideo, videoIndex, mediaTab, onSelect,
+  photoThumbs, activeImg, hasVideo, videoIndex, mediaTab, onSelect, title,
 }: GalleryThumbsProps) {
+  // alt в пределах 125 символов: «Название — фото N»
+  const thumbAlt = (i: number) => (`${title || 'Объект'} — фото ${i + 1}`).slice(0, 125);
   const desktopRef = useRef<HTMLDivElement>(null);
   const mobileRef = useRef<HTMLDivElement>(null);
 
@@ -51,7 +54,7 @@ export function GalleryThumbs({
               }`}
               style={{ width: 80, height: 60 }}
             >
-              <img src={u} alt="" loading="lazy" className="w-full h-full object-cover" />
+              <img src={u} alt={thumbAlt(i)} loading="lazy" className="w-full h-full object-cover" />
             </button>
           );
         })}
@@ -76,7 +79,7 @@ export function GalleryThumbs({
               }`}
               style={{ width: 60, height: 45 }}
             >
-              <img src={u} alt="" loading="lazy" className="w-full h-full object-cover" />
+              <img src={u} alt={thumbAlt(i)} loading="lazy" className="w-full h-full object-cover" />
             </button>
           );
         })}

@@ -93,9 +93,10 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
 
   useEffect(() => {
     if (!item) return;
-    const title = item.seoTitle || `${item.title} — ${item.city || 'Краснодар'} | ${settings.company_name || 'Бизнес. Маркетинг. Недвижимость.'}`;
+    const rawTitle = item.seoTitle || `${item.title} — ${item.city || 'Краснодар'} | ${settings.company_name || 'Бизнес. Маркетинг. Недвижимость.'}`;
+    const title = rawTitle.length > 68 ? rawTitle.slice(0, 67).trimEnd() + '…' : rawTitle;
     document.title = title;
-    const desc = item.seoDescription || (item.description || '').slice(0, 160);
+    const desc = (item.seoDescription || (item.description || '')).slice(0, 160);
     const setMeta = (selector: string, create: () => HTMLMetaElement, content: string) => {
       let el = document.querySelector(selector) as HTMLMetaElement | null;
       if (!el) { el = create(); document.head.appendChild(el); }

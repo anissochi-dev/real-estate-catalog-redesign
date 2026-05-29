@@ -181,8 +181,9 @@ export function NewsArticlePage() {
 
   useEffect(() => {
     if (!article) return;
-    document.title = `${article.title} | ${settings.company_name || 'Бизнес. Маркетинг. Недвижимость.'}`;
-    const desc = article.summary || (article.content || '').slice(0, 160);
+    const rawTitle = `${article.title} | ${settings.company_name || 'Бизнес. Маркетинг. Недвижимость.'}`;
+    document.title = rawTitle.length > 68 ? rawTitle.slice(0, 67).trimEnd() + '…' : rawTitle;
+    const desc = (article.summary || article.content || '').slice(0, 160);
     const setMeta = (sel: string, create: () => HTMLMetaElement, content: string) => {
       let el = document.querySelector(sel) as HTMLMetaElement | null;
       if (!el) { el = create(); document.head.appendChild(el); }
@@ -212,11 +213,13 @@ export function NewsArticlePage() {
 
   const paragraphs = (article.content || '').split('\n').filter(Boolean);
 
-  const h1 = article.seo_h1 || article.title;
-  const h2text = article.seo_h2 || article.summary || null;
-  const h3text = article.seo_h3 || null;
-  const h4text = article.seo_h4 || null;
-  const h5text = article.seo_h5 || null;
+  // Ограничения длины заголовков по SEO: H1 ≤ 70, H2 ≤ 60, H3–H6 ≤ 50
+  const clip = (s: string, max: number) => (s && s.length > max ? s.slice(0, max - 1).trimEnd() + '…' : s);
+  const h1 = clip(article.seo_h1 || article.title, 70);
+  const h2text = article.seo_h2 ? clip(article.seo_h2, 60) : (article.summary || null);
+  const h3text = article.seo_h3 ? clip(article.seo_h3, 50) : null;
+  const h4text = article.seo_h4 ? clip(article.seo_h4, 50) : null;
+  const h5text = article.seo_h5 ? clip(article.seo_h5, 50) : null;
 
   const articleSiteUrl = settings.site_url || 'https://bmn23.ru';
   const articlePageUrl = `${articleSiteUrl}/news/${article.slug}`;

@@ -47,11 +47,14 @@ export default function PropertyMainContent({
   const sotki = isLand && item.area ? +(item.area / 100).toFixed(2) : null;
   const addressStr = [item.city || 'Краснодар', item.district, item.address].filter(Boolean).join(', ');
 
-  const h1 = item.seoH1 || item.title;
-  const h2 = item.seoH2 || `${dealLabel} · ${typeLabel} · ${item.area} м²`;
-  const h3params = item.seoH3 || null;
-  const h4comms = item.seoH4 || null;
-  const h5price = item.seoH5 || null;
+  // Ограничения длины заголовков по SEO-рекомендациям:
+  // H1 ≤ 70, H2 ≤ 60, H3–H6 ≤ 50 символов
+  const clip = (s: string, max: number) => (s && s.length > max ? s.slice(0, max - 1).trimEnd() + '…' : s);
+  const h1 = clip(item.seoH1 || item.title, 70);
+  const h2 = clip(item.seoH2 || `${dealLabel} · ${typeLabel} · ${item.area} м²`, 60);
+  const h3params = item.seoH3 ? clip(item.seoH3, 50) : null;
+  const h4comms = item.seoH4 ? clip(item.seoH4, 50) : null;
+  const h5price = item.seoH5 ? clip(item.seoH5, 50) : null;
 
   return (
     <>

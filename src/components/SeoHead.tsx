@@ -102,8 +102,11 @@ export default function SeoHead({
   }, [effectivePath]);
 
   useEffect(() => {
-    const finalTitle = title || remote?.title || h1 || remote?.h1 || document.title;
-    const finalDesc = description ?? remote?.description ?? '';
+    // SEO-лимиты: title ≤ 68 символов, meta description ≤ 160 символов
+    const clip = (s: string, max: number) => (s && s.length > max ? s.slice(0, max - 1).trimEnd() + '…' : s);
+    const rawTitle = title || remote?.title || h1 || remote?.h1 || document.title;
+    const finalTitle = clip(String(rawTitle || ''), 68);
+    const finalDesc = clip(description ?? remote?.description ?? '', 160);
     const finalKw = keywords ?? remote?.keywords ?? '';
     const finalOg = ogImage ?? remote?.og_image ?? '';
     const finalNoindex = noindex || !!remote?.noindex;

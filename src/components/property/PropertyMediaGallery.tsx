@@ -167,6 +167,7 @@ export default function PropertyMediaGallery({
           videoIndex={videoIndex}
           mediaTab={mediaTab}
           onSelect={handleThumbSelect}
+          title={item.title}
         />
       </div>
     </>
