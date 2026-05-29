@@ -214,7 +214,7 @@ export default function App() {
         if (!done) fetchListings(8, 0)
           .then(({ listings, total }) => applyListings(listings, total))
           .catch(() => { setError('Не удалось загрузить объекты.'); setLoading(false); });
-      }, 4000);
+      }, 2000);
       return () => clearTimeout(guard);
     }
 
@@ -223,6 +223,19 @@ export default function App() {
       .then(({ listings, total }) => applyListings(listings, total))
       .catch(err => { console.error(err); setError('Не удалось загрузить объекты.'); setLoading(false); });
   }, []);
+
+  // Страховка от «вечного колеса»: если через 3 сек данные так и не пришли
+  // (зависла prefetch-гонка в index.html), делаем прямой запрос и снимаем загрузку.
+  useEffect(() => {
+    if (!loading) return;
+    const t = setTimeout(() => {
+      fetchListings(8, 0)
+        .then(({ listings }) => { setProperties(prev => (prev.length ? prev : listings)); })
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [loading]);
 
   // Ленивая догрузка всех объектов: триггерится при переходе со «/» на
   // любую страницу, где нужен полный список (каталог, категории, избранное,
