@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Property } from '@/App';
 import { formatPrice } from '@/components/PropertyCard';
@@ -110,6 +110,10 @@ export default function MapPage({
   const isFav: boolean = selected ? favorites.includes(selected.id) : false;
   const inCompare: boolean = selected ? compareList.includes(selected.id) : false;
 
+  const handlePointClick = useCallback((p: { id: number }) => {
+    setSelected(prev => (prev?.id === p.id ? prev : properties.find(x => x.id === p.id) || null));
+  }, [properties]);
+
   return (
     <div className="flex flex-col" style={{ minHeight: 'calc(100vh - 64px)' }}>
       <h1 className="sr-only">{h1}</h1>
@@ -155,10 +159,7 @@ export default function MapPage({
             center={points.length === 0 ? KRASNODAR_CENTER : undefined}
             zoom={11}
             height="100%"
-            onPointClick={(p) => {
-              const found = properties.find(x => x.id === p.id) || null;
-              setSelected(found);
-            }}
+            onPointClick={handlePointClick}
           />
 
           {/* Легенда категорий — показываем только те, у которых есть объекты */}

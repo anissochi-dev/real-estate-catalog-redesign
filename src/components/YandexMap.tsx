@@ -137,6 +137,8 @@ export default function YandexMap({
                 setError('INVALID_KEY');
               }
             }
+            // Перехватчик больше не нужен — возвращаем оригинал.
+            console.error = origConsoleError;
           }, 2000);
         } catch (err) {
           const msg = err instanceof Error ? err.message : '';
@@ -153,6 +155,9 @@ export default function YandexMap({
 
     return () => {
       cancelled = true;
+      // ВАЖНО: восстанавливаем оригинальный console.error.
+      // Иначе при каждом заходе на карту обёртки накапливаются и замедляют весь сайт.
+      console.error = origConsoleError;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.yandex_maps_api_key]);
