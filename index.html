@@ -76,11 +76,20 @@
           }
         } catch(e) {}
 
+        // fetch с таймаутом — зависший запрос не блокирует всю предзагрузку
+        function pf(url) {
+          var ac = new AbortController();
+          var t = setTimeout(function(){ ac.abort(); }, 4000);
+          return fetch(url, { signal: ac.signal })
+            .then(function(r){ clearTimeout(t); return r.json(); })
+            .catch(function(){ clearTimeout(t); return {}; });
+        }
+
         // 3 параллельных запроса — стартуют пока браузер грузит JS-бандл
         window.__PREFETCH_PROMISE__ = Promise.all([
-          fetch(BASE + '?limit=8&offset=0').then(function(r){ return r.json(); }),
-          fetch(BASE + '?resource=public_settings').then(function(r){ return r.json(); }),
-          fetch(BASE + '?resource=public_home_data').then(function(r){ return r.json(); })
+          pf(BASE + '?limit=8&offset=0'),
+          pf(BASE + '?resource=public_settings'),
+          pf(BASE + '?resource=public_home_data')
         ]).then(function(res) {
           var hd = res[2] || {};
           var data = {
@@ -91,12 +100,17 @@
             leadsCount: (hd.leads_count || 0)
           };
           window.__PREFETCH__ = data;
-          try {
-            // settings → в ключ который читает SettingsContext
-            sessionStorage.setItem('bmn_settings_cache', JSON.stringify({ ts: Date.now(), data: data.settings }));
-            // всё остальное
-            sessionStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: data }));
-          } catch(e) {}
+          // Не кэшируем пустой результат (например при таймауте запроса) —
+          // иначе следующий заход покажет пустую главную из кэша.
+          var hasData = data.listings.length > 0;
+          if (hasData) {
+            try {
+              // settings → в ключ который читает SettingsContext
+              sessionStorage.setItem('bmn_settings_cache', JSON.stringify({ ts: Date.now(), data: data.settings }));
+              // всё остальное
+              sessionStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: data }));
+            } catch(e) {}
+          }
           if (typeof window.__PREFETCH_RESOLVE__ === 'function') {
             window.__PREFETCH_RESOLVE__(data);
           }
