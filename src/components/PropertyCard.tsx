@@ -5,6 +5,8 @@ import Icon from '@/components/ui/icon';
 import { listingSlug } from '@/lib/slug';
 import YandexMap from '@/components/YandexMap';
 import { useSettings } from '@/contexts/SettingsContext';
+import { prefetchListingById } from '@/lib/api';
+import { prefetchPage } from '@/app/lazyPages';
 
 const PREDICT_URL = 'https://functions.poehali.dev/9986e5a6-c4d4-407a-919f-a303aa3eddf2';
 
@@ -175,10 +177,22 @@ export default function PropertyCard({
   }, [property.createdAt]);
   const showNew = property.isNew || isAutoNew;
 
+  // Предзагрузка страницы объекта и его данных при наведении/касании —
+  // к моменту клика всё уже готово, карточка открывается мгновенно.
+  const prefetched = useRef(false);
+  const handlePrefetch = () => {
+    if (prefetched.current) return;
+    prefetched.current = true;
+    prefetchPage('property');
+    prefetchListingById(property.id);
+  };
+
   return (
     <>
       <div
         ref={rootRef}
+        onMouseEnter={handlePrefetch}
+        onTouchStart={handlePrefetch}
         className="property-card group bg-white rounded-2xl overflow-hidden border border-border shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up flex flex-col"
         style={style}
       >

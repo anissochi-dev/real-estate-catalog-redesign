@@ -55,6 +55,7 @@ export const LeadsListPage      = lazyWithRetry(importers.leads);
 const prefetched = new Set<string>();
 export function prefetchPage(page: string): void {
   const map: Record<string, () => Promise<unknown>> = {
+    property: importers.property,
     catalog: importers.catalog,
     map: importers.map,
     favorites: importers.favorites,

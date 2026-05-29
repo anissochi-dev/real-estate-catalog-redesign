@@ -161,51 +161,76 @@ export interface ListingDetail extends Property {
   seoH5?: string | null;
 }
 
+// Кэш деталей объекта — заполняется при префетче (наведение на карточку),
+// чтобы страница объекта открывалась мгновенно без ожидания сети.
+const listingDetailCache = new Map<number, ListingDetail | null>();
+const listingDetailInflight = new Map<number, Promise<ListingDetail | null>>();
+
+/** Префетч деталей объекта (без ожидания результата) — вызывать при наведении на карточку. */
+export function prefetchListingById(id: number): void {
+  if (listingDetailCache.has(id) || listingDetailInflight.has(id)) return;
+  const p = fetchListingById(id).catch(() => null);
+  listingDetailInflight.set(id, p);
+}
+
 export async function fetchListingById(id: number): Promise<ListingDetail | null> {
-  try {
-    const res = await fetchWithTimeout(`${LISTINGS_URL}?id=${id}`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const it = data.listing;
-    if (!it) return null;
-    const base = mapListing(it);
-    const imgs: string[] = (() => {
-      if (Array.isArray(it.images)) return it.images;
-      if (typeof it.images === 'string' && it.images) {
-        const sep = it.images.includes('|') ? '|' : ',';
-        return it.images.split(sep).map((s: string) => s.trim()).filter(Boolean);
-      }
-      return base.image ? [base.image] : [];
-    })();
-    return {
-      ...base,
-      images: imgs,
-      city: it.city || 'Краснодар',
-      priceUnit: it.price_unit,
-      purpose: it.purpose,
-      condition: it.condition,
-      parking: it.parking,
-      entrance: it.entrance,
-      propertyRights: it.property_rights,
-      landStatus: it.land_status,
-      landArea: it.land_area ?? null,
-      landVri: it.land_vri,
-      videoUrl: it.video_url,
-      videoType: it.video_type,
-      ownerName: it.owner_name,
-      ownerPhone: it.owner_phone,
-      seoTitle: it.seo_title,
-      seoDescription: it.seo_description,
-      rooms: it.rooms ?? null,
-      seoH1: it.seo_h1 ?? null,
-      seoH2: it.seo_h2 ?? null,
-      seoH3: it.seo_h3 ?? null,
-      seoH4: it.seo_h4 ?? null,
-      seoH5: it.seo_h5 ?? null,
-    };
-  } catch {
-    return null;
-  }
+  if (listingDetailCache.has(id)) return listingDetailCache.get(id) ?? null;
+  const existing = listingDetailInflight.get(id);
+  if (existing) return existing;
+
+  const run = (async (): Promise<ListingDetail | null> => {
+    try {
+      const res = await fetchWithTimeout(`${LISTINGS_URL}?id=${id}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      const it = data.listing;
+      if (!it) return null;
+      const base = mapListing(it);
+      const imgs: string[] = (() => {
+        if (Array.isArray(it.images)) return it.images;
+        if (typeof it.images === 'string' && it.images) {
+          const sep = it.images.includes('|') ? '|' : ',';
+          return it.images.split(sep).map((s: string) => s.trim()).filter(Boolean);
+        }
+        return base.image ? [base.image] : [];
+      })();
+      return {
+        ...base,
+        images: imgs,
+        city: it.city || 'Краснодар',
+        priceUnit: it.price_unit,
+        purpose: it.purpose,
+        condition: it.condition,
+        parking: it.parking,
+        entrance: it.entrance,
+        propertyRights: it.property_rights,
+        landStatus: it.land_status,
+        landArea: it.land_area ?? null,
+        landVri: it.land_vri,
+        videoUrl: it.video_url,
+        videoType: it.video_type,
+        ownerName: it.owner_name,
+        ownerPhone: it.owner_phone,
+        seoTitle: it.seo_title,
+        seoDescription: it.seo_description,
+        rooms: it.rooms ?? null,
+        seoH1: it.seo_h1 ?? null,
+        seoH2: it.seo_h2 ?? null,
+        seoH3: it.seo_h3 ?? null,
+        seoH4: it.seo_h4 ?? null,
+        seoH5: it.seo_h5 ?? null,
+      };
+    } catch {
+      return null;
+    }
+  })();
+
+  listingDetailInflight.set(id, run);
+  const result = await run;
+  listingDetailInflight.delete(id);
+  // Кэшируем только успешный результат — null не кэшируем, чтобы повторить попытку позже.
+  if (result) listingDetailCache.set(id, result);
+  return result;
 }
 
 export interface LeadInput {
