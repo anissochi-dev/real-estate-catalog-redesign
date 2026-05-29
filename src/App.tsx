@@ -28,6 +28,9 @@ import { useAuth } from './contexts/AuthContext';
 
 export type { PropertyType, DealType, Property, Page, AppView } from './app/appTypes';
 
+// Временный флаг показа баннера согласия. Поставить true, чтобы вернуть баннер.
+const SHOW_CONSENT_BANNER = false;
+
 export default function App() {
   const { user, loading: authLoading } = useAuth();
   const { settings } = useSettings();
@@ -401,7 +404,9 @@ export default function App() {
         />
       )}
 
-      {!consentGiven && consentVisible && hasLegalDocs && location.pathname !== '/declined'
+      {/* Баннер согласия временно скрыт. Чтобы вернуть — поставить SHOW_CONSENT_BANNER = true. */}
+      {SHOW_CONSENT_BANNER && !consentGiven && consentVisible && hasLegalDocs
+        && location.pathname !== '/declined'
         && !location.pathname.startsWith('/admin')
         && !location.pathname.startsWith('/login') && (
         <ConsentBanner onAccept={() => setConsentGiven(true)} />
