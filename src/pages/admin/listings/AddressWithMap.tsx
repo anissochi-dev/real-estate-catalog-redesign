@@ -144,8 +144,8 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey]);
 
-  /* Подсказки через HTTP Geocoder API (не зависит от ymaps.suggest, который часто отваливается).
-   * Используем тот же yandex_maps_api_key. Геокодер возвращает адресные объекты — выдаём их как подсказки. */
+  /* Подсказки через встроенный ymaps.suggest (часть JS API Карт).
+   * Работает с тем же ключом yandex_maps_api_key и НЕ требует отдельного ключа HTTP-геокодера. */
   const fetchSuggestions = (query: string) => {
     if (suggestTimer.current) clearTimeout(suggestTimer.current);
     const q = query.trim();
@@ -155,21 +155,19 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
       return;
     }
     suggestTimer.current = setTimeout(() => {
+      if (!window.ymaps || typeof window.ymaps.suggest !== 'function') {
+        setSuggestions([]);
+        return;
+      }
       const fullQuery = `${currentCity}, ${q}`;
-      const url = `https://geocode-maps.yandex.ru/1.x/?format=json&lang=ru_RU&results=8`
-        + (apiKey ? `&apikey=${encodeURIComponent(apiKey)}` : '')
-        + `&geocode=${encodeURIComponent(fullQuery)}`;
-      fetch(url)
-        .then(r => r.json())
-        .then((data: any) => {
-          const features = data?.response?.GeoObjectCollection?.featureMember || [];
-          const list: Suggestion[] = features.map((f: any) => {
-            const obj = f.GeoObject || {};
-            const raw = obj?.metaDataProperty?.GeocoderMetaData?.text || obj?.name || '';
+      window.ymaps.suggest(fullQuery, { results: 8 })
+        .then((items: any[]) => {
+          const list: Suggestion[] = (items || []).map((it) => {
+            const raw = it.displayName || it.value || '';
             const cleaned = raw
-              .replace(new RegExp(`^Россия,\\s*`, 'i'), '')
+              .replace(/^Россия,\s*/i, '')
               .replace(new RegExp(`(^|,\\s*)(${currentCity}(\\s+\\(.+?\\))?)(,\\s*|$)`, 'gi'), '$1')
-              .replace(new RegExp(`(^|,\\s*)(Краснодарский край|[^,]+ область|[^,]+ край|[^,]+ Республика)(,\\s*|$)`, 'gi'), '$1')
+              .replace(/(^|,\s*)(Краснодарский край|[^,]+ область|[^,]+ край|[^,]+ Республика)(,\s*|$)/gi, '$1')
               .replace(/^,\s*/, '')
               .replace(/,\s*,/g, ',')
               .trim();
@@ -183,62 +181,63 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     }, 250);
   };
 
-  /* Геокодинг по адресной строке через HTTP API. */
+  /* Геокодинг по адресной строке через ymaps.geocode (JS API, тот же ключ). */
   function geocodeAddress(fullAddr: string, streetOnly?: string) {
-    const url = `https://geocode-maps.yandex.ru/1.x/?format=json&lang=ru_RU&results=1`
-      + (apiKey ? `&apikey=${encodeURIComponent(apiKey)}` : '')
-      + `&geocode=${encodeURIComponent(fullAddr)}`;
-    fetch(url)
-      .then(r => r.json())
-      .then((data: any) => {
-        const features = data?.response?.GeoObjectCollection?.featureMember || [];
-        const obj = features[0]?.GeoObject;
+    if (!window.ymaps || typeof window.ymaps.geocode !== 'function') return;
+    window.ymaps.geocode(fullAddr, { results: 1 })
+      .then((res: any) => {
+        const obj = res?.geoObjects?.get(0);
         if (!obj) return;
-        const pos = (obj.Point?.pos || '').split(' ');
-        if (pos.length !== 2) return;
-        const lng = parseFloat(pos[0]);
-        const lat = parseFloat(pos[1]);
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-        const coords: [number, number] = [lat, lng];
+        const coordsRaw = obj.geometry?.getCoordinates?.();
+        if (!coordsRaw || coordsRaw.length !== 2) return;
+        const coords: [number, number] = [coordsRaw[0], coordsRaw[1]];
         markerRef.current?.geometry.setCoordinates(coords);
         ymapInstance.current?.setCenter(coords, 16, { duration: 400 });
-        parseHttpGeoObject(obj, coords, streetOnly);
+        parseYmapsGeoObject(obj, coords, streetOnly);
       })
       .catch(() => undefined);
   }
 
-  /* Обратный геокодинг (клик/драг на карте). */
+  /* Обратный геокодинг (клик/драг на карте) через ymaps.geocode. */
   function reverseGeocode(lat: number, lng: number) {
-    const url = `https://geocode-maps.yandex.ru/1.x/?format=json&lang=ru_RU&results=1&kind=house`
-      + (apiKey ? `&apikey=${encodeURIComponent(apiKey)}` : '')
-      + `&geocode=${encodeURIComponent(`${lng},${lat}`)}`;
-    fetch(url)
-      .then(r => r.json())
-      .then((data: any) => {
-        const features = data?.response?.GeoObjectCollection?.featureMember || [];
-        const obj = features[0]?.GeoObject;
+    if (!window.ymaps || typeof window.ymaps.geocode !== 'function') return;
+    window.ymaps.geocode([lat, lng], { results: 1, kind: 'house' })
+      .then((res: any) => {
+        const obj = res?.geoObjects?.get(0);
         if (!obj) return;
-        parseHttpGeoObject(obj, [lat, lng]);
+        parseYmapsGeoObject(obj, [lat, lng]);
       })
       .catch(() => undefined);
   }
 
-  /** Парсер ответа HTTP-геокодера. */
-  function parseHttpGeoObject(obj: any, coords: [number, number], streetOverride?: string) {
-    const meta = obj?.metaDataProperty?.GeocoderMetaData || {};
-    const addrComponents: { kind: string; name: string }[] = meta?.Address?.Components || [];
-    let district = '', street = '', house = '';
-    for (const p of addrComponents) {
-      if (p.kind === 'district') district = p.name;
-      else if (p.kind === 'street') street = p.name;
-      else if (p.kind === 'house') house = p.name;
+  /** Парсер geoObject из ymaps.geocode. Район всегда берём из нового адреса. */
+  function parseYmapsGeoObject(obj: any, coords: [number, number], streetOverride?: string) {
+    // Район: административная единица уровня района города
+    let district = '';
+    try {
+      const adminAreas = obj.getAdministrativeAreas?.() || [];
+      // Последний элемент обычно — район/округ города
+      district = (adminAreas.length ? adminAreas[adminAreas.length - 1] : '') || '';
+    } catch { /* ignore */ }
+    // Запасной способ — через metaData компоненты
+    if (!district) {
+      try {
+        const meta = obj.properties?.get?.('metaDataProperty')?.GeocoderMetaData;
+        const comps: { kind: string; name: string }[] = meta?.Address?.Components || [];
+        for (const p of comps) {
+          if (p.kind === 'district') district = p.name;
+        }
+      } catch { /* ignore */ }
     }
+    const street = obj.getThoroughfare?.() || '';
+    const house = obj.getPremiseNumber?.() || '';
     const builtAddress = [street, house].filter(Boolean).join(', ');
-    const finalAddress = streetOverride || builtAddress || meta?.text || obj?.name || '';
+    const finalAddress = streetOverride || builtAddress || obj.getAddressLine?.() || '';
     const cur = editingRef.current;
     setEditing({
       ...cur,
-      district: district || cur.district || '',
+      // Район всегда переопределяем новым адресом (пустой — значит для нового адреса район не определён)
+      district: district || '',
       address: finalAddress,
       lat: coords[0],
       lng: coords[1],
