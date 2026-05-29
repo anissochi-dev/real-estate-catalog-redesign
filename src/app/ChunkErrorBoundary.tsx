@@ -23,12 +23,17 @@ export default class ChunkErrorBoundary extends Component<{ children: ReactNode;
       return (
         <div className="min-h-screen flex items-center justify-center flex-col gap-4 text-center p-8">
           <div className="text-4xl">⚠️</div>
-          <div className="font-semibold text-lg">Не удалось загрузить страницу</div>
-          <div className="text-sm text-muted-foreground max-w-md">Возможно, кеш браузера устарел после обновления сайта.</div>
-          <button className="px-4 py-2 bg-brand-blue text-white rounded-xl" onClick={() => {
-            try { sessionStorage.removeItem('__chunk_reload_at__'); } catch { /* ignore */ }
-            window.location.reload();
-          }}>Обновить страницу</button>
+          <div className="font-semibold text-lg">Что-то пошло не так</div>
+          <div className="text-sm text-muted-foreground max-w-md">Не удалось отобразить страницу. Попробуйте обновить — обычно это помогает.</div>
+          <div className="flex gap-3">
+            <button className="px-4 py-2 bg-brand-blue text-white rounded-xl" onClick={() => {
+              try { sessionStorage.removeItem('__chunk_reload_at__'); } catch { /* ignore */ }
+              window.location.reload();
+            }}>Обновить страницу</button>
+            <button className="px-4 py-2 bg-muted rounded-xl" onClick={() => { window.location.href = '/'; }}>
+              На главную
+            </button>
+          </div>
         </div>
       );
     }

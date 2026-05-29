@@ -194,7 +194,7 @@ export function makeNewsArticleSchema(opts: {
   return {
     '@context': 'https://schema.org',
     '@type': 'NewsArticle',
-    headline: opts.title.slice(0, 110),
+    headline: (opts.title || '').slice(0, 110),
     ...(opts.description ? { description: opts.description } : {}),
     url: opts.url,
     ...(opts.image ? { image: { '@type': 'ImageObject', url: opts.image } } : {}),

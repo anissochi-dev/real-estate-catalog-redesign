@@ -367,19 +367,21 @@ export default function App() {
       />
 
       <main>
-        <Suspense fallback={<div style={{minHeight: 'calc(100vh - 64px)'}} />}>
-          <AppRoutes
-            properties={properties}
-            favorites={favorites}
-            compareList={compareList}
-            compareProperties={compareProperties}
-            favoriteProperties={favoriteProperties}
-            allLoaded={allLoaded}
-            toggleFavorite={toggleFavorite}
-            toggleCompare={toggleCompare}
-            setCurrentPage={setCurrentPage}
-          />
-        </Suspense>
+        <ChunkErrorBoundary>
+          <Suspense fallback={<div style={{minHeight: 'calc(100vh - 64px)'}} />}>
+            <AppRoutes
+              properties={properties}
+              favorites={favorites}
+              compareList={compareList}
+              compareProperties={compareProperties}
+              favoriteProperties={favoriteProperties}
+              allLoaded={allLoaded}
+              toggleFavorite={toggleFavorite}
+              toggleCompare={toggleCompare}
+              setCurrentPage={setCurrentPage}
+            />
+          </Suspense>
+        </ChunkErrorBoundary>
       </main>
 
       <Footer onLogin={() => setView('login')} setCurrentPage={setCurrentPage} />
