@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
 
@@ -138,7 +137,6 @@ function LegalModal({ title, content, onClose }: { title: string; content: strin
 }
 
 export default function ConsentBanner({ onAccept }: Props) {
-  const navigate = useNavigate();
   const { settings } = useSettings();
   const [openDoc, setOpenDoc] = useState<LegalDoc | null>(null);
   // Какие документы пользователь открывал — пишем в журнал для юр. защиты.
@@ -153,25 +151,6 @@ export default function ConsentBanner({ onAccept }: Props) {
       next.add(doc.key);
       return next;
     });
-  };
-
-  const handleAccept = () => {
-    saveConsent();
-    // Отправляем лог в БД — не ждём ответа, не блокируем UI пользователя.
-    // Журнал нужен для юридической защиты компании.
-    logConsent(Array.from(openedDocs));
-    onAccept();
-  };
-
-  const handleDecline = () => {
-    // Пробуем закрыть вкладку; если не получилось — показываем заглушку
-    try {
-      window.close();
-    } catch {
-      // ignore
-    }
-    // Если вкладка осталась — переходим на заглушку (страница уже есть в App.tsx)
-    setTimeout(() => navigate('/declined'), 100);
   };
 
   const docs: LegalDoc[] = [
@@ -195,18 +174,21 @@ export default function ConsentBanner({ onAccept }: Props) {
     },
   ].filter(d => d.content.trim().length > 0);
 
+  const handleAccept = () => {
+    saveConsent();
+    // При согласии автоматически отмечаем ВСЕ документы как принятые —
+    // в журнал для юридической защиты уходит полный список.
+    logConsent(docs.map(d => d.key));
+    onAccept();
+  };
+
   return (
     <>
-      {/* Полупрозрачный оверлей — блокирует визуальное взаимодействие с сайтом */}
-      <div
-        className="fixed inset-0 z-[95] bg-black/45 backdrop-blur-[2px]"
-        aria-hidden="true"
-      />
-
-      {/* Сам баннер */}
+      {/* Мягкий баннер — БЕЗ блокирующего оверлея. Сайт доступен сразу,
+          баннер просто висит снизу, пока пользователь не нажмёт «Согласен». */}
       <div
         data-consent-banner="true"
-        className="fixed left-0 right-0 bottom-0 z-[100] flex justify-center pointer-events-none px-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:px-4 sm:pb-6"
+        className="fixed left-0 right-0 bottom-0 z-[100] flex justify-center pointer-events-none px-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:px-4 sm:pb-6 animate-fade-in-up"
       >
         <div className="pointer-events-auto bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-brand-blue/10 flex flex-col overflow-hidden">
           {/* Header */}
@@ -217,10 +199,10 @@ export default function ConsentBanner({ onAccept }: Props) {
               </div>
               <div className="min-w-0">
                 <h2 className="font-display font-800 text-base sm:text-lg text-foreground leading-tight">
-                  Чтобы пользоваться сайтом, нужно ваше согласие
+                  Мы используем cookie и обрабатываем данные
                 </h2>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-                  Ознакомьтесь с документами ниже
+                  Нажмите «Согласен», чтобы продолжить
                 </p>
               </div>
             </div>
@@ -255,18 +237,11 @@ export default function ConsentBanner({ onAccept }: Props) {
             )}
           </div>
 
-          {/* Actions */}
-          <div className="px-4 sm:px-5 pb-4 sm:pb-5 pt-2 flex flex-col-reverse sm:flex-row gap-2 border-t border-border">
-            <button
-              onClick={handleDecline}
-              className="sm:flex-none sm:px-5 py-3 rounded-xl font-semibold text-sm border border-border text-muted-foreground hover:bg-muted transition-colors flex items-center justify-center gap-2 min-h-[44px]"
-            >
-              <Icon name="X" size={16} />
-              Не согласен
-            </button>
+          {/* Actions — только одна кнопка, без блокировки сайта */}
+          <div className="px-4 sm:px-5 pb-4 sm:pb-5 pt-2 border-t border-border">
             <button
               onClick={handleAccept}
-              className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors min-h-[44px] shadow-lg shadow-emerald-600/20"
+              className="w-full bg-emerald-600 text-white py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors min-h-[44px] shadow-lg shadow-emerald-600/20"
             >
               <Icon name="Check" size={16} />
               Согласен — продолжить

@@ -31,8 +31,8 @@ import { useAuth } from './contexts/AuthContext';
 
 export type { PropertyType, DealType, Property, Page, AppView } from './app/appTypes';
 
-// Временный флаг показа баннера согласия. Поставить true, чтобы вернуть баннер.
-const SHOW_CONSENT_BANNER = false;
+// Показ мягкого баннера согласия (без блокировки сайта).
+const SHOW_CONSENT_BANNER = true;
 
 export default function App() {
   const { user, loading: authLoading } = useAuth();
@@ -74,8 +74,9 @@ export default function App() {
       show();
     };
     events.forEach(e => window.addEventListener(e, onInteract, { passive: true }));
-    // Страховка: показать через 15 сек (после завершения Lighthouse-теста)
-    const fallback = setTimeout(show, 15000);
+    // Страховка: показать через 5 сек (после завершения Lighthouse-теста).
+    // Баннер мягкий и не блокирует сайт, поэтому можно показать раньше.
+    const fallback = setTimeout(show, 5000);
     return () => {
       events.forEach(e => window.removeEventListener(e, onInteract));
       clearTimeout(fallback);
