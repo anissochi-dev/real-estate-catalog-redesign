@@ -73,9 +73,26 @@ export default function PropertyMapInfrastructure({ lat, lng, title, address }: 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
+  // Ленивая загрузка: карту инициализируем только когда блок появился на экране.
+  const [visible, setVisible] = useState(false);
 
-  // Инициализация карты
+  // Следим за появлением блока карты в зоне видимости
   useEffect(() => {
+    const el = containerRef.current;
+    if (!el || visible) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some(e => e.isIntersecting)) {
+        setVisible(true);
+        io.disconnect();
+      }
+    }, { rootMargin: '200px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [visible]);
+
+  // Инициализация карты (только после появления в зоне видимости)
+  useEffect(() => {
+    if (!visible) return;
     const apiKey = settings.yandex_maps_api_key || '';
     if (!apiKey) { setError('NO_KEY'); return; }
     const coords = normalizeCoords(lat, lng);
@@ -105,9 +122,18 @@ export default function PropertyMapInfrastructure({ lat, lng, title, address }: 
       }
     }).catch(() => setError('LOAD_FAILED'));
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (mapRef.current) {
+        try { mapRef.current.destroy(); } catch { /* ignore */ }
+        mapRef.current = null;
+        markRef.current = null;
+        collectionsRef.current = {};
+        setInitialized(false);
+      }
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.yandex_maps_api_key]);
+  }, [settings.yandex_maps_api_key, visible]);
 
   // Синхронизация координат при изменении lat/lng (без переинициализации карты)
   useEffect(() => {
