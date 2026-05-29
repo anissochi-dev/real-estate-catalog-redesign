@@ -114,6 +114,9 @@ export default function CrmDashboard() {
           <h3 className="font-semibold mb-3 flex items-center gap-2">
             <Icon name="TrendingUp" size={16} className="text-brand-blue" />
             Создано сделок {periodLabel[period]}
+            <span className="ml-auto inline-flex items-center gap-1 text-brand-blue bg-brand-blue/10 rounded-lg px-2.5 py-0.5 text-sm font-bold">
+              {data.timeline.reduce((sum: number, d: { count: number }) => sum + d.count, 0)}
+            </span>
           </h3>
           <div className="flex items-end gap-1 h-24">
             {data.timeline.map((d: { day: string; count: number }) => {
