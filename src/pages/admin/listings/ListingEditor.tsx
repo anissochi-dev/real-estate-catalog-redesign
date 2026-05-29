@@ -57,7 +57,7 @@ export default function ListingEditor({
     main:     !!(errors.title || errors.category || errors.deal || errors.condition || errors.owner_name || errors.owner_phone),
     photos:   !!errors.photos,
     location: !!errors.address,
-    details:  !!(errors.price || errors.area || errors.floor || errors.total_floors || errors.broker_commission),
+    details:  !!(errors.price || errors.area || errors.floor || errors.total_floors || errors.broker_commission || errors.land_status || errors.land_vri),
     content:  !!errors.description,
     extra:    !!(errors.finishing || errors.building_class || errors.building_year || errors.property_rights),
   };
@@ -84,6 +84,11 @@ export default function ListingEditor({
     if (!editing.building_class) e.building_class = true;
     if (!editing.building_year) e.building_year = true;
     if (!editing.property_rights) e.property_rights = true;
+    // Для земельного участка обязательны категория земли и ВРИ
+    if (editing.category === 'land') {
+      if (!editing.land_status) e.land_status = true;
+      if (!editing.land_vri) e.land_vri = true;
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -145,7 +150,7 @@ export default function ListingEditor({
       if (t === 'main') return !editing.title?.trim() || !editing.owner_name?.trim() || !editing.owner_phone?.trim() || !editing.category || !editing.deal || !editing.condition;
       if (t === 'photos') return !photos.length;
       if (t === 'location') return !editing.address?.trim() && !editing.district?.trim();
-      if (t === 'details') return !editing.price || !editing.area || editing.floor == null || editing.total_floors == null || !bc?.trim();
+      if (t === 'details') return !editing.price || !editing.area || editing.floor == null || editing.total_floors == null || !bc?.trim() || (editing.category === 'land' && (!editing.land_status || !editing.land_vri));
       if (t === 'content') return !editing.description?.trim() || editing.description.trim().length < 30;
       if (t === 'extra') return !editing.finishing || !editing.building_class || !editing.building_year || !editing.property_rights;
       return false;
@@ -215,6 +220,8 @@ export default function ListingEditor({
                 setEditing={(l) => { setEditing(l); setErrors(v => ({ ...v, address: false })); }}
                 cities={cities}
                 landVri={landVri}
+                errors={errors}
+                setErrors={setErrors}
                 addressError={false}
                 detailsOnly
                 onCoordsManualChange={setCoordsManual}
