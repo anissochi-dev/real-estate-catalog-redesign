@@ -5,6 +5,20 @@
       "method": "GET",
       "path": "/?resource=listings",
       "expectedStatus": 401
+    },
+    {
+      "name": "Приём ошибки без авторизации (SMTP не настроен)",
+      "method": "POST",
+      "path": "/?resource=error_report",
+      "body": {
+        "message": "Test error",
+        "url": "https://example.com/news/test",
+        "stack": "Error: test",
+        "userAgent": "Mozilla/5.0"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {"sent": false},
+      "bodyMatcher": "partial"
     }
   ]
 }

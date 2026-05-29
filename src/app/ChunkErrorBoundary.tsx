@@ -1,12 +1,14 @@
 import { Component } from 'react';
 import type { ReactNode } from 'react';
+import { reportError } from '@/lib/adminApi';
 
 export default class ChunkErrorBoundary extends Component<{ children: ReactNode; fallback?: ReactNode }, { error: boolean }> {
   constructor(props: { children: ReactNode; fallback?: ReactNode }) { super(props); this.state = { error: false }; }
   static getDerivedStateFromError() { return { error: true }; }
   componentDidCatch(error: Error) {
     const msg = String(error?.message || error || '');
-    if (/Failed to fetch dynamically imported module|Loading chunk|ChunkLoadError|Importing a module script failed/i.test(msg)) {
+    const isChunkError = /Failed to fetch dynamically imported module|Loading chunk|ChunkLoadError|Importing a module script failed/i.test(msg);
+    if (isChunkError) {
       try {
         const last = Number(sessionStorage.getItem('__chunk_reload_at__') || '0');
         if (Date.now() - last > 15000) {
@@ -15,7 +17,15 @@ export default class ChunkErrorBoundary extends Component<{ children: ReactNode;
           else window.location.reload();
         }
       } catch { window.location.reload(); }
+      return;
     }
+    // Реальный краш рендера — уведомляем админов на почту
+    reportError({
+      message: msg,
+      url: typeof window !== 'undefined' ? window.location.href : '',
+      stack: String(error?.stack || '').slice(0, 2000),
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+    });
   }
   render() {
     if (this.state.error) {

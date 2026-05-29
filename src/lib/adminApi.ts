@@ -1,5 +1,18 @@
 const AUTH_URL = 'https://functions.poehali.dev/e5d9d96a-a3ca-45cd-9ea3-3e2982b626f7';
 const ADMIN_URL = 'https://functions.poehali.dev/aeccc0fe-9c55-4933-b292-432cec9cc09d';
+
+/** Отправляет сведения о клиентской ошибке на бэкенд (для email-уведомления админам).
+ * Тихо игнорирует любые сбои — не должен мешать работе сайта. */
+export function reportError(info: { message: string; url?: string; stack?: string; userAgent?: string }): void {
+  try {
+    fetch(`${ADMIN_URL}?resource=error_report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(info),
+      keepalive: true,
+    }).catch(() => {});
+  } catch { /* ignore */ }
+}
 export const AI_RETRAIN_URL = 'https://functions.poehali.dev/e2f1d357-fb83-4fbb-8d8b-6fb063357afc';
 const AI_URL = 'https://functions.poehali.dev/34bfc4a2-89b9-4c89-bcbc-d82314730aef';
 // Используем функцию upload/ (поддерживает водяной знак и возвращает original_url)

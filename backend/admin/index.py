@@ -30,6 +30,81 @@ def _safe(s, length=255):
     return (s or '').replace("'", "''")[:length]
 
 
+# Антиспам для уведомлений об ошибках: одинаковый текст не чаще раза в 5 минут.
+_ERROR_REPORT_LAST = {}
+
+
+def _error_report(cur, event):
+    """Приём клиентской (frontend) ошибки и отправка письма админам через SMTP.
+
+    Всегда возвращает 200, чтобы не ломать фронт. Если SMTP не настроен —
+    тихо выходит. Защищён троттлингом от спама одинаковыми ошибками.
+    """
+    import smtplib
+    from datetime import timezone
+    from email.mime.text import MIMEText
+
+    try:
+        data = json.loads(event.get('body') or '{}')
+    except Exception:
+        data = {}
+
+    message = str(data.get('message') or 'Неизвестная ошибка')[:500]
+    page_url = str(data.get('url') or '')[:300]
+    stack = str(data.get('stack') or '')[:2000]
+    user_agent = str(data.get('userAgent') or '')[:300]
+
+    now_ts = datetime.now(timezone.utc).timestamp()
+    key = message[:120]
+    if now_ts - _ERROR_REPORT_LAST.get(key, 0) < 300:
+        return _ok({'sent': False, 'throttled': True})
+
+    cur.execute(f"SELECT * FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
+    s = cur.fetchone() or {}
+
+    recipients = (s.get('notify_email_recipients') or '').strip()
+    host = (s.get('smtp_host') or '').strip()
+    port = s.get('smtp_port') or 465
+    smtp_user = (s.get('smtp_user') or '').strip()
+    smtp_pass = s.get('smtp_password') or ''
+    smtp_from = (s.get('smtp_from') or smtp_user or '').strip()
+    company = s.get('company_name') or 'сайт'
+
+    if not (recipients and host and smtp_user and smtp_pass):
+        return _ok({'sent': False, 'reason': 'smtp_not_configured'})
+
+    to_list = [r.strip() for r in recipients.split(',') if r.strip()]
+    when = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+
+    body_text = (
+        f'На сайте «{company}» произошла ошибка у посетителя.\n\n'
+        f'Время: {when}\n'
+        f'Страница: {page_url or "—"}\n'
+        f'Сообщение: {message}\n'
+        f'Браузер: {user_agent or "—"}\n\n'
+        f'Технические детали (stack):\n{stack or "—"}\n'
+    )
+
+    try:
+        msg = MIMEText(body_text, 'plain', 'utf-8')
+        msg['Subject'] = f'Ошибка на сайте {company}'
+        msg['From'] = smtp_from
+        msg['To'] = ', '.join(to_list)
+
+        if int(port) == 465:
+            server = smtplib.SMTP_SSL(host, int(port), timeout=15)
+        else:
+            server = smtplib.SMTP(host, int(port), timeout=15)
+            server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_from, to_list, msg.as_string())
+        server.quit()
+        _ERROR_REPORT_LAST[key] = now_ts
+        return _ok({'sent': True, 'recipients': len(to_list)})
+    except Exception as ex:
+        return _ok({'sent': False, 'error': str(ex)[:200]})
+
+
 def _str_or_null(v, length=255):
     if v is None or v == '':
         return 'NULL'
@@ -149,6 +224,11 @@ def handler(event, context):
     conn = psycopg2.connect(dsn)
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Публичный ресурс: приём ошибок с фронтенда (без авторизации).
+            # Шлёт письмо админам, если настроен SMTP. Не должен ломать фронт.
+            if resource == 'error_report' and method == 'POST':
+                return _error_report(cur, event)
+
             user = _get_user(cur, token)
             if not user:
                 return _err(401, 'Требуется авторизация')
