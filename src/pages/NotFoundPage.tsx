@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import Icon from '@/components/ui/icon';
+import SeoHead from '@/components/SeoHead';
 
 export default function NotFoundPage() {
   const location = useLocation();
@@ -8,10 +9,16 @@ export default function NotFoundPage() {
 
   useEffect(() => {
     console.error('404:', location.pathname);
+    // Сигнал для пререндера/ботов, что это страница 404 — чтобы сервер мог
+    // вернуть корректный статус. Также проставляем класс на <html>.
+    document.documentElement.setAttribute('data-http-status', '404');
+    return () => { document.documentElement.removeAttribute('data-http-status'); };
   }, [location.pathname]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-muted/30 to-white flex items-center justify-center px-4">
+      {/* noindex — чтобы несуществующие страницы не попадали в индекс поисковиков */}
+      <SeoHead title="Страница не найдена — 404" noindex />
       <div className="max-w-md w-full text-center">
         <div className="relative mb-8">
           <div className="text-[140px] font-display font-bold text-brand-blue/8 leading-none select-none">404</div>

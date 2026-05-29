@@ -1,0 +1,34 @@
+{
+  "tests": [
+    {
+      "name": "Существующая статическая страница возвращает 200",
+      "method": "GET",
+      "path": "/?path=/catalog",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Главная страница возвращает 200",
+      "method": "GET",
+      "path": "/?path=/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Несуществующая страница возвращает 404",
+      "method": "GET",
+      "path": "/?path=/nesuschestvuyushchaya-stranica-xyz",
+      "expectedStatus": 404
+    },
+    {
+      "name": "Несуществующий объект возвращает 404",
+      "method": "GET",
+      "path": "/?path=/object/nesuschestvuet-99999999",
+      "expectedStatus": 404
+    },
+    {
+      "name": "OPTIONS возвращает 200 (CORS)",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    }
+  ]
+}

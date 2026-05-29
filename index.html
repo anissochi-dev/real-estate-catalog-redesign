@@ -197,6 +197,29 @@
       })();
     </script>
 
+    <!-- SEO 404: для поисковых краулеров проверяем существование страницы.
+         Если страница не найдена — заранее проставляем noindex в <head>,
+         чтобы несуществующие URL не попадали в индекс (SPA отдаёт 200). -->
+    <script>
+      (function() {
+        var ua = (navigator.userAgent || '').toLowerCase();
+        var crawlers = ['googlebot','yandex','bingbot','mail.ru','duckduckbot','baiduspider','petalbot','semrush','ahrefsbot'];
+        var isCrawler = crawlers.some(function(b){ return ua.indexOf(b) !== -1; });
+        if (!isCrawler) return;
+        var path = window.location.pathname;
+        try {
+          var xhr = new XMLHttpRequest();
+          xhr.open('GET', 'https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff?path=' + encodeURIComponent(path), false);
+          xhr.send(null);
+          if (xhr.status === 404) {
+            var m = document.querySelector('meta[name="robots"]');
+            if (!m) { m = document.createElement('meta'); m.setAttribute('name','robots'); document.head.appendChild(m); }
+            m.setAttribute('content', 'noindex, nofollow');
+          }
+        } catch (e) {}
+      })();
+    </script>
+
     <!-- Лёгкая защита изображений: блокируем только ПКМ и перетаскивание картинок.
          Перехват F12/Ctrl+U/копирования/печати УБРАН — такое поведение
          антивирусы и браузеры помечают как вредоносное и портят репутацию сайта. -->
