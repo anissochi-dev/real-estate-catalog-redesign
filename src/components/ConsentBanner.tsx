@@ -10,12 +10,36 @@ const CONSENT_SESSION_KEY = 'biznest_consent_session';
 // Публичная функция listings — там обрабатывается action=consent_save
 const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
 
-export function hasConsent(): boolean {
+// Cookie-дубль флага согласия — на случай если браузер очистит localStorage
+// (например Safari/iOS удаляет localStorage после ~7 дней без визита).
+function setConsentCookie(): void {
   try {
-    return localStorage.getItem(CONSENT_KEY) === 'accepted';
+    const oneYear = 365 * 24 * 60 * 60;
+    document.cookie = `${CONSENT_KEY}=accepted; path=/; max-age=${oneYear}; SameSite=Lax`;
+  } catch { /* ignore */ }
+}
+
+function readConsentCookie(): boolean {
+  try {
+    return document.cookie.split('; ').some(c => c === `${CONSENT_KEY}=accepted`);
   } catch {
     return false;
   }
+}
+
+export function hasConsent(): boolean {
+  try {
+    if (localStorage.getItem(CONSENT_KEY) === 'accepted') return true;
+  } catch { /* ignore */ }
+  // Фолбэк на cookie, если localStorage недоступен или был очищен браузером
+  return readConsentCookie();
+}
+
+export function saveConsent(): void {
+  try {
+    localStorage.setItem(CONSENT_KEY, 'accepted');
+  } catch { /* ignore */ }
+  setConsentCookie();
 }
 
 export function revokeConsent(): void {
@@ -25,6 +49,9 @@ export function revokeConsent(): void {
   } catch {
     // ignore
   }
+  try {
+    document.cookie = `${CONSENT_KEY}=; path=/; max-age=0; SameSite=Lax`;
+  } catch { /* ignore */ }
 }
 
 function getSessionId(): string {
@@ -129,11 +156,7 @@ export default function ConsentBanner({ onAccept }: Props) {
   };
 
   const handleAccept = () => {
-    try {
-      localStorage.setItem(CONSENT_KEY, 'accepted');
-    } catch {
-      // ignore
-    }
+    saveConsent();
     // Отправляем лог в БД — не ждём ответа, не блокируем UI пользователя.
     // Журнал нужен для юридической защиты компании.
     logConsent(Array.from(openedDocs));

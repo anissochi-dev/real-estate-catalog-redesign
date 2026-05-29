@@ -37,6 +37,13 @@ export default function App() {
   const [adminInitialSection, setAdminInitialSection] = useState<string | undefined>();
   const [consentGiven, setConsentGiven] = useState<boolean>(() => hasConsent());
   const [consentVisible, setConsentVisible] = useState(false);
+  // Баннер показываем только когда настройки загрузились и есть хотя бы один юр. документ —
+  // иначе он мелькает пустым до загрузки настроек («глюк»).
+  const hasLegalDocs = Boolean(
+    (settings.legal_privacy_policy || '').trim()
+    || (settings.legal_personal_data || '').trim()
+    || (settings.legal_marketing_consent || '').trim()
+  );
 
   useEffect(() => {
     if (hasConsent()) return;
@@ -394,7 +401,7 @@ export default function App() {
         />
       )}
 
-      {!consentGiven && consentVisible && location.pathname !== '/declined'
+      {!consentGiven && consentVisible && hasLegalDocs && location.pathname !== '/declined'
         && !location.pathname.startsWith('/admin')
         && !location.pathname.startsWith('/login') && (
         <ConsentBanner onAccept={() => setConsentGiven(true)} />
