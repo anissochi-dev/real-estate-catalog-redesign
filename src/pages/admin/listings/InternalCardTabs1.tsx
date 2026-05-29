@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { adminApi } from '@/lib/adminApi';
 import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
-import { Listing, fmtDate, CONDITIONS, PARKING, ENTRANCE, FINISHING, ROAD_LINES } from './types';
+import { Listing, fmtDate, CONDITIONS, PARKING, ENTRANCE, FINISHING, ROAD_LINES, LAND_STATUSES, PROPERTY_RIGHTS } from './types';
 import { HistoryRow, StatData, InternalCardLead, DbComment, LEAD_STATUS, fmt } from './internalCardTypes';
 
 export function Spinner() {
@@ -110,7 +110,7 @@ export function TabOverview({ listing, siteUrl }: { listing: Listing; siteUrl?: 
     listing.building_year ? { label: 'Год постройки', value: String(listing.building_year) } : null,
     listing.is_apartments ? { label: 'Тип', value: 'Апартаменты' } : null,
     listing.land_area ? { label: 'Площадь участка', value: `${listing.land_area} соток` } : null,
-    listing.land_status ? { label: 'Статус земли', value: listing.land_status } : null,
+    listing.land_status ? { label: 'Статус земли', value: translate(listing.land_status, LAND_STATUSES) } : null,
     listing.min_area ? { label: 'Мин. площадь', value: `${listing.min_area} м²` } : null,
   ].filter(Boolean) as OverviewRow[];
 
@@ -125,7 +125,7 @@ export function TabOverview({ listing, siteUrl }: { listing: Listing; siteUrl?: 
 
   // Юридическое и сотрудничество
   const legal: OverviewRow[] = [
-    listing.property_rights ? { label: 'Права собственности', value: listing.property_rights } : null,
+    listing.property_rights ? { label: 'Права собственности', value: translate(listing.property_rights, PROPERTY_RIGHTS) } : null,
     listing.broker_commission ? { label: 'Комиссия брокера', value: listing.broker_commission } : null,
     { label: 'Собственник', value: listing.owner_name || '—' },
     { label: 'Телефон', value: listing.owner_phone || '—' },
