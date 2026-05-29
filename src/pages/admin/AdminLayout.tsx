@@ -3,7 +3,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
 import AiChat from '@/components/admin/AiChat';
 import { adminApi } from '@/lib/adminApi';
-import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 const IDLE_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 const IDLE_WARNING_MS = 2 * 60 * 1000;
@@ -39,7 +38,6 @@ const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; gro
 export default function AdminLayout({ section, setSection, onExit, children }: Props) {
   const { user, logout } = useAuth();
   const [aiOpen, setAiOpen] = useState(false);
-  const { state: pushState, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePushNotifications();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // Меню пользователя в мобильной шапке (имя + На сайт + Выйти)
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -275,50 +273,6 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            {/* Push-уведомления — ключи генерируются автоматически на сервере */}
-            {pushState !== 'unsupported' && (
-              <div className="relative group">
-                <button
-                  onClick={pushState === 'subscribed' ? pushUnsubscribe : pushSubscribe}
-                  disabled={pushState === 'loading' || pushState === 'denied'}
-                  className={`p-2 rounded-xl border transition relative ${
-                    pushState === 'subscribed'
-                      ? 'border-emerald-300 bg-emerald-50 text-emerald-600'
-                      : pushState === 'denied'
-                      ? 'border-red-200 bg-red-50 text-red-400 cursor-not-allowed opacity-60'
-                      : 'border-border bg-white hover:bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {pushState === 'loading'
-                    ? <Icon name="Loader2" size={16} className="animate-spin" />
-                    : pushState === 'subscribed'
-                    ? <Icon name="BellRing" size={16} />
-                    : <Icon name="BellOff" size={16} />
-                  }
-                  {pushState === 'subscribed' && (
-                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white" />
-                  )}
-                </button>
-                {/* Тултип */}
-                <div className="absolute right-0 top-full mt-2 w-64 bg-gray-900 text-white text-xs rounded-xl px-3 py-2.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
-                  {pushState === 'subscribed' && (
-                    <><div className="font-semibold text-emerald-400 mb-1">✓ Уведомления включены</div>
-                    <div className="text-gray-300">Вы будете получать уведомления о новых заявках. Нажмите чтобы отключить.</div></>
-                  )}
-                  {pushState === 'denied' && (
-                    <><div className="font-semibold text-red-400 mb-1">✗ Уведомления заблокированы</div>
-                    <div className="text-gray-300">Браузер запретил уведомления. Разрешите их: откройте настройки браузера → Конфиденциальность → Уведомления → найдите этот сайт и разрешите.</div></>
-                  )}
-                  {pushState === 'unsubscribed' && (
-                    <><div className="font-semibold text-gray-200 mb-1">Уведомления отключены</div>
-                    <div className="text-gray-300">Нажмите чтобы получать уведомления о новых заявках с сайта.</div></>
-                  )}
-                  {pushState === 'loading' && (
-                    <div className="text-gray-300">Проверка статуса уведомлений...</div>
-                  )}
-                </div>
-              </div>
-            )}
             {(user.role === 'admin' || user.role === 'editor' || user.role === 'manager') && (
               <button
                 onClick={() => setAiOpen(true)}
