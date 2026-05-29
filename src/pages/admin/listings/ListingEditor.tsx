@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Listing, City } from './types';
+import { Listing, City, LandVri } from './types';
 import ListingEditorPriceSection from './ListingEditorPriceSection';
 import ListingEditorDetailsSection from './ListingEditorDetailsSection';
 import ListingEditorContentSection from './ListingEditorContentSection';
@@ -17,6 +17,7 @@ interface Props {
   photos: string[];
   setPhotos: (p: string[]) => void;
   cities: City[];
+  landVri: LandVri[];
   aiLoading: boolean;
   aiTagsLoading: boolean;
   aiSeoLoading: boolean;
@@ -30,7 +31,7 @@ interface Props {
 }
 
 export default function ListingEditor({
-  editing, setEditing, photos, setPhotos, cities,
+  editing, setEditing, photos, setPhotos, cities, landVri,
   aiLoading, aiTagsLoading, aiSeoLoading, aiAllLoading,
   onDescribe, onGenerateTags, onGenerateSeo, onGenerateAll, onClose, onSave,
 }: Props) {
@@ -213,6 +214,7 @@ export default function ListingEditor({
                 editing={editing}
                 setEditing={(l) => { setEditing(l); setErrors(v => ({ ...v, address: false })); }}
                 cities={cities}
+                landVri={landVri}
                 addressError={false}
                 detailsOnly
                 onCoordsManualChange={setCoordsManual}

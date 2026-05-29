@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { adminApi, aiApi } from '@/lib/adminApi';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
-import { Listing, City, Purpose, empty, detectVideoType, splitImages } from './types';
+import { Listing, City, Purpose, LandVri, empty, detectVideoType, splitImages } from './types';
 
 export const DRAFT_KEY = 'biznest_listing_draft';
 
@@ -30,6 +30,7 @@ export function useListingsState() {
   const [items, setItems] = useState<Listing[]>([]);
   const [cities, setCities] = useState<City[]>([]);
   const [purposes, setPurposes] = useState<Purpose[]>([]);
+  const [landVri, setLandVri] = useState<LandVri[]>([]);
   const [editing, setEditing] = useState<Partial<Listing> | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
   const [historyListing, setHistoryListing] = useState<Listing | null>(null);
@@ -49,11 +50,12 @@ export function useListingsState() {
 
   const load = () => {
     setLoading(true);
-    Promise.all([adminApi.listListings(), adminApi.listCities(), adminApi.listPurposes()])
-      .then(([l, c, p]) => {
+    Promise.all([adminApi.listListings(), adminApi.listCities(), adminApi.listPurposes(), adminApi.listLandVri()])
+      .then(([l, c, p, v]) => {
         setItems(l.listings || []);
         setCities((c.cities || []).filter((x: City) => x.is_active));
         setPurposes(p.purposes || []);
+        setLandVri((v.land_vri || []).filter((x: LandVri) => x.is_active !== false));
       })
       .catch(() => {/* не сбрасываем страницу при ошибке */})
       .finally(() => setLoading(false));
@@ -277,7 +279,7 @@ export function useListingsState() {
 
   return {
     // data
-    items, filtered, cities, purposes, loading,
+    items, filtered, cities, purposes, landVri, loading,
     // edit state
     editing, setEditing, photos, setPhotos,
     // modals

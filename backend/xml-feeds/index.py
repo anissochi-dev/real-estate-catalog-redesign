@@ -358,6 +358,8 @@ def _build_yandex(listings, company):
                 out.append(f'<lot-area><value>{l["land_area"]}</value><unit>сот.</unit></lot-area>')
             if l.get('land_status') and l['land_status'] in LAND_STATUS_YANDEX:
                 out.append(f'<lot-type>{LAND_STATUS_YANDEX[l["land_status"]]}</lot-type>')
+            if l.get('land_vri'):
+                out.append(f'<permitted-land-use>{_xml_escape(str(l["land_vri"]))}</permitted-land-use>')
 
         # Этажность
         if l.get('floor') is not None:
@@ -461,6 +463,8 @@ def _build_avito(listings, company):
                 out.append(f'<LandSquare>{l["land_area"]}</LandSquare>')
             if l.get('land_status') and l['land_status'] in LAND_STATUS_AVITO:
                 out.append(f'<LandStatus>{_xml_escape(LAND_STATUS_AVITO[l["land_status"]])}</LandStatus>')
+            if l.get('land_vri'):
+                out.append(f'<PermittedLandUse>{_xml_escape(str(l["land_vri"]))}</PermittedLandUse>')
 
         # Этажи
         if l.get('floor') is not None:
@@ -576,7 +580,10 @@ def _build_cian(listings, company):
         if category == 'land' and l.get('land_area'):
             out.append(f'<LandArea>{l["land_area"]}</LandArea>')
             if l.get('land_status'):
-                out.append(f'<LandStatus>{_xml_escape(l["land_status"])}</LandStatus>')
+                _ls = LAND_STATUS_AVITO.get(l['land_status'], l['land_status'])
+                out.append(f'<LandStatus>{_xml_escape(str(_ls))}</LandStatus>')
+            if l.get('land_vri'):
+                out.append(f'<PermittedLandUse>{_xml_escape(str(l["land_vri"]))}</PermittedLandUse>')
 
         # Этажи
         if l.get('floor') is not None:
@@ -701,10 +708,22 @@ def handler(event, context):
 
                 cur.execute(f"SELECT * FROM {SCHEMA}.listings WHERE {' AND '.join(where)} ORDER BY created_at DESC")
                 listings = [dict(r) for r in cur.fetchall()]
+                # Справочник ВРИ: slug → читаемое имя
+                cur.execute(f"SELECT slug, name FROM {SCHEMA}.land_vri")
+                _vri_map = {r['slug']: r['name'] for r in cur.fetchall()}
                 for l in listings:
                     for k in ('created_at', 'updated_at'):
                         if l.get(k):
                             l[k] = l[k].isoformat()
+                    # Для земли: если сотки не заданы — считаем из площади (area в м²)
+                    if l.get('category') == 'land' and not l.get('land_area') and l.get('area'):
+                        try:
+                            l['land_area'] = round(float(l['area']) / 100, 2)
+                        except (TypeError, ValueError):
+                            pass
+                    # ВРИ читаемым названием
+                    if l.get('land_vri') and l['land_vri'] in _vri_map:
+                        l['land_vri'] = _vri_map[l['land_vri']]
 
                 cur.execute(f"SELECT * FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
                 company = dict(cur.fetchone() or {})

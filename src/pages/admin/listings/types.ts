@@ -70,6 +70,7 @@ export interface Listing {
   subway_distance?: number | null;
   land_area?: number | null;
   land_status?: string | null;
+  land_vri?: string | null;
   has_furniture?: boolean;
   has_equipment?: boolean;
   property_rights?: string | null;
@@ -84,6 +85,7 @@ export interface Listing {
 
 export interface City { id: number; name: string; is_active: boolean }
 export interface Purpose { id: number; name: string; slug: string }
+export interface LandVri { id: number; name: string; slug: string; is_active?: boolean }
 
 export const CATS = [
   ['office', 'Офис'],

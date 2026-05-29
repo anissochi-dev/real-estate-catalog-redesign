@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { adminApi, aiApi, CRM_PAYMENTS_URL, getToken } from '@/lib/adminApi';
 import { useSettings } from '@/contexts/SettingsContext';
 import PurposesAdmin from './PurposesAdmin';
+import LandVriAdmin from './LandVriAdmin';
 import XmlFeedsAdmin from './XmlFeedsAdmin';
 import SeoAdmin from './SeoAdmin';
 import RolesAdmin from './RolesAdmin';
@@ -31,7 +32,7 @@ export default function SettingsAdmin() {
   const [cityAdding, setCityAdding] = useState(false);
   type TabId = 'general' | 'watermark' | 'brand-kit' | 'seo' | 'seo-ai' | 'footer' | 'legal'
     | 'integrations' | 'ad-platforms' | 'autoposting' | 'feeds' | 'notifications'
-    | 'cities' | 'purposes' | 'pages' | 'roles' | 'migration' | 'photo-optimize' | 'site-health';
+    | 'cities' | 'purposes' | 'land-vri' | 'pages' | 'roles' | 'migration' | 'photo-optimize' | 'site-health';
   const [tab, setTab] = useState<TabId>('general');
   const [showKey, setShowKey] = useState(false);
   const [showMapsKey, setShowMapsKey] = useState(false);
@@ -197,6 +198,7 @@ export default function SettingsAdmin() {
         ['footer', 'Подвал', 'PanelBottom'],
         ['legal', 'Правовые', 'Scale'],
         ['purposes', 'Назначения', 'Tag'],
+        ['land-vri', 'ВРИ земли', 'Sprout'],
       ],
     },
     {
@@ -285,6 +287,7 @@ export default function SettingsAdmin() {
 
       {tab === 'ad-platforms' && <AdPlatformsTab />}
       {tab === 'purposes' && <PurposesAdmin />}
+      {tab === 'land-vri' && <LandVriAdmin />}
       {tab === 'feeds' && <XmlFeedsAdmin />}
       {tab === 'legal' && <LegalTab s={s} setS={setS} saved={saved} save={save} />}
       {tab === 'footer' && <FooterTab s={s} setS={setS} saved={saved} save={save} />}

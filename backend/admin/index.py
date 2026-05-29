@@ -180,7 +180,7 @@ def _can(role, resource, op, permissions=None):
         return False
     # Fallback — встроенные права
     if role == 'manager':
-        if resource in ('cities', 'purposes', 'xml_feeds'):
+        if resource in ('cities', 'purposes', 'xml_feeds', 'land_vri'):
             return op == 'read'
         return resource in ('listings', 'leads') and op in ('read', 'create', 'update', 'delete')
     if role == 'editor':
@@ -188,7 +188,7 @@ def _can(role, resource, op, permissions=None):
             return op in ('read', 'create', 'update')
         if resource in ('pages', 'settings'):
             return op in ('read', 'update')
-        if resource in ('cities', 'purposes', 'xml_feeds'):
+        if resource in ('cities', 'purposes', 'xml_feeds', 'land_vri'):
             return op in ('read', 'create', 'update')
         if resource == 'leads':
             return op == 'read'
@@ -252,6 +252,8 @@ def handler(event, context):
                 return _cities(cur, conn, method, rid, event, user)
             if resource == 'purposes':
                 return _purposes(cur, conn, method, rid, event, user)
+            if resource == 'land_vri':
+                return _land_vri(cur, conn, method, rid, event, user)
             if resource == 'xml_feeds':
                 return _xml_feeds(cur, conn, method, rid, event, user)
             if resource == 'stats':
@@ -1879,7 +1881,7 @@ def _listings(cur, conn, method, rid, event, user):
 
         sql = (
             f"INSERT INTO {SCHEMA}.listings "
-            f"(title, description, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, is_visible, rooms, broker_commission, owner_phone_contact_id, owner_phone2_contact_id) VALUES ("
+            f"(title, description, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, owner_phone_contact_id, owner_phone2_contact_id) VALUES ("
             f"{_str_or_null(body.get('title'), 255)}, {_str_or_null(body.get('description'), 5000)}, "
             f"{_str_or_null(body.get('category'), 50)}, {_str_or_null(body.get('deal'), 20)}, "
             f"{_int_or_null(body.get('price'))}, {_int_or_null(body.get('price_per_m2'))}, "
@@ -1908,6 +1910,11 @@ def _listings(cur, conn, method, rid, event, user):
             f"{_str_or_null(body.get('utilities'), 500)}, {_str_or_null(body.get('road_line'), 50)}, "
             f"{user['id']}, {_bool(body.get('is_visible', True))}, {_int_or_null(body.get('rooms'))}, "
             f"{_str_or_null(body.get('broker_commission'), 100)}, "
+            f"{_str_or_null(body.get('building_class'), 10)}, {_int_or_null(body.get('building_year'))}, "
+            f"{_str_or_null(body.get('property_rights'), 30)}, {_num_or_null(body.get('min_area'))}, "
+            f"{_num_or_null(body.get('land_area'))}, {_str_or_null(body.get('land_status'), 30)}, "
+            f"{_str_or_null(body.get('land_vri'), 150)}, {_bool(body.get('is_apartments'))}, "
+            f"{_bool(body.get('has_furniture'))}, {_bool(body.get('has_equipment'))}, "
             f"{owner_pc_id if owner_pc_id else 'NULL'}, "
             f"{owner_pc2_id if owner_pc2_id else 'NULL'}) RETURNING id"
         )
@@ -1978,7 +1985,7 @@ def _listings(cur, conn, method, rid, event, user):
                           ('finishing', 100), ('utilities', 500), ('road_line', 50),
                           # Дополнительные поля из вкладки «Дополнительное»
                           ('building_class', 10), ('property_rights', 30),
-                          ('land_status', 30), ('subway_station', 100)]:
+                          ('land_status', 30), ('land_vri', 150), ('subway_station', 100)]:
             if f in body:
                 fields.append(f"{f} = {_str_or_null(body.get(f), length)}")
         for f in ('price', 'price_per_m2', 'area', 'payback', 'profit', 'floor', 'total_floors',
@@ -2829,6 +2836,51 @@ def _purposes(cur, conn, method, rid, event, user):
 
     if method == 'DELETE' and rid:
         cur.execute(f"DELETE FROM {SCHEMA}.purposes WHERE id = {int(rid)}")
+        conn.commit()
+        return _ok({'success': True})
+
+    return _err(400, 'Bad request')
+
+
+def _land_vri(cur, conn, method, rid, event, user):
+    """Справочник видов разрешённого использования (ВРИ) земельных участков."""
+    if method == 'GET':
+        cur.execute(f"SELECT * FROM {SCHEMA}.land_vri ORDER BY sort_order ASC, name ASC")
+        return _ok({'land_vri': [dict(r) for r in cur.fetchall()]})
+
+    body = json.loads(event.get('body') or '{}')
+
+    if method == 'POST':
+        name = _safe(body.get('name') or '', 150)
+        slug = _safe(body.get('slug') or '', 60)
+        if not name or not slug:
+            return _err(400, 'Название и slug обязательны')
+        cur.execute(f"SELECT id FROM {SCHEMA}.land_vri WHERE slug = '{slug}' OR name = '{name}'")
+        if cur.fetchone():
+            return _err(409, 'ВРИ уже существует')
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.land_vri (name, slug) VALUES ('{name}', '{slug}') RETURNING id"
+        )
+        conn.commit()
+        return _ok({'id': cur.fetchone()['id'], 'success': True})
+
+    if method == 'PUT' and rid:
+        fields = []
+        for f, length in [('name', 150), ('slug', 60)]:
+            if f in body:
+                fields.append(f"{f} = {_str_or_null(body[f], length)}")
+        if 'is_active' in body:
+            fields.append(f"is_active = {_bool(body['is_active'])}")
+        if 'sort_order' in body:
+            fields.append(f"sort_order = {_int_or_null(body['sort_order'])}")
+        if not fields:
+            return _err(400, 'Нет полей')
+        cur.execute(f"UPDATE {SCHEMA}.land_vri SET {', '.join(fields)} WHERE id = {int(rid)}")
+        conn.commit()
+        return _ok({'success': True})
+
+    if method == 'DELETE' and rid:
+        cur.execute(f"DELETE FROM {SCHEMA}.land_vri WHERE id = {int(rid)}")
         conn.commit()
         return _ok({'success': True})
 

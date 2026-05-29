@@ -49,6 +49,11 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
           <label className="text-xs text-muted-foreground">Площадь, м² *</label>
           <input type="number" className={`w-full px-3 py-2 border rounded-lg ${err('area')}`}
             value={editing.area || ''} onChange={e => { setEditing({ ...editing, area: +e.target.value }); setErrors?.(v => ({ ...v, area: false })); }} />
+          {editing.category === 'land' && editing.area ? (
+            <div className="text-[11px] text-muted-foreground mt-1">
+              ≈ {(+editing.area / 100).toLocaleString('ru', { maximumFractionDigits: 2 })} соток
+            </div>
+          ) : null}
         </div>
         <div>
           <label className="text-xs text-muted-foreground">Единица цены</label>

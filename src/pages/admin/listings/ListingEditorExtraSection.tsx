@@ -1,6 +1,6 @@
 import Icon from '@/components/ui/icon';
 import CharCount from '@/components/ui/CharCount';
-import { Listing, BUILDING_CLASSES, PROPERTY_RIGHTS, LAND_STATUSES, FINISHING } from './types';
+import { Listing, BUILDING_CLASSES, PROPERTY_RIGHTS, FINISHING } from './types';
 import SeoHeadingsBlock, { SeoHeadings } from '@/components/admin/SeoHeadingsBlock';
 
 const DEAL_LABEL: Record<string, string> = {
@@ -99,26 +99,6 @@ export default function ListingEditorExtraSection({
               value={editing.min_area ?? ''}
               onChange={e => setEditing({ ...editing, min_area: e.target.value === '' ? null : +e.target.value })} />
           </div>
-          {(editing.category === 'land') && (
-            <>
-              <div>
-                <label className="text-xs text-muted-foreground">Площадь участка, сотки</label>
-                <input type="number" min={0} step={0.1} className="w-full px-3 py-2 border rounded-lg"
-                  placeholder="напр. 15"
-                  value={editing.land_area ?? ''}
-                  onChange={e => setEditing({ ...editing, land_area: e.target.value === '' ? null : +e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Назначение земли</label>
-                <select className="w-full px-3 py-2 border rounded-lg"
-                  value={editing.land_status || ''}
-                  onChange={e => setEditing({ ...editing, land_status: e.target.value || null })}>
-                  <option value="">— Не указано —</option>
-                  {LAND_STATUSES.map(s => <option key={s[0]} value={s[0]}>{s[1]}</option>)}
-                </select>
-              </div>
-            </>
-          )}
         </div>
         <div className="flex flex-wrap gap-4 mt-1">
           <label className="flex items-center gap-2 cursor-pointer">

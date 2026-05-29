@@ -1,4 +1,4 @@
-import { Listing } from './types';
+import { Listing, LandVri, LAND_STATUSES } from './types';
 
 const UTILITIES_MAP: { key: string; label: string; options: string[] }[] = [
   { key: 'Вода', label: '💧 Вода', options: ['Центральная', 'Скважина', 'Колодец', 'Привозная'] },
@@ -16,14 +16,38 @@ const UTILITIES_MAP: { key: string; label: string; options: string[] }[] = [
 interface Props {
   editing: Partial<Listing>;
   setEditing: (l: Partial<Listing>) => void;
+  landVri?: LandVri[];
 }
 
-export default function ListingRoomFeatures({ editing, setEditing }: Props) {
+export default function ListingRoomFeatures({ editing, setEditing, landVri = [] }: Props) {
+  const isLand = editing.category === 'land';
   return (
     <>
       <div className="space-y-3 border-t border-border pt-4">
         <div className="text-sm font-semibold">Характеристики помещения</div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {isLand && (
+            <>
+              <div>
+                <label className="text-xs text-muted-foreground">Категория земли</label>
+                <select className="w-full px-3 py-2 border rounded-lg"
+                  value={editing.land_status || ''}
+                  onChange={e => setEditing({ ...editing, land_status: e.target.value || null })}>
+                  <option value="">— Не указано —</option>
+                  {LAND_STATUSES.map(s => <option key={s[0]} value={s[0]}>{s[1]}</option>)}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-xs text-muted-foreground">Вид разрешённого использования (ВРИ)</label>
+                <select className="w-full px-3 py-2 border rounded-lg"
+                  value={editing.land_vri || ''}
+                  onChange={e => setEditing({ ...editing, land_vri: e.target.value || null })}>
+                  <option value="">— Не указано —</option>
+                  {landVri.map(v => <option key={v.id} value={v.slug}>{v.name}</option>)}
+                </select>
+              </div>
+            </>
+          )}
           <div>
             <label className="text-xs text-muted-foreground">Высота потолка, м</label>
             <input type="number" step="0.1" min="0" className="w-full px-3 py-2 border rounded-lg"

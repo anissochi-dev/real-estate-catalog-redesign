@@ -134,6 +134,8 @@ export interface ListingDetail extends Property {
   entrance?: string;
   propertyRights?: string;
   landStatus?: string;
+  landArea?: number | null;
+  landVri?: string;
   videoUrl?: string;
   videoType?: string;
   ownerName?: string;
@@ -175,6 +177,8 @@ export async function fetchListingById(id: number): Promise<ListingDetail | null
       entrance: it.entrance,
       propertyRights: it.property_rights,
       landStatus: it.land_status,
+      landArea: it.land_area ?? null,
+      landVri: it.land_vri,
       videoUrl: it.video_url,
       videoType: it.video_type,
       ownerName: it.owner_name,

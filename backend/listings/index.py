@@ -163,6 +163,13 @@ def handler(event: dict, context) -> dict:
                 )
                 return _ok({'purposes': [dict(r) for r in cur.fetchall()]}, cache='public, max-age=3600, stale-while-revalidate=300')
 
+            if params.get('resource') == 'public_land_vri':
+                cur.execute(
+                    "SELECT id, name, slug FROM t_p71821556_real_estate_catalog_.land_vri "
+                    "WHERE is_active = TRUE ORDER BY sort_order ASC, name ASC"
+                )
+                return _ok({'land_vri': [dict(r) for r in cur.fetchall()]}, cache='public, max-age=3600, stale-while-revalidate=300')
+
             if params.get('resource') == 'public_leads':
                 cur.execute(
                     "SELECT id, name, message, budget, company, created_at "
@@ -457,9 +464,11 @@ def handler(event: dict, context) -> dict:
                 cur.execute(
                     "SELECT l.*, "
                     "  COALESCE(NULLIF(pc.name, ''), l.owner_name) AS owner_name_final, "
-                    "  COALESCE(pc.phone, l.owner_phone) AS owner_phone_final "
+                    "  COALESCE(pc.phone, l.owner_phone) AS owner_phone_final, "
+                    "  lv.name AS land_vri_name "
                     "FROM t_p71821556_real_estate_catalog_.listings l "
                     "LEFT JOIN t_p71821556_real_estate_catalog_.phone_contacts pc ON pc.id = l.owner_phone_contact_id "
+                    "LEFT JOIN t_p71821556_real_estate_catalog_.land_vri lv ON lv.slug = l.land_vri "
                     "WHERE l.id = "
                     + str(int(listing_id))
                     + " AND (l.is_visible IS NULL OR l.is_visible = TRUE)"
@@ -476,8 +485,12 @@ def handler(event: dict, context) -> dict:
                     d['owner_name'] = d['owner_name_final']
                 if d.get('owner_phone_final'):
                     d['owner_phone'] = d['owner_phone_final']
+                # ВРИ: показываем читаемое имя из справочника (если ВРИ удалён — оставляем slug)
+                if d.get('land_vri_name'):
+                    d['land_vri'] = d['land_vri_name']
                 d.pop('owner_name_final', None)
                 d.pop('owner_phone_final', None)
+                d.pop('land_vri_name', None)
                 return _ok({'listing': _serialize(d)}, cache='public, max-age=120, stale-while-revalidate=30')
 
             where = ["status = 'active'", "(is_visible IS NULL OR is_visible = TRUE)"]

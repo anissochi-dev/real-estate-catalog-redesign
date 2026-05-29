@@ -105,12 +105,15 @@ export function TabOverview({ listing, siteUrl }: { listing: Listing; siteUrl?: 
   ].filter(Boolean) as OverviewRow[];
 
   // Здание / земля
+  const isLand = listing.category === 'land';
+  const sotki = isLand && listing.area ? +(listing.area / 100).toFixed(2) : null;
   const building: OverviewRow[] = [
     listing.building_class ? { label: 'Класс здания', value: listing.building_class } : null,
     listing.building_year ? { label: 'Год постройки', value: String(listing.building_year) } : null,
     listing.is_apartments ? { label: 'Тип', value: 'Апартаменты' } : null,
-    listing.land_area ? { label: 'Площадь участка', value: `${listing.land_area} соток` } : null,
-    listing.land_status ? { label: 'Статус земли', value: translate(listing.land_status, LAND_STATUSES) } : null,
+    sotki ? { label: 'Площадь участка', value: `${sotki.toLocaleString('ru')} соток` } : null,
+    listing.land_status ? { label: 'Категория земли', value: translate(listing.land_status, LAND_STATUSES) } : null,
+    listing.land_vri ? { label: 'Вид разрешённого использования', value: listing.land_vri } : null,
     listing.min_area ? { label: 'Мин. площадь', value: `${listing.min_area} м²` } : null,
   ].filter(Boolean) as OverviewRow[];
 

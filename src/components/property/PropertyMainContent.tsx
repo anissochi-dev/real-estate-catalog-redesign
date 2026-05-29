@@ -42,7 +42,9 @@ function ParamCard({ icon, label, value }: { icon: string; label: string; value:
 export default function PropertyMainContent({
   item, dealLabel, typeLabel, sent, sending, form, setForm, onSubmit,
 }: Props) {
-  const itemExt = item as ListingDetail & { condition?: string; parking?: string; entrance?: string; propertyRights?: string; landStatus?: string };
+  const itemExt = item as ListingDetail & { condition?: string; parking?: string; entrance?: string; propertyRights?: string; landStatus?: string; landVri?: string };
+  const isLand = item.type === 'land';
+  const sotki = isLand && item.area ? +(item.area / 100).toFixed(2) : null;
   const addressStr = [item.city || 'Краснодар', item.district, item.address].filter(Boolean).join(', ');
 
   const h1 = item.seoH1 || item.title;
@@ -94,6 +96,7 @@ export default function PropertyMainContent({
         <h2 className="font-display font-700 text-base mb-3">{h3params || 'Параметры объекта'}</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           <ParamCard icon="Maximize" label="Площадь" value={`${item.area} м²`} />
+          {sotki ? <ParamCard icon="Maximize2" label="Площадь участка" value={`${sotki.toLocaleString('ru')} соток`} /> : null}
           <ParamCard icon="Briefcase" label="Тип сделки" value={dealLabel} />
           <ParamCard icon="Building2" label="Тип объекта" value={typeLabel} />
           {item.floor ? <ParamCard icon="Layers" label="Этаж" value={`${item.floor}${item.totalFloors ? ` из ${item.totalFloors}` : ''}`} /> : null}
@@ -116,7 +119,8 @@ export default function PropertyMainContent({
             <ParamCard icon="DoorOpen" label="Вход" value={ENTRANCE_LABELS[itemExt.entrance] || itemExt.entrance} />
           ) : null}
           {item.roadLine ? <ParamCard icon="Milestone" label="Линия расположения" value={ROAD_LINE_LABELS[item.roadLine] || item.roadLine} /> : null}
-          {itemExt.landStatus ? <ParamCard icon="Map" label="Статус земли" value={LAND_STATUS_LABELS[itemExt.landStatus] || itemExt.landStatus} /> : null}
+          {itemExt.landStatus ? <ParamCard icon="Map" label="Категория земли" value={LAND_STATUS_LABELS[itemExt.landStatus] || itemExt.landStatus} /> : null}
+          {itemExt.landVri ? <ParamCard icon="Sprout" label="Вид разрешённого использования" value={itemExt.landVri} /> : null}
           {itemExt.propertyRights ? <ParamCard icon="ScrollText" label="Права собственности" value={PROPERTY_RIGHTS_LABELS[itemExt.propertyRights] || itemExt.propertyRights} /> : null}
           {item.payback ? <ParamCard icon="TrendingUp" label="Окупаемость" value={`${item.payback} мес${item.payback >= 12 ? ` (~${(item.payback / 12).toFixed(1)} лет)` : ''}`} /> : null}
           {item.monthlyRent ? <ParamCard icon="Wallet" label="Арендный поток/мес" value={`${item.monthlyRent.toLocaleString('ru')} ₽`} /> : null}
