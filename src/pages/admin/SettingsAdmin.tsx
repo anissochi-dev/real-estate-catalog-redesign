@@ -72,27 +72,53 @@ export default function SettingsAdmin() {
       return;
     }
     setMapsState({ loading: true, status: 'idle', message: '' });
-    try {
-      // Проверяем ключ через геокодер Яндекс.Карт (JSON-ответ, простой формат)
-      const url = `https://geocode-maps.yandex.ru/1.x/?apikey=${encodeURIComponent(key)}&format=json&geocode=Краснодар&results=1`;
-      const res = await fetch(url);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.statusCode === 403 || data?.error) {
-        const msg = data?.message || data?.error || `HTTP ${res.status}`;
-        setMapsState({ loading: false, status: 'err', message: `Ключ невалиден: ${msg}` });
-        return;
+
+    // Проверяем доступ к Геокодеру (поиск адреса, район) и Геосаджесту (подсказки).
+    // Оба сервиса нужны для работы поля адреса при добавлении объекта.
+    const checkGeocoder = async (): Promise<boolean> => {
+      try {
+        const url = `https://geocode-maps.yandex.ru/1.x/?apikey=${encodeURIComponent(key)}&format=json&geocode=Краснодар&results=1`;
+        const res = await fetch(url);
+        if (!res.ok) return false;
+        const data = await res.json().catch(() => ({}));
+        if (data?.statusCode === 403 || data?.error) return false;
+        return !!data?.response?.GeoObjectCollection;
+      } catch {
+        return false;
       }
-      const found = data?.response?.GeoObjectCollection?.metaDataProperty?.GeocoderResponseMetaData?.found;
+    };
+
+    const checkSuggest = async (): Promise<boolean> => {
+      try {
+        const url = `https://suggest-maps.yandex.ru/v1/suggest?apikey=${encodeURIComponent(key)}&text=Краснодар, Красная&results=3&lang=ru`;
+        const res = await fetch(url);
+        if (!res.ok) return false;
+        const data = await res.json().catch(() => null);
+        return Array.isArray(data?.results);
+      } catch {
+        return false;
+      }
+    };
+
+    const [geocoderOk, suggestOk] = await Promise.all([checkGeocoder(), checkSuggest()]);
+
+    const line = (ok: boolean, label: string) => `${ok ? '✓' : '✗'} ${label}${ok ? ' — подключён' : ' — НЕ подключён'}`;
+    const details = [
+      line(geocoderOk, 'Геокодер (поиск адреса и район)'),
+      line(suggestOk, 'Геосаджест (подсказки адреса)'),
+    ].join('\n');
+
+    if (geocoderOk && suggestOk) {
+      setMapsState({ loading: false, status: 'ok', message: `Ключ полностью настроен:\n${details}` });
+    } else if (geocoderOk || suggestOk) {
       setMapsState({
-        loading: false,
-        status: 'ok',
-        message: `Ключ рабочий. Геокодер нашёл объектов: ${found || '0'}.`,
+        loading: false, status: 'err',
+        message: `Ключ работает частично:\n${details}\n\nПодключите недостающие сервисы в кабинете: developer.tech.yandex.ru`,
       });
-    } catch (e) {
+    } else {
       setMapsState({
-        loading: false,
-        status: 'err',
-        message: e instanceof Error ? e.message : 'Ошибка проверки',
+        loading: false, status: 'err',
+        message: `Ключ не имеет доступа к нужным сервисам:\n${details}\n\nПодключите «API Геокодера» и «API Геосаджеста» к ключу в кабинете: developer.tech.yandex.ru`,
       });
     }
   };

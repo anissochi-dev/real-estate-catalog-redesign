@@ -53,7 +53,7 @@ export default function IntegrationsMapsPaySection({
             </button>
           </div>
           <div className="text-xs text-muted-foreground mt-1">
-            developer.tech.yandex.ru → подключить сервис <b>JavaScript API и Геокодер</b>
+            developer.tech.yandex.ru → подключить к ключу: <b>JavaScript API и Геокодер</b> + <b>API Геосаджеста</b> (для подсказок адреса)
           </div>
         </div>
 

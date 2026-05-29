@@ -15,7 +15,7 @@ export function StatusBanner({ state }: StatusBannerProps) {
         size={16}
         className="flex-shrink-0 mt-0.5"
       />
-      <div>{state.message}</div>
+      <div className="whitespace-pre-line">{state.message}</div>
     </div>
   );
 }
