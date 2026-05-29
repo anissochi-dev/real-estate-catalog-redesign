@@ -274,6 +274,37 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
         """)
         timeline = [{'day': str(r[0]), 'count': int(r[1])} for r in cur.fetchall()]
 
+        # Детализация: список сделок за период с суммой, комиссией, этапом и ответственным
+        cur.execute(f"""
+            SELECT d.id, d.title, d.amount, d.commission, d.source, d.created_at,
+                   s.name AS stage_name, s.color AS stage_color, s.is_win,
+                   u.name AS manager_name,
+                   l.title AS listing_title
+            FROM crm_deals d
+            LEFT JOIN crm_stages s ON s.id = d.stage_id
+            LEFT JOIN users u ON u.id = d.assigned_to
+            LEFT JOIN listings l ON l.id = d.listing_id
+            WHERE d.{period_filter}
+            ORDER BY d.created_at DESC
+            LIMIT 100
+        """)
+        deals_list = [
+            {
+                'id': r[0],
+                'title': r[1] or 'Без названия',
+                'amount': float(r[2] or 0),
+                'commission': float(r[3] or 0),
+                'source': r[4],
+                'created_at': str(r[5]) if r[5] else None,
+                'stage_name': r[6],
+                'stage_color': r[7],
+                'is_win': bool(r[8]),
+                'manager_name': r[9],
+                'listing_title': r[10],
+            }
+            for r in cur.fetchall()
+        ]
+
         return ok({
             'period': period,
             'total_deals': total_deals,
@@ -288,6 +319,7 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
             'leaderboard': leaderboard,
             'funnel': funnel,
             'timeline': timeline,
+            'deals_list': deals_list,
         })
 
     # ── STAGES ─────────────────────────────────────────────────────────────────

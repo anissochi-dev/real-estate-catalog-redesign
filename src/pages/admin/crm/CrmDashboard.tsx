@@ -208,6 +208,59 @@ export default function CrmDashboard() {
         </div>
       </div>
 
+      {/* Детализация: список сделок за период с суммой и описанием */}
+      <div className="bg-white rounded-2xl border border-border p-5">
+        <h3 className="font-semibold mb-4 flex items-center gap-2">
+          <Icon name="ListChecks" size={16} className="text-brand-blue" />
+          Сделки {periodLabel[period]}
+          {data?.deals_list?.length > 0 && (
+            <span className="ml-auto inline-flex items-center gap-1 text-brand-blue bg-brand-blue/10 rounded-lg px-2.5 py-0.5 text-sm font-bold">
+              {fmtMoney(data.deals_list.reduce((s: number, d: { amount: number }) => s + d.amount, 0))}
+            </span>
+          )}
+        </h3>
+        {isLoading ? (
+          <div className="space-y-2">{[...Array(4)].map((_, i) => <div key={i} className="h-14 bg-muted rounded-xl animate-pulse" />)}</div>
+        ) : !data?.deals_list || data.deals_list.length === 0 ? (
+          <div className="text-center text-muted-foreground py-8">Нет сделок за период</div>
+        ) : (
+          <div className="space-y-2">
+            {data.deals_list.map((d: {
+              id: number; title: string; amount: number; commission: number;
+              source?: string; created_at?: string; stage_name?: string;
+              stage_color?: string; is_win?: boolean; manager_name?: string; listing_title?: string;
+            }) => (
+              <div key={d.id} className="flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-muted/30 transition">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-sm truncate">{d.title}</span>
+                    {d.stage_name && (
+                      <span
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-white shrink-0"
+                        style={{ backgroundColor: d.stage_color || '#64748b' }}
+                      >
+                        {d.stage_name}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
+                    {d.manager_name && <span className="inline-flex items-center gap-1"><Icon name="User" size={11} />{d.manager_name}</span>}
+                    {d.listing_title && <span className="inline-flex items-center gap-1 truncate"><Icon name="Building2" size={11} />{d.listing_title}</span>}
+                    {d.created_at && <span className="inline-flex items-center gap-1"><Icon name="Calendar" size={11} />{new Date(d.created_at).toLocaleDateString('ru', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>}
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="font-bold text-sm font-display">{fmtMoney(d.amount)}</div>
+                  {d.commission > 0 && (
+                    <div className="text-[11px] text-brand-orange">комиссия {fmtMoney(d.commission)}</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
     </div>
   );
 }
