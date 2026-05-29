@@ -1,7 +1,10 @@
-import { useEffect, useState, useMemo, Suspense } from 'react';
+import { useEffect, useState, useMemo, Suspense, lazy } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import AdminPage from './pages/AdminPage';
 import { LoginPage } from './app/lazyPages';
+
+// Админка грузится лениво — её тяжёлый код (CRM, редакторы) больше НЕ попадает
+// в основной бандл и не замедляет загрузку публичного сайта для посетителей.
+const AdminPage = lazy(() => import('./pages/AdminPage'));
 import ChunkErrorBoundary from './app/ChunkErrorBoundary';
 import AppRoutes from './app/AppRoutes';
 import {

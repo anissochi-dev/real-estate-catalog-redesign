@@ -1,3 +1,12 @@
+# Заголовки безопасности для всех страниц — повышают репутацию сайта
+# у антивирусов и браузеров, защищают от кликджекинга и подмены типов.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(self), microphone=(), camera=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+
 # Статические ресурсы со встроенным хэшем в имени файла —
 # кэшируются на год, браузер не перепроверяет до истечения срока.
 # При новом деплое имя файла меняется → кэш автоматически сбрасывается.
