@@ -87,12 +87,23 @@ function mapListing(item: ApiListing): Property {
   };
 }
 
+/** fetch с таймаутом — зависший запрос не держит спиннер бесконечно. */
+async function fetchWithTimeout(url: string, init?: RequestInit, timeoutMs = 12000): Promise<Response> {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: ac.signal });
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 /** fetch с retry на сетевые сбои (без XHR-fallback — он ломал ИИ-запросы из-за CORS). */
 async function fetchWithRetry(url: string, init?: RequestInit, retries = 3): Promise<Response> {
   let lastErr: unknown = null;
   for (let i = 0; i < retries; i++) {
     try {
-      return await fetch(url, init);
+      return await fetchWithTimeout(url, init);
     } catch (e) {
       lastErr = e;
       if (typeof navigator !== 'undefined' && navigator.onLine === false) break;
@@ -115,7 +126,7 @@ export async function fetchListings(limit?: number, offset?: number): Promise<{ 
 
 export async function fetchSimilarListings(id: number): Promise<Property[]> {
   try {
-    const res = await fetch(`${LISTINGS_URL}?resource=similar&id=${id}`);
+    const res = await fetchWithTimeout(`${LISTINGS_URL}?resource=similar&id=${id}`);
     if (!res.ok) return [];
     const data = await res.json();
     return (data.listings || []).map(mapListing);
@@ -152,7 +163,7 @@ export interface ListingDetail extends Property {
 
 export async function fetchListingById(id: number): Promise<ListingDetail | null> {
   try {
-    const res = await fetch(`${LISTINGS_URL}?id=${id}`);
+    const res = await fetchWithTimeout(`${LISTINGS_URL}?id=${id}`);
     if (!res.ok) return null;
     const data = await res.json();
     const it = data.listing;
