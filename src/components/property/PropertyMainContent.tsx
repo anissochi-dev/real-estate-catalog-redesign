@@ -11,6 +11,7 @@ const InvestmentModel = lazy(() => import('@/components/property/InvestmentModel
 import {
   CONDITION_LABELS, FINISHING_LABELS, PARKING_LABELS,
   ENTRANCE_LABELS, UTILITY_ICONS, ROAD_LINE_LABELS, PURPOSE_LABELS,
+  LAND_STATUS_LABELS, PROPERTY_RIGHTS_LABELS,
 } from './propertyLabels';
 
 interface Props {
@@ -41,7 +42,7 @@ function ParamCard({ icon, label, value }: { icon: string; label: string; value:
 export default function PropertyMainContent({
   item, dealLabel, typeLabel, sent, sending, form, setForm, onSubmit,
 }: Props) {
-  const itemExt = item as ListingDetail & { condition?: string; parking?: string; entrance?: string };
+  const itemExt = item as ListingDetail & { condition?: string; parking?: string; entrance?: string; propertyRights?: string; landStatus?: string };
   const addressStr = [item.city || 'Краснодар', item.district, item.address].filter(Boolean).join(', ');
 
   const h1 = item.seoH1 || item.title;
@@ -115,6 +116,8 @@ export default function PropertyMainContent({
             <ParamCard icon="DoorOpen" label="Вход" value={ENTRANCE_LABELS[itemExt.entrance] || itemExt.entrance} />
           ) : null}
           {item.roadLine ? <ParamCard icon="Milestone" label="Линия расположения" value={ROAD_LINE_LABELS[item.roadLine] || item.roadLine} /> : null}
+          {itemExt.landStatus ? <ParamCard icon="Map" label="Статус земли" value={LAND_STATUS_LABELS[itemExt.landStatus] || itemExt.landStatus} /> : null}
+          {itemExt.propertyRights ? <ParamCard icon="ScrollText" label="Права собственности" value={PROPERTY_RIGHTS_LABELS[itemExt.propertyRights] || itemExt.propertyRights} /> : null}
           {item.payback ? <ParamCard icon="TrendingUp" label="Окупаемость" value={`${item.payback} мес${item.payback >= 12 ? ` (~${(item.payback / 12).toFixed(1)} лет)` : ''}`} /> : null}
           {item.monthlyRent ? <ParamCard icon="Wallet" label="Арендный поток/мес" value={`${item.monthlyRent.toLocaleString('ru')} ₽`} /> : null}
           {item.yearlyRent ? <ParamCard icon="Coins" label="Арендный поток/год" value={`${item.yearlyRent.toLocaleString('ru')} ₽`} /> : null}

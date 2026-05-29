@@ -55,6 +55,22 @@ export const ROAD_LINE_LABELS: Record<string, string> = {
   'yard': 'Во дворе',
 };
 
+export const LAND_STATUS_LABELS: Record<string, string> = {
+  izhs: 'ИЖС',
+  lph: 'ЛПХ',
+  snt: 'СНТ',
+  dni: 'ДНТ',
+  commercial: 'Коммерческое назначение',
+  agricultural: 'Сельскохозяйственное назначение',
+  industrial: 'Промышленное назначение',
+};
+
+export const PROPERTY_RIGHTS_LABELS: Record<string, string> = {
+  ownership: 'Собственность',
+  lease: 'Аренда',
+  sublease: 'Субаренда',
+};
+
 export const PURPOSE_LABELS: Record<string, string> = {
   carwash: 'Автомойка',
   pharmacy: 'Аптека',
