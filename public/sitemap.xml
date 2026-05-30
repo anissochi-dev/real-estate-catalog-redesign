@@ -1,22 +1,147 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://bmn.su/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>
-  <url><loc>https://bmn.su/catalog</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
-  <url><loc>https://bmn.su/catalog?deal=sale</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
-  <url><loc>https://bmn.su/catalog?deal=rent</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
-  <url><loc>https://bmn.su/catalog?deal=business</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
-  <url><loc>https://bmn.su/catalog/office</loc><changefreq>daily</changefreq><priority>0.85</priority></url>
-  <url><loc>https://bmn.su/catalog/retail</loc><changefreq>daily</changefreq><priority>0.85</priority></url>
-  <url><loc>https://bmn.su/catalog/warehouse</loc><changefreq>daily</changefreq><priority>0.85</priority></url>
-  <url><loc>https://bmn.su/catalog/restaurant</loc><changefreq>daily</changefreq><priority>0.85</priority></url>
-  <url><loc>https://bmn.su/catalog/hotel</loc><changefreq>daily</changefreq><priority>0.85</priority></url>
-  <url><loc>https://bmn.su/catalog/business</loc><changefreq>daily</changefreq><priority>0.85</priority></url>
-  <url><loc>https://bmn.su/catalog/gab</loc><changefreq>daily</changefreq><priority>0.85</priority></url>
-  <url><loc>https://bmn.su/catalog/production</loc><changefreq>daily</changefreq><priority>0.85</priority></url>
-  <url><loc>https://bmn.su/catalog/land</loc><changefreq>daily</changefreq><priority>0.85</priority></url>
-  <url><loc>https://bmn.su/catalog/building</loc><changefreq>daily</changefreq><priority>0.85</priority></url>
-  <url><loc>https://bmn.su/catalog/free_purpose</loc><changefreq>daily</changefreq><priority>0.85</priority></url>
-  <url><loc>https://bmn.su/catalog/car_service</loc><changefreq>daily</changefreq><priority>0.85</priority></url>
-  <url><loc>https://bmn.su/map</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
-  <url><loc>https://bmn.su/network-tenants</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
+<url><loc>https://bmn.su/</loc><lastmod>2026-05-30</lastmod></url>
+<url><loc>https://bmn.su/catalog</loc><lastmod>2026-05-30</lastmod></url>
+<url><loc>https://bmn.su/compare</loc><lastmod>2026-05-30</lastmod></url>
+<url><loc>https://bmn.su/favorites</loc><lastmod>2026-05-30</lastmod></url>
+<url><loc>https://bmn.su/map</loc><lastmod>2026-05-30</lastmod></url>
+<url><loc>https://bmn.su/network-tenants</loc><lastmod>2026-05-30</lastmod></url>
+<url><loc>https://bmn.su/news</loc><lastmod>2026-05-30</lastmod></url>
+<url><loc>https://bmn.su/object/128</loc><lastmod>2026-05-30</lastmod></url>
+<url><loc>https://bmn.su/object/129</loc><lastmod>2026-05-30</lastmod></url>
+<url><loc>https://bmn.su/object/153</loc><lastmod>2026-05-29</lastmod></url>
+<url><loc>https://bmn.su/object/176</loc><lastmod>2026-05-29</lastmod></url>
+<url><loc>https://bmn.su/object/103</loc><lastmod>2026-05-29</lastmod></url>
+<url><loc>https://bmn.su/object/104</loc><lastmod>2026-05-29</lastmod></url>
+<url><loc>https://bmn.su/object/105</loc><lastmod>2026-05-29</lastmod></url>
+<url><loc>https://bmn.su/object/151</loc><lastmod>2026-05-29</lastmod></url>
+<url><loc>https://bmn.su/object/177</loc><lastmod>2026-05-29</lastmod></url>
+<url><loc>https://bmn.su/object/152</loc><lastmod>2026-05-28</lastmod></url>
+<url><loc>https://bmn.su/object/81</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/80</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/79</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/193</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/192</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/191</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/165</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/141</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/140</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/139</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/117</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/116</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/115</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/93</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/92</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/91</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/69</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/68</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/67</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/187</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/186</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/185</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/171</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/170</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/169</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/157</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/147</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/146</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/145</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/135</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/134</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/133</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/123</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/122</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/121</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/111</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/110</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/109</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/99</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/98</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/97</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/87</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/86</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/85</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/75</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/74</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/73</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/63</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/62</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/61</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/196</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/195</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/194</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/190</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/189</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/188</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/184</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/182</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/181</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/180</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/179</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/178</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/174</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/173</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/172</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/168</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/167</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/166</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/161</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/156</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/155</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/154</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/150</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/149</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/148</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/144</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/143</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/142</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/138</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/137</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/136</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/132</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/131</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/130</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/126</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/125</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/124</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/120</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/119</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/118</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/114</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/113</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/112</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/108</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/107</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/106</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/102</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/101</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/100</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/96</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/95</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/94</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/90</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/89</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/88</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/84</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/83</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/82</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/78</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/77</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/76</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/72</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/71</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/70</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/66</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/65</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/64</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/60</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/59</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/58</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/57</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/55</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/53</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/52</loc><lastmod>2026-05-27</lastmod></url>
+<url><loc>https://bmn.su/object/54</loc><lastmod>2026-05-26</lastmod></url>
+<url><loc>https://bmn.su/object/51</loc><lastmod>2026-05-25</lastmod></url>
+<url><loc>https://bmn.su/object/127</loc><lastmod>2026-05-25</lastmod></url>
 </urlset>
