@@ -115,23 +115,26 @@ export default function InvestmentModel({ listingId, price, area, deal }: Props)
             <>
               {/* Источник бенчмарков */}
               {data.data_source === 'real_rent' ? (
-                <div className="flex items-center gap-2 text-[11px] bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-2.5 py-1.5">
-                  <Icon name="CheckCircle2" size={12} className="shrink-0 text-emerald-600" />
-                  <span className="truncate font-semibold">Реальные данные аренды</span>
-                  <span className="truncate text-emerald-700/80">· {data.benchmarks.comment}</span>
+                <div className="flex items-start gap-2 text-[11px] bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-2.5 py-1.5">
+                  <Icon name="CheckCircle2" size={12} className="shrink-0 text-emerald-600 mt-0.5" />
+                  <span className="leading-relaxed">
+                    <span className="font-semibold">Реальные данные аренды</span>
+                    {data.benchmarks.comment ? <span className="text-emerald-700/80"> · {data.benchmarks.comment}</span> : null}
+                  </span>
                 </div>
               ) : (
-                <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground bg-muted/40 rounded-lg px-2.5 py-1.5">
-                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                    <Icon name={data.benchmarks.source === 'yandex_gpt' ? 'Sparkles' : 'Database'} size={11} className="shrink-0" />
-                    <span className="truncate">
-                      {data.benchmarks.source === 'yandex_gpt' ? 'ИИ-оценка бенчмарков' : 'Среднерыночные данные'}: {data.benchmarks.comment}
+                <div className="flex items-start justify-between gap-2 text-[11px] text-muted-foreground bg-muted/40 rounded-lg px-2.5 py-1.5">
+                  <div className="flex items-start gap-1.5 flex-1">
+                    <Icon name={data.benchmarks.source === 'yandex_gpt' ? 'Sparkles' : 'Database'} size={11} className="shrink-0 mt-0.5" />
+                    <span className="leading-relaxed">
+                      <span className="font-semibold">{data.benchmarks.source === 'yandex_gpt' ? 'ИИ-оценка бенчмарков' : 'Среднерыночные данные'}:</span>{' '}
+                      {data.benchmarks.comment}
                     </span>
                   </div>
                   <button
                     onClick={() => fetch(`${PRICE_PREDICT_URL}?action=noi_model&listing_id=${listingId}&refresh=1`).then(() => refetch())}
                     disabled={isFetching}
-                    className="text-[10px] underline shrink-0 disabled:opacity-50"
+                    className="text-[10px] underline shrink-0 disabled:opacity-50 mt-0.5"
                     title="Обновить рыночную оценку"
                   >
                     {isFetching ? 'Обновляю…' : 'Обновить'}
