@@ -70,14 +70,18 @@ def _load_keys(cur):
 def _fallback_benchmarks(listing: dict) -> dict:
     type_key = (listing.get('type') or 'office').lower()
     defaults = {
-        'office':     {'rent_rate': 900,  'vacancy_pct': 10, 'opex_per_m2': 180, 'market_cap_rate_pct': 10.0, 'avg_indexation_pct': 7},
-        'retail':     {'rent_rate': 1500, 'vacancy_pct': 7,  'opex_per_m2': 220, 'market_cap_rate_pct': 9.5,  'avg_indexation_pct': 7},
-        'warehouse':  {'rent_rate': 550,  'vacancy_pct': 5,  'opex_per_m2': 90,  'market_cap_rate_pct': 12.0, 'avg_indexation_pct': 8},
-        'restaurant': {'rent_rate': 1800, 'vacancy_pct': 8,  'opex_per_m2': 250, 'market_cap_rate_pct': 11.0, 'avg_indexation_pct': 7},
-        'hotel':      {'rent_rate': 2000, 'vacancy_pct': 25, 'opex_per_m2': 400, 'market_cap_rate_pct': 11.5, 'avg_indexation_pct': 6},
-        'gab':        {'rent_rate': 1100, 'vacancy_pct': 5,  'opex_per_m2': 150, 'market_cap_rate_pct': 10.0, 'avg_indexation_pct': 7},
-        'business':   {'rent_rate': 1300, 'vacancy_pct': 8,  'opex_per_m2': 200, 'market_cap_rate_pct': 11.0, 'avg_indexation_pct': 7},
-        'production': {'rent_rate': 450,  'vacancy_pct': 6,  'opex_per_m2': 80,  'market_cap_rate_pct': 12.5, 'avg_indexation_pct': 7},
+        'office':       {'rent_rate': 900,  'vacancy_pct': 10, 'opex_per_m2': 180, 'market_cap_rate_pct': 10.0, 'avg_indexation_pct': 7},
+        'retail':       {'rent_rate': 1500, 'vacancy_pct': 7,  'opex_per_m2': 220, 'market_cap_rate_pct': 9.5,  'avg_indexation_pct': 7},
+        'warehouse':    {'rent_rate': 550,  'vacancy_pct': 5,  'opex_per_m2': 90,  'market_cap_rate_pct': 12.0, 'avg_indexation_pct': 8},
+        'restaurant':   {'rent_rate': 1800, 'vacancy_pct': 8,  'opex_per_m2': 250, 'market_cap_rate_pct': 11.0, 'avg_indexation_pct': 7},
+        'hotel':        {'rent_rate': 2000, 'vacancy_pct': 25, 'opex_per_m2': 400, 'market_cap_rate_pct': 11.5, 'avg_indexation_pct': 6},
+        'gab':          {'rent_rate': 1100, 'vacancy_pct': 5,  'opex_per_m2': 150, 'market_cap_rate_pct': 10.0, 'avg_indexation_pct': 7},
+        'business':     {'rent_rate': 1300, 'vacancy_pct': 8,  'opex_per_m2': 200, 'market_cap_rate_pct': 11.0, 'avg_indexation_pct': 7},
+        'production':   {'rent_rate': 450,  'vacancy_pct': 6,  'opex_per_m2': 80,  'market_cap_rate_pct': 12.5, 'avg_indexation_pct': 7},
+        'building':     {'rent_rate': 800,  'vacancy_pct': 8,  'opex_per_m2': 160, 'market_cap_rate_pct': 10.5, 'avg_indexation_pct': 7},
+        'free_purpose': {'rent_rate': 1000, 'vacancy_pct': 8,  'opex_per_m2': 170, 'market_cap_rate_pct': 10.0, 'avg_indexation_pct': 7},
+        'car_service':  {'rent_rate': 700,  'vacancy_pct': 6,  'opex_per_m2': 130, 'market_cap_rate_pct': 12.0, 'avg_indexation_pct': 7},
+        'land':         {'rent_rate': 200,  'vacancy_pct': 10, 'opex_per_m2': 20,  'market_cap_rate_pct': 7.0,  'avg_indexation_pct': 6},
     }
     base = defaults.get(type_key, defaults['office'])
     return {
