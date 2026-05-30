@@ -6,6 +6,7 @@ import Icon from '@/components/ui/icon';
 import { Listing, CATS, DEALS } from './types';
 import { TabId, TABS } from './internalCardTypes';
 import { Spinner, TabOverview, TabPriceHistory, TabStats, TabLeads, TabComments } from './InternalCardTabs1';
+import { fmtListingId } from '@/lib/formatPrice';
 import { TabAi, TabDocuments, TabBroker } from './InternalCardTabs2';
 import TabPhotos from './TabPhotos';
 
@@ -65,26 +66,14 @@ export default function ListingInternalCard({ listingId, onClose, onBrokerChange
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-display font-700 text-base truncate">{listing.title}</span>
-              {listing.public_code && (
-                <button
-                  onClick={() => copyId(listing.public_code!)}
-                  title="Нажмите, чтобы скопировать ID"
-                  className="text-xs px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue font-semibold shrink-0 hover:bg-brand-blue/20 transition-colors flex items-center gap-1 cursor-pointer"
-                >
-                  {copied ? <Icon name="Check" size={10} /> : <Icon name="Copy" size={10} />}
-                  ID {listing.public_code}
-                </button>
-              )}
-              {!listing.public_code && (
-                <button
-                  onClick={() => copyId(listing.id)}
-                  title="Нажмите, чтобы скопировать ID"
-                  className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-semibold shrink-0 hover:bg-muted/80 transition-colors flex items-center gap-1 cursor-pointer"
-                >
-                  {copied ? <Icon name="Check" size={10} /> : <Icon name="Copy" size={10} />}
-                  #{listing.id}
-                </button>
-              )}
+              <button
+                onClick={() => copyId(fmtListingId(listing.id))}
+                title="Нажмите, чтобы скопировать ID"
+                className="text-xs px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue font-mono font-semibold shrink-0 hover:bg-brand-blue/20 transition-colors flex items-center gap-1 cursor-pointer"
+              >
+                {copied ? <Icon name="Check" size={10} /> : <Icon name="Copy" size={10} />}
+                #{fmtListingId(listing.id)}
+              </button>
               {listing.is_hot && <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-semibold shrink-0">Горячее</span>}
               {listing.is_new && <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold shrink-0">Новинка</span>}
               {listing.is_exclusive && <span className="text-xs px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-semibold shrink-0">Эксклюзив</span>}

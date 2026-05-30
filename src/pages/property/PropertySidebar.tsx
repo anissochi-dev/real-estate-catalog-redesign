@@ -1,6 +1,7 @@
 import type { ListingDetail, Agent } from '@/lib/api';
 import Icon from '@/components/ui/icon';
 import { DEAL_LABELS } from './propertyLabels';
+import { fmtListingId } from '@/lib/formatPrice';
 
 interface Props {
   item: ListingDetail;
@@ -29,7 +30,7 @@ export default function PropertySidebar({ item, agents }: Props) {
         <div className="px-5 py-2.5 bg-muted/40 border-t border-border flex items-center gap-2">
           <Icon name="Hash" size={12} className="text-muted-foreground" />
           <span className="text-xs text-muted-foreground">ID объекта:</span>
-          <span className="text-xs font-mono font-semibold text-foreground">#{item.publicCode || item.id}</span>
+          <span className="text-xs font-mono font-semibold text-foreground">#{fmtListingId(item.id)}</span>
         </div>
       </div>
 

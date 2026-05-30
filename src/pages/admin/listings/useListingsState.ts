@@ -79,13 +79,14 @@ export function useListingsState() {
       if (statusFilter !== 'all' && it.status !== statusFilter) return false;
       if (catFilter && it.category !== catFilter) return false;
       if (search) {
-        const q = search.toLowerCase();
+        const q = search.toLowerCase().replace(/^#/, '');
         return (
           it.title?.toLowerCase().includes(q) ||
           it.address?.toLowerCase().includes(q) ||
           it.owner_name?.toLowerCase().includes(q) ||
           it.owner_phone?.includes(q) ||
-          String(it.public_code || '').includes(q)
+          String(`123${it.id}`).includes(q) ||
+          String(it.id).includes(q)
         );
       }
       return true;

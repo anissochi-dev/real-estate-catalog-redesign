@@ -1,3 +1,9 @@
+/** Форматирует ID объекта: префикс 123 + числовой id.
+ *  id=129 → "123129", id=53 → "12353" */
+export function fmtListingId(id: number): string {
+  return `123${id}`;
+}
+
 export function formatPrice(price: number, deal: string): string {
   const fmtMln = (v: number) => {
     const n = v / 1000000;

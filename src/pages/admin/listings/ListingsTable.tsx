@@ -1,6 +1,7 @@
 import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
 import { Listing, DEALS, fmtDate, perM2, splitImages } from './types';
+import { fmtListingId } from '@/lib/formatPrice';
 
 const VIEW_KEY = 'biznest_view';
 
@@ -110,7 +111,7 @@ export default function ListingsTable({
                       <div className="font-semibold">{it.title}</div>
                     )}
                     <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue">
-                      #{it.public_code || it.id}
+                      #{fmtListingId(it.id)}
                     </span>
                     {it.is_visible === false && (
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-700 inline-flex items-center gap-0.5">

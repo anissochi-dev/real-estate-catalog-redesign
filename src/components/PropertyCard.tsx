@@ -7,6 +7,7 @@ import YandexMap from '@/components/YandexMap';
 import { useSettings } from '@/contexts/SettingsContext';
 import { prefetchListingById } from '@/lib/api';
 import { prefetchPage } from '@/app/lazyPages';
+import { fmtListingId } from '@/lib/formatPrice';
 
 const PREDICT_URL = 'https://functions.poehali.dev/9986e5a6-c4d4-407a-919f-a303aa3eddf2';
 
@@ -161,7 +162,7 @@ export default function PropertyCard({
     ? property.pricePerM2
     : property.area > 0 ? Math.round(property.price / property.area) : null;
 
-  const publicId = property.publicCode || property.id;
+  const publicId = fmtListingId(property.id);
   const assessCls = hint?.price_assessment
     ? (ASSESS_STYLES[hint.price_assessment.color] ?? ASSESS_STYLES.gray) : null;
 
