@@ -804,12 +804,19 @@ def handler(event: dict, context) -> dict:
                 )
                 row = cur.fetchone()
                 base = _site_base_url(cur)
+                sitemap_count = int(row['urls_count']) if row and row.get('urls_count') else 0
+                sitemap_updated = row['updated_at'] if row else None
                 return _ok({
                     'robots_url': f'{base}/robots.txt',
                     'sitemap_url': f'{base}/sitemap.xml',
-                    'sitemap_urls_count': (row['urls_count'] if row else 0),
-                    'sitemap_updated_at': (row['updated_at'] if row else None),
+                    'sitemap_urls_count': sitemap_count,
+                    'sitemap_updated_at': sitemap_updated,
                     'robots_disallow': ROBOTS_DISALLOW,
+                    # robots.txt всегда генерируется динамически — считаем его существующим
+                    'robots_exists': True,
+                    # sitemap существует если в кэше есть URL (> 0)
+                    'sitemap_exists': sitemap_count > 0,
+                    'gpt_configured': bool(api_key and folder_id),
                 })
 
             if action == 'sitemap_rebuild':

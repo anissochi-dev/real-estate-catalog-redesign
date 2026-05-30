@@ -173,11 +173,14 @@ function TechnicalTab() {
 
   const loadSeoStatus = async () => {
     setSeoLoading(true);
-    const { data, error } = await seoCall({ action: 'status' });
+    setSeoErr('');
+    const { data, error } = await seoCall({ action: 'files_status' });
     setSeoLoading(false);
     if (error) { setSeoErr(error); return; }
-    if (data?.status) setSeoStatus(data.status as SeoStatus);
-    setGptOk(!!data?.gpt_configured);
+    if (data) {
+      setSeoStatus(data as unknown as SeoStatus);
+      setGptOk(!!data.gpt_configured);
+    }
   };
 
   const rebuildSitemap = async () => {

@@ -40,6 +40,11 @@ export interface SeoStatus {
   no_seo_title: number;
   no_seo_desc: number;
   no_desc: number;
+  // Поля files_status (для TechnicalTab)
+  robots_exists?: boolean;
+  sitemap_exists?: boolean;
+  sitemap_urls_count?: number;
+  sitemap_updated_at?: string | null;
 }
 
 export interface Schedule {
