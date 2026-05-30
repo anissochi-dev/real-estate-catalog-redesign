@@ -1510,8 +1510,17 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
             max_len = 65
         # Режим 1: items уже содержит готовые new_title → просто применяем
         # Режим 2: items содержит только id → генерируем new_title через GPT
+        # Режим 3: items не передан → автосбор объектов с длинными title
         if not isinstance(items, list) or not items:
-            return {'error': 'Не передан список объектов'}
+            cur.execute(
+                f"SELECT id, title FROM {SCHEMA}.listings "
+                f"WHERE status='active' AND LENGTH(title) > {max_len} "
+                f"ORDER BY LENGTH(title) DESC LIMIT 20"
+            )
+            rows = cur.fetchall()
+            if not rows:
+                return {'ok': True, 'message': f'Объектов с title длиннее {max_len} символов не найдено.'}
+            items = [{'id': r['id']} for r in rows]
         if len(items) > 30:
             return {'error': 'Максимум 30 объектов за раз'}
 
@@ -1694,7 +1703,27 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
     if act_type == 'optimize_images':
         keys = params.get('keys') or []
         if not keys:
-            return {'error': 'Нужен список keys'}
+            # Автосбор: сканируем S3 и берём кандидатов на сжатие
+            try:
+                s3 = _s3()
+                all_keys_sizes = {}
+                paginator = s3.get_paginator('list_objects_v2')
+                for prefix in S3_PREFIXES:
+                    try:
+                        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+                            for obj in page.get('Contents', []):
+                                all_keys_sizes[obj['Key']] = obj['Size']
+                    except Exception:
+                        pass
+                keys = [
+                    k for k, sz in all_keys_sizes.items()
+                    if sz > IMG_COMPRESS_THRESHOLD
+                    and k.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))
+                ][:50]
+            except Exception as e:
+                return {'error': f'Не удалось собрать список файлов: {e}'}
+            if not keys:
+                return {'ok': True, 'message': 'Нет изображений для оптимизации — все файлы уже в норме.'}
         try:
             from PIL import Image as _PIL
         except ImportError:
