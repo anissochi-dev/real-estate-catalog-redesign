@@ -109,11 +109,9 @@ export default function ListingsTable({
                     ) : (
                       <div className="font-semibold">{it.title}</div>
                     )}
-                    {it.public_code ? (
-                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue">
-                        ID {it.public_code}
-                      </span>
-                    ) : null}
+                    <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue">
+                      #{it.public_code || it.id}
+                    </span>
                     {it.is_visible === false && (
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-700 inline-flex items-center gap-0.5">
                         <Icon name="EyeOff" size={10} /> Скрыт

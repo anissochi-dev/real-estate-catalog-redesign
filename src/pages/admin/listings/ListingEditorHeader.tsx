@@ -35,9 +35,9 @@ export default function ListingEditorHeader({
       <div className="p-4 border-b border-border flex justify-between items-center gap-3 flex-shrink-0">
         <div className="font-display font-700 text-lg flex items-center gap-2 flex-wrap">
           {editing.id ? 'Редактировать' : 'Новый объект'}
-          {editing.public_code ? (
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue">
-              ID: {editing.public_code}
+          {(editing.public_code || editing.id) ? (
+            <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue">
+              #{editing.public_code || editing.id}
             </span>
           ) : null}
           {/* Виртуальный брокер: анализ цены — между названием и кнопкой видимости */}

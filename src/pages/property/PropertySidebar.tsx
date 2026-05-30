@@ -26,13 +26,11 @@ export default function PropertySidebar({ item, agents }: Props) {
             </div>
           ) : null}
         </div>
-        {item.publicCode && (
-          <div className="px-5 py-2.5 bg-muted/40 border-t border-border flex items-center gap-2">
-            <Icon name="Hash" size={12} className="text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">ID объекта:</span>
-            <span className="text-xs font-semibold text-foreground">{item.publicCode}</span>
-          </div>
-        )}
+        <div className="px-5 py-2.5 bg-muted/40 border-t border-border flex items-center gap-2">
+          <Icon name="Hash" size={12} className="text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">ID объекта:</span>
+          <span className="text-xs font-mono font-semibold text-foreground">#{item.publicCode || item.id}</span>
+        </div>
       </div>
 
       {/* Карточка агента */}
