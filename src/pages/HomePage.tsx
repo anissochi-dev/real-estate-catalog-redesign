@@ -193,6 +193,10 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
       question: 'Можно ли арендовать и купить помещение?',
       answer: 'Да. В каталоге есть объекты как для аренды, так и для покупки — используйте фильтр по типу сделки.',
     },
+    {
+      question: 'Как связаться с агентством и оставить заявку?',
+      answer: `Оставьте заявку прямо на сайте или позвоните нам — специалист подберёт объект под ваши задачи и ответит на вопросы по любому помещению в ${cityName}е.`,
+    },
   ];
 
   return (
@@ -415,13 +419,13 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
       {/* Частые вопросы — FAQ Schema + видимый блок (полезно для AI и поиска) */}
       <SchemaOrg id="faq" schema={makeFaqSchema(faqItems)} />
       <section className="py-8 bg-white" aria-labelledby="faq-title">
-        <div className="container mx-auto px-4 max-w-3xl">
+        <div className="container mx-auto px-4 max-w-5xl">
           <h2 id="faq-title" className="font-display font-800 text-xl sm:text-2xl text-foreground mb-5">
             Частые вопросы
           </h2>
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 md:gap-x-4 md:gap-y-2.5 md:items-start">
             {faqItems.map((f, i) => (
-              <details key={i} className="group bg-muted/30 rounded-xl border border-border px-4 py-3">
+              <details key={i} className="group bg-muted/30 rounded-xl border border-border px-4 py-2.5">
                 <summary className="flex items-center justify-between cursor-pointer list-none font-medium text-sm text-foreground">
                   {f.question}
                   <Icon name="ChevronDown" size={16} className="text-muted-foreground transition-transform group-open:rotate-180 shrink-0 ml-3" />
