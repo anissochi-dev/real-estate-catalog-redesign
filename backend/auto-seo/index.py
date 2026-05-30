@@ -70,6 +70,34 @@ PAGE_HINTS = {
     '/contacts': 'Контакты офиса BIZNEST в Краснодаре: телефон, адрес, мессенджеры.',
 }
 
+_RU_MAP = {
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e',
+    'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
+    'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+    'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
+    'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+}
+
+
+def _make_slug(title: str, listing_id: int) -> str:
+    s = (title or '').lower()
+    out = []
+    for ch in s:
+        out.append(_RU_MAP.get(ch, ch))
+    s = ''.join(out)
+    clean = []
+    for ch in s:
+        if ch.isalnum():
+            clean.append(ch)
+        elif ch in (' ', '-', '_'):
+            clean.append('-')
+    s = ''.join(clean)
+    while '--' in s:
+        s = s.replace('--', '-')
+    s = s.strip('-')[:80].rstrip('-') or 'object'
+    return f"{s}-{listing_id}"
+
+
 ROBOTS_DISALLOW = [
     '/admin', '/admin/', '/login', '/auth', '/signin',
     '/api/', '/private/',
@@ -387,13 +415,13 @@ def _build_sitemap_xml(cur) -> tuple:
 
     # Активные объекты
     cur.execute(
-        f"SELECT id, slug, updated_at FROM {SCHEMA}.listings "
+        f"SELECT id, slug, title, updated_at FROM {SCHEMA}.listings "
         f"WHERE status = 'active' ORDER BY updated_at DESC NULLS LAST LIMIT 5000"
     )
     for r in cur.fetchall():
         lid = r.get('id')
-        slug = r.get('slug') or ''
-        path = f"/object/{slug}-{lid}" if slug else f"/object/{lid}"
+        slug = r.get('slug') or _make_slug(r.get('title') or '', lid)
+        path = f"/object/{slug}"
         urls.append((base + path, r.get('updated_at')))
 
     parts = ['<?xml version="1.0" encoding="UTF-8"?>',

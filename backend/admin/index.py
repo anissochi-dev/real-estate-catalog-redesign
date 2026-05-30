@@ -124,6 +124,34 @@ def _bool(v):
     return 'TRUE' if v else 'FALSE'
 
 
+_RU_MAP = {
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e',
+    'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
+    'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+    'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
+    'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+}
+
+
+def _make_slug(title: str, listing_id: int) -> str:
+    s = (title or '').lower()
+    out = []
+    for ch in s:
+        out.append(_RU_MAP.get(ch, ch))
+    s = ''.join(out)
+    clean = []
+    for ch in s:
+        if ch.isalnum():
+            clean.append(ch)
+        elif ch in (' ', '-', '_'):
+            clean.append('-')
+    s = ''.join(clean)
+    while '--' in s:
+        s = s.replace('--', '-')
+    s = s.strip('-')[:80].rstrip('-') or 'object'
+    return f"{s}-{listing_id}"
+
+
 def _num_or_null(v):
     if v is None or v == '':
         return 'NULL'
@@ -1920,13 +1948,18 @@ def _listings(cur, conn, method, rid, event, user):
         )
         cur.execute(sql)
         new_id = cur.fetchone()['id']
+        # Генерируем slug на основе title + id и сразу сохраняем
+        new_slug = _make_slug(body.get('title') or '', new_id)
+        cur.execute(
+            f"UPDATE {SCHEMA}.listings SET slug = '{_safe(new_slug, 120)}' WHERE id = {new_id}"
+        )
         # Связь телефон ↔ объект (для системы phonebook)
         if owner_pc_id:
             _link_phone_to_listing(cur, owner_pc_id, new_id, 'owner')
         if owner_pc2_id:
             _link_phone_to_listing(cur, owner_pc2_id, new_id, 'owner')
         conn.commit()
-        return _ok({'id': new_id, 'success': True, 'owner_phone_contact_id': owner_pc_id})
+        return _ok({'id': new_id, 'success': True, 'slug': new_slug, 'owner_phone_contact_id': owner_pc_id})
 
     if method == 'PUT' and rid:
         # ── Снимаем "до" — для diff и истории ─────────────────────────────────
@@ -1975,6 +2008,11 @@ def _listings(cur, conn, method, rid, event, user):
                     _link_phone_to_listing(cur, pc2_id, int(rid), 'owner')
             else:
                 fields.append("owner_phone2_contact_id = NULL")
+
+        # Если изменился title — пересчитываем slug
+        if 'title' in body and body.get('title'):
+            updated_slug = _make_slug(body['title'], int(rid))
+            fields.append(f"slug = '{_safe(updated_slug, 120)}'")
 
         for f, length in [('title', 255), ('description', 5000), ('category', 50), ('deal', 20),
                           ('address', 255), ('district', 100), ('city', 100), ('image', 500),
