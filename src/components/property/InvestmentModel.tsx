@@ -25,7 +25,7 @@ const buildInitialParams = (api: NoiApiResponse): UserParams => ({
   avg_indexation_pct: api.benchmarks.avg_indexation_pct,
   cb_rate_pct: 21,
   ltv_pct: 0,
-  loan_rate_pct: 22,
+  loan_rate_pct: 22, // актуальная ставка для коммерческой ипотеки
   loan_years: 10,
   infra_rent_uplift_pct: 0,
   infra_year: 0,
@@ -114,22 +114,30 @@ export default function InvestmentModel({ listingId, price, area, deal }: Props)
           {data && liveResult && params && (
             <>
               {/* Источник бенчмарков */}
-              <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground bg-muted/40 rounded-lg px-2.5 py-1.5">
-                <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                  <Icon name={data.benchmarks.source === 'yandex_gpt' ? 'Sparkles' : 'Database'} size={11} className="shrink-0" />
-                  <span className="truncate">
-                    {data.benchmarks.source === 'yandex_gpt' ? 'ИИ-оценка бенчмарков' : 'Среднерыночные данные'}: {data.benchmarks.comment}
-                  </span>
+              {data.data_source === 'real_rent' ? (
+                <div className="flex items-center gap-2 text-[11px] bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-2.5 py-1.5">
+                  <Icon name="CheckCircle2" size={12} className="shrink-0 text-emerald-600" />
+                  <span className="truncate font-semibold">Реальные данные аренды</span>
+                  <span className="truncate text-emerald-700/80">· {data.benchmarks.comment}</span>
                 </div>
-                <button
-                  onClick={() => fetch(`${PRICE_PREDICT_URL}?action=noi_model&listing_id=${listingId}&refresh=1`).then(() => refetch())}
-                  disabled={isFetching}
-                  className="text-[10px] underline shrink-0 disabled:opacity-50"
-                  title="Обновить рыночную оценку"
-                >
-                  {isFetching ? 'Обновляю…' : 'Обновить'}
-                </button>
-              </div>
+              ) : (
+                <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground bg-muted/40 rounded-lg px-2.5 py-1.5">
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    <Icon name={data.benchmarks.source === 'yandex_gpt' ? 'Sparkles' : 'Database'} size={11} className="shrink-0" />
+                    <span className="truncate">
+                      {data.benchmarks.source === 'yandex_gpt' ? 'ИИ-оценка бенчмарков' : 'Среднерыночные данные'}: {data.benchmarks.comment}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => fetch(`${PRICE_PREDICT_URL}?action=noi_model&listing_id=${listingId}&refresh=1`).then(() => refetch())}
+                    disabled={isFetching}
+                    className="text-[10px] underline shrink-0 disabled:opacity-50"
+                    title="Обновить рыночную оценку"
+                  >
+                    {isFetching ? 'Обновляю…' : 'Обновить'}
+                  </button>
+                </div>
+              )}
 
               {/* KPI */}
               <KpiCards result={liveResult} />

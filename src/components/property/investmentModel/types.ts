@@ -6,7 +6,7 @@ export interface Benchmarks {
   market_cap_rate_pct: number;
   avg_indexation_pct: number;
   comment: string;
-  source: 'yandex_gpt' | 'fallback';
+  source: 'yandex_gpt' | 'fallback' | 'real_data';
 }
 
 export interface YearRow {
@@ -50,9 +50,16 @@ export interface NoiApiResponse {
     price: number;
     type?: string;
     deal?: string;
+    monthly_rent?: number | null;
+    yearly_rent?: number | null;
+    tenant_name?: string | null;
+    building_class?: string | null;
+    building_year?: number | null;
+    total_floors?: number | null;
   };
   benchmarks: Benchmarks;
   scenarios: Scenarios;
+  data_source?: 'real_rent' | 'yandex_gpt' | 'fallback';
 }
 
 export interface UserParams {

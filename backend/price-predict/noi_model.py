@@ -17,6 +17,19 @@ YANDEX_MODEL_NAME = 'yandexgpt/rc'
 CACHE_TTL_DAYS = 7
 
 DEAL_RU = {'sale': 'продажа', 'rent': 'аренда', 'business': 'готовый бизнес'}
+CONDITION_RU = {
+    'new': 'новое', 'euro': 'евроремонт', 'good': 'хорошее', 'cosmetic': 'косметика',
+    'rough': 'черновая отделка', 'shellcore': 'shell & core',
+}
+FINISHING_RU = {
+    'none': 'без отделки', 'rough': 'черновая', 'pre_finish': 'предчистовая',
+    'cosmetic': 'косметический ремонт', 'euro': 'евроремонт', 'designer': 'дизайнерский',
+}
+PARKING_RU = {'none': 'нет', 'street': 'на улице', 'building': 'в здании'}
+ROAD_LINE_RU = {
+    '1': 'первая линия (фасад на дорогу)', '2': 'вторая линия',
+    '3': 'третья линия и дальше', 'yard': 'во дворе',
+}
 TYPE_RU = {
     'office': 'офис', 'retail': 'торговое помещение', 'warehouse': 'склад',
     'restaurant': 'кафе/ресторан', 'hotel': 'гостиница', 'business': 'готовый бизнес',
@@ -103,7 +116,39 @@ def _normalize_benchmarks(raw: dict, listing: dict) -> dict:
     }
 
 
+def _real_rent_benchmarks(listing: dict) -> dict:
+    """
+    Если объект уже сдан (есть monthly_rent) — строим бенчмарки из реальных данных.
+    Ставка аренды берётся из факта, вакантность = 0 (объект занят), OPEX и налог — нормативные.
+    """
+    area = float(listing.get('area') or 1)
+    monthly_rent = float(listing.get('monthly_rent') or 0)
+    yearly_rent = float(listing.get('yearly_rent') or 0)
+
+    # Если есть годовая — используем её, иначе monthly × 12
+    annual = yearly_rent if yearly_rent > 0 else monthly_rent * 12
+    real_rent_rate = annual / 12 / area if area > 0 else 0
+
+    type_key = (listing.get('type') or 'office').lower()
+    fallback = _fallback_benchmarks(listing)
+
+    return {
+        'rent_rate': round(real_rent_rate, 2) if real_rent_rate > 0 else fallback['rent_rate'],
+        'vacancy_pct': 0,              # объект занят — вакантность = 0
+        'opex_per_m2': fallback['opex_per_m2'],
+        'property_tax_pct': 1.8,
+        'market_cap_rate_pct': fallback['market_cap_rate_pct'],
+        'avg_indexation_pct': fallback['avg_indexation_pct'],
+        'comment': f"Реальная аренда: {int(annual):,} ₽/год, арендатор: {listing.get('tenant_name') or 'есть'}. OPEX — нормативный.".replace(',', ' '),
+        'source': 'real_data',
+    }
+
+
 def _gpt_benchmarks(listing: dict, api_key: str, folder_id: str) -> dict:
+    # Если есть реальная аренда — используем факт, ИИ не нужен
+    if listing.get('monthly_rent') or listing.get('yearly_rent'):
+        return _real_rent_benchmarks(listing)
+
     if not api_key or not folder_id:
         return _fallback_benchmarks(listing)
 
@@ -118,16 +163,38 @@ def _gpt_benchmarks(listing: dict, api_key: str, folder_id: str) -> dict:
         parts.append(f"Адрес: {listing['address']}")
     if listing.get('city'):
         parts.append(f"Город: {listing['city']}")
-    if listing.get('floor'):
+    if listing.get('district'):
+        parts.append(f"Район: {listing['district']}")
+    if listing.get('floor') and listing.get('total_floors'):
+        parts.append(f"Этаж: {listing['floor']} из {listing['total_floors']}")
+    elif listing.get('floor'):
         parts.append(f"Этаж: {listing['floor']}")
+    if listing.get('total_floors'):
+        parts.append(f"Этажность здания: {listing['total_floors']}")
+    if listing.get('building_class'):
+        parts.append(f"Класс здания: {listing['building_class']}")
+    if listing.get('building_year'):
+        parts.append(f"Год постройки: {listing['building_year']}")
     if listing.get('condition'):
-        parts.append(f"Состояние: {listing['condition']}")
+        label = CONDITION_RU.get(listing['condition'], listing['condition'])
+        parts.append(f"Состояние: {label}")
+    if listing.get('finishing'):
+        label = FINISHING_RU.get(listing['finishing'], listing['finishing'])
+        parts.append(f"Отделка: {label}")
+    if listing.get('ceiling_height'):
+        parts.append(f"Высота потолков: {listing['ceiling_height']} м")
+    if listing.get('parking'):
+        label = PARKING_RU.get(listing['parking'], listing['parking'])
+        parts.append(f"Парковка: {label}")
+    if listing.get('road_line'):
+        label = ROAD_LINE_RU.get(str(listing['road_line']), listing['road_line'])
+        parts.append(f"Линия улицы: {label}")
     if listing.get('rooms'):
-        parts.append(f"Помещений: {listing['rooms']}")
+        parts.append(f"Помещений/секций: {listing['rooms']}")
     if listing.get('purpose'):
         parts.append(f"Назначение: {listing['purpose']}")
     if listing.get('price'):
-        parts.append(f"Цена: {listing['price']} ₽")
+        parts.append(f"Цена продажи: {listing['price']:,} ₽".replace(',', ' '))
 
     user_text = '\n'.join(parts)
     payload = {
@@ -334,8 +401,9 @@ def save_cache(cur, conn, listing_id: int, benchmarks: dict):
 
 def load_listing(cur, listing_id: int):
     cur.execute(
-        f"SELECT id, title, address, area, price, deal, category, floor, rooms, condition, "
-        f"purpose, lat, lng, city, district "
+        f"SELECT id, title, address, area, price, deal, category, floor, total_floors, rooms, "
+        f"condition, purpose, lat, lng, city, district, building_class, building_year, "
+        f"finishing, ceiling_height, parking, road_line, monthly_rent, yearly_rent, tenant_name "
         f"FROM {SCHEMA}.listings WHERE id = %s",
         (listing_id,),
     )
@@ -374,6 +442,8 @@ def handle_noi_request(cur, conn, qs: dict) -> dict:
 
     scenarios = build_scenarios(listing, bench)
 
+    has_real_rent = bool(listing.get('monthly_rent') or listing.get('yearly_rent'))
+
     return {
         'listing': {
             'id': listing['id'],
@@ -382,7 +452,14 @@ def handle_noi_request(cur, conn, qs: dict) -> dict:
             'price': float(listing.get('price') or 0),
             'type': listing.get('type'),
             'deal': listing.get('deal'),
+            'monthly_rent': listing.get('monthly_rent'),
+            'yearly_rent': listing.get('yearly_rent'),
+            'tenant_name': listing.get('tenant_name'),
+            'building_class': listing.get('building_class'),
+            'building_year': listing.get('building_year'),
+            'total_floors': listing.get('total_floors'),
         },
         'benchmarks': bench,
         'scenarios': scenarios,
+        'data_source': 'real_rent' if has_real_rent else bench.get('source', 'fallback'),
     }
