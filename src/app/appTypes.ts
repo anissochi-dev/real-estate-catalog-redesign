@@ -65,19 +65,28 @@ export function pageFromPath(pathname: string): Page {
 }
 
 export const VIEW_KEY = 'biznest_view';
+// Флаг «сотрудник прямо сейчас работает в админке».
+// Ставится только когда реально показывается админ-панель, снимается при выходе.
+// Нужен, чтобы при перезагрузке (F5) внутри админки — где в адресной строке
+// остаётся публичный путь вроде «/map» — вернуть админку, а не сайт.
+export const IN_ADMIN_KEY = 'biznest_in_admin';
 
 export function loadInitialView(): AppView {
   try {
+    // 1. Если сотрудник работал в админке — восстанавливаем её при перезагрузке
+    //    ПЕРВЫМ делом, до проверки публичных путей. Обычных посетителей это
+    //    не затрагивает: у них флага нет.
+    if (localStorage.getItem(IN_ADMIN_KEY) === '1') return 'admin';
+
     const path = window.location.pathname;
 
-    // 1. Публичные страницы (включая главную «/») ВСЕГДА открываем как сайт.
+    // 2. Публичные страницы (включая главную «/») открываем как сайт.
     //    Иначе сохранённый в localStorage admin-режим перехватывал рендер
     //    главной и показывал бесконечное колесо загрузки вместо контента.
     const publicPaths = ['/object', '/catalog', '/map', '/favorites', '/compare', '/network-tenants', '/news', '/leads', '/declined'];
     if (path === '/' || publicPaths.some(p => path.startsWith(p))) return 'site';
 
-    // 2. Если в localStorage сохранён admin/login — восстанавливаем его
-    //    (нужно при перезагрузке внутри админки, где URL не меняется).
+    // 3. Если в localStorage сохранён admin/login — восстанавливаем его.
     const v = localStorage.getItem(VIEW_KEY);
     if (v === 'admin' || v === 'login') return v;
     if (v === 'site') return v;
