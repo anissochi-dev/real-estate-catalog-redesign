@@ -84,7 +84,7 @@ export interface Listing {
 }
 
 export interface City { id: number; name: string; is_active: boolean }
-export interface Purpose { id: number; name: string; slug: string }
+export interface Purpose { id: number; name: string; slug: string; icon?: string | null; is_active?: boolean; sort_order?: number }
 export interface LandVri { id: number; name: string; slug: string; is_active?: boolean }
 
 export const CATS = [

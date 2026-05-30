@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import PhonePickerInput from '@/components/admin/PhonePickerInput';
-import { Listing, CATS, DEALS, CONDITIONS, PURPOSE_LIST } from './types';
+import { Listing, CATS, DEALS, CONDITIONS, PURPOSE_LIST, Purpose } from './types';
 
 interface Props {
   editing: Partial<Listing>;
@@ -10,11 +10,16 @@ interface Props {
   setErrors: (fn: (v: Record<string, boolean>) => Record<string, boolean>) => void;
   onGenerateTitle?: () => void;
   aiTitleLoading?: boolean;
+  purposes?: Purpose[];
 }
 
 const MAX_PURPOSES = 10;
 
-export default function ListingEditorMainTab({ editing, setEditing, errors, setErrors, onGenerateTitle, aiTitleLoading }: Props) {
+export default function ListingEditorMainTab({ editing, setEditing, errors, setErrors, onGenerateTitle, aiTitleLoading, purposes }: Props) {
+  // Список назначений: из БД (если передан) или хардкод как запасной вариант
+  const purposeNames = purposes && purposes.length > 0
+    ? purposes.filter(p => p.is_active !== false).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).map(p => p.name)
+    : [...PURPOSE_LIST];
   const [purposeOpen, setPurposeOpen] = useState(false);
   const [purposeSearch, setPurposeSearch] = useState('');
   const purposeRef = useRef<HTMLDivElement>(null);
@@ -152,7 +157,7 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
           </div>
           {purposeOpen && (
             <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-border rounded-xl shadow-lg max-h-48 overflow-y-auto">
-              {PURPOSE_LIST
+              {purposeNames
                 .filter(name => !purposeSearch || name.toLowerCase().includes(purposeSearch.toLowerCase()))
                 .map(name => {
                   const isChecked = selectedPurposes.includes(name);
@@ -164,7 +169,7 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
                     </label>
                   );
                 })}
-              {PURPOSE_LIST.filter(n => !purposeSearch || n.toLowerCase().includes(purposeSearch.toLowerCase())).length === 0 && (
+              {purposeNames.filter(n => !purposeSearch || n.toLowerCase().includes(purposeSearch.toLowerCase())).length === 0 && (
                 <div className="px-3 py-2 text-sm text-muted-foreground">Не найдено</div>
               )}
             </div>
