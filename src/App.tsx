@@ -5,6 +5,22 @@ import { LoginPage } from './app/lazyPages';
 // Админка грузится лениво — её тяжёлый код (CRM, редакторы) больше НЕ попадает
 // в основной бандл и не замедляет загрузку публичного сайта для посетителей.
 const AdminPage = lazy(() => import('./pages/AdminPage'));
+
+// Prefetch AdminPage чанка в фоне — только если в браузере есть токен
+// (т.е. это залогиненный сотрудник). Запускается через 3с после монтирования,
+// когда LCP уже готов и основной трафик утих. Обычный посетитель не скачивает
+// ни байта — у него токена нет.
+function usePrefetchAdmin() {
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem('biznest_token')) return;
+    } catch { return; }
+    const id = setTimeout(() => {
+      import('./pages/AdminPage').catch(() => {});
+    }, 3000);
+    return () => clearTimeout(id);
+  }, []);
+}
 import ChunkErrorBoundary from './app/ChunkErrorBoundary';
 import AppRoutes from './app/AppRoutes';
 import {
@@ -36,6 +52,7 @@ export type { PropertyType, DealType, Property, Page, AppView } from './app/appT
 const SHOW_CONSENT_BANNER = true;
 
 export default function App() {
+  usePrefetchAdmin();
   const { user, loading: authLoading } = useAuth();
   const { settings } = useSettings();
   const location = useLocation();
