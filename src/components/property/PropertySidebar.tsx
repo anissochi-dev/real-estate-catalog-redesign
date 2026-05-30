@@ -3,6 +3,7 @@ import Icon from '@/components/ui/icon';
 import { DEAL_LABELS } from './propertyLabels';
 import { formatPhone } from '@/lib/phone';
 import PublicPhoneInput from '@/components/PublicPhoneInput';
+import { fmtListingId } from '@/lib/formatPrice';
 
 interface Props {
   item: ListingDetail;
@@ -41,13 +42,11 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
               </div>
             ) : null}
           </div>
-          {item.publicCode && (
-            <div className="px-4 py-1.5 bg-muted/40 border-t border-border flex items-center gap-1.5">
-              <Icon name="Hash" size={11} className="text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">ID:</span>
-              <span className="text-xs font-semibold text-foreground">{item.publicCode}</span>
-            </div>
-          )}
+          <div className="px-4 py-1.5 bg-muted/40 border-t border-border flex items-center gap-1.5">
+            <Icon name="Hash" size={11} className="text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">ID:</span>
+            <span className="text-xs font-mono font-semibold text-foreground">#{fmtListingId(item.id)}</span>
+          </div>
 
           {/* Представитель собственника */}
           {agent && (
