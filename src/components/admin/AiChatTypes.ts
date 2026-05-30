@@ -42,6 +42,9 @@ export const QUICK_CMDS: QuickCmd[] = [
   { id: 'marketing', label: 'Маркетинг', icon: 'TrendingUp', action: 'agent', prompt: 'Проанализируй каталог с маркетинговой точки зрения: конверсия, ЦА, ценообразование, позиционирование. Предложи конкретные шаги.' },
   { id: 'seo_fix', label: 'SEO', icon: 'Search', action: 'agent', prompt: 'Найди все объекты без SEO-заголовков и описаний. Сгенерируй и примени SEO для каждого.' },
   { id: 'photos', label: 'Фото', icon: 'Image', action: 'agent', prompt: 'Сканируй фотографии: найди неиспользуемые и большие файлы-кандидаты на сжатие. Предложи оптимизацию.' },
+  { id: 'find_lead', label: 'Найти заявку', icon: 'PhoneSearch', action: 'agent', prompt: 'Найди заявку по номеру телефона или id. Покажи статус, имя клиента, сообщение и когда поступила.' },
+  { id: 'ask_knowledge', label: 'База знаний', icon: 'BookOpen', action: 'agent', prompt: 'Найди в базе знаний информацию по моему вопросу. Используй search_knowledge.' },
+  { id: 'notify_team', label: 'Уведомить команду', icon: 'BellRing', action: 'agent', prompt: 'Составь и отправь уведомление сотруднику. Используй notify_employee.' },
 ];
 
 export const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
@@ -83,6 +86,16 @@ export const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
   analytics_report: { label: 'Аналитика', icon: 'BarChart3' },
   marketing_tips: { label: 'Маркетинг', icon: 'TrendingUp' },
   note: { label: 'Совет', icon: 'Lightbulb' },
+  // Поиск и коммуникация
+  lookup_lead: { label: 'Найти заявку', icon: 'Search' },
+  search_knowledge: { label: 'Поиск в базе знаний', icon: 'BookOpen' },
+  assign_broker: { label: 'Назначить брокера', icon: 'UserCheck' },
+  send_email_to_lead: { label: 'Письмо клиенту', icon: 'Mail' },
+  notify_employee: { label: 'Уведомить сотрудника', icon: 'BellRing' },
+  // Изображения
+  scan_images: { label: 'Сканировать фото', icon: 'ScanLine' },
+  optimize_images: { label: 'Оптимизировать фото', icon: 'ImageDown' },
+  delete_unused_images: { label: 'Удалить неиспользуемые', icon: 'Trash2' },
 };
 
 // Действия с risk: low — это безопасные информационные действия,
@@ -105,6 +118,9 @@ export const AUTO_APPLY_ACTIONS = new Set([
   'marketing_tips',
   'note',
   'scan_long_titles',
+  'lookup_lead',
+  'search_knowledge',
+  'scan_images',
 ]);
 
 /** Поля объекта/лида/новости, безопасные для автоприменения (без подтверждения).

@@ -389,7 +389,13 @@ SYSTEM_PROMPTS = {
         '- scan_images: {} risk:low\n'
         '- optimize_images: {"keys":["photos/x.jpg",...]} risk:medium\n'
         '- delete_unused_images: {"keys":["photos/x.jpg",...]} risk:high\n'
-        '- note: {"text":str} risk:low\n\n'
+        '- note: {"text":str} risk:low\n'
+        'Поиск и коммуникация:\n'
+        '- lookup_lead: {"phone":str} или {"id":int} risk:low — найти заявку по номеру телефона или id. Используй когда спрашивают «найди заявку», «что по номеру +79...», «статус заявки #N»\n'
+        '- search_knowledge: {"query":str} risk:low — поиск по базе знаний ВБ (ai_memory). Используй когда нужно найти факты о рынке, ценах, районах\n'
+        '- assign_broker: {"lead_id":int,"broker_id":int} или {"lead_id":int,"broker_name":str} risk:medium — назначить брокера на заявку. Статус меняется на in_progress\n'
+        '- send_email_to_lead: {"lead_id":int,"subject":str,"body":str} или {"email":str,"subject":str,"body":str} risk:medium — отправить письмо клиенту. Используй когда просят «напиши клиенту», «отправь подборку на почту»\n'
+        '- notify_employee: {"name":str,"subject":str,"body":str} или {"employee_id":int,"subject":str,"body":str} risk:medium — уведомить сотрудника по email. Используй когда просят «передай Ивану», «уведоми менеджера»\n\n'
         'КРИТИЧНО: отвечай ТОЛЬКО валидным JSON без markdown, без текста до/после:\n'
         '{"reasoning":"1-2 предложения анализа","actions":[{"type":str,"title":str,"description":str,"risk":"low|medium|high","params":{}}]}\n\n'
         'ПРАВИЛА:\n'
@@ -1843,6 +1849,240 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
             }
         except Exception as e:
             return {'error': f'Ошибка удаления: {e}'}
+
+    # ── Поиск заявки по телефону или id ─────────────────────────────────
+    if act_type == 'lookup_lead':
+        phone = (params.get('phone') or '').strip()
+        lead_id = params.get('id')
+        if not phone and not lead_id:
+            return {'error': 'Укажите телефон или id заявки'}
+        if lead_id:
+            try:
+                cur.execute(
+                    f"SELECT id, name, phone, email, message, status, source, "
+                    f"listing_id, created_at, company, request_category, budget "
+                    f"FROM {SCHEMA}.leads WHERE id = {int(lead_id)}"
+                )
+            except Exception:
+                return {'error': 'Некорректный id'}
+        else:
+            # Нормализуем телефон — убираем всё кроме цифр для поиска
+            digits = ''.join(c for c in phone if c.isdigit())
+            cur.execute(
+                f"SELECT id, name, phone, email, message, status, source, "
+                f"listing_id, created_at, company, request_category, budget "
+                f"FROM {SCHEMA}.leads "
+                f"WHERE regexp_replace(phone, '[^0-9]', '', 'g') LIKE '%{digits[-10:]}%' "
+                f"ORDER BY created_at DESC LIMIT 5"
+            )
+        rows = [dict(r) for r in cur.fetchall()]
+        if not rows:
+            return {'ok': True, 'found': 0, 'message': 'Заявок не найдено', 'leads': []}
+        # Форматируем даты
+        for r in rows:
+            if r.get('created_at'):
+                try:
+                    r['created_at'] = r['created_at'].strftime('%d.%m.%Y %H:%M')
+                except Exception:
+                    r['created_at'] = str(r['created_at'])
+        return {
+            'ok': True, 'found': len(rows), 'leads': rows,
+            'message': f'Найдено заявок: {len(rows)}. ' + '; '.join(
+                f"#{r['id']} {r.get('name','?')} {r.get('phone','')} — {r.get('status','?')}"
+                for r in rows
+            ),
+        }
+
+    # ── Отправка email клиенту из чата ───────────────────────────────────
+    if act_type == 'send_email_to_lead':
+        import smtplib
+        from email.mime.text import MIMEText as _MIMEText
+        lead_id = params.get('lead_id') or params.get('id')
+        to_email = (params.get('email') or '').strip()
+        subject = (params.get('subject') or '').strip()
+        body = (params.get('body') or '').strip()
+        if not (subject and body):
+            return {'error': 'Укажите тему (subject) и текст письма (body)'}
+        # Если email не передан — берём из лида
+        if not to_email and lead_id:
+            try:
+                cur.execute(f"SELECT email, name FROM {SCHEMA}.leads WHERE id = {int(lead_id)}")
+                row = cur.fetchone()
+                if row:
+                    to_email = (row.get('email') or '').strip()
+            except Exception:
+                pass
+        if not to_email:
+            return {'error': 'Не найден email получателя. Укажите email или lead_id с email в базе'}
+        # Настройки SMTP из settings
+        cur.execute(
+            f"SELECT smtp_host, smtp_port, smtp_user, smtp_password, smtp_from, company_name "
+            f"FROM {SCHEMA}.settings ORDER BY id LIMIT 1"
+        )
+        s = cur.fetchone() or {}
+        host = (s.get('smtp_host') or '').strip()
+        port = int(s.get('smtp_port') or 465)
+        smtp_user = (s.get('smtp_user') or '').strip()
+        smtp_pass = (s.get('smtp_password') or '').strip()
+        smtp_from = (s.get('smtp_from') or smtp_user or '').strip()
+        company = (s.get('company_name') or 'БМН').strip()
+        if not (host and smtp_user and smtp_pass):
+            return {'error': 'SMTP не настроен. Перейди в Настройки → Интеграции и укажи данные почты'}
+        try:
+            msg = _MIMEText(body, 'plain', 'utf-8')
+            msg['Subject'] = subject
+            msg['From'] = f'{company} <{smtp_from}>'
+            msg['To'] = to_email
+            if port == 465:
+                srv = smtplib.SMTP_SSL(host, port, timeout=15)
+            else:
+                srv = smtplib.SMTP(host, port, timeout=15)
+                srv.starttls()
+            srv.login(smtp_user, smtp_pass)
+            srv.sendmail(smtp_from, [to_email], msg.as_string())
+            srv.quit()
+            # Логируем в лид если есть lead_id
+            if lead_id:
+                try:
+                    cur.execute(
+                        f"UPDATE {SCHEMA}.leads SET updated_at = NOW() WHERE id = {int(lead_id)}"
+                    )
+                except Exception:
+                    pass
+            return {'ok': True, 'message': f'Письмо отправлено на {to_email}. Тема: «{subject}»'}
+        except Exception as e:
+            return {'error': f'Ошибка отправки: {str(e)[:200]}'}
+
+    # ── Поиск по базе знаний (ai_memory) ─────────────────────────────────
+    if act_type == 'search_knowledge':
+        query = (params.get('query') or '').strip().lower()
+        if not query:
+            return {'error': 'Укажите поисковый запрос (query)'}
+        # Ищем по ключу и значению
+        terms = query.split()[:5]
+        where_parts = []
+        for t in terms:
+            t_safe = t.replace("'", "''")
+            where_parts.append(
+                f"(LOWER(key) LIKE '%{t_safe}%' OR LOWER(value) LIKE '%{t_safe}%')"
+            )
+        where_sql = ' AND '.join(where_parts) if where_parts else '1=1'
+        cur.execute(
+            f"SELECT key, value, updated_at FROM {SCHEMA}.ai_memory "
+            f"WHERE {where_sql} ORDER BY updated_at DESC LIMIT 10"
+        )
+        rows = cur.fetchall()
+        if not rows:
+            return {'ok': True, 'found': 0, 'results': [],
+                    'message': f'В базе знаний ничего не найдено по запросу «{query}»'}
+        results = []
+        for r in rows:
+            upd = r['updated_at'].strftime('%d.%m.%Y') if r.get('updated_at') else ''
+            results.append({'key': r['key'], 'value': (r['value'] or '')[:300], 'updated': upd})
+        summary = '\n'.join(f"• {r['key']}: {r['value'][:120]}" for r in results)
+        return {
+            'ok': True, 'found': len(results), 'results': results,
+            'message': f'Найдено {len(results)} записей по «{query}»:\n{summary}',
+        }
+
+    # ── Назначить брокера на заявку ──────────────────────────────────────
+    if act_type == 'assign_broker':
+        lead_id = params.get('lead_id') or params.get('id')
+        broker_id = params.get('broker_id')
+        broker_name = (params.get('broker_name') or '').strip()
+        if not lead_id:
+            return {'error': 'Укажите lead_id заявки'}
+        # Если передано имя — ищем брокера по нему
+        if broker_name and not broker_id:
+            name_safe = broker_name.replace("'", "''")
+            cur.execute(
+                f"SELECT id, name FROM {SCHEMA}.users "
+                f"WHERE is_active = TRUE AND LOWER(name) LIKE '%{name_safe.lower()}%' "
+                f"AND role IN ('admin','director','broker','manager','office_manager') LIMIT 1"
+            )
+            broker_row = cur.fetchone()
+            if broker_row:
+                broker_id = broker_row['id']
+                broker_name = broker_row['name']
+            else:
+                return {'error': f'Брокер «{broker_name}» не найден в системе'}
+        if not broker_id:
+            return {'error': 'Укажите broker_id или broker_name'}
+        try:
+            cur.execute(
+                f"UPDATE {SCHEMA}.leads SET broker_id = {int(broker_id)}, "
+                f"status = CASE WHEN status = 'new' THEN 'in_progress' ELSE status END, "
+                f"updated_at = NOW() WHERE id = {int(lead_id)}"
+            )
+        except Exception as e:
+            return {'error': f'Ошибка: {e}'}
+        return {
+            'ok': True,
+            'message': f'Заявка #{lead_id} назначена брокеру {broker_name or broker_id}. Статус → in_progress.',
+        }
+
+    # ── Уведомить сотрудника по email ────────────────────────────────────
+    if act_type == 'notify_employee':
+        import smtplib
+        from email.mime.text import MIMEText as _MIMEText2
+        employee_name = (params.get('name') or '').strip()
+        employee_id = params.get('employee_id')
+        subject = (params.get('subject') or '').strip()
+        body = (params.get('body') or '').strip()
+        if not (subject and body):
+            return {'error': 'Укажите тему (subject) и текст (body)'}
+        # Ищем email сотрудника
+        to_email = (params.get('email') or '').strip()
+        if not to_email:
+            if employee_id:
+                cur.execute(
+                    f"SELECT email, name FROM {SCHEMA}.users WHERE id = {int(employee_id)} LIMIT 1"
+                )
+            elif employee_name:
+                name_safe = employee_name.replace("'", "''")
+                cur.execute(
+                    f"SELECT email, name FROM {SCHEMA}.users "
+                    f"WHERE is_active = TRUE AND LOWER(name) LIKE '%{name_safe.lower()}%' LIMIT 1"
+                )
+            else:
+                return {'error': 'Укажите имя, id или email сотрудника'}
+            row = cur.fetchone()
+            if not row:
+                return {'error': f'Сотрудник не найден'}
+            to_email = (row.get('email') or '').strip()
+            employee_name = employee_name or row.get('name', '')
+        if not to_email:
+            return {'error': f'У сотрудника {employee_name} не указан email'}
+        # SMTP
+        cur.execute(
+            f"SELECT smtp_host, smtp_port, smtp_user, smtp_password, smtp_from, company_name "
+            f"FROM {SCHEMA}.settings ORDER BY id LIMIT 1"
+        )
+        s = cur.fetchone() or {}
+        host = (s.get('smtp_host') or '').strip()
+        port = int(s.get('smtp_port') or 465)
+        smtp_user = (s.get('smtp_user') or '').strip()
+        smtp_pass = (s.get('smtp_password') or '').strip()
+        smtp_from = (s.get('smtp_from') or smtp_user or '').strip()
+        company = (s.get('company_name') or 'БМН').strip()
+        if not (host and smtp_user and smtp_pass):
+            return {'error': 'SMTP не настроен. Перейди в Настройки → Интеграции'}
+        try:
+            msg = _MIMEText2(body, 'plain', 'utf-8')
+            msg['Subject'] = subject
+            msg['From'] = f'{company} <{smtp_from}>'
+            msg['To'] = to_email
+            if port == 465:
+                srv = smtplib.SMTP_SSL(host, port, timeout=15)
+            else:
+                srv = smtplib.SMTP(host, port, timeout=15)
+                srv.starttls()
+            srv.login(smtp_user, smtp_pass)
+            srv.sendmail(smtp_from, [to_email], msg.as_string())
+            srv.quit()
+            return {'ok': True, 'message': f'Уведомление отправлено сотруднику {employee_name} ({to_email})'}
+        except Exception as e:
+            return {'error': f'Ошибка отправки: {str(e)[:200]}'}
 
     return {'error': f'Неизвестное действие: {act_type}'}
 
