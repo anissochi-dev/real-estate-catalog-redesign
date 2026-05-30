@@ -14,6 +14,7 @@ import PhoneBook from './admin/PhoneBook';
 import NetworkTenantsAdmin from './admin/NetworkTenantsAdmin';
 import NewsAdmin from './admin/NewsAdmin';
 import VBKnowledgeAdmin from './admin/VBKnowledgeAdmin';
+import SeoHubAdmin from './admin/SeoHubAdmin';
 
 interface Props {
   onExit: () => void;
@@ -47,6 +48,7 @@ export default function AdminPage({ onExit, initialSection }: Props) {
       {section === 'phones' && <PhoneBook />}
       {section === 'network-tenants' && <NetworkTenantsAdmin />}
       {section === 'news' && <NewsAdmin />}
+      {section === 'seo' && <SeoHubAdmin />}
       {section === 'vb-knowledge' && <VBKnowledgeAdmin />}
     </AdminLayout>
   );

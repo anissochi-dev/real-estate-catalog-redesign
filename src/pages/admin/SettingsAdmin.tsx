@@ -4,7 +4,6 @@ import { useSettings } from '@/contexts/SettingsContext';
 import PurposesAdmin from './PurposesAdmin';
 import LandVriAdmin from './LandVriAdmin';
 import XmlFeedsAdmin from './XmlFeedsAdmin';
-import SeoAdmin from './SeoAdmin';
 import RolesAdmin from './RolesAdmin';
 import PagesAdmin from './PagesAdmin';
 import MigrationTab from './settings/MigrationTab';
@@ -12,7 +11,6 @@ import PhotoOptimizeTab from './settings/PhotoOptimizeTab';
 import Icon from '@/components/ui/icon';
 import { S, City, PingState } from './settings/types';
 import GeneralTab from './settings/GeneralTab';
-import SeoTab from './settings/SeoTab';
 import IntegrationsTab from './settings/IntegrationsTab';
 import CitiesTab from './settings/CitiesTab';
 import LegalTab from './settings/LegalTab';
@@ -30,7 +28,7 @@ export default function SettingsAdmin() {
   const [saved, setSaved] = useState(false);
   const [cityQuery, setCityQuery] = useState('');
   const [cityAdding, setCityAdding] = useState(false);
-  type TabId = 'general' | 'watermark' | 'brand-kit' | 'seo' | 'seo-ai' | 'footer' | 'legal'
+  type TabId = 'general' | 'watermark' | 'brand-kit' | 'footer' | 'legal'
     | 'integrations' | 'ad-platforms' | 'autoposting' | 'feeds' | 'notifications'
     | 'cities' | 'purposes' | 'land-vri' | 'pages' | 'roles' | 'migration' | 'photo-optimize' | 'site-health';
   const [tab, setTab] = useState<TabId>('general');
@@ -218,8 +216,6 @@ export default function SettingsAdmin() {
     },
     {
       id: 'site', label: 'Сайт', icon: 'Globe', tabs: [
-        ['seo', 'SEO сайта', 'BarChart3'],
-        ['seo-ai', 'SEO-оптимизация', 'TrendingUp'],
         ['pages', 'Страницы', 'FileText'],
         ['footer', 'Подвал', 'PanelBottom'],
         ['legal', 'Правовые', 'Scale'],
@@ -286,10 +282,6 @@ export default function SettingsAdmin() {
         <GeneralTab tab={tab} s={s} setS={setS} cities={cities} saved={saved} save={save} />
       )}
 
-      {tab === 'seo' && (
-        <SeoTab s={s} setS={setS} saved={saved} save={save} />
-      )}
-
       {tab === 'integrations' && (
         <IntegrationsTab
           s={s} setS={setS} saved={saved} save={save}
@@ -317,7 +309,6 @@ export default function SettingsAdmin() {
       {tab === 'feeds' && <XmlFeedsAdmin />}
       {tab === 'legal' && <LegalTab s={s} setS={setS} saved={saved} save={save} />}
       {tab === 'footer' && <FooterTab s={s} setS={setS} saved={saved} save={save} />}
-      {tab === 'seo-ai' && <SeoAdmin />}
       {tab === 'roles' && <RolesAdmin />}
       {tab === 'autoposting' && <AutoPostingTab />}
       {tab === 'brand-kit' && <BrandKitTab s={s} setS={setS} saved={saved} save={save} />}
