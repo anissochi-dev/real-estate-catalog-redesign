@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import { MemoryItem, TRAINING_SOURCES, categoryByKey, fmtDate } from './types';
+
+const PAGE_SIZE = 30;
 
 interface Props {
   loading: boolean;
@@ -31,6 +34,24 @@ export default function VBMemoryList({
   onLoad, onToggleSource, onTrainOpen, onTrainSubmit,
   onEditOpen, onEditClose, onEditChange, onSave, onRemove,
 }: Props) {
+  const [page, setPage] = useState(0);
+  // Сброс страницы при смене фильтра
+  const prevFilterRef = useState(filter);
+  if (prevFilterRef[0] !== filter) { prevFilterRef[0] = filter; if (page !== 0) setPage(0); }
+
+  // Плоский список с пагинацией — сбрасываем страницу при смене фильтра
+  const allItems = filtered;
+  const totalPages = Math.ceil(allItems.length / PAGE_SIZE);
+  const safePage = Math.min(page, Math.max(0, totalPages - 1));
+  const pageItems = allItems.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+
+  // Группируем только текущую страницу
+  const pageGrouped: Record<string, MemoryItem[]> = {};
+  pageItems.forEach(it => {
+    const cat = categoryByKey(it.key);
+    (pageGrouped[cat] = pageGrouped[cat] || []).push(it);
+  });
+
   return (
     <>
       {loading && (
@@ -62,37 +83,74 @@ export default function VBMemoryList({
         </div>
       )}
 
-      {Object.entries(grouped).map(([cat, list]) => (
-        <div key={cat} className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm space-y-2">
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {cat} <span className="text-muted-foreground/60">({list.length})</span>
+      {/* Счётчик и пагинация сверху */}
+      {!loading && !error && allItems.length > 0 && (
+        <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+          <span>
+            Всего фактов: <strong className="text-foreground">{allItems.length}</strong>
+            {totalPages > 1 && <> · страница <strong className="text-foreground">{safePage + 1}</strong> из {totalPages}</>}
+          </span>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+                disabled={safePage === 0}
+                className="px-2 py-1 rounded-lg border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Icon name="ChevronLeft" size={13} />
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => {
+                // Показываем: первую, последнюю, текущую ±1
+                const show = i === 0 || i === totalPages - 1 || Math.abs(i - safePage) <= 1;
+                const ellipsisBefore = i === 1 && safePage > 2;
+                const ellipsisAfter = i === totalPages - 2 && safePage < totalPages - 3;
+                if (!show) return null;
+                return (
+                  <span key={i} className="flex items-center gap-1">
+                    {ellipsisBefore && <span className="text-muted-foreground text-xs px-0.5">…</span>}
+                    <button
+                      onClick={() => setPage(i)}
+                      className={`w-7 h-7 rounded-lg text-xs font-medium border transition ${i === safePage ? 'bg-brand-blue text-white border-brand-blue' : 'border-border hover:bg-muted'}`}
+                    >
+                      {i + 1}
+                    </button>
+                    {ellipsisAfter && <span className="text-muted-foreground text-xs px-0.5">…</span>}
+                  </span>
+                );
+              })}
+              <button
+                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                disabled={safePage === totalPages - 1}
+                className="px-2 py-1 rounded-lg border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Icon name="ChevronRight" size={13} />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Факты сгруппированные по категориям (только текущая страница) */}
+      {Object.entries(pageGrouped).map(([cat, list]) => (
+        <div key={cat} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-4 py-2.5 bg-muted/40 border-b border-border flex items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{cat}</span>
+            <span className="text-[10px] bg-muted rounded-full px-2 py-0.5 text-muted-foreground">{list.length}</span>
           </div>
           <div className="divide-y divide-border">
             {list.map(it => (
-              <div key={it.id} className="py-3 flex items-start gap-3 group hover:bg-muted/20 -mx-2 px-2 rounded-lg transition">
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-mono text-brand-blue mb-0.5">{it.key}</div>
-                  <div className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap break-words">
-                    {it.value}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground/70 mt-1">
-                    Обновлено: {fmtDate(it.updated_at)}
-                  </div>
+              <div key={it.id} className="flex items-start gap-2 px-4 py-2 group hover:bg-muted/20 transition">
+                <div className="flex-1 min-w-0 grid grid-cols-[160px_1fr] gap-x-3 items-start">
+                  <div className="text-[11px] font-mono text-brand-blue truncate pt-0.5" title={it.key}>{it.key}</div>
+                  <div className="text-xs text-foreground/90 leading-relaxed line-clamp-2" title={it.value}>{it.value}</div>
                 </div>
-                <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => onEditOpen(it)}
-                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-brand-blue"
-                    title="Редактировать"
-                  >
-                    <Icon name="Pencil" size={14} />
+                <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="text-[10px] text-muted-foreground/50 mr-1">{fmtDate(it.updated_at)}</span>
+                  <button onClick={() => onEditOpen(it)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-brand-blue" title="Редактировать">
+                    <Icon name="Pencil" size={12} />
                   </button>
-                  <button
-                    onClick={() => onRemove(it.id)}
-                    className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600"
-                    title="Удалить"
-                  >
-                    <Icon name="Trash2" size={14} />
+                  <button onClick={() => onRemove(it.id)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600" title="Удалить">
+                    <Icon name="Trash2" size={12} />
                   </button>
                 </div>
               </div>
