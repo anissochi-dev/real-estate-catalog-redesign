@@ -678,7 +678,8 @@ def handler(event: dict, context) -> dict:
             # ── СПИСОК ДЛЯ АДМИНКИ ───────────────────────────────────────
             if action == 'admin_list' and method == 'GET':
                 cur.execute(
-                    f"SELECT id, title, slug, summary, is_published, is_auto, "
+                    f"SELECT id, title, slug, summary, content, image_url, "
+                    f"source_url, source_name, is_published, is_auto, "
                     f"published_at, created_at, category, cb_key_rate FROM {SCHEMA}.news "
                     f"ORDER BY created_at DESC LIMIT 100"
                 )
@@ -687,6 +688,11 @@ def handler(event: dict, context) -> dict:
                     d = dict(r)
                     if d.get('cb_key_rate') is not None:
                         d['cb_key_rate'] = float(d['cb_key_rate'])
+                    # Обрезаем content для списка — полный текст не нужен
+                    if d.get('content'):
+                        d['content_preview'] = d['content'][:600]
+                        d['content_length'] = len(d['content'])
+                        del d['content']
                     rows.append(d)
                 return _ok({'news': rows})
 

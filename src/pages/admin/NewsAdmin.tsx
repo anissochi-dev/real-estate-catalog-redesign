@@ -24,6 +24,11 @@ interface NewsItem {
   title: string;
   slug: string;
   summary?: string;
+  content_preview?: string;
+  content_length?: number;
+  image_url?: string;
+  source_url?: string;
+  source_name?: string;
   is_published: boolean;
   is_auto: boolean;
   published_at?: string;
@@ -91,6 +96,7 @@ export default function NewsAdmin() {
   const [form, setForm] = useState({ title: '', summary: '', content: '', image_url: '', source_url: '', source_name: '' });
   const [seoHeadings, setSeoHeadings] = useState<Partial<SeoHeadings>>({});
   const [saving, setSaving] = useState(false);
+  const [report, setReport] = useState<NewsItem | null>(null);
   const loadNews = () => {
     fetch(`${NEWS_URL}?action=admin_list`, { headers })
       .then(r => r.json())
@@ -210,53 +216,205 @@ export default function NewsAdmin() {
               <div>Новостей нет. Создайте первую или запустите автогенерацию.</div>
             </div>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50">
-                <tr>
-                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Заголовок</th>
-                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground w-24">Тип</th>
-                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground w-36">Дата</th>
-                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground w-32">Действия</th>
-                </tr>
-              </thead>
-              <tbody>
-                {news.map(n => (
-                  <tr key={n.id} className="border-t border-border hover:bg-muted/20 transition">
-                    <td className="px-4 py-3">
-                      <div className="font-medium line-clamp-1">{n.title}</div>
-                      {n.slug && (
-                        <div className="text-xs text-muted-foreground font-mono">/news/{n.slug}</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${n.is_auto ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                        {n.is_auto ? 'Авто' : 'Ручная'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">{fmtDate(n.published_at || n.created_at)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-2">
-                        {n.is_published ? (
-                          <button onClick={() => publish(n.id, false)}
-                            className="text-xs px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-red-50 hover:text-red-600 transition font-medium">
-                            Опубл.
-                          </button>
-                        ) : (
-                          <button onClick={() => publish(n.id, true)}
-                            className="text-xs px-2.5 py-1 rounded-lg bg-muted hover:bg-emerald-100 hover:text-emerald-700 transition font-medium">
-                            Опубл.
-                          </button>
-                        )}
-                        <a href={`${window.location.origin}/news/${n.slug}`} target="_blank" rel="noopener noreferrer"
-                          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-brand-blue transition">
-                          <Icon name="ExternalLink" size={14} />
-                        </a>
+            <div className="flex">
+              {/* Таблица */}
+              <div className={`flex-1 min-w-0 overflow-x-auto transition-all ${report ? 'hidden lg:block' : ''}`}>
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Заголовок</th>
+                      <th className="px-4 py-3 text-left font-semibold text-muted-foreground w-24">Тип</th>
+                      <th className="px-4 py-3 text-left font-semibold text-muted-foreground w-36 hidden sm:table-cell">Дата</th>
+                      <th className="px-4 py-3 text-right font-semibold text-muted-foreground w-36">Действия</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {news.map(n => (
+                      <tr key={n.id} className={`border-t border-border hover:bg-muted/20 transition cursor-pointer ${report?.id === n.id ? 'bg-brand-blue/5' : ''}`}
+                        onClick={() => setReport(report?.id === n.id ? null : n)}>
+                        <td className="px-4 py-3">
+                          <div className="font-medium line-clamp-1">{n.title}</div>
+                          {n.slug && (
+                            <div className="text-xs text-muted-foreground font-mono">/news/{n.slug}</div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${n.is_auto ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {n.is_auto ? 'Авто' : 'Ручная'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground hidden sm:table-cell">{fmtDate(n.published_at || n.created_at)}</td>
+                        <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => setReport(report?.id === n.id ? null : n)}
+                              className={`text-xs px-2.5 py-1 rounded-lg transition font-medium flex items-center gap-1 ${report?.id === n.id ? 'bg-brand-blue text-white' : 'bg-muted hover:bg-brand-blue/10 hover:text-brand-blue'}`}
+                              title="Отчёт по статье"
+                            >
+                              <Icon name="BarChart2" size={12} />
+                              <span className="hidden sm:inline">Отчёт</span>
+                            </button>
+                            {n.is_published ? (
+                              <button onClick={() => publish(n.id, false)}
+                                className="text-xs px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-red-50 hover:text-red-600 transition font-medium">
+                                Опубл.
+                              </button>
+                            ) : (
+                              <button onClick={() => publish(n.id, true)}
+                                className="text-xs px-2.5 py-1 rounded-lg bg-muted hover:bg-emerald-100 hover:text-emerald-700 transition font-medium">
+                                Опубл.
+                              </button>
+                            )}
+                            <a href={`${window.location.origin}/news/${n.slug}`} target="_blank" rel="noopener noreferrer"
+                              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-brand-blue transition">
+                              <Icon name="ExternalLink" size={14} />
+                            </a>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Панель отчёта */}
+              {report && (
+                <div className="w-full lg:w-96 lg:min-w-96 border-l border-border flex flex-col">
+                  {/* Заголовок панели */}
+                  <div className="px-4 py-3 bg-muted/40 border-b border-border flex items-center justify-between gap-2 sticky top-0">
+                    <div className="flex items-center gap-2 font-semibold text-sm">
+                      <Icon name="BarChart2" size={15} className="text-brand-blue" />
+                      Отчёт
+                    </div>
+                    <button onClick={() => setReport(null)} className="p-1 rounded hover:bg-muted text-muted-foreground">
+                      <Icon name="X" size={15} />
+                    </button>
+                  </div>
+
+                  <div className="p-4 space-y-4 overflow-y-auto">
+                    {/* Заголовок статьи */}
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1 uppercase tracking-wide font-semibold">Статья</div>
+                      <div className="font-semibold text-sm leading-snug">{report.title}</div>
+                      <div className="text-xs text-muted-foreground mt-1 font-mono">/news/{report.slug}</div>
+                    </div>
+
+                    {/* Статус и тип */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-muted/40 rounded-xl p-3">
+                        <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Статус</div>
+                        <div className={`text-sm font-semibold flex items-center gap-1.5 ${report.is_published ? 'text-emerald-600' : 'text-amber-600'}`}>
+                          <Icon name={report.is_published ? 'CheckCircle' : 'Clock'} size={13} />
+                          {report.is_published ? 'Опубликована' : 'Черновик'}
+                        </div>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      <div className="bg-muted/40 rounded-xl p-3">
+                        <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Тип</div>
+                        <div className={`text-sm font-semibold flex items-center gap-1.5 ${report.is_auto ? 'text-purple-600' : 'text-blue-600'}`}>
+                          <Icon name={report.is_auto ? 'Bot' : 'PenLine'} size={13} />
+                          {report.is_auto ? 'Автоматическая' : 'Ручная'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Дата и размер */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-muted/40 rounded-xl p-3">
+                        <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Опубликована</div>
+                        <div className="text-sm font-medium">{fmtDate(report.published_at || report.created_at)}</div>
+                      </div>
+                      <div className="bg-muted/40 rounded-xl p-3">
+                        <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Объём</div>
+                        <div className="text-sm font-medium">
+                          {report.content_length ? `${report.content_length.toLocaleString('ru')} симв.` : '—'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Ставка ЦБ */}
+                    {report.cb_key_rate != null && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                        <div className="text-[10px] text-amber-700 uppercase tracking-wide mb-1 font-semibold">Ключевая ставка ЦБ на момент публикации</div>
+                        <div className="text-xl font-bold text-amber-700">{report.cb_key_rate}%</div>
+                      </div>
+                    )}
+
+                    {/* Источник */}
+                    {(report.source_url || report.source_name) && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-1">
+                        <div className="text-[10px] text-blue-700 uppercase tracking-wide font-semibold flex items-center gap-1">
+                          <Icon name="Link" size={11} />
+                          Источник
+                        </div>
+                        {report.source_name && (
+                          <div className="text-sm font-medium text-blue-900">{report.source_name}</div>
+                        )}
+                        {report.source_url && (
+                          <a
+                            href={report.source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-600 hover:text-blue-800 underline break-all flex items-start gap-1"
+                          >
+                            <Icon name="ExternalLink" size={11} className="mt-0.5 shrink-0" />
+                            {report.source_url}
+                          </a>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Отсутствие источника у авто-статьи */}
+                    {report.is_auto && !report.source_url && !report.source_name && (
+                      <div className="bg-muted/40 rounded-xl p-3">
+                        <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1 font-semibold flex items-center gap-1">
+                          <Icon name="Globe" size={11} />
+                          Источники
+                        </div>
+                        <div className="text-xs text-muted-foreground">Написана на основе анализа открытых новостей из интернета (Google News / Яндекс)</div>
+                      </div>
+                    )}
+
+                    {/* Краткое описание */}
+                    {report.summary && (
+                      <div>
+                        <div className="text-xs text-muted-foreground uppercase tracking-wide font-semibold mb-1">Анонс</div>
+                        <div className="text-sm text-foreground/80 leading-relaxed">{report.summary}</div>
+                      </div>
+                    )}
+
+                    {/* Превью текста */}
+                    {report.content_preview && (
+                      <div>
+                        <div className="text-xs text-muted-foreground uppercase tracking-wide font-semibold mb-1">Начало статьи</div>
+                        <div className="text-xs text-foreground/70 leading-relaxed bg-muted/30 rounded-lg p-3 line-clamp-6 whitespace-pre-line">
+                          {report.content_preview}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Кнопки */}
+                    <div className="flex gap-2 pt-1">
+                      <a
+                        href={`${window.location.origin}/news/${report.slug}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-brand-blue text-white text-sm font-medium hover:opacity-90 transition"
+                      >
+                        <Icon name="ExternalLink" size={14} />
+                        Открыть
+                      </a>
+                      <button
+                        onClick={() => { publish(report.id, !report.is_published); setReport({ ...report, is_published: !report.is_published }); }}
+                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition ${report.is_published ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
+                      >
+                        <Icon name={report.is_published ? 'EyeOff' : 'Eye'} size={14} />
+                        {report.is_published ? 'Снять' : 'Опубликовать'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}
