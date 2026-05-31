@@ -152,27 +152,23 @@ export function useAiChatActions({
           reasoning: r.reasoning,
           agentActions: incomingActions,
         };
-        setMessages(m => {
-          const next = [...m, aiMsg];
-          // Автозапуск безопасных информационных действий (risk=low) — без подтверждения
-          const newMsgIdx = next.length - 1;
-          const autoIdxs = incomingActions
-            .map((a, i) => ({ a, i }))
-            .filter(({ a }) => (a.risk === 'low' && isAutoApplicableAction(a.type, a.params))
-              // Для update_* — авто-применяем только если все поля из safe-списка,
-              // даже если модель пометила high (безопасность пользователя выше)
-              || isAutoApplicableAction(a.type, a.params))
-            .map(({ i }) => i);
-          if (autoIdxs.length > 0) {
-            setTimeout(() => {
-              autoIdxs.reduce<Promise<void>>(
-                (p, i) => p.then(() => confirmAgentAction(newMsgIdx, i)),
-                Promise.resolve(),
-              );
-            }, 50);
-          }
-          return next;
-        });
+        setMessages(m => [...m, aiMsg]);
+
+        // Авто-запуск безопасных действий — через ref к актуальному индексу
+        const autoIdxs = incomingActions
+          .map((a, i) => ({ a, i }))
+          .filter(({ a }) => isAutoApplicableAction(a.type, a.params))
+          .map(({ i }) => i);
+
+        if (autoIdxs.length > 0) {
+          // Запускаем после того как React обновит state
+          setTimeout(() => {
+            autoIdxs.reduce<Promise<void>>(
+              (p, idx) => p.then(() => execActionByData(aiMsg, idx)),
+              Promise.resolve(),
+            );
+          }, 100);
+        }
       } else {
         const r = await aiApi.ask(act, text, contextData, history);
         const aiMsg: Msg = {
@@ -207,55 +203,109 @@ export function useAiChatActions({
     'devops_get_repo_stats',
   ]);
 
-  const confirmAgentAction = async (msgIdx: number, actIdx: number) => {
-    const msg = messages[msgIdx];
-    if (!msg?.agentActions) return;
-    const target = msg.agentActions[actIdx];
-    if (!target || target.status !== 'pending') return;
-    setMessages(m => m.map((x, i) => i === msgIdx && x.agentActions
-      ? { ...x, agentActions: x.agentActions.map((a, j) => j === actIdx ? { ...a, status: 'pending', resultMessage: 'Выполняется...' } : a) }
-      : x));
+  /** Выполняет действие напрямую по объекту action — без чтения из messages (нет stale closure). */
+  const execActionByData = async (sourceMsg: Msg, actIdx: number) => {
+    const target = sourceMsg.agentActions?.[actIdx];
+    if (!target) return;
+    // Обновляем статус в messages по timestamp совпадению
+    setMessages(m => m.map(x =>
+      x.ts === sourceMsg.ts && x.agentActions
+        ? { ...x, agentActions: x.agentActions.map((a, j) => j === actIdx ? { ...a, resultMessage: 'Выполняется...' } : a) }
+        : x
+    ));
     try {
       let r: { ok?: boolean; message?: string; error?: string } & Record<string, unknown>;
       if (target.type === 'dispatcher_smart_run') {
         const res = await smartRunApi.run();
         r = { ok: res.ok, message: res.message };
       } else if (DEVOPS_ACTIONS.has(target.type)) {
-        const action = target.type.replace('devops_', '');
-        const res = await devopsApi.call(action, target.params as Record<string, unknown>);
+        const res = await devopsApi.call(target.type.replace('devops_', ''), target.params as Record<string, unknown>);
         r = { ok: !!res.ok, message: res.message as string, error: res.error as string };
       } else {
         const res = await aiApi.execute([{ type: target.type, title: target.title, description: target.description, risk: target.risk, params: target.params }]);
         r = res.results?.[0]?.result || {};
       }
       const ok = !!r.ok;
-
-      // Сохраняем resultData для аналитических действий
       const resultData = RESULT_INJECT_ACTIONS.has(target.type) ? (r as Record<string, unknown>) : undefined;
+      setMessages(m => {
+        const next = m.map(x =>
+          x.ts === sourceMsg.ts && x.agentActions
+            ? { ...x, agentActions: x.agentActions.map((a, j) => j === actIdx
+                ? { ...a, status: ok ? 'applied' as const : 'failed' as const, resultMessage: r.message || r.error || '' , resultData }
+                : a) }
+            : x
+        );
+        if (ok && resultData && r.message) {
+          return [...next, {
+            role: 'ai' as const,
+            text: `📊 Результат «${target.title || target.type}»:\n${r.message}`,
+            action: 'agent' as const,
+            ts: Date.now() + 1,
+            agentActions: [],
+          }];
+        }
+        return next;
+      });
+    } catch (e: unknown) {
+      setMessages(m => m.map(x =>
+        x.ts === sourceMsg.ts && x.agentActions
+          ? { ...x, agentActions: x.agentActions.map((a, j) => j === actIdx ? { ...a, status: 'failed' as const, resultMessage: e instanceof Error ? e.message : 'Ошибка' } : a) }
+          : x
+      ));
+    }
+  };
 
+  const confirmAgentAction = async (msgIdx: number, actIdx: number) => {
+    // Читаем target из актуального state через ref-паттерн
+    let target: NonNullable<Msg['agentActions']>[0] | undefined;
+    setMessages(m => {
+      target = m[msgIdx]?.agentActions?.[actIdx];
+      return m; // не меняем state, только читаем
+    });
+    // Даём React обработать (нужен микротаск)
+    await Promise.resolve();
+    // Повторно читаем через snapshot если target не получен
+    if (!target) {
+      const snap = messages[msgIdx]?.agentActions?.[actIdx];
+      target = snap;
+    }
+    if (!target || target.status !== 'pending') return;
+
+    const t = target; // фиксируем для замыкания
+    setMessages(m => m.map((x, i) => i === msgIdx && x.agentActions
+      ? { ...x, agentActions: x.agentActions.map((a, j) => j === actIdx ? { ...a, resultMessage: 'Выполняется...' } : a) }
+      : x));
+    try {
+      let r: { ok?: boolean; message?: string; error?: string } & Record<string, unknown>;
+      if (t.type === 'dispatcher_smart_run') {
+        const res = await smartRunApi.run();
+        r = { ok: res.ok, message: res.message };
+      } else if (DEVOPS_ACTIONS.has(t.type)) {
+        const res = await devopsApi.call(t.type.replace('devops_', ''), t.params as Record<string, unknown>);
+        r = { ok: !!res.ok, message: res.message as string, error: res.error as string };
+      } else {
+        const res = await aiApi.execute([{ type: t.type, title: t.title, description: t.description, risk: t.risk, params: t.params }]);
+        r = res.results?.[0]?.result || {};
+      }
+      const ok = !!r.ok;
+      const resultData = RESULT_INJECT_ACTIONS.has(t.type) ? (r as Record<string, unknown>) : undefined;
       setMessages(m => {
         const next = m.map((x, i) => i === msgIdx && x.agentActions
           ? { ...x, agentActions: x.agentActions.map((a, j) => j === actIdx
               ? { ...a, status: ok ? 'applied' as const : 'failed' as const, resultMessage: r.message || r.error || '', resultData }
               : a) }
           : x);
-
-        // Если действие — аналитическое/поиск, инжектируем результат в историю диалога
-        // чтобы GPT мог использовать его в следующем шаге (multi-step reasoning)
         if (ok && resultData && r.message) {
-          const resultMsg: Msg = {
-            role: 'ai',
-            text: `📊 Результат «${target.title || target.type}»:\n${r.message}`,
-            action: 'agent',
+          return [...next, {
+            role: 'ai' as const,
+            text: `📊 Результат «${t.title || t.type}»:\n${r.message}`,
+            action: 'agent' as const,
             ts: Date.now() + 1,
-            // Специальный флаг — это системный результат, не показываем actions
             agentActions: [],
-          };
-          return [...next, resultMsg];
+          }];
         }
         return next;
       });
-
     } catch (e: unknown) {
       setMessages(m => m.map((x, i) => i === msgIdx && x.agentActions
         ? { ...x, agentActions: x.agentActions.map((a, j) => j === actIdx ? { ...a, status: 'failed' as const, resultMessage: e instanceof Error ? e.message : 'Ошибка' } : a) }
@@ -270,10 +320,13 @@ export function useAiChatActions({
   };
 
   const confirmAllAgentActions = async (msgIdx: number) => {
-    const msg = messages[msgIdx];
-    if (!msg?.agentActions) return;
-    for (let i = 0; i < msg.agentActions.length; i++) {
-      if (msg.agentActions[i].status === 'pending') {
+    // Читаем актуальный список действий из state
+    let actions: NonNullable<Msg['agentActions']> = [];
+    setMessages(m => { actions = m[msgIdx]?.agentActions || []; return m; });
+    await Promise.resolve();
+    if (!actions.length) actions = messages[msgIdx]?.agentActions || [];
+    for (let i = 0; i < actions.length; i++) {
+      if (actions[i].status === 'pending') {
         await confirmAgentAction(msgIdx, i);
       }
     }
