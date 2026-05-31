@@ -5,6 +5,7 @@ import {
   Msg, Suggestion, QuickCmd,
   isAutoApplicableAction,
   detectSuggestion,
+  RESULT_INJECT_ACTIONS,
 } from './AiChatTypes';
 import { MemoryData } from './AiChatAdminOpsTab';
 
@@ -215,13 +216,11 @@ export function useAiChatActions({
       ? { ...x, agentActions: x.agentActions.map((a, j) => j === actIdx ? { ...a, status: 'pending', resultMessage: 'Выполняется...' } : a) }
       : x));
     try {
-      let r: { ok?: boolean; message?: string; error?: string };
+      let r: { ok?: boolean; message?: string; error?: string } & Record<string, unknown>;
       if (target.type === 'dispatcher_smart_run') {
-        // Smart Run идёт в отдельную функцию smart-run
         const res = await smartRunApi.run();
         r = { ok: res.ok, message: res.message };
       } else if (DEVOPS_ACTIONS.has(target.type)) {
-        // DevOps-действия идут в отдельную функцию devops-agent
         const action = target.type.replace('devops_', '');
         const res = await devopsApi.call(action, target.params as Record<string, unknown>);
         r = { ok: !!res.ok, message: res.message as string, error: res.error as string };
@@ -230,12 +229,36 @@ export function useAiChatActions({
         r = res.results?.[0]?.result || {};
       }
       const ok = !!r.ok;
-      setMessages(m => m.map((x, i) => i === msgIdx && x.agentActions
-        ? { ...x, agentActions: x.agentActions.map((a, j) => j === actIdx ? { ...a, status: ok ? 'applied' : 'failed', resultMessage: r.message || r.error || '' } : a) }
-        : x));
+
+      // Сохраняем resultData для аналитических действий
+      const resultData = RESULT_INJECT_ACTIONS.has(target.type) ? (r as Record<string, unknown>) : undefined;
+
+      setMessages(m => {
+        const next = m.map((x, i) => i === msgIdx && x.agentActions
+          ? { ...x, agentActions: x.agentActions.map((a, j) => j === actIdx
+              ? { ...a, status: ok ? 'applied' as const : 'failed' as const, resultMessage: r.message || r.error || '', resultData }
+              : a) }
+          : x);
+
+        // Если действие — аналитическое/поиск, инжектируем результат в историю диалога
+        // чтобы GPT мог использовать его в следующем шаге (multi-step reasoning)
+        if (ok && resultData && r.message) {
+          const resultMsg: Msg = {
+            role: 'ai',
+            text: `📊 Результат «${target.title || target.type}»:\n${r.message}`,
+            action: 'agent',
+            ts: Date.now() + 1,
+            // Специальный флаг — это системный результат, не показываем actions
+            agentActions: [],
+          };
+          return [...next, resultMsg];
+        }
+        return next;
+      });
+
     } catch (e: unknown) {
       setMessages(m => m.map((x, i) => i === msgIdx && x.agentActions
-        ? { ...x, agentActions: x.agentActions.map((a, j) => j === actIdx ? { ...a, status: 'failed', resultMessage: e instanceof Error ? e.message : 'Ошибка' } : a) }
+        ? { ...x, agentActions: x.agentActions.map((a, j) => j === actIdx ? { ...a, status: 'failed' as const, resultMessage: e instanceof Error ? e.message : 'Ошибка' } : a) }
         : x));
     }
   };

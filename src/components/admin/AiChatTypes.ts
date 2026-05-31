@@ -3,7 +3,36 @@ import { AiAction, AgentAction, VbRole } from '@/lib/adminApi';
 export interface AgentActionState extends AgentAction {
   status: 'pending' | 'applied' | 'rejected' | 'failed';
   resultMessage?: string;
+  /** Полный результат действия — для передачи в следующий шаг агента */
+  resultData?: Record<string, unknown>;
 }
+
+/**
+ * Действия, результаты которых нужно инжектировать в историю диалога
+ * чтобы GPT видел их при следующем шаге (multi-step reasoning).
+ */
+export const RESULT_INJECT_ACTIONS = new Set([
+  'web_search',
+  'knowledge_search',
+  'get_listings_summary',
+  'get_leads_summary',
+  'get_conversion_analytics',
+  'inspector_full_audit',
+  'guardian_full_scan',
+  'check_data_integrity',
+  'detect_suspicious_activity',
+  'analytics_report',
+  'scan_long_titles',
+  'lookup_lead',
+  'inspector_get_reports',
+  'copywriter_get_topics',
+  'dispatcher_get_status',
+  'knowledge_stats',
+  'devops_check_github',
+  'devops_get_commits',
+  'devops_get_issues',
+  'devops_analyze_errors',
+]);
 
 export interface Msg {
   role: 'user' | 'ai';
