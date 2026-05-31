@@ -3093,16 +3093,28 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         news_id = None
         if publish:
             cur.execute(
-                f"INSERT INTO {SCHEMA}.news (title, summary, content, is_published, "
-                f"seo_title, seo_description, created_at) "
+                f"INSERT INTO {SCHEMA}.news (title, summary, content, is_published, is_auto, created_at, published_at) "
                 f"VALUES ('{_sanitize_text(news_title, 200)}', "
                 f"'{_sanitize_text(summary, 500)}', "
-                f"'{_sanitize_text(article_text, 15000)}', TRUE, "
-                f"'{_sanitize_text(seo_title, 100)}', "
-                f"'{_sanitize_text(seo_desc, 300)}', NOW()) RETURNING id"
+                f"'{_sanitize_text(article_text, 15000)}', "
+                f"TRUE, TRUE, NOW(), NOW()) RETURNING id"
             )
             row_n = cur.fetchone()
             news_id = row_n['id'] if row_n else None
+            # Генерируем slug
+            if news_id:
+                import re as _re2
+                slug_base = _re2.sub(r'[^a-z0-9]+', '-', news_title.lower()
+                    .replace('а','a').replace('б','b').replace('в','v').replace('г','g')
+                    .replace('д','d').replace('е','e').replace('ё','e').replace('ж','zh')
+                    .replace('з','z').replace('и','i').replace('й','y').replace('к','k')
+                    .replace('л','l').replace('м','m').replace('н','n').replace('о','o')
+                    .replace('п','p').replace('р','r').replace('с','s').replace('т','t')
+                    .replace('у','u').replace('ф','f').replace('х','h').replace('ц','ts')
+                    .replace('ч','ch').replace('ш','sh').replace('щ','sch').replace('ы','y')
+                    .replace('э','e').replace('ю','yu').replace('я','ya')).strip('-')[:60]
+                slug = f'{slug_base}-{news_id}'
+                cur.execute(f"UPDATE {SCHEMA}.news SET slug='{_sanitize_text(slug, 200)}' WHERE id={news_id}")
 
         cur.execute(f"UPDATE {SCHEMA}.agent_modules SET last_run_at=NOW() WHERE module='copywriter'")
         web_note = f' На основе {news_found} свежих новостей из интернета.' if news_found else ''
