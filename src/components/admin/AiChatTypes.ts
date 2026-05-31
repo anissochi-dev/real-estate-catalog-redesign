@@ -130,6 +130,8 @@ export const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
   devops_get_workflows: { label: 'GitHub Actions', icon: 'Workflow' },
   devops_analyze_errors: { label: 'Анализ ошибок', icon: 'Bug' },
   devops_get_repo_stats: { label: 'Статистика репо', icon: 'BarChart2' },
+  // 🌐 Поиск в интернете
+  web_search: { label: 'Поиск в интернете', icon: 'Globe' },
   // 🧠 База знаний
   knowledge_search: { label: 'Поиск в базе знаний', icon: 'DatabaseSearch' },
   knowledge_index: { label: 'Индексировать базу', icon: 'Database' },
@@ -180,6 +182,8 @@ export const AUTO_APPLY_ACTIONS = new Set([
   'devops_get_workflows',
   'devops_analyze_errors',
   'devops_get_repo_stats',
+  // Поиск в интернете
+  'web_search',
   // База знаний
   'knowledge_search',
   'knowledge_index',

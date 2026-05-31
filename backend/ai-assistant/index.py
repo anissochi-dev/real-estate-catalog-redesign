@@ -434,6 +434,9 @@ SYSTEM_PROMPTS = {
         '- devops_analyze_errors: {"hours":24?} risk:low — анализ ошибок из логов системы + GPT-рекомендации\n'
         '- devops_get_repo_stats: {"repo":"owner/repo"?} risk:low — статистика репо: языки, контрибьюторы, релизы\n'
         '\n'
+        '🌐 ПОИСК В ИНТЕРНЕТЕ (Yandex Search API):\n'
+        '- web_search: {"query":str,"limit":5?} risk:low — поиск в интернете через Яндекс. Используй при «найди в интернете», «что пишут про», «новости рынка», «актуальная цена», «найди информацию о», «поищи». Возвращает заголовки, сниппеты и ссылки.\n'
+        '\n'
         '🧠 БАЗА ЗНАНИЙ (векторный поиск):\n'
         '- knowledge_search: {"query":str,"source_type":"listing|news|ai_memory"?,"limit":10?} risk:low — семантический поиск по базе знаний. Используй когда спрашивают «найди в базе», «что известно про...», «есть ли объекты с...»\n'
         '- knowledge_index: {"source_type":"listing|news|ai_memory|all"?,"limit":50?} risk:low — проиндексировать источники в базу знаний. Запускай при «обнови базу знаний», «переиндексируй»\n'
@@ -463,7 +466,8 @@ SYSTEM_PROMPTS = {
         '- При запросах «найди в базе знаний», «что известно про», «поищи похожие объекты» — используй knowledge_search.\n'
         '- При «обнови базу знаний», «проиндексируй» — knowledge_index с source_type:"all".\n'
         '- knowledge_search, knowledge_index, knowledge_stats — всегда risk:low (выполняются авто).\n'
-        '- При «проверь всё», «полная проверка», «запусти умный анализ», «smart run» — используй dispatcher_smart_run (risk:medium, требует подтверждения). Это самое мощное действие — делает всё за один раз.'
+        '- При «проверь всё», «полная проверка», «запусти умный анализ», «smart run» — используй dispatcher_smart_run (risk:medium, требует подтверждения). Это самое мощное действие — делает всё за один раз.\n'
+        '- web_search всегда risk:low (выполняется авто). После получения результатов — кратко изложи найденное своими словами.'
     ),
     'security': (
         'Ты — специалист по информационной безопасности. Анализируй данные системы (объявления, лиды, '
@@ -2737,6 +2741,104 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
     if act_type == 'dispatcher_smart_run':
         # Выполняется через отдельную функцию smart-run (см. backend/smart-run/index.py)
         return {'error': 'Smart Run выполняется через отдельный эндпоинт. Используй кнопку ⚡ Smart Run в чате.'}
+
+    # ════════════════════════════════════════════════════════════════════
+    # 🌐  ПОИСК В ИНТЕРНЕТЕ (Yandex Search API)
+    # ════════════════════════════════════════════════════════════════════
+
+    if act_type == 'web_search':
+        """Поиск в интернете через Yandex Search API v2."""
+        import xml.etree.ElementTree as ET
+        import urllib.error as _ue
+
+        query = (params.get('query') or '').strip()
+        limit = min(int(params.get('limit') or 5), 10)
+        if not query:
+            return {'error': 'Укажите query для поиска'}
+
+        search_key = os.environ.get('YANDEX_SEARCH_API_KEY', '')
+        folder_id_s = os.environ.get('YANDEX_FOLDER_ID', '')
+        if not search_key:
+            return {'error': 'YANDEX_SEARCH_API_KEY не настроен'}
+
+        payload = json.dumps({
+            'query': {'searchType': 'SEARCH_TYPE_RU', 'queryText': query},
+            'sortSpec': {'sortMode': 'SORT_MODE_BY_RELEVANCE'},
+            'maxPassages': 2,
+            'pageSize': limit,
+        }, ensure_ascii=False).encode()
+
+        req = urllib.request.Request(
+            'https://searchapi.api.cloud.yandex.net/v2/web/search',
+            data=payload,
+            headers={
+                'Authorization': f'Api-Key {search_key}',
+                'Content-Type': 'application/json',
+                'x-folder-id': folder_id_s,
+            },
+            method='POST',
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                raw = json.loads(resp.read().decode())
+        except _ue.HTTPError as e:
+            err_body = ''
+            try:
+                err_body = e.read().decode('utf-8', errors='ignore')[:400]
+            except Exception:
+                pass
+            return {'error': f'Yandex Search API ошибка {e.code}: {err_body}'}
+        except Exception as e:
+            return {'error': f'Ошибка соединения: {str(e)[:200]}'}
+
+        # rawData — base64 XML с результатами
+        import base64 as _b64
+        raw_data = raw.get('rawData', '')
+        if not raw_data:
+            return {'ok': True, 'found': 0, 'results': [], 'message': f'По запросу «{query}» ничего не найдено.'}
+
+        try:
+            xml_bytes = _b64.b64decode(raw_data)
+            root = ET.fromstring(xml_bytes.decode('utf-8', errors='ignore'))
+        except Exception as e:
+            return {'error': f'Ошибка разбора XML: {str(e)[:200]}'}
+
+        results = []
+        for doc in root.findall('.//doc'):
+            title_el = doc.find('title')
+            url_el = doc.find('url')
+            passages = doc.findall('.//passage')
+            snippet_parts = [p.text or '' for p in passages if p.text]
+            # Убираем теги из текста (могут быть <hlword>)
+            snippet = ' '.join(snippet_parts)[:400]
+            # Очищаем от XML-тегов вручную
+            import re as _re
+            snippet = _re.sub(r'<[^>]+>', '', snippet).strip()
+            title_text = _re.sub(r'<[^>]+>', '', (title_el.text or '') if title_el is not None else '').strip()
+            url_text = (url_el.text or '').strip() if url_el is not None else ''
+            if title_text or url_text:
+                results.append({
+                    'title': title_text[:150],
+                    'url': url_text,
+                    'snippet': snippet[:300],
+                })
+
+        # Формируем читаемое сообщение для ВБ
+        lines = [f'🌐 Результаты поиска по запросу «{query}»:\n']
+        for i, r in enumerate(results[:limit], 1):
+            lines.append(f'{i}. **{r["title"]}**')
+            if r['snippet']:
+                lines.append(f'   {r["snippet"]}')
+            lines.append(f'   🔗 {r["url"]}')
+        summary = '\n'.join(lines) if results else f'По запросу «{query}» ничего не найдено.'
+
+        return {
+            'ok': True,
+            'query': query,
+            'found': len(results),
+            'results': results,
+            'message': summary,
+        }
 
     # ════════════════════════════════════════════════════════════════════
     # 🧠  БАЗА ЗНАНИЙ (pgvector / FTS)
