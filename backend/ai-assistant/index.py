@@ -462,6 +462,7 @@ SYSTEM_PROMPTS = {
         '- Если до этого был web_search с ценами конкурентов → предложи update_listing_full для обновления цен\n'
         '- Если был inspector_full_audit с SEO-проблемами → предложи bulk_seo_optimize с конкретными id\n'
         '- Если был get_listings_summary → используй числа оттуда в своём ответе\n'
+        '- Если в истории есть «✅ Оптимизация завершена» или «✅ Описания сгенерированы» или «✅ SEO» — эти задачи УЖЕ ВЫПОЛНЕНЫ. НЕ предлагай их снова. Сделай get_listings_summary чтобы убедиться и сообщи результат.\n'
         'Всегда объясняй в reasoning что именно ты нашёл и какие конкретные действия предлагаешь на основе результатов.\n\n'
         'ФОРМАТ ОТВЕТА — валидный JSON без markdown:\n'
         '{"reasoning":"Живой текстовый ответ 1-4 предложения. Можно задать уточняющий вопрос.","actions":[{"type":str,"title":str,"description":str,"risk":"low|medium|high","params":{}}]}\n'
@@ -474,7 +475,8 @@ SYSTEM_PROMPTS = {
         '- Если пользователь просит «измени/поправь объект #ID» — update_listing_full. risk:low если только description/tags/seo_*/флаги, risk:high если title/price/status/address.\n'
         '- Если запрос общий — начни с get_listings_summary + get_leads_summary (оба low, выполнятся авто).\n'
         '- При «проверь всё» / «полная проверка» — dispatcher_smart_run (risk:medium).\n'
-        '- web_search, knowledge_search, knowledge_stats — всегда risk:low (авто). После web_search изложи найденное в reasoning.'
+        '- web_search, knowledge_search, knowledge_stats — всегда risk:low (авто). После web_search изложи найденное в reasoning.\n'
+        '- После выполнения bulk_shorten_titles / bulk_generate_descriptions / bulk_seo_optimize — СЛЕДУЮЩИМ действием предложи get_listings_summary (low, авто) чтобы подтвердить результат пользователю.'
     ),
     'security': (
         'Ты — специалист по информационной безопасности. Анализируй данные системы (объявления, лиды, '
@@ -1545,15 +1547,24 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
             f"COUNT(*) FILTER (WHERE status='archived') AS archived, "
             f"COUNT(*) FILTER (WHERE status='active' AND COALESCE(LENGTH(description), 0) < 50) AS no_desc, "
             f"COUNT(*) FILTER (WHERE status='active' AND (seo_title IS NULL OR seo_title='')) AS no_seo, "
+            f"COUNT(*) FILTER (WHERE status='active' AND LENGTH(title) > 70) AS long_titles, "
             f"COALESCE(AVG(price) FILTER (WHERE status='active'), 0)::bigint AS avg_price, "
             f"COALESCE(MIN(price) FILTER (WHERE status='active' AND price > 0), 0) AS min_price, "
             f"COALESCE(MAX(price) FILTER (WHERE status='active'), 0) AS max_price "
             f"FROM {SCHEMA}.listings WHERE 1=1{where_period}"
         )
         row = dict(cur.fetchone())
-        return {'ok': True, 'message': f"Объектов: {row['active']} активных, {row['archived']} в архиве. "
-                f"Средняя цена: {row['avg_price']:,} ₽. Без описания: {row['no_desc']}, без SEO: {row['no_seo']}.",
-                'data': row}
+        issues = []
+        if row['no_desc'] > 0: issues.append(f"без описания: {row['no_desc']}")
+        if row['no_seo'] > 0: issues.append(f"без SEO: {row['no_seo']}")
+        if row['long_titles'] > 0: issues.append(f"длинных заголовков: {row['long_titles']}")
+        issues_str = ', '.join(issues) if issues else 'все объекты в порядке ✅'
+        return {
+            'ok': True,
+            'message': f"Объектов: {row['active']} активных, {row['archived']} в архиве. "
+                       f"Средняя цена: {row['avg_price']:,} ₽. Проблемы: {issues_str}.",
+            'data': row,
+        }
 
     if act_type == 'get_leads_summary':
         period = params.get('period', 'all')
