@@ -2946,27 +2946,25 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         """Написать SEO-статью для блога под тему и TOV компании."""
         topic = (params.get('topic') or '').strip()
         keywords = (params.get('keywords') or '').strip()
-        length = (params.get('length') or 'medium').strip()  # short|medium|long
+        length = (params.get('length') or 'medium').strip()
         publish = params.get('publish', False)
+        use_web = params.get('use_web', True)  # по умолчанию ищем новости
 
         if not topic:
             return {'error': 'Укажите topic — тему статьи'}
 
-        # Загружаем TOV из конфига модуля
-        cur.execute(
-            f"SELECT config FROM {SCHEMA}.agent_modules WHERE module='copywriter' LIMIT 1"
-        )
+        # Загружаем TOV
+        cur.execute(f"SELECT config FROM {SCHEMA}.agent_modules WHERE module='copywriter' LIMIT 1")
         cfg_row = cur.fetchone()
         tov = 'профессиональный брокер коммерческой недвижимости'
         if cfg_row and cfg_row.get('config'):
-            import json as _jcfg
             try:
-                tov = _jcfg.loads(cfg_row['config']).get('tov', tov) if isinstance(cfg_row['config'], str) else cfg_row['config'].get('tov', tov)
+                cfg = cfg_row['config'] if isinstance(cfg_row['config'], dict) else json.loads(cfg_row['config'])
+                tov = cfg.get('tov', tov)
             except Exception:
                 pass
 
-        # Данные о компании
-        cur.execute(f"SELECT company_name, hero_subtitle FROM {SCHEMA}.settings LIMIT 1")
+        cur.execute(f"SELECT company_name FROM {SCHEMA}.settings LIMIT 1")
         site_s = cur.fetchone() or {}
         company = site_s.get('company_name') or 'BIZNEST'
 
@@ -2977,44 +2975,83 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         if not api_key:
             return {'error': 'YandexGPT не настроен'}
 
-        kw_line = f'Ключевые слова для SEO (вплети органично): {keywords}.' if keywords else ''
+        # Ищем свежие новости по теме если use_web=True
+        news_context = ''
+        news_found = 0
+        if use_web:
+            try:
+                import urllib.request as _ureq, urllib.parse as _uparse, xml.etree.ElementTree as _ET, re as _re
+                search_user = os.environ.get('YANDEX_SEARCH_USER', '')
+                search_key = os.environ.get('YANDEX_SEARCH_API_KEY', '')
+                if search_user and search_key:
+                    search_q = f'{topic} Краснодар'
+                    qparams = _uparse.urlencode({
+                        'user': search_user, 'key': search_key,
+                        'query': search_q, 'lr': '35', 'l10n': 'ru',
+                        'groupby': 'attr=d.mode=flat.groups-on-page=6.docs-in-group=1',
+                    })
+                    req_s = _ureq.Request(
+                        f'https://yandex.ru/search/xml?{qparams}',
+                        headers={'User-Agent': 'Mozilla/5.0'}
+                    )
+                    with _ureq.urlopen(req_s, timeout=10) as resp_s:
+                        xml_s = resp_s.read().decode('utf-8', errors='replace')
+                    root_s = _ET.fromstring(xml_s)
+                    snippets = []
+                    for doc in root_s.iter('doc'):
+                        t_el = doc.find('title')
+                        s_el = doc.find('passages/passage') or doc.find('snippet')
+                        t = _re.sub(r'<[^>]+>', '', (t_el.text or '') if t_el is not None else '').strip()
+                        s = _re.sub(r'<[^>]+>', '', (s_el.text or '') if s_el is not None else '').strip()
+                        if t and s:
+                            snippets.append(f'• {t}: {s}')
+                        if len(snippets) >= 6:
+                            break
+                    if snippets:
+                        news_found = len(snippets)
+                        news_context = (
+                            'СВЕЖИЕ НОВОСТИ ПО ТЕМЕ (используй как фактуру, НЕ копируй дословно):\n'
+                            + '\n'.join(snippets)
+                            + '\n\nПереформулируй все факты своими словами, добавь экспертный анализ.'
+                        )
+            except Exception:
+                pass
+
+        kw_line = f'Ключевые слова SEO: {keywords}. ' if keywords else ''
         sys_p = (
-            f'Ты — экспертный копирайтер агентства коммерческой недвижимости «{company}». '
-            f'Стиль: {tov}. Пишешь полезные, экспертные статьи для блога. '
-            f'Без воды, с конкретными фактами, советами и примерами.'
+            f'Ты — экспертный копирайтер агентства «{company}» ({tov}). '
+            f'Пишешь уникальные экспертные статьи для блога о коммерческой недвижимости. '
+            f'Без плагиата — все внешние факты переформулируй своими словами. '
+            f'Без markdown-символов (#, *, **).'
         )
         user_p = (
-            f'Напиши SEO-статью для блога на тему: «{topic}». '
-            f'{kw_line} '
+            f'Напиши SEO-статью на тему: «{topic}».\n'
+            f'{kw_line}'
             f'Объём: {words_count} слов. '
-            f'Структура: заголовок H1, вводный абзац, 3-5 разделов с подзаголовками, заключение с призывом. '
-            f'Без markdown-символов (#, *, **). Только чистый текст с переносами строк.'
+            f'Структура: заголовок, вводный абзац, 3-5 разделов с подзаголовками, заключение с призывом.\n'
+            + (f'\n{news_context}' if news_context else '')
         )
 
-        gpt_res = _call_yandex_gpt(user_p, sys_p, api_key, folder_id)
+        gpt_res = _call_yandex_gpt(user_p, sys_p, api_key, folder_id, max_tokens=3000)
         if 'error' in gpt_res:
             return {'error': gpt_res['error']}
-
         article_text = gpt_res.get('text', '')
 
-        # Генерируем SEO-мету
-        seo_prompt = (
-            f'По этой статье дай:\nTITLE: заголовок до 65 символов\nDESCRIPTION: описание до 155 символов\n\n'
-            f'Статья:\n{article_text[:800]}'
+        # SEO-мета
+        seo_res = _call_yandex_gpt(
+            f'Статья:\n{article_text[:800]}\n\nДай:\nTITLE: до 65 символов\nDESCRIPTION: до 155 символов',
+            'SEO-специалист', api_key, folder_id, model='short'
         )
-        seo_res = _call_yandex_gpt(seo_prompt, 'SEO-специалист', api_key, folder_id, model='short')
-        seo_text = seo_res.get('text', '')
         seo_title, seo_desc = '', ''
-        for line in seo_text.splitlines():
-            if line.startswith('TITLE:'):
-                seo_title = line[6:].strip()[:65]
-            elif line.startswith('DESCRIPTION:'):
-                seo_desc = line[12:].strip()[:155]
+        for line in (seo_res.get('text') or '').splitlines():
+            if line.upper().startswith('TITLE:') and not seo_title:
+                seo_title = line.split(':', 1)[1].strip()[:65]
+            elif line.upper().startswith('DESCRIPTION:') and not seo_desc:
+                seo_desc = line.split(':', 1)[1].strip()[:155]
 
-        # Первая строка = заголовок статьи
-        lines = [l.strip() for l in article_text.splitlines() if l.strip()]
-        news_title = lines[0][:200] if lines else topic
-        summary = lines[1][:500] if len(lines) > 1 else article_text[:200]
+        art_lines = [l.strip() for l in article_text.splitlines() if l.strip()]
+        news_title = art_lines[0][:200] if art_lines else topic
+        summary = art_lines[1][:500] if len(art_lines) > 1 else article_text[:200]
 
         news_id = None
         if publish:
@@ -3027,14 +3064,11 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
                 f"'{_sanitize_text(seo_title, 100)}', "
                 f"'{_sanitize_text(seo_desc, 300)}', NOW()) RETURNING id"
             )
-            news_row = cur.fetchone()
-            news_id = news_row['id'] if news_row else None
+            row_n = cur.fetchone()
+            news_id = row_n['id'] if row_n else None
 
-        # Логируем задачу
-        cur.execute(
-            f"UPDATE {SCHEMA}.agent_modules SET last_run_at=NOW() WHERE module='copywriter'"
-        )
-
+        cur.execute(f"UPDATE {SCHEMA}.agent_modules SET last_run_at=NOW() WHERE module='copywriter'")
+        web_note = f' На основе {news_found} свежих новостей из интернета.' if news_found else ''
         return {
             'ok': True,
             'title': news_title,
@@ -3043,9 +3077,10 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
             'seo_description': seo_desc,
             'news_id': news_id,
             'published': bool(publish and news_id),
+            'news_sources_used': news_found,
             'message': (
-                f'Статья «{news_title[:60]}» написана ({len(article_text)} симв.). '
-                + (f'Опубликована как новость #{news_id}.' if news_id else 'Не опубликована — передай publish:true чтобы сохранить.')
+                f'✅ Статья «{news_title[:60]}» написана ({len(article_text)} симв.).{web_note} '
+                + (f'Опубликована как новость #{news_id}.' if news_id else 'Черновик — передай publish:true чтобы опубликовать.')
             ),
         }
 

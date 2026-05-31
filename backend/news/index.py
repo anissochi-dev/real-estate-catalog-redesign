@@ -64,25 +64,23 @@ AUTO_TOPICS = [
 
 SYSTEM_PROMPT_TEMPLATE = """Ты — профессиональный копирайтер специализированного издания о коммерческой недвижимости Краснодара и Краснодарского края.
 
-СЕГОДНЯШНЯЯ ДАТА: {today}. Пиши статью актуальную именно на эту дату. Все ссылки на периоды, события, данные должны быть актуальны на дату публикации (не старше 10 дней от {today}).
+СЕГОДНЯШНЯЯ ДАТА: {today}. Пиши статью актуальную именно на эту дату.
 
 {key_rate_block}
 
-Твои источники для анализа:
-- Данные ЦБ РФ о ключевой ставке и ипотеке (cbr.ru) — актуальные на {today}
-- Новости застройщиков Краснодара (ЮСИ, Девелопмент-Юг, СКС) — события текущего месяца
-- Рынок коммерческой недвижимости (ЦИАН, Авито) — цены и тренды на {today}
-- Новости правительства Краснодарского края (kuban.ru) — актуальные решения
-- Банки: Сбербанк, ВТБ, Альфа-Банк — текущие ставки и программы
-
 Правила написания статьи:
-1. Заголовок: конкретный, содержательный, до 100 символов, с указанием актуального периода (месяц/год: {month_year})
+1. Заголовок: конкретный, до 100 символов, с указанием периода {month_year}
 2. Краткое описание (summary): 2-3 предложения, суть материала, 150-250 символов
-3. Текст статьи: 4-6 абзацев, факты и цифры, профессиональный тон
-4. Если в статье упоминается ключевая ставка ЦБ — {key_rate_rule}
-5. Не пиши обобщённо — пиши конкретно о текущей ситуации на {today}
-6. Завершай выводом или рекомендацией для инвесторов/арендаторов
-7. Пиши на русском языке, без markdown-разметки, только текст
+3. Текст: 4-6 абзацев, факты и цифры, профессиональный тон, 600-900 слов
+4. Если упоминается ключевая ставка — {key_rate_rule}
+5. Завершай выводом или рекомендацией для инвесторов/арендаторов
+6. Без markdown-разметки, только текст с переносами строк
+
+АНТИПЛАГИАТ — ОБЯЗАТЕЛЬНО:
+- Если получаешь новости из источников — НЕ копируй дословно ни одного предложения
+- Все факты переформулируй своими словами, сохраняя смысл
+- Добавляй собственный экспертный анализ: что это значит для рынка Краснодара, какие последствия
+- Статья должна быть уникальной авторской работой, а не пересказом новостей
 
 Формат ответа (строго JSON):
 {{
@@ -91,7 +89,7 @@ SYSTEM_PROMPT_TEMPLATE = """Ты — профессиональный копир
   "content": "Полный текст статьи"
 }}
 
-ВАЖНО: статья должна отражать реалии именно {today}, а не прошлого года."""
+ВАЖНО: статья должна отражать реалии именно {today}."""
 
 
 def _fetch_cbr_key_rate() -> float | None:
@@ -221,7 +219,65 @@ def _load_gpt_keys(cur):
     return os.environ.get('YANDEX_API_KEY', ''), os.environ.get('YANDEX_FOLDER_ID', '')
 
 
-def _gpt(api_key, folder_id, topic, key_rate: float | None = None):
+def _fetch_news_snippets(query: str, limit: int = 8) -> list[dict]:
+    """
+    Ищет свежие новости через Яндекс XML Search API.
+    Возвращает список {'title': str, 'snippet': str, 'url': str}.
+    """
+    search_user = os.environ.get('YANDEX_SEARCH_USER', '')
+    search_key = os.environ.get('YANDEX_SEARCH_API_KEY', '')
+    if not search_user or not search_key:
+        return []
+    try:
+        import urllib.parse
+        params = urllib.parse.urlencode({
+            'user': search_user,
+            'key': search_key,
+            'query': query,
+            'lr': '35',         # Краснодар
+            'l10n': 'ru',
+            'sortby': 'rlv',
+            'filter': 'none',
+            'groupby': f'attr=d.mode=flat.groups-on-page={limit}.docs-in-group=1',
+        })
+        url = f'https://yandex.ru/search/xml?{params}'
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            xml_data = resp.read().decode('utf-8', errors='replace')
+        root = ET.fromstring(xml_data)
+        results = []
+        for doc in root.iter('doc'):
+            title_el = doc.find('title')
+            snippet_el = doc.find('passages/passage') or doc.find('snippet')
+            url_el = doc.find('url')
+            title = (title_el.text or '') if title_el is not None else ''
+            snippet = (snippet_el.text or '') if snippet_el is not None else ''
+            url = (url_el.text or '') if url_el is not None else ''
+            # Убираем HTML-теги из сниппетов
+            title = re.sub(r'<[^>]+>', '', title).strip()
+            snippet = re.sub(r'<[^>]+>', '', snippet).strip()
+            if title and snippet:
+                results.append({'title': title[:150], 'snippet': snippet[:400], 'url': url[:200]})
+            if len(results) >= limit:
+                break
+        return results
+    except Exception:
+        return []
+
+
+def _build_news_context(snippets: list[dict]) -> str:
+    """Форматирует найденные новости в читаемый блок для промпта GPT."""
+    if not snippets:
+        return ''
+    lines = ['СВЕЖИЕ НОВОСТИ ИЗ ИНТЕРНЕТА (использй как фактуру, НЕ копируй дословно):']
+    for i, s in enumerate(snippets, 1):
+        lines.append(f'{i}. {s["title"]}')
+        if s['snippet']:
+            lines.append(f'   {s["snippet"]}')
+    return '\n'.join(lines)
+
+
+def _gpt(api_key, folder_id, topic, key_rate: float | None = None, news_snippets: list | None = None):
     if not api_key or not folder_id:
         return None, 'YandexGPT не настроен'
     now = datetime.now(timezone.utc)
@@ -241,12 +297,17 @@ def _gpt(api_key, folder_id, topic, key_rate: float | None = None):
         key_rate_block=key_rate_block,
         key_rate_rule=key_rate_rule,
     )
+    # Добавляем живые новости в контекст если переданы
+    news_block = _build_news_context(news_snippets or [])
+    user_text = f'Напиши статью на тему: {topic}. Дата: {today_str}.'
+    if news_block:
+        user_text += f'\n\n{news_block}\n\nНапиши УНИКАЛЬНУЮ авторскую статью, используя эти новости как фактуру и источник данных. Переформулируй все факты своими словами, добавь экспертный анализ и выводы для рынка коммерческой недвижимости Краснодара.'
     payload = {
         'modelUri': f'gpt://{folder_id}/{YANDEX_MODEL}',
         'completionOptions': {'stream': False, 'temperature': 0.7, 'maxTokens': '3000'},
         'messages': [
             {'role': 'system', 'text': system_prompt},
-            {'role': 'user', 'text': f'Напиши статью на тему: {topic}. Дата: {today_str}.'},
+            {'role': 'user', 'text': user_text},
         ],
     }
     req = urllib.request.Request(
@@ -448,8 +509,23 @@ def handler(event: dict, context) -> dict:
                         else:
                             pool = AUTO_TOPICS
                         topics = random.sample(pool, min(count, len(pool)))
+                        # Один раз ищем общий дайджест новостей Краснодара за сегодня
+                        daily_news = _fetch_news_snippets(
+                            'коммерческая недвижимость Краснодар новости сегодня', limit=10
+                        )
                         for topic in topics:
-                            article, err = _gpt(api_key, folder_id, topic, key_rate=key_rate)
+                            # Ищем новости по конкретной теме + общий дайджест
+                            topic_news = _fetch_news_snippets(
+                                f'{topic} Краснодар', limit=5
+                            )
+                            # Объединяем: сначала тематические, потом общие (без дублей)
+                            seen_urls = {s['url'] for s in topic_news}
+                            combined = topic_news + [s for s in daily_news if s['url'] not in seen_urls]
+                            article, err = _gpt(
+                                api_key, folder_id, topic,
+                                key_rate=key_rate,
+                                news_snippets=combined[:8],
+                            )
                             if article:
                                 _save_article(cur, conn, article, True, auto_publish=True, logo_url=logo_url, key_rate=key_rate)
                                 news_generated += 1
