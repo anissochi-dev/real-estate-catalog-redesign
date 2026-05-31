@@ -141,7 +141,7 @@ export default function AiChatMessage({
                   </div>
                 </div>
 
-                {a.status === 'pending' && (
+                {a.status === 'pending' && !a.resultMessage && (
                   <div className="flex gap-2 mt-2">
                     <button
                       onClick={() => onConfirmAgentAction(i, j)}
@@ -157,10 +157,35 @@ export default function AiChatMessage({
                     </button>
                   </div>
                 )}
+                {a.status === 'pending' && a.resultMessage === 'Выполняется...' && (
+                  <div className="mt-2 space-y-1.5">
+                    {/* Полоса прогресса */}
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full rounded-full bg-brand-blue animate-progress-indeterminate" />
+                    </div>
+                    <div className="text-[11px] text-brand-blue flex items-center gap-1.5">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-blue animate-pulse" />
+                      Выполняется
+                      {Array.isArray((a.params as Record<string,unknown>)?.items)
+                        ? ` — ${((a.params as Record<string,unknown>).items as unknown[]).length} объектов`
+                        : ''}
+                      …
+                    </div>
+                  </div>
+                )}
                 {a.status === 'applied' && (
-                  <div className="mt-2 text-[11px] text-emerald-700 flex items-center gap-1">
-                    <Icon name="CheckCircle2" size={12} />
-                    {a.resultMessage || 'Выполнено'}
+                  <div className="mt-2 space-y-1">
+                    <div className="text-[11px] text-emerald-700 flex items-center gap-1">
+                      <Icon name="CheckCircle2" size={12} />
+                      {a.resultMessage
+                        ? a.resultMessage.split('\n')[0]
+                        : 'Выполнено'}
+                    </div>
+                    {a.resultMessage && a.resultMessage.includes('\n') && (
+                      <div className="text-[10px] text-muted-foreground whitespace-pre-wrap bg-muted/40 rounded-lg p-2 max-h-32 overflow-y-auto">
+                        {a.resultMessage.split('\n').slice(1).join('\n')}
+                      </div>
+                    )}
                   </div>
                 )}
                 {a.status === 'failed' && (

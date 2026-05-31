@@ -470,7 +470,7 @@ SYSTEM_PROMPTS = {
         '- Максимум 5 действий. Сначала low risk (аналитика, авто), потом medium/high (требуют подтверждения).\n'
         '- Используй id ТОЛЬКО из контекста данных — не придумывай.\n'
         '- Если в данных есть listings_no_desc или listings_no_seo > 0 — предложи bulk-исправление с реальными id из listings.\n'
-        '- Если в данных listings_long_titles > 0 — сначала scan_long_titles (low, авто), потом bulk_shorten_titles с id из long_titles_sample.\n'
+        '- Если в данных listings_long_titles > 0 — предложи ОДНО действие bulk_shorten_titles с params: {"items": [{"id":N},{"id":N},...все id из long_titles_sample...], "max_len":65}. Передавай ВСЕ id из long_titles_sample, не обрезай список. Это обработает все объекты за один вызов.\n'
         '- Если пользователь просит «измени/поправь объект #ID» — update_listing_full. risk:low если только description/tags/seo_*/флаги, risk:high если title/price/status/address.\n'
         '- Если запрос общий — начни с get_listings_summary + get_leads_summary (оба low, выполнятся авто).\n'
         '- При «проверь всё» / «полная проверка» — dispatcher_smart_run (risk:medium).\n'
@@ -1580,25 +1580,16 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         max_len = int(params.get('max_len') or 65)
         if max_len < 30 or max_len > 120:
             max_len = 65
-        # Режим 1: items уже содержит готовые new_title → просто применяем
-        # Режим 2: items содержит только id → генерируем new_title через GPT
-        # Режим 3: items не передан → автосбор объектов с длинными title
-        if not isinstance(items, list) or not items:
-            cur.execute(
-                f"SELECT id, title FROM {SCHEMA}.listings "
-                f"WHERE status='active' AND LENGTH(title) > {max_len} "
-                f"ORDER BY LENGTH(title) DESC LIMIT 20"
-            )
-            rows = cur.fetchall()
-            if not rows:
-                return {'ok': True, 'message': f'Объектов с title длиннее {max_len} символов не найдено.'}
-            items = [{'id': r['id']} for r in rows]
-        if len(items) > 30:
-            return {'error': 'Максимум 30 объектов за раз'}
 
-        # Готовые названия от ВБ
-        has_ready = all(isinstance(it, dict) and it.get('new_title') for it in items)
-        if has_ready:
+        deal_map = {'sale': 'Продажа', 'rent': 'Аренда', 'lease': 'Аренда'}
+        cat_map = {
+            'office': 'офис', 'warehouse': 'склад', 'retail': 'ритейл',
+            'production': 'производство', 'land': 'участок', 'gab': 'ГАБ',
+            'building': 'здание', 'free_purpose': 'помещение',
+        }
+
+        # Режим 1: items уже содержит готовые new_title → просто применяем без GPT
+        if isinstance(items, list) and items and all(isinstance(it, dict) and it.get('new_title') for it in items):
             updated = 0
             for it in items:
                 try:
@@ -1607,7 +1598,6 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
                     if not lid or not nt:
                         continue
                     if len(nt) > max_len + 20:
-                        # На всякий случай страхуем — обрезаем по последнему пробелу
                         cut = nt[:max_len].rsplit(' ', 1)[0] or nt[:max_len]
                         nt = cut.rstrip(' .,;:-—')
                     cur.execute(
@@ -1618,87 +1608,124 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
                     continue
             return {'ok': True, 'message': f'Названия обновлены: {updated} из {len(items)}'}
 
-        # Иначе — items = [{id}, ...]. Подтягиваем оригиналы и зовём GPT построчно.
-        ids = [int(it.get('id')) for it in items if isinstance(it, dict) and str(it.get('id', '')).isdigit()]
-        if not ids:
-            return {'error': 'Не указаны корректные id'}
-        id_list = ','.join(str(i) for i in ids)
-        cur.execute(
-            f"SELECT id, title, category, deal, area, district, address, price "
-            f"FROM {SCHEMA}.listings WHERE id IN ({id_list})"
-        )
+        # Режим 2: items = [{id}, ...] или пусто → собираем ВСЕ длинные из БД
+        if isinstance(items, list) and items:
+            ids_from_params = [int(it.get('id')) for it in items if isinstance(it, dict) and str(it.get('id', '')).isdigit()]
+        else:
+            ids_from_params = []
+
+        if ids_from_params:
+            id_list = ','.join(str(i) for i in ids_from_params)
+            cur.execute(
+                f"SELECT id, title, category, deal, area, district, address "
+                f"FROM {SCHEMA}.listings WHERE id IN ({id_list}) ORDER BY LENGTH(title) DESC"
+            )
+        else:
+            # Без явных ID — берём ВСЕ активные объекты с длинным title (без лимита)
+            cur.execute(
+                f"SELECT id, title, category, deal, area, district, address "
+                f"FROM {SCHEMA}.listings "
+                f"WHERE status='active' AND LENGTH(title) > {max_len} "
+                f"ORDER BY LENGTH(title) DESC"
+            )
         rows = [dict(r) for r in cur.fetchall()]
         if not rows:
-            return {'error': 'Объекты не найдены'}
+            return {'ok': True, 'message': f'Объектов с title длиннее {max_len} символов не найдено.'}
 
         db_key, db_folder = _load_keys_from_db(cur)
+        if not db_key:
+            return {'error': 'YandexGPT не настроен'}
+
         sys_p = (
-            'Ты — SEO-копирайтер коммерческой недвижимости. Пиши короткие, цепляющие заголовки объявлений. '
-            'Правила: 1) длина 45-65 символов. 2) обязательно вид сделки (Сдам/Продам/Аренда/Продажа). '
-            '3) тип объекта (офис, склад, помещение, ритейл, ГАБ). 4) ключевая цифра (площадь в м² или цена). '
-            '5) локация коротко (улица или район). 6) без воды и эмодзи. 7) ОТВЕЧАЙ ОДНОЙ СТРОКОЙ — только заголовок, без кавычек, без пояснений.'
+            'Ты — SEO-копирайтер коммерческой недвижимости. Получаешь список объектов в формате:\n'
+            'ID|Тип сделки|Категория|Площадь|Район|Текущее название\n\n'
+            'Для каждого объекта напиши короткий SEO-заголовок (45-65 символов).\n'
+            'Правила: 1) вид сделки (Аренда/Продажа). 2) тип объекта. 3) площадь в м². '
+            '4) район или улица коротко. 5) без воды и эмодзи.\n'
+            'Отвечай СТРОГО в формате — одна строка на объект:\n'
+            'ID|Новый заголовок\n'
+            'Никаких пояснений, только строки ID|заголовок.'
         )
 
-        deal_map = {'sale': 'Продажа', 'rent': 'Аренда', 'lease': 'Аренда'}
-        cat_map = {
-            'office': 'офис', 'warehouse': 'склад', 'retail': 'ритейл',
-            'production': 'производство', 'land': 'участок', 'gab': 'ГАБ',
-            'building': 'здание', 'free_purpose': 'помещение',
-        }
-
+        # Батчевая обработка по 15 объектов — один вызов GPT на пачку
+        BATCH = 15
         results = []
         updated = 0
-        for r in rows:
-            try:
-                lid = r['id']
-                old_title = (r.get('title') or '')[:300]
-                deal_ru = deal_map.get((r.get('deal') or '').lower(), '')
-                cat_ru = cat_map.get((r.get('category') or '').lower(), 'помещение')
-                area = r.get('area')
-                district = r.get('district') or ''
-                address = (r.get('address') or '')[:80]
+        total = len(rows)
 
-                user_p = (
-                    f'Перепиши название объекта коммерческой недвижимости в короткий SEO-заголовок (50-65 символов).\n'
-                    f'Текущее название: {old_title}\n'
-                    f'Тип сделки: {deal_ru or "—"}\n'
-                    f'Категория: {cat_ru}\n'
-                    f'Площадь: {area or "—"} м²\n'
-                    f'Район: {district or "—"}\n'
-                    f'Адрес: {address or "—"}\n\n'
-                    f'Верни ТОЛЬКО новый заголовок одной строкой.'
-                )
-                gpt = _call_yandex_gpt(
-                    sys_p, user_p, db_key, db_folder,
-                    history=None, temperature=0.4, max_tokens=120,
-                    model=YANDEX_MODEL_SHORT,
-                )
-                new_title = (gpt.get('text') or '').strip().strip('"').strip("'")
-                # Берём первую строку
-                new_title = new_title.split('\n')[0].strip()
-                # Страховка по длине
+        import math as _math
+        batches = [rows[i:i+BATCH] for i in range(0, total, BATCH)]
+
+        for batch in batches:
+            lines = []
+            for r in batch:
+                deal_ru = deal_map.get((r.get('deal') or '').lower(), '—')
+                cat_ru = cat_map.get((r.get('category') or '').lower(), 'помещение')
+                area = r.get('area') or '—'
+                district = (r.get('district') or r.get('address') or '')[:50]
+                old_title = (r.get('title') or '')[:200]
+                lines.append(f"{r['id']}|{deal_ru}|{cat_ru}|{area}|{district}|{old_title}")
+
+            user_p = 'Объекты:\n' + '\n'.join(lines) + '\n\nВерни только строки ID|Новый заголовок.'
+            gpt = _call_yandex_gpt(
+                sys_p, user_p, db_key, db_folder,
+                history=None, temperature=0.3, max_tokens=BATCH * 25,
+                model=YANDEX_MODEL_SHORT,
+            )
+            raw = (gpt.get('text') or '').strip()
+
+            # Парсим ответ построчно
+            gpt_map = {}
+            for line in raw.splitlines():
+                line = line.strip()
+                if '|' not in line:
+                    continue
+                parts = line.split('|', 1)
+                if len(parts) == 2:
+                    try:
+                        gpt_map[int(parts[0].strip())] = parts[1].strip().strip('"').strip("'")
+                    except Exception:
+                        pass
+
+            # Применяем результаты батча
+            for r in batch:
+                lid = r['id']
+                old_title = (r.get('title') or '')[:100]
+                new_title = gpt_map.get(lid, '')
+                if not new_title or len(new_title) < 15:
+                    results.append({'id': lid, 'old': old_title, 'skipped': True})
+                    continue
                 if len(new_title) > max_len + 15:
                     cut = new_title[:max_len].rsplit(' ', 1)[0] or new_title[:max_len]
                     new_title = cut.rstrip(' .,;:-—')
-                if not new_title or len(new_title) < 15:
-                    results.append({'id': lid, 'skipped': True, 'reason': 'GPT не вернул валидный заголовок'})
-                    continue
-                safe_title = _sanitize_text(new_title, 200)
-                cur.execute(
-                    f"UPDATE {SCHEMA}.listings SET title='{safe_title}', updated_at=NOW() WHERE id={lid}"
-                )
-                updated += 1
-                results.append({'id': lid, 'old_title': old_title[:100], 'new_title': new_title})
-            except Exception as e:
-                results.append({'id': r.get('id'), 'skipped': True, 'reason': str(e)[:120]})
-                continue
+                try:
+                    safe_title = _sanitize_text(new_title, 200)
+                    cur.execute(
+                        f"UPDATE {SCHEMA}.listings SET title='{safe_title}', updated_at=NOW() WHERE id={lid}"
+                    )
+                    updated += 1
+                    results.append({'id': lid, 'old': old_title, 'new': new_title})
+                except Exception as e:
+                    results.append({'id': lid, 'old': old_title, 'skipped': True, 'reason': str(e)[:80]})
+
+        skipped = total - updated
+        # Краткий отчёт со списком исправленных
+        sample_lines = [f"• [{r['id']}] {r.get('new','—')}" for r in results if not r.get('skipped')][:10]
+        sample_text = '\n'.join(sample_lines)
+        if len(results) > 10:
+            sample_text += f'\n... и ещё {updated - 10} объектов'
 
         return {
             'ok': True,
             'updated': updated,
-            'total': len(rows),
+            'skipped': skipped,
+            'total': total,
             'results': results,
-            'message': f'Названия переписаны: {updated} из {len(rows)}',
+            'message': (
+                f'✅ Оптимизация завершена: исправлено {updated} из {total} заголовков'
+                + (f', пропущено {skipped}' if skipped else '') + '.\n\n'
+                + sample_text
+            ),
         }
 
     if act_type == 'fix_data_quality':
@@ -3170,13 +3197,13 @@ def _collect_agent_context(cur) -> dict:
         ctx['listings_no_desc'] = cur.fetchone()['c']
         cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.listings WHERE status = 'active' AND (seo_title IS NULL OR seo_title = '')")
         ctx['listings_no_seo'] = cur.fetchone()['c']
-        # Длинные названия — для агента критично знать id, чтобы запустить bulk_shorten_titles
+        # Длинные названия — передаём ВСЕ id агенту, чтобы bulk_shorten_titles обработал все
         cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.listings WHERE status='active' AND LENGTH(title) > 70")
         ctx['listings_long_titles'] = cur.fetchone()['c']
         cur.execute(
             f"SELECT id, LENGTH(title) AS len, LEFT(title, 60) AS title_preview "
             f"FROM {SCHEMA}.listings WHERE status='active' AND LENGTH(title) > 70 "
-            f"ORDER BY LENGTH(title) DESC LIMIT 30"
+            f"ORDER BY LENGTH(title) DESC LIMIT 200"
         )
         ctx['long_titles_sample'] = [dict(r) for r in cur.fetchall()]
         cur.execute(f"SELECT COALESCE(SUM(views_site), 0) AS c FROM {SCHEMA}.listings WHERE status = 'active'")
