@@ -675,6 +675,17 @@ def handler(event: dict, context) -> dict:
             if not user or user['role'] not in ALLOWED_ROLES:
                 return _err('Нет доступа', 403)
 
+            # ── ПОЛНАЯ СТАТЬЯ ДЛЯ АДМИНКИ (включая черновики) ───────────
+            if action == 'admin_get' and method == 'GET':
+                nid = int(qs.get('id', 0))
+                if not nid:
+                    return _err('Укажите id')
+                cur.execute(f"SELECT * FROM {SCHEMA}.news WHERE id = {nid}")
+                r = cur.fetchone()
+                if not r:
+                    return _err('Не найдено', 404)
+                return _ok({'article': _row_to_dict(r)})
+
             # ── СПИСОК ДЛЯ АДМИНКИ ───────────────────────────────────────
             if action == 'admin_list' and method == 'GET':
                 cur.execute(

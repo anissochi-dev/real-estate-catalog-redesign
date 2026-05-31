@@ -97,6 +97,10 @@ export default function NewsAdmin() {
   const [seoHeadings, setSeoHeadings] = useState<Partial<SeoHeadings>>({});
   const [saving, setSaving] = useState(false);
   const [report, setReport] = useState<NewsItem | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState({ title: '', summary: '', content: '', source_url: '', source_name: '' });
+  const [editSaving, setEditSaving] = useState(false);
+  const [loadingFull, setLoadingFull] = useState(false);
   const loadNews = () => {
     fetch(`${NEWS_URL}?action=admin_list`, { headers })
       .then(r => r.json())
@@ -111,6 +115,57 @@ export default function NewsAdmin() {
   };
 
   useEffect(() => { loadNews(); loadSchedule(); }, []);
+
+  const openReport = async (n: NewsItem) => {
+    if (report?.id === n.id) { setReport(null); setEditMode(false); return; }
+    setReport(n);
+    setEditMode(false);
+    setLoadingFull(true);
+    try {
+      const r = await fetch(`${NEWS_URL}?action=admin_get&id=${n.id}`, { headers });
+      const d = await r.json();
+      if (d.article) {
+        setReport(prev => prev ? {
+          ...prev,
+          content_preview: d.article.content,
+          content_length: d.article.content?.length,
+          source_url: d.article.source_url,
+          source_name: d.article.source_name,
+          summary: d.article.summary,
+        } : prev);
+      }
+    } catch { /* тихо */ } finally { setLoadingFull(false); }
+  };
+
+  const startEdit = (n: NewsItem) => {
+    setEditForm({
+      title: n.title || '',
+      summary: n.summary || '',
+      content: n.content_preview || '',
+      source_url: n.source_url || '',
+      source_name: n.source_name || '',
+    });
+    setEditMode(true);
+  };
+
+  const saveEdit = async () => {
+    if (!report) return;
+    if (!editForm.title.trim()) { toast.error('Заголовок обязателен'); return; }
+    setEditSaving(true);
+    try {
+      const r = await fetch(NEWS_URL, {
+        method: 'POST', headers,
+        body: JSON.stringify({ action: 'update', id: report.id, ...editForm }),
+      });
+      const d = await r.json();
+      if (d.error) { toast.error(d.error); return; }
+      toast.success('Сохранено');
+      const updated = { ...report, ...editForm, content_preview: editForm.content, content_length: editForm.content.length };
+      setReport(updated);
+      setNews(prev => prev.map(n => n.id === report.id ? { ...n, title: editForm.title, summary: editForm.summary, source_url: editForm.source_url, source_name: editForm.source_name } : n));
+      setEditMode(false);
+    } catch { toast.error('Ошибка сети'); } finally { setEditSaving(false); }
+  };
 
   const publish = async (id: number, state: boolean) => {
     await fetch(NEWS_URL, { method: 'POST', headers, body: JSON.stringify({ action: 'publish', id, state }) });
@@ -231,7 +286,7 @@ export default function NewsAdmin() {
                   <tbody>
                     {news.map(n => (
                       <tr key={n.id} className={`border-t border-border hover:bg-muted/20 transition cursor-pointer ${report?.id === n.id ? 'bg-brand-blue/5' : ''}`}
-                        onClick={() => setReport(report?.id === n.id ? null : n)}>
+                        onClick={() => openReport(n)}>
                         <td className="px-4 py-3">
                           <div className="font-medium line-clamp-1">{n.title}</div>
                           {n.slug && (
@@ -247,7 +302,7 @@ export default function NewsAdmin() {
                         <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1.5">
                             <button
-                              onClick={() => setReport(report?.id === n.id ? null : n)}
+                              onClick={() => openReport(n)}
                               className={`text-xs px-2.5 py-1 rounded-lg transition font-medium flex items-center gap-1 ${report?.id === n.id ? 'bg-brand-blue text-white' : 'bg-muted hover:bg-brand-blue/10 hover:text-brand-blue'}`}
                               title="Отчёт по статье"
                             >
@@ -277,141 +332,207 @@ export default function NewsAdmin() {
                 </table>
               </div>
 
-              {/* Панель отчёта */}
+              {/* Панель отчёта / редактирования */}
               {report && (
-                <div className="w-full lg:w-96 lg:min-w-96 border-l border-border flex flex-col">
-                  {/* Заголовок панели */}
-                  <div className="px-4 py-3 bg-muted/40 border-b border-border flex items-center justify-between gap-2 sticky top-0">
-                    <div className="flex items-center gap-2 font-semibold text-sm">
-                      <Icon name="BarChart2" size={15} className="text-brand-blue" />
-                      Отчёт
+                <div className="w-full lg:w-[420px] lg:min-w-[420px] border-l border-border flex flex-col max-h-[80vh] lg:max-h-none">
+                  {/* Шапка с переключателем режимов */}
+                  <div className="px-4 py-2.5 bg-muted/40 border-b border-border flex items-center justify-between gap-2 sticky top-0 z-10">
+                    <div className="flex items-center gap-1 bg-white rounded-lg p-0.5 border border-border">
+                      <button
+                        onClick={() => setEditMode(false)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition ${!editMode ? 'bg-brand-blue text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                      >
+                        <Icon name="BarChart2" size={12} />
+                        Отчёт
+                      </button>
+                      <button
+                        onClick={() => startEdit(report)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition ${editMode ? 'bg-brand-blue text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                      >
+                        <Icon name="Pencil" size={12} />
+                        Редактировать
+                      </button>
                     </div>
-                    <button onClick={() => setReport(null)} className="p-1 rounded hover:bg-muted text-muted-foreground">
+                    <button onClick={() => { setReport(null); setEditMode(false); }} className="p-1 rounded hover:bg-muted text-muted-foreground">
                       <Icon name="X" size={15} />
                     </button>
                   </div>
 
-                  <div className="p-4 space-y-4 overflow-y-auto">
-                    {/* Заголовок статьи */}
-                    <div>
-                      <div className="text-xs text-muted-foreground mb-1 uppercase tracking-wide font-semibold">Статья</div>
-                      <div className="font-semibold text-sm leading-snug">{report.title}</div>
-                      <div className="text-xs text-muted-foreground mt-1 font-mono">/news/{report.slug}</div>
-                    </div>
-
-                    {/* Статус и тип */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="bg-muted/40 rounded-xl p-3">
-                        <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Статус</div>
-                        <div className={`text-sm font-semibold flex items-center gap-1.5 ${report.is_published ? 'text-emerald-600' : 'text-amber-600'}`}>
-                          <Icon name={report.is_published ? 'CheckCircle' : 'Clock'} size={13} />
-                          {report.is_published ? 'Опубликована' : 'Черновик'}
-                        </div>
-                      </div>
-                      <div className="bg-muted/40 rounded-xl p-3">
-                        <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Тип</div>
-                        <div className={`text-sm font-semibold flex items-center gap-1.5 ${report.is_auto ? 'text-purple-600' : 'text-blue-600'}`}>
-                          <Icon name={report.is_auto ? 'Bot' : 'PenLine'} size={13} />
-                          {report.is_auto ? 'Автоматическая' : 'Ручная'}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Дата и размер */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="bg-muted/40 rounded-xl p-3">
-                        <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Опубликована</div>
-                        <div className="text-sm font-medium">{fmtDate(report.published_at || report.created_at)}</div>
-                      </div>
-                      <div className="bg-muted/40 rounded-xl p-3">
-                        <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Объём</div>
-                        <div className="text-sm font-medium">
-                          {report.content_length ? `${report.content_length.toLocaleString('ru')} симв.` : '—'}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Ставка ЦБ */}
-                    {report.cb_key_rate != null && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-                        <div className="text-[10px] text-amber-700 uppercase tracking-wide mb-1 font-semibold">Ключевая ставка ЦБ на момент публикации</div>
-                        <div className="text-xl font-bold text-amber-700">{report.cb_key_rate}%</div>
-                      </div>
-                    )}
-
-                    {/* Источник */}
-                    {(report.source_url || report.source_name) && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-1">
-                        <div className="text-[10px] text-blue-700 uppercase tracking-wide font-semibold flex items-center gap-1">
-                          <Icon name="Link" size={11} />
-                          Источник
-                        </div>
-                        {report.source_name && (
-                          <div className="text-sm font-medium text-blue-900">{report.source_name}</div>
-                        )}
-                        {report.source_url && (
-                          <a
-                            href={report.source_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-blue-600 hover:text-blue-800 underline break-all flex items-start gap-1"
-                          >
-                            <Icon name="ExternalLink" size={11} className="mt-0.5 shrink-0" />
-                            {report.source_url}
-                          </a>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Отсутствие источника у авто-статьи */}
-                    {report.is_auto && !report.source_url && !report.source_name && (
-                      <div className="bg-muted/40 rounded-xl p-3">
-                        <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1 font-semibold flex items-center gap-1">
-                          <Icon name="Globe" size={11} />
-                          Источники
-                        </div>
-                        <div className="text-xs text-muted-foreground">Написана на основе анализа открытых новостей из интернета (Google News / Яндекс)</div>
-                      </div>
-                    )}
-
-                    {/* Краткое описание */}
-                    {report.summary && (
+                  {/* ── РЕЖИМ ОТЧЁТА ── */}
+                  {!editMode && (
+                    <div className="p-4 space-y-3 overflow-y-auto flex-1">
                       <div>
-                        <div className="text-xs text-muted-foreground uppercase tracking-wide font-semibold mb-1">Анонс</div>
-                        <div className="text-sm text-foreground/80 leading-relaxed">{report.summary}</div>
+                        <div className="font-semibold text-sm leading-snug">{report.title}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5 font-mono">/news/{report.slug}</div>
                       </div>
-                    )}
 
-                    {/* Превью текста */}
-                    {report.content_preview && (
-                      <div>
-                        <div className="text-xs text-muted-foreground uppercase tracking-wide font-semibold mb-1">Начало статьи</div>
-                        <div className="text-xs text-foreground/70 leading-relaxed bg-muted/30 rounded-lg p-3 line-clamp-6 whitespace-pre-line">
-                          {report.content_preview}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-muted/40 rounded-xl p-3">
+                          <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Статус</div>
+                          <div className={`text-sm font-semibold flex items-center gap-1.5 ${report.is_published ? 'text-emerald-600' : 'text-amber-600'}`}>
+                            <Icon name={report.is_published ? 'CheckCircle' : 'Clock'} size={13} />
+                            {report.is_published ? 'Опубликована' : 'Черновик'}
+                          </div>
+                        </div>
+                        <div className="bg-muted/40 rounded-xl p-3">
+                          <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Тип</div>
+                          <div className={`text-sm font-semibold flex items-center gap-1.5 ${report.is_auto ? 'text-purple-600' : 'text-blue-600'}`}>
+                            <Icon name={report.is_auto ? 'Bot' : 'PenLine'} size={13} />
+                            {report.is_auto ? 'Авто' : 'Ручная'}
+                          </div>
                         </div>
                       </div>
-                    )}
 
-                    {/* Кнопки */}
-                    <div className="flex gap-2 pt-1">
-                      <a
-                        href={`${window.location.origin}/news/${report.slug}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-brand-blue text-white text-sm font-medium hover:opacity-90 transition"
-                      >
-                        <Icon name="ExternalLink" size={14} />
-                        Открыть
-                      </a>
-                      <button
-                        onClick={() => { publish(report.id, !report.is_published); setReport({ ...report, is_published: !report.is_published }); }}
-                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition ${report.is_published ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
-                      >
-                        <Icon name={report.is_published ? 'EyeOff' : 'Eye'} size={14} />
-                        {report.is_published ? 'Снять' : 'Опубликовать'}
-                      </button>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-muted/40 rounded-xl p-3">
+                          <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Дата</div>
+                          <div className="text-xs font-medium">{fmtDate(report.published_at || report.created_at)}</div>
+                        </div>
+                        <div className="bg-muted/40 rounded-xl p-3">
+                          <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Объём</div>
+                          <div className="text-sm font-medium">
+                            {report.content_length ? `${report.content_length.toLocaleString('ru')} симв.` : '—'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {report.cb_key_rate != null && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                          <div className="text-[10px] text-amber-700 uppercase tracking-wide mb-1 font-semibold">Ключевая ставка ЦБ на момент публикации</div>
+                          <div className="text-xl font-bold text-amber-700">{report.cb_key_rate}%</div>
+                        </div>
+                      )}
+
+                      {(report.source_url || report.source_name) ? (
+                        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-1">
+                          <div className="text-[10px] text-blue-700 uppercase tracking-wide font-semibold flex items-center gap-1">
+                            <Icon name="Link" size={11} /> Источник
+                          </div>
+                          {report.source_name && <div className="text-sm font-medium text-blue-900">{report.source_name}</div>}
+                          {report.source_url && (
+                            <a href={report.source_url} target="_blank" rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:text-blue-800 underline break-all flex items-start gap-1">
+                              <Icon name="ExternalLink" size={11} className="mt-0.5 shrink-0" />
+                              {report.source_url}
+                            </a>
+                          )}
+                        </div>
+                      ) : report.is_auto ? (
+                        <div className="bg-muted/40 rounded-xl p-3">
+                          <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1 font-semibold flex items-center gap-1">
+                            <Icon name="Globe" size={11} /> Источники
+                          </div>
+                          <div className="text-xs text-muted-foreground">На основе открытых новостей из интернета (Google News / Яндекс)</div>
+                        </div>
+                      ) : null}
+
+                      {report.summary && (
+                        <div>
+                          <div className="text-xs text-muted-foreground uppercase tracking-wide font-semibold mb-1">Анонс</div>
+                          <div className="text-sm text-foreground/80 leading-relaxed">{report.summary}</div>
+                        </div>
+                      )}
+
+                      {(report.content_preview || loadingFull) && (
+                        <div>
+                          <div className="text-xs text-muted-foreground uppercase tracking-wide font-semibold mb-1 flex items-center gap-1.5">
+                            Начало статьи
+                            {loadingFull && <Icon name="Loader2" size={11} className="animate-spin" />}
+                          </div>
+                          <div className="text-xs text-foreground/70 leading-relaxed bg-muted/30 rounded-lg p-3 max-h-48 overflow-y-auto whitespace-pre-line">
+                            {report.content_preview}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex gap-2 pt-1">
+                        <a href={`${window.location.origin}/news/${report.slug}`} target="_blank" rel="noopener noreferrer"
+                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-brand-blue text-white text-sm font-medium hover:opacity-90 transition">
+                          <Icon name="ExternalLink" size={14} /> Открыть
+                        </a>
+                        <button
+                          onClick={() => { publish(report.id, !report.is_published); setReport({ ...report, is_published: !report.is_published }); }}
+                          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition ${report.is_published ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
+                        >
+                          <Icon name={report.is_published ? 'EyeOff' : 'Eye'} size={14} />
+                          {report.is_published ? 'Снять' : 'Опубликовать'}
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {/* ── РЕЖИМ РЕДАКТИРОВАНИЯ ── */}
+                  {editMode && (
+                    <div className="p-4 space-y-3 overflow-y-auto flex-1">
+                      <div>
+                        <label className="text-xs text-muted-foreground font-semibold uppercase tracking-wide block mb-1">Заголовок *</label>
+                        <input
+                          value={editForm.title}
+                          onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+                          className="w-full px-3 py-2 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground font-semibold uppercase tracking-wide block mb-1">Анонс</label>
+                        <textarea
+                          value={editForm.summary}
+                          onChange={e => setEditForm(f => ({ ...f, summary: e.target.value }))}
+                          rows={3}
+                          className="w-full px-3 py-2 border border-border rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground font-semibold uppercase tracking-wide block mb-1">
+                          Текст статьи
+                          <span className="ml-2 text-muted-foreground/60 normal-case font-normal">
+                            {editForm.content.length.toLocaleString('ru')} симв.
+                          </span>
+                        </label>
+                        <textarea
+                          value={editForm.content}
+                          onChange={e => setEditForm(f => ({ ...f, content: e.target.value }))}
+                          rows={12}
+                          className="w-full px-3 py-2 border border-border rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand-blue/30 font-mono text-xs"
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 gap-3">
+                        <div>
+                          <label className="text-xs text-muted-foreground font-semibold uppercase tracking-wide block mb-1">Источник — название</label>
+                          <input
+                            value={editForm.source_name}
+                            onChange={e => setEditForm(f => ({ ...f, source_name: e.target.value }))}
+                            placeholder="Например: КубаньПресс"
+                            className="w-full px-3 py-2 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground font-semibold uppercase tracking-wide block mb-1">Источник — ссылка</label>
+                          <input
+                            value={editForm.source_url}
+                            onChange={e => setEditForm(f => ({ ...f, source_url: e.target.value }))}
+                            placeholder="https://..."
+                            className="w-full px-3 py-2 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-2 pt-1 sticky bottom-0 bg-white pb-1">
+                        <button
+                          onClick={() => setEditMode(false)}
+                          className="flex-1 px-3 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted transition"
+                        >
+                          Отмена
+                        </button>
+                        <button
+                          onClick={saveEdit}
+                          disabled={editSaving}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-brand-blue text-white text-sm font-medium hover:opacity-90 transition disabled:opacity-60"
+                        >
+                          {editSaving ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Save" size={14} />}
+                          {editSaving ? 'Сохранение...' : 'Сохранить'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
