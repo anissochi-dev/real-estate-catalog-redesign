@@ -36,7 +36,8 @@ export default function AiChat({
   currentText,
   onOpenKnowledge,
 }: Props) {
-  const [action, setAction] = useState<AiAction>(initialAction);
+  // Всегда agent — единый режим, ВБ сам решает что делать
+  const [action, setAction] = useState<AiAction>('agent');
   const [input, setInput] = useState(initialPrompt);
   const [messages, setMessages] = useState<Msg[]>(() => loadHistory());
   const [loading, setLoading] = useState(false);

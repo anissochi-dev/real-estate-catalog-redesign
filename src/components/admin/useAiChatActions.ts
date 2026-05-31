@@ -277,7 +277,7 @@ export function useAiChatActions({
     const msg = messages[idx];
     if (!msg) return;
     setInput(`Доработай: ${msg.text.slice(0, 200)}...`);
-    setAction(msg.action || action);
+    setAction('agent');
   };
 
   // clearHistory — обёртка для совместимости с AiChatHeader (он передаёт сюда onClearHistory)
