@@ -1,5 +1,6 @@
 """
-Business: ИИ-ассистент на YandexGPT 5 Pro (Алиса) — генерация описаний, аналитика, ответы на лиды, SEO, публичный ИИ-подбор объектов.
+Business: ИИ-ассистент на YandexGPT 5 Pro — генерация описаний, аналитика, ответы на лиды, SEO, публичный ИИ-подбор объектов.
+Модули: Страж, Инспектор, Копирайтер, Диспетчер, DevOps.
 Args: event с httpMethod (POST), body {action, prompt, context_data}, headers X-Auth-Token; context
 Returns: HTTP-ответ с текстом от YandexGPT и логом в БД
 """
@@ -418,6 +419,15 @@ SYSTEM_PROMPTS = {
         '- dispatcher_run_all: {} risk:low — запустить все модули (Страж + Инспектор). Используй при «запусти всё», «полная проверка»\n'
         '- dispatcher_get_status: {} risk:low — статус всех модулей: включён, последний запуск, последний отчёт\n'
         '- dispatcher_toggle_module: {"module":str,"enabled":bool} risk:medium — включить/выключить модуль\n'
+        '\n'
+        '🛠️ DEVOPS-АССИСТЕНТ:\n'
+        '- devops_check_github: {} risk:low — проверить подключение к GitHub, список репозиториев. Используй при «проверь GitHub», «что с репозиторием»\n'
+        '- devops_get_commits: {"repo":"owner/repo"?,"branch":"main"?,"limit":10?} risk:low — последние коммиты репо\n'
+        '- devops_get_issues: {"repo":"owner/repo"?,"state":"open|closed"?} risk:low — список issues/багов\n'
+        '- devops_create_issue: {"repo":"owner/repo","title":str,"body":str?,"labels":[str]?} risk:medium — создать issue/баг-репорт\n'
+        '- devops_get_workflows: {"repo":"owner/repo"?} risk:low — статус GitHub Actions, упавшие сборки\n'
+        '- devops_analyze_errors: {"hours":24?} risk:low — анализ ошибок из логов системы + GPT-рекомендации\n'
+        '- devops_get_repo_stats: {"repo":"owner/repo"?} risk:low — статистика репо: языки, контрибьюторы, релизы\n'
         '\n'
         'ПРАВИЛА МОДУЛЕЙ:\n'
         '- При запросах «проверь безопасность» — сначала guardian_full_scan, потом предлагай guardian_block для найденных угроз\n'
@@ -2704,6 +2714,8 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         )
         state = 'включён' if enabled else 'выключен'
         return {'ok': True, 'message': f'Модуль «{module}» {state}'}
+
+    # DevOps-модуль вынесен в отдельную функцию devops-agent
 
     return {'error': f'Неизвестное действие: {act_type}'}
 

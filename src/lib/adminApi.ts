@@ -15,6 +15,7 @@ export function reportError(info: { message: string; url?: string; stack?: strin
 }
 export const AI_RETRAIN_URL = 'https://functions.poehali.dev/e2f1d357-fb83-4fbb-8d8b-6fb063357afc';
 const AI_URL = 'https://functions.poehali.dev/34bfc4a2-89b9-4c89-bcbc-d82314730aef';
+const DEVOPS_URL = 'https://functions.poehali.dev/8dc0ef1b-de31-4ede-94b2-c1779c324922';
 // Используем функцию upload/ (поддерживает водяной знак и возвращает original_url)
 const UPLOADS_URL = 'https://functions.poehali.dev/8983c0a8-a8c8-47ff-97ed-59cc1571aa15';
 export const CRM_URL = 'https://functions.poehali.dev/221e23fa-e0a4-416e-b878-c2da2914daac';
@@ -516,4 +517,26 @@ export const aiApi = {
       tech_decisions: { date: string; q: string; a: string }[];
       mood: string;
     }>,
+};
+
+/** DevOps-агент: GitHub API — коммиты, issues, Actions, анализ ошибок. */
+export const devopsApi = {
+  call: (action: string, params: Record<string, unknown> = {}) =>
+    req(DEVOPS_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action, params }),
+    }) as Promise<{ ok: boolean; message?: string; error?: string; [key: string]: unknown }>,
+  checkGithub: () => devopsApi.call('check_github'),
+  getCommits: (repo?: string, branch?: string, limit?: number) =>
+    devopsApi.call('get_commits', { ...(repo ? { repo } : {}), ...(branch ? { branch } : {}), ...(limit ? { limit } : {}) }),
+  getIssues: (repo?: string, state: 'open' | 'closed' | 'all' = 'open') =>
+    devopsApi.call('get_issues', { ...(repo ? { repo } : {}), state }),
+  createIssue: (title: string, body?: string, repo?: string, labels?: string[]) =>
+    devopsApi.call('create_issue', { title, ...(body ? { body } : {}), ...(repo ? { repo } : {}), ...(labels ? { labels } : {}) }),
+  getWorkflows: (repo?: string) =>
+    devopsApi.call('get_workflows', { ...(repo ? { repo } : {}) }),
+  getRepoStats: (repo?: string) =>
+    devopsApi.call('get_repo_stats', { ...(repo ? { repo } : {}) }),
+  analyzeErrors: (hours = 24) =>
+    devopsApi.call('analyze_errors', { hours }),
 };

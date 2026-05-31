@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { toast } from 'sonner';
-import { aiApi, AiAction } from '@/lib/adminApi';
+import { aiApi, devopsApi, AiAction } from '@/lib/adminApi';
 import {
   Msg, Suggestion, QuickCmd,
   isAutoApplicableAction,
@@ -200,6 +200,12 @@ export function useAiChatActions({
     }
   };
 
+  const DEVOPS_ACTIONS = new Set([
+    'devops_check_github', 'devops_get_commits', 'devops_get_issues',
+    'devops_create_issue', 'devops_get_workflows', 'devops_analyze_errors',
+    'devops_get_repo_stats',
+  ]);
+
   const confirmAgentAction = async (msgIdx: number, actIdx: number) => {
     const msg = messages[msgIdx];
     if (!msg?.agentActions) return;
@@ -209,8 +215,16 @@ export function useAiChatActions({
       ? { ...x, agentActions: x.agentActions.map((a, j) => j === actIdx ? { ...a, status: 'pending', resultMessage: 'Выполняется...' } : a) }
       : x));
     try {
-      const res = await aiApi.execute([{ type: target.type, title: target.title, description: target.description, risk: target.risk, params: target.params }]);
-      const r = res.results?.[0]?.result || {};
+      let r: { ok?: boolean; message?: string; error?: string };
+      if (DEVOPS_ACTIONS.has(target.type)) {
+        // DevOps-действия идут в отдельную функцию devops-agent
+        const action = target.type.replace('devops_', '');
+        const res = await devopsApi.call(action, target.params as Record<string, unknown>);
+        r = { ok: !!res.ok, message: res.message as string, error: res.error as string };
+      } else {
+        const res = await aiApi.execute([{ type: target.type, title: target.title, description: target.description, risk: target.risk, params: target.params }]);
+        r = res.results?.[0]?.result || {};
+      }
       const ok = !!r.ok;
       setMessages(m => m.map((x, i) => i === msgIdx && x.agentActions
         ? { ...x, agentActions: x.agentActions.map((a, j) => j === actIdx ? { ...a, status: ok ? 'applied' : 'failed', resultMessage: r.message || r.error || '' } : a) }

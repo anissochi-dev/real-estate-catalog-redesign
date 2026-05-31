@@ -49,6 +49,7 @@ export const QUICK_CMDS: QuickCmd[] = [
   { id: 'inspector', label: '🔍 Инспектор', icon: 'ClipboardList', action: 'agent', prompt: 'Запусти полный аудит сайта: SEO, битые данные, дубли, устаревшие объекты, необработанные лиды. Используй inspector_full_audit.' },
   { id: 'copywriter', label: '✍️ Копирайтер', icon: 'PenLine', action: 'agent', prompt: 'Предложи темы для статей блога на основе каталога и запросов клиентов. Используй copywriter_get_topics, затем предложи написать статью через copywriter_write_article.' },
   { id: 'dispatcher', label: '🎛️ Диспетчер', icon: 'Zap', action: 'agent', prompt: 'Покажи статус всех модулей (dispatcher_get_status), затем запусти все включённые модули через dispatcher_run_all.' },
+  { id: 'devops', label: '🛠️ DevOps', icon: 'Github', action: 'agent', prompt: 'Проверь GitHub: подключение, последние коммиты, открытые issues, статус Actions. Используй devops_check_github, затем devops_get_commits и devops_get_issues.' },
 ];
 
 export const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
@@ -118,6 +119,14 @@ export const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
   dispatcher_run_all: { label: 'Запустить все модули', icon: 'Zap' },
   dispatcher_get_status: { label: 'Статус модулей', icon: 'LayoutDashboard' },
   dispatcher_toggle_module: { label: 'Вкл/выкл модуль', icon: 'ToggleLeft' },
+  // 🛠️ DevOps
+  devops_check_github: { label: 'GitHub: статус', icon: 'Github' },
+  devops_get_commits: { label: 'Последние коммиты', icon: 'GitCommit' },
+  devops_get_issues: { label: 'Issues / баги', icon: 'GitPullRequest' },
+  devops_create_issue: { label: 'Создать issue', icon: 'FilePlus' },
+  devops_get_workflows: { label: 'GitHub Actions', icon: 'Workflow' },
+  devops_analyze_errors: { label: 'Анализ ошибок', icon: 'Bug' },
+  devops_get_repo_stats: { label: 'Статистика репо', icon: 'BarChart2' },
 };
 
 // Действия с risk: low — это безопасные информационные действия,
@@ -156,6 +165,13 @@ export const AUTO_APPLY_ACTIONS = new Set([
   'dispatcher_run_module',
   'dispatcher_run_all',
   'dispatcher_get_status',
+  // DevOps
+  'devops_check_github',
+  'devops_get_commits',
+  'devops_get_issues',
+  'devops_get_workflows',
+  'devops_analyze_errors',
+  'devops_get_repo_stats',
 ]);
 
 /** Поля объекта/лида/новости, безопасные для автоприменения (без подтверждения).
