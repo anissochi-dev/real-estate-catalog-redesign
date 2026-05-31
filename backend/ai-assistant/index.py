@@ -2364,11 +2364,23 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
             f"битых данных: {audit['broken_data']['count']}, дублей: {audit['duplicates']['count']}, "
             f"без фото: {audit['no_photo']['count']}, старых необработанных лидов: {audit['old_unprocessed_leads']['count']}"
         )
-        cur.execute(
-            f"INSERT INTO {SCHEMA}.agent_reports (module, report_type, summary, data, severity) "
-            f"VALUES ('inspector', 'full_audit', '{_sanitize_text(summary, 500)}', "
-            f"'{_sanitize_text(_json2.dumps(audit, ensure_ascii=False, default=str), 8000)}', '{severity}')"
-        )
+        # Сохраняем только числа в data — без вложенных items, чтобы не ломать SQL большим JSON
+        audit_summary_only = {
+            'seo': {k: v for k, v in seo_stat.items()},
+            'broken_data': audit['broken_data']['count'],
+            'duplicates': audit['duplicates']['count'],
+            'stale_listings': audit['stale_listings']['count'],
+            'no_photo': audit['no_photo']['count'],
+            'old_unprocessed_leads': audit['old_unprocessed_leads']['count'],
+        }
+        try:
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.agent_reports (module, report_type, summary, data, severity) "
+                f"VALUES ('inspector', 'full_audit', '{_sanitize_text(summary, 500)}', "
+                f"'{_sanitize_text(_json2.dumps(audit_summary_only, ensure_ascii=False), 2000)}', '{severity}')"
+            )
+        except Exception:
+            pass  # не критично — основной результат возвращаем всегда
         return {
             'ok': True, 'severity': severity,
             'audit': audit, 'message': f'Аудит завершён. {summary}',
@@ -3308,14 +3320,23 @@ def handler(event, context):
                 for a in actions_to_run:
                     a_type = (a or {}).get('type', '')
                     a_params = (a or {}).get('params') or {}
-                    res = _exec_action(cur, user, a_type, a_params)
+                    try:
+                        res = _exec_action(cur, user, a_type, a_params)
+                    except Exception as exec_err:
+                        res = {'ok': False, 'error': f'Ошибка выполнения {a_type}: {str(exec_err)[:200]}'}
                     results.append({'type': a_type, 'result': res})
-                    log_text = json.dumps({'type': a_type, 'params': a_params, 'result': res}, ensure_ascii=False)[:4000]
-                    cur.execute(
-                        f"INSERT INTO {SCHEMA}.ai_logs (user_id, action, prompt, response, tokens) "
-                        f"VALUES ({user['id']}, 'execute', '{_safe(a_type, 50)}', '{_sanitize_text(log_text, 4000)}', 0)"
-                    )
-                conn.commit()
+                    try:
+                        log_text = json.dumps({'type': a_type, 'result': {'ok': res.get('ok'), 'message': str(res.get('message',''))[:200]}}, ensure_ascii=False)
+                        cur.execute(
+                            f"INSERT INTO {SCHEMA}.ai_logs (user_id, action, prompt, response, tokens) "
+                            f"VALUES ({user['id']}, 'exec_{_safe(a_type, 40)}', '{_safe(a_type, 50)}', '{_sanitize_text(log_text, 2000)}', 0)"
+                        )
+                    except Exception:
+                        pass
+                try:
+                    conn.commit()
+                except Exception:
+                    pass
                 return _ok({'results': results})
 
             user_text = (body.get('prompt') or '').strip()
@@ -3487,17 +3508,18 @@ def handler(event, context):
             if action == 'agent':
                 import re as _re
                 text = result['text'].strip()
-                # Убираем markdown-обёртку ```json ... ```
-                if text.startswith('```'):
-                    text = _re.sub(r'^```[a-z]*\n?', '', text).rstrip('`').strip()
-                # Пытаемся найти JSON-объект внутри текста
+                # Убираем markdown-обёртку ```json ... ``` (любые варианты)
+                text = _re.sub(r'^```[a-zA-Z]*\s*', '', text)
+                text = _re.sub(r'\s*```$', '', text).strip()
+                # Пытаемся найти JSON-объект внутри текста — берём самый длинный
                 if not text.startswith('{'):
+                    matches_json = _re.findall(r'\{[\s\S]*?\}(?=\s*$|\s*\n\s*[^\{])', text)
                     m = _re.search(r'\{[\s\S]*\}', text)
                     if m:
                         text = m.group(0)
                 # Несколько попыток парсинга
                 parsed = None
-                for candidate in [text, text.split('\n\n')[0]]:
+                for candidate in [text, text.split('\n\n')[0], text.split('\n')[0]]:
                     try:
                         parsed = json.loads(candidate)
                         break
