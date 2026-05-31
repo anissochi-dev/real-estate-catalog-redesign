@@ -43,6 +43,7 @@ export default function AiChat({
   const [showMemory, setShowMemory] = useState(false);
   const [memoryData, setMemoryData] = useState<MemoryData | null>(null);
   const [memoryLoading, setMemoryLoading] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const opsScrollRef = useRef<HTMLDivElement>(null);
 
@@ -93,6 +94,67 @@ export default function AiChat({
     handleClearAll,
   });
 
+  // Расширенный режим — чат занимает всю страницу справа от сайдбара (без backdrop)
+  if (expanded) {
+    return (
+      <div className="fixed inset-0 z-50 flex animate-fade-in">
+        <aside className="w-full h-full bg-white shadow-2xl flex flex-col animate-fade-in">
+          <AiChatHeader
+            title={title}
+            memoryLoading={memoryLoading}
+            onClearHistory={clearHistory}
+            onLoadMemory={loadMemory}
+            onOpenKnowledge={onOpenKnowledge}
+            onClose={onClose}
+            isWorking={loading}
+            expanded={expanded}
+            onToggleExpand={() => setExpanded(false)}
+            currentRole={
+              [...messages].reverse().find(m => m.role === 'ai' && m.vbRole)?.vbRole
+            }
+          />
+          <AiChatLimitIndicator
+            usagePercent={usagePercent}
+            totalMessages={totalMessages}
+            historyLimit={historyLimit}
+            onOpen={() => setLimitModalOpen(true)}
+          />
+          <AiChatMainTab
+            scrollRef={scrollRef}
+            messages={messages}
+            loading={loading}
+            action={action}
+            input={input}
+            setInput={setInput}
+            onSend={send}
+            onRunQuick={runQuick}
+            onApplySuggestion={applySuggestion}
+            onRejectSuggestion={rejectSuggestion}
+            onRequestEdit={requestEdit}
+            onConfirmAgentAction={confirmAgentAction}
+            onRejectAgentAction={rejectAgentAction}
+            onConfirmAllAgentActions={confirmAllAgentActions}
+            formatTime={formatTime}
+            showMemory={showMemory}
+            memoryData={memoryData}
+            onCloseMemory={() => setShowMemory(false)}
+            wide
+          />
+        </aside>
+        <AiChatLimitModal
+          open={limitModalOpen}
+          usagePercent={usagePercent}
+          totalMessages={totalMessages}
+          historyLimit={historyLimit}
+          onClose={() => setLimitModalOpen(false)}
+          onClearOld={handleClearOld}
+          onClearAll={handleClearAll}
+          onIncreaseLimit={handleIncreaseLimit}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end animate-fade-in">
       <button
@@ -109,6 +171,8 @@ export default function AiChat({
           onOpenKnowledge={onOpenKnowledge}
           onClose={onClose}
           isWorking={loading}
+          expanded={expanded}
+          onToggleExpand={() => setExpanded(true)}
           currentRole={
             [...messages].reverse().find(m => m.role === 'ai' && m.vbRole)?.vbRole
           }

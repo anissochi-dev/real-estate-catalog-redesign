@@ -13,6 +13,9 @@ interface Props {
   isWorking?: boolean;
   /** Роль последнего ответа (или текущая, если работает). */
   currentRole?: VbRole;
+  /** Полноэкранный режим. */
+  expanded?: boolean;
+  onToggleExpand?: () => void;
 }
 
 const ROLE_META: Record<VbRole, { label: string; short: string; icon: string; color: string }> = {
@@ -45,6 +48,8 @@ export default function AiChatHeader({
   onClose,
   isWorking = false,
   currentRole,
+  expanded = false,
+  onToggleExpand,
 }: Props) {
   const role = currentRole || 'mixed';
   const meta = ROLE_META[role];
@@ -97,6 +102,15 @@ export default function AiChatHeader({
           <button onClick={onClearHistory} title="Очистить историю" className="hover:bg-white/10 rounded-lg p-1.5">
             <Icon name="Trash2" size={18} />
           </button>
+          {onToggleExpand && (
+            <button
+              onClick={onToggleExpand}
+              title={expanded ? 'Свернуть панель' : 'Развернуть на всю страницу'}
+              className="hover:bg-white/10 rounded-lg p-1.5"
+            >
+              <Icon name={expanded ? 'Minimize2' : 'Maximize2'} size={18} />
+            </button>
+          )}
           <button onClick={onClose} className="hover:bg-white/10 rounded-lg p-1.5">
             <Icon name="X" size={20} />
           </button>
