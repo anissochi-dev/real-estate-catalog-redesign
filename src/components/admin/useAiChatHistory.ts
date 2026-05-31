@@ -30,8 +30,12 @@ export function useAiChatHistory(
 
   useEffect(() => {
     saveHistory(messages);
+    // Скролл после рендера DOM — requestAnimationFrame гарантирует что новое сообщение уже в DOM
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      const el = scrollRef.current;
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
     }
     // Предупреждения по достижении порогов
     if (usagePercent >= 1 && limitWarnedRef.current !== 'critical') {
