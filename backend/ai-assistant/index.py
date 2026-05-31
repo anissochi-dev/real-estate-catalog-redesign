@@ -355,11 +355,11 @@ SYSTEM_PROMPTS = {
         '- update_listing: {"id":int,"fields":{title?,description?,price?,status?,seo_title?,seo_description?,tags?}} risk:medium\n'
         '- archive_listing: {"id":int} risk:medium\n'
         '- delete_listing: {"id":int} risk:high (только явный мусор/тест)\n'
-        '- generate_description: {"id":int} risk:medium — GPT сам генерирует описание по данным объекта. Передавай ТОЛЬКО id, больше ничего не нужно.\n'
-        '- seo_optimize: {"id":int,"seo_title":str,"seo_description":str} risk:medium\n'
+        '- generate_description: {"id":int} risk:medium — GPT сам генерирует описание по данным объекта. Передавай ТОЛЬКО id.\n'
+        '- seo_optimize: {"id":int} risk:medium — GPT сам генерирует seo_title и seo_description по данным объекта. Передавай ТОЛЬКО id.\n'
         '- bulk_update_status: {"ids":[int,...],"status":str} risk:high\n'
-        '- bulk_generate_descriptions: {"items":[{"id":int},...]} risk:high — GPT сам генерирует описания для всех переданных id. Если items пустой [] — обработает ВСЕ объекты без описания.\n'
-        '- bulk_seo_optimize: {"items":[{"id":int,"seo_title":str,"seo_description":str},...]} risk:high\n'
+        '- bulk_generate_descriptions: {"items":[{"id":int},...]} risk:high — GPT сам генерирует описания. items:[] = все объекты без описания.\n'
+        '- bulk_seo_optimize: {"items":[{"id":int},...]} risk:high — GPT сам генерирует SEO для каждого. items:[] = все объекты без SEO.\n'
         '- bulk_shorten_titles: {"items":[{"id":int}],"max_len":65} risk:high — массово ПЕРЕПИСЫВАЕТ длинные title через GPT в SEO-стиле (50-65 симв). Можно передать и готовые new_title: {"items":[{"id":int,"new_title":str},...]}\n'
         '- scan_long_titles: {"max_len":70,"limit":100} risk:low — сканирует объекты с длинными title и возвращает список с id + длина\n'
         '- create_listing: {"title":str,"category":str,"deal":str,"price":int,"area":float,"city":str} risk:medium\n'
@@ -367,10 +367,10 @@ SYSTEM_PROMPTS = {
         '    БЕЗОПАСНЫЕ (risk:low — авто): description, tags, seo_title, seo_description, purpose, condition, parking, entrance, finishing, road_line, utilities, building_class, broker_commission, video_url, video_type, is_hot, is_new, is_exclusive, is_urgent, is_apartments, has_furniture, has_equipment, use_watermark, export_yandex, export_avito, export_cian, is_visible, is_pinned\n'
         '    ЧУВСТВИТЕЛЬНЫЕ (risk:high — требуют подтверждения): title, price, price_per_m2, area, monthly_rent, yearly_rent, status, category, deal, address, district, city, lat, lng, owner_name, owner_phone, owner_phone2, tenant_name, slug, image, images, floor, total_floors, ceiling_height, electricity_kw, land_area, land_status, property_rights, building_year, subway_station, subway_distance, rooms, min_area, public_code, broker_id, author_id, payback, profit, price_unit\n'
         '- update_news: {"id":int,"fields":{title?,summary?,content?,image_url?,source_url?,source_name?,category?,is_published?,cb_key_rate?}} risk:medium (high если меняем is_published)\n'
-        '- create_news: {"title":str,"summary":str,"content":str,"image_url"?,"category"?,"is_published":bool?} risk:medium\n'
+        '- create_news: {"title":str,"category"?,"keywords"?,"is_published":bool?} risk:medium — GPT сам пишет полный текст статьи по title. Передавай ТОЛЬКО title и опционально category/keywords/is_published.\n'
         '- update_lead: {"id":int,"fields":{name?,phone?,email?,message?,status?,source?,company?,request_category?,lead_type?,assigned_to?,broker_id?,budget?,listing_id?,is_public?,show_on_main?,...}} risk:medium (high если меняем phone/email/status=closed)\n'
         'Лиды:\n'
-        '- reply_lead: {"id":int,"message":str} risk:medium\n'
+        '- reply_lead: {"id":int} risk:medium — GPT сам составит ответ клиенту по данным заявки. Передавай ТОЛЬКО id лида.\n'
         '- close_lead: {"id":int,"reason":str} risk:medium\n'
         '- approve_lead: {"id":int} risk:medium\n'
         'Настройки:\n'
@@ -395,8 +395,8 @@ SYSTEM_PROMPTS = {
         '- lookup_lead: {"phone":str} или {"id":int} risk:low — найти заявку по номеру телефона или id. Используй когда спрашивают «найди заявку», «что по номеру +79...», «статус заявки #N»\n'
         '- search_knowledge: {"query":str} risk:low — поиск по базе знаний ВБ (ai_memory). Используй когда нужно найти факты о рынке, ценах, районах\n'
         '- assign_broker: {"lead_id":int,"broker_id":int} или {"lead_id":int,"broker_name":str} risk:medium — назначить брокера на заявку. Статус меняется на in_progress\n'
-        '- send_email_to_lead: {"lead_id":int,"subject":str,"body":str} или {"email":str,"subject":str,"body":str} risk:medium — отправить письмо клиенту. Используй когда просят «напиши клиенту», «отправь подборку на почту»\n'
-        '- notify_employee: {"name":str,"subject":str,"body":str} или {"employee_id":int,"subject":str,"body":str} risk:medium — уведомить сотрудника по email. Используй когда просят «передай Ивану», «уведоми менеджера»\n'
+        '- send_email_to_lead: {"lead_id":int,"goal":str?} или {"email":str,"goal":str?} risk:medium — GPT сам составит тему и текст письма по данным лида. Передавай lead_id и опционально goal (цель письма). Используй при «напиши клиенту», «отправь ответ».\n'
+        '- notify_employee: {"name":str,"goal":str,"context":str?} или {"employee_id":int,"goal":str} risk:medium — GPT составит текст уведомления. Передавай имя/id сотрудника и goal (о чём уведомить). Используй при «уведоми Ивана», «передай менеджеру».\n'
         '\n'
         '🛡️ СТРАЖ (Security Guardian):\n'
         '- guardian_full_scan: {} risk:low — полное сканирование безопасности: XSS, спам-телефоны, SQL-инъекции в заявках, аномалии, активные блокировки. Используй при «проверь безопасность», «сканируй угрозы»\n'
@@ -1082,11 +1082,60 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
 
     if act_type == 'reply_lead':
         lead_id = int(params.get('id') or 0)
-        message = params.get('message') or ''
-        if not lead_id or not message:
-            return {'error': 'Нужны id лида и текст ответа'}
-        cur.execute(f"UPDATE {SCHEMA}.leads SET status = 'in_progress' WHERE id = {lead_id}")
-        return {'ok': True, 'message': f'Лид #{lead_id} взят в работу. Текст ответа: {message[:120]}'}
+        if not lead_id:
+            return {'error': 'Не указан id лида'}
+        message = (params.get('message') or '').strip()
+
+        # Если текст не передан — генерируем через GPT по данным лида
+        if not message:
+            cur.execute(
+                f"SELECT name, phone, email, message AS request, status, source, "
+                f"request_category, budget, listing_id "
+                f"FROM {SCHEMA}.leads WHERE id = {lead_id}"
+            )
+            lead = cur.fetchone()
+            if not lead:
+                return {'error': f'Лид #{lead_id} не найден'}
+            lead = dict(lead)
+            db_key, db_folder = _load_keys_from_db(cur)
+            if not db_key:
+                return {'error': 'YandexGPT не настроен'}
+            # TOV компании
+            cur.execute(f"SELECT company_name, company_phone, company_email FROM {SCHEMA}.settings LIMIT 1")
+            s = cur.fetchone() or {}
+            company = s.get('company_name') or 'наша компания'
+            phone = s.get('company_phone') or ''
+            # Данные по объекту если есть
+            listing_info = ''
+            if lead.get('listing_id'):
+                cur.execute(f"SELECT title, price, area, address FROM {SCHEMA}.listings WHERE id = {lead['listing_id']}")
+                lr = cur.fetchone()
+                if lr:
+                    lr = dict(lr)
+                    listing_info = f"Объект интереса: {lr.get('title','')}, {lr.get('area','')}м², {lr.get('price','')}₽, {lr.get('address','')}"
+            gpt = _call_yandex_gpt(
+                f'Ты — менеджер компании {company} по коммерческой недвижимости. '
+                f'Пиши профессиональные, живые ответы клиентам. '
+                f'Тон: дружелюбный, конкретный, без воды. 3-5 предложений. '
+                f'В конце укажи контакт для связи: {phone or company}.',
+                f'Клиент: {lead.get("name","")}\n'
+                f'Запрос: {lead.get("request","")}\n'
+                f'Категория: {lead.get("request_category","")}\n'
+                f'Бюджет: {lead.get("budget","")}\n'
+                + (listing_info + '\n' if listing_info else '') +
+                f'Напиши ответ клиенту от имени менеджера {company}.',
+                db_key, db_folder,
+                history=None, temperature=0.7, max_tokens=300, model=YANDEX_MODEL_SHORT,
+            )
+            message = (gpt.get('text') or '').strip()
+            if not message:
+                return {'error': 'GPT не смог составить ответ'}
+
+        cur.execute(f"UPDATE {SCHEMA}.leads SET status = 'in_progress', updated_at = NOW() WHERE id = {lead_id}")
+        return {
+            'ok': True,
+            'message': f'✅ Лид #{lead_id} взят в работу.\n\nПодготовленный ответ клиенту:\n{message}',
+        }
 
     if act_type == 'approve_lead':
         lead_id = int(params.get('id') or 0)
@@ -1097,19 +1146,64 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
 
     if act_type == 'seo_optimize':
         listing_id = int(params.get('id') or 0)
-        seo_title = params.get('seo_title') or ''
-        seo_desc = params.get('seo_description') or ''
         if not listing_id:
             return {'error': 'Не указан id объекта'}
+        seo_title = (params.get('seo_title') or '').strip()
+        seo_desc = (params.get('seo_description') or '').strip()
+
+        # Если SEO не передан — генерируем через GPT по данным объекта
+        if not seo_title or not seo_desc:
+            cur.execute(
+                f"SELECT title, category, deal, area, price, address, district, description "
+                f"FROM {SCHEMA}.listings WHERE id = {listing_id}"
+            )
+            row = cur.fetchone()
+            if not row:
+                return {'error': f'Объект #{listing_id} не найден'}
+            row = dict(row)
+            db_key, db_folder = _load_keys_from_db(cur)
+            if not db_key:
+                return {'error': 'YandexGPT не настроен'}
+            deal_map = {'sale': 'Продажа', 'rent': 'Аренда', 'lease': 'Аренда'}
+            cat_map = {'office':'Офис','warehouse':'Склад','retail':'Торговое помещение',
+                'production':'Производство','land':'Участок','gab':'ГАБ',
+                'building':'Здание','free_purpose':'Помещение'}
+            deal_ru = deal_map.get((row.get('deal') or '').lower(), '')
+            cat_ru = cat_map.get((row.get('category') or '').lower(), 'Объект')
+            area = row.get('area') or '—'
+            address = row.get('address') or row.get('district') or '—'
+            price = f"{int(row['price']):,}".replace(',', ' ') + ' ₽' if row.get('price') else ''
+            desc_snippet = (row.get('description') or '')[:300]
+            gpt = _call_yandex_gpt(
+                'Ты — SEO-специалист по коммерческой недвижимости. '
+                'Генерируй мета-теги строго по формату — две строки:\n'
+                'TITLE: <заголовок 50-60 символов, тип+сделка+площадь+локация>\n'
+                'DESC: <описание 130-155 символов, ключевые преимущества + CTA>',
+                f'Объект: {cat_ru}, {deal_ru}, {area} м², {price}, {address}\n'
+                f'Название: {row.get("title","")}\n'
+                f'Описание: {desc_snippet}',
+                db_key, db_folder,
+                history=None, temperature=0.4, max_tokens=200, model=YANDEX_MODEL_SHORT,
+            )
+            raw = (gpt.get('text') or '').strip()
+            for line in raw.splitlines():
+                if line.upper().startswith('TITLE:') and not seo_title:
+                    seo_title = line.split(':', 1)[1].strip().strip('"')
+                elif line.upper().startswith('DESC:') and not seo_desc:
+                    seo_desc = line.split(':', 1)[1].strip().strip('"')
+            if not seo_title and not seo_desc:
+                return {'error': 'GPT не смог сгенерировать SEO. Попробуйте ещё раз.'}
+
         sets = []
         if seo_title:
             sets.append(f"seo_title = '{_sanitize_text(seo_title, 120)}'")
         if seo_desc:
             sets.append(f"seo_description = '{_sanitize_text(seo_desc, 300)}'")
-        if not sets:
-            return {'error': 'Нет SEO данных для обновления'}
         cur.execute(f"UPDATE {SCHEMA}.listings SET {', '.join(sets)}, updated_at = NOW() WHERE id = {listing_id}")
-        return {'ok': True, 'message': f'SEO объекта #{listing_id} обновлено'}
+        return {
+            'ok': True,
+            'message': f'✅ SEO объекта #{listing_id} обновлено.\nTitle: {seo_title}\nDesc: {seo_desc}',
+        }
 
     # ── Полное редактирование объекта (любые разрешённые поля) ──────────
     if act_type == 'update_listing_full':
@@ -1334,6 +1428,41 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         image_url = _sanitize_text(str(params.get('image_url') or ''), 500)
         category = _sanitize_text(str(params.get('category') or 'market'), 50)
         is_published = bool(params.get('is_published', False))
+        keywords = (params.get('keywords') or '').strip()
+
+        # Если контент не передан — генерируем через GPT
+        if not content or len(content) < 100:
+            db_key, db_folder = _load_keys_from_db(cur)
+            if db_key:
+                cur.execute(f"SELECT company_name FROM {SCHEMA}.settings LIMIT 1")
+                s = cur.fetchone() or {}
+                company = s.get('company_name') or 'компании'
+                # Загружаем TOV
+                cur.execute(f"SELECT config FROM {SCHEMA}.agent_modules WHERE module='copywriter' LIMIT 1")
+                cfg_row = cur.fetchone()
+                tov = 'профессиональный брокер коммерческой недвижимости'
+                if cfg_row and cfg_row.get('config'):
+                    try:
+                        tov = (cfg_row['config'] if isinstance(cfg_row['config'], dict)
+                               else json.loads(cfg_row['config'])).get('tov', tov)
+                    except Exception:
+                        pass
+                kw_line = f'Ключевые слова: {keywords}.' if keywords else ''
+                gpt = _call_yandex_gpt(
+                    f'Ты — SEO-копирайтер компании {company} ({tov}). '
+                    f'Пиши информативные статьи для сайта о коммерческой недвижимости. '
+                    f'Структура: введение → 2-3 смысловых блока с подзаголовками → заключение. '
+                    f'Без эмодзи, без markdown. 400-600 слов.',
+                    f'Тема: {title}\n{kw_line}\nНапиши статью для блога {company}.',
+                    db_key, db_folder,
+                    history=None, temperature=0.65, max_tokens=900, model=YANDEX_MODEL_NAME,
+                )
+                generated = (gpt.get('text') or '').strip()
+                if generated and len(generated) > 100:
+                    content = _sanitize_text(generated, 30000)
+                    if not summary:
+                        summary = _sanitize_text(generated[:300].split('.')[0] + '.', 1000)
+
         cur.execute(
             f"INSERT INTO {SCHEMA}.news (title, summary, content, image_url, category, is_published, is_auto, "
             f"created_by, created_at, updated_at, published_at) "
@@ -1342,7 +1471,12 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
             f"{'NOW()' if is_published else 'NULL'}) RETURNING id"
         )
         new_id = cur.fetchone()['id']
-        return {'ok': True, 'message': f'Новость #{new_id} «{title[:50]}» создана', 'id': new_id}
+        pub_status = 'опубликована' if is_published else 'создана как черновик'
+        return {
+            'ok': True,
+            'id': new_id,
+            'message': f'✅ Новость #{new_id} «{title[:60]}» {pub_status}.\nОбъём: {len(content)} символов.',
+        }
 
     if act_type == 'bulk_update_status':
         ids = params.get('ids') or []
@@ -1670,27 +1804,99 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
 
     if act_type == 'bulk_seo_optimize':
         items = params.get('items') or []
+        # Если items пустой — берём все без SEO
         if not isinstance(items, list) or not items:
-            return {'error': 'Не передан список объектов'}
-        if len(items) > 20:
-            return {'error': 'Максимум 20 объектов за раз'}
+            cur.execute(
+                f"SELECT id FROM {SCHEMA}.listings "
+                f"WHERE status='active' AND (seo_title IS NULL OR seo_title='') "
+                f"ORDER BY id"
+            )
+            items = [{'id': r['id']} for r in cur.fetchall()]
+        if not items:
+            return {'ok': True, 'message': 'Все объекты уже имеют SEO-теги.'}
+
+        # Режим 1: готовые seo_title/seo_description переданы — просто сохраняем
+        has_ready = all(isinstance(it, dict) and (it.get('seo_title') or it.get('seo_description')) for it in items)
+        if has_ready:
+            updated = 0
+            for it in items:
+                try:
+                    lid = int(it.get('id') or 0)
+                    st = _sanitize_text(str(it.get('seo_title') or ''), 120)
+                    sd = _sanitize_text(str(it.get('seo_description') or ''), 300)
+                    if lid and (st or sd):
+                        sets = []
+                        if st: sets.append(f"seo_title='{st}'")
+                        if sd: sets.append(f"seo_description='{sd}'")
+                        cur.execute(f"UPDATE {SCHEMA}.listings SET {', '.join(sets)}, updated_at=NOW() WHERE id={lid}")
+                        updated += 1
+                except Exception:
+                    continue
+            return {'ok': True, 'message': f'SEO обновлён для {updated} из {len(items)} объектов'}
+
+        # Режим 2: только id — генерируем через GPT батчем по 10
+        db_key, db_folder = _load_keys_from_db(cur)
+        if not db_key:
+            return {'error': 'YandexGPT не настроен'}
+        ids = [int(it.get('id')) for it in items if isinstance(it, dict) and str(it.get('id','')).isdigit()]
+        if not ids:
+            return {'error': 'Не переданы корректные id'}
+        id_list = ','.join(str(i) for i in ids)
+        cur.execute(
+            f"SELECT id, title, category, deal, area, price, address, district "
+            f"FROM {SCHEMA}.listings WHERE id IN ({id_list})"
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+
+        deal_map = {'sale':'Продажа','rent':'Аренда','lease':'Аренда'}
+        cat_map = {'office':'Офис','warehouse':'Склад','retail':'Торговое помещение',
+            'production':'Производство','land':'Участок','gab':'ГАБ',
+            'building':'Здание','free_purpose':'Помещение'}
+
+        BATCH = 10
         updated = 0
-        for it in items:
-            try:
-                lid = int(it.get('id') or 0)
-                st = _sanitize_text(str(it.get('seo_title') or ''), 120)
-                sd = _sanitize_text(str(it.get('seo_description') or ''), 300)
-                if lid and (st or sd):
-                    sets = []
-                    if st:
-                        sets.append(f"seo_title='{st}'")
-                    if sd:
-                        sets.append(f"seo_description='{sd}'")
-                    cur.execute(f"UPDATE {SCHEMA}.listings SET {', '.join(sets)}, updated_at=NOW() WHERE id={lid}")
-                    updated += 1
-            except Exception:
-                continue
-        return {'ok': True, 'message': f'SEO обновлён для {updated} объектов из {len(items)}'}
+        sys_p = (
+            'Ты — SEO-специалист по коммерческой недвижимости. '
+            'Получаешь список объектов: ID|Категория|Сделка|Площадь|Адрес|Название. '
+            'Для каждого сгенерируй TITLE (50-60 симв) и DESC (130-155 симв).\n'
+            'Отвечай СТРОГО построчно:\nID|TITLE|DESC\nНикаких пояснений, только строки.'
+        )
+        for i in range(0, len(rows), BATCH):
+            batch = rows[i:i+BATCH]
+            lines = []
+            for r in batch:
+                cat_ru = cat_map.get((r.get('category') or '').lower(), 'Объект')
+                deal_ru = deal_map.get((r.get('deal') or '').lower(), '')
+                area = r.get('area') or '—'
+                addr = r.get('address') or r.get('district') or '—'
+                price = f"{int(r['price']):,}".replace(',', ' ') + '₽' if r.get('price') else ''
+                lines.append(f"{r['id']}|{cat_ru}|{deal_ru}|{area}м²|{addr}|{r.get('title','')[:80]}")
+            gpt = _call_yandex_gpt(
+                sys_p, 'Объекты:\n' + '\n'.join(lines),
+                db_key, db_folder,
+                history=None, temperature=0.3, max_tokens=BATCH * 40, model=YANDEX_MODEL_SHORT,
+            )
+            for line in (gpt.get('text') or '').strip().splitlines():
+                parts = line.split('|')
+                if len(parts) >= 3:
+                    try:
+                        lid = int(parts[0].strip())
+                        st = _sanitize_text(parts[1].strip().strip('"'), 120)
+                        sd = _sanitize_text(parts[2].strip().strip('"'), 300)
+                        if lid and (st or sd):
+                            sets = []
+                            if st: sets.append(f"seo_title='{st}'")
+                            if sd: sets.append(f"seo_description='{sd}'")
+                            cur.execute(f"UPDATE {SCHEMA}.listings SET {', '.join(sets)}, updated_at=NOW() WHERE id={lid}")
+                            updated += 1
+                    except Exception:
+                        continue
+        return {
+            'ok': True,
+            'updated': updated,
+            'total': len(rows),
+            'message': f'✅ SEO сгенерирован и сохранён для {updated} из {len(rows)} объектов.',
+        }
 
     # ── Сканер длинных названий объектов ─────────────────────────────────
     if act_type == 'scan_long_titles':
@@ -2149,8 +2355,63 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         to_email = (params.get('email') or '').strip()
         subject = (params.get('subject') or '').strip()
         body = (params.get('body') or '').strip()
+
+        # Если subject или body не переданы — генерируем через GPT по данным лида
+        if not subject or not body:
+            lead_data = {}
+            if lead_id:
+                try:
+                    cur.execute(
+                        f"SELECT name, email, message, request_category, budget, listing_id "
+                        f"FROM {SCHEMA}.leads WHERE id = {int(lead_id)}"
+                    )
+                    lr = cur.fetchone()
+                    if lr:
+                        lead_data = dict(lr)
+                        if not to_email:
+                            to_email = (lead_data.get('email') or '').strip()
+                except Exception:
+                    pass
+            db_key, db_folder = _load_keys_from_db(cur)
+            if db_key:
+                cur.execute(f"SELECT company_name, company_phone FROM {SCHEMA}.settings LIMIT 1")
+                s2 = cur.fetchone() or {}
+                company2 = s2.get('company_name') or 'наша компания'
+                phone2 = s2.get('company_phone') or ''
+                listing_info2 = ''
+                if lead_data.get('listing_id'):
+                    cur.execute(f"SELECT title, address FROM {SCHEMA}.listings WHERE id={lead_data['listing_id']}")
+                    lr2 = cur.fetchone()
+                    if lr2:
+                        listing_info2 = f"Объект: {lr2['title']}, {lr2['address']}"
+                goal = params.get('goal') or 'ответить на запрос клиента'
+                gpt = _call_yandex_gpt(
+                    f'Ты — менеджер {company2}. Пиши деловые письма клиентам: вежливо, кратко, по делу. '
+                    f'Формат ответа — две строки:\nSUBJECT: <тема письма>\nBODY: <текст письма 3-5 предложений>',
+                    f'Цель: {goal}\n'
+                    f'Клиент: {lead_data.get("name","")}\n'
+                    f'Запрос клиента: {lead_data.get("message","")}\n'
+                    f'Категория: {lead_data.get("request_category","")}\n'
+                    + (listing_info2 + '\n' if listing_info2 else '')
+                    + f'Контакт для ответа: {phone2 or company2}',
+                    db_key, db_folder,
+                    history=None, temperature=0.6, max_tokens=300, model=YANDEX_MODEL_SHORT,
+                )
+                raw = (gpt.get('text') or '').strip()
+                for line in raw.splitlines():
+                    if line.upper().startswith('SUBJECT:') and not subject:
+                        subject = line.split(':', 1)[1].strip()
+                    elif line.upper().startswith('BODY:') and not body:
+                        body = line.split(':', 1)[1].strip()
+                if not body and raw:
+                    # Если GPT вернул просто текст без меток
+                    lines = raw.splitlines()
+                    subject = subject or lines[0][:100]
+                    body = body or '\n'.join(lines[1:]).strip() or raw
+
         if not (subject and body):
-            return {'error': 'Укажите тему (subject) и текст письма (body)'}
+            return {'error': 'Не удалось сформировать письмо. Укажите subject и body вручную.'}
+
         # Если email не передан — берём из лида
         if not to_email and lead_id:
             try:
@@ -2277,8 +2538,40 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         employee_id = params.get('employee_id')
         subject = (params.get('subject') or '').strip()
         body = (params.get('body') or '').strip()
+
+        # Если subject или body не переданы — генерируем через GPT
+        if not subject or not body:
+            db_key, db_folder = _load_keys_from_db(cur)
+            if db_key:
+                cur.execute(f"SELECT company_name FROM {SCHEMA}.settings LIMIT 1")
+                s3 = cur.fetchone() or {}
+                company3 = s3.get('company_name') or 'компания'
+                goal3 = params.get('goal') or params.get('reason') or 'уведомить о задаче'
+                context3 = params.get('context') or ''
+                gpt3 = _call_yandex_gpt(
+                    f'Ты — менеджер {company3}. Пиши деловые внутренние письма сотрудникам: '
+                    f'кратко, чётко, по делу. 2-3 предложения.\n'
+                    f'Формат:\nSUBJECT: <тема>\nBODY: <текст>',
+                    f'Кому: {employee_name or "сотруднику"}\n'
+                    f'Цель: {goal3}\n'
+                    + (f'Контекст: {context3}\n' if context3 else ''),
+                    db_key, db_folder,
+                    history=None, temperature=0.5, max_tokens=200, model=YANDEX_MODEL_SHORT,
+                )
+                raw3 = (gpt3.get('text') or '').strip()
+                for line in raw3.splitlines():
+                    if line.upper().startswith('SUBJECT:') and not subject:
+                        subject = line.split(':', 1)[1].strip()
+                    elif line.upper().startswith('BODY:') and not body:
+                        body = line.split(':', 1)[1].strip()
+                if not subject and not body and raw3:
+                    lines3 = raw3.splitlines()
+                    subject = lines3[0][:100]
+                    body = '\n'.join(lines3[1:]).strip() or raw3
+
         if not (subject and body):
-            return {'error': 'Укажите тему (subject) и текст (body)'}
+            return {'error': 'Не удалось сформировать уведомление. Укажите subject и body вручную.'}
+
         # Ищем email сотрудника
         to_email = (params.get('email') or '').strip()
         if not to_email:
