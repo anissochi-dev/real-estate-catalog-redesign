@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Msg,
@@ -26,17 +26,26 @@ export function useAiChatHistory(
   const limitWarnedRef = useRef<'none' | 'warn' | 'critical'>('none');
 
   const totalMessages = messages.length;
+
+  // Скролл при первом монтировании — useLayoutEffect гарантирует что DOM уже готов
+  useLayoutEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [scrollRef]);
   const usagePercent = historyLimit > 0 ? totalMessages / historyLimit : 0;
 
   useEffect(() => {
     saveHistory(messages);
-    // Скролл после рендера DOM — requestAnimationFrame гарантирует что новое сообщение уже в DOM
-    if (scrollRef.current) {
-      const el = scrollRef.current;
-      requestAnimationFrame(() => {
-        el.scrollTop = el.scrollHeight;
-      });
-    }
+    // Скролл вниз: несколько попыток — на случай когда карточки действий рендерятся асинхронно
+    const scrollToBottom = () => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
+    };
+    requestAnimationFrame(scrollToBottom);
+    setTimeout(scrollToBottom, 80);
+    setTimeout(scrollToBottom, 300);
     // Предупреждения по достижении порогов
     if (usagePercent >= 1 && limitWarnedRef.current !== 'critical') {
       limitWarnedRef.current = 'critical';
