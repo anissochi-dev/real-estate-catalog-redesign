@@ -219,50 +219,109 @@ def _load_gpt_keys(cur):
     return os.environ.get('YANDEX_API_KEY', ''), os.environ.get('YANDEX_FOLDER_ID', '')
 
 
-def _fetch_news_snippets(query: str, limit: int = 8) -> list[dict]:
+def _fetch_news_snippets(query: str, limit: int = 8) -> tuple[list[dict], str]:
     """
-    Ищет свежие новости через Яндекс XML Search API.
-    Возвращает список {'title': str, 'snippet': str, 'url': str}.
+    Ищет свежие новости. Пробует несколько источников.
+    Возвращает (список {'title', 'snippet', 'url'}, источник).
     """
+    import urllib.parse
+
+    # ── Метод 1: Яндекс XML Search API ───────────────────────────────────
     search_user = os.environ.get('YANDEX_SEARCH_USER', '')
     search_key = os.environ.get('YANDEX_SEARCH_API_KEY', '')
-    if not search_user or not search_key:
-        return []
+    if search_user and search_key:
+        try:
+            params = urllib.parse.urlencode({
+                'user': search_user,
+                'key': search_key,
+                'query': query,
+                'lr': '35',
+                'l10n': 'ru',
+                'sortby': 'rlv',
+                'filter': 'none',
+                'maxpassages': '3',
+                'groupby': f'attr=d.mode=flat.groups-on-page={limit}.docs-in-group=1',
+            })
+            url = f'https://yandex.ru/search/xml?{params}'
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                xml_data = resp.read().decode('utf-8', errors='replace')
+            # Проверяем на ошибку от Яндекса
+            if '<error' in xml_data.lower():
+                err_m = re.search(r'<message>(.*?)</message>', xml_data)
+                raise Exception(f'Яндекс XML: {err_m.group(1) if err_m else xml_data[:200]}')
+            root = ET.fromstring(xml_data)
+            results = []
+            for doc in root.iter('doc'):
+                title_el = doc.find('title')
+                snippet_el = doc.find('passages/passage') or doc.find('headline') or doc.find('snippet')
+                url_el = doc.find('url')
+                title = re.sub(r'<[^>]+>', '', (title_el.text or '') if title_el is not None else '').strip()
+                snippet = re.sub(r'<[^>]+>', '', (snippet_el.text or '') if snippet_el is not None else '').strip()
+                url_s = (url_el.text or '') if url_el is not None else ''
+                if title:
+                    results.append({'title': title[:150], 'snippet': snippet[:400], 'url': url_s[:200]})
+                if len(results) >= limit:
+                    break
+            if results:
+                return results, 'yandex_xml'
+        except Exception as e:
+            # Сохраняем ошибку для диагностики — попадёт в логи если вызывается из _gpt
+            os.environ['_SEARCH_LAST_ERROR'] = str(e)[:300]
+
+    # ── Метод 2: Google News RSS (без ключа) ─────────────────────────────
     try:
-        import urllib.parse
-        params = urllib.parse.urlencode({
-            'user': search_user,
-            'key': search_key,
-            'query': query,
-            'lr': '35',         # Краснодар
-            'l10n': 'ru',
-            'sortby': 'rlv',
-            'filter': 'none',
-            'groupby': f'attr=d.mode=flat.groups-on-page={limit}.docs-in-group=1',
-        })
-        url = f'https://yandex.ru/search/xml?{params}'
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            xml_data = resp.read().decode('utf-8', errors='replace')
-        root = ET.fromstring(xml_data)
-        results = []
-        for doc in root.iter('doc'):
-            title_el = doc.find('title')
-            snippet_el = doc.find('passages/passage') or doc.find('snippet')
-            url_el = doc.find('url')
-            title = (title_el.text or '') if title_el is not None else ''
-            snippet = (snippet_el.text or '') if snippet_el is not None else ''
-            url = (url_el.text or '') if url_el is not None else ''
-            # Убираем HTML-теги из сниппетов
-            title = re.sub(r'<[^>]+>', '', title).strip()
-            snippet = re.sub(r'<[^>]+>', '', snippet).strip()
-            if title and snippet:
-                results.append({'title': title[:150], 'snippet': snippet[:400], 'url': url[:200]})
-            if len(results) >= limit:
+        q_enc = urllib.parse.quote(query)
+        rss_url = f'https://news.google.com/rss/search?q={q_enc}&hl=ru&gl=RU&ceid=RU:ru'
+        req2 = urllib.request.Request(rss_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req2, timeout=10) as resp2:
+            rss_data = resp2.read().decode('utf-8', errors='replace')
+        root2 = ET.fromstring(rss_data)
+        results2 = []
+        for item in root2.iter('item'):
+            t_el = item.find('title')
+            d_el = item.find('description')
+            l_el = item.find('link')
+            title = (t_el.text or '') if t_el is not None else ''
+            snippet = re.sub(r'<[^>]+>', '', (d_el.text or '') if d_el is not None else '').strip()
+            link = (l_el.text or '') if l_el is not None else ''
+            # Убираем имя издания из заголовка (формат «Заголовок - Издание»)
+            title = re.sub(r'\s+-\s+[\w\s]+$', '', title).strip()
+            if title:
+                results2.append({'title': title[:150], 'snippet': snippet[:300], 'url': link[:200]})
+            if len(results2) >= limit:
                 break
-        return results
+        if results2:
+            return results2, 'google_news_rss'
     except Exception:
-        return []
+        pass
+
+    # ── Метод 3: Яндекс Новости RSS ──────────────────────────────────────
+    try:
+        q_enc = urllib.parse.quote(query)
+        yn_url = f'https://news.yandex.ru/search.rss?text={q_enc}&geo=35'
+        req3 = urllib.request.Request(yn_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req3, timeout=10) as resp3:
+            rss3 = resp3.read().decode('utf-8', errors='replace')
+        root3 = ET.fromstring(rss3)
+        results3 = []
+        for item in root3.iter('item'):
+            t_el = item.find('title')
+            d_el = item.find('description')
+            l_el = item.find('link')
+            title = (t_el.text or '') if t_el is not None else ''
+            snippet = re.sub(r'<[^>]+>', '', (d_el.text or '') if d_el is not None else '').strip()[:300]
+            link = (l_el.text or '') if l_el is not None else ''
+            if title:
+                results3.append({'title': title[:150], 'snippet': snippet, 'url': link[:200]})
+            if len(results3) >= limit:
+                break
+        if results3:
+            return results3, 'yandex_news_rss'
+    except Exception:
+        pass
+
+    return [], 'none'
 
 
 def _build_news_context(snippets: list[dict]) -> str:
@@ -332,8 +391,17 @@ def _gpt(api_key, folder_id, topic, key_rate: float | None = None, news_snippets
         if text.startswith('```'):
             text = re.sub(r'^```\w*\n?', '', text)
             text = re.sub(r'\n?```$', '', text)
+        # Убираем markdown если GPT добавил
+        def _strip_md(s):
+            s = re.sub(r'\*{1,3}([^*]+)\*{1,3}', r'\1', s)
+            s = re.sub(r'#{1,6}\s+', '', s)
+            s = re.sub(r'_{1,2}([^_]+)_{1,2}', r'\1', s)
+            return s
+
         try:
             parsed = json.loads(text)
+            parsed['content'] = _strip_md(parsed.get('content', ''))
+            parsed['title'] = _strip_md(parsed.get('title', ''))
             return parsed, None
         except Exception:
             # Пробуем вытащить JSON из текста
@@ -341,15 +409,17 @@ def _gpt(api_key, folder_id, topic, key_rate: float | None = None, news_snippets
             if m:
                 try:
                     parsed = json.loads(m.group(0))
+                    parsed['content'] = _strip_md(parsed.get('content', ''))
+                    parsed['title'] = _strip_md(parsed.get('title', ''))
                     return parsed, None
                 except Exception:
                     pass
             # Если не JSON — формируем структуру из текста
             lines = text.split('\n', 2)
             return {
-                'title': lines[0][:200] if lines else topic,
+                'title': _strip_md(lines[0][:200] if lines else topic),
                 'summary': lines[1][:300] if len(lines) > 1 else '',
-                'content': '\n'.join(lines[2:]) if len(lines) > 2 else text,
+                'content': _strip_md('\n'.join(lines[2:]) if len(lines) > 2 else text),
             }, None
     except Exception as e:
         return None, str(e)[:300]
@@ -510,12 +580,12 @@ def handler(event: dict, context) -> dict:
                             pool = AUTO_TOPICS
                         topics = random.sample(pool, min(count, len(pool)))
                         # Один раз ищем общий дайджест новостей Краснодара за сегодня
-                        daily_news = _fetch_news_snippets(
+                        daily_news, _ = _fetch_news_snippets(
                             'коммерческая недвижимость Краснодар новости сегодня', limit=10
                         )
                         for topic in topics:
                             # Ищем новости по конкретной теме + общий дайджест
-                            topic_news = _fetch_news_snippets(
+                            topic_news, src = _fetch_news_snippets(
                                 f'{topic} Краснодар', limit=5
                             )
                             # Объединяем: сначала тематические, потом общие (без дублей)

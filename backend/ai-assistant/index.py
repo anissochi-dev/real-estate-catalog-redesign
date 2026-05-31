@@ -8,6 +8,7 @@ Returns: HTTP-ответ с текстом от YandexGPT и логом в БД
 import io
 import json
 import os
+import re
 import urllib.request
 
 import boto3
@@ -2978,42 +2979,74 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         # Ищем свежие новости по теме если use_web=True
         news_context = ''
         news_found = 0
+        news_source = 'none'
         if use_web:
             try:
                 import urllib.request as _ureq, urllib.parse as _uparse, xml.etree.ElementTree as _ET, re as _re
+                search_q = f'{topic} Краснодар'
+                snippets_raw = []
+
+                # Метод 1: Яндекс XML Search
                 search_user = os.environ.get('YANDEX_SEARCH_USER', '')
                 search_key = os.environ.get('YANDEX_SEARCH_API_KEY', '')
                 if search_user and search_key:
-                    search_q = f'{topic} Краснодар'
-                    qparams = _uparse.urlencode({
-                        'user': search_user, 'key': search_key,
-                        'query': search_q, 'lr': '35', 'l10n': 'ru',
-                        'groupby': 'attr=d.mode=flat.groups-on-page=6.docs-in-group=1',
-                    })
-                    req_s = _ureq.Request(
-                        f'https://yandex.ru/search/xml?{qparams}',
-                        headers={'User-Agent': 'Mozilla/5.0'}
+                    try:
+                        qparams = _uparse.urlencode({
+                            'user': search_user, 'key': search_key,
+                            'query': search_q, 'lr': '35', 'l10n': 'ru',
+                            'maxpassages': '3',
+                            'groupby': 'attr=d.mode=flat.groups-on-page=6.docs-in-group=1',
+                        })
+                        req_s = _ureq.Request(f'https://yandex.ru/search/xml?{qparams}', headers={'User-Agent': 'Mozilla/5.0'})
+                        with _ureq.urlopen(req_s, timeout=12) as resp_s:
+                            xml_s = resp_s.read().decode('utf-8', errors='replace')
+                        if '<error' not in xml_s.lower():
+                            root_s = _ET.fromstring(xml_s)
+                            for doc in root_s.iter('doc'):
+                                t_el = doc.find('title')
+                                s_el = doc.find('passages/passage') or doc.find('headline') or doc.find('snippet')
+                                t = _re.sub(r'<[^>]+>', '', (t_el.text or '') if t_el is not None else '').strip()
+                                s = _re.sub(r'<[^>]+>', '', (s_el.text or '') if s_el is not None else '').strip()
+                                if t:
+                                    snippets_raw.append(f'• {t}' + (f': {s}' if s else ''))
+                                if len(snippets_raw) >= 6:
+                                    break
+                            if snippets_raw:
+                                news_source = 'yandex_xml'
+                    except Exception:
+                        pass
+
+                # Метод 2: Google News RSS (fallback)
+                if not snippets_raw:
+                    try:
+                        q_enc = _uparse.quote(search_q)
+                        rss_url = f'https://news.google.com/rss/search?q={q_enc}&hl=ru&gl=RU&ceid=RU:ru'
+                        req_r = _ureq.Request(rss_url, headers={'User-Agent': 'Mozilla/5.0'})
+                        with _ureq.urlopen(req_r, timeout=10) as resp_r:
+                            rss = resp_r.read().decode('utf-8', errors='replace')
+                        root_r = _ET.fromstring(rss)
+                        for item in root_r.iter('item'):
+                            t_el = item.find('title')
+                            d_el = item.find('description')
+                            t = (t_el.text or '') if t_el is not None else ''
+                            d = _re.sub(r'<[^>]+>', '', (d_el.text or '') if d_el is not None else '').strip()
+                            t = _re.sub(r'\s+-\s+[\w\s]+$', '', t).strip()
+                            if t:
+                                snippets_raw.append(f'• {t}' + (f': {d[:200]}' if d else ''))
+                            if len(snippets_raw) >= 6:
+                                break
+                        if snippets_raw:
+                            news_source = 'google_news'
+                    except Exception:
+                        pass
+
+                if snippets_raw:
+                    news_found = len(snippets_raw)
+                    news_context = (
+                        f'СВЕЖИЕ НОВОСТИ ПО ТЕМЕ (источник: {news_source}, НЕ копируй дословно):\n'
+                        + '\n'.join(snippets_raw)
+                        + '\n\nПереформулируй все факты своими словами, добавь экспертный анализ.'
                     )
-                    with _ureq.urlopen(req_s, timeout=10) as resp_s:
-                        xml_s = resp_s.read().decode('utf-8', errors='replace')
-                    root_s = _ET.fromstring(xml_s)
-                    snippets = []
-                    for doc in root_s.iter('doc'):
-                        t_el = doc.find('title')
-                        s_el = doc.find('passages/passage') or doc.find('snippet')
-                        t = _re.sub(r'<[^>]+>', '', (t_el.text or '') if t_el is not None else '').strip()
-                        s = _re.sub(r'<[^>]+>', '', (s_el.text or '') if s_el is not None else '').strip()
-                        if t and s:
-                            snippets.append(f'• {t}: {s}')
-                        if len(snippets) >= 6:
-                            break
-                    if snippets:
-                        news_found = len(snippets)
-                        news_context = (
-                            'СВЕЖИЕ НОВОСТИ ПО ТЕМЕ (используй как фактуру, НЕ копируй дословно):\n'
-                            + '\n'.join(snippets)
-                            + '\n\nПереформулируй все факты своими словами, добавь экспертный анализ.'
-                        )
             except Exception:
                 pass
 
@@ -3036,6 +3069,10 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         if 'error' in gpt_res:
             return {'error': gpt_res['error']}
         article_text = gpt_res.get('text', '')
+        # Убираем markdown-символы если GPT всё равно добавил
+        article_text = re.sub(r'\*{1,3}([^*]+)\*{1,3}', r'\1', article_text)
+        article_text = re.sub(r'#{1,6}\s+', '', article_text)
+        article_text = re.sub(r'_{1,2}([^_]+)_{1,2}', r'\1', article_text)
 
         # SEO-мета
         seo_res = _call_yandex_gpt(
