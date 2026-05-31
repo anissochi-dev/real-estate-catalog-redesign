@@ -118,11 +118,21 @@ export default function AiChatMessage({
           </div>
           {m.agentActions.map((a, j) => {
             const meta = ACTION_LABELS[a.type] || { label: a.type, icon: 'Zap' };
+            // Валидация обязательных параметров
+            const NEEDS_OBJ_ID = ['update_listing','archive_listing','delete_listing','generate_description','seo_optimize','update_listing_full'];
+            const NEEDS_LEAD_ID = ['reply_lead','close_lead','approve_lead','update_lead'];
+            const NEEDS_IDS = ['fix_data_quality','bulk_update_status'];
+            const p = (a.params || {}) as Record<string, unknown>;
+            let paramError: string | null = null;
+            if (NEEDS_OBJ_ID.includes(a.type) && !p.id) paramError = 'Не указан id объекта';
+            else if (NEEDS_LEAD_ID.includes(a.type) && !p.id) paramError = 'Не указан id лида';
+            else if (NEEDS_IDS.includes(a.type) && (!Array.isArray(p.ids) || (p.ids as unknown[]).length === 0)) paramError = 'Не указаны ids объектов';
+
             return (
-              <div key={j} className="border border-border rounded-xl p-3 bg-white">
+              <div key={j} className={`border rounded-xl p-3 bg-white ${paramError ? 'border-amber-200 bg-amber-50/30' : 'border-border'}`}>
                 <div className="flex items-start gap-2 mb-1.5">
-                  <div className="mt-0.5 w-7 h-7 rounded-lg bg-brand-blue/10 flex items-center justify-center shrink-0">
-                    <Icon name={meta.icon} size={14} className="text-brand-blue" />
+                  <div className={`mt-0.5 w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${paramError ? 'bg-amber-100' : 'bg-brand-blue/10'}`}>
+                    <Icon name={paramError ? 'AlertTriangle' : meta.icon} size={14} className={paramError ? 'text-amber-600' : 'text-brand-blue'} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -141,11 +151,19 @@ export default function AiChatMessage({
                   </div>
                 </div>
 
+                {paramError && a.status === 'pending' && (
+                  <div className="mb-2 text-[11px] text-amber-700 bg-amber-100 rounded-lg px-2.5 py-1.5 flex items-center gap-1.5">
+                    <Icon name="AlertTriangle" size={11} />
+                    {paramError} — действие недоступно. Запросите аудит для получения данных.
+                  </div>
+                )}
+
                 {a.status === 'pending' && !a.resultMessage && (
                   <div className="flex gap-2 mt-2">
                     <button
                       onClick={() => onConfirmAgentAction(i, j)}
-                      className="flex-1 btn-blue text-white px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center justify-center gap-1"
+                      disabled={!!paramError}
+                      className="flex-1 btn-blue text-white px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <Icon name="Check" size={12} /> Подтвердить
                     </button>
