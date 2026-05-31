@@ -995,7 +995,7 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         if not new_desc:
             # Генерируем через GPT: подтягиваем данные объекта
             cur.execute(
-                f"SELECT id, title, category, deal, area, price, floor, floors_total, "
+                f"SELECT id, title, category, deal, area, price, floor, total_floors, "
                 f"address, district, city, condition, parking, entrance, finishing, "
                 f"ceiling_height, electricity_kw, building_year, building_class "
                 f"FROM {SCHEMA}.listings WHERE id = {listing_id}"
@@ -1021,7 +1021,7 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
             area = row.get('area') or '—'
             address = row.get('address') or row.get('district') or row.get('city') or '—'
             extra_parts = []
-            if row.get('floor'): extra_parts.append(f"этаж {row['floor']}" + (f"/{row['floors_total']}" if row.get('floors_total') else ''))
+            if row.get('floor'): extra_parts.append(f"этаж {row['floor']}" + (f"/{row['total_floors']}" if row.get('total_floors') else ''))
             if row.get('ceiling_height'): extra_parts.append(f"высота потолков {row['ceiling_height']} м")
             if row.get('condition'): extra_parts.append(f"состояние: {row['condition']}")
             if row.get('parking'): extra_parts.append(f"парковка: {row['parking']}")
@@ -1746,7 +1746,7 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
 
         id_list = ','.join(str(i) for i in ids)
         cur.execute(
-            f"SELECT id, title, category, deal, area, price, address, district, floor, floors_total, condition "
+            f"SELECT id, title, category, deal, area, price, address, district, floor, total_floors, condition "
             f"FROM {SCHEMA}.listings WHERE id IN ({id_list})"
         )
         rows = [dict(r) for r in cur.fetchall()]
