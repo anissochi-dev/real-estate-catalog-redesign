@@ -45,6 +45,10 @@ export const QUICK_CMDS: QuickCmd[] = [
   { id: 'find_lead', label: 'Найти заявку', icon: 'PhoneSearch', action: 'agent', prompt: 'Найди заявку по номеру телефона или id. Покажи статус, имя клиента, сообщение и когда поступила.' },
   { id: 'ask_knowledge', label: 'База знаний', icon: 'BookOpen', action: 'agent', prompt: 'Найди в базе знаний информацию по моему вопросу. Используй search_knowledge.' },
   { id: 'notify_team', label: 'Уведомить команду', icon: 'BellRing', action: 'agent', prompt: 'Составь и отправь уведомление сотруднику. Используй notify_employee.' },
+  { id: 'guardian', label: '🛡️ Страж', icon: 'ShieldCheck', action: 'agent', prompt: 'Запусти полное сканирование безопасности сайта: XSS в объектах, спам-телефоны, SQL-инъекции в заявках, аномальные данные. Используй guardian_full_scan, затем предложи guardian_block для найденных угроз.' },
+  { id: 'inspector', label: '🔍 Инспектор', icon: 'ClipboardList', action: 'agent', prompt: 'Запусти полный аудит сайта: SEO, битые данные, дубли, устаревшие объекты, необработанные лиды. Используй inspector_full_audit.' },
+  { id: 'copywriter', label: '✍️ Копирайтер', icon: 'PenLine', action: 'agent', prompt: 'Предложи темы для статей блога на основе каталога и запросов клиентов. Используй copywriter_get_topics, затем предложи написать статью через copywriter_write_article.' },
+  { id: 'dispatcher', label: '🎛️ Диспетчер', icon: 'Zap', action: 'agent', prompt: 'Покажи статус всех модулей (dispatcher_get_status), затем запусти все включённые модули через dispatcher_run_all.' },
 ];
 
 export const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
@@ -96,6 +100,24 @@ export const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
   scan_images: { label: 'Сканировать фото', icon: 'ScanLine' },
   optimize_images: { label: 'Оптимизировать фото', icon: 'ImageDown' },
   delete_unused_images: { label: 'Удалить неиспользуемые', icon: 'Trash2' },
+  // 🛡️ Страж
+  guardian_full_scan: { label: 'Страж: сканирование', icon: 'ShieldCheck' },
+  guardian_block: { label: 'Заблокировать', icon: 'ShieldOff' },
+  guardian_unblock: { label: 'Разблокировать', icon: 'ShieldCheck' },
+  guardian_get_blocks: { label: 'Список блокировок', icon: 'List' },
+  // 🔍 Инспектор
+  inspector_full_audit: { label: 'Инспектор: аудит', icon: 'ClipboardList' },
+  inspector_check_typos: { label: 'Проверка опечаток', icon: 'SpellCheck' },
+  inspector_get_reports: { label: 'Отчёты модулей', icon: 'FileText' },
+  // ✍️ Копирайтер
+  copywriter_write_article: { label: 'Написать статью', icon: 'PenLine' },
+  copywriter_rewrite_tov: { label: 'Переписать под TOV', icon: 'RefreshCw' },
+  copywriter_get_topics: { label: 'Темы для блога', icon: 'Lightbulb' },
+  // 🎛️ Диспетчер
+  dispatcher_run_module: { label: 'Запустить модуль', icon: 'Play' },
+  dispatcher_run_all: { label: 'Запустить все модули', icon: 'Zap' },
+  dispatcher_get_status: { label: 'Статус модулей', icon: 'LayoutDashboard' },
+  dispatcher_toggle_module: { label: 'Вкл/выкл модуль', icon: 'ToggleLeft' },
 };
 
 // Действия с risk: low — это безопасные информационные действия,
@@ -121,6 +143,19 @@ export const AUTO_APPLY_ACTIONS = new Set([
   'lookup_lead',
   'search_knowledge',
   'scan_images',
+  // Страж
+  'guardian_full_scan',
+  'guardian_get_blocks',
+  // Инспектор
+  'inspector_full_audit',
+  'inspector_check_typos',
+  'inspector_get_reports',
+  // Копирайтер
+  'copywriter_get_topics',
+  // Диспетчер
+  'dispatcher_run_module',
+  'dispatcher_run_all',
+  'dispatcher_get_status',
 ]);
 
 /** Поля объекта/лида/новости, безопасные для автоприменения (без подтверждения).

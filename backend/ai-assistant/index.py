@@ -395,7 +395,37 @@ SYSTEM_PROMPTS = {
         '- search_knowledge: {"query":str} risk:low — поиск по базе знаний ВБ (ai_memory). Используй когда нужно найти факты о рынке, ценах, районах\n'
         '- assign_broker: {"lead_id":int,"broker_id":int} или {"lead_id":int,"broker_name":str} risk:medium — назначить брокера на заявку. Статус меняется на in_progress\n'
         '- send_email_to_lead: {"lead_id":int,"subject":str,"body":str} или {"email":str,"subject":str,"body":str} risk:medium — отправить письмо клиенту. Используй когда просят «напиши клиенту», «отправь подборку на почту»\n'
-        '- notify_employee: {"name":str,"subject":str,"body":str} или {"employee_id":int,"subject":str,"body":str} risk:medium — уведомить сотрудника по email. Используй когда просят «передай Ивану», «уведоми менеджера»\n\n'
+        '- notify_employee: {"name":str,"subject":str,"body":str} или {"employee_id":int,"subject":str,"body":str} risk:medium — уведомить сотрудника по email. Используй когда просят «передай Ивану», «уведоми менеджера»\n'
+        '\n'
+        '🛡️ СТРАЖ (Security Guardian):\n'
+        '- guardian_full_scan: {} risk:low — полное сканирование безопасности: XSS, спам-телефоны, SQL-инъекции в заявках, аномалии, активные блокировки. Используй при «проверь безопасность», «сканируй угрозы»\n'
+        '- guardian_block: {"block_type":"phone|email|ip","value":str,"reason":str} risk:medium — заблокировать телефон/email/ip\n'
+        '- guardian_unblock: {"block_type":str,"value":str} risk:medium — снять блокировку\n'
+        '- guardian_get_blocks: {} risk:low — список активных блокировок\n'
+        '\n'
+        '🔍 ИНСПЕКТОР (Site Doctor):\n'
+        '- inspector_full_audit: {} risk:low — полный аудит: SEO, битые данные, дубли, устаревшие объекты, необработанные лиды. Используй при «проверь сайт», «аудит», «что не так»\n'
+        '- inspector_check_typos: {"ids":[int,...]} risk:low — проверка опечаток в описаниях через GPT (до 5 объектов)\n'
+        '- inspector_get_reports: {"module":str?,"limit":int?} risk:low — история отчётов модулей\n'
+        '\n'
+        '✍️ КОПИРАЙТЕР:\n'
+        '- copywriter_write_article: {"topic":str,"keywords":str?,"length":"short|medium|long"?,"publish":bool?} risk:medium — написать SEO-статью для блога. publish:true — сразу публикует как новость\n'
+        '- copywriter_rewrite_tov: {"id":int} risk:medium — переписать описание объекта под TOV компании\n'
+        '- copywriter_get_topics: {} risk:low — предложить темы для статей на основе каталога и лидов\n'
+        '\n'
+        '🎛️ ДИСПЕТЧЕР (Orchestrator):\n'
+        '- dispatcher_run_module: {"module":"guardian|inspector|copywriter"} risk:low — запустить один модуль\n'
+        '- dispatcher_run_all: {} risk:low — запустить все модули (Страж + Инспектор). Используй при «запусти всё», «полная проверка»\n'
+        '- dispatcher_get_status: {} risk:low — статус всех модулей: включён, последний запуск, последний отчёт\n'
+        '- dispatcher_toggle_module: {"module":str,"enabled":bool} risk:medium — включить/выключить модуль\n'
+        '\n'
+        'ПРАВИЛА МОДУЛЕЙ:\n'
+        '- При запросах «проверь безопасность» — сначала guardian_full_scan, потом предлагай guardian_block для найденных угроз\n'
+        '- При «аудит сайта» / «что не так» — inspector_full_audit\n'
+        '- При «напиши статью» / «контент для блога» — сначала copywriter_get_topics (low, авто), потом copywriter_write_article\n'
+        '- При «запусти все модули» / «полная проверка» — dispatcher_run_all\n'
+        '- dispatcher_get_status всегда выполняется автоматически (low risk)\n'
+        '\n'
         'КРИТИЧНО: отвечай ТОЛЬКО валидным JSON без markdown, без текста до/после:\n'
         '{"reasoning":"1-2 предложения анализа","actions":[{"type":str,"title":str,"description":str,"risk":"low|medium|high","params":{}}]}\n\n'
         'ПРАВИЛА:\n'
@@ -2083,6 +2113,597 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
             return {'ok': True, 'message': f'Уведомление отправлено сотруднику {employee_name} ({to_email})'}
         except Exception as e:
             return {'error': f'Ошибка отправки: {str(e)[:200]}'}
+
+    # ════════════════════════════════════════════════════════════════════
+    # 🛡️  МОДУЛЬ: СТРАЖ (Security Guardian)
+    # ════════════════════════════════════════════════════════════════════
+
+    if act_type == 'guardian_full_scan':
+        """Полное сканирование безопасности: XSS, спам, брутфорс, аномалии."""
+        report = {}
+
+        # 1. XSS в текстовых полях
+        cur.execute(
+            f"SELECT id, title FROM {SCHEMA}.listings "
+            f"WHERE description ~ '<script|<iframe|onerror=|onclick=|javascript:' "
+            f"OR title ~ '<script|<iframe|onerror=' LIMIT 20"
+        )
+        xss_rows = [dict(r) for r in cur.fetchall()]
+        report['xss'] = {'count': len(xss_rows), 'items': xss_rows}
+
+        # 2. Спам-активность по телефонам (>3 заявок за 24ч)
+        cur.execute(
+            f"SELECT phone, COUNT(*) AS cnt FROM {SCHEMA}.leads "
+            f"WHERE created_at > NOW() - INTERVAL '24 hours' AND phone IS NOT NULL "
+            f"GROUP BY phone HAVING COUNT(*) > 3 ORDER BY cnt DESC LIMIT 20"
+        )
+        spam_rows = [dict(r) for r in cur.fetchall()]
+        report['spam_phones'] = {'count': len(spam_rows), 'items': spam_rows}
+
+        # 3. Повторные заявки с одного email за неделю
+        cur.execute(
+            f"SELECT email, COUNT(*) AS cnt FROM {SCHEMA}.leads "
+            f"WHERE created_at > NOW() - INTERVAL '7 days' AND email IS NOT NULL AND email != '' "
+            f"GROUP BY email HAVING COUNT(*) > 5 ORDER BY cnt DESC LIMIT 10"
+        )
+        spam_emails = [dict(r) for r in cur.fetchall()]
+        report['spam_emails'] = {'count': len(spam_emails), 'items': spam_emails}
+
+        # 4. Подозрительные паттерны в заявках (SQL, скрипты)
+        cur.execute(
+            f"SELECT id, name, message FROM {SCHEMA}.leads "
+            f"WHERE message ~ 'SELECT |INSERT |DROP |UNION |--$|<script' "
+            f"OR name ~ '<script|SELECT ' LIMIT 10"
+        )
+        injection_rows = [dict(r) for r in cur.fetchall()]
+        report['injections'] = {'count': len(injection_rows), 'items': injection_rows}
+
+        # 5. Аномальные объекты: цена 0, площадь 0, без автора
+        cur.execute(
+            f"SELECT id, title, price, area FROM {SCHEMA}.listings "
+            f"WHERE status='active' AND (price = 0 OR area = 0 OR author_id IS NULL) LIMIT 20"
+        )
+        anomaly_rows = [dict(r) for r in cur.fetchall()]
+        report['anomalies'] = {'count': len(anomaly_rows), 'items': anomaly_rows}
+
+        # 6. Активные блокировки
+        cur.execute(
+            f"SELECT block_type, value, reason, blocked_at FROM {SCHEMA}.agent_blocks "
+            f"WHERE is_active = TRUE ORDER BY blocked_at DESC LIMIT 20"
+        )
+        blocks = [dict(r) for r in cur.fetchall()]
+        for b in blocks:
+            if b.get('blocked_at'):
+                b['blocked_at'] = b['blocked_at'].strftime('%d.%m.%Y %H:%M')
+        report['active_blocks'] = {'count': len(blocks), 'items': blocks}
+
+        total_threats = (
+            report['xss']['count'] + report['spam_phones']['count'] +
+            report['injections']['count']
+        )
+        severity = 'critical' if total_threats > 5 else ('warning' if total_threats > 0 else 'info')
+
+        # Сохраняем отчёт
+        import json as _json
+        summary = (
+            f"XSS: {report['xss']['count']}, спам-телефоны: {report['spam_phones']['count']}, "
+            f"инъекции: {report['injections']['count']}, аномалии: {report['anomalies']['count']}, "
+            f"активных блокировок: {report['active_blocks']['count']}"
+        )
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.agent_reports (module, report_type, summary, data, severity) "
+            f"VALUES ('guardian', 'full_scan', '{_sanitize_text(summary, 500)}', "
+            f"'{_sanitize_text(_json.dumps(report, ensure_ascii=False, default=str), 8000)}', '{severity}')"
+        )
+        return {
+            'ok': True, 'severity': severity,
+            'report': report, 'message': f'Сканирование завершено. {summary}',
+        }
+
+    if act_type == 'guardian_block':
+        """Заблокировать телефон/email как спам."""
+        block_type = (params.get('block_type') or 'phone').strip()
+        value = (params.get('value') or '').strip()
+        reason = (params.get('reason') or 'Заблокировано агентом Страж').strip()
+        if not value:
+            return {'error': 'Укажите value (телефон, email или ip)'}
+        if block_type not in ('phone', 'email', 'ip'):
+            return {'error': 'block_type: phone | email | ip'}
+        val_safe = value.replace("'", "''")
+        reason_safe = reason.replace("'", "''")
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.agent_blocks (block_type, value, reason, blocked_by) "
+            f"VALUES ('{block_type}', '{val_safe}', '{reason_safe}', 'guardian') "
+            f"ON CONFLICT (block_type, value) DO UPDATE SET is_active=TRUE, reason='{reason_safe}', blocked_at=NOW()"
+        )
+        return {'ok': True, 'message': f'{block_type} «{value}» заблокирован. Причина: {reason}'}
+
+    if act_type == 'guardian_unblock':
+        """Снять блокировку."""
+        block_type = (params.get('block_type') or 'phone').strip()
+        value = (params.get('value') or '').strip()
+        if not value:
+            return {'error': 'Укажите value'}
+        val_safe = value.replace("'", "''")
+        cur.execute(
+            f"UPDATE {SCHEMA}.agent_blocks SET is_active=FALSE "
+            f"WHERE block_type='{block_type}' AND value='{val_safe}'"
+        )
+        return {'ok': True, 'message': f'{block_type} «{value}» разблокирован'}
+
+    if act_type == 'guardian_get_blocks':
+        """Список активных блокировок."""
+        cur.execute(
+            f"SELECT block_type, value, reason, blocked_at FROM {SCHEMA}.agent_blocks "
+            f"WHERE is_active=TRUE ORDER BY blocked_at DESC LIMIT 50"
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+        for r in rows:
+            if r.get('blocked_at'):
+                r['blocked_at'] = r['blocked_at'].strftime('%d.%m.%Y %H:%M')
+        return {'ok': True, 'count': len(rows), 'blocks': rows,
+                'message': f'Активных блокировок: {len(rows)}'}
+
+    # ════════════════════════════════════════════════════════════════════
+    # 🔍  МОДУЛЬ: ИНСПЕКТОР (Site Doctor)
+    # ════════════════════════════════════════════════════════════════════
+
+    if act_type == 'inspector_full_audit':
+        """Полный аудит сайта: SEO, данные, опечатки, качество контента."""
+        audit = {}
+
+        # 1. SEO-аудит
+        cur.execute(
+            f"SELECT "
+            f"COUNT(*) FILTER (WHERE seo_title IS NULL OR seo_title='') AS no_seo_title, "
+            f"COUNT(*) FILTER (WHERE seo_description IS NULL OR seo_description='') AS no_seo_desc, "
+            f"COUNT(*) FILTER (WHERE LENGTH(seo_title) > 70) AS long_seo_title, "
+            f"COUNT(*) FILTER (WHERE LENGTH(seo_description) > 160) AS long_seo_desc, "
+            f"COUNT(*) FILTER (WHERE COALESCE(LENGTH(description),0) < 50) AS short_desc, "
+            f"COUNT(*) FILTER (WHERE LENGTH(title) > 70) AS long_title, "
+            f"COUNT(*) AS total "
+            f"FROM {SCHEMA}.listings WHERE status='active'"
+        )
+        seo_stat = dict(cur.fetchone() or {})
+        audit['seo'] = seo_stat
+
+        # 2. Битые данные (нулевые цены, площади, пустые адреса)
+        cur.execute(
+            f"SELECT id, title, price, area, address FROM {SCHEMA}.listings "
+            f"WHERE status='active' AND (price <= 0 OR area <= 0 OR "
+            f"COALESCE(address,'') = '' OR COALESCE(city,'') = '') LIMIT 30"
+        )
+        broken_rows = [dict(r) for r in cur.fetchall()]
+        audit['broken_data'] = {'count': len(broken_rows), 'items': broken_rows}
+
+        # 3. Дубли по названию
+        cur.execute(
+            f"SELECT title, COUNT(*) AS cnt FROM {SCHEMA}.listings "
+            f"WHERE status='active' GROUP BY LOWER(title) HAVING COUNT(*) > 1 LIMIT 10"
+        )
+        dupes = [dict(r) for r in cur.fetchall()]
+        audit['duplicates'] = {'count': len(dupes), 'items': dupes}
+
+        # 4. Устаревшие объекты (активны > 365 дней без изменений)
+        cur.execute(
+            f"SELECT id, title, created_at FROM {SCHEMA}.listings "
+            f"WHERE status='active' AND created_at < NOW() - INTERVAL '365 days' "
+            f"AND updated_at < NOW() - INTERVAL '180 days' LIMIT 20"
+        )
+        stale_rows = [dict(r) for r in cur.fetchall()]
+        for r in stale_rows:
+            if r.get('created_at'):
+                r['created_at'] = r['created_at'].strftime('%d.%m.%Y')
+        audit['stale_listings'] = {'count': len(stale_rows), 'items': stale_rows}
+
+        # 5. Объекты без фото
+        cur.execute(
+            f"SELECT id, title FROM {SCHEMA}.listings "
+            f"WHERE status='active' AND (image IS NULL OR image='') LIMIT 20"
+        )
+        no_photo = [dict(r) for r in cur.fetchall()]
+        audit['no_photo'] = {'count': len(no_photo), 'items': no_photo}
+
+        # 6. Лиды без обработки >7 дней
+        cur.execute(
+            f"SELECT id, name, phone, created_at FROM {SCHEMA}.leads "
+            f"WHERE status='new' AND created_at < NOW() - INTERVAL '7 days' "
+            f"ORDER BY created_at ASC LIMIT 20"
+        )
+        old_leads = [dict(r) for r in cur.fetchall()]
+        for r in old_leads:
+            if r.get('created_at'):
+                r['created_at'] = r['created_at'].strftime('%d.%m.%Y')
+        audit['old_unprocessed_leads'] = {'count': len(old_leads), 'items': old_leads}
+
+        total_issues = (
+            seo_stat.get('no_seo_title', 0) + seo_stat.get('short_desc', 0) +
+            audit['broken_data']['count'] + audit['old_unprocessed_leads']['count']
+        )
+        severity = 'critical' if total_issues > 20 else ('warning' if total_issues > 5 else 'info')
+
+        import json as _json2
+        summary = (
+            f"Без SEO: {seo_stat.get('no_seo_title',0)}, коротких описаний: {seo_stat.get('short_desc',0)}, "
+            f"битых данных: {audit['broken_data']['count']}, дублей: {audit['duplicates']['count']}, "
+            f"без фото: {audit['no_photo']['count']}, старых необработанных лидов: {audit['old_unprocessed_leads']['count']}"
+        )
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.agent_reports (module, report_type, summary, data, severity) "
+            f"VALUES ('inspector', 'full_audit', '{_sanitize_text(summary, 500)}', "
+            f"'{_sanitize_text(_json2.dumps(audit, ensure_ascii=False, default=str), 8000)}', '{severity}')"
+        )
+        return {
+            'ok': True, 'severity': severity,
+            'audit': audit, 'message': f'Аудит завершён. {summary}',
+        }
+
+    if act_type == 'inspector_check_typos':
+        """Проверка опечаток в описаниях через YandexGPT (до 5 объектов за раз)."""
+        ids = params.get('ids') or []
+        if not ids:
+            # Берём объекты с длинными описаниями
+            cur.execute(
+                f"SELECT id, title, description FROM {SCHEMA}.listings "
+                f"WHERE status='active' AND LENGTH(description) > 100 "
+                f"ORDER BY updated_at DESC LIMIT 5"
+            )
+            rows = [dict(r) for r in cur.fetchall()]
+        else:
+            id_list = ','.join(str(int(i)) for i in ids[:5] if str(i).isdigit() or isinstance(i, int))
+            cur.execute(
+                f"SELECT id, title, description FROM {SCHEMA}.listings WHERE id IN ({id_list})"
+            )
+            rows = [dict(r) for r in cur.fetchall()]
+
+        if not rows:
+            return {'ok': True, 'message': 'Нет объектов для проверки', 'results': []}
+
+        api_key, folder_id = _load_keys_from_db(cur)
+        if not api_key:
+            return {'error': 'YandexGPT не настроен'}
+
+        results = []
+        for row in rows:
+            text = (row.get('description') or '')[:1500]
+            if not text:
+                continue
+            prompt = (
+                f'Найди орфографические и стилистические ошибки в тексте объявления о недвижимости. '
+                f'Перечисли только реальные ошибки (не больше 5), каждую в формате: '
+                f'«ошибка» → «исправление». Если ошибок нет — ответь: ОК.\n\nТекст:\n{text}'
+            )
+            gpt_res = _call_yandex_gpt(prompt, 'Корректор текста', api_key, folder_id, model='short')
+            results.append({
+                'id': row['id'],
+                'title': row.get('title', '')[:60],
+                'typos': gpt_res.get('text', 'Ошибка GPT'),
+            })
+
+        return {
+            'ok': True,
+            'checked': len(results), 'results': results,
+            'message': f'Проверено объектов: {len(results)}',
+        }
+
+    if act_type == 'inspector_get_reports':
+        """Последние отчёты Инспектора и Стража."""
+        module_filter = (params.get('module') or '').strip()
+        limit = min(int(params.get('limit') or 10), 50)
+        where = f"WHERE module='{module_filter}'" if module_filter else "WHERE TRUE"
+        cur.execute(
+            f"SELECT id, module, report_type, summary, severity, created_at, is_resolved "
+            f"FROM {SCHEMA}.agent_reports {where} ORDER BY created_at DESC LIMIT {limit}"
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+        for r in rows:
+            if r.get('created_at'):
+                r['created_at'] = r['created_at'].strftime('%d.%m.%Y %H:%M')
+        return {'ok': True, 'count': len(rows), 'reports': rows}
+
+    # ════════════════════════════════════════════════════════════════════
+    # ✍️  МОДУЛЬ: КОПИРАЙТЕР
+    # ════════════════════════════════════════════════════════════════════
+
+    if act_type == 'copywriter_write_article':
+        """Написать SEO-статью для блога под тему и TOV компании."""
+        topic = (params.get('topic') or '').strip()
+        keywords = (params.get('keywords') or '').strip()
+        length = (params.get('length') or 'medium').strip()  # short|medium|long
+        publish = params.get('publish', False)
+
+        if not topic:
+            return {'error': 'Укажите topic — тему статьи'}
+
+        # Загружаем TOV из конфига модуля
+        cur.execute(
+            f"SELECT config FROM {SCHEMA}.agent_modules WHERE module='copywriter' LIMIT 1"
+        )
+        cfg_row = cur.fetchone()
+        tov = 'профессиональный брокер коммерческой недвижимости'
+        if cfg_row and cfg_row.get('config'):
+            import json as _jcfg
+            try:
+                tov = _jcfg.loads(cfg_row['config']).get('tov', tov) if isinstance(cfg_row['config'], str) else cfg_row['config'].get('tov', tov)
+            except Exception:
+                pass
+
+        # Данные о компании
+        cur.execute(f"SELECT company_name, hero_subtitle FROM {SCHEMA}.settings LIMIT 1")
+        site_s = cur.fetchone() or {}
+        company = site_s.get('company_name') or 'BIZNEST'
+
+        words_map = {'short': '400-600', 'medium': '700-900', 'long': '1200-1500'}
+        words_count = words_map.get(length, '700-900')
+
+        api_key, folder_id = _load_keys_from_db(cur)
+        if not api_key:
+            return {'error': 'YandexGPT не настроен'}
+
+        kw_line = f'Ключевые слова для SEO (вплети органично): {keywords}.' if keywords else ''
+        sys_p = (
+            f'Ты — экспертный копирайтер агентства коммерческой недвижимости «{company}». '
+            f'Стиль: {tov}. Пишешь полезные, экспертные статьи для блога. '
+            f'Без воды, с конкретными фактами, советами и примерами.'
+        )
+        user_p = (
+            f'Напиши SEO-статью для блога на тему: «{topic}». '
+            f'{kw_line} '
+            f'Объём: {words_count} слов. '
+            f'Структура: заголовок H1, вводный абзац, 3-5 разделов с подзаголовками, заключение с призывом. '
+            f'Без markdown-символов (#, *, **). Только чистый текст с переносами строк.'
+        )
+
+        gpt_res = _call_yandex_gpt(user_p, sys_p, api_key, folder_id)
+        if 'error' in gpt_res:
+            return {'error': gpt_res['error']}
+
+        article_text = gpt_res.get('text', '')
+
+        # Генерируем SEO-мету
+        seo_prompt = (
+            f'По этой статье дай:\nTITLE: заголовок до 65 символов\nDESCRIPTION: описание до 155 символов\n\n'
+            f'Статья:\n{article_text[:800]}'
+        )
+        seo_res = _call_yandex_gpt(seo_prompt, 'SEO-специалист', api_key, folder_id, model='short')
+        seo_text = seo_res.get('text', '')
+        seo_title, seo_desc = '', ''
+        for line in seo_text.splitlines():
+            if line.startswith('TITLE:'):
+                seo_title = line[6:].strip()[:65]
+            elif line.startswith('DESCRIPTION:'):
+                seo_desc = line[12:].strip()[:155]
+
+        # Первая строка = заголовок статьи
+        lines = [l.strip() for l in article_text.splitlines() if l.strip()]
+        news_title = lines[0][:200] if lines else topic
+        summary = lines[1][:500] if len(lines) > 1 else article_text[:200]
+
+        news_id = None
+        if publish:
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.news (title, summary, content, is_published, "
+                f"seo_title, seo_description, created_at) "
+                f"VALUES ('{_sanitize_text(news_title, 200)}', "
+                f"'{_sanitize_text(summary, 500)}', "
+                f"'{_sanitize_text(article_text, 15000)}', TRUE, "
+                f"'{_sanitize_text(seo_title, 100)}', "
+                f"'{_sanitize_text(seo_desc, 300)}', NOW()) RETURNING id"
+            )
+            news_row = cur.fetchone()
+            news_id = news_row['id'] if news_row else None
+
+        # Логируем задачу
+        cur.execute(
+            f"UPDATE {SCHEMA}.agent_modules SET last_run_at=NOW() WHERE module='copywriter'"
+        )
+
+        return {
+            'ok': True,
+            'title': news_title,
+            'content': article_text,
+            'seo_title': seo_title,
+            'seo_description': seo_desc,
+            'news_id': news_id,
+            'published': bool(publish and news_id),
+            'message': (
+                f'Статья «{news_title[:60]}» написана ({len(article_text)} симв.). '
+                + (f'Опубликована как новость #{news_id}.' if news_id else 'Не опубликована — передай publish:true чтобы сохранить.')
+            ),
+        }
+
+    if act_type == 'copywriter_rewrite_tov':
+        """Переписать описание объекта под TOV компании."""
+        listing_id = int(params.get('id') or 0)
+        if not listing_id:
+            return {'error': 'Укажите id объекта'}
+
+        cur.execute(
+            f"SELECT id, title, description, category, deal, price, area, district "
+            f"FROM {SCHEMA}.listings WHERE id={listing_id}"
+        )
+        row = cur.fetchone()
+        if not row:
+            return {'error': f'Объект #{listing_id} не найден'}
+
+        cur.execute(f"SELECT config FROM {SCHEMA}.agent_modules WHERE module='copywriter' LIMIT 1")
+        cfg_row = cur.fetchone()
+        tov = 'профессиональный брокер коммерческой недвижимости'
+        if cfg_row and cfg_row.get('config'):
+            import json as _jcfg2
+            try:
+                tov = (_jcfg2.loads(cfg_row['config']) if isinstance(cfg_row['config'], str) else cfg_row['config']).get('tov', tov)
+            except Exception:
+                pass
+
+        api_key, folder_id = _load_keys_from_db(cur)
+        if not api_key:
+            return {'error': 'YandexGPT не настроен'}
+
+        row = dict(row)
+        ctx = f"{row.get('category','')}, {row.get('deal','')}, {row.get('area','')} м², {row.get('district','')}, {row.get('price','')} руб."
+        prompt = (
+            f'Перепиши описание объекта недвижимости в стиле: {tov}. '
+            f'Параметры: {ctx}. Объём: 150-250 слов. Продающий, конкретный, без воды. '
+            f'Только описание, без заголовка.\n\nИсходное описание:\n{(row.get("description") or "")[:1000]}'
+        )
+        gpt_res = _call_yandex_gpt(prompt, f'Копирайтер ({tov})', api_key, folder_id)
+        if 'error' in gpt_res:
+            return {'error': gpt_res['error']}
+
+        new_desc = gpt_res.get('text', '')
+        cur.execute(
+            f"UPDATE {SCHEMA}.listings SET description='{_sanitize_text(new_desc, 5000)}', "
+            f"updated_at=NOW() WHERE id={listing_id}"
+        )
+        return {
+            'ok': True,
+            'id': listing_id, 'new_description': new_desc,
+            'message': f'Описание объекта #{listing_id} переписано в стиле TOV ({len(new_desc)} симв.)',
+        }
+
+    if act_type == 'copywriter_get_topics':
+        """Предложить темы для статей блога на основе каталога и лидов."""
+        api_key, folder_id = _load_keys_from_db(cur)
+        if not api_key:
+            return {'error': 'YandexGPT не настроен'}
+
+        # Собираем контекст: популярные категории и запросы лидов
+        cur.execute(
+            f"SELECT category, COUNT(*) AS cnt FROM {SCHEMA}.listings "
+            f"WHERE status='active' GROUP BY category ORDER BY cnt DESC LIMIT 8"
+        )
+        cats = ', '.join(f"{r['category']}({r['cnt']})" for r in cur.fetchall())
+        cur.execute(
+            f"SELECT request_category, COUNT(*) AS cnt FROM {SCHEMA}.leads "
+            f"WHERE created_at > NOW()-INTERVAL '30 days' AND request_category IS NOT NULL "
+            f"GROUP BY request_category ORDER BY cnt DESC LIMIT 5"
+        )
+        lead_cats = ', '.join(f"{r['request_category']}({r['cnt']})" for r in cur.fetchall())
+        cur.execute(f"SELECT company_name FROM {SCHEMA}.settings LIMIT 1")
+        company = (cur.fetchone() or {}).get('company_name', 'агентство')
+
+        prompt = (
+            f'Ты — контент-стратег агентства «{company}». '
+            f'Предложи 8 тем для SEO-статей блога. '
+            f'Каталог: {cats}. Запросы клиентов за месяц: {lead_cats or "нет данных"}. '
+            f'Темы должны отвечать на реальные вопросы покупателей/арендаторов. '
+            f'Формат: нумерованный список, каждая тема — одна строка, до 80 символов.'
+        )
+        gpt_res = _call_yandex_gpt(prompt, 'Контент-стратег', api_key, folder_id, model='short')
+        topics_text = gpt_res.get('text', '')
+        topics = [l.strip() for l in topics_text.splitlines() if l.strip() and l[0].isdigit()]
+        return {
+            'ok': True, 'topics': topics, 'raw': topics_text,
+            'message': f'Предложено {len(topics)} тем для блога',
+        }
+
+    # ════════════════════════════════════════════════════════════════════
+    # 🎛️  МОДУЛЬ: ДИСПЕТЧЕР (Orchestrator)
+    # ════════════════════════════════════════════════════════════════════
+
+    if act_type == 'dispatcher_run_module':
+        """Запустить конкретный модуль по имени."""
+        module = (params.get('module') or '').strip()
+        module_action_map = {
+            'guardian':   'guardian_full_scan',
+            'inspector':  'inspector_full_audit',
+            'copywriter': 'copywriter_get_topics',
+        }
+        if module not in module_action_map:
+            return {'error': f'Неизвестный модуль: {module}. Доступны: {", ".join(module_action_map)}'}
+
+        # Проверяем включён ли модуль
+        cur.execute(
+            f"SELECT enabled FROM {SCHEMA}.agent_modules WHERE module='{module}' LIMIT 1"
+        )
+        mod_row = cur.fetchone()
+        if mod_row and not mod_row.get('enabled'):
+            return {'error': f'Модуль {module} отключён в настройках'}
+
+        # Запускаем нужный _exec_action рекурсивно
+        result = _exec_action(cur, user, module_action_map[module], params)
+
+        # Обновляем last_run_at
+        cur.execute(
+            f"UPDATE {SCHEMA}.agent_modules SET last_run_at=NOW() WHERE module='{module}'"
+        )
+        # Сохраняем задачу
+        import json as _jd
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.agent_tasks (module, action, status, result, created_by) "
+            f"VALUES ('{module}', '{module_action_map[module]}', 'done', "
+            f"'{_sanitize_text(_jd.dumps(result, ensure_ascii=False, default=str), 4000)}', "
+            f"{user['id'] if user else 'NULL'})"
+        )
+        return {'ok': True, 'module': module, 'result': result,
+                'message': f'Модуль «{module}» выполнен'}
+
+    if act_type == 'dispatcher_run_all':
+        """Запустить все включённые модули последовательно."""
+        modules = ['guardian', 'inspector']  # copywriter не запускаем авто (контент по запросу)
+        results = {}
+        for mod in modules:
+            cur.execute(
+                f"SELECT enabled FROM {SCHEMA}.agent_modules WHERE module='{mod}' LIMIT 1"
+            )
+            row = cur.fetchone()
+            if not row or not row.get('enabled'):
+                results[mod] = {'skipped': True, 'reason': 'отключён'}
+                continue
+            results[mod] = _exec_action(cur, user, f'{mod}_full_scan' if mod == 'guardian' else f'{mod}_full_audit', {})
+            cur.execute(f"UPDATE {SCHEMA}.agent_modules SET last_run_at=NOW() WHERE module='{mod}'")
+
+        summary = '; '.join(
+            f"{m}: {'OK' if results[m].get('ok') else results[m].get('error','skip')}"
+            for m in results
+        )
+        return {'ok': True, 'results': results, 'message': f'Все модули запущены. {summary}'}
+
+    if act_type == 'dispatcher_get_status':
+        """Статус всех модулей: включён, последний запуск, конфиг."""
+        cur.execute(
+            f"SELECT module, enabled, config, last_run_at FROM {SCHEMA}.agent_modules ORDER BY module"
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+        for r in rows:
+            if r.get('last_run_at'):
+                r['last_run_at'] = r['last_run_at'].strftime('%d.%m.%Y %H:%M')
+            # Последний отчёт
+            cur.execute(
+                f"SELECT severity, created_at FROM {SCHEMA}.agent_reports "
+                f"WHERE module='{r['module']}' ORDER BY created_at DESC LIMIT 1"
+            )
+            last_rep = cur.fetchone()
+            r['last_report_severity'] = last_rep['severity'] if last_rep else None
+
+        # Задачи за последние 24ч
+        cur.execute(
+            f"SELECT module, action, status, created_at FROM {SCHEMA}.agent_tasks "
+            f"WHERE created_at > NOW()-INTERVAL '24 hours' ORDER BY created_at DESC LIMIT 20"
+        )
+        tasks = [dict(r) for r in cur.fetchall()]
+        for t in tasks:
+            if t.get('created_at'):
+                t['created_at'] = t['created_at'].strftime('%d.%m.%Y %H:%M')
+
+        return {
+            'ok': True, 'modules': rows, 'recent_tasks': tasks,
+            'message': f'Модулей: {len(rows)}, задач за 24ч: {len(tasks)}',
+        }
+
+    if act_type == 'dispatcher_toggle_module':
+        """Включить/выключить модуль."""
+        module = (params.get('module') or '').strip()
+        enabled = bool(params.get('enabled', True))
+        if not module:
+            return {'error': 'Укажите module'}
+        cur.execute(
+            f"UPDATE {SCHEMA}.agent_modules SET enabled={enabled}, updated_at=NOW() "
+            f"WHERE module='{module}'"
+        )
+        state = 'включён' if enabled else 'выключен'
+        return {'ok': True, 'message': f'Модуль «{module}» {state}'}
 
     return {'error': f'Неизвестное действие: {act_type}'}
 
