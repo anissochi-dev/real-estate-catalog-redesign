@@ -2314,7 +2314,7 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
 
         # 3. Дубли по названию
         cur.execute(
-            f"SELECT title, COUNT(*) AS cnt FROM {SCHEMA}.listings "
+            f"SELECT LOWER(title) AS title_lower, COUNT(*) AS cnt FROM {SCHEMA}.listings "
             f"WHERE status='active' GROUP BY LOWER(title) HAVING COUNT(*) > 1 LIMIT 10"
         )
         dupes = [dict(r) for r in cur.fetchall()]
