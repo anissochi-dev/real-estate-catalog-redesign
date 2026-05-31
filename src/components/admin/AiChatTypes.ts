@@ -50,6 +50,7 @@ export const QUICK_CMDS: QuickCmd[] = [
   { id: 'copywriter', label: '✍️ Копирайтер', icon: 'PenLine', action: 'agent', prompt: 'Предложи темы для статей блога на основе каталога и запросов клиентов. Используй copywriter_get_topics, затем предложи написать статью через copywriter_write_article.' },
   { id: 'dispatcher', label: '🎛️ Диспетчер', icon: 'Zap', action: 'agent', prompt: 'Покажи статус всех модулей (dispatcher_get_status), затем запусти все включённые модули через dispatcher_run_all.' },
   { id: 'devops', label: '🛠️ DevOps', icon: 'Github', action: 'agent', prompt: 'Проверь GitHub: подключение, последние коммиты, открытые issues, статус Actions. Используй devops_check_github, затем devops_get_commits и devops_get_issues.' },
+  { id: 'knowledge', label: '🧠 База знаний', icon: 'Database', action: 'agent', prompt: 'Покажи статистику базы знаний (knowledge_stats), затем проиндексируй все источники (knowledge_index с source_type:"all").' },
 ];
 
 export const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
@@ -127,6 +128,11 @@ export const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
   devops_get_workflows: { label: 'GitHub Actions', icon: 'Workflow' },
   devops_analyze_errors: { label: 'Анализ ошибок', icon: 'Bug' },
   devops_get_repo_stats: { label: 'Статистика репо', icon: 'BarChart2' },
+  // 🧠 База знаний
+  knowledge_search: { label: 'Поиск в базе знаний', icon: 'DatabaseSearch' },
+  knowledge_index: { label: 'Индексировать базу', icon: 'Database' },
+  knowledge_stats: { label: 'Статистика базы', icon: 'PieChart' },
+  knowledge_delete: { label: 'Очистить базу', icon: 'DatabaseZap' },
 };
 
 // Действия с risk: low — это безопасные информационные действия,
@@ -172,6 +178,10 @@ export const AUTO_APPLY_ACTIONS = new Set([
   'devops_get_workflows',
   'devops_analyze_errors',
   'devops_get_repo_stats',
+  // База знаний
+  'knowledge_search',
+  'knowledge_index',
+  'knowledge_stats',
 ]);
 
 /** Поля объекта/лида/новости, безопасные для автоприменения (без подтверждения).

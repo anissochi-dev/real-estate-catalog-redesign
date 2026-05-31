@@ -429,6 +429,12 @@ SYSTEM_PROMPTS = {
         '- devops_analyze_errors: {"hours":24?} risk:low — анализ ошибок из логов системы + GPT-рекомендации\n'
         '- devops_get_repo_stats: {"repo":"owner/repo"?} risk:low — статистика репо: языки, контрибьюторы, релизы\n'
         '\n'
+        '🧠 БАЗА ЗНАНИЙ (векторный поиск):\n'
+        '- knowledge_search: {"query":str,"source_type":"listing|news|ai_memory"?,"limit":10?} risk:low — семантический поиск по базе знаний. Используй когда спрашивают «найди в базе», «что известно про...», «есть ли объекты с...»\n'
+        '- knowledge_index: {"source_type":"listing|news|ai_memory|all"?,"limit":50?} risk:low — проиндексировать источники в базу знаний. Запускай при «обнови базу знаний», «переиндексируй»\n'
+        '- knowledge_stats: {} risk:low — статистика базы знаний: сколько записей по каждому источнику\n'
+        '- knowledge_delete: {"source_type":str} risk:high — удалить записи из базы знаний по типу\n'
+        '\n'
         'ПРАВИЛА МОДУЛЕЙ:\n'
         '- При запросах «проверь безопасность» — сначала guardian_full_scan, потом предлагай guardian_block для найденных угроз\n'
         '- При «аудит сайта» / «что не так» — inspector_full_audit\n'
@@ -448,7 +454,10 @@ SYSTEM_PROMPTS = {
         'Определяй risk правильно: если меняешь только description/tags/seo_*/condition/флаги — risk:low (применится авто). '
         'Если меняешь price/title/status/category/deal/address/owner_phone — risk:high (требует подтверждения).\n'
         '- Для редактирования новостей используй update_news, для лидов — update_lead. Передавай ТОЛЬКО изменившиеся поля.\n'
-        '- Если запрос общий ("что нужно сделать?") — начни с get_listings_summary + get_leads_summary.'
+        '- Если запрос общий ("что нужно сделать?") — начни с get_listings_summary + get_leads_summary.\n'
+        '- При запросах «найди в базе знаний», «что известно про», «поищи похожие объекты» — используй knowledge_search.\n'
+        '- При «обнови базу знаний», «проиндексируй» — knowledge_index с source_type:"all".\n'
+        '- knowledge_search, knowledge_index, knowledge_stats — всегда risk:low (выполняются авто).'
     ),
     'security': (
         'Ты — специалист по информационной безопасности. Анализируй данные системы (объявления, лиды, '
@@ -2716,6 +2725,179 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         return {'ok': True, 'message': f'Модуль «{module}» {state}'}
 
     # DevOps-модуль вынесен в отдельную функцию devops-agent
+
+    # ════════════════════════════════════════════════════════════════════
+    # 🧠  БАЗА ЗНАНИЙ (pgvector / FTS)
+    # ════════════════════════════════════════════════════════════════════
+
+    if act_type == 'knowledge_search':
+        """Семантический поиск по базе знаний через FTS (с fallback на LIKE)."""
+        query = (params.get('query') or '').strip()
+        source_type = (params.get('source_type') or '').strip()
+        limit = min(int(params.get('limit') or 10), 50)
+        if not query:
+            return {'error': 'Укажите query'}
+
+        where_parts = []
+        if source_type:
+            where_parts.append(f"source_type = '{_sanitize_text(source_type, 50)}'")
+
+        # FTS-поиск с ранжированием
+        src_filter = f"AND {' AND '.join(where_parts)}" if where_parts else ''
+        query_safe = _sanitize_text(query, 200)
+        cur.execute(
+            f"SELECT id, source_type, source_id, title, "
+            f"LEFT(content, 400) AS snippet, meta, created_at, "
+            f"ts_rank(fts, plainto_tsquery('russian', '{query_safe}')) AS rank "
+            f"FROM {SCHEMA}.knowledge_vectors "
+            f"WHERE fts @@ plainto_tsquery('russian', '{query_safe}') {src_filter} "
+            f"ORDER BY rank DESC LIMIT {limit}"
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+
+        # Fallback: ILIKE если FTS ничего не нашёл
+        if not rows:
+            words = [w for w in query.split()[:3] if len(w) > 2]
+            if words:
+                like_parts = [f"content ILIKE '%{_sanitize_text(w, 50)}%'" for w in words]
+                like_sql = ' OR '.join(like_parts)
+                cur.execute(
+                    f"SELECT id, source_type, source_id, title, "
+                    f"LEFT(content, 400) AS snippet, meta, created_at, 0.0 AS rank "
+                    f"FROM {SCHEMA}.knowledge_vectors "
+                    f"WHERE ({like_sql}) {src_filter} "
+                    f"ORDER BY created_at DESC LIMIT {limit}"
+                )
+                rows = [dict(r) for r in cur.fetchall()]
+
+        for r in rows:
+            if r.get('created_at'):
+                r['created_at'] = r['created_at'].strftime('%d.%m.%Y')
+            r['rank'] = round(float(r.get('rank') or 0), 4)
+
+        summary = '\n'.join(
+            f"• [{r['source_type']}] {r.get('title') or '—'}: {(r.get('snippet') or '')[:150]}"
+            for r in rows
+        )
+        return {
+            'ok': True, 'found': len(rows), 'results': rows,
+            'message': f'По запросу «{query}» найдено {len(rows)} записей.' +
+                       (f'\n{summary}' if rows else ' База знаний пуста или запрос не совпал.'),
+        }
+
+    if act_type == 'knowledge_index':
+        """Проиндексировать источники в базу знаний: listings, news, ai_memory."""
+        source_type = (params.get('source_type') or 'all').strip()
+        limit = min(int(params.get('limit') or 50), 200)
+        indexed = 0
+        skipped = 0
+
+        import hashlib as _md5
+
+        def _upsert_doc(src_type: str, src_id, title: str, content: str, meta: dict):
+            nonlocal indexed, skipped
+            if not content or len(content.strip()) < 10:
+                return
+            import json as _jm
+            h = _md5.md5(content.encode()).hexdigest()
+            cur.execute(
+                f"SELECT id FROM {SCHEMA}.knowledge_vectors "
+                f"WHERE source_type='{src_type}' AND source_id={src_id if src_id else 'NULL'} "
+                f"AND content_hash='{h}' LIMIT 1"
+            )
+            if cur.fetchone():
+                skipped += 1
+                return
+            title_s = _sanitize_text(title or '', 490)
+            content_s = _sanitize_text(content, 15000)
+            meta_s = _sanitize_text(_jm.dumps(meta, ensure_ascii=False), 1000)
+            src_id_sql = str(int(src_id)) if src_id else 'NULL'
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.knowledge_vectors "
+                f"(source_type, source_id, title, content, content_hash, meta) "
+                f"VALUES ('{src_type}', {src_id_sql}, '{title_s}', '{content_s}', '{h}', '{meta_s}') "
+                f"ON CONFLICT DO NOTHING"
+            )
+            indexed += 1
+
+        # 1. Объекты каталога
+        if source_type in ('all', 'listing'):
+            cur.execute(
+                f"SELECT id, title, description, category, deal, price, area, district, city, tags "
+                f"FROM {SCHEMA}.listings WHERE status='active' "
+                f"AND COALESCE(LENGTH(description),0) > 30 "
+                f"ORDER BY id DESC LIMIT {limit}"
+            )
+            for r in cur.fetchall():
+                r = dict(r)
+                content = (
+                    f"Объект: {r.get('title','')}. "
+                    f"Категория: {r.get('category','')} {r.get('deal','')}. "
+                    f"Цена: {r.get('price','')} руб., площадь: {r.get('area','')} м². "
+                    f"Район: {r.get('district','')} {r.get('city','')}. "
+                    f"Описание: {(r.get('description') or '')[:1000]}. "
+                    f"Теги: {r.get('tags','')}."
+                )
+                _upsert_doc('listing', r['id'], r.get('title',''), content,
+                            {'category': r.get('category'), 'price': r.get('price')})
+
+        # 2. Новости / статьи блога
+        if source_type in ('all', 'news'):
+            cur.execute(
+                f"SELECT id, title, summary, content FROM {SCHEMA}.news "
+                f"WHERE is_published=TRUE ORDER BY id DESC LIMIT {limit}"
+            )
+            for r in cur.fetchall():
+                r = dict(r)
+                text = f"{r.get('summary','')} {(r.get('content') or '')[:2000]}"
+                _upsert_doc('news', r['id'], r.get('title',''), text, {})
+
+        # 3. База знаний ВБ (ai_memory)
+        if source_type in ('all', 'ai_memory'):
+            cur.execute(f"SELECT key, value FROM {SCHEMA}.ai_memory WHERE value IS NOT NULL")
+            for r in cur.fetchall():
+                r = dict(r)
+                val = (r.get('value') or '')[:3000]
+                if len(val) > 20:
+                    _upsert_doc('ai_memory', None, r.get('key',''), val, {'key': r.get('key')})
+
+        return {
+            'ok': True,
+            'indexed': indexed, 'skipped': skipped,
+            'message': f'Индексирование завершено. Добавлено: {indexed}, пропущено (дубли): {skipped}.',
+        }
+
+    if act_type == 'knowledge_stats':
+        """Статистика базы знаний."""
+        cur.execute(
+            f"SELECT source_type, COUNT(*) AS cnt, MAX(created_at) AS last_added "
+            f"FROM {SCHEMA}.knowledge_vectors GROUP BY source_type ORDER BY cnt DESC"
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+        for r in rows:
+            if r.get('last_added'):
+                r['last_added'] = r['last_added'].strftime('%d.%m.%Y')
+        cur.execute(f"SELECT COUNT(*) AS total FROM {SCHEMA}.knowledge_vectors")
+        total = (cur.fetchone() or {}).get('total', 0)
+        summary = ', '.join(f"{r['source_type']}: {r['cnt']}" for r in rows)
+        return {
+            'ok': True, 'total': total, 'by_source': rows,
+            'message': f'База знаний: {total} записей. {summary}',
+        }
+
+    if act_type == 'knowledge_delete':
+        """Удалить записи из базы знаний по типу источника."""
+        source_type = (params.get('source_type') or '').strip()
+        if not source_type:
+            return {'error': 'Укажите source_type (listing|news|ai_memory|all)'}
+        if source_type == 'all':
+            cur.execute(f"DELETE FROM {SCHEMA}.knowledge_vectors")
+        else:
+            cur.execute(
+                f"DELETE FROM {SCHEMA}.knowledge_vectors WHERE source_type='{_sanitize_text(source_type, 50)}'"
+            )
+        count = cur.rowcount
+        return {'ok': True, 'deleted': count, 'message': f'Удалено {count} записей типа «{source_type}»'}
 
     return {'error': f'Неизвестное действие: {act_type}'}
 
