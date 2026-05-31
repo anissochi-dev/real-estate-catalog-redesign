@@ -387,7 +387,10 @@ SYSTEM_PROMPTS = {
         '- analytics_report: {"period":"week|month|all"?} risk:low\n'
         '- marketing_tips: {} risk:low\n'
         '- get_content_recommendations: {"focus":"seo|conversion|descriptions"?} risk:low\n'
-        '- scan_images: {} risk:low\n'
+        '- scan_images: {} risk:low — сканирует S3, находит неиспользуемые и тяжёлые фото\n'
+        '- search_listings_without_images: {"limit":50?} risk:low — найти объекты без фото. Используй при «объекты без фото», «нет фотографий»\n'
+        '- search_listings_without_description: {"limit":50?} risk:low — найти объекты без описания\n'
+        '- search_listings_without_seo: {"limit":50?} risk:low — найти объекты без SEO-заголовка\n'
         '- optimize_images: {"keys":["photos/x.jpg",...]} risk:medium\n'
         '- delete_unused_images: {"keys":["photos/x.jpg",...]} risk:high\n'
         '- note: {"text":str} risk:low\n'
@@ -3518,6 +3521,64 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         count = cur.rowcount
         return {'ok': True, 'deleted': count, 'message': f'Удалено {count} записей типа «{source_type}»'}
 
+    # ── Поиск объектов без фото ──────────────────────────────────────────
+    if act_type in ('search_listings_without_images', 'get_listings_without_images', 'find_listings_no_photo'):
+        limit = min(int(params.get('limit') or 50), 200)
+        cur.execute(
+            f"SELECT id, title, category, deal, price, area, address "
+            f"FROM {SCHEMA}.listings "
+            f"WHERE status='active' AND (image IS NULL OR image='') "
+            f"ORDER BY id DESC LIMIT {limit}"
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+        if not rows:
+            return {'ok': True, 'count': 0, 'items': [], 'message': 'Все активные объекты имеют фото ✅'}
+        lines = [f"#{r['id']} — {(r['title'] or '')[:60]}" for r in rows[:10]]
+        more = f'\n... и ещё {len(rows)-10}' if len(rows) > 10 else ''
+        return {
+            'ok': True, 'count': len(rows), 'items': rows,
+            'message': f'Найдено {len(rows)} объектов без фото:\n' + '\n'.join(lines) + more,
+        }
+
+    # ── Поиск объектов без описания ──────────────────────────────────────
+    if act_type in ('search_listings_without_description', 'get_listings_no_desc', 'find_listings_no_description'):
+        limit = min(int(params.get('limit') or 50), 200)
+        cur.execute(
+            f"SELECT id, title, category, deal, price, area, address "
+            f"FROM {SCHEMA}.listings "
+            f"WHERE status='active' AND (description IS NULL OR LENGTH(description) < 50) "
+            f"ORDER BY id DESC LIMIT {limit}"
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+        if not rows:
+            return {'ok': True, 'count': 0, 'items': [], 'message': 'Все активные объекты имеют описание ✅'}
+        lines = [f"#{r['id']} — {(r['title'] or '')[:60]}" for r in rows[:10]]
+        more = f'\n... и ещё {len(rows)-10}' if len(rows) > 10 else ''
+        return {
+            'ok': True, 'count': len(rows), 'items': rows,
+            'message': f'Найдено {len(rows)} объектов без описания:\n' + '\n'.join(lines) + more,
+        }
+
+    # ── Поиск объектов без SEO ───────────────────────────────────────────
+    if act_type in ('search_listings_without_seo', 'get_listings_no_seo', 'find_listings_no_seo'):
+        limit = min(int(params.get('limit') or 50), 200)
+        cur.execute(
+            f"SELECT id, title, category, deal, price, area "
+            f"FROM {SCHEMA}.listings "
+            f"WHERE status='active' AND (seo_title IS NULL OR seo_title='') "
+            f"ORDER BY id DESC LIMIT {limit}"
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+        if not rows:
+            return {'ok': True, 'count': 0, 'items': [], 'message': 'Все активные объекты имеют SEO-заголовок ✅'}
+        lines = [f"#{r['id']} — {(r['title'] or '')[:60]}" for r in rows[:10]]
+        more = f'\n... и ещё {len(rows)-10}' if len(rows) > 10 else ''
+        return {
+            'ok': True, 'count': len(rows), 'items': rows,
+            'message': f'Найдено {len(rows)} объектов без SEO:\n' + '\n'.join(lines) + more,
+        }
+
+    # ── Неизвестное действие ─────────────────────────────────────────────
     return {'error': f'Неизвестное действие: {act_type}'}
 
 

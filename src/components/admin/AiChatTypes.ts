@@ -32,6 +32,9 @@ export const RESULT_INJECT_ACTIONS = new Set([
   'devops_get_commits',
   'devops_get_issues',
   'devops_analyze_errors',
+  'search_listings_without_images',
+  'search_listings_without_description',
+  'search_listings_without_seo',
 ]);
 
 export interface Msg {
