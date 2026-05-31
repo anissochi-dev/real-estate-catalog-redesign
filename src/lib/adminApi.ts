@@ -16,6 +16,7 @@ export function reportError(info: { message: string; url?: string; stack?: strin
 export const AI_RETRAIN_URL = 'https://functions.poehali.dev/e2f1d357-fb83-4fbb-8d8b-6fb063357afc';
 const AI_URL = 'https://functions.poehali.dev/34bfc4a2-89b9-4c89-bcbc-d82314730aef';
 const DEVOPS_URL = 'https://functions.poehali.dev/8dc0ef1b-de31-4ede-94b2-c1779c324922';
+const SMART_RUN_URL = 'https://functions.poehali.dev/880b61c2-dbe7-491a-a147-ffd926b3fe73';
 // Используем функцию upload/ (поддерживает водяной знак и возвращает original_url)
 const UPLOADS_URL = 'https://functions.poehali.dev/8983c0a8-a8c8-47ff-97ed-59cc1571aa15';
 export const CRM_URL = 'https://functions.poehali.dev/221e23fa-e0a4-416e-b878-c2da2914daac';
@@ -539,4 +540,35 @@ export const devopsApi = {
     devopsApi.call('get_repo_stats', { ...(repo ? { repo } : {}) }),
   analyzeErrors: (hours = 24) =>
     devopsApi.call('analyze_errors', { hours }),
+};
+
+/** Smart Run — умный многошаговый workflow: Страж + Инспектор + Опечатки. */
+export const smartRunApi = {
+  run: () => {
+    const token = getToken();
+    return fetch(SMART_RUN_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'X-Auth-Token': token } : {}),
+      },
+      body: JSON.stringify({}),
+    }).then(async res => {
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Ошибка Smart Run');
+      return data as {
+        ok: boolean;
+        severity: 'info' | 'warning' | 'critical';
+        steps: Record<string, unknown>;
+        totals: {
+          threats_found: number;
+          blocked: number;
+          seo_fixed: number;
+          typos_found: number;
+          total_actions: number;
+        };
+        message: string;
+      };
+    });
+  },
 };

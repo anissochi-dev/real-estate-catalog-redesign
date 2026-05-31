@@ -33,6 +33,7 @@ export interface QuickCmd {
 }
 
 export const QUICK_CMDS: QuickCmd[] = [
+  { id: 'smart_run', label: '⚡ Smart Run', icon: 'Workflow', action: 'agent', prompt: 'Запусти полную умную проверку сайта через dispatcher_smart_run: безопасность с авто-блокировкой угроз, SEO-аудит с авто-исправлением, проверка опечаток. Покажи итоговую сводку.' },
   { id: 'what_to_do', label: 'Что сделать?', icon: 'Sparkles', action: 'agent', prompt: 'Проанализируй текущее состояние сайта: каталог, лиды, SEO, данные. Предложи самые важные действия прямо сейчас — по приоритету.' },
   { id: 'edit_site', label: 'Улучшить объекты', icon: 'Pencil', action: 'agent', prompt: 'Найди объекты с пустыми описаниями, плохим SEO или некорректными данными. Предложи конкретные улучшения для каждого и выполни их.' },
   { id: 'shorten_titles', label: 'Сократить названия', icon: 'Scissors', action: 'agent', prompt: 'Найди все активные объекты с длинными названиями (более 70 символов) и перепиши их через bulk_shorten_titles в короткие SEO-заголовки 50-65 символов. Сначала запусти scan_long_titles, затем bulk_shorten_titles с первыми 15-20 id.' },
@@ -116,6 +117,7 @@ export const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
   copywriter_rewrite_tov: { label: 'Переписать под TOV', icon: 'RefreshCw' },
   copywriter_get_topics: { label: 'Темы для блога', icon: 'Lightbulb' },
   // 🎛️ Диспетчер
+  dispatcher_smart_run: { label: '⚡ Smart Run', icon: 'Workflow' },
   dispatcher_run_module: { label: 'Запустить модуль', icon: 'Play' },
   dispatcher_run_all: { label: 'Запустить все модули', icon: 'Zap' },
   dispatcher_get_status: { label: 'Статус модулей', icon: 'LayoutDashboard' },

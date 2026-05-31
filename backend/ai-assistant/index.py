@@ -415,6 +415,11 @@ SYSTEM_PROMPTS = {
         '- copywriter_get_topics: {} risk:low — предложить темы для статей на основе каталога и лидов\n'
         '\n'
         '🎛️ ДИСПЕТЧЕР (Orchestrator):\n'
+        '- dispatcher_smart_run: {} risk:medium — УМНЫЙ WORKFLOW: запускает все 3 шага с условной логикой:\n'
+        '  1) guardian_full_scan → авто-блокирует найденные спам-телефоны и инъекции\n'
+        '  2) inspector_full_audit → авто-генерирует SEO для объектов без мета через GPT\n'
+        '  3) inspector_check_typos → находит опечатки и сохраняет в отчёт\n'
+        '  Возвращает итоговую сводку с числами. Используй при «проверь всё», «полная проверка», «запусти умный анализ»\n'
         '- dispatcher_run_module: {"module":"guardian|inspector|copywriter"} risk:low — запустить один модуль\n'
         '- dispatcher_run_all: {} risk:low — запустить все модули (Страж + Инспектор). Используй при «запусти всё», «полная проверка»\n'
         '- dispatcher_get_status: {} risk:low — статус всех модулей: включён, последний запуск, последний отчёт\n'
@@ -457,7 +462,8 @@ SYSTEM_PROMPTS = {
         '- Если запрос общий ("что нужно сделать?") — начни с get_listings_summary + get_leads_summary.\n'
         '- При запросах «найди в базе знаний», «что известно про», «поищи похожие объекты» — используй knowledge_search.\n'
         '- При «обнови базу знаний», «проиндексируй» — knowledge_index с source_type:"all".\n'
-        '- knowledge_search, knowledge_index, knowledge_stats — всегда risk:low (выполняются авто).'
+        '- knowledge_search, knowledge_index, knowledge_stats — всегда risk:low (выполняются авто).\n'
+        '- При «проверь всё», «полная проверка», «запусти умный анализ», «smart run» — используй dispatcher_smart_run (risk:medium, требует подтверждения). Это самое мощное действие — делает всё за один раз.'
     ),
     'security': (
         'Ты — специалист по информационной безопасности. Анализируй данные системы (объявления, лиды, '
@@ -2725,6 +2731,12 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         return {'ok': True, 'message': f'Модуль «{module}» {state}'}
 
     # DevOps-модуль вынесен в отдельную функцию devops-agent
+
+    # Smart Run вынесен в отдельную функцию backend/smart-run
+
+    if act_type == 'dispatcher_smart_run':
+        # Выполняется через отдельную функцию smart-run (см. backend/smart-run/index.py)
+        return {'error': 'Smart Run выполняется через отдельный эндпоинт. Используй кнопку ⚡ Smart Run в чате.'}
 
     # ════════════════════════════════════════════════════════════════════
     # 🧠  БАЗА ЗНАНИЙ (pgvector / FTS)

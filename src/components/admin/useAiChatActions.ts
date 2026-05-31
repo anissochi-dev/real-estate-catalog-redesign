@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { toast } from 'sonner';
-import { aiApi, devopsApi, AiAction } from '@/lib/adminApi';
+import { aiApi, devopsApi, smartRunApi, AiAction } from '@/lib/adminApi';
 import {
   Msg, Suggestion, QuickCmd,
   isAutoApplicableAction,
@@ -216,7 +216,11 @@ export function useAiChatActions({
       : x));
     try {
       let r: { ok?: boolean; message?: string; error?: string };
-      if (DEVOPS_ACTIONS.has(target.type)) {
+      if (target.type === 'dispatcher_smart_run') {
+        // Smart Run идёт в отдельную функцию smart-run
+        const res = await smartRunApi.run();
+        r = { ok: res.ok, message: res.message };
+      } else if (DEVOPS_ACTIONS.has(target.type)) {
         // DevOps-действия идут в отдельную функцию devops-agent
         const action = target.type.replace('devops_', '');
         const res = await devopsApi.call(action, target.params as Record<string, unknown>);
