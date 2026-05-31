@@ -355,10 +355,10 @@ SYSTEM_PROMPTS = {
         '- update_listing: {"id":int,"fields":{title?,description?,price?,status?,seo_title?,seo_description?,tags?}} risk:medium\n'
         '- archive_listing: {"id":int} risk:medium\n'
         '- delete_listing: {"id":int} risk:high (только явный мусор/тест)\n'
-        '- generate_description: {"id":int,"new_description":str} risk:medium\n'
+        '- generate_description: {"id":int} risk:medium — GPT сам генерирует описание по данным объекта. Передавай ТОЛЬКО id, больше ничего не нужно.\n'
         '- seo_optimize: {"id":int,"seo_title":str,"seo_description":str} risk:medium\n'
         '- bulk_update_status: {"ids":[int,...],"status":str} risk:high\n'
-        '- bulk_generate_descriptions: {"items":[{"id":int,"description":str},...]} risk:high\n'
+        '- bulk_generate_descriptions: {"items":[{"id":int},...]} risk:high — GPT сам генерирует описания для всех переданных id. Если items пустой [] — обработает ВСЕ объекты без описания.\n'
         '- bulk_seo_optimize: {"items":[{"id":int,"seo_title":str,"seo_description":str},...]} risk:high\n'
         '- bulk_shorten_titles: {"items":[{"id":int}],"max_len":65} risk:high — массово ПЕРЕПИСЫВАЕТ длинные title через GPT в SEO-стиле (50-65 симв). Можно передать и готовые new_title: {"items":[{"id":int,"new_title":str},...]}\n'
         '- scan_long_titles: {"max_len":70,"limit":100} risk:low — сканирует объекты с длинными title и возвращает список с id + длина\n'
@@ -986,14 +986,92 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
 
     if act_type == 'generate_description':
         listing_id = int(params.get('id') or 0)
-        new_desc = params.get('new_description') or ''
-        if not listing_id or not new_desc:
-            return {'error': 'Нужны id и новое описание'}
+        if not listing_id:
+            return {'error': 'Укажите id объекта'}
+
+        # Если описание уже передано — просто сохраняем
+        new_desc = (params.get('new_description') or params.get('description') or '').strip()
+
+        if not new_desc:
+            # Генерируем через GPT: подтягиваем данные объекта
+            cur.execute(
+                f"SELECT id, title, category, deal, area, price, floor, floors_total, "
+                f"address, district, city, condition, parking, entrance, finishing, "
+                f"ceiling_height, electricity_kw, building_year, building_class "
+                f"FROM {SCHEMA}.listings WHERE id = {listing_id}"
+            )
+            row = cur.fetchone()
+            if not row:
+                return {'error': f'Объект #{listing_id} не найден'}
+            row = dict(row)
+
+            db_key, db_folder = _load_keys_from_db(cur)
+            if not db_key:
+                return {'error': 'YandexGPT не настроен'}
+
+            deal_map = {'sale': 'Продажа', 'rent': 'Аренда', 'lease': 'Аренда'}
+            cat_map = {
+                'office': 'Офис', 'warehouse': 'Склад', 'retail': 'Торговое помещение',
+                'production': 'Производство', 'land': 'Земельный участок', 'gab': 'Готовый арендный бизнес',
+                'building': 'Здание', 'free_purpose': 'Помещение свободного назначения',
+            }
+            deal_ru = deal_map.get((row.get('deal') or '').lower(), '')
+            cat_ru = cat_map.get((row.get('category') or '').lower(), 'Объект')
+            price_fmt = f"{int(row['price']):,}".replace(',', ' ') + ' ₽' if row.get('price') else '—'
+            area = row.get('area') or '—'
+            address = row.get('address') or row.get('district') or row.get('city') or '—'
+            extra_parts = []
+            if row.get('floor'): extra_parts.append(f"этаж {row['floor']}" + (f"/{row['floors_total']}" if row.get('floors_total') else ''))
+            if row.get('ceiling_height'): extra_parts.append(f"высота потолков {row['ceiling_height']} м")
+            if row.get('condition'): extra_parts.append(f"состояние: {row['condition']}")
+            if row.get('parking'): extra_parts.append(f"парковка: {row['parking']}")
+            if row.get('building_year'): extra_parts.append(f"год постройки {row['building_year']}")
+            extra = ', '.join(extra_parts)
+
+            # Загружаем TOV компании
+            cur.execute(f"SELECT company_name FROM {SCHEMA}.settings LIMIT 1")
+            site_s = cur.fetchone() or {}
+            company = (site_s.get('company_name') or 'наша компания')
+
+            sys_p = (
+                'Ты — профессиональный копирайтер коммерческой недвижимости. '
+                'Пиши продающие описания для объявлений: живо, конкретно, без воды. '
+                'Структура: 1) главная ценность объекта (1-2 предложения), '
+                '2) характеристики и преимущества (2-4 предложения), '
+                '3) кому подойдёт и призыв к действию (1-2 предложения). '
+                'Без эмодзи, без markdown, только текст. Объём 100-200 слов.'
+            )
+            user_p = (
+                f'Напиши описание для объекта коммерческой недвижимости:\n'
+                f'Тип: {cat_ru}\n'
+                f'Сделка: {deal_ru}\n'
+                f'Площадь: {area} м²\n'
+                f'Цена: {price_fmt}\n'
+                f'Адрес: {address}\n'
+                + (f'Доп. характеристики: {extra}\n' if extra else '')
+                + f'Название объявления: {row.get("title", "")}\n\n'
+                f'Напиши продающее описание для сайта {company}.'
+            )
+            gpt = _call_yandex_gpt(
+                sys_p, user_p, db_key, db_folder,
+                history=None, temperature=0.6, max_tokens=400,
+                model=YANDEX_MODEL_SHORT,
+            )
+            new_desc = (gpt.get('text') or '').strip()
+            if not new_desc or len(new_desc) < 30:
+                return {'error': 'GPT не смог сгенерировать описание, попробуйте ещё раз'}
+
         cur.execute(
             f"UPDATE {SCHEMA}.listings SET description = '{_sanitize_text(new_desc, 5000)}', "
             f"updated_at = NOW() WHERE id = {listing_id}"
         )
-        return {'ok': True, 'message': f'Описание объекта #{listing_id} обновлено'}
+        preview = new_desc[:120] + ('…' if len(new_desc) > 120 else '')
+        return {
+            'ok': True,
+            'listing_id': listing_id,
+            'description': new_desc,
+            'message': f'✅ Описание для объекта #{listing_id} сгенерировано и сохранено.\n\n{preview}',
+        }
 
     if act_type == 'close_lead':
         lead_id = int(params.get('id') or 0)
@@ -1497,21 +1575,98 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
     # Массовые исправления (risk: high — требуют подтверждения админа)
     if act_type == 'bulk_generate_descriptions':
         items = params.get('items') or []
+        # Если items пустой — берём ВСЕ активные объекты без описания
         if not isinstance(items, list) or not items:
-            return {'error': 'Не передан список объектов'}
-        if len(items) > 20:
-            return {'error': 'Максимум 20 объектов за раз'}
+            cur.execute(
+                f"SELECT id FROM {SCHEMA}.listings "
+                f"WHERE status='active' AND (description IS NULL OR LENGTH(description) < 50) "
+                f"ORDER BY id"
+            )
+            items = [{'id': r['id']} for r in cur.fetchall()]
+        if not items:
+            return {'ok': True, 'message': 'Все объекты уже имеют описания.'}
+
+        # Режим 1: готовые описания переданы — просто сохраняем
+        has_ready = all(isinstance(it, dict) and it.get('description') for it in items)
+        if has_ready:
+            updated = 0
+            for it in items:
+                try:
+                    lid = int(it.get('id') or 0)
+                    desc = _sanitize_text(str(it.get('description') or ''), 5000)
+                    if lid and desc:
+                        cur.execute(f"UPDATE {SCHEMA}.listings SET description='{desc}', updated_at=NOW() WHERE id={lid}")
+                        updated += 1
+                except Exception:
+                    continue
+            return {'ok': True, 'message': f'Обновлено описаний: {updated} из {len(items)}'}
+
+        # Режим 2: только id — генерируем через generate_description для каждого
+        db_key, db_folder = _load_keys_from_db(cur)
+        if not db_key:
+            return {'error': 'YandexGPT не настроен'}
+
+        ids = [int(it.get('id')) for it in items if isinstance(it, dict) and str(it.get('id','')).isdigit()]
+        if not ids:
+            return {'error': 'Не переданы корректные id'}
+
+        id_list = ','.join(str(i) for i in ids)
+        cur.execute(
+            f"SELECT id, title, category, deal, area, price, address, district, floor, floors_total, condition "
+            f"FROM {SCHEMA}.listings WHERE id IN ({id_list})"
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+
+        deal_map = {'sale': 'Продажа', 'rent': 'Аренда', 'lease': 'Аренда'}
+        cat_map = {
+            'office': 'Офис', 'warehouse': 'Склад', 'retail': 'Торговое помещение',
+            'production': 'Производство', 'land': 'Земельный участок', 'gab': 'Готовый арендный бизнес',
+            'building': 'Здание', 'free_purpose': 'Помещение свободного назначения',
+        }
+        cur.execute(f"SELECT company_name FROM {SCHEMA}.settings LIMIT 1")
+        site_s = cur.fetchone() or {}
+        company = (site_s.get('company_name') or 'наша компания')
+
+        sys_p = (
+            'Ты — копирайтер коммерческой недвижимости. Пиши продающие описания: живо, конкретно, без воды. '
+            'Структура: 1) главная ценность (1-2 предл.), 2) характеристики (2-3 предл.), 3) кому подойдёт (1 предл.). '
+            'Без эмодзи, без markdown. 80-150 слов.'
+        )
+
         updated = 0
-        for it in items:
+        results = []
+        for row in rows:
             try:
-                lid = int(it.get('id') or 0)
-                desc = _sanitize_text(str(it.get('description') or ''), 5000)
-                if lid and desc:
-                    cur.execute(f"UPDATE {SCHEMA}.listings SET description='{desc}', updated_at=NOW() WHERE id={lid}")
+                lid = row['id']
+                deal_ru = deal_map.get((row.get('deal') or '').lower(), '')
+                cat_ru = cat_map.get((row.get('category') or '').lower(), 'Объект')
+                price_fmt = f"{int(row['price']):,}".replace(',', ' ') + ' ₽' if row.get('price') else '—'
+                area = row.get('area') or '—'
+                address = row.get('address') or row.get('district') or '—'
+                floor_info = f"этаж {row['floor']}" if row.get('floor') else ''
+
+                user_p = (
+                    f'Описание для: {cat_ru}, {deal_ru}, {area} м², {price_fmt}, {address}'
+                    + (f', {floor_info}' if floor_info else '')
+                    + f'\nНазвание: {row.get("title","")}\nКомпания: {company}'
+                )
+                gpt = _call_yandex_gpt(sys_p, user_p, db_key, db_folder,
+                    history=None, temperature=0.6, max_tokens=350, model=YANDEX_MODEL_SHORT)
+                desc = (gpt.get('text') or '').strip()
+                if desc and len(desc) > 30:
+                    cur.execute(f"UPDATE {SCHEMA}.listings SET description='{_sanitize_text(desc, 5000)}', updated_at=NOW() WHERE id={lid}")
                     updated += 1
+                    results.append(f'#{lid}')
             except Exception:
                 continue
-        return {'ok': True, 'message': f'Обновлено описаний: {updated} из {len(items)}'}
+
+        sample = ', '.join(results[:8]) + (f' и ещё {updated-8}' if updated > 8 else '')
+        return {
+            'ok': True,
+            'updated': updated,
+            'total': len(rows),
+            'message': f'✅ Описания сгенерированы и сохранены: {updated} из {len(rows)} объектов ({sample}).',
+        }
 
     if act_type == 'bulk_seo_optimize':
         items = params.get('items') or []
