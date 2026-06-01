@@ -88,6 +88,66 @@ def _parse_area(text: str) -> float:
         return 0
 
 
+def _db_analogs(cur, listing: dict) -> list:
+    """
+    Ищет реальные аналоги в базе данных системы.
+    Стратегия: широкий диапазон площадей, та же категория и сделка.
+    При малом количестве — расширяем диапазон площадей.
+    """
+    cat = (listing.get('category') or '').replace("'", "''")
+    deal = (listing.get('deal') or 'sale').replace("'", "''")
+    area = float(listing.get('area') or 0)
+    district = (listing.get('district') or '').lower().strip()
+    listing_id = int(listing.get('id') or 0)
+
+    if area <= 0:
+        return []
+
+    results = []
+
+    # Попытка 1: узкий диапазон площади ±50%, тот же район
+    for area_mult, use_district in [(0.5, True), (0.5, False), (1.5, False)]:
+        area_min = area * (1 - area_mult)
+        area_max = area * (1 + area_mult)
+        district_clause = ''
+        if use_district and district:
+            safe_d = district.replace("'", "''")
+            district_clause = f"AND LOWER(district) LIKE '%{safe_d}%'"
+        id_clause = f'AND id != {listing_id}' if listing_id else ''
+
+        cur.execute(
+            f"SELECT id, price, area, price_per_m2, district, condition, status "
+            f"FROM {SCHEMA}.listings "
+            f"WHERE category = '{cat}' AND deal = '{deal}' "
+            f"AND area BETWEEN {area_min} AND {area_max} "
+            f"AND price > 0 AND area > 0 "
+            f"AND status IN ('active', 'archived') "
+            f"{district_clause} {id_clause} "
+            f"ORDER BY CASE WHEN status='active' THEN 0 ELSE 1 END, updated_at DESC "
+            f"LIMIT 15"
+        )
+        rows = cur.fetchall()
+        for r in rows:
+            p = float(r['price'] or 0)
+            a = float(r['area'] or 0)
+            if p > 0 and a > 0:
+                ppm2 = float(r['price_per_m2'] or 0) or round(p / a)
+                results.append({
+                    'source': 'база системы',
+                    'price': p,
+                    'area': a,
+                    'price_per_m2': ppm2,
+                    'district': str(r.get('district') or ''),
+                    'url': '',
+                    'status': str(r.get('status') or ''),
+                })
+        if len(results) >= 5:
+            break
+
+    print(f'[mela_price] DB: found {len(results)} analogs (cat={cat}, deal={deal}, area={area})')
+    return results[:15]
+
+
 def _search_yandex_xml(query: str, user: str, api_key: str, num: int = 10) -> str:
     """Делает запрос к Yandex XML Search и возвращает сырой XML."""
     params = urllib.parse.urlencode({
@@ -648,23 +708,32 @@ def handle_mela_price_check(cur, conn, body: dict, qs: dict) -> dict:
     sources_used = []
     used_fallback = False
 
-    # 1) Yandex XML Search — реальный поиск по ЦИАН, Авито и другим площадкам
-    search_key = os.environ.get('YANDEX_SEARCH_API_KEY', '')
-    search_user = os.environ.get('YANDEX_SEARCH_USER', '')
-    if search_key and search_user:
-        try:
-            search_analogs = _search_analogs(listing, search_user, search_key)
-            if search_analogs:
-                analogs.extend(search_analogs)
-                for a in search_analogs:
-                    if a['source'] not in sources_used:
-                        sources_used.append(a['source'])
-        except Exception as e:
-            print(f'[mela_price] Search analogs error: {e}')
-    else:
-        print('[mela_price] Yandex Search keys not set, skipping')
+    # 1) Аналоги из собственной базы данных системы
+    try:
+        db_analogs = _db_analogs(cur, listing)
+        if db_analogs:
+            analogs.extend(db_analogs)
+            sources_used.append('база системы')
+        print(f'[mela_price] DB analogs: {len(db_analogs)}')
+    except Exception as e:
+        print(f'[mela_price] DB analogs error: {e}')
 
-    # 2) Если поиск не дал достаточно — GPT-фоллбэк
+    # 2) Yandex XML Search — реальный поиск по ЦИАН, Авито и другим площадкам
+    if len(analogs) < 5:
+        search_key = os.environ.get('YANDEX_SEARCH_API_KEY', '')
+        search_user = os.environ.get('YANDEX_SEARCH_USER', '')
+        if search_key and search_user:
+            try:
+                search_analogs = _search_analogs(listing, search_user, search_key)
+                if search_analogs:
+                    analogs.extend(search_analogs)
+                    for a in search_analogs:
+                        if a['source'] not in sources_used:
+                            sources_used.append(a['source'])
+            except Exception as e:
+                print(f'[mela_price] Search analogs error: {e}')
+
+    # 3) Если данных всё ещё мало — GPT-фоллбэк
     if len(analogs) < 3:
         api_key, folder_id = _load_keys(cur)
         gpt_analogs = _gpt_fallback(listing, api_key, folder_id)
@@ -683,13 +752,17 @@ def handle_mela_price_check(cur, conn, body: dict, qs: dict) -> dict:
 
     verdict = _verdict(price, area, analogs)
 
+    db_count = sum(1 for a in analogs if a.get('source') == 'база системы')
+    cache_days = 1 if db_count > 0 else CACHE_TTL_DAYS
+
     result = {
         'verdict': verdict,
         'analogs_count': len(analogs),
+        'db_analogs_count': db_count,
         'analogs': analogs[:8],
         'sources': sources_used,
         'used_gpt_fallback': used_fallback,
-        'cached_until': (datetime.now() + timedelta(days=CACHE_TTL_DAYS)).isoformat(),
+        'cached_until': (datetime.now() + timedelta(days=cache_days)).isoformat(),
     }
     _save_cache(cur, conn, key, result)
     return result
