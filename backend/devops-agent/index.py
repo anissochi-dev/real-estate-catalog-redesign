@@ -15,12 +15,20 @@ SCHEMA = os.environ.get('MAIN_DB_SCHEMA', 't_p71821556_real_estate_catalog_')
 GITHUB_API = 'https://api.github.com'
 
 
+_CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token, X-Authorization, Authorization',
+    'Content-Type': 'application/json',
+}
+
+
 def _ok(data: dict) -> dict:
-    return {'statusCode': 200, 'headers': {'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json'}, 'body': json.dumps(data, ensure_ascii=False, default=str)}
+    return {'statusCode': 200, 'headers': _CORS_HEADERS, 'body': json.dumps(data, ensure_ascii=False, default=str)}
 
 
 def _err(code: int, msg: str) -> dict:
-    return {'statusCode': code, 'headers': {'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json'}, 'body': json.dumps({'error': msg}, ensure_ascii=False)}
+    return {'statusCode': code, 'headers': _CORS_HEADERS, 'body': json.dumps({'error': msg}, ensure_ascii=False)}
 
 
 def _github(path: str, method: str = 'GET', data: dict = None) -> dict | list:
@@ -73,20 +81,18 @@ def _sanitize(s: str, max_len: int = 500) -> str:
 def handler(event: dict, context) -> dict:
     """DevOps-ассистент: GitHub коммиты, issues, Actions, анализ ошибок."""
 
+    _cors = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token, X-Authorization, Authorization',
+        'Access-Control-Max-Age': '86400',
+    }
+
     if event.get('httpMethod') == 'OPTIONS':
-        return {
-            'statusCode': 200,
-            'headers': {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token',
-                'Access-Control-Max-Age': '86400',
-            },
-            'body': '',
-        }
+        return {'statusCode': 200, 'headers': _cors, 'body': ''}
 
     if event.get('httpMethod') != 'POST':
-        return _err(405, 'Method not allowed')
+        return {'statusCode': 405, 'headers': {**_cors, 'Content-Type': 'application/json'}, 'body': '{"error":"Method not allowed"}'}
 
     headers = event.get('headers') or {}
     qs = event.get('queryStringParameters') or {}
