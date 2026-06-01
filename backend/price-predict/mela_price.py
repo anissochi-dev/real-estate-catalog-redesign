@@ -233,18 +233,23 @@ def _scrape_arrpro(listing: dict) -> list:
 
 
 def _scrape_kayan(listing: dict) -> list:
-    """Парсит kayan.ru — краснодарское агентство недвижимости."""
-    cat = (listing.get('category') or '').lower()
+    """
+    Парсит kayan.ru — краснодарское агентство (Drupal, SSR).
+    Рабочий URL: /kupit-kommercheskuyu-nedvizhimost (продажа) или /arenda-kommercheskoy-nedvizhimosti (аренда).
+    """
     deal = (listing.get('deal') or 'sale').lower()
     area = float(listing.get('area') or 0)
-    section = CAT_TO_KAYAN.get(cat, 'kommercheskaya')
-    action = 'arenda' if deal == 'rent' else 'prodazha'
-    url = f'https://www.kayan.ru/{section}/{action}/'
+    url = (
+        'https://www.kayan.ru/sdat-kommercheskuyu-nedvizhimost'
+        if deal == 'rent' else
+        'https://www.kayan.ru/kupit-kommercheskuyu-nedvizhimost'
+    )
     try:
-        html = _http_get(url, timeout=12)
-        min_p = 30_000 if deal == 'rent' else 500_000
+        html = _http_get(url, timeout=14)
+        print(f'[mela_price] kayan.ru: html={len(html)}, has_rub={"руб" in html}')
+        min_p = 20_000 if deal == 'rent' else 300_000
         res = _parse_html_analogs(html, 'kayan.ru', min_p, area)
-        print(f'[mela_price] kayan.ru: {len(res)} analogs (html={len(html)})')
+        print(f'[mela_price] kayan.ru: {len(res)} analogs found')
         return res
     except Exception as e:
         print(f'[mela_price] kayan.ru error: {e}')
@@ -302,19 +307,12 @@ def _scrape_etagi(listing: dict) -> list:
 
 
 def _scrape_moreon(listing: dict) -> list:
-    """Парсит moreon-invest.ru — инвестиционная недвижимость Краснодара."""
-    area = float(listing.get('area') or 0)
-    deal = (listing.get('deal') or 'sale').lower()
-    url = 'https://moreon-invest.ru/catalog/'
-    try:
-        html = _http_get(url, timeout=12)
-        min_p = 30_000 if deal == 'rent' else 500_000
-        res = _parse_html_analogs(html, 'moreon-invest.ru', min_p, area)
-        print(f'[mela_price] moreon-invest.ru: {len(res)} analogs (html={len(html)})')
-        return res
-    except Exception as e:
-        print(f'[mela_price] moreon-invest.ru error: {e}')
-        return []
+    """
+    moreon-invest.ru — Bitrix-каталог, карточки объектов рендерятся через JS.
+    SSR отдаёт только форму фильтра без цен. Парсинг без headless невозможен.
+    """
+    print('[mela_price] moreon-invest.ru: skipped (JS-rendered catalog)')
+    return []
 
 
 def _scrape_local_sites(listing: dict) -> list:
