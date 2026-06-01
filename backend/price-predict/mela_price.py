@@ -145,7 +145,7 @@ def _db_analogs(cur, listing: dict) -> list:
             break
 
     print(f'[mela_price] DB: found {len(results)} analogs (cat={cat}, deal={deal}, area={area})')
-    return results[:15]
+    return results[:10]
 
 
 # ─── Парсеры сторонних сайтов Краснодара ────────────────────────────────────
@@ -204,7 +204,7 @@ def _parse_html_analogs(html: str, source: str, min_price: float, area: float) -
                 'url': '',
             })
             used_prices.add(pi)
-        if len(results) >= 12:
+        if len(results) >= 10:
             break
     return results
 
@@ -333,7 +333,7 @@ def _scrape_etagi(listing: dict) -> list:
                     'price_per_m2': round(best_p[1] / sq_val),
                     'url': url,
                 })
-            if len(results) >= 12:
+            if len(results) >= 10:
                 break
 
         # Фоллбэк на универсальный парсер если JSON-блоки не дали результат
@@ -490,14 +490,14 @@ def _search_analogs(listing: dict, search_user: str, search_key: str) -> list:
                 sources_hit.add(a['source'])
             all_analogs.extend(found)
             print(f'[mela_price] Query "{q[:60]}": {len(found)} results')
-            if len(all_analogs) >= 8:
+            if len(all_analogs) >= 10:
                 break
         except Exception as e:
             print(f'[mela_price] Yandex Search error: {e}')
             continue
 
     print(f'[mela_price] Yandex Search total: {len(all_analogs)} from {sources_hit}')
-    return all_analogs
+    return all_analogs[:10]
 
 
 def _scrape_cian(listing: dict) -> list:
@@ -571,7 +571,7 @@ def _scrape_cian(listing: dict) -> list:
         print(f'[mela_price] CIAN parse error: {e}')
 
     print(f'[mela_price] CIAN: got {len(offers)} analogs')
-    return offers[:12]
+    return offers[:10]
 
 
 def _scrape_avito(listing: dict) -> list:
@@ -648,7 +648,7 @@ def _scrape_avito(listing: dict) -> list:
         print(f'[mela_price] Avito parse error: {e}')
 
     print(f'[mela_price] Avito: got {len(results)} analogs')
-    return results[:12]
+    return results[:10]
 
 
 def _scrape_restate(listing: dict) -> list:
@@ -702,7 +702,7 @@ def _scrape_restate(listing: dict) -> list:
                 'url': url,
             })
     print(f'[mela_price] Restate: got {len(results)} analogs')
-    return results
+    return results[:10]
 
 
 def _load_keys(cur):
