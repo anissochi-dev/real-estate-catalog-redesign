@@ -1,0 +1,1 @@
+UPDATE t_p71821556_real_estate_catalog_.mela_price_cache SET expires_at = '2020-01-01' WHERE expires_at > NOW();
