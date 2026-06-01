@@ -6,20 +6,129 @@ import { Listing, fmtDate } from './types';
 import { AiMsg, DbDoc, BrokerUser } from './internalCardTypes';
 import { Spinner } from './InternalCardTabs1';
 
+const DEAL_LABELS: Record<string, string> = { sale: 'продажа', rent: 'аренда', business: 'готовый бизнес' };
+const CAT_LABELS: Record<string, string> = {
+  office: 'офис', retail: 'торговое помещение', warehouse: 'склад',
+  restaurant: 'кафе/ресторан', hotel: 'гостиница', business: 'готовый бизнес',
+  gab: 'ГАБ', production: 'производство', free_purpose: 'свободного назначения',
+  land: 'земельный участок', building: 'здание', car_service: 'автосервис',
+};
+const COND_LABELS: Record<string, string> = {
+  new: 'новое', euro: 'евроремонт', designer: 'дизайнерский ремонт',
+  good: 'хорошее', normal: 'рабочее', needs_repair: 'требует ремонта',
+  rough: 'черновая отделка', shell: 'без отделки',
+};
+
+function buildAutoPrompt(listing: Listing, marketData?: { median?: number; min?: number; max?: number; analogs?: number }): string {
+  const deal = DEAL_LABELS[listing.deal] || listing.deal;
+  const cat = CAT_LABELS[listing.category] || listing.category;
+  const cond = COND_LABELS[listing.condition || ''] || listing.condition || 'не указано';
+  const addr = [listing.address, listing.district, listing.city].filter(Boolean).join(', ') || 'не указан';
+
+  const comms: string[] = [];
+  if (listing.electricity_kw) comms.push(`электричество ${listing.electricity_kw} кВт`);
+  if (listing.utilities) comms.push(listing.utilities);
+  const commsStr = comms.length ? comms.join(', ') : 'не указаны';
+
+  const income = listing.monthly_rent
+    ? `${listing.monthly_rent.toLocaleString('ru')} руб./мес.`
+    : listing.yearly_rent
+    ? `${listing.yearly_rent.toLocaleString('ru')} руб./год`
+    : listing.profit
+    ? `${listing.profit.toLocaleString('ru')} руб./мес.`
+    : 'нет данных';
+
+  const marketLine = marketData?.median
+    ? `- Средняя цена аналогичных объектов: ${marketData.median.toLocaleString('ru')} руб.\n- Количество аналогичных предложений: ${marketData.analogs ?? 'н/д'}\n- Диапазон рынка: ${(marketData.min ?? 0).toLocaleString('ru')} – ${(marketData.max ?? 0).toLocaleString('ru')} руб.`
+    : '- Данные рынка: недостаточно аналогов для точного анализа';
+
+  return `Ты — эксперт по коммерческой недвижимости с 15‑летним опытом. Твоя задача — проанализировать объект и дать развёрнутые рекомендации.
+
+ДАННЫЕ ОБ ОБЪЕКТЕ:
+- Категория: ${deal}
+- Тип: ${cat}
+- Адрес: ${addr}
+- Площадь: ${listing.area || '—'} м²
+- Этаж: ${listing.floor ?? 'не указан'}${listing.total_floors ? ` из ${listing.total_floors}` : ''}
+- Состояние: ${cond}
+- Коммуникации: ${commsStr}
+- Мощность электроэнергии: ${listing.electricity_kw ? `${listing.electricity_kw} кВт` : 'не указана'}
+- Арендатор: ${listing.tenant_name ? `есть (${listing.tenant_name})` : 'нет'}
+- Доход: ${income}
+- Цена/ставка: ${listing.price ? `${listing.price.toLocaleString('ru')} руб.` : 'не указана'}
+- Фото: ${listing.images ? 'есть' : 'нет'}
+
+ДАННЫЕ ИЗ АНАЛИЗА РЫНКА:
+${marketLine}
+- Ликвидность (среднее время продажи/аренды): зависит от категории и района
+- Инфраструктура рядом: определяется по адресу объекта
+- Планы развития района: требует отдельного анализа
+
+ЗАДАНИЯ:
+1. Сравни цену объекта со среднерыночной. Укажи, завышена она или занижена, на сколько процентов.
+2. Оцени ликвидность объекта на основе данных рынка.
+3. Проанализируй инфраструктуру и планы развития района. Как это влияет на привлекательность объекта?
+4. Дай рекомендации брокеру: что можно улучшить в презентации объекта? Какие акценты сделать в описании?
+5. Предложи 2–3 идеи по улучшению самого объекта (ремонт, перепланировка, дополнительные услуги и т. д.).
+6. Сформулируй УТП для названия объекта (5–7 вариантов, до 10 слов каждый).
+7. Напиши продающее описание объекта по шаблону:
+   - Начало: «От собственника, без % и комиссий!»
+   - Далее — краткий анализ преимуществ на основе данных выше.
+   - Затем — рекомендации по улучшению.
+   - В конце — перспективы объекта (для кого подойдёт, какие направления бизнеса).
+   - Объём: 200–300 слов. Стиль: деловой, но живой, без канцелярита. Избегай списков и таблиц. Пиши сплошным текстом с абзацами.
+
+ОТВЕТ ДАЙ ТОЛЬКО В ВИДЕ ГОТОВОГО ОПИСАНИЯ ОБЪЕКТА ПО ШАБЛОНУ. НЕ ВКЛЮЧАЙ ПРОМЕЖУТОЧНЫЕ ВЫВОДЫ ИЛИ РАЗДЕЛЫ.`;
+}
+
+const PREDICT_URL = 'https://functions.poehali.dev/9986e5a6-c4d4-407a-919f-a303aa3eddf2';
+
 export function TabAi({ listing }: { listing: Listing }) {
   const [messages, setMessages] = useState<AiMsg[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState<string | null>(null);
   const [asked, setAsked] = useState(false);
+  const [marketData, setMarketData] = useState<{ median?: number; min?: number; max?: number; analogs?: number } | undefined>();
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!listing.area || !listing.price || !listing.category || !listing.deal) return;
+    fetch(PREDICT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'mela_price_check',
+        category: listing.category,
+        deal: listing.deal,
+        area: listing.area,
+        price: listing.price,
+        address: listing.address || '',
+        district: listing.district || '',
+        floor: listing.floor || null,
+        condition: listing.condition || '',
+      }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d?.verdict) {
+          setMarketData({
+            median: d.verdict.market_median_per_m2 ? d.verdict.market_median_per_m2 * listing.area : undefined,
+            min: d.verdict.market_min_price,
+            max: d.verdict.market_max_price,
+            analogs: d.analogs_count,
+          });
+        }
+      })
+      .catch(() => {});
+  }, [listing.id]);
 
   const ask = async (text: string) => {
     setLoading(true);
     if (text !== '__auto__') setMessages(m => [...m, { role: 'user', text }]);
     try {
       const prompt = text === '__auto__'
-        ? `Ты — Виртуальный брокер (ВБ), личный ИИ-помощник коммерческого брокера. Проанализируй объект и дай конкретные рекомендации как авитолог, маркетолог и профессиональный коммерческий брокер.\n\nОбъект: ${listing.title}\nКатегория: ${listing.category}, площадь: ${listing.area}м², цена: ${listing.price}₽\nАдрес: ${listing.address || listing.district || listing.city}\nОписание: ${listing.description || '—'}\n\nОтветь структурированно:\n1. На что обратить внимание\n2. Стоит ли снизить/повысить цену\n3. Что изменить в названии\n4. Что улучшить в описании\n5. Рекомендации по фото и размещению`
+        ? buildAutoPrompt(listing, marketData)
         : text;
       const r = await aiApi.ask('marketing', prompt);
       setMessages(m => [...m, { role: 'ai', text: r.text }]);

@@ -146,6 +146,67 @@ def _scrape_cian(listing: dict) -> list:
     return results
 
 
+def _scrape_avito(listing: dict) -> list:
+    """Парсит выдачу avito.ru по коммерческой недвижимости Краснодара."""
+    category = (listing.get('category') or '').lower()
+    deal = (listing.get('deal') or 'sale').lower()
+    area = float(listing.get('area') or 0)
+
+    cat_map = {
+        'office': 'ofisy', 'retail': 'torgovye-pomeshcheniya', 'warehouse': 'sklady-i-bazy',
+        'restaurant': 'obshchepit', 'hotel': 'gostinitsy-i-pansionaty',
+        'production': 'proizvodstvennye-pomeshcheniya', 'free_purpose': 'pomeshcheniya-svobodnogo-naznacheniya',
+        'business': 'gotoviy-biznes', 'gab': 'gotoviy-biznes',
+        'land': 'zemelnye-uchastki-kommercheskoe', 'building': 'zdaniya',
+        'car_service': 'avtoservisy-i-avtomoyky',
+    }
+    section = cat_map.get(category, 'kommercheskaya-nedvizhimost')
+    action = 'sdam' if deal == 'rent' else 'prodam'
+
+    params = {'bt': '1', 'p': '1'}
+    if area:
+        params['s_ot'] = str(int(max(1, area * 0.5)))
+        params['s_do'] = str(int(area * 2.0))
+
+    qs = urllib.parse.urlencode(params)
+    url = f'https://www.avito.ru/krasnodar/{section}/{action}?{qs}'
+
+    try:
+        html = _http_get(url, timeout=14)
+    except Exception:
+        return []
+
+    results = []
+    # Авито встраивает JSON в window.__initialData__ или data-marker атрибуты
+    # Ищем блоки с ценами через regex
+    price_pattern = re.compile(r'"price"\s*:\s*\{[^}]*"value"\s*:\s*(\d+)', re.UNICODE)
+    area_pattern  = re.compile(r'"square"\s*:\s*\{[^}]*"value"\s*:\s*([\d.,]+)', re.UNICODE)
+
+    prices_found = [int(m.group(1)) for m in price_pattern.finditer(html)]
+    areas_found  = [float(m.group(1).replace(',', '.')) for m in area_pattern.finditer(html)]
+
+    # Фоллбэк: текстовый парсинг если JSON не найден
+    if not prices_found:
+        price_pattern2 = re.compile(r'(\d[\d\s]{4,})\s*₽', re.UNICODE)
+        prices_found = [int(re.sub(r'\s', '', m.group(1))) for m in price_pattern2.finditer(html)]
+    if not areas_found:
+        area_pattern2 = re.compile(r'(\d+[.,]?\d*)\s*м²', re.UNICODE)
+        areas_found = [float(m.group(1).replace(',', '.')) for m in area_pattern2.finditer(html)]
+
+    n = min(len(prices_found), len(areas_found), 10)
+    for i in range(n):
+        p, a = prices_found[i], areas_found[i]
+        if p > 100_000 and a > 5:
+            results.append({
+                'source': 'avito.ru',
+                'price': float(p),
+                'area': a,
+                'price_per_m2': round(p / a) if a else 0,
+                'url': url,
+            })
+    return results
+
+
 def _scrape_restate(listing: dict) -> list:
     """Парсит выдачу krasnodar.restate.ru."""
     category = (listing.get('category') or '').lower()
@@ -411,7 +472,7 @@ def handle_mela_price_check(cur, conn, body: dict, qs: dict) -> dict:
         if cached:
             return cached
 
-    # 1) Скрапинг
+    # 1) Скрапинг: ЦИАН + Авито + Restate параллельно (последовательно, но все три)
     analogs = []
     sources_used = []
     try:
@@ -419,6 +480,14 @@ def handle_mela_price_check(cur, conn, body: dict, qs: dict) -> dict:
         if cian_analogs:
             analogs.extend(cian_analogs)
             sources_used.append('cian.ru')
+    except Exception:
+        pass
+
+    try:
+        avito_analogs = _scrape_avito(listing)
+        if avito_analogs:
+            analogs.extend(avito_analogs)
+            sources_used.append('avito.ru')
     except Exception:
         pass
 
