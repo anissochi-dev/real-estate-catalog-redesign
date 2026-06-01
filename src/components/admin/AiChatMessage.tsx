@@ -205,7 +205,7 @@ export default function AiChatMessage({
                         <div className={`text-[10px] rounded-lg p-2 max-h-40 overflow-y-auto space-y-0.5 ${hasIssues ? 'bg-red-50' : 'bg-muted/40'}`}>
                           {msg.split('\n').slice(1).filter(Boolean).map((line, li) => {
                             const lineHasIssue = /найден|проблем|ошибк|битых|некорректн|дубл|устарев|без фото|без описан|без seo|нет seo|не заполн|\d+\s*(объект|лид|запис)/i.test(line);
-                            const lineOk = /всё\s*в\s*порядке|не\s*найдено|проблем\s*нет|ок\b|ok\b|✅|успешно/i.test(line);
+                            const lineOk = /всё\s*в\s*порядке|проблем\s*нет|ок\b|ok\b|✅|успешно/i.test(line);
                             return (
                               <div key={li} className={`whitespace-pre-wrap leading-relaxed ${lineHasIssue ? 'text-red-700 font-medium' : lineOk ? 'text-emerald-700' : hasIssues ? 'text-red-600/70' : 'text-muted-foreground'}`}>
                                 {line}
