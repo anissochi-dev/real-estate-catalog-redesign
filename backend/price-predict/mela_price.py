@@ -362,10 +362,8 @@ def _scrape_local_sites(listing: dict) -> list:
     sources_hit = []
     for scraper, name in [
         (_scrape_arrpro, 'arrpro'),
-        (_scrape_kayan, 'kayan'),
         (_scrape_ayax, 'ayax'),
         (_scrape_etagi, 'etagi'),
-        (_scrape_moreon, 'moreon'),
     ]:
         try:
             res = scraper(listing)
