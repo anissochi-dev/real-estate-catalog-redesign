@@ -392,6 +392,7 @@ SYSTEM_PROMPTS = {
         '- search_listings_without_images: {"limit":50?} risk:low — найти объекты без фото. Используй при «объекты без фото», «нет фотографий»\n'
         '- search_listings_without_description: {"limit":50?} risk:low — найти объекты без описания\n'
         '- search_listings_without_seo: {"limit":50?} risk:low — найти объекты без SEO-заголовка\n'
+        '- search_listings_with_broken_data: {"limit":50?} risk:low — найти объекты с битыми данными (нет цены, площади, адреса). Используй при «битые данные», «некорректные данные», «исправить данные». Возвращает ids для fix_data_quality.\n'
         '- optimize_images: {"keys":["photos/x.jpg",...]} risk:medium\n'
         '- delete_unused_images: {"keys":["photos/x.jpg",...]} risk:high\n'
         '- note: {"text":str} risk:low\n'
@@ -3667,6 +3668,34 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         return {
             'ok': True, 'count': len(rows), 'items': rows,
             'message': f'Найдено {len(rows)} объектов без SEO:\n' + '\n'.join(lines) + more,
+        }
+
+    # ── Поиск объектов с битыми данными ─────────────────────────────────
+    if act_type in ('search_listings_with_broken_data', 'find_broken_data', 'get_broken_listings'):
+        limit = min(int(params.get('limit') or 50), 200)
+        cur.execute(
+            f"SELECT id, title, category, deal, price, area, address, city "
+            f"FROM {SCHEMA}.listings "
+            f"WHERE status='active' AND (price <= 0 OR area <= 0 OR "
+            f"COALESCE(address,'') = '' OR COALESCE(city,'') = '') "
+            f"ORDER BY id DESC LIMIT {limit}"
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+        if not rows:
+            return {'ok': True, 'count': 0, 'items': [], 'message': 'Битых данных не найдено — все объекты в порядке ✅'}
+        lines = []
+        for r in rows[:15]:
+            issues = []
+            if not r.get('price') or r['price'] <= 0: issues.append('нет цены')
+            if not r.get('area') or r['area'] <= 0: issues.append('нет площади')
+            if not (r.get('address') or '').strip(): issues.append('нет адреса')
+            if not (r.get('city') or '').strip(): issues.append('нет города')
+            lines.append(f"#{r['id']} — {(r['title'] or '')[:50]} ({', '.join(issues)})")
+        more = f'\n... и ещё {len(rows)-15}' if len(rows) > 15 else ''
+        ids = [r['id'] for r in rows]
+        return {
+            'ok': True, 'count': len(rows), 'items': rows, 'ids': ids,
+            'message': f'Найдено {len(rows)} объектов с битыми данными:\n' + '\n'.join(lines) + more,
         }
 
     # ── Неизвестное действие ─────────────────────────────────────────────

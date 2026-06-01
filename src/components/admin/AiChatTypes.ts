@@ -35,6 +35,7 @@ export const RESULT_INJECT_ACTIONS = new Set([
   'search_listings_without_images',
   'search_listings_without_description',
   'search_listings_without_seo',
+  'search_listings_with_broken_data',
 ]);
 
 export interface Msg {

@@ -52,6 +52,14 @@ function buildResultHistoryText(actionType: string, actionTitle: string, result:
     }
   }
 
+  // Для search_listings_with_broken_data — передаём ids
+  if (actionType === 'search_listings_with_broken_data' && result.items) {
+    const items = result.items as { id: number }[];
+    if (items?.length) {
+      text += `\nids объектов с битыми данными: [${items.map(x => x.id).join(',')}]\nИспользуй эти ids в fix_data_quality: {"issue_type":"wrong_price","ids":[...]} или {"issue_type":"missing_desc","ids":[...]}`;
+    }
+  }
+
   return text;
 }
 import { MemoryData } from './AiChatAdminOpsTab';
