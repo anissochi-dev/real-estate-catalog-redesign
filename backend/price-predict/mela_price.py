@@ -234,26 +234,12 @@ def _scrape_arrpro(listing: dict) -> list:
 
 def _scrape_kayan(listing: dict) -> list:
     """
-    Парсит kayan.ru — краснодарское агентство (Drupal, SSR).
-    Рабочий URL: /kupit-kommercheskuyu-nedvizhimost (продажа) или /arenda-kommercheskoy-nedvizhimosti (аренда).
+    kayan.ru — страница поиска Drupal отдаёт только форму фильтра (параметры),
+    а не карточки объявлений. Карточки грузятся динамически через JS.
+    Парсинг без headless-браузера невозможен.
     """
-    deal = (listing.get('deal') or 'sale').lower()
-    area = float(listing.get('area') or 0)
-    url = (
-        'https://www.kayan.ru/sdat-kommercheskuyu-nedvizhimost'
-        if deal == 'rent' else
-        'https://www.kayan.ru/kupit-kommercheskuyu-nedvizhimost'
-    )
-    try:
-        html = _http_get(url, timeout=14)
-        print(f'[mela_price] kayan.ru: html={len(html)}, has_rub={"руб" in html}')
-        min_p = 20_000 if deal == 'rent' else 300_000
-        res = _parse_html_analogs(html, 'kayan.ru', min_p, area)
-        print(f'[mela_price] kayan.ru: {len(res)} analogs found')
-        return res
-    except Exception as e:
-        print(f'[mela_price] kayan.ru error: {e}')
-        return []
+    print('[mela_price] kayan.ru: skipped (search form only, no SSR listings)')
+    return []
 
 
 def _scrape_ayax(listing: dict) -> list:
@@ -290,17 +276,72 @@ def _scrape_ayax(listing: dict) -> list:
 
 
 def _scrape_etagi(listing: dict) -> list:
-    """Парсит krasnodar.etagi.com — федеральный агрегатор."""
+    """
+    Парсит krasnodar.etagi.com/commerce/ — федеральный агрегатор (SSR, 414кб).
+    Рабочий URL: /commerce/ (продажа) и /rent/commerce/ (аренда).
+    JSON с площадями встроен в HTML: "square":N, цены как числа рядом с ₽/руб.
+    """
     deal = (listing.get('deal') or 'sale').lower()
     area = float(listing.get('area') or 0)
-    action = 'arenda-kommercheskoy-nedvizhimosti' if deal == 'rent' else 'prodazha-kommercheskoy-nedvizhimosti'
-    url = f'https://krasnodar.etagi.com/{action}/'
+    url = 'https://krasnodar.etagi.com/rent/commerce/' if deal == 'rent' else 'https://krasnodar.etagi.com/commerce/'
     try:
-        html = _http_get(url, timeout=14)
-        min_p = 30_000 if deal == 'rent' else 500_000
-        res = _parse_html_analogs(html, 'etagi.com', min_p, area)
-        print(f'[mela_price] etagi.com: {len(res)} analogs (html={len(html)})')
-        return res
+        req = urllib.request.Request(url, headers={
+            'User-Agent': USER_AGENT,
+            'Accept': 'text/html,application/xhtml+xml,*/*;q=0.9',
+            'Accept-Language': 'ru-RU,ru;q=0.9',
+            'Cache-Control': 'no-cache',
+            'Referer': 'https://www.google.com/',
+        })
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = resp.read(600_000)
+            html = raw.decode('utf-8', errors='replace')
+        print(f'[mela_price] etagi.com: html={len(html)} bytes')
+        if len(html) < 10_000:
+            print('[mela_price] etagi.com: response too small, skipping')
+            return []
+
+        # Etagi встраивает данные как "square":42.5 и "price":"14800000" (строка)
+        # Извлекаем все цены и площади по отдельности, затем соединяем попарно
+        results = []
+        area_min = area * 0.2 if area > 0 else 5
+        area_max = area * 5.0 if area > 0 else 10000
+        min_p = 20_000 if deal == 'rent' else 300_000
+
+        squares = [(m.start(), float(m.group(1))) for m in re.finditer(r'"square"\s*:\s*(\d+(?:\.\d+)?)', html)]
+        prices  = [(m.start(), float(m.group(1))) for m in re.finditer(r'"price"\s*:\s*"(\d+)"', html)]
+
+        used_price_pos = set()
+        for sq_pos, sq_val in squares:
+            if not (area_min <= sq_val <= area_max):
+                continue
+            # Ищем ближайшую цену в окне ±3000 символов
+            best_p = None
+            best_dist = 9999
+            for pr_pos, pr_val in prices:
+                if pr_pos in used_price_pos:
+                    continue
+                dist = abs(pr_pos - sq_pos)
+                if dist < 3000 and dist < best_dist and pr_val >= min_p:
+                    best_dist = dist
+                    best_p = (pr_pos, pr_val)
+            if best_p:
+                used_price_pos.add(best_p[0])
+                results.append({
+                    'source': 'etagi.com',
+                    'price': best_p[1],
+                    'area': sq_val,
+                    'price_per_m2': round(best_p[1] / sq_val),
+                    'url': url,
+                })
+            if len(results) >= 12:
+                break
+
+        # Фоллбэк на универсальный парсер если JSON-блоки не дали результат
+        if not results:
+            results = _parse_html_analogs(html, 'etagi.com', min_p, area)
+
+        print(f'[mela_price] etagi.com: {len(results)} analogs found')
+        return results
     except Exception as e:
         print(f'[mela_price] etagi.com error: {e}')
         return []
@@ -333,8 +374,6 @@ def _scrape_local_sites(listing: dict) -> list:
                 sources_hit.append(name)
         except Exception as e:
             print(f'[mela_price] {name} failed: {e}')
-        if len(all_analogs) >= 10:
-            break
     print(f'[mela_price] local sites total: {len(all_analogs)} from {sources_hit}')
     return all_analogs
 
