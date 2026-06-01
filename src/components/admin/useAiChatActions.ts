@@ -7,6 +7,53 @@ import {
   detectSuggestion,
   RESULT_INJECT_ACTIONS,
 } from './AiChatTypes';
+
+// Строит текст для истории — включает ключевые id чтобы ИИ мог их использовать
+function buildResultHistoryText(actionType: string, actionTitle: string, result: Record<string, unknown>): string {
+  let text = `📊 Результат «${actionTitle || actionType}»:\n${result.message || ''}`;
+
+  // Для inspector_full_audit добавляем id из items
+  if (actionType === 'inspector_full_audit' && result.audit) {
+    const audit = result.audit as Record<string, unknown>;
+    const parts: string[] = [];
+
+    const broken = audit.broken_data as { count?: number; items?: { id: number }[] } | undefined;
+    if (broken?.items?.length) {
+      parts.push(`broken_data ids: [${broken.items.map(x => x.id).join(',')}]`);
+    }
+    const dupes = audit.duplicates as { count?: number; items?: { id?: number }[] } | undefined;
+    if (dupes?.items?.length) {
+      const dupeIds = dupes.items.map(x => x.id).filter(Boolean);
+      if (dupeIds.length) parts.push(`duplicate ids: [${dupeIds.join(',')}]`);
+    }
+    const noPhoto = audit.no_photo as { count?: number; items?: { id: number }[] } | undefined;
+    if (noPhoto?.items?.length) {
+      parts.push(`no_photo ids: [${noPhoto.items.map(x => x.id).join(',')}]`);
+    }
+    const stale = audit.stale_listings as { count?: number; items?: { id: number }[] } | undefined;
+    if (stale?.items?.length) {
+      parts.push(`stale ids: [${stale.items.map(x => x.id).join(',')}]`);
+    }
+    const leads = audit.old_unprocessed_leads as { count?: number; items?: { id: number; name?: string }[] } | undefined;
+    if (leads?.items?.length) {
+      parts.push(`unprocessed_lead ids: [${leads.items.map(x => x.id).join(',')}] (первый: id=${leads.items[0].id}, ${leads.items[0].name || ''})`);
+    }
+
+    if (parts.length) {
+      text += '\n\nКонкретные id для действий:\n' + parts.join('\n');
+    }
+  }
+
+  // Для check_data_integrity — аналогично
+  if (actionType === 'check_data_integrity' && result.issues) {
+    const issues = result.issues as { id?: number }[];
+    if (issues?.length) {
+      text += `\nids с проблемами: [${issues.map((x) => x.id).filter(Boolean).join(',')}]`;
+    }
+  }
+
+  return text;
+}
 import { MemoryData } from './AiChatAdminOpsTab';
 
 interface UseAiChatActionsParams {
@@ -235,10 +282,10 @@ export function useAiChatActions({
                 : a) }
             : x
         );
-        if (ok && resultData && r.message) {
+        if (ok && resultData) {
           return [...next, {
             role: 'ai' as const,
-            text: `📊 Результат «${target.title || target.type}»:\n${r.message}`,
+            text: buildResultHistoryText(target.type, target.title || target.type, resultData),
             action: 'agent' as const,
             ts: Date.now() + 1,
             agentActions: [],
@@ -295,10 +342,10 @@ export function useAiChatActions({
               ? { ...a, status: ok ? 'applied' as const : 'failed' as const, resultMessage: r.message || r.error || '', resultData }
               : a) }
           : x);
-        if (ok && resultData && r.message) {
+        if (ok && resultData) {
           return [...next, {
             role: 'ai' as const,
-            text: `📊 Результат «${t.title || t.type}»:\n${r.message}`,
+            text: buildResultHistoryText(t.type, t.title || t.type, resultData),
             action: 'agent' as const,
             ts: Date.now() + 1,
             agentActions: [],
