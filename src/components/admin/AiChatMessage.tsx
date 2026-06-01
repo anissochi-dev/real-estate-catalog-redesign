@@ -191,21 +191,24 @@ export default function AiChatMessage({
                     </div>
                   </div>
                 )}
-                {a.status === 'applied' && (
-                  <div className="mt-2 space-y-1">
-                    <div className="text-[11px] text-emerald-700 flex items-center gap-1">
-                      <Icon name="CheckCircle2" size={12} />
-                      {a.resultMessage
-                        ? a.resultMessage.split('\n')[0]
-                        : 'Выполнено'}
-                    </div>
-                    {a.resultMessage && a.resultMessage.includes('\n') && (
-                      <div className="text-[10px] text-muted-foreground whitespace-pre-wrap bg-muted/40 rounded-lg p-2 max-h-32 overflow-y-auto">
-                        {a.resultMessage.split('\n').slice(1).join('\n')}
+                {a.status === 'applied' && (() => {
+                  const msg = a.resultMessage || 'Выполнено';
+                  const firstLine = msg.split('\n')[0];
+                  const hasIssues = /найден|проблем|ошибк|битых|некорректн|дубл|устарев|без фото|без описан|без seo|нет seo|не заполн/i.test(msg);
+                  return (
+                    <div className="mt-2 space-y-1">
+                      <div className={`text-[11px] flex items-center gap-1 font-medium ${hasIssues ? 'text-red-600' : 'text-emerald-700'}`}>
+                        <Icon name={hasIssues ? 'AlertCircle' : 'CheckCircle2'} size={12} />
+                        {firstLine}
                       </div>
-                    )}
-                  </div>
-                )}
+                      {msg.includes('\n') && (
+                        <div className={`text-[10px] whitespace-pre-wrap rounded-lg p-2 max-h-32 overflow-y-auto ${hasIssues ? 'text-red-700 bg-red-50' : 'text-muted-foreground bg-muted/40'}`}>
+                          {msg.split('\n').slice(1).join('\n')}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 {a.status === 'failed' && (
                   <div className="mt-2 text-[11px] text-red-600 flex items-center gap-1">
                     <Icon name="AlertTriangle" size={12} />
