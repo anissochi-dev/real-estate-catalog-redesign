@@ -375,6 +375,94 @@ def _predict(cur, category: str, deal: str, area: float, price: float,
     }
 
 
+def handle_debug_scrape(body: dict) -> dict:
+    """Живая диагностика HTTP-запроса к сайту прямо из облачной функции."""
+    import urllib.request as _req
+    import urllib.error as _err
+    import re as _re
+    import time
+
+    urls = body.get('urls') or []
+    keywords = body.get('keywords') or ['руб', '₽', 'price', 'м²', 'площадь']
+    regex_patterns = body.get('regex_patterns') or []
+    results = []
+
+    ua_variants = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+        'python-requests/2.31.0',
+    ]
+
+    for url in urls[:5]:
+        for ua in ua_variants:
+            t0 = time.time()
+            entry = {'url': url, 'user_agent': ua[:40] + '...', 'status': None,
+                     'html_len': 0, 'keywords_found': [], 'error': None,
+                     'first_200_chars': '', 'elapsed_ms': 0, 'regex_matches': {}}
+            try:
+                cache_bust = f'{"&" if "?" in url else "?"}nocache={int(time.time())}'
+                req = _req.Request(
+                    url + cache_bust,
+                    headers={
+                        'User-Agent': ua,
+                        'Accept': 'text/html,application/xhtml+xml,application/json,*/*;q=0.9',
+                        'Accept-Language': 'ru-RU,ru;q=0.9',
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache',
+                        'Referer': 'https://www.google.com/',
+                    }
+                )
+                with _req.urlopen(req, timeout=12) as resp:
+                    raw = resp.read(500_000)
+                    try:
+                        html = raw.decode('utf-8', errors='replace')
+                    except Exception:
+                        html = raw.decode('cp1251', errors='replace')
+                    entry['status'] = resp.status
+                    entry['html_len'] = len(html)
+                    entry['first_200_chars'] = html[:200].replace('\n', ' ').strip()
+                    entry['keywords_found'] = [kw for kw in keywords if kw in html]
+                    entry['is_spa'] = (
+                        len(html) < 5000 or
+                        (html.count('<script') > 10 and not entry['keywords_found'])
+                    )
+                    # Дополнительный regex-поиск по HTML
+                    for pat in regex_patterns:
+                        try:
+                            matches = _re.findall(pat, html)
+                            entry['regex_matches'][pat[:40]] = matches[:5]
+                        except Exception:
+                            pass
+                    # Ищем встроенный JSON (SSR-данные)
+                    json_snippets = _re.findall(
+                        r'(?:window\.__(?:NUXT|NEXT_DATA|STATE|INITIAL_STATE|DATA)__|'
+                        r'<script[^>]*type=["\']application/json["\'][^>]*>)'
+                        r'.{0,50}',
+                        html
+                    )
+                    entry['embedded_json_hints'] = json_snippets[:3]
+                    # Ищем первое вхождение числа рядом с ₽/руб
+                    price_samples = _re.findall(r'(\d[\d\s]{3,})\s*(?:₽|руб)', html)[:5]
+                    entry['price_samples'] = price_samples
+            except _err.HTTPError as e:
+                entry['status'] = e.code
+                entry['error'] = f'HTTP {e.code}: {e.reason}'
+                try:
+                    body_bytes = e.read(2000)
+                    entry['first_200_chars'] = body_bytes.decode('utf-8', errors='replace')[:200]
+                except Exception:
+                    pass
+            except Exception as e:
+                entry['error'] = str(e)[:200]
+            finally:
+                entry['elapsed_ms'] = round((time.time() - t0) * 1000)
+            results.append(entry)
+            if entry['status'] == 200:
+                break
+
+    return {'results': results}
+
+
 def handler(event: dict, context) -> dict:
     """Прогнозирует рыночную цену, окупаемость и индекс спроса для объекта недвижимости."""
 
@@ -412,6 +500,9 @@ def handler(event: dict, context) -> dict:
                 result = handle_mela_price_check(cur, conn, body_data, params_all)
                 status = result.pop('_status', 200)
                 return _ok(result, status)
+
+            if body_data.get('action') == 'debug_scrape':
+                return _ok(handle_debug_scrape(body_data))
 
             if method == 'GET':
                 params = params_all

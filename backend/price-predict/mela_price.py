@@ -252,18 +252,32 @@ def _scrape_kayan(listing: dict) -> list:
 
 
 def _scrape_ayax(listing: dict) -> list:
-    """Парсит ayax.ru — крупное агентство Краснодара."""
-    cat = (listing.get('category') or '').lower()
+    """
+    Парсит ayax.ru — крупное агентство Краснодара.
+    Сайт SSR: отдаёт цены в HTML, но нужно читать 500кб (не 300кб).
+    Работает только страница /kommercheskaya-nedvizhimost/ (без подпутей).
+    """
     deal = (listing.get('deal') or 'sale').lower()
     area = float(listing.get('area') or 0)
-    section = CAT_TO_AYAX.get(cat, 'commercial')
-    action = 'rent' if deal == 'rent' else 'sale'
-    url = f'https://www.ayax.ru/kommercheskaya-nedvizhimost/{action}/'
+    url = 'https://www.ayax.ru/kommercheskaya-nedvizhimost/'
     try:
-        html = _http_get(url, timeout=12)
-        min_p = 30_000 if deal == 'rent' else 500_000
+        req = urllib.request.Request(url, headers={
+            'User-Agent': USER_AGENT,
+            'Accept': 'text/html,application/xhtml+xml,*/*;q=0.9',
+            'Accept-Language': 'ru-RU,ru;q=0.9',
+            'Cache-Control': 'no-cache',
+            'Referer': 'https://www.google.com/',
+        })
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = resp.read(600_000)
+            html = raw.decode('utf-8', errors='replace')
+        print(f'[mela_price] ayax.ru: html={len(html)} bytes')
+        if len(html) < 10_000:
+            print('[mela_price] ayax.ru: response too small, skipping')
+            return []
+        min_p = 20_000 if deal == 'rent' else 300_000
         res = _parse_html_analogs(html, 'ayax.ru', min_p, area)
-        print(f'[mela_price] ayax.ru: {len(res)} analogs (html={len(html)})')
+        print(f'[mela_price] ayax.ru: {len(res)} analogs found')
         return res
     except Exception as e:
         print(f'[mela_price] ayax.ru error: {e}')
