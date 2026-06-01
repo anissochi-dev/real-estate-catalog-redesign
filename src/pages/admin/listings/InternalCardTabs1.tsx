@@ -198,18 +198,35 @@ export function TabOverview({ listing, siteUrl }: { listing: Listing; siteUrl?: 
   );
 }
 
+function parsePriceChange(raw: unknown): { oldP: number; newP: number } | null {
+  try {
+    const ch = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (!ch) return null;
+    const p = ch.price;
+    if (!p && p !== 0) return null;
+    if (Array.isArray(p) && p.length >= 2) return { oldP: Number(p[0]), newP: Number(p[1]) };
+    if (typeof p === 'object' && p !== null && ('old' in p || 'new' in p)) return { oldP: Number(p.old ?? 0), newP: Number(p.new ?? 0) };
+  } catch { /* ignore */ }
+  return null;
+}
+
 export function TabPriceHistory({ listingId }: { listingId: number }) {
   const [rows, setRows] = useState<HistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     adminApi.getListingHistory(listingId).then(r => {
-      const all: HistoryRow[] = r.history || [];
-      setRows(all.filter(h => h.changes && h.changes.price));
-    }).finally(() => setLoading(false));
+      const all: HistoryRow[] = (r.history || []).map((h: HistoryRow) => ({
+        ...h,
+        changes: typeof h.changes === 'string' ? (() => { try { return JSON.parse(h.changes as unknown as string); } catch { return null; } })() : h.changes,
+      }));
+      setRows(all.filter(h => parsePriceChange(h.changes) !== null));
+    }).catch(e => setError(String(e))).finally(() => setLoading(false));
   }, [listingId]);
 
   if (loading) return <Spinner />;
+  if (error) return <div className="p-6 text-center text-red-500 text-sm">{error}</div>;
 
   if (!rows.length) return (
     <div className="p-6 text-center text-muted-foreground text-sm">История изменений цены не найдена</div>
@@ -230,14 +247,15 @@ export function TabPriceHistory({ listingId }: { listingId: number }) {
           </thead>
           <tbody>
             {rows.map(h => {
-              const [oldP, newP] = h.changes!.price as [number, number];
-              const diff = Number(newP) - Number(oldP);
+              const parsed = parsePriceChange(h.changes)!;
+              const { oldP, newP } = parsed;
+              const diff = newP - oldP;
               return (
                 <tr key={h.id} className="border-t border-border">
                   <td className="px-4 py-2 text-xs text-muted-foreground">{fmtDate(h.created_at)}</td>
-                  <td className="px-4 py-2 font-mono">{fmt(Number(oldP))} ₽</td>
+                  <td className="px-4 py-2 font-mono">{fmt(oldP)} ₽</td>
                   <td className="px-4 py-2 font-mono font-semibold">
-                    {fmt(Number(newP))} ₽
+                    {fmt(newP)} ₽
                     <span className={`ml-2 text-xs ${diff < 0 ? 'text-emerald-600' : diff > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
                       {diff > 0 ? `+${fmt(diff)}` : fmt(diff)}
                     </span>
