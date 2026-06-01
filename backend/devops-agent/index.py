@@ -89,7 +89,10 @@ def handler(event: dict, context) -> dict:
         return _err(405, 'Method not allowed')
 
     headers = event.get('headers') or {}
-    token = headers.get('X-Auth-Token') or headers.get('x-auth-token') or ''
+    qs = event.get('queryStringParameters') or {}
+    token = (headers.get('X-Auth-Token') or headers.get('x-auth-token') or
+             headers.get('X-Authorization') or headers.get('x-authorization') or
+             qs.get('auth_token') or '')
 
     body = json.loads(event.get('body') or '{}')
     action = (body.get('action') or '').strip()
