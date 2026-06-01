@@ -148,6 +148,185 @@ def _db_analogs(cur, listing: dict) -> list:
     return results[:15]
 
 
+# ─── Парсеры сторонних сайтов Краснодара ────────────────────────────────────
+
+CAT_TO_ARRPRO = {
+    'office': 'ofisy', 'retail': 'torgovye-pomeshcheniya', 'warehouse': 'sklady',
+    'restaurant': 'obshchepit', 'production': 'proizvodstvo',
+    'free_purpose': 'pomeshcheniya-svobodnogo-naznacheniya',
+    'business': 'gotovyy-biznes', 'gab': 'gotovyy-biznes',
+    'land': 'zemelnye-uchastki', 'building': 'zdaniya',
+}
+CAT_TO_KAYAN = {
+    'office': 'ofisy', 'retail': 'torgovye', 'warehouse': 'sklady',
+    'free_purpose': 'svobodnoe', 'production': 'proizvodstvo',
+    'business': 'biznes', 'land': 'uchastki',
+}
+CAT_TO_AYAX = {
+    'office': 'office', 'retail': 'retail', 'warehouse': 'warehouse',
+    'free_purpose': 'free', 'production': 'production',
+    'business': 'business', 'restaurant': 'catering',
+}
+
+
+def _parse_html_analogs(html: str, source: str, min_price: float, area: float) -> list:
+    """Универсальный парсер цен и площадей из HTML коммерческих сайтов Краснодара."""
+    results = []
+    price_pat = re.compile(r'(\d[\d\s]{4,})\s*(?:₽|руб\.?|р\.)', re.UNICODE)
+    area_pat  = re.compile(r'(\d+[.,]?\d*)\s*м²', re.UNICODE)
+
+    prices = [(m.start(), _parse_price(m.group(1))) for m in price_pat.finditer(html)]
+    areas  = [(m.start(), _parse_area(m.group(0))) for m in area_pat.finditer(html)]
+
+    # Широкий диапазон: берём объекты от 20% до 5× от целевой площади
+    area_min = area * 0.2 if area > 0 else 5
+    area_max = area * 5.0 if area > 0 else 10000
+
+    used_prices = set()
+    for pi, p in prices:
+        if p < min_price or pi in used_prices:
+            continue
+        # Ищем ближайшую площадь в окне ±800 символов
+        best_a = None
+        best_dist = 9999
+        for ai, a_val in areas:
+            if area_min <= a_val <= area_max and abs(ai - pi) < 800:
+                dist = abs(ai - pi)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_a = a_val
+        if best_a and best_a > 0:
+            results.append({
+                'source': source,
+                'price': float(p),
+                'area': float(best_a),
+                'price_per_m2': round(p / best_a),
+                'url': '',
+            })
+            used_prices.add(pi)
+        if len(results) >= 12:
+            break
+    return results
+
+
+def _scrape_arrpro(listing: dict) -> list:
+    """Парсит krasnodar.arrpro.ru — агрегатор коммерческой недвижимости."""
+    deal = (listing.get('deal') or 'sale').lower()
+    area = float(listing.get('area') or 0)
+    # Главная страница содержит актуальные объявления (~189кб SSR HTML)
+    url = 'https://krasnodar.arrpro.ru/'
+    try:
+        html = _http_get(url, timeout=14)
+        if len(html) < 1000:
+            print(f'[mela_price] arrpro.ru: empty response ({len(html)} bytes)')
+            return []
+        print(f'[mela_price] arrpro.ru: html={len(html)} bytes, has_price={"₽" in html or "руб" in html}')
+        min_p = 20_000 if deal == 'rent' else 300_000
+        # Широкий диапазон площадей — берём всё что есть на странице
+        broad_listing = dict(listing, area=area if area > 0 else 100)
+        res = _parse_html_analogs(html, 'arrpro.ru', min_p, broad_listing['area'])
+        print(f'[mela_price] arrpro.ru: {len(res)} analogs found')
+        return res
+    except Exception as e:
+        print(f'[mela_price] arrpro.ru error: {e}')
+        return []
+
+
+def _scrape_kayan(listing: dict) -> list:
+    """Парсит kayan.ru — краснодарское агентство недвижимости."""
+    cat = (listing.get('category') or '').lower()
+    deal = (listing.get('deal') or 'sale').lower()
+    area = float(listing.get('area') or 0)
+    section = CAT_TO_KAYAN.get(cat, 'kommercheskaya')
+    action = 'arenda' if deal == 'rent' else 'prodazha'
+    url = f'https://www.kayan.ru/{section}/{action}/'
+    try:
+        html = _http_get(url, timeout=12)
+        min_p = 30_000 if deal == 'rent' else 500_000
+        res = _parse_html_analogs(html, 'kayan.ru', min_p, area)
+        print(f'[mela_price] kayan.ru: {len(res)} analogs (html={len(html)})')
+        return res
+    except Exception as e:
+        print(f'[mela_price] kayan.ru error: {e}')
+        return []
+
+
+def _scrape_ayax(listing: dict) -> list:
+    """Парсит ayax.ru — крупное агентство Краснодара."""
+    cat = (listing.get('category') or '').lower()
+    deal = (listing.get('deal') or 'sale').lower()
+    area = float(listing.get('area') or 0)
+    section = CAT_TO_AYAX.get(cat, 'commercial')
+    action = 'rent' if deal == 'rent' else 'sale'
+    url = f'https://www.ayax.ru/kommercheskaya-nedvizhimost/{action}/'
+    try:
+        html = _http_get(url, timeout=12)
+        min_p = 30_000 if deal == 'rent' else 500_000
+        res = _parse_html_analogs(html, 'ayax.ru', min_p, area)
+        print(f'[mela_price] ayax.ru: {len(res)} analogs (html={len(html)})')
+        return res
+    except Exception as e:
+        print(f'[mela_price] ayax.ru error: {e}')
+        return []
+
+
+def _scrape_etagi(listing: dict) -> list:
+    """Парсит krasnodar.etagi.com — федеральный агрегатор."""
+    deal = (listing.get('deal') or 'sale').lower()
+    area = float(listing.get('area') or 0)
+    action = 'arenda-kommercheskoy-nedvizhimosti' if deal == 'rent' else 'prodazha-kommercheskoy-nedvizhimosti'
+    url = f'https://krasnodar.etagi.com/{action}/'
+    try:
+        html = _http_get(url, timeout=14)
+        min_p = 30_000 if deal == 'rent' else 500_000
+        res = _parse_html_analogs(html, 'etagi.com', min_p, area)
+        print(f'[mela_price] etagi.com: {len(res)} analogs (html={len(html)})')
+        return res
+    except Exception as e:
+        print(f'[mela_price] etagi.com error: {e}')
+        return []
+
+
+def _scrape_moreon(listing: dict) -> list:
+    """Парсит moreon-invest.ru — инвестиционная недвижимость Краснодара."""
+    area = float(listing.get('area') or 0)
+    deal = (listing.get('deal') or 'sale').lower()
+    url = 'https://moreon-invest.ru/catalog/'
+    try:
+        html = _http_get(url, timeout=12)
+        min_p = 30_000 if deal == 'rent' else 500_000
+        res = _parse_html_analogs(html, 'moreon-invest.ru', min_p, area)
+        print(f'[mela_price] moreon-invest.ru: {len(res)} analogs (html={len(html)})')
+        return res
+    except Exception as e:
+        print(f'[mela_price] moreon-invest.ru error: {e}')
+        return []
+
+
+def _scrape_local_sites(listing: dict) -> list:
+    """Запускает все локальные парсеры и возвращает объединённый список аналогов."""
+    all_analogs = []
+    sources_hit = []
+    for scraper, name in [
+        (_scrape_arrpro, 'arrpro'),
+        (_scrape_kayan, 'kayan'),
+        (_scrape_ayax, 'ayax'),
+        (_scrape_etagi, 'etagi'),
+        (_scrape_moreon, 'moreon'),
+    ]:
+        try:
+            res = scraper(listing)
+            if res:
+                all_analogs.extend(res)
+                sources_hit.append(name)
+        except Exception as e:
+            print(f'[mela_price] {name} failed: {e}')
+        if len(all_analogs) >= 10:
+            break
+    print(f'[mela_price] local sites total: {len(all_analogs)} from {sources_hit}')
+    return all_analogs
+
+
 def _search_yandex_xml(query: str, user: str, api_key: str, num: int = 10) -> str:
     """Делает запрос к Yandex XML Search и возвращает сырой XML."""
     params = urllib.parse.urlencode({
@@ -718,7 +897,19 @@ def handle_mela_price_check(cur, conn, body: dict, qs: dict) -> dict:
     except Exception as e:
         print(f'[mela_price] DB analogs error: {e}')
 
-    # 2) Yandex XML Search — реальный поиск по ЦИАН, Авито и другим площадкам
+    # 2) Парсинг локальных сайтов Краснодара (etagi, ayax, kayan, arrpro, moreon)
+    if len(analogs) < 5:
+        try:
+            site_analogs = _scrape_local_sites(listing)
+            if site_analogs:
+                analogs.extend(site_analogs)
+                for a in site_analogs:
+                    if a['source'] not in sources_used:
+                        sources_used.append(a['source'])
+        except Exception as e:
+            print(f'[mela_price] local sites error: {e}')
+
+    # 3) Yandex XML Search (когда будет настроен)
     if len(analogs) < 5:
         search_key = os.environ.get('YANDEX_SEARCH_API_KEY', '')
         search_user = os.environ.get('YANDEX_SEARCH_USER', '')
@@ -733,7 +924,7 @@ def handle_mela_price_check(cur, conn, body: dict, qs: dict) -> dict:
             except Exception as e:
                 print(f'[mela_price] Search analogs error: {e}')
 
-    # 3) Если данных всё ещё мало — GPT-фоллбэк
+    # 4) Если данных всё ещё мало — GPT-фоллбэк
     if len(analogs) < 3:
         api_key, folder_id = _load_keys(cur)
         gpt_analogs = _gpt_fallback(listing, api_key, folder_id)
