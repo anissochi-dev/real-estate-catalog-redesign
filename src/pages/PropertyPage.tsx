@@ -194,14 +194,16 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
       <SchemaOrg schema={breadcrumbSchema} id="breadcrumb" />
 
       <div className="container mx-auto px-4 py-4">
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <Breadcrumbs items={[
-            { label: 'Главная', to: '/' },
-            { label: 'Каталог', to: '/catalog' },
-            { label: `${typeLabel} · ${dealLabel}`, to: `/catalog?type=${item.type}&deal=${item.deal}` },
-            { label: item.title },
-          ]} />
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+          <div className="min-w-0 flex-1">
+            <Breadcrumbs items={[
+              { label: 'Главная', to: '/' },
+              { label: 'Каталог', to: '/catalog' },
+              { label: `${typeLabel} · ${dealLabel}`, to: `/catalog?type=${item.type}&deal=${item.deal}` },
+              { label: item.title },
+            ]} />
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
             <div className="relative">
               <button
                 onClick={() => setShareOpen(v => !v)}
