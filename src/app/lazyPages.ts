@@ -1,20 +1,50 @@
 import { lazy } from 'react';
 import type { ComponentType } from 'react';
 
+function _isChunkError(err: unknown): boolean {
+  const msg = String((err as Error)?.message || err || '');
+  return /Failed to fetch dynamically imported module|Loading chunk|ChunkLoadError|Importing a module script failed/i.test(msg);
+}
+
+function _hardReload() {
+  try {
+    const key = '__chunk_hard_reload_at__';
+    const last = Number(sessionStorage.getItem(key) || '0');
+    if (Date.now() - last > 20000) {
+      sessionStorage.setItem(key, String(Date.now()));
+      if ('caches' in window) {
+        caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).finally(() => window.location.reload());
+      } else {
+        window.location.reload();
+      }
+    }
+  } catch {
+    window.location.reload();
+  }
+}
+
 export function lazyWithRetry<T extends { default: ComponentType<Record<string, unknown>> }>(
   factory: () => Promise<T>,
   retries = 3,
-  delay = 600,
+  delay = 400,
 ) {
   return lazy(() => {
     let attempt = 0;
     const tryLoad = (): Promise<T> =>
-      factory().catch((err: Error) => {
+      factory().catch((err: unknown) => {
         attempt++;
-        if (attempt > retries) throw err;
-        return new Promise<T>((resolve, reject) => {
-          setTimeout(() => tryLoad().then(resolve, reject), delay * attempt);
-        });
+        if (_isChunkError(err)) {
+          if (attempt > retries) {
+            // Все попытки исчерпаны — тихо перезагружаем страницу
+            _hardReload();
+            // Возвращаем пустышку чтобы React не крашил рендер пока идёт reload
+            return { default: () => null } as unknown as T;
+          }
+          return new Promise<T>((resolve, reject) =>
+            setTimeout(() => tryLoad().then(resolve, reject), delay * attempt),
+          );
+        }
+        throw err;
       });
     return tryLoad();
   });

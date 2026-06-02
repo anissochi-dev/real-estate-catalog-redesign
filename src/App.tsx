@@ -1,10 +1,9 @@
-import { useEffect, useState, useMemo, Suspense, lazy } from 'react';
+import React, { useEffect, useState, useMemo, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LoginPage } from './app/lazyPages';
+import { LoginPage, lazyWithRetry } from './app/lazyPages';
 
-// Админка грузится лениво — её тяжёлый код (CRM, редакторы) больше НЕ попадает
-// в основной бандл и не замедляет загрузку публичного сайта для посетителей.
-const AdminPage = lazy(() => import('./pages/AdminPage'));
+// Админка грузится лениво с автоматическим retry при устаревшем хеше чанка.
+const AdminPage = lazyWithRetry(() => import('./pages/AdminPage') as Promise<{ default: React.ComponentType<Record<string, unknown>> }>);
 
 // Prefetch AdminPage чанка в фоне — только если в браузере есть токен
 // (т.е. это залогиненный сотрудник). Запускается через 3с после монтирования,
