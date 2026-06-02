@@ -339,6 +339,23 @@ SYSTEM_PROMPTS = {
         '{"ids": [id1, id2, ...], "reasoning": "одно предложение почему подобрал именно их", '
         '"advice": "1-2 предложения совета клиенту и расчёт окупаемости если применимо"}'
     ),
+    'analyze_property': (
+        'Ты — старший эксперт-аналитик коммерческой недвижимости Краснодара с 15-летним опытом. '
+        'Тебе переданы полные данные об объекте и рыночные данные по ценам аналогов. '
+        'Сформируй глубокий структурированный анализ объекта для брокера. '
+        'СТРОГИЙ ФОРМАТ ОТВЕТА — только JSON без markdown, без пояснений снаружи:\n'
+        '{\n'
+        '  "price_analysis": "2-3 предложения: сравнение цены с рынком, завышена/занижена на X%, рекомендуемый диапазон",\n'
+        '  "liquidity": "2-3 предложения: ликвидность объекта, среднее время экспозиции для данного типа и района, факторы влияния",\n'
+        '  "location_analysis": "3-4 предложения: что находится рядом (магазины, компании, инфраструктура), транспортная доступность, пешеходный/автомобильный трафик, перспективы района",\n'
+        '  "object_analysis": "3-4 предложения: оценка характеристик — состояние, коммуникации, электромощность, этаж, фото, наличие арендатора, доходность если указана",\n'
+        '  "broker_recommendations": ["рекомендация 1 брокеру", "рекомендация 2", "рекомендация 3"],\n'
+        '  "improvements": ["улучшение 1 которое можно сделать самостоятельно", "улучшение 2", "улучшение 3"],\n'
+        '  "utp_titles": ["УТП-название 1 до 10 слов", "УТП-название 2", "УТП-название 3", "УТП-название 4", "УТП-название 5"],\n'
+        '  "suitable_for": ["направление бизнеса 1", "направление 2", "направление 3", "направление 4"],\n'
+        '  "description": "Готовое продающее описание объекта. ОБЯЗАТЕЛЬНО начинается со слов: От собственника, без % и комиссий! Далее 3-5 абзацев сплошного текста (без списков и *): преимущества локации, характеристики помещения, доходность если есть, рекомендации и перспективы, для каких направлений подойдёт. 200-300 слов. Деловой живой стиль."\n'
+        '}'
+    ),
     'search_leads': (
         'Ты — поисковый помощник. На входе — запрос посетителя сайта и список заявок других '
         'клиентов (что они ищут). Выбери до 10 заявок, наиболее подходящих под запрос — по теме, '
@@ -3933,7 +3950,7 @@ def handler(event, context):
     conn = psycopg2.connect(dsn)
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            is_public = action in ('match', 'search_leads')
+            is_public = action in ('match', 'search_leads', 'analyze_property')
             is_search_leads = action == 'search_leads'
             user = None
             if not is_public:
@@ -4035,6 +4052,123 @@ def handler(event, context):
                 if ctx_data:
                     agent_ctx['extra'] = ctx_data
                 ctx_data = agent_ctx
+
+            # ── analyze_property: публичный анализ объекта ──────────────────
+            if action == 'analyze_property':
+                listing_data = body.get('listing') or {}
+                market_data  = body.get('market') or {}
+                if not listing_data:
+                    return _err(400, 'Нет данных объекта')
+
+                # Загружаем ключи YandexGPT из БД
+                try:
+                    cur.execute(
+                        f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
+                    )
+                    row = cur.fetchone()
+                    db_key    = row['yandex_api_key']    if row else ''
+                    db_folder = row['yandex_folder_id']  if row else ''
+                except Exception:
+                    db_key, db_folder = '', ''
+
+                DEAL_RU = {'sale': 'продажа', 'rent': 'аренда', 'business': 'готовый бизнес'}
+                CAT_RU  = {
+                    'office': 'офис', 'retail': 'торговое помещение', 'warehouse': 'склад',
+                    'restaurant': 'кафе/ресторан', 'hotel': 'гостиница', 'business': 'готовый бизнес',
+                    'gab': 'ГАБ (готовый арендный бизнес)', 'production': 'производство',
+                    'free_purpose': 'свободного назначения', 'land': 'земельный участок',
+                    'building': 'здание целиком', 'car_service': 'автосервис',
+                }
+                COND_RU = {
+                    'new': 'новое', 'euro': 'евроремонт', 'designer': 'дизайнерский ремонт',
+                    'good': 'хорошее', 'normal': 'рабочее', 'needs_repair': 'требует ремонта',
+                    'rough': 'черновая отделка', 'shell': 'без отделки',
+                }
+
+                deal = DEAL_RU.get(listing_data.get('deal', ''), listing_data.get('deal', '—'))
+                cat  = CAT_RU.get(listing_data.get('category', ''), listing_data.get('category', '—'))
+                cond = COND_RU.get(listing_data.get('condition', ''), listing_data.get('condition', 'не указано'))
+                addr_parts = [
+                    listing_data.get('address', ''),
+                    listing_data.get('district', ''),
+                    listing_data.get('city', 'Краснодар'),
+                ]
+                addr = ', '.join(p for p in addr_parts if p)
+
+                income_str = '—'
+                if listing_data.get('monthly_rent'):
+                    income_str = f"{int(listing_data['monthly_rent']):,} руб./мес".replace(',', ' ')
+                elif listing_data.get('yearly_rent'):
+                    income_str = f"{int(listing_data['yearly_rent']):,} руб./год".replace(',', ' ')
+                elif listing_data.get('profit'):
+                    income_str = f"{int(listing_data['profit']):,} руб./мес".replace(',', ' ')
+
+                market_line = '— данные рынка недоступны'
+                if market_data.get('median_per_m2'):
+                    market_line = (
+                        f"медиана ₽/м²: {int(market_data['median_per_m2']):,}, "
+                        f"диапазон: {int(market_data.get('min_price', 0)):,} – {int(market_data.get('max_price', 0)):,} руб., "
+                        f"аналогов найдено: {market_data.get('analogs_count', '?')}"
+                    ).replace(',', ' ')
+
+                prompt_text = (
+                    f"ДАННЫЕ ОБ ОБЪЕКТЕ:\n"
+                    f"- Тип сделки: {deal}\n"
+                    f"- Категория: {cat}\n"
+                    f"- Адрес: {addr}\n"
+                    f"- Площадь: {listing_data.get('area', '—')} м²\n"
+                    f"- Цена: {listing_data.get('price', '—')} руб."
+                    + (f" ({listing_data.get('price_per_m2', '')} руб./м²)" if listing_data.get('price_per_m2') else '') + "\n"
+                    f"- Этаж: {listing_data.get('floor', 'не указан')}"
+                    + (f" из {listing_data['total_floors']}" if listing_data.get('total_floors') else '') + "\n"
+                    f"- Состояние: {cond}\n"
+                    f"- Высота потолков: {listing_data.get('ceiling_height', 'не указана')} м\n"
+                    f"- Электромощность: {listing_data.get('electricity_kw', 'не указана')} кВт\n"
+                    f"- Коммуникации: {listing_data.get('utilities', 'не указаны')}\n"
+                    f"- Парковка: {listing_data.get('parking', 'не указана')}\n"
+                    f"- Арендатор: {listing_data.get('tenant_name') or 'нет'}\n"
+                    f"- Доход: {income_str}\n"
+                    f"- Окупаемость: {listing_data.get('payback', '—')} мес.\n"
+                    f"- Фото: {'есть (' + str(listing_data.get('photos_count', 1)) + ' шт.)' if listing_data.get('has_photos') else 'нет'}\n"
+                    f"- Назначение: {listing_data.get('purpose', 'не указано')}\n"
+                    f"\nДАННЫЕ РЫНКА ПО АНАЛОГАМ:\n- {market_line}\n"
+                    f"\nПроанализируй объект по всем параметрам."
+                )
+
+                result = _call_yandex_gpt(
+                    SYSTEM_PROMPTS['analyze_property'],
+                    prompt_text,
+                    db_key, db_folder,
+                    temperature=0.5,
+                    max_tokens=3500,
+                    model=YANDEX_MODEL_NAME,
+                )
+                if 'error' in result:
+                    return _err(502, result['error'])
+
+                text = result['text'].strip()
+                # Убираем markdown-обёртку
+                import re as _re2
+                text = _re2.sub(r'^```[a-zA-Z]*\s*', '', text)
+                text = _re2.sub(r'\s*```$', '', text).strip()
+                try:
+                    parsed = json.loads(text)
+                except Exception:
+                    # Фоллбэк: вернуть как description
+                    parsed = {'description': text}
+
+                return _ok({
+                    'price_analysis':        parsed.get('price_analysis', ''),
+                    'liquidity':             parsed.get('liquidity', ''),
+                    'location_analysis':     parsed.get('location_analysis', ''),
+                    'object_analysis':       parsed.get('object_analysis', ''),
+                    'broker_recommendations': parsed.get('broker_recommendations', []),
+                    'improvements':          parsed.get('improvements', []),
+                    'utp_titles':            parsed.get('utp_titles', []),
+                    'suitable_for':          parsed.get('suitable_for', []),
+                    'description':           parsed.get('description', ''),
+                    'tokens':                result.get('tokens', 0),
+                })
 
             # Для match — подтягиваем активные объекты как контекст
             matches = []

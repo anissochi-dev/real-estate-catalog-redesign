@@ -13,6 +13,19 @@
       "path": "/",
       "body": {"action": "match", "prompt": ""},
       "expectedStatus": 400
+    },
+    {
+      "name": "analyze_property без данных — 400",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "analyze_property"},
+      "expectedStatus": 400
+    },
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
     }
   ]
 }
