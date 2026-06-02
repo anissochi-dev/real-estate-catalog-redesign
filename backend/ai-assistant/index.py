@@ -380,7 +380,7 @@ SYSTEM_PROMPTS = {
         '- bulk_seo_optimize: {"items":[{"id":int},...]} risk:high — GPT сам генерирует SEO для каждого. items:[] = все объекты без SEO.\n'
         '- bulk_shorten_titles: {"items":[{"id":int}],"max_len":65} risk:high — массово ПЕРЕПИСЫВАЕТ длинные title через GPT в SEO-стиле (50-65 симв). Можно передать и готовые new_title: {"items":[{"id":int,"new_title":str},...]}\n'
         '- scan_long_titles: {"max_len":70,"limit":100} risk:low — сканирует объекты с длинными title и возвращает список с id + длина\n'
-        '- create_listing: {"title":str,"category":str,"deal":str,"price":int,"area":float,"city":str} risk:medium\n'
+        '- create_listing: {"title":str,"category":str,"deal":str,"price":int,"area":float,"city":str,"address":str?,"district":str?,"floor":int?,"total_floors":int?,"ceiling_height":float?,"electricity_kw":float?,"utilities":str?,"condition":str?,"parking":str?,"entrance":str?,"description":str?,"images":list[str]?} risk:medium\n'
         '- update_listing_full: {"id":int,"fields":{...любые из ниже...}} — ПОЛНОЕ редактирование объекта. risk зависит от полей:\n'
         '    БЕЗОПАСНЫЕ (risk:low — авто): description, tags, seo_title, seo_description, purpose, condition, parking, entrance, finishing, road_line, utilities, building_class, broker_commission, video_url, video_type, is_hot, is_new, is_exclusive, is_urgent, is_apartments, has_furniture, has_equipment, use_watermark, export_yandex, export_avito, export_cian, is_visible, is_pinned\n'
         '    ЧУВСТВИТЕЛЬНЫЕ (risk:high — требуют подтверждения): title, price, price_per_m2, area, monthly_rent, yearly_rent, status, category, deal, address, district, city, lat, lng, owner_name, owner_phone, owner_phone2, tenant_name, slug, image, images, floor, total_floors, ceiling_height, electricity_kw, land_area, land_status, property_rights, building_year, subway_station, subway_distance, rooms, min_area, public_code, broker_id, author_id, payback, profit, price_unit\n'
@@ -1558,19 +1558,69 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         title = params.get('title') or ''
         if not title:
             return {'error': 'Название объекта обязательно'}
-        category = params.get('category', 'office')
-        deal = params.get('deal', 'sale')
-        price = int(params.get('price', 0))
-        area = float(params.get('area', 0))
-        city = _sanitize_text(str(params.get('city', 'Краснодар')), 100)
-        description = _sanitize_text(str(params.get('description', '')), 5000)
-        cur.execute(
-            f"INSERT INTO {SCHEMA}.listings (title, category, deal, price, area, city, description, status, created_by) "
-            f"VALUES ('{_sanitize_text(title, 255)}', '{category}', '{deal}', {price}, {area}, '{city}', '{description}', 'draft', {user['id']}) "
-            f"RETURNING id"
+        category  = _sanitize_text(str(params.get('category', 'office')), 50)
+        deal      = _sanitize_text(str(params.get('deal', 'sale')), 50)
+        price     = int(float(params.get('price', 0) or 0))
+        area      = float(params.get('area', 0) or 0)
+        city      = _sanitize_text(str(params.get('city', 'Краснодар')), 100)
+        description = _sanitize_text(str(params.get('description', '')), 8000)
+        address   = _sanitize_text(str(params.get('address', '')), 255)
+        district  = _sanitize_text(str(params.get('district', '')), 100)
+        floor_val = params.get('floor')
+        total_floors_val = params.get('total_floors')
+        ceiling_h = params.get('ceiling_height')
+        elec_kw   = params.get('electricity_kw')
+        utilities = _sanitize_text(str(params.get('utilities', '')), 500)
+        condition = _sanitize_text(str(params.get('condition', '')), 50)
+        parking   = _sanitize_text(str(params.get('parking', '')), 50)
+        entrance  = _sanitize_text(str(params.get('entrance', '')), 50)
+        # Изображения: строка URL или список
+        raw_images = params.get('images') or params.get('image') or ''
+        if isinstance(raw_images, list):
+            images_str = '|'.join(str(u) for u in raw_images if u)
+        else:
+            images_str = _sanitize_text(str(raw_images), 5000)
+        image_main = images_str.split('|')[0] if images_str else ''
+        price_per_m2 = round(price / area) if area > 0 and price > 0 else 0
+        # Формируем INSERT с расширенными полями
+        extra_cols = 'title, category, deal, price, area, city, description, status, created_by'
+        extra_vals = (
+            f"'{_sanitize_text(title, 255)}', '{category}', '{deal}', "
+            f"{price}, {area}, '{city}', '{description}', 'draft', {user['id']}"
         )
+        if address:
+            extra_cols += ', address'; extra_vals += f", '{address}'"
+        if district:
+            extra_cols += ', district'; extra_vals += f", '{district}'"
+        if floor_val not in (None, ''):
+            extra_cols += ', floor'; extra_vals += f", {int(floor_val)}"
+        if total_floors_val not in (None, ''):
+            extra_cols += ', total_floors'; extra_vals += f", {int(total_floors_val)}"
+        if ceiling_h not in (None, ''):
+            extra_cols += ', ceiling_height'; extra_vals += f", {float(ceiling_h)}"
+        if elec_kw not in (None, ''):
+            extra_cols += ', electricity_kw'; extra_vals += f", {float(elec_kw)}"
+        if utilities:
+            extra_cols += ', utilities'; extra_vals += f", '{utilities}'"
+        if condition:
+            extra_cols += ', condition'; extra_vals += f", '{condition}'"
+        if parking:
+            extra_cols += ', parking'; extra_vals += f", '{parking}'"
+        if entrance:
+            extra_cols += ', entrance'; extra_vals += f", '{entrance}'"
+        if price_per_m2 > 0:
+            extra_cols += ', price_per_m2'; extra_vals += f", {price_per_m2}"
+        if image_main:
+            extra_cols += ', image'; extra_vals += f", '{_sanitize_text(image_main, 500)}'"
+        if images_str:
+            extra_cols += ', images'; extra_vals += f", '{_sanitize_text(images_str, 5000)}'"
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.listings ({extra_cols}) VALUES ({extra_vals}) RETURNING id"
+        )
+        conn.commit()
         new_id = cur.fetchone()['id']
-        return {'ok': True, 'message': f'Объект "{title}" создан в черновиках с ID #{new_id}'}
+        imgs_note = f", {len(images_str.split('|'))} фото" if images_str else ""
+        return {'ok': True, 'id': new_id, 'message': f'Объект "{title}" создан в черновиках с ID #{new_id}{imgs_note}. Ссылка: /admin/listings/{new_id}'}
 
     # ─────────── НОВЫЕ ИНСТРУМЕНТЫ МЕЛАНИИ ───────────
 

@@ -1,7 +1,7 @@
 {
   "tests": [
     {
-      "name": "Без авторизации для describe",
+      "name": "Без авторизации — 401 или 502 (холодный старт)",
       "method": "POST",
       "path": "/",
       "body": {"action": "describe", "prompt": "тест"},
