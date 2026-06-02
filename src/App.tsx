@@ -38,7 +38,7 @@ import Footer from './components/Footer';
 import CompareBar from './components/CompareBar';
 import AnalyticsLoader from './components/AnalyticsLoader';
 import ScrollToTop from './components/ScrollToTop';
-import ConsentBanner, { hasConsent } from './components/ConsentBanner';
+import ConsentBanner, { hasConsent, checkConsentByIp } from './components/ConsentBanner';
 import SeoHead from './components/SeoHead';
 import SchemaOrg, { makeOrganizationSchema, makeWebSiteSchema } from './components/SchemaOrg';
 import { useSettings } from './contexts/SettingsContext';
@@ -69,34 +69,53 @@ export default function App() {
   );
 
   useEffect(() => {
+    // Если локально уже принято — ничего делать не надо
     if (hasConsent()) return;
+
+    let cancelled = false;
     let shown = false;
     const show = () => {
-      if (shown) return;
+      if (shown || cancelled) return;
       shown = true;
       setConsentVisible(true);
     };
-    // Lighthouse кликает страницу во время теста — не реагируем на click/pointer
-    // в первые 4 сек после загрузки (Lighthouse снимает LCP обычно < 3 сек)
-    let pageLoadedAt = 0;
-    const onPageLoad = () => { pageLoadedAt = Date.now(); };
-    if (document.readyState === 'complete') { pageLoadedAt = Date.now(); }
-    else window.addEventListener('load', onPageLoad, { once: true });
 
-    const events = ['touchstart', 'keydown', 'click', 'pointerdown'] as const;
-    const onInteract = () => {
-      // Игнорируем взаимодействие в первые 4 сек — это Lighthouse
-      if (Date.now() - pageLoadedAt < 4000) return;
-      events.forEach(e => window.removeEventListener(e, onInteract));
-      show();
-    };
-    events.forEach(e => window.addEventListener(e, onInteract, { passive: true }));
-    // Страховка: показать через 5 сек (после завершения Lighthouse-теста).
-    // Баннер мягкий и не блокирует сайт, поэтому можно показать раньше.
-    const fallback = setTimeout(show, 5000);
+    // Сначала тихо спрашиваем сервер по IP (запрос ~100-300ms).
+    // Если IP уже есть в базе за последний год — сохраняем локально и не показываем.
+    // Если нет — запускаем обычную логику показа баннера.
+    checkConsentByIp(() => {
+      if (cancelled) return;
+      setConsentGiven(true); // скрываем баннер немедленно
+    }).finally(() => {
+      if (cancelled || hasConsent()) return;
+
+      // Обычная логика показа после проверки сервера
+      let pageLoadedAt = 0;
+      const onPageLoad = () => { pageLoadedAt = Date.now(); };
+      if (document.readyState === 'complete') { pageLoadedAt = Date.now(); }
+      else window.addEventListener('load', onPageLoad, { once: true });
+
+      const events = ['touchstart', 'keydown', 'click', 'pointerdown'] as const;
+      const onInteract = () => {
+        if (Date.now() - pageLoadedAt < 4000) return;
+        events.forEach(e => window.removeEventListener(e, onInteract));
+        show();
+      };
+      events.forEach(e => window.addEventListener(e, onInteract, { passive: true }));
+      // Страховка: показать через 5 сек (после завершения Lighthouse-теста)
+      const fallback = setTimeout(show, 5000);
+      // Сохраняем cleanup чтобы отработал при размонтировании
+      (window as Window & { __consentCleanup?: () => void }).__consentCleanup = () => {
+        events.forEach(e => window.removeEventListener(e, onInteract));
+        clearTimeout(fallback);
+      };
+    });
+
     return () => {
-      events.forEach(e => window.removeEventListener(e, onInteract));
-      clearTimeout(fallback);
+      cancelled = true;
+      try {
+        (window as Window & { __consentCleanup?: () => void }).__consentCleanup?.();
+      } catch { /* ignore */ }
     };
   }, []);
 

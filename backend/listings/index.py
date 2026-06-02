@@ -51,14 +51,14 @@ def handler(event: dict, context) -> dict:
         except Exception:
             body = {}
         action = body.get('action') or params.get('action')
-        if action != 'consent_save':
+        if action not in ('consent_save', 'consent_check'):
             return {
                 'statusCode': 405,
                 'headers': {'Access-Control-Allow-Origin': '*'},
                 'body': json.dumps({'error': 'Method not allowed'}),
             }
 
-        # Извлекаем IP, User-Agent и поля
+        # Извлекаем IP из заголовков
         raw_headers = event.get('headers') or {}
         headers_lc = {k.lower(): v for k, v in raw_headers.items()}
         req_ctx = event.get('requestContext') or {}
@@ -70,19 +70,39 @@ def handler(event: dict, context) -> dict:
             or ''
         )
         ua = headers_lc.get('user-agent') or body.get('user_agent') or ''
-        docs_opened = body.get('documents_opened') or []
-        page_url = body.get('page_url') or ''
-        session_id = body.get('session_id') or ''
 
-        # Безопасное экранирование
         def _esc(s):
             return str(s or '').replace("'", "''")[:1000]
 
         ip_e = _esc(ip)
+
+        # ── consent_check: проверяем по IP есть ли согласие за последний год ──
+        if action == 'consent_check':
+            if not ip_e:
+                return _ok({'accepted': False})
+            conn = psycopg2.connect(dsn)
+            try:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute(
+                        "SELECT id, accepted_at FROM t_p71821556_real_estate_catalog_.consent_log "
+                        f"WHERE ip_address = '{ip_e}' "
+                        "AND accepted_at > NOW() - INTERVAL '1 year' "
+                        "ORDER BY accepted_at DESC LIMIT 1"
+                    )
+                    row = cur.fetchone()
+                    if row:
+                        return _ok({'accepted': True, 'id': int(row['id'])})
+                    return _ok({'accepted': False})
+            finally:
+                conn.close()
+
+        # ── consent_save ──────────────────────────────────────────────────────
         ua_e = _esc(ua)
+        docs_opened = body.get('documents_opened') or []
+        page_url = body.get('page_url') or ''
+        session_id = body.get('session_id') or ''
         pu_e = _esc(page_url)
         sid_e = _esc(session_id)
-        # Нормализуем documents_opened — только строки
         if isinstance(docs_opened, list):
             docs_clean = [str(d)[:50] for d in docs_opened if d]
         else:
@@ -92,16 +112,15 @@ def handler(event: dict, context) -> dict:
         conn = psycopg2.connect(dsn)
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                # Дедуп: если за последние 24ч был лог с этим IP+UA — обновляем
+                # Дедуп по IP за последний год — обновляем вместо дублирования
                 cur.execute(
                     "SELECT id, documents_opened FROM t_p71821556_real_estate_catalog_.consent_log "
-                    f"WHERE ip_address = '{ip_e}' AND user_agent = '{ua_e}' "
-                    "AND accepted_at > NOW() - INTERVAL '24 hours' "
+                    f"WHERE ip_address = '{ip_e}' "
+                    "AND accepted_at > NOW() - INTERVAL '1 year' "
                     "ORDER BY accepted_at DESC LIMIT 1"
                 )
                 existing = cur.fetchone()
                 if existing:
-                    # Объединяем массивы открытых документов
                     old_docs = existing.get('documents_opened') or []
                     if isinstance(old_docs, str):
                         try:
@@ -113,8 +132,9 @@ def handler(event: dict, context) -> dict:
                     cur.execute(
                         "UPDATE t_p71821556_real_estate_catalog_.consent_log "
                         f"SET documents_opened = '{merged_json}'::jsonb, "
-                        f"page_url = '{pu_e}', session_id = '{sid_e}', "
-                        f"accepted_at = NOW() WHERE id = {int(existing['id'])} RETURNING id"
+                        f"user_agent = '{ua_e}', page_url = '{pu_e}', "
+                        f"session_id = '{sid_e}', accepted_at = NOW() "
+                        f"WHERE id = {int(existing['id'])} RETURNING id"
                     )
                     new_id = cur.fetchone()['id']
                 else:

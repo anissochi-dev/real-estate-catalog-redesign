@@ -5,8 +5,10 @@ import Icon from '@/components/ui/icon';
 const CONSENT_KEY = 'biznest_consent_v1';
 const CONSENT_ID_KEY = 'biznest_consent_id';
 const CONSENT_SESSION_KEY = 'biznest_consent_session';
+// Ключ: дата последней серверной проверки (чтобы не дёргать сервер при каждом визите)
+const CONSENT_SERVER_CHECK_KEY = 'biznest_consent_server_checked';
 
-// Публичная функция listings — там обрабатывается action=consent_save
+// Публичная функция listings — там обрабатываются action=consent_save и consent_check
 const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
 
 // Cookie-дубль флага согласия — на случай если браузер очистит localStorage
@@ -32,6 +34,33 @@ export function hasConsent(): boolean {
   } catch { /* ignore */ }
   // Фолбэк на cookie, если localStorage недоступен или был очищен браузером
   return readConsentCookie();
+}
+
+// Проверяет по IP на сервере — вызывается один раз при загрузке страницы.
+// Если сервер говорит "уже принял" — сохраняем локально и не показываем баннер.
+// Результат кешируем на 24ч чтобы не дёргать сервер при каждом открытии страницы.
+export async function checkConsentByIp(onAccepted: () => void): Promise<void> {
+  try {
+    // Не проверяем чаще раза в сутки
+    const lastCheck = Number(localStorage.getItem(CONSENT_SERVER_CHECK_KEY) || '0');
+    if (Date.now() - lastCheck < 24 * 60 * 60 * 1000) return;
+    localStorage.setItem(CONSENT_SERVER_CHECK_KEY, String(Date.now()));
+  } catch { /* ignore */ }
+
+  try {
+    const res = await fetch(LISTINGS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'consent_check' }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data?.accepted) {
+      // Сервер подтвердил — сохраняем локально и скрываем баннер
+      saveConsent();
+      onAccepted();
+    }
+  } catch { /* тихо игнорируем — не критично */ }
 }
 
 export function saveConsent(): void {
