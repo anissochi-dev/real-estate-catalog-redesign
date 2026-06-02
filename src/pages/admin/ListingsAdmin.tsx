@@ -62,11 +62,20 @@ export default function ListingsAdmin() {
             description: data.description,
             price: data.price || 0,
             area: data.area || 0,
-            address: data.address,
+            address: data.address || '',
+            district: data.district || '',
+            city: data.city || '',
             images: imagesStr,
             image: data.images[0] || '',
             category: data.category || 'office',
             deal: data.deal || 'sale',
+            floor: data.floor ?? null,
+            total_floors: data.total_floors ?? null,
+            ceiling_height: data.ceiling_height ?? null,
+            electricity_kw: data.electricity_kw ?? null,
+            utilities: data.utilities || '',
+            condition: data.condition || null,
+            parking: data.parking || null,
           });
           if (data.images.length > 0) s.setPhotos(data.images);
         }}
