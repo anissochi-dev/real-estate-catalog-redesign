@@ -340,7 +340,10 @@ export default function SeoAuditTab() {
                           {fixingFaqId === p.id ? 'FAQ...' : 'FAQ'}
                         </button>
                       )}
-                      <a href={`/admin#listings-${p.id}`} className="text-xs text-brand-blue hover:underline">Открыть</a>
+                      <button
+                        onClick={() => window.dispatchEvent(new CustomEvent('admin:open-listing', { detail: p.id }))}
+                        className="text-xs text-brand-blue hover:underline"
+                      >Открыть</button>
                     </div>
                   </div>
                 ))}

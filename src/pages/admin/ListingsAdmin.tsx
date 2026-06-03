@@ -22,6 +22,16 @@ export default function ListingsAdmin() {
   // сброс на 1 стр при смене фильтров
   useEffect(() => { setPage(1); }, [s.filtered.length, s.statusFilter, s.search, s.catFilter]);
 
+  // Открытие карточки из других разделов (например из SEO-аудита)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const id = (e as CustomEvent<number>).detail;
+      if (id) setInternalCardId(id);
+    };
+    window.addEventListener('admin:open-listing', handler);
+    return () => window.removeEventListener('admin:open-listing', handler);
+  }, []);
+
   const totalPages = Math.max(1, Math.ceil(s.filtered.length / pageSize));
   const safeP = Math.min(page, totalPages);
   const pageItems = useMemo(() => {

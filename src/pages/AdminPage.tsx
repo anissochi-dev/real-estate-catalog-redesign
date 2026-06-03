@@ -34,6 +34,13 @@ export default function AdminPage({ onExit, initialSection }: Props) {
     try { localStorage.setItem(SECTION_KEY, section); } catch { /* ignore */ }
   }, [section]);
 
+  // Переключение на Объекты из любого раздела (например из SEO-аудита)
+  useEffect(() => {
+    const handler = () => setSection('listings');
+    window.addEventListener('admin:open-listing', handler);
+    return () => window.removeEventListener('admin:open-listing', handler);
+  }, []);
+
   return (
     <AdminLayout section={section} setSection={setSection} onExit={onExit}>
       {section === 'dashboard' && <Dashboard setSection={(s) => setSection(s as AdminSection)} />}

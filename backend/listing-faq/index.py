@@ -51,7 +51,8 @@ def _json_resp(status: int, data: dict) -> dict:
 
 def _check_seo_faq_column(cur) -> bool:
     """Проверяет наличие колонки seo_faq в таблице listings через information_schema."""
-    schema_name = SCHEMA.rstrip('_').rstrip('.')
+    # SCHEMA = 't_p71821556_real_estate_catalog_' — имя схемы включает финальный _
+    schema_name = SCHEMA.rstrip('.')  # убираем только точку если есть, _ оставляем
     cur.execute(
         "SELECT 1 FROM information_schema.columns "
         "WHERE table_schema = %s AND table_name = 'listings' AND column_name = 'seo_faq'",
