@@ -103,7 +103,8 @@ def handler(event: dict, context) -> dict:
                     (seo_description IS NULL OR seo_description = '') AS no_seo_desc,
                     (description IS NULL OR LENGTH(description) < 50) AS short_desc,
                     (image IS NULL OR image = '') AS no_image,
-                    (price IS NULL OR price = 0) AS no_price
+                    (price IS NULL OR price = 0) AS no_price,
+                    (seo_faq IS NULL OR seo_faq = '' OR seo_faq = '[]') AS no_faq
                 FROM {S}.listings
                 WHERE status = 'active'
                     AND (
@@ -111,9 +112,10 @@ def handler(event: dict, context) -> dict:
                         OR seo_description IS NULL OR seo_description = ''
                         OR description IS NULL OR LENGTH(description) < 50
                         OR image IS NULL OR image = ''
+                        OR seo_faq IS NULL OR seo_faq = '' OR seo_faq = '[]'
                     )
                 ORDER BY id DESC
-                LIMIT 30
+                LIMIT 50
             """)
             problem_rows = [dict(r) for r in cur.fetchall()]
 

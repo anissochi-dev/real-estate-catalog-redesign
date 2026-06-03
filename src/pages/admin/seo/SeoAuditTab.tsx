@@ -4,6 +4,7 @@ import Icon from '@/components/ui/icon';
 
 const SEO_AUDIT_URL = 'https://functions.poehali.dev/08a36654-5f5d-4ebb-8148-540529a369d3';
 const AUTO_SEO_URL  = 'https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d';
+const FAQ_URL       = 'https://functions.poehali.dev/282b9c5f-29fa-41ea-bc42-0793bdf8950d';
 
 const SEVERITY_STYLES: Record<string, string> = {
   error:   'bg-red-50 border-red-200 text-red-700',
@@ -19,7 +20,7 @@ interface AuditData {
   total: number;
   stats: Record<string, number>;
   issues: { key: string; message: string; fill_pct: number; severity: string }[];
-  top_problems: { id: number; title: string; category: string; no_seo_title: boolean; no_seo_desc: boolean; short_desc: boolean; no_image: boolean }[];
+  top_problems: { id: number; title: string; category: string; no_seo_title: boolean; no_seo_desc: boolean; short_desc: boolean; no_image: boolean; no_faq: boolean }[];
 }
 
 interface FixResult {
@@ -40,6 +41,8 @@ export default function SeoAuditTab() {
   const [fixErr, setFixErr] = useState('');
   const [fixingId, setFixingId] = useState<number | null>(null);
   const [fixedIds, setFixedIds] = useState<Set<number>>(new Set());
+  const [fixingFaqId, setFixingFaqId] = useState<number | null>(null);
+  const [fixedFaqIds, setFixedFaqIds] = useState<Set<number>>(new Set());
 
   const load = async () => {
     setLoading(true); setErr('');
@@ -92,6 +95,25 @@ export default function SeoAuditTab() {
       setFixErr(e instanceof Error ? e.message : 'Ошибка соединения');
     } finally {
       setFixingId(null);
+    }
+  };
+
+  const fixOneFaq = async (id: number) => {
+    setFixingFaqId(id); setFixErr('');
+    const tok = refreshToken();
+    try {
+      const r = await fetch(FAQ_URL, {
+        method: 'POST',
+        headers: { 'X-Auth-Token': tok || '', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listing_id: id }),
+      });
+      const d = await r.json();
+      if (!r.ok || d.error) { setFixErr(d.error || `Ошибка ${r.status}`); return; }
+      setFixedFaqIds(prev => new Set(prev).add(id));
+    } catch (e) {
+      setFixErr(e instanceof Error ? e.message : 'Ошибка соединения');
+    } finally {
+      setFixingFaqId(null);
     }
   };
 
@@ -263,6 +285,8 @@ export default function SeoAuditTab() {
                               {p.no_seo_desc  && <span className="text-[10px] bg-red-50 text-red-600 border border-red-200 px-1.5 py-0.5 rounded">Нет SEO-описания</span>}
                               {p.short_desc   && <span className="text-[10px] bg-amber-50 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded">Короткое описание</span>}
                               {p.no_image     && <span className="text-[10px] bg-amber-50 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded">Нет фото</span>}
+                              {p.no_faq && !fixedFaqIds.has(p.id) && <span className="text-[10px] bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded">Нет FAQ</span>}
+                              {fixedFaqIds.has(p.id) && <span className="text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded">FAQ готов</span>}
                             </>
                         }
                       </div>
@@ -275,7 +299,17 @@ export default function SeoAuditTab() {
                           className="text-[11px] bg-violet-600 hover:bg-violet-700 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 disabled:opacity-50 transition-colors"
                         >
                           <Icon name={fixingId === p.id ? 'Loader2' : 'Wand2'} size={11} className={fixingId === p.id ? 'animate-spin' : ''} />
-                          {fixingId === p.id ? 'Генерирую...' : 'ИИ'}
+                          {fixingId === p.id ? 'SEO...' : 'SEO'}
+                        </button>
+                      )}
+                      {p.no_faq && !fixedFaqIds.has(p.id) && (
+                        <button
+                          onClick={() => fixOneFaq(p.id)}
+                          disabled={fixingFaqId === p.id}
+                          className="text-[11px] bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 disabled:opacity-50 transition-colors"
+                        >
+                          <Icon name={fixingFaqId === p.id ? 'Loader2' : 'HelpCircle'} size={11} className={fixingFaqId === p.id ? 'animate-spin' : ''} />
+                          {fixingFaqId === p.id ? 'FAQ...' : 'FAQ'}
                         </button>
                       )}
                       <a href={`/admin#listings-${p.id}`} className="text-xs text-brand-blue hover:underline">Открыть</a>
