@@ -119,7 +119,7 @@ def _call_yandex_gpt(api_key: str, folder_id: str, user_text: str) -> dict:
     """Вызывает YandexGPT и возвращает {'text': ...} или {'error': ...}."""
     system = (
         'Ты — эксперт по коммерческой недвижимости России. '
-        'Составь 4-5 вопросов и ответов, которые чаще всего задают потенциальные арендаторы или покупатели. '
+        'Составь ровно 6 вопросов и ответов, которые чаще всего задают потенциальные арендаторы или покупатели. '
         'Вопросы конкретные, ответы — 1-3 предложения. Не придумывай данных которых нет в карточке. '
         'Отвечай СТРОГО в формате JSON-массива без markdown и пояснений:\n'
         '[{"question": "...", "answer": "..."}, ...]'
@@ -170,7 +170,7 @@ def _parse_faq(text: str) -> list:
                 'question': str(item['question']).strip(),
                 'answer': str(item['answer']).strip(),
             })
-    return result[:5]
+    return result[:6]
 
 
 def handler(event: dict, context) -> dict:

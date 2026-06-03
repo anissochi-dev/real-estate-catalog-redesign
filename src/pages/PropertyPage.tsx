@@ -405,12 +405,12 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
         )}
         {faq.length > 0 && (
           <section className="mt-8 border-t border-border pt-8" aria-label="Часто задаваемые вопросы">
-            <h2 className="font-display font-700 text-xl text-foreground mb-5 flex items-center gap-2">
+            <h2 className="font-display font-700 text-xl text-foreground mb-5 flex items-center justify-center gap-2">
               <Icon name="HelpCircle" size={20} className="text-brand-blue" />
               Часто задаваемые вопросы
             </h2>
-            <div className="space-y-3">
-              {faq.map((faqItem, i) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {faq.slice(0, 6).map((faqItem, i) => (
                 <details key={i} className="group border border-border rounded-xl overflow-hidden">
                   <summary className="flex items-center justify-between px-4 py-3.5 cursor-pointer font-semibold text-sm select-none list-none hover:bg-muted/50 transition-colors">
                     <span>{faqItem.question}</span>
