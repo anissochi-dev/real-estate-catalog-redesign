@@ -42,9 +42,9 @@ def _check_auth(event: dict) -> bool:
     conn = psycopg2.connect(dsn)
     try:
         with conn.cursor() as cur:
+            safe_token = token.replace("'", "''")
             cur.execute(
-                f"SELECT id FROM {SCHEMA}users WHERE auth_token = %s AND is_active = TRUE LIMIT 1",
-                (token,),
+                f"SELECT id FROM {SCHEMA}users WHERE auth_token = '{safe_token}' AND is_active = TRUE LIMIT 1"
             )
             return cur.fetchone() is not None
     finally:
