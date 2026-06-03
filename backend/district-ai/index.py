@@ -265,6 +265,10 @@ def handler(event: dict, context) -> dict:
                 )
                 existing = {r[0] for r in cur.fetchall()}
 
+                # Загружаем все существующие slug чтобы избежать коллизий
+                cur.execute(f"SELECT slug FROM {SCHEMA}.districts")
+                existing_slugs = {r[0] for r in cur.fetchall()}
+
                 imported = 0
                 skipped = 0
                 for d in districts_in:
@@ -272,9 +276,18 @@ def handler(event: dict, context) -> dict:
                     if not name or name.lower() in existing:
                         skipped += 1
                         continue
-                    slug = _safe(_make_slug(name), 100)
                     desc = _safe((d.get('description') or '').strip(), 300)
                     sort_order = int(d.get('sort_order') or 0)
+
+                    # Генерируем уникальный slug
+                    base_slug = _make_slug(name)
+                    slug = base_slug
+                    counter = 2
+                    while slug in existing_slugs:
+                        slug = f'{base_slug}-{counter}'
+                        counter += 1
+                    existing_slugs.add(slug)
+                    slug = _safe(slug, 100)
 
                     cur.execute(
                         f"INSERT INTO {SCHEMA}.districts (name, slug, city, description, sort_order, is_active) "
