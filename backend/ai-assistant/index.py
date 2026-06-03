@@ -338,9 +338,13 @@ SYSTEM_PROMPTS = {
         'entrance (street=с улицы/yard=со двора), ceiling_height (м), electricity_kw, utilities, '
         'purpose (назначение под бизнес), payback (месяцев), profit (руб/мес), monthly_rent (руб/мес), '
         'building_class, building_year, description (краткое). '
-        'Подбери до 20 наиболее подходящих объектов. Учитывай ВСЕ критерии клиента: тип, бюджет, площадь, район, адрес, '
+        'Объекты с полем _keyword_match: true уже найдены текстовым поиском по словам запроса — '
+        'они ОБЯЗАТЕЛЬНО должны быть в результате если хоть немного подходят. '
+        'Подбери до 20 наиболее подходящих объектов. Учитывай ВСЕ критерии клиента: '
+        'тип, бюджет, площадь, район, адрес (ищи по частичному совпадению улицы/района), '
         'назначение, этаж, состояние, линию расположения, парковку, вход, потолки, электромощность, коммуникации, доходность, окупаемость. '
-        'Если клиент указал диапазон — фильтруй строго по нему. '
+        'ВАЖНО: если клиент написал название улицы или района — ищи объекты у которых в address или district есть это слово (частичное совпадение). '
+        'Если клиент указал диапазон цены/площади — фильтруй строго по нему. '
         'Сортируй id от самого релевантного к менее релевантному. '
         'Если подходящих нет — верни пустой массив ids и объясни почему. '
         'Ответь СТРОГО в формате JSON без markdown и без пояснений вокруг:\n'
@@ -4243,18 +4247,50 @@ def handler(event, context):
             matches = []
             leads_for_search = []
             if is_public and not is_search_leads:
-                cur.execute(
+                SELECT_FIELDS = (
                     f"SELECT id, title, category, deal, price, area, district, address, "
                     f"payback, profit, monthly_rent, image, floor, total_floors, condition, "
                     f"road_line, rooms, parking, entrance, ceiling_height, electricity_kw, "
                     f"utilities, purpose, building_class, building_year, description "
-                    f"FROM {SCHEMA}.listings "
-                    f"WHERE status = 'active' ORDER BY id DESC LIMIT 80"
+                    f"FROM {SCHEMA}.listings WHERE status = 'active'"
                 )
-                listings = cur.fetchall()
-                matches = [dict(r) for r in listings]
-                compact = []
-                for r in matches:
+
+                # Гибридный поиск: сначала ищем точные совпадения по ключевым словам из запроса
+                # Слова короче 3 символов игнорируем (предлоги, союзы)
+                tokens = [w.strip(",.!?:;\"'()") for w in user_text.split() if len(w.strip(",.!?:;\"'()")) >= 3]
+                keyword_ids = set()
+                if tokens:
+                    like_parts = []
+                    for tok in tokens[:6]:  # не больше 6 токенов
+                        safe_tok = tok.replace("'", "''")
+                        like_parts.append(
+                            f"(LOWER(address) LIKE LOWER('%{safe_tok}%') OR "
+                            f"LOWER(title) LIKE LOWER('%{safe_tok}%') OR "
+                            f"LOWER(COALESCE(description,'')) LIKE LOWER('%{safe_tok}%') OR "
+                            f"LOWER(COALESCE(district,'')) LIKE LOWER('%{safe_tok}%') OR "
+                            f"LOWER(COALESCE(purpose,'')) LIKE LOWER('%{safe_tok}%'))"
+                        )
+                    where_kw = ' OR '.join(like_parts)
+                    cur.execute(f"{SELECT_FIELDS} AND ({where_kw}) ORDER BY id DESC LIMIT 20")
+                    kw_rows = [dict(r) for r in cur.fetchall()]
+                    keyword_ids = {r['id'] for r in kw_rows}
+                else:
+                    kw_rows = []
+
+                # Остальные объекты (без дублей)
+                cur.execute(f"{SELECT_FIELDS} ORDER BY id DESC LIMIT 80")
+                all_rows = [dict(r) for r in cur.fetchall()]
+
+                # Объединяем: сначала найденные по ключевым словам, потом остальные
+                seen = set()
+                merged = []
+                for r in kw_rows + all_rows:
+                    if r['id'] not in seen:
+                        seen.add(r['id'])
+                        merged.append(r)
+                matches = merged[:80]
+
+                def _make_compact(r, is_keyword_match=False):
                     obj = {
                         'id': r['id'],
                         'title': r['title'],
@@ -4263,11 +4299,13 @@ def handler(event, context):
                         'price': r['price'],
                         'area': r['area'],
                         'district': r['district'],
-                        'address': (r.get('address') or '')[:80],
+                        'address': (r.get('address') or '')[:100],
                         'payback': r.get('payback'),
                         'profit': r.get('profit'),
                         'monthly_rent': r.get('monthly_rent'),
                     }
+                    if is_keyword_match:
+                        obj['_keyword_match'] = True  # подсказка ИИ
                     if r.get('floor'):          obj['floor'] = r['floor']
                     if r.get('total_floors'):   obj['total_floors'] = r['total_floors']
                     if r.get('condition'):      obj['condition'] = r['condition']
@@ -4281,8 +4319,10 @@ def handler(event, context):
                     if r.get('purpose'):        obj['purpose'] = (r['purpose'] or '')[:60]
                     if r.get('building_class'): obj['building_class'] = r['building_class']
                     if r.get('building_year'):  obj['building_year'] = r['building_year']
-                    if r.get('description'):    obj['description'] = (r['description'] or '')[:120]
-                    compact.append(obj)
+                    if r.get('description'):    obj['description'] = (r['description'] or '')[:150]
+                    return obj
+
+                compact = [_make_compact(r, r['id'] in keyword_ids) for r in matches]
                 ctx_data = {'listings': compact}
 
             # Для search_leads — подтягиваем активные публичные заявки
