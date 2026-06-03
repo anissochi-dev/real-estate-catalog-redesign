@@ -4251,6 +4251,7 @@ def handler(event, context):
                         'price': r['price'],
                         'area': r['area'],
                         'district': r['district'],
+                        'address': (r.get('address') or '')[:80],
                         'payback': r['payback'],
                     }
                     for r in matches
@@ -4308,7 +4309,7 @@ def handler(event, context):
 
             full_prompt = user_text
             if ctx_data:
-                full_prompt += '\n\nДанные:\n' + json.dumps(ctx_data, ensure_ascii=False, default=str)[:6000]
+                full_prompt += '\n\nДанные:\n' + json.dumps(ctx_data, ensure_ascii=False, default=str)[:12000]
 
             db_key, db_folder = _load_keys_from_db(cur)
             # Диалоговые режимы: история + температура повыше + 32k-модель + больше токенов
