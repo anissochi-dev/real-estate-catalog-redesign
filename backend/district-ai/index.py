@@ -1,11 +1,12 @@
 """
 ИИ-помощник для добавления районов города.
 Режимы (action в POST-теле):
-  suggest  — через YandexGPT генерирует список районов для заданного города,
-             возвращает массив без сохранения в БД (для превью).
-  import   — сохраняет переданный список районов в БД (пропускает уже существующие).
-Args: POST {action, city, districts?[{name, description, sort_order}]}, X-Auth-Token
-Returns: {districts: [...]} или {imported, skipped}
+  suggest  — через YandexGPT генерирует список районов для заданного города.
+  enrich   — принимает текстовый список названий районов, ИИ обогащает каждый
+             подробным описанием, характеристиками (тип, особенности, инфра).
+  import   — сохраняет переданный список районов в БД (пропускает существующие).
+Args: POST {action, city, text?, districts?[{name,description,sort_order}]}, X-Auth-Token
+Returns: {districts:[...]} или {imported, skipped}
 """
 import json
 import os
@@ -89,20 +90,12 @@ def _load_keys(cur):
     return os.environ.get('YANDEX_API_KEY', ''), os.environ.get('YANDEX_FOLDER_ID', '')
 
 
-def _gpt(user_text: str, api_key: str, folder_id: str) -> dict:
+def _call_gpt(system: str, user_text: str, api_key: str, folder_id: str, max_tokens: str = '2000') -> dict:
     if not api_key or not folder_id:
         return {'error': 'YandexGPT не настроен — добавьте ключи в Настройки → Интеграции'}
-    system = (
-        'Ты — эксперт по географии и недвижимости. '
-        'По названию города сгенерируй список всех основных районов и микрорайонов этого города. '
-        'Для каждого района дай: короткое название (1-4 слова) и краткое описание (1 предложение, до 100 символов). '
-        'Без нумерации, без markdown. '
-        'Формат строго (каждый район с новой строки):\n'
-        'РАЙОН: <название> | ОПИСАНИЕ: <описание>'
-    )
     payload = {
         'modelUri': f'gpt://{folder_id}/{YANDEX_MODEL_NAME}',
-        'completionOptions': {'stream': False, 'temperature': 0.3, 'maxTokens': '2000'},
+        'completionOptions': {'stream': False, 'temperature': 0.3, 'maxTokens': max_tokens},
         'messages': [{'role': 'system', 'text': system}, {'role': 'user', 'text': user_text}],
     }
     req = urllib.request.Request(
@@ -116,7 +109,7 @@ def _gpt(user_text: str, api_key: str, folder_id: str) -> dict:
         method='POST',
     )
     try:
-        with urllib.request.urlopen(req, timeout=45) as resp:
+        with urllib.request.urlopen(req, timeout=55) as resp:
             data = json.loads(resp.read().decode())
         alts = (data.get('result') or {}).get('alternatives') or []
         text = ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
@@ -149,11 +142,16 @@ def _parse_districts(text: str, city: str) -> list:
         result.append({
             'name': name[:100],
             'city': city,
-            'description': desc[:200],
+            'description': desc[:250],
             'slug': _make_slug(name),
             'sort_order': (i + 1) * 10,
         })
     return result
+
+
+def _parse_enriched(text: str, city: str) -> list:
+    """Парсит ответ ИИ на обогащение: РАЙОН: ... | ОПИСАНИЕ: ..."""
+    return _parse_districts(text, city)
 
 
 def handler(event: dict, context) -> dict:
@@ -184,9 +182,18 @@ def handler(event: dict, context) -> dict:
             if not user or user['role'] not in ('admin', 'director', 'editor'):
                 return _err(401, 'Недостаточно прав')
 
+            # ── suggest: ИИ сам придумывает список районов города ──────────────
             if action == 'suggest':
                 api_key, folder_id = _load_keys(cur)
-                result = _gpt(f'Город: {city}', api_key, folder_id)
+                system = (
+                    'Ты — эксперт по географии и недвижимости. '
+                    'По названию города сгенерируй список всех основных районов и микрорайонов этого города. '
+                    'Для каждого района дай: короткое название (1-4 слова) и краткое описание (1 предложение, до 120 символов). '
+                    'Без нумерации, без markdown. '
+                    'Формат строго (каждый район с новой строки):\n'
+                    'РАЙОН: <название> | ОПИСАНИЕ: <описание>'
+                )
+                result = _call_gpt(system, f'Город: {city}', api_key, folder_id)
                 if 'error' in result:
                     return _err(502, result['error'])
                 districts = _parse_districts(result['text'], city)
@@ -194,6 +201,60 @@ def handler(event: dict, context) -> dict:
                     return _err(502, 'ИИ не вернул районы — попробуйте ещё раз')
                 return _ok({'districts': districts, 'city': city})
 
+            # ── enrich: пользователь вводит названия, ИИ обогащает инфо ────────
+            if action == 'enrich':
+                raw_text = (body.get('text') or '').strip()
+                if not raw_text:
+                    return _err(400, 'Введите список районов')
+
+                # Парсим сырой текст — каждая непустая строка = название района
+                names = []
+                for line in raw_text.splitlines():
+                    name = line.strip().lstrip('•-–—*0123456789.) ').strip()
+                    if name and len(name) <= 100:
+                        names.append(name)
+                if not names:
+                    return _err(400, 'Не удалось распознать ни одного района')
+                if len(names) > 60:
+                    return _err(400, f'Слишком много районов ({len(names)}). Максимум 60 за раз')
+
+                api_key, folder_id = _load_keys(cur)
+                system = (
+                    'Ты — эксперт по географии городов России и недвижимости. '
+                    f'Тебе дан список районов / микрорайонов города {city}. '
+                    'Для КАЖДОГО района напиши развёрнутое описание (1-2 предложения, до 160 символов): '
+                    'тип застройки, особенности, инфраструктура, транспорт, популярность. '
+                    'Используй свои знания о реальной географии этого города. '
+                    'Без нумерации, без markdown. '
+                    'Формат строго (каждый район с новой строки, в том же порядке):\n'
+                    'РАЙОН: <точное название из списка> | ОПИСАНИЕ: <описание>'
+                )
+                user_text = f'Город: {city}\nСписок районов:\n' + '\n'.join(names)
+                result = _call_gpt(system, user_text, api_key, folder_id, max_tokens='3000')
+                if 'error' in result:
+                    return _err(502, result['error'])
+
+                enriched = _parse_enriched(result['text'], city)
+
+                # Сопоставляем: если ИИ пропустил какой-то район — добавляем без описания
+                enriched_names_lower = {d['name'].lower() for d in enriched}
+                for i, name in enumerate(names):
+                    if name.lower() not in enriched_names_lower:
+                        enriched.append({
+                            'name': name[:100],
+                            'city': city,
+                            'description': '',
+                            'slug': _make_slug(name),
+                            'sort_order': (len(enriched) + 1) * 10,
+                        })
+
+                # Пересчитываем sort_order по порядку
+                for i, d in enumerate(enriched):
+                    d['sort_order'] = (i + 1) * 10
+
+                return _ok({'districts': enriched, 'city': city, 'source': 'enrich'})
+
+            # ── import: сохранить выбранные районы в БД ─────────────────────────
             if action == 'import':
                 districts_in = body.get('districts') or []
                 if not districts_in:
