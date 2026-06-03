@@ -159,6 +159,7 @@ export interface ListingDetail extends Property {
   seoH3?: string | null;
   seoH4?: string | null;
   seoH5?: string | null;
+  seoFaq?: { question: string; answer: string }[] | null;
 }
 
 // Кэш деталей объекта — заполняется при префетче (наведение на карточку),
@@ -219,6 +220,12 @@ export async function fetchListingById(id: number): Promise<ListingDetail | null
         seoH3: it.seo_h3 ?? null,
         seoH4: it.seo_h4 ?? null,
         seoH5: it.seo_h5 ?? null,
+        seoFaq: (() => {
+          const raw = it.seo_faq;
+          if (!raw) return null;
+          if (Array.isArray(raw)) return raw;
+          try { return JSON.parse(raw); } catch { return null; }
+        })(),
       };
     } catch {
       return null;

@@ -95,9 +95,14 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
     fetchAgents().then(setAgents).catch(() => {});
   }, []);
 
-  const FAQ_URL = ''; // будет заполнено после деплоя
   useEffect(() => {
-    if (!item?.id || !FAQ_URL) return;
+    if (!item?.id) return;
+    // Если FAQ уже закеширован в объекте — используем сразу
+    if (item.seoFaq && item.seoFaq.length > 0) {
+      setFaq(item.seoFaq);
+      return;
+    }
+    // Иначе генерируем через функцию (кешируется в БД для следующих просмотров)
     setFaqLoading(true);
     fetch(FAQ_URL, {
       method: 'POST',
