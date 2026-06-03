@@ -11,7 +11,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import openai
 
-SCHEMA = 't_p71821556_real_estate_catalog_'
+SCHEMA = 't_p71821556_real_estate_catalog_'  # используется как {SCHEMA}.table
 
 DEAL_LABELS = {
     'sale': 'продажа',
@@ -51,10 +51,11 @@ def _json_resp(status: int, data: dict) -> dict:
 
 def _check_seo_faq_column(cur) -> bool:
     """Проверяет наличие колонки seo_faq в таблице listings через information_schema."""
+    schema_name = SCHEMA.rstrip('_').rstrip('.')
     cur.execute(
         "SELECT 1 FROM information_schema.columns "
         "WHERE table_schema = %s AND table_name = 'listings' AND column_name = 'seo_faq'",
-        (SCHEMA.rstrip('_'),),
+        (schema_name,),
     )
     return cur.fetchone() is not None
 
@@ -209,14 +210,14 @@ def handler(event: dict, context) -> dict:
                 cur.execute(
                     f"SELECT id, title, description, category, deal, price, area, "
                     f"address, district, city, seo_faq "
-                    f"FROM {SCHEMA}listings WHERE id = %s",
+                    f"FROM {SCHEMA}.listings WHERE id = %s",
                     (listing_id,),
                 )
             else:
                 cur.execute(
                     f"SELECT id, title, description, category, deal, price, area, "
                     f"address, district, city "
-                    f"FROM {SCHEMA}listings WHERE id = %s",
+                    f"FROM {SCHEMA}.listings WHERE id = %s",
                     (listing_id,),
                 )
 
@@ -255,7 +256,7 @@ def handler(event: dict, context) -> dict:
             if has_seo_faq:
                 try:
                     cur.execute(
-                        f"UPDATE {SCHEMA}listings SET seo_faq = %s WHERE id = %s",
+                        f"UPDATE {SCHEMA}.listings SET seo_faq = %s WHERE id = %s",
                         (json.dumps(faq, ensure_ascii=False), listing_id),
                     )
                     conn.commit()
