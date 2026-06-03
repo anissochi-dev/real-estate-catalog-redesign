@@ -44,7 +44,7 @@ def _check_auth(event: dict) -> bool:
         with conn.cursor() as cur:
             safe_token = token.replace("'", "''")
             cur.execute(
-                f"SELECT id FROM {SCHEMA}users WHERE auth_token = '{safe_token}' AND is_active = TRUE LIMIT 1"
+                f"SELECT id FROM {SCHEMA}.sessions WHERE token = '{safe_token}' AND expires_at > NOW() LIMIT 1"
             )
             return cur.fetchone() is not None
     finally:
