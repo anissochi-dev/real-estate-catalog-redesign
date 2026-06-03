@@ -9,10 +9,20 @@ export default function NotFoundPage() {
 
   useEffect(() => {
     console.error('404:', location.pathname);
-    // Сигнал для пререндера/ботов, что это страница 404 — чтобы сервер мог
-    // вернуть корректный статус. Также проставляем класс на <html>.
+    // Сигнал для пререндера/ботов — HTTP-статус 404
     document.documentElement.setAttribute('data-http-status', '404');
-    return () => { document.documentElement.removeAttribute('data-http-status'); };
+    // Мета-тег для пререндер-сервисов (prerender.io и совместимых)
+    let meta = document.querySelector<HTMLMetaElement>('meta[name="prerender-status-code"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.setAttribute('name', 'prerender-status-code');
+      document.head.appendChild(meta);
+    }
+    meta.setAttribute('content', '404');
+    return () => {
+      document.documentElement.removeAttribute('data-http-status');
+      document.querySelector('meta[name="prerender-status-code"]')?.remove();
+    };
   }, [location.pathname]);
 
   return (
@@ -47,20 +57,20 @@ export default function NotFoundPage() {
             <Icon name="ArrowLeft" size={16} />
             Назад
           </button>
-          <button
-            onClick={() => navigate('/')}
+          <a
+            href="/"
             className="inline-flex items-center justify-center gap-2 btn-blue text-white px-5 py-2.5 rounded-xl text-sm font-semibold"
           >
             <Icon name="Home" size={16} />
             На главную
-          </button>
-          <button
-            onClick={() => navigate('/catalog')}
+          </a>
+          <a
+            href="/catalog"
             className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-border text-sm font-semibold hover:bg-muted transition"
           >
             <Icon name="Building2" size={16} />
             Каталог
-          </button>
+          </a>
         </div>
       </div>
     </div>

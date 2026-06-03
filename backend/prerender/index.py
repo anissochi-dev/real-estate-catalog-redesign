@@ -30,13 +30,24 @@ def _resp(status, html, extra_headers=None):
     return {'statusCode': status, 'headers': headers, 'body': html, 'isBase64Encoded': False}
 
 
-def _page(title, status_note=''):
+def _page(title, status_note='', is_404=False):
+    canonical = ''
+    if not is_404:
+        canonical = '<link rel="canonical" href="/" />'
+    prerender_meta = '<meta name="prerender-status-code" content="404" />' if is_404 else ''
+    links = (
+        '<nav>'
+        '<a href="/">На главную</a> | '
+        '<a href="/catalog">Каталог объектов</a>'
+        '</nav>'
+    ) if is_404 else ''
     return (
         '<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">'
         f'<title>{title}</title>'
         '<meta name="robots" content="noindex, nofollow">'
+        f'{prerender_meta}{canonical}'
         '</head><body>'
-        f'<h1>{title}</h1>{status_note}'
+        f'<h1>{title}</h1>{status_note}{links}'
         '</body></html>'
     )
 
@@ -110,4 +121,4 @@ def handler(event: dict, context):
 
     if exists:
         return _resp(200, _page('OK'))
-    return _resp(404, _page('Страница не найдена', '<p>404 — страница не существует.</p>'))
+    return _resp(404, _page('Страница не найдена', '<p>404 — страница не существует.</p>', is_404=True))
