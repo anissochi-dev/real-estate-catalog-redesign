@@ -138,7 +138,6 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
     if (typeFilter !== 'all') next.set('type', typeFilter); else next.delete('type');
     if (districtFilter !== 'all') next.set('district', districtFilter); else next.delete('district');
     setSearchParams(next, { replace: true });
-    setPage(1);
   }, [dealFilter, typeFilter, districtFilter]);
 
   const filtered = useMemo(() => {
