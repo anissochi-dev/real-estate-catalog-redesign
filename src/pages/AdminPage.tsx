@@ -15,6 +15,7 @@ import NetworkTenantsAdmin from './admin/NetworkTenantsAdmin';
 import NewsAdmin from './admin/NewsAdmin';
 import VBKnowledgeAdmin from './admin/VBKnowledgeAdmin';
 import SeoHubAdmin from './admin/SeoHubAdmin';
+import DistrictsAdmin from './admin/DistrictsAdmin';
 
 interface Props {
   onExit: () => void;
@@ -40,6 +41,7 @@ export default function AdminPage({ onExit, initialSection }: Props) {
       {section === 'leads' && <LeadsAdmin />}
       {section === 'users' && <UsersAdmin />}
       {section === 'settings' && <SettingsAdmin />}
+      {section === 'districts' && <DistrictsAdmin />}
       {section === 'crm-owners' && <CrmOwners />}
       {section === 'crm-kanban' && <CrmKanban />}
       {section === 'crm-gamification' && <CrmGamification />}

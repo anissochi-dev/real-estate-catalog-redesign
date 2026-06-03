@@ -282,6 +282,8 @@ def handler(event, context):
                 return _purposes(cur, conn, method, rid, event, user)
             if resource == 'land_vri':
                 return _land_vri(cur, conn, method, rid, event, user)
+            if resource == 'districts':
+                return _districts(cur, conn, method, rid, event, user)
             if resource == 'xml_feeds':
                 return _xml_feeds(cur, conn, method, rid, event, user)
             if resource == 'stats':
@@ -2919,6 +2921,75 @@ def _land_vri(cur, conn, method, rid, event, user):
 
     if method == 'DELETE' and rid:
         cur.execute(f"DELETE FROM {SCHEMA}.land_vri WHERE id = {int(rid)}")
+        conn.commit()
+        return _ok({'success': True})
+
+    return _err(400, 'Bad request')
+
+
+def _districts(cur, conn, method, rid, event, user):
+    """Справочник районов города."""
+    if method == 'GET':
+        cur.execute(
+            f"SELECT d.*, "
+            f"(SELECT COUNT(*) FROM {SCHEMA}.listings l "
+            f" WHERE l.status='active' AND l.district ILIKE '%' || d.name || '%') AS listings_count "
+            f"FROM {SCHEMA}.districts d ORDER BY d.sort_order ASC, d.name ASC"
+        )
+        return _ok({'districts': [dict(r) for r in cur.fetchall()]})
+
+    body = json.loads(event.get('body') or '{}')
+
+    if method == 'POST':
+        name = _safe(body.get('name') or '', 100)
+        slug = _safe(body.get('slug') or '', 100)
+        city = _safe(body.get('city') or 'Краснодар', 100)
+        description = _safe(body.get('description') or '', 1000)
+        sort_order = int(body.get('sort_order') or 100)
+        if not name:
+            return _err(400, 'Название обязательно')
+        if not slug:
+            import re as _re
+            slug = _re.sub(r'[^a-z0-9]+', '-', name.lower().replace('ё', 'e')
+                .replace('а','a').replace('б','b').replace('в','v').replace('г','g')
+                .replace('д','d').replace('е','e').replace('ж','zh').replace('з','z')
+                .replace('и','i').replace('й','y').replace('к','k').replace('л','l')
+                .replace('м','m').replace('н','n').replace('о','o').replace('п','p')
+                .replace('р','r').replace('с','s').replace('т','t').replace('у','u')
+                .replace('ф','f').replace('х','kh').replace('ц','ts').replace('ч','ch')
+                .replace('ш','sh').replace('щ','sch').replace('ъ','').replace('ы','y')
+                .replace('ь','').replace('э','e').replace('ю','yu').replace('я','ya')
+            ).strip('-')
+        cur.execute(f"SELECT id FROM {SCHEMA}.districts WHERE slug = '{slug}'")
+        if cur.fetchone():
+            return _err(409, f"Район со slug «{slug}» уже существует")
+        desc_val = f"'{description}'" if description else 'NULL'
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.districts (name, slug, city, description, sort_order) "
+            f"VALUES ('{name}', '{slug}', '{city}', {desc_val}, {sort_order}) RETURNING id"
+        )
+        conn.commit()
+        return _ok({'id': cur.fetchone()['id'], 'success': True})
+
+    if method == 'PUT' and rid:
+        fields = []
+        for f, length in [('name', 100), ('slug', 100), ('city', 100), ('description', 1000)]:
+            if f in body:
+                fields.append(f"{f} = {_str_or_null(body[f], length)}")
+        if 'is_active' in body:
+            fields.append(f"is_active = {_bool(body['is_active'])}")
+        if 'sort_order' in body:
+            fields.append(f"sort_order = {_int_or_null(body['sort_order'])}")
+        if not fields:
+            return _err(400, 'Нет полей для обновления')
+        cur.execute(
+            f"UPDATE {SCHEMA}.districts SET {', '.join(fields)} WHERE id = {int(rid)}"
+        )
+        conn.commit()
+        return _ok({'success': True})
+
+    if method == 'DELETE' and rid:
+        cur.execute(f"DELETE FROM {SCHEMA}.districts WHERE id = {int(rid)}")
         conn.commit()
         return _ok({'success': True})
 

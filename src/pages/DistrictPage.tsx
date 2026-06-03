@@ -6,6 +6,7 @@ import Breadcrumbs from '@/components/Breadcrumbs';
 import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
 import SchemaOrg, { makeItemListSchema, makeBreadcrumbSchema } from '@/components/SchemaOrg';
+import { fetchDistricts, District } from '@/lib/api';
 
 const DISTRICT_SEO_URL = 'https://functions.poehali.dev/935f6aa4-e24d-49ac-bc65-6b55db9d2ae3';
 const PAGE_SIZE = 12;
@@ -28,6 +29,15 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
   const [aiLoading, setAiLoading] = useState(false);
 
   const districtName = district ? decodeURIComponent(district) : '';
+  const [districtData, setDistrictData] = useState<District | null>(null);
+
+  useEffect(() => {
+    if (!district) return;
+    fetchDistricts().then(list => {
+      const found = list.find(d => d.slug === district);
+      setDistrictData(found || null);
+    });
+  }, [district]);
 
   // SEO meta
   useEffect(() => {
@@ -50,33 +60,37 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
   // Загружаем AI-текст
   useEffect(() => {
     if (!districtName || !DISTRICT_SEO_URL || DISTRICT_SEO_URL.includes('PLACEHOLDER')) return;
+    const nameForSeo = districtData?.name || districtName;
     setAiText('');
     setAiLoading(true);
-    fetch(`${DISTRICT_SEO_URL}?district=${encodeURIComponent(districtName)}&city=${encodeURIComponent(city)}`)
+    fetch(`${DISTRICT_SEO_URL}?district=${encodeURIComponent(nameForSeo)}&city=${encodeURIComponent(city)}`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.text) setAiText(d.text); })
       .catch(() => {})
       .finally(() => setAiLoading(false));
-  }, [districtName, city]);
+  }, [districtName, districtData, city]);
 
   const items = useMemo(() => {
     if (!districtName) return [];
-    const q = districtName.toLowerCase();
+    const searchName = districtData?.name || districtName;
+    const q = searchName.toLowerCase();
     return properties.filter(p =>
       (p.district || '').toLowerCase().includes(q) ||
       (p.address || '').toLowerCase().includes(q)
     );
-  }, [properties, districtName]);
+  }, [properties, districtData, districtName]);
 
   const totalPages = Math.ceil(items.length / PAGE_SIZE);
   const pageItems = items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const displayName = districtData?.name || districtName;
 
   const siteUrl = settings.site_url || 'https://bmn.su';
 
   const breadcrumbSchema = makeBreadcrumbSchema([
     { name: 'Главная', url: siteUrl },
     { name: 'Каталог', url: `${siteUrl}/catalog` },
-    { name: `${districtName} район` },
+    { name: `${displayName} район` },
   ]);
 
   const itemListSchema = makeItemListSchema(
@@ -86,7 +100,7 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
       image: p.image || undefined,
       description: p.description?.slice(0, 160),
     })),
-    `Коммерческая недвижимость — ${districtName} район`,
+    `Коммерческая недвижимость — ${displayName} район`,
   );
 
   if (!districtName) {
@@ -116,7 +130,7 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
               items={[
                 { label: 'Главная', to: '/' },
                 { label: 'Каталог', to: '/catalog' },
-                { label: `${districtName} район` },
+                { label: `${displayName} район` },
               ]}
               light
             />
@@ -127,15 +141,15 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
             </div>
             <div>
               <h1 className="font-display font-900 text-2xl md:text-3xl leading-tight mb-1">
-                Коммерческая недвижимость — {districtName} район
+                Коммерческая недвижимость — {displayName} район
               </h1>
               <h2 className="font-display font-600 text-base text-white/75 mb-2 leading-snug">
-                Аренда и продажа объектов в {districtName}ом районе {city}а
+                Аренда и продажа объектов в {displayName}ом районе {city}а
               </h2>
               <p className="text-white/70 text-sm max-w-2xl leading-relaxed">
                 {items.length > 0
                   ? `В базе ${items.length} активных объектов в этом районе — офисы, торговые площади, склады и другие.`
-                  : `Актуальные объекты коммерческой недвижимости в ${districtName}ом районе.`}
+                  : `Актуальные объекты коммерческой недвижимости в ${displayName}ом районе.`}
               </p>
             </div>
           </div>
@@ -146,12 +160,12 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
       <div className="bg-white border-b border-border">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="text-sm text-muted-foreground">
-            <h3 className="inline font-semibold text-foreground">{districtName} район</h3>
+            <h3 className="inline font-semibold text-foreground">{displayName} район</h3>
             {' '}— найдено <span className="font-semibold text-foreground">{items.length}</span> объектов
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => navigate(`/catalog?search=${encodeURIComponent(districtName)}`)}
+              onClick={() => navigate(`/catalog?search=${encodeURIComponent(displayName)}`)}
               className="text-xs text-brand-blue font-semibold flex items-center gap-1 hover:underline"
             >
               <Icon name="SlidersHorizontal" size={13} />
@@ -222,7 +236,7 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
             {/* AI SEO-текст */}
             <div className="mt-12 p-6 bg-white rounded-2xl border border-border">
               <h2 className="font-display font-700 text-lg mb-3">
-                О коммерческой недвижимости в {districtName}ом районе
+                О коммерческой недвижимости в {displayName}ом районе
               </h2>
               {aiLoading && !aiText ? (
                 <div className="space-y-2">
@@ -234,7 +248,7 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
                 <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{aiText}</p>
               ) : (
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Агентство помогает подобрать коммерческую недвижимость в {districtName}ом районе {city}а —
+                  Агентство помогает подобрать коммерческую недвижимость в {displayName}ом районе {city}а —
                   офисы, торговые площади, склады, производственные помещения и готовый бизнес.
                   Работаем с {settings.company_since_year || 2007} года, знаем рынок и поможем найти
                   объект под ваши требования и бюджет.

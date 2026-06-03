@@ -8,6 +8,7 @@ import { useSeoH1 } from '@/components/SeoHead';
 import AIMatchModal from '@/components/AIMatchModal';
 import { useSettings } from '@/contexts/SettingsContext';
 import SchemaOrg, { makeBreadcrumbSchema } from '@/components/SchemaOrg';
+import { fetchDistricts, District } from '@/lib/api';
 
 interface CatalogPageProps {
   properties: Property[];
@@ -82,7 +83,11 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
   const [showFilters, setShowFilters] = useState(false);
   const [minArea, setMinArea] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
+  const [districtFilter, setDistrictFilter] = useState('all');
+  const [districts, setDistricts] = useState<District[]>([]);
   const [page, setPage] = useState(1);
+
+  useEffect(() => { fetchDistricts().then(setDistricts); }, []);
 
   const h1 = buildCatalogH1(dealFilter, typeFilter) || h1Base;
 
@@ -94,9 +99,11 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
     const deal = searchParams.get('deal');
     const type = searchParams.get('type');
     const q = searchParams.get('search');
+    const district = searchParams.get('district');
     if (deal) setDealFilter(deal);
     if (type) setTypeFilter(type);
     if (q) setSearch(q);
+    if (district) setDistrictFilter(district);
   }, [searchParams]);
 
   // Синхронизируем выбранный deal в URL
@@ -104,9 +111,10 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
     const next = new URLSearchParams(searchParams);
     if (dealFilter !== 'all') next.set('deal', dealFilter); else next.delete('deal');
     if (typeFilter !== 'all') next.set('type', typeFilter); else next.delete('type');
+    if (districtFilter !== 'all') next.set('district', districtFilter); else next.delete('district');
     setSearchParams(next, { replace: true });
     setPage(1);
-  }, [dealFilter, typeFilter]);
+  }, [dealFilter, typeFilter, districtFilter]);
 
   const filtered = useMemo(() => {
     let result = [...properties];
@@ -122,6 +130,11 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
 
     if (dealFilter !== 'all') result = result.filter(p => String(p.deal) === dealFilter);
     if (typeFilter !== 'all') result = result.filter(p => String(p.type) === typeFilter);
+    if (districtFilter !== 'all') {
+      result = result.filter(p =>
+        (p.district || '').toLowerCase().includes(districtFilter.toLowerCase())
+      );
+    }
     if (minArea) result = result.filter(p => p.area >= Number(minArea));
     if (maxPrice) result = result.filter(p => p.price <= Number(maxPrice) * 1000000);
 
@@ -137,7 +150,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
     }
 
     return result;
-  }, [properties, search, dealFilter, typeFilter, sortBy, minArea, maxPrice]);
+  }, [properties, search, dealFilter, typeFilter, districtFilter, sortBy, minArea, maxPrice]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageItems = useMemo(() => {
@@ -155,7 +168,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
   };
 
   // Сброс страницы при изменении поиска/сортировки
-  useEffect(() => { setPage(1); }, [search, sortBy, minArea, maxPrice]);
+  useEffect(() => { setPage(1); }, [search, sortBy, minArea, maxPrice, districtFilter]);
 
   // SEO: rel="prev" / rel="next" в <head> для пагинации
   useEffect(() => {
@@ -275,16 +288,16 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
             <button
               onClick={() => setShowFilters(!showFilters)}
               className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 my-1.5 rounded-lg text-xs font-semibold transition-all border
-                ${showFilters || dealFilter !== 'all' || typeFilter !== 'all' || minArea || maxPrice
+                ${showFilters || dealFilter !== 'all' || typeFilter !== 'all' || minArea || maxPrice || districtFilter !== 'all'
                   ? 'border-brand-blue bg-brand-blue/10 text-brand-blue'
                   : 'border-border text-muted-foreground hover:border-brand-blue hover:text-brand-blue'
                 }`}
             >
               <Icon name="SlidersHorizontal" size={14} />
               Фильтры
-              {(dealFilter !== 'all' || typeFilter !== 'all' || minArea || maxPrice) && (
+              {(dealFilter !== 'all' || typeFilter !== 'all' || minArea || maxPrice || districtFilter !== 'all') && (
                 <span className="w-4 h-4 rounded-full bg-brand-blue text-white text-[10px] flex items-center justify-center">
-                  {[dealFilter !== 'all', typeFilter !== 'all', !!minArea, !!maxPrice].filter(Boolean).length}
+                  {[dealFilter !== 'all', typeFilter !== 'all', !!minArea, !!maxPrice, districtFilter !== 'all'].filter(Boolean).length}
                 </span>
               )}
             </button>
@@ -293,7 +306,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
           {/* Раскрытые фильтры */}
           {showFilters && (
             <div className="pb-4 pt-1 border-t border-border animate-fade-in">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-3">
 
                 {/* Тип объекта */}
                 <div>
@@ -305,6 +318,21 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
                   >
                     {PROPERTY_TYPES.map(pt => (
                       <option key={pt.value} value={pt.value}>{pt.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Район */}
+                <div>
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Район</div>
+                  <select
+                    value={districtFilter}
+                    onChange={e => setDistrictFilter(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm outline-none focus:border-brand-blue transition-colors"
+                  >
+                    <option value="all">Все районы</option>
+                    {districts.map(d => (
+                      <option key={d.id} value={d.name}>{d.name}{d.listings_count ? ` (${d.listings_count})` : ''}</option>
                     ))}
                   </select>
                 </div>
@@ -339,9 +367,9 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
               </div>
 
               {/* Сброс */}
-              {(dealFilter !== 'all' || typeFilter !== 'all' || minArea || maxPrice) && (
+              {(dealFilter !== 'all' || typeFilter !== 'all' || minArea || maxPrice || districtFilter !== 'all') && (
                 <button
-                  onClick={() => { setDealFilter('all'); setTypeFilter('all'); setMinArea(''); setMaxPrice(''); }}
+                  onClick={() => { setDealFilter('all'); setTypeFilter('all'); setMinArea(''); setMaxPrice(''); setDistrictFilter('all'); }}
                   className="mt-3 text-xs text-brand-orange font-semibold flex items-center gap-1 hover:opacity-80"
                 >
                   <Icon name="X" size={12} /> Сбросить все фильтры

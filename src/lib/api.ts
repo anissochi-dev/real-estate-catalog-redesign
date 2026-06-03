@@ -414,3 +414,26 @@ export async function fetchAgents(): Promise<Agent[]> {
     return [];
   }
 }
+
+export interface District {
+  id: number;
+  name: string;
+  slug: string;
+  city: string;
+  description?: string;
+  sort_order: number;
+  is_active: boolean;
+  listings_count?: number;
+}
+
+export async function fetchDistricts(city?: string): Promise<District[]> {
+  try {
+    const params = city ? `?resource=districts&city=${encodeURIComponent(city)}` : '?resource=districts';
+    const res = await fetchWithTimeout(`${LISTINGS_URL}${params}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.districts || [];
+  } catch {
+    return [];
+  }
+}

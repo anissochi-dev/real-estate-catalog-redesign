@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
 import { Listing, City, ROAD_LINES } from './types';
+import { fetchDistricts, District } from '@/lib/api';
 
 /* ── Яндекс.Карты типы ── */
 declare global {
@@ -81,7 +82,10 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [highlightIdx, setHighlightIdx] = useState(-1);
+  const [districts, setDistricts] = useState<District[]>([]);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => { fetchDistricts().then(setDistricts); }, []);
 
   const currentCity = editing.city || 'Краснодар';
 
@@ -417,9 +421,22 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
         </div>
       </div>
 
-      {editing.district && (
-        <div className="text-xs text-muted-foreground">
-          Микрорайон: <span className="font-medium text-foreground">{editing.district}</span>
+      {districts.length > 0 && (
+        <div className="mt-2">
+          <label className="text-xs font-semibold text-muted-foreground block mb-1">Район</label>
+          <select
+            value={editing.district || ''}
+            onChange={e => setEditing({ ...editing, district: e.target.value })}
+            className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white focus:border-brand-blue outline-none transition-colors"
+          >
+            <option value="">— не указан —</option>
+            {districts.map(d => (
+              <option key={d.id} value={d.name}>{d.name}</option>
+            ))}
+          </select>
+          <div className="text-xs text-muted-foreground mt-1">
+            Район определяется автоматически по адресу или выбирается вручную
+          </div>
         </div>
       )}
 

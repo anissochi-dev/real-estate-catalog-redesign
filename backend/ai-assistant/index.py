@@ -394,7 +394,7 @@ SYSTEM_PROMPTS = {
         'Настройки:\n'
         '- update_settings: {"company_name"?,"company_phone"?,"company_email"?,"hero_title"?,"hero_subtitle"?,"about_text"?} risk:high\n'
         'Аналитика (low risk — авто):\n'
-        '- get_listings_summary: {"period":"week|month|all"?} risk:low\n'
+        '- get_listings_summary: {"period":"week|month|all"?,"district":str?} risk:low\n'
         '- get_leads_summary: {"period":"week|month|all"?} risk:low\n'
         '- get_conversion_analytics: {"period":"week|month|all"?} risk:low\n'
         '- check_data_integrity: {} risk:low\n'
@@ -406,6 +406,7 @@ SYSTEM_PROMPTS = {
         '- marketing_tips: {} risk:low\n'
         '- get_content_recommendations: {"focus":"seo|conversion|descriptions"?} risk:low\n'
         '- scan_images: {} risk:low — сканирует S3, находит неиспользуемые и тяжёлые фото\n'
+        '- search_listings: {"query":str,"category":str?,"deal":str?,"max_price":int?,"district":str?} risk:low — поиск объектов по тексту/категории/сделке/цене/району\n'
         '- search_listings_without_images: {"limit":50?} risk:low — найти объекты без фото. Используй при «объекты без фото», «нет фотографий»\n'
         '- search_listings_without_description: {"limit":50?} risk:low — найти объекты без описания\n'
         '- search_listings_without_seo: {"limit":50?} risk:low — найти объекты без SEO-заголовка\n'
@@ -1627,8 +1628,10 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
     # Аналитика и сбор данных (risk: low — выполняется без подтверждения)
     if act_type == 'get_listings_summary':
         period = params.get('period', 'all')
+        district = params.get('district', '')
         interval = "INTERVAL '7 days'" if period == 'week' else ("INTERVAL '30 days'" if period == 'month' else None)
         where_period = f" AND created_at > NOW() - {interval}" if interval else ""
+        where_district = f" AND district ILIKE '%{_sanitize_text(district, 100)}%'" if district else ""
         cur.execute(
             f"SELECT COUNT(*) AS total, "
             f"COUNT(*) FILTER (WHERE status='active') AS active, "
@@ -1639,7 +1642,7 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
             f"COALESCE(AVG(price) FILTER (WHERE status='active'), 0)::bigint AS avg_price, "
             f"COALESCE(MIN(price) FILTER (WHERE status='active' AND price > 0), 0) AS min_price, "
             f"COALESCE(MAX(price) FILTER (WHERE status='active'), 0) AS max_price "
-            f"FROM {SCHEMA}.listings WHERE 1=1{where_period}"
+            f"FROM {SCHEMA}.listings WHERE 1=1{where_period}{where_district}"
         )
         row = dict(cur.fetchone())
         issues = []
@@ -1647,9 +1650,10 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         if row['no_seo'] > 0: issues.append(f"без SEO: {row['no_seo']}")
         if row['long_titles'] > 0: issues.append(f"длинных заголовков: {row['long_titles']}")
         issues_str = ', '.join(issues) if issues else 'все объекты в порядке ✅'
+        district_note = f" в районе {district}" if district else ""
         return {
             'ok': True,
-            'message': f"Объектов: {row['active']} активных, {row['archived']} в архиве. "
+            'message': f"Объектов{district_note}: {row['active']} активных, {row['archived']} в архиве. "
                        f"Средняя цена: {row['avg_price']:,} ₽. Проблемы: {issues_str}.",
             'data': row,
         }
@@ -1701,23 +1705,30 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
     if act_type == 'search_listings':
         query = _sanitize_text(str(params.get('query', '')), 200)
         category = params.get('category', '')
+        deal = params.get('deal', '')
         max_price = params.get('max_price')
+        district = params.get('district', '')
         where = ["status = 'active'"]
         if query:
             where.append(f"(LOWER(title) LIKE '%{query.lower()}%' OR LOWER(description) LIKE '%{query.lower()}%')")
         if category:
             where.append(f"category = '{_sanitize_text(str(category), 50)}'")
+        if deal:
+            where.append(f"deal = '{_sanitize_text(str(deal), 50)}'")
+        if district:
+            where.append(f"district ILIKE '%{_sanitize_text(district, 100)}%'")
         if max_price:
             try:
                 where.append(f"price <= {int(max_price)}")
             except Exception:
                 pass
         cur.execute(
-            f"SELECT id, title, category, price, area, district FROM {SCHEMA}.listings "
+            f"SELECT id, title, category, deal, price, area, district FROM {SCHEMA}.listings "
             f"WHERE {' AND '.join(where)} ORDER BY id DESC LIMIT 20"
         )
         found = [dict(r) for r in cur.fetchall()]
-        return {'ok': True, 'message': f"Найдено {len(found)} объектов по запросу.",
+        district_note = f" в районе {district}" if district else ""
+        return {'ok': True, 'message': f"Найдено {len(found)} объектов по запросу{district_note}.",
                 'data': {'listings': found}}
 
     if act_type == 'analyze_user_behavior':

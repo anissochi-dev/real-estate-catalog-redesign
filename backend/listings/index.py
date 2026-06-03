@@ -176,6 +176,26 @@ def handler(event: dict, context) -> dict:
                 row = cur.fetchone()
                 return _ok({'settings': dict(row) if row else {}}, cache='public, max-age=300, stale-while-revalidate=60')
 
+            if params.get('resource') == 'districts':
+                city_f = (params.get('city') or '').strip()
+                where_city = f"AND city = '{city_f.replace(chr(39), chr(39)*2)}'" if city_f else ''
+                cur.execute(
+                    "SELECT id, name, slug, city, description, sort_order "
+                    "FROM t_p71821556_real_estate_catalog_.districts "
+                    f"WHERE is_active = TRUE {where_city} "
+                    "ORDER BY sort_order ASC, name ASC"
+                )
+                districts = [dict(r) for r in cur.fetchall()]
+                # Добавляем количество активных объектов в каждом районе
+                for d in districts:
+                    name_esc = d['name'].replace("'", "''")
+                    cur.execute(
+                        f"SELECT COUNT(*) AS c FROM t_p71821556_real_estate_catalog_.listings "
+                        f"WHERE status = 'active' AND district ILIKE '%{name_esc}%'"
+                    )
+                    d['listings_count'] = cur.fetchone()['c']
+                return _ok({'districts': districts}, cache='public, max-age=300, stale-while-revalidate=60')
+
             if params.get('resource') == 'public_purposes':
                 cur.execute(
                     "SELECT id, name, slug, icon FROM t_p71821556_real_estate_catalog_.purposes "
@@ -369,11 +389,10 @@ def handler(event: dict, context) -> dict:
                     'free_purpose', 'car_service',
                 ]
 
-                # Получаем уникальные районы с объектами для страниц-хабов
+                # Берём районы из справочника (slug уже правильный)
                 cur.execute(
-                    "SELECT DISTINCT district FROM t_p71821556_real_estate_catalog_.listings "
-                    "WHERE status = 'active' AND district IS NOT NULL AND district != '' "
-                    "ORDER BY district ASC LIMIT 50"
+                    "SELECT slug FROM t_p71821556_real_estate_catalog_.districts "
+                    "WHERE is_active = TRUE ORDER BY sort_order ASC, name ASC"
                 )
                 district_rows = cur.fetchall()
 
@@ -411,13 +430,11 @@ def handler(event: dict, context) -> dict:
                         + img_tag
                         + '</url>'
                     )
-                # Страницы районов
+                # Страницы районов из справочника
                 for dr in district_rows:
-                    d_name = dr.get('district') or ''
-                    if not d_name:
+                    d_slug = dr.get('slug') or ''
+                    if not d_slug:
                         continue
-                    import urllib.parse as _up
-                    d_slug = _up.quote(d_name, safe='')
                     items.append(
                         f'<url><loc>{base}/district/{d_slug}</loc>'
                         '<changefreq>weekly</changefreq><priority>0.7</priority></url>'

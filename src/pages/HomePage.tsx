@@ -7,6 +7,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { NEWS_URL } from '@/lib/adminApi';
 import SeoHead from '@/components/SeoHead';
 import SchemaOrg, { makeFaqSchema } from '@/components/SchemaOrg';
+import { fetchDistricts, District } from '@/lib/api';
 
 const ClientLeadsSection = lazy(() => import('@/components/ClientLeadsSection'));
 const AIMatchModal = lazy(() => import('@/components/AIMatchModal'));
@@ -62,6 +63,11 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
 
   const [aiOpen, setAiOpen] = useState(false);
   const [latestNews, setLatestNews] = useState<NewsPreview[] | null>(null);
+  const [districts, setDistricts] = useState<District[]>([]);
+
+  useEffect(() => {
+    fetchDistricts().then(d => setDistricts(d.filter(x => x.listings_count && x.listings_count > 0)));
+  }, []);
 
   const newsLimit = settings.home_news_limit ?? 10;
   const showNewsOnHome = settings.show_news_on_home;
@@ -319,6 +325,35 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
           </div>
         </div>
       </section>
+
+      {/* Районы города */}
+      {districts.length > 0 && (
+        <section className="py-6 bg-muted/40">
+          <div className="container mx-auto px-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Icon name="MapPin" size={16} className="text-brand-blue" />
+                <h2 className="font-display font-700 text-base text-foreground">Районы города</h2>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {districts.map(d => (
+                <button
+                  key={d.id}
+                  onClick={() => navigate(`/district/${d.slug}`)}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-border rounded-xl hover:border-brand-blue hover:shadow-sm transition-all text-sm"
+                >
+                  <Icon name="MapPin" size={13} className="text-brand-blue shrink-0" />
+                  <span className="font-semibold">{d.name}</span>
+                  {d.listings_count ? (
+                    <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">{d.listings_count}</span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Новые объекты */}
       <section className="py-6 bg-muted/40">

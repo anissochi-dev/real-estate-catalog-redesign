@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Property } from '@/App';
 import Icon from '@/components/ui/icon';
@@ -152,6 +152,7 @@ export default function PropertyCard({
   property, isFavorite, isCompare, onToggleFavorite, onToggleCompare, style, index = 99,
 }: PropertyCardProps) {
   const href = `/object/${listingSlug(property.title, property.id)}`;
+  const navigate = useNavigate();
   const { hint, rootRef } = usePredictHint(property.id);
   const { settings } = useSettings();
 
@@ -353,6 +354,18 @@ export default function PropertyCard({
               );
             })()}
           </div>
+
+          {/* Район */}
+          {property.district && (
+            <button
+              type="button"
+              onClick={e => { e.preventDefault(); e.stopPropagation(); navigate(`/catalog?search=${encodeURIComponent(property.district || '')}`); }}
+              className="inline-flex items-center gap-1 text-[10px] text-brand-blue/70 hover:text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 px-1.5 py-0.5 rounded-md transition-colors font-medium"
+            >
+              <Icon name="MapPin" size={9} />
+              {property.district}
+            </button>
+          )}
 
           {/* Адрес */}
           {addressLine && (
