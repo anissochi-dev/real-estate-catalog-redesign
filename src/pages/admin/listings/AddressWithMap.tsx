@@ -52,6 +52,7 @@ interface AddressProps {
   setEditing: (l: Partial<Listing>) => void;
   cities: City[];
   hasError?: boolean;
+  districtError?: boolean;
   /**
    * Колбэк для отметки "координаты выставлены вручную".
    * Вызывается с true при клике/перетаскивании маркера на карте,
@@ -65,7 +66,7 @@ interface Suggestion {
   displayName: string;
 }
 
-export default function AddressWithMap({ editing, setEditing, cities, hasError, onCoordsManualChange }: AddressProps) {
+export default function AddressWithMap({ editing, setEditing, cities, hasError, districtError, onCoordsManualChange }: AddressProps) {
   const { settings } = useSettings();
   const apiKey = settings.yandex_maps_api_key || '';
   const mapRef = useRef<HTMLDivElement>(null);
@@ -421,24 +422,34 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
         </div>
       </div>
 
-      {districts.length > 0 && (
-        <div className="mt-2">
-          <label className="text-xs font-semibold text-muted-foreground block mb-1">Район</label>
+      <div>
+        <label className="text-xs font-semibold block mb-1">
+          Район <span className="text-red-500">*</span>
+          {districtError && <span className="ml-2 text-red-500 font-normal">— обязательное поле</span>}
+        </label>
+        {districts.length > 0 ? (
           <select
             value={editing.district || ''}
             onChange={e => setEditing({ ...editing, district: e.target.value })}
-            className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white focus:border-brand-blue outline-none transition-colors"
+            className={`w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none transition-colors ${districtError ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-border focus:border-brand-blue'}`}
           >
-            <option value="">— не указан —</option>
+            <option value="">— выберите район —</option>
             {districts.map(d => (
               <option key={d.id} value={d.name}>{d.name}</option>
             ))}
           </select>
-          <div className="text-xs text-muted-foreground mt-1">
-            Район определяется автоматически по адресу или выбирается вручную
-          </div>
+        ) : (
+          <input
+            value={editing.district || ''}
+            onChange={e => setEditing({ ...editing, district: e.target.value })}
+            placeholder="Введите район вручную"
+            className={`w-full px-3 py-2 border rounded-lg text-sm outline-none transition-colors ${districtError ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-border focus:border-brand-blue'}`}
+          />
+        )}
+        <div className="text-xs text-muted-foreground mt-1">
+          Определяется автоматически по адресу или выбирается вручную
         </div>
-      )}
+      </div>
 
       <div>
         <label className="text-xs text-muted-foreground block mb-1">Линия расположения</label>

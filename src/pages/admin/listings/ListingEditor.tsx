@@ -59,7 +59,7 @@ export default function ListingEditor({
   const tabErrors: Partial<Record<EditorTab, boolean>> = {
     main:     !!(errors.title || errors.category || errors.deal || errors.condition || errors.owner_name || errors.owner_phone),
     photos:   !!errors.photos,
-    location: !!errors.address,
+    location: !!(errors.address || errors.district),
     details:  !!(errors.price || errors.area || errors.floor || errors.total_floors || errors.broker_commission || errors.land_status || errors.land_vri),
     content:  !!errors.description,
     extra:    !!(errors.finishing || errors.building_class || errors.building_year || errors.property_rights),
@@ -128,8 +128,8 @@ export default function ListingEditor({
       const patch: Partial<Listing> = {
         lat: res.lat,
         lng: res.lng,
-        // Район следует за адресом: берём из свежего геокодинга, иначе очищаем
-        district: res.district || '',
+        // Район: геокодинг заполняет только если пользователь не выбрал вручную
+        district: editing.district?.trim() ? editing.district : (res.district || ''),
       };
       setEditing({ ...editing, ...patch });
       return patch;

@@ -436,13 +436,19 @@ export interface District {
   listings_count?: number;
 }
 
+const _districtsCache = new Map<string, District[]>();
+
 export async function fetchDistricts(city?: string): Promise<District[]> {
+  const key = city || '__all__';
+  if (_districtsCache.has(key)) return _districtsCache.get(key)!;
   try {
     const params = city ? `?resource=districts&city=${encodeURIComponent(city)}` : '?resource=districts';
     const res = await fetchWithTimeout(`${LISTINGS_URL}${params}`);
     if (!res.ok) return [];
     const data = await res.json();
-    return data.districts || [];
+    const list: District[] = data.districts || [];
+    _districtsCache.set(key, list);
+    return list;
   } catch {
     return [];
   }
