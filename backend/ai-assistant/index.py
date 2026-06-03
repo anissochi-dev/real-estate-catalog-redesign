@@ -330,14 +330,22 @@ SYSTEM_PROMPTS = {
         'Пример: офис, центр, парковка, евроремонт, открытая планировка'
     ),
     'match': (
-        'Ты — консультант агентства коммерческой недвижимости BIZNEST. '
-        'Клиент описал свою задачу. Тебе дан список доступных объектов в JSON. '
-        'Подбери до 20 наиболее подходящих объектов по критериям клиента (тип, бюджет, площадь, район, цель). '
+        'Ты — опытный консультант агентства коммерческой недвижимости BIZNEST в Краснодаре. '
+        'Клиент описал свою задачу (возможно в свободной форме или диалоге). Тебе дан список доступных объектов в JSON. '
+        'Поля объектов: id, title, category (office/retail/warehouse/restaurant/hotel/business/gab/production/land/building/free_purpose/car_service), '
+        'deal (sale/rent/business), price, area (м²), district, address, floor, total_floors, condition, '
+        'road_line (1=первая линия/2=вторая/3=третья/yard=двор), rooms, parking (none/street/building), '
+        'entrance (street=с улицы/yard=со двора), ceiling_height (м), electricity_kw, utilities, '
+        'purpose (назначение под бизнес), payback (месяцев), profit (руб/мес), monthly_rent (руб/мес), '
+        'building_class, building_year, description (краткое). '
+        'Подбери до 20 наиболее подходящих объектов. Учитывай ВСЕ критерии клиента: тип, бюджет, площадь, район, адрес, '
+        'назначение, этаж, состояние, линию расположения, парковку, вход, потолки, электромощность, коммуникации, доходность, окупаемость. '
+        'Если клиент указал диапазон — фильтруй строго по нему. '
         'Сортируй id от самого релевантного к менее релевантному. '
-        'Если подходящих объектов меньше 20 — верни столько, сколько есть. Если совсем нет — верни пустой массив. '
+        'Если подходящих нет — верни пустой массив ids и объясни почему. '
         'Ответь СТРОГО в формате JSON без markdown и без пояснений вокруг:\n'
-        '{"ids": [id1, id2, ...], "reasoning": "одно предложение почему подобрал именно их", '
-        '"advice": "1-2 предложения совета клиенту и расчёт окупаемости если применимо"}'
+        '{"ids": [id1, id2, ...], "reasoning": "1-2 предложения: какие критерии учёл и почему эти объекты", '
+        '"advice": "1-2 предложения совета клиенту: что ещё уточнить, расчёт окупаемости если применимо"}'
     ),
     'analyze_property': (
         'Ты — старший эксперт-аналитик коммерческой недвижимости Краснодара с 15-летним опытом. '
@@ -4237,13 +4245,17 @@ def handler(event, context):
             if is_public and not is_search_leads:
                 cur.execute(
                     f"SELECT id, title, category, deal, price, area, district, address, "
-                    f"payback, profit, image FROM {SCHEMA}.listings "
-                    f"WHERE status = 'active' ORDER BY id DESC LIMIT 60"
+                    f"payback, profit, monthly_rent, image, floor, total_floors, condition, "
+                    f"road_line, rooms, parking, entrance, ceiling_height, electricity_kw, "
+                    f"utilities, purpose, building_class, building_year, description "
+                    f"FROM {SCHEMA}.listings "
+                    f"WHERE status = 'active' ORDER BY id DESC LIMIT 80"
                 )
                 listings = cur.fetchall()
                 matches = [dict(r) for r in listings]
-                compact = [
-                    {
+                compact = []
+                for r in matches:
+                    obj = {
                         'id': r['id'],
                         'title': r['title'],
                         'category': r['category'],
@@ -4252,10 +4264,25 @@ def handler(event, context):
                         'area': r['area'],
                         'district': r['district'],
                         'address': (r.get('address') or '')[:80],
-                        'payback': r['payback'],
+                        'payback': r.get('payback'),
+                        'profit': r.get('profit'),
+                        'monthly_rent': r.get('monthly_rent'),
                     }
-                    for r in matches
-                ]
+                    if r.get('floor'):          obj['floor'] = r['floor']
+                    if r.get('total_floors'):   obj['total_floors'] = r['total_floors']
+                    if r.get('condition'):      obj['condition'] = r['condition']
+                    if r.get('road_line'):      obj['road_line'] = r['road_line']
+                    if r.get('rooms'):          obj['rooms'] = r['rooms']
+                    if r.get('parking') and r['parking'] != 'none': obj['parking'] = r['parking']
+                    if r.get('entrance'):       obj['entrance'] = r['entrance']
+                    if r.get('ceiling_height'): obj['ceiling_height'] = r['ceiling_height']
+                    if r.get('electricity_kw'): obj['electricity_kw'] = r['electricity_kw']
+                    if r.get('utilities'):      obj['utilities'] = (r['utilities'] or '')[:60]
+                    if r.get('purpose'):        obj['purpose'] = (r['purpose'] or '')[:60]
+                    if r.get('building_class'): obj['building_class'] = r['building_class']
+                    if r.get('building_year'):  obj['building_year'] = r['building_year']
+                    if r.get('description'):    obj['description'] = (r['description'] or '')[:120]
+                    compact.append(obj)
                 ctx_data = {'listings': compact}
 
             # Для search_leads — подтягиваем активные публичные заявки

@@ -323,11 +323,14 @@ export interface AiMatchResult {
   advice: string;
 }
 
-export async function aiMatch(prompt: string): Promise<AiMatchResult> {
+export async function aiMatch(
+  prompt: string,
+  history?: { role: string; text: string }[]
+): Promise<AiMatchResult> {
   const res = await fetch(AI_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'match', prompt }),
+    body: JSON.stringify({ action: 'match', prompt, history: history || [] }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Ошибка ИИ-подбора');
