@@ -223,32 +223,39 @@ export default function PropertyCard({
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/5 to-transparent pointer-events-none" />
 
           {/* Клик по фото открывает страницу объекта */}
-          <Link to={href} className="absolute inset-0" aria-label={property.title} />
+          <Link to={href} className="absolute inset-0 z-[1]" aria-label={property.title} />
 
-
-          {/* Badges сверху-слева */}
-          <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1 z-10">
-            <span className={`text-[10px] font-bold font-display px-2 py-0.5 rounded-full shadow-sm ${DEAL_COLORS[property.deal] ?? 'bg-white/90 text-brand-blue'}`}>
+          {/* ── Бейджи сверху-слева — поверх ссылки ── */}
+          <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1 z-[5] pointer-events-none">
+            <span className={`text-[11px] font-bold font-display px-2.5 py-1 rounded-full shadow ${DEAL_COLORS[property.deal] ?? 'bg-white/90 text-brand-blue'}`}>
               {DEAL_LABELS[property.deal]}
             </span>
-            {property.isHot && (
-              <span className="text-[10px] font-bold font-display px-2 py-0.5 rounded-full bg-brand-orange text-white shadow-sm">🔥 Горячее</span>
+            {property.isUrgent && (
+              <span className="text-[11px] font-bold font-display px-2.5 py-1 rounded-full bg-red-500 text-white shadow flex items-center gap-1">
+                ⚡ Срочно
+              </span>
             )}
-            {showNew && (
-              <span className="text-[10px] font-bold font-display px-2 py-0.5 rounded-full bg-emerald-500 text-white shadow-sm">Новое</span>
+            {property.isHot && (
+              <span className="text-[11px] font-bold font-display px-2.5 py-1 rounded-full bg-orange-500 text-white shadow flex items-center gap-1">
+                🔥 Горячее
+              </span>
             )}
             {property.isExclusive && (
-              <span className="text-[10px] font-bold font-display px-2 py-0.5 rounded-full bg-amber-500 text-white shadow-sm">⭐ Эксклюзив</span>
+              <span className="text-[11px] font-bold font-display px-2.5 py-1 rounded-full bg-amber-400 text-white shadow flex items-center gap-1">
+                ⭐ Эксклюзив
+              </span>
             )}
-            {property.isUrgent && (
-              <span className="text-[10px] font-bold font-display px-2 py-0.5 rounded-full bg-red-600 text-white shadow-sm">⚡ Срочно</span>
+            {showNew && (
+              <span className="text-[11px] font-bold font-display px-2.5 py-1 rounded-full bg-emerald-500 text-white shadow">
+                Новое
+              </span>
             )}
           </div>
 
 
 
           {/* Избранное / сравнение — на тач-устройствах всегда видимы, на десктопе на hover */}
-          <div className="absolute right-2 top-10 flex flex-col gap-1.5 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+          <div className="absolute right-2 top-10 flex flex-col gap-1.5 z-[5] opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
             <button type="button" onClick={e => { e.preventDefault(); onToggleFavorite(property.id); }}
               aria-label="В избранное"
               className={`w-9 h-9 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shadow-md backdrop-blur-sm transition-all ${isFavorite ? 'bg-red-500 text-white' : 'bg-white/90 text-slate-400 hover:text-red-500'}`}>
