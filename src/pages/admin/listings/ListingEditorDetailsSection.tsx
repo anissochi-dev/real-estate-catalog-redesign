@@ -10,14 +10,15 @@ interface Props {
   errors?: Record<string, boolean>;
   setErrors?: (fn: (prev: Record<string, boolean>) => Record<string, boolean>) => void;
   addressError?: boolean;
+  districtError?: boolean;
   locationOnly?: boolean;
   detailsOnly?: boolean;
   onCoordsManualChange?: (manual: boolean) => void;
 }
 
-export default function ListingEditorDetailsSection({ editing, setEditing, cities, landVri, errors, setErrors, addressError, locationOnly, detailsOnly, onCoordsManualChange }: Props) {
+export default function ListingEditorDetailsSection({ editing, setEditing, cities, landVri, errors, setErrors, addressError, districtError, locationOnly, detailsOnly, onCoordsManualChange }: Props) {
   if (locationOnly) {
-    return <AddressWithMap editing={editing} setEditing={setEditing} cities={cities} hasError={addressError} onCoordsManualChange={onCoordsManualChange} />;
+    return <AddressWithMap editing={editing} setEditing={setEditing} cities={cities} hasError={addressError} districtError={districtError} onCoordsManualChange={onCoordsManualChange} />;
   }
   if (detailsOnly) {
     return <ListingRoomFeatures editing={editing} setEditing={setEditing} landVri={landVri} errors={errors} setErrors={setErrors} />;
@@ -25,7 +26,7 @@ export default function ListingEditorDetailsSection({ editing, setEditing, citie
   return (
     <>
       <ListingRoomFeatures editing={editing} setEditing={setEditing} landVri={landVri} errors={errors} setErrors={setErrors} />
-      <AddressWithMap editing={editing} setEditing={setEditing} cities={cities} hasError={addressError} onCoordsManualChange={onCoordsManualChange} />
+      <AddressWithMap editing={editing} setEditing={setEditing} cities={cities} hasError={addressError} districtError={districtError} onCoordsManualChange={onCoordsManualChange} />
     </>
   );
 }
