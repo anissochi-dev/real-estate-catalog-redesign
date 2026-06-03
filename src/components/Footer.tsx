@@ -164,23 +164,6 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
             </div>
           )}
 
-          {/* Правовые документы — по центру */}
-          {legalDocs.length > 0 && (
-            <div className="border-t border-white/10 mt-6 pt-5">
-              <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-x-6 gap-y-2">
-                {legalDocs.map(doc => (
-                  <button
-                    key={doc.label}
-                    onClick={() => setModal({ title: doc.label, content: doc.content })}
-                    className="text-xs text-white/50 hover:text-white/80 active:text-white/90 underline underline-offset-2 transition-colors text-center min-h-[28px]"
-                  >
-                    {doc.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Районы города */}
           {districts.length > 0 && (
             <div className="border-t border-white/10 mt-6 pt-5">
@@ -199,6 +182,23 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
                     {d.listings_count ? (
                       <span className="text-white/40">{d.listings_count}</span>
                     ) : null}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Правовые документы — по центру */}
+          {legalDocs.length > 0 && (
+            <div className="border-t border-white/10 mt-6 pt-5">
+              <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-x-6 gap-y-2">
+                {legalDocs.map(doc => (
+                  <button
+                    key={doc.label}
+                    onClick={() => setModal({ title: doc.label, content: doc.content })}
+                    className="text-xs text-white/50 hover:text-white/80 active:text-white/90 underline underline-offset-2 transition-colors text-center min-h-[28px]"
+                  >
+                    {doc.label}
                   </button>
                 ))}
               </div>
