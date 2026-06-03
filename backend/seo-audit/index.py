@@ -9,7 +9,7 @@ import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-SCHEMA = 't_p71821556_real_estate_catalog_'
+S = 't_p71821556_real_estate_catalog_'
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -30,6 +30,10 @@ def _err(msg, status=400):
             'body': json.dumps({'error': msg}, ensure_ascii=False)}
 
 
+def _safe(s, length=200):
+    return (s or '').replace("'", "''")[:length]
+
+
 def _check_auth(event: dict) -> bool:
     headers = {k.lower(): v for k, v in (event.get('headers') or {}).items()}
     token = (headers.get('x-auth-token') or headers.get('x-authorization') or
@@ -42,9 +46,11 @@ def _check_auth(event: dict) -> bool:
     conn = psycopg2.connect(dsn)
     try:
         with conn.cursor() as cur:
-            safe_token = token.replace("'", "''")
+            t = _safe(token)
             cur.execute(
-                f"SELECT id FROM {SCHEMA}.sessions WHERE token = '{safe_token}' AND expires_at > NOW() LIMIT 1"
+                f"SELECT s.id FROM {S}.sessions s "
+                f"JOIN {S}.users u ON u.id = s.user_id "
+                f"WHERE s.token = '{t}' AND s.expires_at > NOW() AND u.is_active = TRUE LIMIT 1"
             )
             return cur.fetchone() is not None
     finally:
@@ -68,7 +74,6 @@ def handler(event: dict, context) -> dict:
     conn = psycopg2.connect(dsn)
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # Общая статистика активных объектов
             cur.execute(f"""
                 SELECT
                     COUNT(*) AS total,
@@ -86,13 +91,12 @@ def handler(event: dict, context) -> dict:
                     COUNT(*) FILTER (WHERE area = 0 OR area IS NULL) AS no_area,
                     ROUND(AVG(LENGTH(title))::numeric, 1) AS avg_title_len,
                     ROUND(AVG(LENGTH(COALESCE(description,'')))::numeric, 0) AS avg_desc_len
-                FROM {SCHEMA}listings
+                FROM {S}.listings
                 WHERE status = 'active'
             """)
             stats_row = dict(cur.fetchone() or {})
             total = int(stats_row.get('total') or 0)
 
-            # Топ-проблемных объектов (без SEO заголовка или описания)
             cur.execute(f"""
                 SELECT id, title, category, deal,
                     (seo_title IS NULL OR seo_title = '') AS no_seo_title,
@@ -100,7 +104,7 @@ def handler(event: dict, context) -> dict:
                     (description IS NULL OR LENGTH(description) < 50) AS short_desc,
                     (image IS NULL OR image = '') AS no_image,
                     (price IS NULL OR price = 0) AS no_price
-                FROM {SCHEMA}listings
+                FROM {S}.listings
                 WHERE status = 'active'
                     AND (
                         seo_title IS NULL OR seo_title = ''
@@ -113,7 +117,6 @@ def handler(event: dict, context) -> dict:
             """)
             problem_rows = [dict(r) for r in cur.fetchall()]
 
-            # Считаем SEO-score (0..100)
             if total == 0:
                 score = 100
                 issues = []
