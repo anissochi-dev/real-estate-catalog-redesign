@@ -1183,18 +1183,19 @@ def _site_health(cur, conn, method, action, event, user):
     if action == 's3_stats':
         try:
             import boto3
+            from botocore.config import Config as _BotoConfig
             s3 = boto3.client(
                 's3',
                 endpoint_url='https://bucket.poehali.dev',
                 aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
                 aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+                config=_BotoConfig(connect_timeout=10, read_timeout=20),
             )
-            # Считаем файлы по папкам
             paginator = s3.get_paginator('list_objects_v2')
             folders = {'photos': 0, 'news': 0, 'uploads': 0, 'other': 0}
             total_size = 0
             total_files = 0
-            for page in paginator.paginate(Bucket='files', PaginationConfig={'MaxItems': 5000}):
+            for page in paginator.paginate(Bucket='files', PaginationConfig={'MaxItems': 2000}):
                 for obj in page.get('Contents', []):
                     key = obj['Key']
                     size = obj.get('Size', 0)
@@ -1225,16 +1226,12 @@ def _site_health(cur, conn, method, action, event, user):
                 'cdn_base': cdn_base,
             })
         except Exception as e:
-            return _err(500, f'S3 ошибка: {str(e)[:200]}')
+            return _err(500, f'S3 ошибка: {str(e)[:300]}')
 
     # ── ПРОВЕРКА XML-ФИДОВ ───────────────────────────────────────────────────
     if action == 'xml_check':
         import urllib.request as _ur3
         import xml.etree.ElementTree as ET
-
-        # Получаем URL фидов из настроек или из func2url
-        cur.execute(f"SELECT company_name FROM {SCHEMA}.settings ORDER BY id LIMIT 1")
-        row = cur.fetchone() or {}
 
         feeds_to_check = []
         try:
@@ -1257,32 +1254,28 @@ def _site_health(cur, conn, method, action, event, user):
         results = []
         for feed in feeds_to_check:
             try:
-                req3 = _ur3.Request(feed['url'], headers={'User-Agent': 'Mozilla/5.0'})
-                resp = _ur3.urlopen(req3, timeout=15)
-                http_status = resp.status
+                _req3 = _ur3.Request(feed['url'], headers={'User-Agent': 'Mozilla/5.0'})
+                _resp3 = _ur3.urlopen(_req3, timeout=15)
+                http_status = _resp3.status
 
-                # Потоковый подсчёт элементов — не грузим весь файл в память
                 item_count = 0
                 root_tag = ''
                 total_bytes = 0
                 parser = ET.XMLPullParser(events=('start',))
-                depth0_tag = ''
-                child_tags = set()
                 try:
                     while True:
-                        chunk = resp.read(32768)  # читаем по 32 КБ
+                        chunk = _resp3.read(32768)
                         if not chunk:
                             break
                         total_bytes += len(chunk)
                         parser.feed(chunk)
-                        for event, elem in parser.read_events():
+                        for _ev, elem in parser.read_events():
                             if not root_tag:
                                 root_tag = elem.tag
                             elif elem.tag != root_tag:
-                                child_tags.add(elem.tag)
                                 item_count += 1
-                            elem.clear()  # не держим в памяти
-                        if total_bytes > 10 * 1024 * 1024:  # стоп после 10 МБ
+                            elem.clear()
+                        if total_bytes > 10 * 1024 * 1024:
                             break
                     results.append({
                         'name': feed['name'],
@@ -1301,7 +1294,7 @@ def _site_health(cur, conn, method, action, event, user):
                         'size_kb': round(total_bytes / 1024, 1),
                     })
             except Exception as e:
-                results.append({'name': feed['name'], 'ok': False, 'error': str(e)[:120]})
+                results.append({'name': feed['name'], 'ok': False, 'error': str(e)[:200]})
 
         all_ok = all(f.get('ok') for f in results)
         return _ok({'feeds': results, 'all_ok': all_ok, 'checked': len(results)})
