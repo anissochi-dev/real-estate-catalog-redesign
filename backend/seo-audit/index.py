@@ -148,6 +148,16 @@ def handler(event: dict, context) -> dict:
                         severity = 'error' if fill_pct < 50 else 'warning' if fill_pct < 80 else 'info'
                         issues.append({'key': key, 'message': msg, 'fill_pct': fill_pct, 'severity': severity})
 
+            # Список всех активных объектов с пометкой has_faq для управления FAQ
+            cur.execute(f"""
+                SELECT id, title,
+                    (seo_faq IS NOT NULL AND seo_faq::text != '[]' AND seo_faq::text != 'null') AS has_faq
+                FROM {S}.listings
+                WHERE status = 'active'
+                ORDER BY id DESC
+            """)
+            all_listings = [dict(r) for r in cur.fetchall()]
+
             return _ok({
                 'score': score,
                 'total': total,
@@ -168,6 +178,7 @@ def handler(event: dict, context) -> dict:
                 },
                 'issues': issues,
                 'top_problems': problem_rows,
+                'all_listings': all_listings,
             })
     finally:
         conn.close()

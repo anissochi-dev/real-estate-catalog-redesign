@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
 
@@ -21,6 +21,7 @@ interface AuditData {
   stats: Record<string, number>;
   issues: { key: string; message: string; fill_pct: number; severity: string }[];
   top_problems: { id: number; title: string; category: string; no_seo_title: boolean; no_seo_desc: boolean; short_desc: boolean; no_image: boolean; no_faq: boolean }[];
+  all_listings: { id: number; title: string; has_faq: boolean }[];
 }
 
 interface FixResult {
@@ -43,6 +44,10 @@ export default function SeoAuditTab() {
   const [fixedIds, setFixedIds] = useState<Set<number>>(new Set());
   const [fixingFaqId, setFixingFaqId] = useState<number | null>(null);
   const [fixedFaqIds, setFixedFaqIds] = useState<Set<number>>(new Set());
+  const [faqSearch, setFaqSearch] = useState('');
+  const [faqFilter, setFaqFilter] = useState<'all' | 'has' | 'missing'>('all');
+  const [regeneratingAll, setRegeneratingAll] = useState(false);
+  const [regenProgress, setRegenProgress] = useState({ done: 0, total: 0 });
 
   const load = async () => {
     setLoading(true); setErr('');
@@ -125,14 +130,14 @@ export default function SeoAuditTab() {
     }
   };
 
-  const fixOneFaq = async (id: number) => {
+  const fixOneFaq = async (id: number, force = false) => {
     setFixingFaqId(id); setFixErr('');
     const tok = refreshToken();
     try {
       const r = await fetch(FAQ_URL, {
         method: 'POST',
         headers: { 'X-Auth-Token': tok || '', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ listing_id: id }),
+        body: JSON.stringify({ listing_id: id, force }),
       });
       const d = await r.json();
       if (!r.ok || d.error) { setFixErr(d.error || `Ошибка ${r.status}`); return; }
@@ -144,7 +149,37 @@ export default function SeoAuditTab() {
     }
   };
 
+  const regenerateAllFaq = async () => {
+    if (!data?.all_listings) return;
+    const ids = data.all_listings.map(l => l.id);
+    setRegeneratingAll(true);
+    setRegenProgress({ done: 0, total: ids.length });
+    const tok = refreshToken();
+    for (let i = 0; i < ids.length; i++) {
+      try {
+        await fetch(FAQ_URL, {
+          method: 'POST',
+          headers: { 'X-Auth-Token': tok || '', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ listing_id: ids[i], force: true }),
+        });
+        setFixedFaqIds(prev => new Set(prev).add(ids[i]));
+      } catch { /* продолжаем */ }
+      setRegenProgress({ done: i + 1, total: ids.length });
+    }
+    setRegeneratingAll(false);
+    await load();
+  };
+
   useEffect(() => { load(); }, []);
+
+  const filteredFaqListings = useMemo(() => {
+    if (!data?.all_listings) return [];
+    return data.all_listings.filter(l => {
+      const matchSearch = !faqSearch || l.title.toLowerCase().includes(faqSearch.toLowerCase()) || String(l.id).includes(faqSearch);
+      const matchFilter = faqFilter === 'all' || (faqFilter === 'has' ? (l.has_faq || fixedFaqIds.has(l.id)) : (!l.has_faq && !fixedFaqIds.has(l.id)));
+      return matchSearch && matchFilter;
+    });
+  }, [data?.all_listings, faqSearch, faqFilter, fixedFaqIds]);
 
   const scoreColor = !data ? '' : data.score >= 80 ? 'text-emerald-600' : data.score >= 50 ? 'text-amber-600' : 'text-red-600';
   const scoreBg   = !data ? '' : data.score >= 80 ? 'bg-emerald-50 border-emerald-200' : data.score >= 50 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200';
@@ -356,6 +391,89 @@ export default function SeoAuditTab() {
               <Icon name="CheckCircle2" size={32} className="text-emerald-500 mx-auto mb-2" />
               <div className="font-display font-700 text-lg text-emerald-700">Всё отлично!</div>
               <div className="text-sm text-emerald-600 mt-1">SEO-проблем не найдено</div>
+            </div>
+          )}
+
+          {/* FAQ-менеджер */}
+          {data.all_listings?.length > 0 && (
+            <div className="bg-white rounded-2xl border border-border p-5">
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+                <div>
+                  <h3 className="font-display font-700 text-base flex items-center gap-2">
+                    <Icon name="HelpCircle" size={16} className="text-blue-500" />
+                    Управление FAQ объектов
+                  </h3>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Заполнено: {data.stats.has_faq || 0} из {data.total} объектов
+                  </div>
+                </div>
+                <button
+                  onClick={regenerateAllFaq}
+                  disabled={regeneratingAll}
+                  className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl flex items-center gap-1.5 disabled:opacity-50 transition-colors"
+                >
+                  <Icon name={regeneratingAll ? 'Loader2' : 'RefreshCw'} size={13} className={regeneratingAll ? 'animate-spin' : ''} />
+                  {regeneratingAll
+                    ? `Генерирую ${regenProgress.done}/${regenProgress.total}...`
+                    : 'Перегенерировать все FAQ'}
+                </button>
+              </div>
+
+              {/* Поиск и фильтр */}
+              <div className="flex gap-2 mb-3 flex-wrap">
+                <div className="relative flex-1 min-w-40">
+                  <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    value={faqSearch}
+                    onChange={e => setFaqSearch(e.target.value)}
+                    placeholder="Поиск по названию или ID..."
+                    className="w-full pl-8 pr-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:border-brand-blue"
+                  />
+                </div>
+                <div className="flex rounded-lg border border-border overflow-hidden text-xs">
+                  {([['all', 'Все'], ['missing', 'Нет FAQ'], ['has', 'Есть FAQ']] as const).map(([v, l]) => (
+                    <button key={v} onClick={() => setFaqFilter(v)}
+                      className={`px-3 py-2 transition-colors ${faqFilter === v ? 'bg-brand-blue text-white' : 'hover:bg-muted text-muted-foreground'}`}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Список объектов */}
+              <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
+                {filteredFaqListings.map(l => {
+                  const hasFaq = l.has_faq || fixedFaqIds.has(l.id);
+                  const isGenerating = fixingFaqId === l.id;
+                  return (
+                    <div key={l.id} className="flex items-center gap-3 px-3 py-2 rounded-xl border border-border hover:bg-muted/30 transition-colors">
+                      <span className="text-[11px] font-mono text-muted-foreground w-10 shrink-0">#{l.id}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm truncate">{l.title}</div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {hasFaq
+                          ? <span className="text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded flex items-center gap-1">
+                              <Icon name="Check" size={9} /> Есть
+                            </span>
+                          : <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded">Нет</span>
+                        }
+                        <button
+                          onClick={() => fixOneFaq(l.id, hasFaq)}
+                          disabled={isGenerating || regeneratingAll}
+                          className={`text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1 disabled:opacity-50 transition-colors ${hasFaq ? 'bg-muted hover:bg-blue-50 hover:text-blue-600 border border-border' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+                        >
+                          <Icon name={isGenerating ? 'Loader2' : hasFaq ? 'RefreshCw' : 'Sparkles'} size={11} className={isGenerating ? 'animate-spin' : ''} />
+                          {isGenerating ? '...' : hasFaq ? 'Обновить' : 'Создать'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {filteredFaqListings.length === 0 && (
+                  <div className="text-center py-6 text-sm text-muted-foreground">Объекты не найдены</div>
+                )}
+              </div>
             </div>
           )}
         </>

@@ -195,6 +195,7 @@ def handler(event: dict, context) -> dict:
         listing_id = int(listing_id)
     except (TypeError, ValueError):
         return _json_resp(400, {'error': 'listing_id must be an integer'})
+    force = bool(body.get('force', False))  # True — сбросить кеш и перегенерировать
 
     dsn = os.environ.get('DATABASE_URL')
     if not dsn:
@@ -220,8 +221,8 @@ def handler(event: dict, context) -> dict:
                 return _json_resp(404, {'error': 'Listing not found'})
             listing = dict(listing)
 
-            # Кеш
-            if has_seo_faq:
+            # Кеш (пропускаем если force=True)
+            if has_seo_faq and not force:
                 cached = listing.get('seo_faq')
                 if cached:
                     if isinstance(cached, str):
