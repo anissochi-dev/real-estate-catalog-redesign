@@ -1,17 +1,21 @@
 """
-Business: Генерация FAQ (вопрос-ответ) для страницы объекта недвижимости через OpenAI GPT-4o-mini.
-Кеширует результат в поле seo_faq таблицы listings (если поле существует).
-Args: POST { listing_id: int, token?: str }
+Business: Генерация FAQ (вопрос-ответ) для страницы объекта недвижимости через YandexGPT.
+Кеширует результат в поле seo_faq таблицы listings.
+Args: POST { listing_id: int }
 Returns: { faq: [{question: str, answer: str}, ...] }
 """
 
 import json
 import os
+import re
+import urllib.request
+import urllib.error
 import psycopg2
 from psycopg2.extras import RealDictCursor
-import openai
 
-SCHEMA = 't_p71821556_real_estate_catalog_'  # используется как {SCHEMA}.table
+SCHEMA = 't_p71821556_real_estate_catalog_'
+YANDEX_GPT_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
+YANDEX_MODEL = 'yandexgpt/rc'
 
 DEAL_LABELS = {
     'sale': 'продажа',
@@ -49,10 +53,21 @@ def _json_resp(status: int, data: dict) -> dict:
     }
 
 
+def _load_yandex_keys(cur) -> tuple:
+    """Загружает ключи YandexGPT из БД, fallback — env."""
+    try:
+        cur.execute(f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
+        row = cur.fetchone()
+        if row:
+            return row.get('yandex_api_key') or '', row.get('yandex_folder_id') or ''
+    except Exception:
+        pass
+    return os.environ.get('YANDEX_API_KEY', ''), os.environ.get('YANDEX_FOLDER_ID', '')
+
+
 def _check_seo_faq_column(cur) -> bool:
     """Проверяет наличие колонки seo_faq в таблице listings через information_schema."""
-    # SCHEMA = 't_p71821556_real_estate_catalog_' — имя схемы включает финальный _
-    schema_name = SCHEMA.rstrip('.')  # убираем только точку если есть, _ оставляем
+    schema_name = SCHEMA.rstrip('.')  # SCHEMA уже содержит финальный _
     cur.execute(
         "SELECT 1 FROM information_schema.columns "
         "WHERE table_schema = %s AND table_name = 'listings' AND column_name = 'seo_faq'",
@@ -63,7 +78,7 @@ def _check_seo_faq_column(cur) -> bool:
 
 def _build_prompt(listing: dict) -> str:
     deal = DEAL_LABELS.get(listing.get('deal') or '', listing.get('deal') or '')
-    obj_type = TYPE_LABELS.get(listing.get('category') or listing.get('type') or '', listing.get('category') or '')
+    obj_type = TYPE_LABELS.get(listing.get('category') or '', listing.get('category') or '')
     area = listing.get('area')
     price = listing.get('price')
     address = listing.get('address') or ''
@@ -85,11 +100,7 @@ def _build_prompt(listing: dict) -> str:
             else:
                 price_str = f'{int(price):,} руб.'.replace(',', ' ')
 
-    lines = [
-        f'Объект: {title}',
-        f'Тип: {obj_type}',
-        f'Вид сделки: {deal}',
-    ]
+    lines = [f'Объект: {title}', f'Тип: {obj_type}', f'Вид сделки: {deal}']
     if area:
         lines.append(f'Площадь: {area} м²')
     if price_str:
@@ -101,58 +112,57 @@ def _build_prompt(listing: dict) -> str:
     if description:
         lines.append(f'Описание: {description}')
 
-    card = '\n'.join(lines)
+    return '\n'.join(lines)
 
-    prompt = (
-        'Ты — эксперт по коммерческой недвижимости. '
-        'На основе данных объекта составь 4-5 вопросов и ответов, '
-        'которые чаще всего задают потенциальные арендаторы или покупатели. '
-        'Вопросы должны быть конкретными и полезными, ответы — информативными, 1-3 предложения. '
-        'Не придумывай данные которых нет в карточке. '
-        'Отвечай строго в формате JSON-массива:\n'
-        '[{"question": "...", "answer": "..."}, ...]\n\n'
-        'Карточка объекта:\n'
-        f'{card}'
+
+def _call_yandex_gpt(api_key: str, folder_id: str, user_text: str) -> dict:
+    """Вызывает YandexGPT и возвращает {'text': ...} или {'error': ...}."""
+    system = (
+        'Ты — эксперт по коммерческой недвижимости России. '
+        'Составь 4-5 вопросов и ответов, которые чаще всего задают потенциальные арендаторы или покупатели. '
+        'Вопросы конкретные, ответы — 1-3 предложения. Не придумывай данных которых нет в карточке. '
+        'Отвечай СТРОГО в формате JSON-массива без markdown и пояснений:\n'
+        '[{"question": "...", "answer": "..."}, ...]'
     )
-    return prompt
-
-
-def _generate_faq(listing: dict) -> list:
-    """Вызывает OpenAI GPT-4o-mini и возвращает список {question, answer}."""
-    client = openai.OpenAI(api_key=os.environ['OPENAI_API_KEY'])
-    prompt = _build_prompt(listing)
-
-    response = client.chat.completions.create(
-        model='gpt-4o-mini',
-        messages=[
-            {
-                'role': 'system',
-                'content': (
-                    'Ты эксперт по коммерческой недвижимости России. '
-                    'Отвечаешь только на русском языке. '
-                    'Возвращаешь только валидный JSON без пояснений и markdown.'
-                ),
-            },
-            {'role': 'user', 'content': prompt},
+    payload = {
+        'modelUri': f'gpt://{folder_id}/{YANDEX_MODEL}',
+        'completionOptions': {'stream': False, 'temperature': 0.4, 'maxTokens': '1200'},
+        'messages': [
+            {'role': 'system', 'text': system},
+            {'role': 'user', 'text': user_text},
         ],
-        temperature=0.5,
-        max_tokens=1200,
+    }
+    req = urllib.request.Request(
+        YANDEX_GPT_URL,
+        data=json.dumps(payload).encode(),
+        headers={
+            'Authorization': f'Api-Key {api_key}',
+            'Content-Type': 'application/json',
+            'x-folder-id': folder_id,
+        },
+        method='POST',
     )
+    try:
+        with urllib.request.urlopen(req, timeout=45) as resp:
+            data = json.loads(resp.read().decode())
+        alts = (data.get('result') or {}).get('alternatives') or []
+        text = ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
+        return {'text': text}
+    except urllib.error.HTTPError as e:
+        return {'error': f'YandexGPT HTTP {e.code}'}
+    except Exception as e:
+        return {'error': f'{type(e).__name__}: {str(e)[:200]}'}
 
-    raw = response.choices[0].message.content or ''
 
-    # Вырезаем ```json ... ``` если модель всё-таки добавила markdown
-    raw = raw.strip()
-    if raw.startswith('```'):
-        raw = raw.split('```', 2)[-1] if raw.count('```') >= 2 else raw
-        if raw.startswith('json'):
-            raw = raw[4:]
-        raw = raw.rsplit('```', 1)[0].strip()
-
-    faq = json.loads(raw)
+def _parse_faq(text: str) -> list:
+    """Парсит JSON-массив из ответа YandexGPT, игнорирует markdown-обёртку."""
+    text = text.strip()
+    # Убираем ```json ... ```
+    text = re.sub(r'^```[a-zA-Z]*\s*', '', text)
+    text = re.sub(r'\s*```$', '', text).strip()
+    faq = json.loads(text)
     if not isinstance(faq, list):
-        raise ValueError('GPT вернул не массив')
-
+        raise ValueError('Ответ не является JSON-массивом')
     result = []
     for item in faq:
         if isinstance(item, dict) and item.get('question') and item.get('answer'):
@@ -164,32 +174,23 @@ def _generate_faq(listing: dict) -> list:
 
 
 def handler(event: dict, context) -> dict:
+    """Генерирует FAQ для объекта недвижимости через YandexGPT и кеширует в seo_faq."""
     method = event.get('httpMethod', 'POST').upper()
 
     if method == 'OPTIONS':
-        return {
-            'statusCode': 200,
-            'headers': {
-                **CORS_HEADERS,
-                'Access-Control-Max-Age': '86400',
-            },
-            'body': '',
-        }
+        return {'statusCode': 200, 'headers': {**CORS_HEADERS, 'Access-Control-Max-Age': '86400'}, 'body': ''}
 
     if method != 'POST':
         return _json_resp(405, {'error': 'Method not allowed'})
 
-    # Парсим тело
-    body_raw = event.get('body') or '{}'
     try:
-        body = json.loads(body_raw)
+        body = json.loads(event.get('body') or '{}')
     except Exception:
         return _json_resp(400, {'error': 'Invalid JSON body'})
 
     listing_id = body.get('listing_id')
     if not listing_id:
         return _json_resp(400, {'error': 'listing_id is required'})
-
     try:
         listing_id = int(listing_id)
     except (TypeError, ValueError):
@@ -203,32 +204,23 @@ def handler(event: dict, context) -> dict:
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
 
-            # Проверяем наличие колонки seo_faq
             has_seo_faq = _check_seo_faq_column(cur)
+            api_key, folder_id = _load_yandex_keys(cur)
 
-            # Получаем объект из БД
+            if not api_key or not folder_id:
+                return _json_resp(503, {'error': 'YandexGPT не настроен. Добавьте ключи в Настройки → Интеграции.'})
+
+            # Получаем объект
+            fields = 'id, title, description, category, deal, price, area, address, district, city'
             if has_seo_faq:
-                cur.execute(
-                    f"SELECT id, title, description, category, deal, price, area, "
-                    f"address, district, city, seo_faq "
-                    f"FROM {SCHEMA}.listings WHERE id = %s",
-                    (listing_id,),
-                )
-            else:
-                cur.execute(
-                    f"SELECT id, title, description, category, deal, price, area, "
-                    f"address, district, city "
-                    f"FROM {SCHEMA}.listings WHERE id = %s",
-                    (listing_id,),
-                )
-
+                fields += ', seo_faq'
+            cur.execute(f"SELECT {fields} FROM {SCHEMA}.listings WHERE id = %s", (listing_id,))
             listing = cur.fetchone()
             if not listing:
                 return _json_resp(404, {'error': 'Listing not found'})
-
             listing = dict(listing)
 
-            # Кеш: если seo_faq уже есть в БД — возвращаем без вызова GPT
+            # Кеш
             if has_seo_faq:
                 cached = listing.get('seo_faq')
                 if cached:
@@ -240,20 +232,22 @@ def handler(event: dict, context) -> dict:
                     if isinstance(cached, list) and len(cached) > 0:
                         return _json_resp(200, {'faq': cached, 'cached': True})
 
-            # Генерируем FAQ через OpenAI
+            # Генерируем через YandexGPT
+            prompt = _build_prompt(listing)
+            result = _call_yandex_gpt(api_key, folder_id, prompt)
+
+            if 'error' in result:
+                return _json_resp(502, {'error': result['error']})
+
             try:
-                faq = _generate_faq(listing)
-            except json.JSONDecodeError as e:
-                return _json_resp(502, {'error': f'GPT returned invalid JSON: {e}'})
-            except openai.OpenAIError as e:
-                return _json_resp(502, {'error': f'OpenAI error: {e}'})
+                faq = _parse_faq(result['text'])
             except Exception as e:
-                return _json_resp(502, {'error': f'Generation failed: {e}'})
+                return _json_resp(502, {'error': f'Не удалось распарсить ответ ИИ: {e}'})
 
             if not faq:
-                return _json_resp(502, {'error': 'GPT returned empty FAQ'})
+                return _json_resp(502, {'error': 'ИИ вернул пустой FAQ'})
 
-            # Сохраняем в seo_faq если колонка существует
+            # Сохраняем в БД
             if has_seo_faq:
                 try:
                     cur.execute(
@@ -263,9 +257,7 @@ def handler(event: dict, context) -> dict:
                     conn.commit()
                 except Exception:
                     conn.rollback()
-                    # Не фатально — всё равно вернём FAQ
 
             return _json_resp(200, {'faq': faq, 'cached': False})
-
     finally:
         conn.close()
