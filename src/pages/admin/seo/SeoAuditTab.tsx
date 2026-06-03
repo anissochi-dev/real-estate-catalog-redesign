@@ -62,7 +62,10 @@ export default function SeoAuditTab() {
   const fixWithAI = async () => {
     setFixing(true); setFixErr(''); setFixResult(null);
     const tok = refreshToken();
+    let processed = 0;
+    let errors = 0;
     try {
+      // 1. SEO-заголовки и описания
       const r = await fetch(AUTO_SEO_URL, {
         method: 'POST',
         headers: { 'X-Auth-Token': tok || '', 'Content-Type': 'application/json' },
@@ -70,7 +73,31 @@ export default function SeoAuditTab() {
       });
       const d = await r.json();
       if (!r.ok || d.error) { setFixErr(d.error || `Ошибка ${r.status}`); return; }
-      setFixResult(d as FixResult);
+      processed += d.processed || 0;
+      errors += d.errors || 0;
+
+      // 2. FAQ для объектов без него
+      const noFaqIds = (data?.top_problems || [])
+        .filter(p => p.no_faq)
+        .map(p => p.id);
+      for (const id of noFaqIds) {
+        try {
+          const fr = await fetch(FAQ_URL, {
+            method: 'POST',
+            headers: { 'X-Auth-Token': tok || '', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ listing_id: id }),
+          });
+          const fd = await fr.json();
+          if (fr.ok && !fd.error) {
+            processed += 1;
+            setFixedFaqIds(prev => new Set(prev).add(id));
+          } else {
+            errors += 1;
+          }
+        } catch { errors += 1; }
+      }
+
+      setFixResult({ processed, skipped: 0, errors });
       await load();
     } catch (e) {
       setFixErr(e instanceof Error ? e.message : 'Ошибка соединения');
@@ -125,7 +152,8 @@ export default function SeoAuditTab() {
   const missingSeo = data
     ? (data.total - (data.stats.has_seo_title || 0)) + (data.total - (data.stats.has_seo_desc || 0))
     : 0;
-  const canFix = missingSeo > 0;
+  const missingFaq = data ? (data.total - (data.stats.has_faq || 0)) : 0;
+  const canFix = missingSeo > 0 || missingFaq > 0;
 
   return (
     <div className="space-y-4">
@@ -140,7 +168,7 @@ export default function SeoAuditTab() {
             <button onClick={fixWithAI} disabled={fixing || loading}
               className="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 disabled:opacity-50 transition-colors">
               <Icon name={fixing ? 'Loader2' : 'Wand2'} size={15} className={fixing ? 'animate-spin' : ''} />
-              {fixing ? 'Генерирую SEO...' : 'Исправить через ИИ'}
+              {fixing ? 'Генерирую...' : `Исправить через ИИ${missingFaq > 0 && missingSeo === 0 ? ` (FAQ: ${missingFaq})` : ''}`}
             </button>
           )}
           <button onClick={load} disabled={loading}
@@ -162,8 +190,8 @@ export default function SeoAuditTab() {
         <div className="bg-violet-50 border border-violet-200 rounded-2xl px-5 py-4 flex items-center gap-3 text-sm text-violet-700">
           <Icon name="Loader2" size={18} className="animate-spin shrink-0" />
           <div>
-            <div className="font-semibold">ИИ генерирует SEO-тексты...</div>
-            <div className="text-violet-500 mt-0.5">Это может занять до 1 минуты</div>
+            <div className="font-semibold">ИИ генерирует SEO и FAQ...</div>
+            <div className="text-violet-500 mt-0.5">Это может занять несколько минут</div>
           </div>
         </div>
       )}
