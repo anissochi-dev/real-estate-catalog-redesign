@@ -48,7 +48,7 @@ def _check_auth(event: dict) -> bool:
         with conn.cursor() as cur:
             t = _safe(token)
             cur.execute(
-                f"SELECT s.id FROM {S}.sessions s "
+                f"SELECT u.id FROM {S}.sessions s "
                 f"JOIN {S}.users u ON u.id = s.user_id "
                 f"WHERE s.token = '{t}' AND s.expires_at > NOW() AND u.is_active = TRUE LIMIT 1"
             )
