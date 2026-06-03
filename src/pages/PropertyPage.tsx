@@ -11,7 +11,6 @@ import PropertyMainContent from '@/components/property/PropertyMainContent';
 import PropertySidebar from '@/components/property/PropertySidebar';
 import { TYPE_LABELS, DEAL_LABELS } from '@/components/property/propertyLabels';
 import AIMatchModal from '@/components/AIMatchModal';
-import PropertyAnalyzeModal from '@/components/PropertyAnalyzeModal';
 import SchemaOrg, { makeRealEstateSchema, makeBreadcrumbSchema, makeVideoObjectSchema, makeFaqSchema } from '@/components/SchemaOrg';
 
 interface Props {
@@ -39,7 +38,6 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   const [copied, setCopied] = useState(false);
   const [aiQuery, setAiQuery] = useState('');
   const [aiOpen, setAiOpen] = useState(false);
-  const [analyzeOpen, setAnalyzeOpen] = useState(false);
   const [faq, setFaq] = useState<{ question: string; answer: string }[]>([]);
   const [faqLoading, setFaqLoading] = useState(false);
 
@@ -275,9 +273,8 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
           </div>
         </div>
 
-        {/* ИИ-панель: подбор похожих + анализ объекта */}
-        <div className="bg-gradient-to-r from-brand-blue to-indigo-600 rounded-2xl px-4 py-3 mb-4 space-y-2.5">
-          {/* Строка поиска похожих */}
+        {/* ИИ-панель: подбор похожих */}
+        <div className="bg-gradient-to-r from-brand-blue to-indigo-600 rounded-2xl px-4 py-3 mb-4">
           <form
             onSubmit={e => { e.preventDefault(); setAiOpen(true); }}
             className="flex items-center gap-2"
@@ -304,22 +301,6 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
               Найти с ИИ
             </button>
           </form>
-          {/* Разделитель */}
-          <div className="border-t border-white/10" />
-          {/* Кнопка ИИ-анализа */}
-          <button
-            onClick={() => setAnalyzeOpen(true)}
-            className="w-full flex items-center gap-2.5 text-left group"
-          >
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-400 to-purple-600 flex items-center justify-center flex-shrink-0">
-              <Icon name="Brain" size={14} className="text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-white text-xs font-semibold leading-tight">ИИ-анализ объекта</div>
-              <div className="text-white/50 text-[10px] leading-tight">Цены, ликвидность, инфраструктура, УТП и готовое описание</div>
-            </div>
-            <Icon name="ChevronRight" size={14} className="text-white/40 group-hover:text-white/70 transition flex-shrink-0" />
-          </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -446,11 +427,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
         initialPrompt={aiQuery || `${dealLabel} ${typeLabel} ${item.area} м² ${item.city || 'Краснодар'}`}
         autoSubmit
       />
-      <PropertyAnalyzeModal
-        open={analyzeOpen}
-        onClose={() => setAnalyzeOpen(false)}
-        item={item}
-      />
+
     </article>
   );
 }
