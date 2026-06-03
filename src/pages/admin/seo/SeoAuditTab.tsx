@@ -38,6 +38,8 @@ export default function SeoAuditTab() {
   const [fixing, setFixing] = useState(false);
   const [fixResult, setFixResult] = useState<FixResult | null>(null);
   const [fixErr, setFixErr] = useState('');
+  const [fixingId, setFixingId] = useState<number | null>(null);
+  const [fixedIds, setFixedIds] = useState<Set<number>>(new Set());
 
   const load = async () => {
     setLoading(true); setErr('');
@@ -71,6 +73,25 @@ export default function SeoAuditTab() {
       setFixErr(e instanceof Error ? e.message : 'Ошибка соединения');
     } finally {
       setFixing(false);
+    }
+  };
+
+  const fixOne = async (id: number) => {
+    setFixingId(id); setFixErr('');
+    const tok = refreshToken();
+    try {
+      const r = await fetch(AUTO_SEO_URL, {
+        method: 'POST',
+        headers: { 'X-Auth-Token': tok || '', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'run', listing_id: id }),
+      });
+      const d = await r.json();
+      if (!r.ok || d.error) { setFixErr(d.error || `Ошибка ${r.status}`); return; }
+      setFixedIds(prev => new Set(prev).add(id));
+    } catch (e) {
+      setFixErr(e instanceof Error ? e.message : 'Ошибка соединения');
+    } finally {
+      setFixingId(null);
     }
   };
 
@@ -230,18 +251,35 @@ export default function SeoAuditTab() {
               <h3 className="font-display font-700 text-base mb-3">Объекты требуют внимания</h3>
               <div className="space-y-2">
                 {data.top_problems.map(p => (
-                  <div key={p.id} className="flex items-center gap-3 border border-border rounded-xl px-4 py-3 hover:bg-muted/30 transition-colors">
+                  <div key={p.id} className={`flex items-center gap-3 border rounded-xl px-4 py-3 transition-colors ${fixedIds.has(p.id) ? 'bg-emerald-50 border-emerald-200' : 'border-border hover:bg-muted/30'}`}>
                     <span className="text-xs font-mono text-muted-foreground shrink-0">#{p.id}</span>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-semibold truncate">{p.title}</div>
                       <div className="flex gap-1.5 mt-1 flex-wrap">
-                        {p.no_seo_title && <span className="text-[10px] bg-red-50 text-red-600 border border-red-200 px-1.5 py-0.5 rounded">Нет SEO-заголовка</span>}
-                        {p.no_seo_desc  && <span className="text-[10px] bg-red-50 text-red-600 border border-red-200 px-1.5 py-0.5 rounded">Нет SEO-описания</span>}
-                        {p.short_desc   && <span className="text-[10px] bg-amber-50 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded">Короткое описание</span>}
-                        {p.no_image     && <span className="text-[10px] bg-amber-50 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded">Нет фото</span>}
+                        {fixedIds.has(p.id)
+                          ? <span className="text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded">SEO заполнен ИИ</span>
+                          : <>
+                              {p.no_seo_title && <span className="text-[10px] bg-red-50 text-red-600 border border-red-200 px-1.5 py-0.5 rounded">Нет SEO-заголовка</span>}
+                              {p.no_seo_desc  && <span className="text-[10px] bg-red-50 text-red-600 border border-red-200 px-1.5 py-0.5 rounded">Нет SEO-описания</span>}
+                              {p.short_desc   && <span className="text-[10px] bg-amber-50 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded">Короткое описание</span>}
+                              {p.no_image     && <span className="text-[10px] bg-amber-50 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded">Нет фото</span>}
+                            </>
+                        }
                       </div>
                     </div>
-                    <a href={`/admin#listings-${p.id}`} className="text-xs text-brand-blue hover:underline shrink-0">Открыть</a>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {(p.no_seo_title || p.no_seo_desc) && !fixedIds.has(p.id) && (
+                        <button
+                          onClick={() => fixOne(p.id)}
+                          disabled={fixingId === p.id}
+                          className="text-[11px] bg-violet-600 hover:bg-violet-700 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 disabled:opacity-50 transition-colors"
+                        >
+                          <Icon name={fixingId === p.id ? 'Loader2' : 'Wand2'} size={11} className={fixingId === p.id ? 'animate-spin' : ''} />
+                          {fixingId === p.id ? 'Генерирую...' : 'ИИ'}
+                        </button>
+                      )}
+                      <a href={`/admin#listings-${p.id}`} className="text-xs text-brand-blue hover:underline">Открыть</a>
+                    </div>
                   </div>
                 ))}
               </div>
