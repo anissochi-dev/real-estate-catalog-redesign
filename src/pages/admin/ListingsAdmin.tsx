@@ -205,7 +205,8 @@ export default function ListingsAdmin() {
         <ListingInternalCard
           listingId={internalCardId}
           onClose={() => setInternalCardId(null)}
-          onBrokerChanged={() => { setInternalCardId(null); /* listings reload is not needed since broker_name is loaded fresh each open */ }}
+          onBrokerChanged={() => { setInternalCardId(null); }}
+          onEdit={listing => { setInternalCardId(null); s.openEdit(listing); }}
         />
       )}
     </div>

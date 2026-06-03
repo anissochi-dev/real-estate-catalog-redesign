@@ -14,9 +14,10 @@ interface Props {
   listingId: number;
   onClose: () => void;
   onBrokerChanged?: () => void;
+  onEdit?: (listing: Listing) => void;
 }
 
-export default function ListingInternalCard({ listingId, onClose, onBrokerChanged }: Props) {
+export default function ListingInternalCard({ listingId, onClose, onBrokerChanged, onEdit }: Props) {
   const { user } = useAuth();
   const { settings } = useSettings();
   const [tab, setTab] = useState<TabId>('overview');
@@ -81,6 +82,15 @@ export default function ListingInternalCard({ listingId, onClose, onBrokerChange
             </div>
             <div className="text-xs text-muted-foreground mt-0.5">{catLabel} · {dealLabel} · {listing.city}{listing.district ? `, ${listing.district}` : ''}</div>
           </div>
+          {onEdit && (
+            <button
+              onClick={() => { onEdit(listing); onClose(); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-blue text-white text-sm font-semibold hover:bg-brand-blue/90 transition shrink-0"
+            >
+              <Icon name="Pencil" size={14} />
+              Редактировать
+            </button>
+          )}
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted shrink-0">
             <Icon name="X" size={18} />
           </button>
