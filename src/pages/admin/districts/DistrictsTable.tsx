@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import { District, FormState } from './DistrictsTypes';
 import { EditRow } from './DistrictForms';
@@ -82,23 +83,66 @@ export default function DistrictsTable({
   onToggleActive,
   onDelete,
 }: DistrictsTableProps) {
+  const [search, setSearch] = useState('');
+
+  const filtered = search.trim()
+    ? districts.filter(d =>
+        d.name.toLowerCase().includes(search.toLowerCase()) ||
+        d.city.toLowerCase().includes(search.toLowerCase()) ||
+        (d.description || '').toLowerCase().includes(search.toLowerCase())
+      )
+    : districts;
+
   return (
     <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
-      <div className="px-5 py-3 border-b border-border flex items-center gap-2 text-sm text-muted-foreground">
-        <Icon name="List" size={14} />
-        {loading ? (
-          <span className="inline-flex items-center gap-1">
-            <Icon name="Loader2" size={12} className="animate-spin" /> Загрузка...
-          </span>
-        ) : (
-          <span>Всего районов: <strong className="text-foreground">{districts.length}</strong></span>
-        )}
+      {/* Шапка: счётчик + поиск */}
+      <div className="px-5 py-3 border-b border-border flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Icon name="List" size={14} />
+          {loading ? (
+            <span className="inline-flex items-center gap-1">
+              <Icon name="Loader2" size={12} className="animate-spin" /> Загрузка...
+            </span>
+          ) : (
+            <span>
+              Районов: <strong className="text-foreground">{filtered.length}</strong>
+              {search && filtered.length !== districts.length && (
+                <span className="text-muted-foreground"> из {districts.length}</span>
+              )}
+            </span>
+          )}
+        </div>
+
+        <div className="flex-1 min-w-[180px] max-w-xs relative">
+          <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Поиск по названию, городу..."
+            className="w-full pl-8 pr-3 py-1.5 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 bg-white"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <Icon name="X" size={13} />
+            </button>
+          )}
+        </div>
       </div>
 
       {!loading && districts.length === 0 && !error ? (
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
           <Icon name="MapPin" size={40} className="opacity-20" />
           <p className="text-sm">Районов пока нет. Добавьте первый.</p>
+        </div>
+      ) : !loading && filtered.length === 0 && search ? (
+        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
+          <Icon name="SearchX" size={32} className="opacity-20" />
+          <p className="text-sm">Ничего не найдено по запросу «{search}»</p>
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -115,7 +159,7 @@ export default function DistrictsTable({
               </tr>
             </thead>
             <tbody>
-              {districts.map(district => {
+              {filtered.map(district => {
                 const isEditing = editId === district.id;
                 const isDeleting = deletingId === district.id;
                 const isToggling = togglingId === district.id;

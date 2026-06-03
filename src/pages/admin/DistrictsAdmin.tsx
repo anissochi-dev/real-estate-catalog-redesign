@@ -6,6 +6,16 @@ import { District, FormState, buildHeaders, buildUrl } from './districts/Distric
 import { AddForm } from './districts/DistrictForms';
 import DistrictsTable from './districts/DistrictsTable';
 
+const DISTRICT_AI_URL = 'https://functions.poehali.dev/eddffe59-b37d-425e-90a3-59d12d44623f';
+
+interface AiDistrict {
+  name: string;
+  city: string;
+  description: string;
+  slug: string;
+  sort_order: number;
+}
+
 export default function DistrictsAdmin() {
   const { refreshToken } = useAuth();
 
@@ -21,6 +31,15 @@ export default function DistrictsAdmin() {
 
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  // ИИ-генерация
+  const [showAiPanel, setShowAiPanel] = useState(false);
+  const [aiCity, setAiCity] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState<AiDistrict[]>([]);
+  const [aiSelected, setAiSelected] = useState<Set<number>>(new Set());
+  const [aiImporting, setAiImporting] = useState(false);
+  const [aiError, setAiError] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -159,8 +178,65 @@ export default function DistrictsAdmin() {
     }
   };
 
+  // ── ИИ-генерация ──────────────────────────────────────────────────────────
+  const handleAiSuggest = async () => {
+    if (!aiCity.trim()) return;
+    setAiLoading(true); setAiError(''); setAiResult([]); setAiSelected(new Set());
+    try {
+      const tok = refreshToken();
+      const res = await fetch(DISTRICT_AI_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Auth-Token': tok },
+        body: JSON.stringify({ action: 'suggest', city: aiCity.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || `Ошибка ${res.status}`);
+      const list: AiDistrict[] = data.districts || [];
+      setAiResult(list);
+      setAiSelected(new Set(list.map((_, i) => i)));
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : 'Ошибка');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleAiImport = async () => {
+    const selected = aiResult.filter((_, i) => aiSelected.has(i));
+    if (!selected.length) return;
+    setAiImporting(true); setAiError('');
+    try {
+      const tok = refreshToken();
+      const res = await fetch(DISTRICT_AI_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Auth-Token': tok },
+        body: JSON.stringify({ action: 'import', city: aiCity.trim(), districts: selected }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || `Ошибка ${res.status}`);
+      toast.success(`Добавлено: ${data.imported}, пропущено (уже есть): ${data.skipped}`);
+      setShowAiPanel(false);
+      setAiResult([]);
+      setAiCity('');
+      await load();
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : 'Ошибка импорта');
+    } finally {
+      setAiImporting(false);
+    }
+  };
+
+  const toggleAiItem = (i: number) => {
+    setAiSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(i)) { next.delete(i); } else { next.add(i); }
+      return next;
+    });
+  };
+
   return (
     <div className="space-y-4">
+      {/* Заголовок */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h2 className="font-display font-700 text-xl flex items-center gap-2">
@@ -172,7 +248,16 @@ export default function DistrictsAdmin() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => { setShowAiPanel(v => !v); setShowAddForm(false); setEditId(null); }}
+            className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 transition"
+          >
+            <Icon name="Wand2" size={14} />
+            Найти через ИИ
+          </button>
+
           <button
             type="button"
             onClick={load}
@@ -183,7 +268,7 @@ export default function DistrictsAdmin() {
             Обновить
           </button>
 
-          {!showAddForm && (
+          {!showAddForm && !showAiPanel && (
             <button
               type="button"
               onClick={() => { setShowAddForm(true); setEditId(null); }}
@@ -203,6 +288,101 @@ export default function DistrictsAdmin() {
         </div>
       )}
 
+      {/* ИИ-панель */}
+      {showAiPanel && (
+        <div className="bg-violet-50 border border-violet-200 rounded-2xl p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <Icon name="Wand2" size={16} className="text-violet-600" />
+            <span className="font-semibold text-sm text-violet-700">Найти районы через ИИ</span>
+            <button type="button" onClick={() => setShowAiPanel(false)} className="ml-auto text-violet-400 hover:text-violet-600">
+              <Icon name="X" size={16} />
+            </button>
+          </div>
+
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={aiCity}
+              onChange={e => setAiCity(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAiSuggest()}
+              placeholder="Введите город, например: Краснодар"
+              className="flex-1 px-3 py-2 border border-violet-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 bg-white"
+            />
+            <button
+              type="button"
+              onClick={handleAiSuggest}
+              disabled={aiLoading || !aiCity.trim()}
+              className="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50 transition"
+            >
+              <Icon name={aiLoading ? 'Loader2' : 'Search'} size={14} className={aiLoading ? 'animate-spin' : ''} />
+              {aiLoading ? 'Ищу...' : 'Найти'}
+            </button>
+          </div>
+
+          {aiError && (
+            <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+              <Icon name="AlertCircle" size={14} /> {aiError}
+            </div>
+          )}
+
+          {aiResult.length > 0 && (
+            <>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-violet-700 font-semibold">
+                  ИИ нашёл {aiResult.length} районов для «{aiCity}»
+                </span>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setAiSelected(new Set(aiResult.map((_, i) => i)))}
+                    className="text-xs text-violet-600 hover:underline">Выбрать все</button>
+                  <span className="text-violet-300">·</span>
+                  <button type="button" onClick={() => setAiSelected(new Set())}
+                    className="text-xs text-violet-600 hover:underline">Снять все</button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-72 overflow-y-auto pr-1">
+                {aiResult.map((d, i) => (
+                  <label
+                    key={i}
+                    className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-colors ${
+                      aiSelected.has(i)
+                        ? 'bg-white border-violet-300'
+                        : 'bg-white/50 border-violet-100 opacity-60'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={aiSelected.has(i)}
+                      onChange={() => toggleAiItem(i)}
+                      className="mt-0.5 accent-violet-600 shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-foreground truncate">{d.name}</div>
+                      {d.description && (
+                        <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{d.description}</div>
+                      )}
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleAiImport}
+                  disabled={aiImporting || aiSelected.size === 0}
+                  className="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50 transition"
+                >
+                  <Icon name={aiImporting ? 'Loader2' : 'Download'} size={14} className={aiImporting ? 'animate-spin' : ''} />
+                  {aiImporting ? 'Добавляю...' : `Добавить выбранные (${aiSelected.size})`}
+                </button>
+                <span className="text-xs text-muted-foreground">Уже существующие районы будут пропущены</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {showAddForm && (
         <AddForm
           onSave={handleAdd}
@@ -219,7 +399,7 @@ export default function DistrictsAdmin() {
         editSaving={editSaving}
         deletingId={deletingId}
         togglingId={togglingId}
-        onEdit={id => { setEditId(id); setShowAddForm(false); }}
+        onEdit={id => { setEditId(id); setShowAddForm(false); setShowAiPanel(false); }}
         onEditSave={handleEdit}
         onEditCancel={() => setEditId(null)}
         onToggleActive={handleToggleActive}

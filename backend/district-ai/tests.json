@@ -1,0 +1,19 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "POST без токена — 401",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "suggest", "city": "Краснодар"},
+      "expectedStatus": 401,
+      "expectedBody": {"error": "Недостаточно прав"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}
