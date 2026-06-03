@@ -79,6 +79,7 @@ export default function ListingEditor({
     if (editing.floor == null) e.floor = true;
     if (editing.total_floors == null) e.total_floors = true;
     if (!editing.address?.trim() && !editing.district?.trim()) e.address = true;
+    if (!editing.district?.trim()) e.district = true;
     const bc = (editing as Record<string, unknown>).broker_commission as string | undefined;
     if (!bc || !bc.trim()) e.broker_commission = true;
     // Описание — обязательное, минимум 30 символов
@@ -153,7 +154,7 @@ export default function ListingEditor({
     const firstErrTab = order.find(t => {
       if (t === 'main') return !editing.title?.trim() || !editing.owner_name?.trim() || !editing.owner_phone?.trim() || !editing.category || !editing.deal || !editing.condition;
       if (t === 'photos') return !photos.length;
-      if (t === 'location') return !editing.address?.trim() && !editing.district?.trim();
+      if (t === 'location') return !editing.district?.trim();
       if (t === 'details') return !editing.price || !editing.area || editing.floor == null || editing.total_floors == null || !bc?.trim() || (editing.category === 'land' && (!editing.land_status || !editing.land_vri));
       if (t === 'content') return !editing.description?.trim() || editing.description.trim().length < 30;
       if (t === 'extra') return !editing.finishing || !editing.building_class || !editing.building_year || !editing.property_rights;
@@ -210,9 +211,10 @@ export default function ListingEditor({
           {tab === 'location' && (
             <ListingEditorDetailsSection
               editing={editing}
-              setEditing={(l) => { setEditing(l); setErrors(v => ({ ...v, address: false })); }}
+              setEditing={(l) => { setEditing(l); setErrors(v => ({ ...v, address: false, district: false })); }}
               cities={cities}
               addressError={!!errors.address}
+              districtError={!!errors.district}
               locationOnly
               onCoordsManualChange={setCoordsManual}
             />
