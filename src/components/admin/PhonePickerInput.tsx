@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import PhoneCardModal from './PhoneCardModal';
@@ -20,7 +20,6 @@ interface Props {
 }
 
 export default function PhonePickerInput({ value, onChange, onNameChange, placeholder, className = '' }: Props) {
-  // displayValue — то что видит пользователь в input (форматированное)
   const [inputDisplay, setInputDisplay] = useState(() => value ? formatPhone(value) : '');
   const [suggestions, setSuggestions] = useState<PhoneContact[]>([]);
   const [open, setOpen] = useState(false);
@@ -30,6 +29,8 @@ export default function PhonePickerInput({ value, onChange, onNameChange, placeh
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const caretDigitsRef = useRef<number>(0);
 
   // синхронизируем display когда value меняется снаружи
   useEffect(() => {
@@ -74,8 +75,26 @@ export default function PhonePickerInput({ value, onChange, onNameChange, placeh
     }, 300);
   };
 
+  const restoreCaret = useCallback(() => {
+    requestAnimationFrame(() => {
+      if (!inputRef.current) return;
+      const s = inputRef.current.value;
+      let pos = 0;
+      let count = 0;
+      while (pos < s.length && count < caretDigitsRef.current) {
+        if (/\d/.test(s[pos])) count++;
+        pos++;
+      }
+      inputRef.current.setSelectionRange(pos, pos);
+    });
+  }, []);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value;
+    const el = e.target;
+    const selEnd = el.selectionEnd ?? el.value.length;
+    caretDigitsRef.current = extractDigits(el.value.slice(0, selEnd)).length;
+
+    const raw = el.value;
     const digits = extractDigits(raw).slice(0, 10);
     const normalized = digits ? '+7' + digits : '';
     const display = digits ? formatPhone('+7' + digits) : '';
@@ -83,6 +102,7 @@ export default function PhonePickerInput({ value, onChange, onNameChange, placeh
     onChange(normalized);
     search(normalized);
     if (!digits) { setSuggestions([]); setOpen(false); setMatchedContact(null); }
+    restoreCaret();
   };
 
   const pick = (c: PhoneContact) => {
@@ -113,6 +133,7 @@ export default function PhonePickerInput({ value, onChange, onNameChange, placeh
         <div className="flex gap-1.5">
           <div className="relative flex-1">
             <input
+              ref={inputRef}
               type="tel"
               className="w-full px-3 py-2 border rounded-lg pr-8 font-mono tracking-wide"
               placeholder={placeholder ?? '+7 900 000-00-00'}
