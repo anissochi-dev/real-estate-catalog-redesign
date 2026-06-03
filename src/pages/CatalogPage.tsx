@@ -317,8 +317,8 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
               onClick={() => { setShowMap(v => !v); setMapSelected(null); }}
               className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 my-1.5 rounded-lg text-xs font-semibold transition-all border mr-1.5
                 ${showMap
-                  ? 'border-brand-blue bg-brand-blue text-white'
-                  : 'border-border text-muted-foreground hover:border-brand-blue hover:text-brand-blue'
+                  ? 'border-brand-orange bg-brand-orange text-white'
+                  : 'border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white'
                 }`}
             >
               <Icon name="Map" size={14} />
@@ -329,14 +329,14 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
               onClick={() => setShowFilters(!showFilters)}
               className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 my-1.5 rounded-lg text-xs font-semibold transition-all border
                 ${showFilters || dealFilter !== 'all' || typeFilter !== 'all' || minArea || maxPrice || districtFilter !== 'all'
-                  ? 'border-brand-blue bg-brand-blue/10 text-brand-blue'
-                  : 'border-border text-muted-foreground hover:border-brand-blue hover:text-brand-blue'
+                  ? 'border-brand-orange bg-brand-orange text-white'
+                  : 'border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white'
                 }`}
             >
               <Icon name="SlidersHorizontal" size={14} />
               Фильтры
               {(dealFilter !== 'all' || typeFilter !== 'all' || minArea || maxPrice || districtFilter !== 'all') && (
-                <span className="w-4 h-4 rounded-full bg-brand-blue text-white text-[10px] flex items-center justify-center">
+                <span className="w-4 h-4 rounded-full bg-white text-brand-orange text-[10px] flex items-center justify-center font-bold">
                   {[dealFilter !== 'all', typeFilter !== 'all', !!minArea, !!maxPrice, districtFilter !== 'all'].filter(Boolean).length}
                 </span>
               )}
