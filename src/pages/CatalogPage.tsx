@@ -76,8 +76,6 @@ function buildCatalogH1(deal: string, type: string): string {
 export default function CatalogPage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare, allLoaded = true }: CatalogPageProps) {
   const h1Base = useSeoH1('Каталог коммерческой недвижимости в Краснодаре');
   const { settings } = useSettings();
-  const DEFAULT_PAGE_SIZE = settings.catalog_page_size ?? 25;
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [dealFilter, setDealFilter] = useState('all');
@@ -88,7 +86,6 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
   const [maxPrice, setMaxPrice] = useState('');
   const [districtFilter, setDistrictFilter] = useState('all');
   const [districts, setDistricts] = useState<District[]>([]);
-  const [page, setPage] = useState(1);
 
   useEffect(() => { fetchDistricts().then(setDistricts); }, []);
 
@@ -180,67 +177,15 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
     return result;
   }, [properties, search, dealFilter, typeFilter, districtFilter, sortBy, minArea, maxPrice]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const pageItems = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filtered.slice(start, start + pageSize);
-  }, [filtered, page, pageSize]);
+  const LOAD_STEP = 20;
+  const [visibleCount, setVisibleCount] = useState(LOAD_STEP);
 
-  useEffect(() => {
-    if (page > totalPages) setPage(1);
-  }, [totalPages, page]);
+  // Сброс при смене фильтров/поиска
+  useEffect(() => { setVisibleCount(LOAD_STEP); }, [search, sortBy, minArea, maxPrice, districtFilter, dealFilter, typeFilter]);
 
-  const goToPage = (n: number) => {
-    setPage(n);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  const pageItems = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
+  const hasMore = visibleCount < filtered.length;
 
-  // Сброс страницы при изменении поиска/сортировки
-  useEffect(() => { setPage(1); }, [search, sortBy, minArea, maxPrice, districtFilter]);
-
-  // SEO: rel="prev" / rel="next" в <head> для пагинации
-  useEffect(() => {
-    const base = window.location.origin + '/catalog';
-    const params = new URLSearchParams();
-    if (dealFilter !== 'all') params.set('deal', dealFilter);
-    if (typeFilter !== 'all') params.set('type', typeFilter);
-
-    const makeHref = (p: number) => {
-      const q = new URLSearchParams(params);
-      q.set('page', String(p));
-      return `${base}?${q.toString()}`;
-    };
-
-    let prevEl = document.querySelector('link[rel="prev"]') as HTMLLinkElement | null;
-    let nextEl = document.querySelector('link[rel="next"]') as HTMLLinkElement | null;
-
-    if (page > 1) {
-      if (!prevEl) {
-        prevEl = document.createElement('link');
-        prevEl.setAttribute('rel', 'prev');
-        document.head.appendChild(prevEl);
-      }
-      prevEl.setAttribute('href', makeHref(page - 1));
-    } else if (prevEl) {
-      prevEl.remove();
-    }
-
-    if (page < totalPages) {
-      if (!nextEl) {
-        nextEl = document.createElement('link');
-        nextEl.setAttribute('rel', 'next');
-        document.head.appendChild(nextEl);
-      }
-      nextEl.setAttribute('href', makeHref(page + 1));
-    } else if (nextEl) {
-      nextEl.remove();
-    }
-
-    return () => {
-      document.querySelector('link[rel="prev"]')?.remove();
-      document.querySelector('link[rel="next"]')?.remove();
-    };
-  }, [page, totalPages, dealFilter, typeFilter]);
 
   const siteUrl = settings.site_url || 'https://bmn.su';
   const catalogBreadcrumbs = [
@@ -492,8 +437,8 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
         <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
           <div className="text-sm text-muted-foreground flex items-center gap-2">
             Найдено <span className="font-semibold text-foreground">{filtered.length}</span> объектов
-            {filtered.length > pageSize && (
-              <span> · показаны {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filtered.length)}</span>
+            {hasMore && (
+              <span> · показано <span className="font-semibold text-foreground">{visibleCount}</span></span>
             )}
             {!allLoaded && (
               <span className="inline-flex items-center gap-1 text-brand-blue/70 text-xs">
@@ -527,27 +472,18 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
               ))}
             </div>
 
-            {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-1 mt-10">
-                <button disabled={page === 1} onClick={() => goToPage(Math.max(1, page - 1))}
-                  className="px-3 py-2 rounded-lg border border-border text-sm font-semibold disabled:opacity-40 hover:bg-muted">
-                  <Icon name="ChevronLeft" size={14} />
+            {hasMore && (
+              <div className="flex flex-col items-center gap-2 mt-10">
+                <button
+                  onClick={() => setVisibleCount(v => v + LOAD_STEP)}
+                  className="btn-orange text-white px-8 py-3 rounded-xl text-sm font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity shadow-sm"
+                >
+                  <Icon name="ChevronDown" size={16} />
+                  Показать ещё {Math.min(LOAD_STEP, filtered.length - visibleCount)} объектов
                 </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1)
-                  .filter(n => n === 1 || n === totalPages || Math.abs(n - page) <= 2)
-                  .map((n, idx, arr) => (
-                    <span key={n}>
-                      {idx > 0 && arr[idx - 1] !== n - 1 && <span className="px-2 text-muted-foreground">…</span>}
-                      <button onClick={() => goToPage(n)}
-                        className={`px-3.5 py-2 rounded-lg text-sm font-semibold ${n === page ? 'bg-brand-blue text-white' : 'border border-border hover:bg-muted'}`}>
-                        {n}
-                      </button>
-                    </span>
-                  ))}
-                <button disabled={page === totalPages} onClick={() => goToPage(Math.min(totalPages, page + 1))}
-                  className="px-3 py-2 rounded-lg border border-border text-sm font-semibold disabled:opacity-40 hover:bg-muted">
-                  <Icon name="ChevronRight" size={14} />
-                </button>
+                <div className="text-xs text-muted-foreground">
+                  Показано {visibleCount} из {filtered.length}
+                </div>
               </div>
             )}
           </>
