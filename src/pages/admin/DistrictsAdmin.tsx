@@ -129,7 +129,7 @@ export default function DistrictsAdmin() {
     setDeletingId(district.id);
     try {
       const tok = refreshToken();
-      const res = await fetch(buildUrl(), { method: 'DELETE', headers: buildHeaders(tok), body: JSON.stringify({ id: district.id }) });
+      const res = await fetch(buildUrl({ id: String(district.id) }), { method: 'DELETE', headers: buildHeaders(tok) });
       if (!res.ok) throw new Error(`Ошибка сервера: ${res.status}`);
       const data = await res.json();
       if (data?.error) throw new Error(String(data.error));
