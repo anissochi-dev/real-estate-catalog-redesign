@@ -4103,7 +4103,7 @@ def handler(event, context):
 
             if action not in SYSTEM_PROMPTS:
                 return _err(400, 'Неизвестное действие ИИ')
-            AUTO_CONTEXT_ACTIONS = {'agent', 'analytics_full', 'security', 'marketing', 'modernize', 'db_check'}
+            AUTO_CONTEXT_ACTIONS = {'agent', 'analytics_full', 'security', 'marketing', 'modernize', 'db_check', 'analyze_property'}
             if not user_text and not ctx_data and action not in AUTO_CONTEXT_ACTIONS:
                 return _err(400, 'Пустой запрос')
 
