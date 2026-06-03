@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Property } from '@/App';
 import PropertyCard from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
@@ -9,6 +9,9 @@ import AIMatchModal from '@/components/AIMatchModal';
 import { useSettings } from '@/contexts/SettingsContext';
 import SchemaOrg, { makeBreadcrumbSchema } from '@/components/SchemaOrg';
 import { fetchDistricts, District } from '@/lib/api';
+import YandexMap from '@/components/YandexMap';
+import { formatPrice } from '@/components/PropertyCard';
+import { listingSlug } from '@/lib/slug';
 
 interface CatalogPageProps {
   properties: Property[];
@@ -93,6 +96,31 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
 
   const [aiQuery, setAiQuery] = useState('');
   const [aiOpen, setAiOpen] = useState(false);
+  const [showMap, setShowMap] = useState(false);
+  const [mapSelected, setMapSelected] = useState<Property | null>(null);
+  const navigate = useNavigate();
+
+  const KRASNODAR_CENTER: [number, number] = [45.0355, 38.9753];
+  const isStubCoord = (n: number) => Math.abs(n - Math.round(n)) < 1e-6 && Math.abs(n * 1000 - Math.round(n * 1000)) < 1e-9;
+
+  const mapPoints = useMemo(
+    () => properties
+      .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng) && p.lat !== 0 && p.lng !== 0 && !(isStubCoord(p.lat) && isStubCoord(p.lng)))
+      .map(p => ({
+        id: p.id,
+        lat: p.lat,
+        lng: p.lng,
+        title: p.title,
+        caption: `${formatPrice(p.price, p.deal)} · ${p.area} м²`,
+        type: String(p.type),
+        isHot: p.isHot,
+      })),
+    [properties],
+  );
+
+  const handleMapPointClick = useCallback((pt: { id: number }) => {
+    setMapSelected(prev => prev?.id === pt.id ? prev : properties.find(x => x.id === pt.id) || null);
+  }, [properties]);
 
   // Читаем фильтры из URL при первом рендере
   useEffect(() => {
@@ -284,6 +312,18 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
               </button>
             ))}
             <div className="flex-1" />
+            {/* Кнопка карты */}
+            <button
+              onClick={() => { setShowMap(v => !v); setMapSelected(null); }}
+              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 my-1.5 rounded-lg text-xs font-semibold transition-all border mr-1.5
+                ${showMap
+                  ? 'border-brand-blue bg-brand-blue text-white'
+                  : 'border-border text-muted-foreground hover:border-brand-blue hover:text-brand-blue'
+                }`}
+            >
+              <Icon name="Map" size={14} />
+              Карта
+            </button>
             {/* Кнопка фильтров справа */}
             <button
               onClick={() => setShowFilters(!showFilters)}
@@ -379,6 +419,60 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
           )}
         </div>
       </div>
+
+      {/* ── Встроенная карта ── */}
+      {showMap && (
+        <div className="border-b border-border bg-white" style={{ height: 420 }}>
+          <div className="relative h-full">
+            {/* Счётчик объектов */}
+            <div className="absolute top-3 left-3 z-10 bg-white/95 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-sm">
+              <div className="text-xs font-semibold text-brand-blue font-display flex items-center gap-1">
+                <Icon name="MapPin" size={12} />
+                {settings.main_city || 'Краснодар'}
+              </div>
+              <div className="text-[10px] text-muted-foreground">{mapPoints.length} объектов на карте</div>
+            </div>
+            {/* Кнопка закрытия */}
+            <button
+              onClick={() => { setShowMap(false); setMapSelected(null); }}
+              className="absolute top-3 right-3 z-10 bg-white/95 backdrop-blur-sm rounded-lg px-2.5 py-1.5 shadow-sm text-xs font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+            >
+              <Icon name="X" size={12} /> Скрыть
+            </button>
+            <YandexMap
+              points={mapPoints}
+              center={mapPoints.length === 0 ? KRASNODAR_CENTER : undefined}
+              zoom={11}
+              height="100%"
+              onPointClick={handleMapPointClick}
+            />
+            {/* Карточка выбранного объекта */}
+            {mapSelected && (
+              <div className="absolute bottom-3 left-3 right-3 z-10 bg-white rounded-xl shadow-lg border border-border p-3 flex gap-3 items-start max-w-sm">
+                {mapSelected.image && (
+                  <img src={mapSelected.image} alt={mapSelected.title} className="w-16 h-16 rounded-lg object-cover shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-semibold truncate mb-0.5">{mapSelected.title}</div>
+                  <div className="text-[11px] text-muted-foreground truncate mb-1">{mapSelected.address || mapSelected.district || ''}</div>
+                  <div className="text-sm font-display font-700 text-brand-blue">{formatPrice(mapSelected.price, mapSelected.deal)}</div>
+                </div>
+                <div className="flex flex-col gap-1.5 shrink-0">
+                  <button
+                    onClick={() => navigate(`/object/${listingSlug(mapSelected.title, mapSelected.id)}`)}
+                    className="text-[11px] bg-brand-blue text-white px-2.5 py-1 rounded-lg font-semibold hover:bg-brand-blue/90 transition-colors"
+                  >
+                    Открыть
+                  </button>
+                  <button onClick={() => setMapSelected(null)} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors text-center">
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <AIMatchModal open={aiOpen} onClose={() => setAiOpen(false)} initialPrompt={aiQuery} autoSubmit={!!aiQuery.trim()} />
 
