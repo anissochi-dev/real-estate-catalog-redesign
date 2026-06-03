@@ -42,14 +42,14 @@ const CATEGORY_LABELS: Record<string, string> = {
 export default function LeadsListPage() {
   const h1 = useSeoH1('Заявки клиентов');
   const { settings } = useSettings();
-  const PAGE_SIZE = settings.leads_page_size ?? 24;
+  const PAGE_SIZE = 20;
+  const LOAD_STEP = 20;
 
-  const [leads, setLeads] = useState<PublicLead[]>([]);
+  const [allLeads, setAllLeads] = useState<PublicLead[]>([]);
+  const [visibleCount, setVisibleCount] = useState(LOAD_STEP);
   const [total, setTotal] = useState(0);
-  const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [page, setPage] = useState(1);
 
   // ИИ-поиск (единственный фильтр на странице)
   const [aiQuery, setAiQuery] = useState('');
@@ -65,30 +65,32 @@ export default function LeadsListPage() {
   const [captcha, setCaptcha] = useState<CaptchaResult | null>(null);
   const [captchaKey, setCaptchaKey] = useState(0);
 
-  const load = (p: number = page) => {
+  const load = () => {
     setLoading(true);
     setError('');
     fetchPublicLeads({
-      page: p,
-      limit: PAGE_SIZE,
+      page: 1,
+      limit: 200,
       ids: aiIds || undefined,
       sort: 'newest',
     })
       .then(r => {
-        setLeads(r.leads);
+        setAllLeads(r.leads);
         setTotal(r.total);
-        setPages(r.pages);
-        setPage(r.page);
+        setVisibleCount(LOAD_STEP);
       })
       .catch((e: unknown) => {
         setError(e instanceof Error ? e.message : 'Не удалось загрузить заявки');
-        setLeads([]);
+        setAllLeads([]);
       })
       .finally(() => setLoading(false));
   };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(1); }, [aiIds]);
+  useEffect(() => { load(); }, [aiIds]);
+
+  const leads = allLeads.slice(0, visibleCount);
+  const hasMore = visibleCount < allLeads.length;
 
   const runAiSearch = async () => {
     const q = aiQuery.trim();
@@ -250,7 +252,7 @@ export default function LeadsListPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
               {leads.map(lead => (
                 <article
                   key={lead.id}
@@ -328,26 +330,19 @@ export default function LeadsListPage() {
               ))}
             </div>
 
-            {/* Пагинация */}
-            {pages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-6 flex-wrap">
+            {/* Показать ещё */}
+            {hasMore && (
+              <div className="flex flex-col items-center gap-2 mt-10">
                 <button
-                  onClick={() => load(Math.max(1, page - 1))}
-                  disabled={page === 1 || loading}
-                  className="px-3 py-2 rounded-lg border hover:bg-muted text-sm disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"
+                  onClick={() => setVisibleCount(v => v + LOAD_STEP)}
+                  className="btn-orange text-white px-8 py-3 rounded-xl text-sm font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity shadow-sm"
                 >
-                  <Icon name="ChevronLeft" size={14} /> Назад
+                  <Icon name="ChevronDown" size={16} />
+                  Показать ещё {Math.min(LOAD_STEP, allLeads.length - visibleCount)} заявок
                 </button>
-                <span className="text-sm text-muted-foreground px-3">
-                  Стр. <b className="text-foreground">{page}</b> из {pages}
-                </span>
-                <button
-                  onClick={() => load(Math.min(pages, page + 1))}
-                  disabled={page >= pages || loading}
-                  className="px-3 py-2 rounded-lg border hover:bg-muted text-sm disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"
-                >
-                  Вперёд <Icon name="ChevronRight" size={14} />
-                </button>
+                <div className="text-xs text-muted-foreground">
+                  Показано {visibleCount} из {allLeads.length}
+                </div>
               </div>
             )}
           </>
