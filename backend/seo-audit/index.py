@@ -104,7 +104,7 @@ def handler(event: dict, context) -> dict:
                     (description IS NULL OR LENGTH(description) < 50) AS short_desc,
                     (image IS NULL OR image = '') AS no_image,
                     (price IS NULL OR price = 0) AS no_price,
-                    (seo_faq IS NULL OR seo_faq = '' OR seo_faq = '[]') AS no_faq
+                    (seo_faq IS NULL OR seo_faq::text = '[]' OR seo_faq::text = 'null') AS no_faq
                 FROM {S}.listings
                 WHERE status = 'active'
                     AND (
@@ -112,7 +112,7 @@ def handler(event: dict, context) -> dict:
                         OR seo_description IS NULL OR seo_description = ''
                         OR description IS NULL OR LENGTH(description) < 50
                         OR image IS NULL OR image = ''
-                        OR seo_faq IS NULL OR seo_faq = '' OR seo_faq = '[]'
+                        OR seo_faq IS NULL OR seo_faq::text = '[]' OR seo_faq::text = 'null'
                     )
                 ORDER BY id DESC
                 LIMIT 50
