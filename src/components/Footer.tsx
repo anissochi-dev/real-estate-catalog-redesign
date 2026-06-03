@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
 import { Page } from '@/App';
+import { fetchDistricts, District } from '@/lib/api';
 
 interface Props {
   onLogin: () => void;
@@ -64,7 +65,13 @@ function parseLinks(raw: string): { label: string; href: string }[] {
 
 export default function Footer({ onLogin, setCurrentPage }: Props) {
   const { settings } = useSettings();
+  const navigate = useNavigate();
   const [modal, setModal] = useState<{ title: string; content: string } | null>(null);
+  const [districts, setDistricts] = useState<District[]>([]);
+
+  useEffect(() => {
+    fetchDistricts().then(d => setDistricts(d.filter(x => x.listings_count && x.listings_count > 0)));
+  }, []);
 
   const company = settings.company_name || 'Бизнес. Маркетинг. Недвижимость.';
   const phone = settings.company_phone;
@@ -168,6 +175,30 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
                     className="text-xs text-white/50 hover:text-white/80 active:text-white/90 underline underline-offset-2 transition-colors text-center min-h-[28px]"
                   >
                     {doc.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Районы города */}
+          {districts.length > 0 && (
+            <div className="border-t border-white/10 mt-6 pt-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Icon name="MapPin" size={14} className="text-white/60" />
+                <h3 className="font-semibold text-white/80 text-sm">Районы города</h3>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {districts.map(d => (
+                  <button
+                    key={d.id}
+                    onClick={() => navigate(`/district/${d.slug}`)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 hover:border-white/20 transition-all text-xs text-white/70 hover:text-white"
+                  >
+                    {d.name}
+                    {d.listings_count ? (
+                      <span className="text-white/40">{d.listings_count}</span>
+                    ) : null}
                   </button>
                 ))}
               </div>
