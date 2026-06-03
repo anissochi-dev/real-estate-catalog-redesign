@@ -29,3 +29,7 @@ Disallow: /api/
 
 Sitemap: https://bmn.su/sitemap.xml
 Sitemap: https://bmn.su/sitemap_index.xml
+
+# Разделы категорий и районов
+Allow: /catalog/
+Allow: /district/

@@ -60,6 +60,7 @@ const importers = {
   login: () => import('../pages/LoginPage'),
   networkTenants: () => import('../pages/NetworkTenantsPage'),
   category: () => import('../pages/CategoryPage'),
+  district: () => import('../pages/DistrictPage'),
   notFound: () => import('../pages/NotFoundPage'),
   declined: () => import('../pages/DeclinedPage'),
   news: () => import('../pages/NewsPage'),
@@ -74,6 +75,7 @@ export const ComparePage        = lazyWithRetry(importers.compare);
 export const LoginPage          = lazyWithRetry(importers.login);
 export const NetworkTenantsPage = lazyWithRetry(importers.networkTenants);
 export const CategoryPage       = lazyWithRetry(importers.category);
+export const DistrictPage       = lazyWithRetry(importers.district);
 export const NotFoundPage       = lazyWithRetry(importers.notFound);
 export const DeclinedPage       = lazyWithRetry(importers.declined);
 export const NewsListPage       = lazyWithRetry(() => importers.news().then(m => ({ default: m.NewsListPage })));

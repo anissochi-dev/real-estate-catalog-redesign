@@ -9,9 +9,14 @@ SCHEMA = os.environ.get('DB_SCHEMA', 't_p71821556_real_estate_catalog_')
 STATIC_PATHS = {
     '/', '/catalog', '/map', '/favorites', '/compare',
     '/network-tenants', '/news', '/leads', '/declined',
+    # Посадочные страницы категорий
+    '/catalog/office', '/catalog/retail', '/catalog/warehouse',
+    '/catalog/restaurant', '/catalog/hotel', '/catalog/business',
+    '/catalog/gab', '/catalog/production', '/catalog/land',
+    '/catalog/building', '/catalog/free_purpose', '/catalog/car_service',
 }
-# Префиксы публичных разделов (например /catalog/office).
-STATIC_PREFIXES = ('/catalog/',)
+# Префиксы публичных разделов.
+STATIC_PREFIXES = ('/catalog/', '/district/')
 
 
 def _resp(status, html, extra_headers=None):

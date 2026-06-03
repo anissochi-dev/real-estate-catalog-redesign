@@ -7,6 +7,7 @@ import Breadcrumbs from '@/components/Breadcrumbs';
 import { useSeoH1 } from '@/components/SeoHead';
 import AIMatchModal from '@/components/AIMatchModal';
 import { useSettings } from '@/contexts/SettingsContext';
+import SchemaOrg, { makeBreadcrumbSchema } from '@/components/SchemaOrg';
 
 interface CatalogPageProps {
   properties: Property[];
@@ -156,6 +157,60 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
   // Сброс страницы при изменении поиска/сортировки
   useEffect(() => { setPage(1); }, [search, sortBy, minArea, maxPrice]);
 
+  // SEO: rel="prev" / rel="next" в <head> для пагинации
+  useEffect(() => {
+    const base = window.location.origin + '/catalog';
+    const params = new URLSearchParams();
+    if (dealFilter !== 'all') params.set('deal', dealFilter);
+    if (typeFilter !== 'all') params.set('type', typeFilter);
+
+    const makeHref = (p: number) => {
+      const q = new URLSearchParams(params);
+      q.set('page', String(p));
+      return `${base}?${q.toString()}`;
+    };
+
+    let prevEl = document.querySelector('link[rel="prev"]') as HTMLLinkElement | null;
+    let nextEl = document.querySelector('link[rel="next"]') as HTMLLinkElement | null;
+
+    if (page > 1) {
+      if (!prevEl) {
+        prevEl = document.createElement('link');
+        prevEl.setAttribute('rel', 'prev');
+        document.head.appendChild(prevEl);
+      }
+      prevEl.setAttribute('href', makeHref(page - 1));
+    } else if (prevEl) {
+      prevEl.remove();
+    }
+
+    if (page < totalPages) {
+      if (!nextEl) {
+        nextEl = document.createElement('link');
+        nextEl.setAttribute('rel', 'next');
+        document.head.appendChild(nextEl);
+      }
+      nextEl.setAttribute('href', makeHref(page + 1));
+    } else if (nextEl) {
+      nextEl.remove();
+    }
+
+    return () => {
+      document.querySelector('link[rel="prev"]')?.remove();
+      document.querySelector('link[rel="next"]')?.remove();
+    };
+  }, [page, totalPages, dealFilter, typeFilter]);
+
+  const siteUrl = settings.site_url || 'https://bmn.su';
+  const catalogBreadcrumbs = [
+    { name: 'Главная', url: siteUrl },
+    ...(typeFilter !== 'all' || dealFilter !== 'all'
+      ? [{ name: 'Каталог', url: `${siteUrl}/catalog` }]
+      : []),
+    { name: h1 },
+  ];
+  const catalogBreadcrumbSchema = makeBreadcrumbSchema(catalogBreadcrumbs);
+
   return (
     <div className="min-h-screen bg-background">
 
@@ -301,10 +356,14 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
 
       {/* Results */}
       <section className="container mx-auto px-4 py-8" aria-label="Каталог объектов">
+        <SchemaOrg schema={catalogBreadcrumbSchema} id="catalog-breadcrumb" />
         <div className="mb-4">
           <Breadcrumbs items={[
             { label: 'Главная', to: '/' },
-            { label: 'Каталог' },
+            ...(typeFilter !== 'all' || dealFilter !== 'all'
+              ? [{ label: 'Каталог', to: '/catalog' }]
+              : []),
+            { label: h1 },
           ]} />
         </div>
         <h1 className="font-display font-900 text-2xl md:text-3xl text-foreground mb-4">{h1}</h1>

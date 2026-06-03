@@ -87,7 +87,7 @@ export function makeWebSiteSchema(opts: { name: string; url: string }) {
   };
 }
 
-export function makeBreadcrumbSchema(items: { name: string; url: string }[]) {
+export function makeBreadcrumbSchema(items: { name: string; url?: string }[]) {
   return {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
@@ -95,9 +95,18 @@ export function makeBreadcrumbSchema(items: { name: string; url: string }[]) {
       '@type': 'ListItem',
       position: i + 1,
       name: item.name,
-      item: item.url,
+      ...(item.url ? { item: item.url } : {}),
     })),
   };
+}
+
+function buildVideoEmbed(videoUrl: string, videoType: string): string {
+  if (videoType === 'rutube') {
+    const match = videoUrl.match(/rutube\.ru\/video\/([a-zA-Z0-9_-]+)/);
+    return match ? `https://rutube.ru/play/embed/${match[1]}` : videoUrl;
+  }
+  // VK даёт embed URL напрямую; для остальных — как есть
+  return videoUrl;
 }
 
 export function makeRealEstateSchema(opts: {
@@ -119,13 +128,15 @@ export function makeRealEstateSchema(opts: {
   sellerUrl?: string;
   updatedAt?: string;
   publicCode?: number;
+  videoUrl?: string;
+  videoType?: string;
 }) {
   const isRent = opts.deal === 'rent';
   const addressStr = [opts.city || 'Краснодар', opts.address].filter(Boolean).join(', ');
 
   const schema: Record<string, unknown> = {
     '@context': 'https://schema.org',
-    '@type': 'Product',
+    '@type': 'RealEstateListing',
     name: opts.title,
     ...(opts.description ? { description: opts.description } : {}),
     ...(opts.images.length ? { image: opts.images } : {}),
@@ -175,9 +186,40 @@ export function makeRealEstateSchema(opts: {
         } : {}),
       },
     } : {}),
+    ...(opts.videoUrl ? {
+      video: {
+        '@type': 'VideoObject',
+        name: opts.title,
+        ...(opts.description ? { description: opts.description } : {}),
+        ...(opts.images.length ? { thumbnailUrl: opts.images[0] } : {}),
+        embedUrl: buildVideoEmbed(opts.videoUrl, opts.videoType || 'other'),
+        ...(opts.updatedAt ? { uploadDate: opts.updatedAt } : {}),
+      },
+    } : {}),
   };
 
   return schema;
+}
+
+export function makeVideoObjectSchema(opts: {
+  name: string;
+  description?: string;
+  thumbnailUrl?: string;
+  uploadDate?: string;
+  videoUrl: string;
+  videoType: string; // 'rutube' | 'vk' | 'other'
+  duration?: string; // ISO 8601, например PT2M30S
+}) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'VideoObject',
+    name: opts.name,
+    ...(opts.description ? { description: opts.description } : {}),
+    ...(opts.thumbnailUrl ? { thumbnailUrl: opts.thumbnailUrl } : {}),
+    embedUrl: buildVideoEmbed(opts.videoUrl, opts.videoType),
+    ...(opts.uploadDate ? { uploadDate: opts.uploadDate } : {}),
+    ...(opts.duration ? { duration: opts.duration } : {}),
+  };
 }
 
 export function makeNewsArticleSchema(opts: {

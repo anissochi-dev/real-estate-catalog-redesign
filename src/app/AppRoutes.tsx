@@ -8,6 +8,7 @@ import {
   ComparePage,
   NetworkTenantsPage,
   CategoryPage,
+  DistrictPage,
   NotFoundPage,
   DeclinedPage,
   NewsListPage,
@@ -99,6 +100,15 @@ export default function AppRoutes({
       <Route path="/network-tenants" element={<NetworkTenantsPage />} />
       <Route path="/object/:slug" element={
         <PropertyPage
+          favorites={favorites}
+          compareList={compareList}
+          onToggleFavorite={toggleFavorite}
+          onToggleCompare={toggleCompare}
+        />
+      } />
+      <Route path="/district/:district" element={
+        <DistrictPage
+          properties={properties}
           favorites={favorites}
           compareList={compareList}
           onToggleFavorite={toggleFavorite}

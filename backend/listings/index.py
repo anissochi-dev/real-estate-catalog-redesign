@@ -312,6 +312,36 @@ def handler(event: dict, context) -> dict:
                     rows.append(d)
                 return _ok({'tenants': rows})
 
+            if params.get('resource') == 'sitemap_index':
+                cur.execute(
+                    "SELECT site_url FROM t_p71821556_real_estate_catalog_.settings ORDER BY id ASC LIMIT 1"
+                )
+                row = cur.fetchone()
+                base = (row.get('site_url') if row else None) or 'https://biznest.poehali.dev'
+                base = base.rstrip('/')
+                sitemaps = [
+                    f'{base}/listings-sitemap.xml',
+                    f'{base}/news-sitemap.xml',
+                    f'{base}/pages-sitemap.xml',
+                ]
+                sitemap_entries = '\n'.join(
+                    f'<sitemap><loc>{loc}</loc></sitemap>' for loc in sitemaps
+                )
+                xml = (
+                    '<?xml version="1.0" encoding="UTF-8"?>\n'
+                    '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+                    + sitemap_entries
+                    + '\n</sitemapindex>'
+                )
+                return {
+                    'statusCode': 200,
+                    'headers': {
+                        'Access-Control-Allow-Origin': '*',
+                        'Content-Type': 'application/xml; charset=utf-8',
+                    },
+                    'body': xml,
+                }
+
             if params.get('resource') == 'sitemap':
                 cur.execute(
                     "SELECT site_url FROM t_p71821556_real_estate_catalog_.settings ORDER BY id ASC LIMIT 1"
@@ -319,27 +349,95 @@ def handler(event: dict, context) -> dict:
                 row = cur.fetchone()
                 base = (row.get('site_url') if row else None) or 'https://biznest.poehali.dev'
                 base = base.rstrip('/')
+
                 cur.execute(
-                    "SELECT id, title, slug, updated_at FROM t_p71821556_real_estate_catalog_.listings "
+                    "SELECT id, title, slug, updated_at, is_hot, is_new, image "
+                    "FROM t_p71821556_real_estate_catalog_.listings "
                     "WHERE status = 'active' ORDER BY updated_at DESC LIMIT 5000"
                 )
-                rows = cur.fetchall()
+                listing_rows = cur.fetchall()
+
+                cur.execute(
+                    "SELECT slug, published_at FROM t_p71821556_real_estate_catalog_.news "
+                    "WHERE status = 'published' ORDER BY published_at DESC LIMIT 1000"
+                )
+                news_rows = cur.fetchall()
+
+                category_slugs = [
+                    'office', 'retail', 'warehouse', 'restaurant', 'hotel',
+                    'business', 'gab', 'production', 'land', 'building',
+                    'free_purpose', 'car_service',
+                ]
+
+                # Получаем уникальные районы с объектами для страниц-хабов
+                cur.execute(
+                    "SELECT DISTINCT district FROM t_p71821556_real_estate_catalog_.listings "
+                    "WHERE status = 'active' AND district IS NOT NULL AND district != '' "
+                    "ORDER BY district ASC LIMIT 50"
+                )
+                district_rows = cur.fetchall()
+
                 items = []
+                # Главная
                 items.append(f'<url><loc>{base}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>')
+                # Основные страницы
                 for p in ['catalog', 'map', 'network-tenants']:
                     items.append(f'<url><loc>{base}/{p}</loc><changefreq>daily</changefreq><priority>0.8</priority></url>')
-                for r in rows:
+                # Категории
+                for cat in category_slugs:
+                    items.append(
+                        f'<url><loc>{base}/catalog/{cat}</loc>'
+                        '<changefreq>weekly</changefreq><priority>0.8</priority></url>'
+                    )
+                # Объекты
+                for r in listing_rows:
                     rid = r['id']
                     slug = r.get('slug') or _make_slug(r.get('title') or '', rid)
                     upd = r['updated_at'].date().isoformat() if r.get('updated_at') else ''
+                    if r.get('is_hot'):
+                        priority = '0.9'
+                    elif r.get('is_new'):
+                        priority = '0.8'
+                    else:
+                        priority = '0.7'
+                    img_tag = ''
+                    if r.get('image'):
+                        img_url = str(r['image']).replace('&', '&amp;')
+                        img_tag = f'<image:image><image:loc>{img_url}</image:loc></image:image>'
                     items.append(
                         f'<url><loc>{base}/object/{slug}</loc>'
                         + (f'<lastmod>{upd}</lastmod>' if upd else '')
-                        + '<changefreq>weekly</changefreq><priority>0.7</priority></url>'
+                        + f'<changefreq>weekly</changefreq><priority>{priority}</priority>'
+                        + img_tag
+                        + '</url>'
                     )
+                # Страницы районов
+                for dr in district_rows:
+                    d_name = dr.get('district') or ''
+                    if not d_name:
+                        continue
+                    import urllib.parse as _up
+                    d_slug = _up.quote(d_name, safe='')
+                    items.append(
+                        f'<url><loc>{base}/district/{d_slug}</loc>'
+                        '<changefreq>weekly</changefreq><priority>0.7</priority></url>'
+                    )
+                # Новости
+                for n in news_rows:
+                    news_slug = n.get('slug') or ''
+                    if not news_slug:
+                        continue
+                    pub = n['published_at'].date().isoformat() if n.get('published_at') else ''
+                    items.append(
+                        f'<url><loc>{base}/news/{news_slug}</loc>'
+                        + (f'<lastmod>{pub}</lastmod>' if pub else '')
+                        + '<changefreq>monthly</changefreq><priority>0.6</priority></url>'
+                    )
+
                 xml = (
                     '<?xml version="1.0" encoding="UTF-8"?>\n'
-                    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+                    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"'
+                    ' xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n'
                     + '\n'.join(items)
                     + '\n</urlset>'
                 )
@@ -348,6 +446,7 @@ def handler(event: dict, context) -> dict:
                     'headers': {
                         'Access-Control-Allow-Origin': '*',
                         'Content-Type': 'application/xml; charset=utf-8',
+                        'X-Sitemap-Count': str(len(items)),
                     },
                     'body': xml,
                 }

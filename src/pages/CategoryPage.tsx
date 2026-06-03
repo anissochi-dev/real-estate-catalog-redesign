@@ -8,6 +8,8 @@ import { useSettings } from '@/contexts/SettingsContext';
 import AIMatchModal from '@/components/AIMatchModal';
 import SchemaOrg, { makeItemListSchema, makeBreadcrumbSchema } from '@/components/SchemaOrg';
 
+const CATEGORY_SEO_URL = 'https://functions.poehali.dev/8dee3c78-5067-465a-905c-2193471100ce';
+
 interface Props {
   properties: Property[];
   favorites: number[];
@@ -183,6 +185,8 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
   const [aiOpen, setAiOpen] = useState(false);
   const [catPage, setCatPage] = useState(1);
   const CAT_PAGE_SIZE = settings.category_page_size ?? 20;
+  const [aiSeoText, setAiSeoText] = useState('');
+  const [aiSeoLoading, setAiSeoLoading] = useState(false);
 
   const meta = type ? CATEGORY_META[type] : null;
 
@@ -210,6 +214,19 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
       document.title = company;
     };
   }, [meta, settings.company_name, settings.site_url]);
+
+  // Загружаем AI SEO-текст — один раз при заходе на категорию.
+  // Текст кешируется на сервере, поэтому GPT вызывается только при первом посещении.
+  useEffect(() => {
+    if (!type || !CATEGORY_SEO_URL) return;
+    setAiSeoText('');
+    setAiSeoLoading(true);
+    fetch(`${CATEGORY_SEO_URL}?category=${encodeURIComponent(type)}&city=${encodeURIComponent(city)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.text) setAiSeoText(d.text); })
+      .catch(() => {})
+      .finally(() => setAiSeoLoading(false));
+  }, [type, city]);
 
   const items = useMemo(() => {
     if (!type) return [];
@@ -412,18 +429,31 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
               </div>
             )}
 
-            {/* SEO-текст внизу */}
+            {/* SEO-текст внизу — AI-генерированный + статический фолбэк */}
             <div className="mt-12 p-6 bg-white rounded-2xl border border-border">
-              <h2 className="font-display font-700 text-lg mb-1">
-                {meta.h2}
-              </h2>
+              <h2 className="font-display font-700 text-lg mb-1">{meta.h2}</h2>
               <h5 className="text-sm text-brand-blue font-medium mb-3">{meta.h5}</h5>
-              <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                {meta.description} Наша компания специализируется на подборе коммерческой недвижимости в {city}е с{' '}
-                {settings.company_since_year || 2007} года. Мы помогаем как покупателям, так и арендаторам найти
-                оптимальный объект с учётом бюджета, требований к площади и расположению.
-              </p>
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Популярные категории</h4>
+
+              {/* AI-текст или скелетон или статический фолбэк */}
+              {aiSeoLoading && !aiSeoText ? (
+                <div className="space-y-2 mb-4">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className={`h-3.5 bg-muted rounded animate-pulse ${i === 3 ? 'w-2/3' : 'w-full'}`} />
+                  ))}
+                </div>
+              ) : aiSeoText ? (
+                <div className="text-sm text-muted-foreground leading-relaxed mb-4 whitespace-pre-line">
+                  {aiSeoText}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+                  {meta.description} Наша компания специализируется на подборе коммерческой недвижимости
+                  в {city}е с {settings.company_since_year || 2007} года. Мы помогаем как покупателям,
+                  так и арендаторам найти оптимальный объект с учётом бюджета, требований к площади и расположению.
+                </p>
+              )}
+
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Другие категории</h4>
               <div className="flex flex-wrap gap-2">
                 {Object.entries(CATEGORY_META)
                   .filter(([k]) => k !== type)

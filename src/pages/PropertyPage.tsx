@@ -12,7 +12,7 @@ import PropertySidebar from '@/components/property/PropertySidebar';
 import { TYPE_LABELS, DEAL_LABELS } from '@/components/property/propertyLabels';
 import AIMatchModal from '@/components/AIMatchModal';
 import PropertyAnalyzeModal from '@/components/PropertyAnalyzeModal';
-import SchemaOrg, { makeRealEstateSchema, makeBreadcrumbSchema } from '@/components/SchemaOrg';
+import SchemaOrg, { makeRealEstateSchema, makeBreadcrumbSchema, makeVideoObjectSchema, makeFaqSchema } from '@/components/SchemaOrg';
 
 interface Props {
   onToggleFavorite: (id: number) => void;
@@ -20,6 +20,8 @@ interface Props {
   favorites: number[];
   compareList: number[];
 }
+
+const FAQ_URL = 'https://functions.poehali.dev/282b9c5f-29fa-41ea-bc42-0793bdf8950d';
 
 export default function PropertyPage({ onToggleFavorite, onToggleCompare, favorites, compareList }: Props) {
   const { slug } = useParams<{ slug: string }>();
@@ -38,6 +40,8 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   const [aiQuery, setAiQuery] = useState('');
   const [aiOpen, setAiOpen] = useState(false);
   const [analyzeOpen, setAnalyzeOpen] = useState(false);
+  const [faq, setFaq] = useState<{ question: string; answer: string }[]>([]);
+  const [faqLoading, setFaqLoading] = useState(false);
 
   const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
 
@@ -92,6 +96,21 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   useEffect(() => {
     fetchAgents().then(setAgents).catch(() => {});
   }, []);
+
+  const FAQ_URL = ''; // будет заполнено после деплоя
+  useEffect(() => {
+    if (!item?.id || !FAQ_URL) return;
+    setFaqLoading(true);
+    fetch(FAQ_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ listing_id: item.id }),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.faq?.length) setFaq(d.faq); })
+      .catch(() => {})
+      .finally(() => setFaqLoading(false));
+  }, [item?.id]);
 
   useEffect(() => {
     if (!item) return;
@@ -181,6 +200,8 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
     sellerUrl: siteUrl,
     updatedAt: item.updatedAt || item.lastEditedAt,
     publicCode: item.publicCode,
+    videoUrl: item.videoUrl,
+    videoType: item.videoType || undefined,
   });
 
   const breadcrumbSchema = makeBreadcrumbSchema([
@@ -190,10 +211,23 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
     { name: item.title, url: pageUrl },
   ]);
 
+  const videoSchema = item.videoUrl ? makeVideoObjectSchema({
+    name: item.title,
+    description: (item.description || '').slice(0, 300),
+    thumbnailUrl: imgs[0],
+    uploadDate: item.createdAt,
+    videoUrl: item.videoUrl,
+    videoType: item.videoType || 'other',
+  }) : null;
+
+  const faqSchema = faq.length > 0 ? makeFaqSchema(faq) : null;
+
   return (
     <article className="bg-background">
       <SchemaOrg schema={productSchema} id="property" />
       <SchemaOrg schema={breadcrumbSchema} id="breadcrumb" />
+      {videoSchema && <SchemaOrg schema={videoSchema} id="video" />}
+      {faqSchema && <SchemaOrg schema={faqSchema} id="faq" />}
 
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
@@ -375,6 +409,35 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
             onSubmit={submit}
           />
         </div>
+
+        {/* FAQ — часто задаваемые вопросы */}
+        {faqLoading && (
+          <div className="mt-8 border-t border-border pt-6 flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="w-3.5 h-3.5 rounded-full border-2 border-brand-blue/30 border-t-brand-blue animate-spin" />
+            Генерируем FAQ для этого объекта…
+          </div>
+        )}
+        {faq.length > 0 && (
+          <section className="mt-8 border-t border-border pt-8" aria-label="Часто задаваемые вопросы">
+            <h2 className="font-display font-700 text-xl text-foreground mb-5 flex items-center gap-2">
+              <Icon name="HelpCircle" size={20} className="text-brand-blue" />
+              Часто задаваемые вопросы
+            </h2>
+            <div className="space-y-3">
+              {faq.map((faqItem, i) => (
+                <details key={i} className="group border border-border rounded-xl overflow-hidden">
+                  <summary className="flex items-center justify-between px-4 py-3.5 cursor-pointer font-semibold text-sm select-none list-none hover:bg-muted/50 transition-colors">
+                    <span>{faqItem.question}</span>
+                    <Icon name="ChevronDown" size={16} className="shrink-0 text-muted-foreground transition-transform group-open:rotate-180 ml-3" />
+                  </summary>
+                  <div className="px-4 pb-4 pt-1 text-sm text-foreground/80 leading-relaxed border-t border-border">
+                    {faqItem.answer}
+                  </div>
+                </details>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
 
       <AIMatchModal
