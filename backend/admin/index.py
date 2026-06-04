@@ -1198,28 +1198,49 @@ def _site_health(cur, conn, method, action, event, user):
             folders = {'photos': 0, 'news': 0, 'uploads': 0, 'other': 0}
             total_size = 0
             total_files = 0
+
+            # На общем S3-эндпоинте файлы проекта лежат под префиксом проекта.
+            # Определяем рабочий префикс автоматически.
+            candidate_prefixes = [
+                '',
+                f'projects/{akey}/bucket/',
+                f'projects/{akey}/',
+                f'{akey}/',
+            ]
+            base_prefix = ''
+            for pref in candidate_prefixes:
+                probe = s3.list_objects_v2(Bucket='files', Prefix=pref, MaxKeys=1)
+                cnt = probe.get('KeyCount', len(probe.get('Contents', [])))
+                print('S3_DEBUG probe prefix=%r count=%s' % (pref, cnt))
+                if cnt and cnt > 0:
+                    base_prefix = pref
+                    break
+
             token = None
-            pages_left = 3
+            pages_left = 5
             first_keys = []
             while pages_left > 0:
                 kwargs = {'Bucket': 'files', 'MaxKeys': 1000}
+                if base_prefix:
+                    kwargs['Prefix'] = base_prefix
                 if token:
                     kwargs['ContinuationToken'] = token
                 resp = s3.list_objects_v2(**kwargs)
                 contents = resp.get('Contents', [])
                 if len(first_keys) < 5:
                     first_keys.extend([o['Key'] for o in contents[:5]])
-                print('S3_DEBUG keys=%d truncated=%s' % (len(contents), resp.get('IsTruncated')))
                 for obj in contents:
                     key = obj['Key']
+                    # отрезаем префикс проекта для классификации по папкам
+                    rel = key[len(base_prefix):] if base_prefix and key.startswith(base_prefix) else key
                     size = obj.get('Size', 0)
                     total_size += size
                     total_files += 1
-                    if 'photos/' in key or 'photo' in key.lower():
+                    if rel.startswith('photos/') or '/photos/' in rel:
                         folders['photos'] += 1
-                    elif 'news/' in key:
+                    elif rel.startswith('news/') or '/news/' in rel:
                         folders['news'] += 1
-                    elif 'uploads/' in key or 'public/' in key:
+                    elif rel.startswith('uploads/') or rel.startswith('public/') or '/uploads/' in rel:
                         folders['uploads'] += 1
                     else:
                         folders['other'] += 1
@@ -1228,7 +1249,7 @@ def _site_health(cur, conn, method, action, event, user):
                     pages_left -= 1
                 else:
                     break
-            print('S3_DEBUG sample_keys=%s' % first_keys)
+            print('S3_DEBUG base_prefix=%r total=%d sample=%s' % (base_prefix, total_files, first_keys))
 
             def _fmt_size(b):
                 if b > 1024**3: return f'{b/1024**3:.1f} ГБ'
