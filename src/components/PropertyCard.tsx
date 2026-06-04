@@ -368,16 +368,26 @@ export default function PropertyCard({
           )}
 
           {/* Адрес (включает район) */}
-          {addressLine && (
-            <button
-              type="button"
-              onClick={() => setMapOpen(true)}
-              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-brand-blue transition-colors text-left w-full min-w-0 group/addr"
-            >
-              <Icon name="MapPin" size={10} className="flex-shrink-0 text-brand-blue/50 group-hover/addr:text-brand-blue transition-colors" />
-              <span className="truncate min-w-0">{addressLine}</span>
-            </button>
-          )}
+          {addressLine && (() => {
+            const longDistrict = (property.district || '').length > 25 && !!property.address;
+            return (
+              <button
+                type="button"
+                onClick={() => setMapOpen(true)}
+                className="flex items-start gap-1 text-[11px] text-muted-foreground hover:text-brand-blue transition-colors text-left w-full min-w-0 group/addr"
+              >
+                <Icon name="MapPin" size={10} className="flex-shrink-0 text-brand-blue/50 group-hover/addr:text-brand-blue transition-colors mt-0.5" />
+                {longDistrict ? (
+                  <span className="min-w-0">
+                    <span className="block truncate">{property.district}</span>
+                    <span className="block truncate text-muted-foreground/70">{property.address}</span>
+                  </span>
+                ) : (
+                  <span className="truncate min-w-0">{addressLine}</span>
+                )}
+              </button>
+            );
+          })()}
 
           {/* Оценка рынка (ниже рынка / выше рынка) скрыта в общем списке карточек */}
           {/*
