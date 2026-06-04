@@ -1181,30 +1181,41 @@ def _site_health(cur, conn, method, action, event, user):
 
     # ── СТАТИСТИКА S3 (из БД, т.к. листинг S3 недоступен на этом эндпоинте) ──
     if action == 's3_stats':
-        # Считаем файлы по ссылкам в БД
-        cur.execute(f"""
-            SELECT
-                SUM(CASE WHEN images IS NOT NULL AND images != ''
-                    THEN array_length(string_to_array(images, '|'), 1) ELSE 0 END) as photos_count
-            FROM {SCHEMA}.listings
-        """)
-        r = cur.fetchone()
-        photos_count = int(r['photos_count'] or 0)
+        photos_count = 0
+        news_count = 0
+        uploads_count = 0
 
-        cur.execute(f"SELECT COUNT(*) as cnt FROM {SCHEMA}.news WHERE image IS NOT NULL AND image != ''")
-        r2 = cur.fetchone()
-        news_count = int(r2['cnt'] or 0)
+        try:
+            cur.execute(f"""
+                SELECT COALESCE(SUM(
+                    CASE WHEN images IS NOT NULL AND images != ''
+                    THEN array_length(string_to_array(images, '|'), 1) ELSE 0 END
+                ), 0) AS cnt FROM {SCHEMA}.listings
+            """)
+            row = cur.fetchone()
+            photos_count = int(row[0] if isinstance(row, tuple) else row.get('cnt', 0) or 0)
+        except Exception:
+            pass
 
-        cur.execute(f"SELECT COUNT(*) as cnt FROM {SCHEMA}.listings WHERE image IS NOT NULL AND image != ''")
-        r3 = cur.fetchone()
-        upload_count = int(r3['cnt'] or 0)
+        try:
+            cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.news WHERE image IS NOT NULL AND image != ''")
+            row = cur.fetchone()
+            news_count = int(row[0] if isinstance(row, tuple) else row.get('count', 0) or 0)
+        except Exception:
+            pass
+
+        try:
+            cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.listings WHERE image IS NOT NULL AND image != ''")
+            row = cur.fetchone()
+            uploads_count = int(row[0] if isinstance(row, tuple) else row.get('count', 0) or 0)
+        except Exception:
+            pass
 
         total_files = photos_count + news_count
         folders = {
             'photos': photos_count,
             'news': news_count,
-            'uploads': upload_count,
-            'other': 0,
+            'uploads': uploads_count,
         }
         project_id = os.environ.get('AWS_ACCESS_KEY_ID', '')
         cdn_base = f'https://cdn.poehali.dev/projects/{project_id}/bucket'
