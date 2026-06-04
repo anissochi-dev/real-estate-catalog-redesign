@@ -236,22 +236,26 @@ def handle_refresh(cur, conn, force=False):
         now = datetime.datetime.now(datetime.timezone.utc)
         today_date = now.date()
 
-        # Запускаем только 1-го числа каждого месяца
-        if not force and today_date.day != 1:
-            return {'skipped': True, 'reason': f'not 1st day of month (today={today_date})'}
+        if force:
+            # Принудительный запуск — сбрасываем любые ограничения и стартуем
+            print(f'[price_refresh] forced start, today={today_date}')
+        else:
+            # Запускаем только 1-го числа каждого месяца
+            if today_date.day != 1:
+                return {'skipped': True, 'reason': f'not 1st day of month (today={today_date})'}
 
-        # Защита от повторного запуска в том же месяце
-        last_at = cfg.get('price_refresh_last_at')
-        if last_at and not force:
-            if isinstance(last_at, str):
-                last_at = datetime.datetime.fromisoformat(last_at)
-            last_date = last_at.date() if hasattr(last_at, 'date') else last_at
-            if last_date.year == today_date.year and last_date.month == today_date.month:
-                return {'skipped': True, 'reason': f'already ran this month ({last_date})'}
+            # Защита от повторного запуска в том же месяце
+            last_at = cfg.get('price_refresh_last_at')
+            if last_at:
+                if isinstance(last_at, str):
+                    last_at = datetime.datetime.fromisoformat(last_at)
+                last_date = last_at.date() if hasattr(last_at, 'date') else last_at
+                if last_date.year == today_date.year and last_date.month == today_date.month:
+                    return {'skipped': True, 'reason': f'already ran this month ({last_date})'}
 
         next_batch = 0
         today = str(today_date)
-        print(f'[price_refresh] starting monthly cycle, today={today}')
+        print(f'[price_refresh] starting cycle, today={today}')
 
     combos    = _get_active_combos(cur)
     districts = _get_active_districts(cur)

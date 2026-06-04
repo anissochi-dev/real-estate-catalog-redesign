@@ -75,7 +75,7 @@ export default function PriceMarketTab() {
         const r = await fetch(PREDICT_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'price_market_refresh', force: isFirst ? force : false }),
+          body: JSON.stringify({ action: 'price_market_refresh', force: force }),
         }).then(r => r.json());
 
         isFirst = false;
@@ -83,7 +83,11 @@ export default function PriceMarketTab() {
         batchTimes.push(elapsed);
 
         if (r.skipped) {
-          toast.info(`Пропущено: ${r.reason}`);
+          const reasonRu = r.reason?.includes('not 1st day') ? 'Запуск возможен только 1-го числа. Нажмите «Обновить» ещё раз — это принудительный запуск.'
+            : r.reason?.includes('already ran') ? 'Данные уже обновлялись в этом месяце. Нажмите «Обновить» для принудительного обновления.'
+            : r.reason?.includes('enabled=false') ? 'Авто-обновление отключено в настройках.'
+            : r.reason;
+          toast.info(reasonRu);
           setRefreshState(INITIAL_STATE);
           return;
         }
