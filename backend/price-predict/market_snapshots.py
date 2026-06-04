@@ -389,8 +389,8 @@ def handle_stats(cur, params):
     cur.execute(f"SELECT DISTINCT category, deal FROM {SCHEMA}.price_market_snapshots ORDER BY category, deal")
     available_combos = [{'category': r['category'], 'deal': r['deal']} for r in cur.fetchall()]
 
-    cur.execute(f"SELECT DISTINCT district FROM {SCHEMA}.price_market_snapshots WHERE district != '' ORDER BY district")
-    available_districts = [r['district'] for r in cur.fetchall()]
+    cur.execute(f"SELECT name FROM {SCHEMA}.districts WHERE is_active = TRUE ORDER BY sort_order ASC, name ASC")
+    available_districts = [r['name'] for r in cur.fetchall()]
 
     return {
         'snapshots': rows, 'latest': latest, 'schedule': schedule,
