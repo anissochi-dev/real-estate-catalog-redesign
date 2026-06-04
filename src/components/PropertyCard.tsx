@@ -296,7 +296,7 @@ export default function PropertyCard({
         </div>
 
         {/* ── Контент ── */}
-        <div className="px-3 pt-2 pb-2.5 flex flex-col flex-1 gap-1.5">
+        <div className="px-3 pt-2 pb-2.5 flex flex-col flex-1 gap-1.5 min-w-0 overflow-hidden">
 
           {/* Название */}
           <Link to={href}>
