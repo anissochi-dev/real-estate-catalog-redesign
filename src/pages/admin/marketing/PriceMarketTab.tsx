@@ -4,13 +4,13 @@ import Icon from '@/components/ui/icon';
 import { MarketStats, CAT_LABELS, PREDICT_URL, fmtDate } from './price-market/types';
 import MarketHeader from './price-market/MarketHeader';
 import { TrendView, CompareView, HeatmapView, IndexView, ViewModeSwitcher } from './price-market/MarketViews';
+import RefreshProgress, { BATCH_STEPS, INITIAL_STATE, RefreshState } from './price-market/RefreshProgress';
 
 type ViewMode = 'trend' | 'compare' | 'heatmap' | 'index';
 
 export default function PriceMarketTab() {
   const [data, setData] = useState<MarketStats | null>(null);
   const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
 
   // Фильтры
   const [viewMode, setViewMode] = useState<ViewMode>('trend');
@@ -18,6 +18,9 @@ export default function PriceMarketTab() {
   const [filterDistrict, setFilterDistrict] = useState('');
   const [filterDays, setFilterDays] = useState(180);
   const [selectedCats, setSelectedCats] = useState<string[]>(['office', 'retail', 'warehouse']);
+
+  // Состояние процесса обновления
+  const [refreshState, setRefreshState] = useState<RefreshState>(INITIAL_STATE);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -37,28 +40,96 @@ export default function PriceMarketTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  const runRefresh = async (force = false) => {
-    setRefreshing(true);
-    try {
-      const r = await fetch(PREDICT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'price_market_refresh', force }),
-      }).then(r => r.json());
-      if (r.skipped) {
-        toast.info(`Пропущено: ${r.reason}`);
-      } else if (r.done) {
-        toast.success(`Цикл завершён — сохранено ${r.saved} снапшотов`);
-        load();
-      } else if (r.source) {
-        toast.success(`Батч ${r.source} выполнен → следующий: ${r.next}`);
-        load();
-      } else {
-        toast.error(r.error || 'Ошибка');
+  // ── Авто-цепочка батчей ───────────────────────────────────────────────────
+  // Запускает все 6 батчей последовательно, обновляя прогресс после каждого.
+  // Время каждого батча замеряется и используется для уточнения прогноза.
+
+  const runBatchChain = useCallback(async (force = false) => {
+    const startedAt = new Date();
+    const batchTimes: number[] = [];
+
+    // Вычисляем ориентировочное время завершения по эталонным оценкам
+    const estTotalMs = BATCH_STEPS.reduce((a, s) => a + s.estSec * 1000, 0);
+    const estimatedFinishAt = new Date(startedAt.getTime() + estTotalMs);
+
+    setRefreshState({
+      running: true,
+      currentBatch: 0,
+      completedBatches: [],
+      startedAt,
+      batchTimes: [],
+      estimatedFinishAt,
+      savedCount: null,
+      finishedAt: null,
+    });
+
+    let isFirst = true;
+
+    for (let batchIdx = 0; batchIdx < BATCH_STEPS.length; batchIdx++) {
+      const batchStart = Date.now();
+
+      // Обновляем: текущий батч
+      setRefreshState(prev => ({ ...prev, currentBatch: batchIdx }));
+
+      try {
+        const r = await fetch(PREDICT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'price_market_refresh', force: isFirst ? force : false }),
+        }).then(r => r.json());
+
+        isFirst = false;
+        const elapsed = Date.now() - batchStart;
+        batchTimes.push(elapsed);
+
+        if (r.skipped) {
+          toast.info(`Пропущено: ${r.reason}`);
+          setRefreshState(INITIAL_STATE);
+          return;
+        }
+
+        if (r.error) {
+          toast.error(r.error);
+          setRefreshState(prev => ({ ...prev, running: false }));
+          return;
+        }
+
+        // Уточняем прогноз по реальным замерам
+        const avgMs = batchTimes.reduce((a, b) => a + b, 0) / batchTimes.length;
+        const remaining = BATCH_STEPS.length - batchIdx - 1;
+        const updatedFinish = new Date(Date.now() + avgMs * remaining);
+
+        const completedBatches = BATCH_STEPS.slice(0, batchIdx + 1).map(s => s.key);
+        setRefreshState(prev => ({
+          ...prev,
+          completedBatches,
+          batchTimes: [...batchTimes],
+          estimatedFinishAt: remaining > 0 ? updatedFinish : prev.estimatedFinishAt,
+        }));
+
+        if (r.done) {
+          // Цикл завершён
+          const finishedAt = new Date();
+          setRefreshState(prev => ({
+            ...prev,
+            running: false,
+            currentBatch: -1,
+            completedBatches: BATCH_STEPS.map(s => s.key),
+            savedCount: r.saved ?? null,
+            finishedAt,
+          }));
+          toast.success(`Готово — сохранено ${r.saved} снапшотов`);
+          load();
+          return;
+        }
+
+      } catch (e) {
+        toast.error('Ошибка при сборе данных');
+        setRefreshState(prev => ({ ...prev, running: false }));
+        return;
       }
-    } catch { toast.error('Ошибка обновления'); }
-    finally { setRefreshing(false); }
-  };
+    }
+  }, [load]);
 
   // ── Подготовка данных для графика тренда ──────────────────────────────────
 
@@ -143,23 +214,31 @@ export default function PriceMarketTab() {
       <MarketHeader
         data={data}
         loading={loading}
-        refreshing={refreshing}
+        refreshing={refreshState.running}
         filterDeal={filterDeal}
         filterDistrict={filterDistrict}
         filterDays={filterDays}
         dynamicDistricts={dynamicDistricts}
-        onRefresh={runRefresh}
+        onRefresh={() => runBatchChain(true)}
         onDealChange={setFilterDeal}
         onDistrictChange={setFilterDistrict}
         onDaysChange={setFilterDays}
       />
 
+      {/* Прогресс обновления */}
+      {(refreshState.running || refreshState.finishedAt) && (
+        <RefreshProgress
+          state={refreshState}
+          onStart={() => runBatchChain(true)}
+        />
+      )}
+
       {/* Нет данных */}
-      {!loading && data?.snapshots.length === 0 && (
+      {!loading && data?.snapshots.length === 0 && !refreshState.running && (
         <div className="bg-white rounded-2xl border border-border p-10 text-center">
           <Icon name="BarChart2" size={36} className="mx-auto mb-3 text-muted-foreground opacity-30" />
           <p className="text-muted-foreground text-sm mb-3">Данных пока нет. Запустите сбор рыночных цен.</p>
-          <button onClick={() => runRefresh(true)} disabled={refreshing}
+          <button onClick={() => runBatchChain(true)} disabled={refreshState.running}
             className="bg-brand-blue text-white px-4 py-2 rounded-xl text-sm font-semibold">
             Собрать данные
           </button>
