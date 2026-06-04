@@ -297,6 +297,7 @@ def _build_yandex(listings, company):
     company_name = _xml_escape(company.get('company_name', 'BIZNEST'))
     phone = _xml_escape(company.get('company_phone', ''))
     email = _xml_escape(company.get('company_email', ''))
+    site_url = (company.get('site_url') or '').rstrip('/')
     now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S+00:00')
 
     out = ['<?xml version="1.0" encoding="UTF-8"?>']
@@ -311,7 +312,10 @@ def _build_yandex(listings, company):
         out.append(f'<type>{deal}</type>')
         out.append('<property-type>коммерческая</property-type>')
         out.append(f'<category>{cat}</category>')
+        out.append('<deal-status>агентство</deal-status>')
         out.append(f'<creation-date>{l["created_at"]}</creation-date>')
+        if site_url:
+            out.append(f'<url>{site_url}/listing/{l["id"]}</url>')
 
         # Адрес и геолокация
         out.append('<location>')
@@ -509,6 +513,10 @@ def _build_avito(listings, company):
             if l.get('subway_distance'):
                 out.append(f'<MetroDistance>{l["subway_distance"]}</MetroDistance>')
 
+        # Тип аренды
+        if l.get('deal') == 'rent':
+            out.append('<LeaseType>На длительный срок</LeaseType>')
+
         # Контакт
         company_phone = company.get('company_phone', '')
         if company_phone:
@@ -533,6 +541,16 @@ def _build_avito(listings, company):
 
 
 def _build_cian(listings, company):
+    # Разбираем телефон компании для блока Phones
+    raw_phone = company.get('company_phone', '') or ''
+    # Очищаем от пробелов, скобок, тире
+    import re as _re
+    digits = _re.sub(r'\D', '', raw_phone)
+    if digits.startswith('8') and len(digits) == 11:
+        digits = '7' + digits[1:]
+    cian_country_code = '+' + digits[:1] if digits else '+7'
+    cian_phone_number = digits[1:] if len(digits) > 1 else ''
+
     out = ['<?xml version="1.0" encoding="UTF-8"?>']
     out.append('<feed>')
     out.append('<feed_version>2</feed_version>')
@@ -549,6 +567,15 @@ def _build_cian(listings, company):
         out.append(f'<ExternalId>{l["id"]}</ExternalId>')
         out.append(f'<Category>{cian_cat}</Category>')
 
+        # Телефон агентства (обязательный тег ЦИАН)
+        if cian_phone_number:
+            out.append('<Phones>')
+            out.append('<PhoneSchema>')
+            out.append(f'<CountryCode>{cian_country_code}</CountryCode>')
+            out.append(f'<Number>{cian_phone_number}</Number>')
+            out.append('</PhoneSchema>')
+            out.append('</Phones>')
+
         # Описание
         if l.get('description'):
             out.append(f'<Description><![CDATA[{l["description"]}]]></Description>')
@@ -557,18 +584,19 @@ def _build_cian(listings, company):
         if l.get('title'):
             out.append(f'<Title>{_xml_escape(l["title"])}</Title>')
 
-        # Адрес
-        out.append('<Address>')
-        out.append('<Country>Россия</Country>')
-        out.append(f'<Location>{_xml_escape(l.get("city") or "Краснодар")}</Location>')
+        # Адрес — плоская строка: "Город, Район, Улица"
+        addr_parts = [l.get('city') or 'Краснодар']
         if l.get('district'):
-            out.append(f'<District>{_xml_escape(l["district"])}</District>')
+            addr_parts.append(l['district'])
         if l.get('address'):
-            out.append(f'<Address>{_xml_escape(l["address"])}</Address>')
+            addr_parts.append(l['address'])
+        out.append(f'<Address>{_xml_escape(", ".join(addr_parts))}</Address>')
+        # Координаты — отдельный блок
         if l.get('lat') and l.get('lng'):
+            out.append('<Coordinates>')
             out.append(f'<Lat>{l["lat"]}</Lat>')
             out.append(f'<Lng>{l["lng"]}</Lng>')
-        out.append('</Address>')
+            out.append('</Coordinates>')
 
         # Площадь
         if l.get('area'):
