@@ -1979,6 +1979,68 @@ def _consent_log(cur, conn, method, event, user):
     return _ok({'logs': items, 'total': total, 'page': page, 'limit': limit})
 
 
+def _auto_district(cur, address: str, city: str = 'Краснодар') -> str:
+    """Определяет район по адресу через YandexGPT. Возвращает название из справочника или ''."""
+    if not address or not address.strip():
+        return ''
+    import urllib.request, urllib.error
+    api_key = os.environ.get('YANDEX_API_KEY', '')
+    folder_id = os.environ.get('YANDEX_FOLDER_ID', '')
+    if not api_key or not folder_id:
+        try:
+            cur.execute(f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
+            row = cur.fetchone()
+            if row:
+                api_key = row.get('yandex_api_key') or api_key
+                folder_id = row.get('yandex_folder_id') or folder_id
+        except Exception:
+            pass
+    if not api_key or not folder_id:
+        return ''
+    try:
+        cur.execute(f"SELECT name FROM {SCHEMA}.districts WHERE is_active = TRUE ORDER BY sort_order ASC, name ASC")
+        districts = [r['name'] for r in cur.fetchall()]
+    except Exception:
+        return ''
+    if not districts:
+        return ''
+    districts_numbered = '\n'.join([f'{i+1}. {d}' for i, d in enumerate(districts)])
+    payload = {
+        'modelUri': f'gpt://{folder_id}/yandexgpt/rc',
+        'completionOptions': {'stream': False, 'temperature': 0.1, 'maxTokens': '50'},
+        'messages': [
+            {'role': 'system', 'text': (
+                f'Ты — эксперт по географии {city}а. Определи номер микрорайона из списка для адреса.\n'
+                f'Отвечай ТОЛЬКО числом (номером из списка). Без пояснений.\n'
+                f'Список:\n{districts_numbered}'
+            )},
+            {'role': 'user', 'text': f'Адрес: {address}, {city}'},
+        ],
+    }
+    req = urllib.request.Request(
+        'https://llm.api.cloud.yandex.net/foundationModels/v1/completion',
+        data=json.dumps(payload).encode(),
+        headers={'Authorization': f'Api-Key {api_key}', 'Content-Type': 'application/json', 'x-folder-id': folder_id},
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+        alts = (data.get('result') or {}).get('alternatives') or []
+        text = ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
+        # Ищем число в ответе
+        import re
+        m = re.search(r'\d+', text)
+        if m:
+            idx = int(m.group()) - 1
+            if 0 <= idx < len(districts):
+                print(f'[auto_district] "{address}" → "{districts[idx]}"')
+                return districts[idx]
+    except Exception as e:
+        print(f'[auto_district] error: {e}')
+    return ''
+
+
 def _listings(cur, conn, method, rid, event, user):
     if method == 'GET':
         if rid:
@@ -2063,6 +2125,15 @@ def _listings(cur, conn, method, rid, event, user):
     body = json.loads(event.get('body') or '{}')
 
     if method == 'POST':
+        # Авто-определение района по адресу если не указан
+        district_val = (body.get('district') or '').strip()
+        if not district_val:
+            address_val = (body.get('address') or '').strip()
+            city_val = (body.get('city') or 'Краснодар').strip()
+            district_val = _auto_district(cur, address_val, city_val)
+            if district_val:
+                body['district'] = district_val
+
         # Авто-линковка собственника с единой телефонной базой
         owner_pc_id = _upsert_phone_contact(cur, body.get('owner_phone'), body.get('owner_name'), user['id'])
         owner_pc2_id = _upsert_phone_contact(cur, body.get('owner_phone2'), body.get('owner_name'), user['id'])
@@ -2122,6 +2193,14 @@ def _listings(cur, conn, method, rid, event, user):
         return _ok({'id': new_id, 'success': True, 'slug': new_slug, 'owner_phone_contact_id': owner_pc_id})
 
     if method == 'PUT' and rid:
+        # Авто-определение района если адрес меняется и район не указан
+        if 'address' in body and not (body.get('district') or '').strip():
+            address_val = (body.get('address') or '').strip()
+            city_val = (body.get('city') or 'Краснодар').strip()
+            auto_d = _auto_district(cur, address_val, city_val)
+            if auto_d:
+                body['district'] = auto_d
+
         # ── Снимаем "до" — для diff и истории ─────────────────────────────────
         diff_cols = [
             'title', 'description', 'category', 'deal', 'price', 'price_per_m2',

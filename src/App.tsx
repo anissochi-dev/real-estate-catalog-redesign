@@ -290,7 +290,9 @@ export default function App() {
       || path === '/compare'
       || path === '/search'
       || path === '/map'
-      || path === '/network-tenants';
+      || path === '/network-tenants'
+      || path.startsWith('/district/')
+      || path.startsWith('/category/');
     if (!needsFullList) return;
     let cancelled = false;
     fetchListings()

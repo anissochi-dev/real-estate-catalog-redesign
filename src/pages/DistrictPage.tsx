@@ -72,8 +72,11 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
 
   const items = useMemo(() => {
     if (!districtName) return [];
-    const searchName = districtData?.name || districtName;
-    const q = searchName.toLowerCase();
+    // Используем точное название из справочника (districtData.name),
+    // или slug как fallback пока данные грузятся
+    const exactName = districtData?.name;
+    if (!exactName) return []; // ждём загрузки districtData
+    const q = exactName.toLowerCase();
     return properties.filter(p =>
       (p.district || '').toLowerCase().includes(q) ||
       (p.address || '').toLowerCase().includes(q)
