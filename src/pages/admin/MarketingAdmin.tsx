@@ -341,11 +341,37 @@ const COLOR_MAP: Record<string, { bar: string; badge: string; icon: string }> = 
   gray:    { bar: 'bg-slate-300',   badge: 'bg-slate-50 text-slate-600 border-slate-200', icon: 'HelpCircle' },
 };
 
+const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
+
 function PricingTab() {
+  const [mode, setMode] = useState<'manual' | 'id'>('id');
+  const [idInput, setIdInput] = useState('');
+  const [idLoading, setIdLoading] = useState(false);
+  const [idErr, setIdErr] = useState('');
+  const [loadedListing, setLoadedListing] = useState<{ id: number; title: string } | null>(null);
   const [form, setForm] = useState({ category: 'office', deal: 'rent', area: '', price: '', district: '' });
   const [result, setResult] = useState<PriceResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
+
+  const loadById = async () => {
+    const id = idInput.trim();
+    if (!id || isNaN(Number(id))) { setIdErr('Введите числовой ID объекта'); return; }
+    setIdLoading(true); setIdErr(''); setResult(null); setLoadedListing(null);
+    try {
+      const r = await fetch(`${LISTINGS_URL}?id=${id}`).then(r => r.json());
+      if (r.error || !r.id) { setIdErr(r.error || 'Объект не найден'); return; }
+      setLoadedListing({ id: r.id, title: r.title || `Объект #${r.id}` });
+      setForm({
+        category: r.category || 'office',
+        deal: r.deal || 'rent',
+        area: String(r.area || ''),
+        price: String(r.price || ''),
+        district: r.district || '',
+      });
+    } catch (e) { setIdErr(e instanceof Error ? e.message : 'Ошибка загрузки'); }
+    finally { setIdLoading(false); }
+  };
 
   const check = async () => {
     if (!form.area || !form.price) { toast.error('Введите площадь и цену'); return; }
@@ -373,51 +399,99 @@ function PricingTab() {
 
   return (
     <div className="space-y-5">
-      <div className="bg-white rounded-2xl border border-border p-5">
-        <h3 className="font-semibold text-base mb-4 flex items-center gap-2">
+      <div className="bg-white rounded-2xl border border-border p-5 space-y-4">
+        <h3 className="font-semibold text-base flex items-center gap-2">
           <Icon name="Sparkles" size={18} className="text-purple-500" />
           AI-анализ рыночной цены
         </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Категория</label>
-            <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-              className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-white">
-              {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Тип сделки</label>
-            <select value={form.deal} onChange={e => setForm(f => ({ ...f, deal: e.target.value }))}
-              className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-white">
-              <option value="rent">Аренда</option>
-              <option value="sale">Продажа</option>
-              <option value="business">Готовый бизнес</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Район</label>
-            <input value={form.district} onChange={e => setForm(f => ({ ...f, district: e.target.value }))}
-              placeholder="Центральный" className="w-full border border-border rounded-xl px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Площадь, м²</label>
-            <input type="number" value={form.area} onChange={e => setForm(f => ({ ...f, area: e.target.value }))}
-              placeholder="100" className="w-full border border-border rounded-xl px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Цена, ₽</label>
-            <input type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
-              placeholder="500000" className="w-full border border-border rounded-xl px-3 py-2 text-sm" />
-          </div>
-          <div className="flex items-end">
-            <button onClick={check} disabled={loading}
-              className="w-full bg-brand-blue text-white rounded-xl px-4 py-2 text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
-              <Icon name={loading ? 'Loader2' : 'Sparkles'} size={15} className={loading ? 'animate-spin' : ''} />
-              {loading ? 'Анализ…' : 'Проверить'}
+
+        {/* Переключатель режима */}
+        <div className="flex gap-1 bg-muted/40 rounded-xl p-1 w-fit">
+          {(['id', 'manual'] as const).map(m => (
+            <button key={m} onClick={() => { setMode(m); setResult(null); setErr(''); setIdErr(''); setLoadedListing(null); }}
+              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition ${mode === m ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+              {m === 'id' ? 'По ID объекта' : 'Вручную'}
             </button>
-          </div>
+          ))}
         </div>
+
+        {/* Режим: по ID */}
+        {mode === 'id' && (
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="text-xs text-muted-foreground mb-1 block">ID объекта из каталога</label>
+                <input
+                  value={idInput}
+                  onChange={e => { setIdInput(e.target.value); setIdErr(''); }}
+                  onKeyDown={e => e.key === 'Enter' && loadById()}
+                  placeholder="Например: 54"
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="flex items-end">
+                <button onClick={loadById} disabled={idLoading}
+                  className="bg-muted border border-border text-foreground rounded-xl px-4 py-2 text-sm font-semibold flex items-center gap-2 disabled:opacity-60 hover:bg-muted/80 transition">
+                  <Icon name={idLoading ? 'Loader2' : 'Search'} size={15} className={idLoading ? 'animate-spin' : ''} />
+                  {idLoading ? 'Загрузка…' : 'Найти'}
+                </button>
+              </div>
+            </div>
+            {idErr && <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-xl">{idErr}</div>}
+            {loadedListing && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-xl text-sm">
+                <Icon name="CheckCircle2" size={15} className="text-emerald-500 flex-shrink-0" />
+                <span className="font-medium truncate">{loadedListing.title}</span>
+                <span className="text-muted-foreground text-xs flex-shrink-0">#{loadedListing.id}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Поля формы — показываем всегда в ручном режиме, или когда загружен объект */}
+        {(mode === 'manual' || loadedListing) && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Категория</label>
+              <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+                className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-white">
+                {CATEGORIES.map(cat => <option key={cat.id} value={cat.id}>{cat.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Тип сделки</label>
+              <select value={form.deal} onChange={e => setForm(f => ({ ...f, deal: e.target.value }))}
+                className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-white">
+                <option value="rent">Аренда</option>
+                <option value="sale">Продажа</option>
+                <option value="business">Готовый бизнес</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Район</label>
+              <input value={form.district} onChange={e => setForm(f => ({ ...f, district: e.target.value }))}
+                placeholder="Центральный" className="w-full border border-border rounded-xl px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Площадь, м²</label>
+              <input type="number" value={form.area} onChange={e => setForm(f => ({ ...f, area: e.target.value }))}
+                placeholder="100" className="w-full border border-border rounded-xl px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Цена, ₽</label>
+              <input type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
+                placeholder="500000" className="w-full border border-border rounded-xl px-3 py-2 text-sm" />
+            </div>
+            <div className="flex items-end">
+              <button onClick={check} disabled={loading}
+                className="w-full bg-brand-blue text-white rounded-xl px-4 py-2 text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
+                <Icon name={loading ? 'Loader2' : 'Sparkles'} size={15} className={loading ? 'animate-spin' : ''} />
+                {loading ? 'Анализ…' : 'Проверить'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {err && <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-xl">{err}</div>}
       </div>
 
