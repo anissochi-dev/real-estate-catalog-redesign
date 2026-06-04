@@ -144,25 +144,68 @@ def _update_last_at(cur, conn):
 # ── Батчи ─────────────────────────────────────────────────────────────────────
 
 def _batch_db(cur, combos, districts):
-    """Батч 0: собираем аналоги из внутренней БД."""
-    from mela_price import _db_analogs
+    """Батч 0: один широкий SELECT всех объявлений, группировка в Python.
+    Заменяет цикл из тысяч отдельных запросов — укладывается в таймаут 30 сек.
+    """
+    cur.execute(f"""
+        SELECT id, category, deal, price, area, price_per_m2, district, status
+        FROM {SCHEMA}.listings
+        WHERE status IN ('active', 'archived')
+          AND price > 0 AND area > 0
+          AND category IS NOT NULL AND deal IS NOT NULL
+        ORDER BY CASE WHEN status='active' THEN 0 ELSE 1 END, updated_at DESC
+        LIMIT 50000
+    """)
+    rows = cur.fetchall()
+    print(f'[price_refresh] batch_db: loaded {len(rows)} listings from DB')
+
+    # Индексируем по category|deal для быстрого поиска
+    by_cat_deal = {}
+    for r in rows:
+        cat  = r['category'] or ''
+        deal = r['deal'] or ''
+        key  = f'{cat}|{deal}'
+        if key not in by_cat_deal:
+            by_cat_deal[key] = []
+        by_cat_deal[key].append(r)
+
+    def _to_analog(r):
+        p = float(r['price'] or 0)
+        a = float(r['area'] or 0)
+        if p <= 0 or a <= 0:
+            return None
+        ppm2 = float(r['price_per_m2'] or 0) or round(p / a)
+        return {
+            'source': 'база системы',
+            'price': p, 'area': a, 'price_per_m2': ppm2,
+            'district': str(r.get('district') or ''),
+            'url': '', 'status': str(r.get('status') or ''),
+        }
+
     pool = {}
     for category, deal in combos:
-        sample_area = CATEGORY_SAMPLE_AREA.get(category, 100)
-        analogs_all = _db_analogs(cur, {
-            'category': category, 'deal': deal, 'area': sample_area,
-            'price': 0, 'district': '', 'condition': '',
-        })
-        if analogs_all:
-            pool[_pool_key(category, deal, '')] = analogs_all
+        key = f'{category}|{deal}'
+        candidates = by_cat_deal.get(key, [])
+        if not candidates:
+            continue
+
+        # Все районы (без фильтра по району)
+        all_analogs = [a for r in candidates if (a := _to_analog(r))]
+        if all_analogs:
+            pool[_pool_key(category, deal, '')] = all_analogs[:50]
+
+        # По каждому конкретному району
         for district in districts:
-            analogs_d = _db_analogs(cur, {
-                'category': category, 'deal': deal, 'area': sample_area,
-                'price': 0, 'district': district, 'condition': '',
-            })
-            if analogs_d:
-                pool[_pool_key(category, deal, district)] = analogs_d
-    print(f'[price_refresh] batch_db: {len(pool)} keys')
+            dist_lower = district.lower()
+            dist_analogs = [
+                a for r in candidates
+                if dist_lower in (r.get('district') or '').lower()
+                and (a := _to_analog(r))
+            ]
+            if dist_analogs:
+                pool[_pool_key(category, deal, district)] = dist_analogs[:50]
+
+    print(f'[price_refresh] batch_db: {len(pool)} pool keys built')
     return pool
 
 
