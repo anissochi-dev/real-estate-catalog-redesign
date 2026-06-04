@@ -5,6 +5,9 @@ import { MarketStats, CAT_LABELS, PREDICT_URL, fmtDate } from './price-market/ty
 import MarketHeader from './price-market/MarketHeader';
 import { TrendView, CompareView, HeatmapView, IndexView, ViewModeSwitcher } from './price-market/MarketViews';
 import RefreshProgress, { BATCH_STEPS, INITIAL_STATE, RefreshState } from './price-market/RefreshProgress';
+import { getToken } from '@/lib/adminApi';
+
+const DISTRICT_AI_URL = 'https://functions.poehali.dev/eddffe59-b37d-425e-90a3-59d12d44623f';
 
 type ViewMode = 'trend' | 'compare' | 'heatmap' | 'index';
 
@@ -19,8 +22,12 @@ export default function PriceMarketTab() {
   const [filterDays, setFilterDays] = useState(180);
   const [selectedCats, setSelectedCats] = useState<string[]>(['office', 'retail', 'warehouse']);
 
-  // Состояние процесса обновления
+  // Состояние процесса обновления рыночных цен
   const [refreshState, setRefreshState] = useState<RefreshState>(INITIAL_STATE);
+
+  // Состояние авто-привязки районов
+  const [assigningDistricts, setAssigningDistricts] = useState(false);
+  const [assignProgress, setAssignProgress] = useState<{ processed: number; updated: number; remaining: number } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -135,6 +142,40 @@ export default function PriceMarketTab() {
     }
   }, [load]);
 
+  // ── Авто-привязка районов по адресу через YandexGPT ───────────────────────
+  // Запускает цепочку батчей по 20 объявлений до полного заполнения поля district.
+  const runAutoAssign = useCallback(async () => {
+    setAssigningDistricts(true);
+    setAssignProgress({ processed: 0, updated: 0, remaining: 140 });
+    let totalProcessed = 0;
+    let totalUpdated = 0;
+
+    while (true) {
+      try {
+        const r = await fetch(DISTRICT_AI_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Auth-Token': getToken() },
+          body: JSON.stringify({ action: 'auto_assign', city: 'Краснодар', batch_size: 20 }),
+        }).then(r => r.json());
+
+        if (r.error) { toast.error(r.error); break; }
+
+        totalProcessed += r.processed ?? 0;
+        totalUpdated += r.updated ?? 0;
+        setAssignProgress({ processed: totalProcessed, updated: totalUpdated, remaining: r.remaining ?? 0 });
+
+        if (r.done || !r.remaining) break;
+      } catch {
+        toast.error('Ошибка при определении районов');
+        break;
+      }
+    }
+
+    setAssigningDistricts(false);
+    toast.success(`Районы привязаны: ${totalUpdated} из ${totalProcessed} объявлений`);
+    load();
+  }, [load]);
+
   // ── Подготовка данных для графика тренда ──────────────────────────────────
 
   const trendData = (() => {
@@ -219,11 +260,14 @@ export default function PriceMarketTab() {
         data={data}
         loading={loading}
         refreshing={refreshState.running}
+        assigningDistricts={assigningDistricts}
+        assignProgress={assignProgress}
         filterDeal={filterDeal}
         filterDistrict={filterDistrict}
         filterDays={filterDays}
         dynamicDistricts={dynamicDistricts}
         onRefresh={() => runBatchChain(true)}
+        onAutoAssign={runAutoAssign}
         onDealChange={setFilterDeal}
         onDistrictChange={setFilterDistrict}
         onDaysChange={setFilterDays}

@@ -298,6 +298,104 @@ def handler(event: dict, context) -> dict:
                 conn.commit()
                 return _ok({'imported': imported, 'skipped': skipped})
 
+            # ── auto_assign: определить район по адресу для объявлений без района ─
+            if action == 'auto_assign':
+                """Один вызов обрабатывает батч из 20 объявлений без района.
+                Возвращает {updated, remaining, done}. Вызывать повторно пока done=False.
+                """
+                api_key, folder_id = _load_keys(cur)
+                if not api_key or not folder_id:
+                    return _err(502, 'YandexGPT не настроен — добавьте ключи в Настройки → Интеграции')
+
+                # Загружаем список районов из справочника
+                cur.execute(f"SELECT name FROM {SCHEMA}.districts WHERE is_active = TRUE ORDER BY sort_order ASC, name ASC")
+                district_names = [r['name'] for r in cur.fetchall()]
+                if not district_names:
+                    return _err(400, 'Нет районов в справочнике')
+
+                # Берём батч объявлений без района
+                batch_size = int(body.get('batch_size') or 20)
+                cur.execute(f"""
+                    SELECT id, address, city FROM {SCHEMA}.listings
+                    WHERE (district IS NULL OR district = '')
+                      AND address IS NOT NULL AND address != ''
+                      AND status IN ('active', 'archived')
+                    ORDER BY id ASC
+                    LIMIT {batch_size}
+                """)
+                listings = [dict(r) for r in cur.fetchall()]
+
+                # Считаем сколько осталось всего
+                cur.execute(f"""
+                    SELECT COUNT(*) as cnt FROM {SCHEMA}.listings
+                    WHERE (district IS NULL OR district = '')
+                      AND address IS NOT NULL AND address != ''
+                      AND status IN ('active', 'archived')
+                """)
+                remaining_total = cur.fetchone()['cnt']
+
+                if not listings:
+                    return _ok({'updated': 0, 'remaining': 0, 'done': True})
+
+                # Формируем запрос к GPT: список адресов → районы
+                districts_list = '\n'.join(district_names)
+                addresses_block = '\n'.join([f"ID={l['id']}: {l['address']}, {l.get('city','Краснодар')}" for l in listings])
+
+                system_prompt = (
+                    'Ты — эксперт по географии Краснодара. '
+                    'Тебе дан список адресов коммерческой недвижимости и список микрорайонов Краснодара. '
+                    'Для каждого адреса определи ТОЧНОЕ название микрорайона из предоставленного списка. '
+                    'Если адрес не относится ни к одному из списка — напиши пустую строку для значения. '
+                    'Отвечай строго в формате (одна строка на адрес): ID=<id>|<название микрорайона или пусто>\n'
+                    'Без пояснений, без markdown, только строки в указанном формате.'
+                )
+                user_text = f'Список микрорайонов Краснодара:\n{districts_list}\n\nАдреса:\n{addresses_block}'
+
+                result = _call_gpt(system_prompt, user_text, api_key, folder_id, max_tokens='1000')
+                if 'error' in result:
+                    return _err(502, result['error'])
+
+                # Парсим ответ GPT: ID=123|Центральный (ЦМР)
+                assignments = {}
+                district_names_lower = {d.lower(): d for d in district_names}
+                for line in result['text'].splitlines():
+                    line = line.strip()
+                    if not line or '|' not in line or not line.startswith('ID='):
+                        continue
+                    parts = line.split('|', 1)
+                    try:
+                        lid = int(parts[0].replace('ID=', '').strip())
+                        dist_raw = parts[1].strip() if len(parts) > 1 else ''
+                        # Ищем точное совпадение (без учёта регистра)
+                        dist_matched = district_names_lower.get(dist_raw.lower(), '')
+                        if dist_matched:
+                            assignments[lid] = dist_matched
+                    except (ValueError, IndexError):
+                        continue
+
+                # Обновляем в БД
+                updated = 0
+                for listing in listings:
+                    lid = listing['id']
+                    if lid in assignments:
+                        dist_safe = assignments[lid].replace("'", "''")
+                        cur.execute(f"UPDATE {SCHEMA}.listings SET district = '{dist_safe}' WHERE id = {lid}")
+                        updated += 1
+                    else:
+                        # Ставим прочерк чтобы не обрабатывать повторно
+                        cur.execute(f"UPDATE {SCHEMA}.listings SET district = '-' WHERE id = {lid}")
+
+                conn.commit()
+
+                remaining_after = remaining_total - len(listings)
+                return _ok({
+                    'updated': updated,
+                    'processed': len(listings),
+                    'remaining': max(0, remaining_after),
+                    'done': remaining_after <= 0,
+                    'assignments': assignments,
+                })
+
             return _err(400, f'Неизвестный action: {action}')
     finally:
         conn.close()

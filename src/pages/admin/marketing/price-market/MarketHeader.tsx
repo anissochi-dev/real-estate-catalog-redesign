@@ -1,15 +1,24 @@
 import Icon from '@/components/ui/icon';
 import { MarketStats, DEAL_LABELS, daysSince } from './types';
 
+interface AssignProgress {
+  processed: number;
+  updated: number;
+  remaining: number;
+}
+
 interface MarketHeaderProps {
   data: MarketStats | null;
   loading: boolean;
   refreshing: boolean;
+  assigningDistricts: boolean;
+  assignProgress: AssignProgress | null;
   filterDeal: 'sale' | 'rent';
   filterDistrict: string;
   filterDays: number;
   dynamicDistricts: string[];
   onRefresh: (force?: boolean) => void;
+  onAutoAssign: () => void;
   onDealChange: (deal: 'sale' | 'rent') => void;
   onDistrictChange: (district: string) => void;
   onDaysChange: (days: number) => void;
@@ -17,8 +26,9 @@ interface MarketHeaderProps {
 
 export default function MarketHeader({
   data, loading, refreshing,
+  assigningDistricts, assignProgress,
   filterDeal, filterDistrict, filterDays, dynamicDistricts,
-  onRefresh, onDealChange, onDistrictChange, onDaysChange,
+  onRefresh, onAutoAssign, onDealChange, onDistrictChange, onDaysChange,
 }: MarketHeaderProps) {
   const sched = data?.schedule;
   const lastDays = daysSince(sched?.last_at || null);
@@ -46,13 +56,47 @@ export default function MarketHeader({
               {sched.enabled ? 'Авто-обновление вкл' : 'Авто-обновление выкл'}
             </div>
           )}
-          <button onClick={() => onRefresh(true)} disabled={refreshing}
+          <button
+            onClick={onAutoAssign}
+            disabled={assigningDistricts || refreshing}
+            title="Определить район по адресу для всех объявлений без района (AI)"
+            className="flex items-center gap-1.5 text-xs bg-violet-600 text-white px-3 py-1.5 rounded-xl font-semibold disabled:opacity-60"
+          >
+            <Icon name={assigningDistricts ? 'Loader2' : 'MapPin'} size={13} className={assigningDistricts ? 'animate-spin' : ''} />
+            {assigningDistricts ? 'Привязка районов…' : 'Привязать районы'}
+          </button>
+          <button onClick={() => onRefresh(true)} disabled={refreshing || assigningDistricts}
             className="flex items-center gap-1.5 text-xs bg-brand-blue text-white px-3 py-1.5 rounded-xl font-semibold disabled:opacity-60">
             <Icon name={refreshing ? 'Loader2' : 'RefreshCw'} size={13} className={refreshing ? 'animate-spin' : ''} />
             {refreshing ? 'Сбор данных…' : 'Обновить сейчас'}
           </button>
         </div>
       </div>
+
+      {/* Прогресс привязки районов */}
+      {assigningDistricts && assignProgress && (
+        <div className="mt-3 bg-violet-50 border border-violet-200 rounded-xl px-4 py-2.5 flex items-center gap-3">
+          <Icon name="Loader2" size={14} className="animate-spin text-violet-600 flex-shrink-0" />
+          <div className="flex-1">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-violet-700 font-medium">
+                YandexGPT определяет районы по адресу…
+              </span>
+              <span className="text-violet-500">
+                обработано {assignProgress.processed}, привязано {assignProgress.updated}
+              </span>
+            </div>
+            {assignProgress.remaining > 0 && (
+              <div className="mt-1.5 h-1 bg-violet-100 rounded-full overflow-hidden">
+                <div
+                  className="h-1 bg-violet-500 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.round((assignProgress.processed / (assignProgress.processed + assignProgress.remaining)) * 100)}%` }}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Фильтры */}
       <div className="flex flex-wrap gap-2 mt-4 items-center">
@@ -73,7 +117,7 @@ export default function MarketHeader({
           <option value={180}>6 месяцев</option>
           <option value={365}>1 год</option>
         </select>
-        {/* Район — из справочника районов */}
+        {/* Район */}
         <select value={filterDistrict} onChange={e => onDistrictChange(e.target.value)}
           className="border border-border rounded-xl px-3 py-1.5 text-xs bg-white">
           <option value="">Все районы</option>
