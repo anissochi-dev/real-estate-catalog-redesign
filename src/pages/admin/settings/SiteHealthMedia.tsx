@@ -110,7 +110,7 @@ export function S3Section({ s3, s3Loading, loadS3 }: S3SectionProps) {
           <div>
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">По папкам</div>
             <div className="grid gap-2">
-              {Object.entries(s3.folders).map(([folder, count]) => (
+              {Object.entries(s3.folders || {}).map(([folder, count]) => (
                 <div key={folder} className="flex items-center justify-between px-4 py-2.5 bg-muted/30 rounded-xl border border-border text-sm">
                   <div className="flex items-center gap-2">
                     <Icon name="Folder" size={14} className="text-muted-foreground" />
