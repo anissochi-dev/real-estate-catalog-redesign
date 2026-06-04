@@ -116,7 +116,7 @@ export function S3Section({ s3, s3Loading, loadS3 }: S3SectionProps) {
                     <Icon name="Folder" size={14} className="text-muted-foreground" />
                     <span className="font-mono text-xs">{folder}/</span>
                   </div>
-                  <span className="font-semibold">{(count as number).toLocaleString()} файлов</span>
+                  <span className="font-semibold">{Number(count || 0).toLocaleString()} файлов</span>
                 </div>
               ))}
             </div>
