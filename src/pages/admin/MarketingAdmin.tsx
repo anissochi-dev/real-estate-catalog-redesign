@@ -355,19 +355,37 @@ function PricingTab() {
   const [err, setErr] = useState('');
 
   const loadById = async () => {
-    const id = idInput.trim();
-    if (!id || isNaN(Number(id))) { setIdErr('Введите числовой ID объекта'); return; }
+    const raw = idInput.trim();
+    if (!raw) { setIdErr('Введите ID объекта'); return; }
+    // Вычищаем любые символы, оставляем только цифры
+    const id = raw.replace(/\D/g, '');
+    if (!id) { setIdErr('ID должен содержать цифры'); return; }
     setIdLoading(true); setIdErr(''); setResult(null); setLoadedListing(null);
     try {
-      const r = await fetch(`${LISTINGS_URL}?id=${id}`).then(r => r.json());
-      if (r.error || !r.id) { setIdErr(r.error || 'Объект не найден'); return; }
-      setLoadedListing({ id: r.id, title: r.title || `Объект #${r.id}` });
+      // Публичный API возвращает {listing: {...}} или {error: '...'}
+      // Для архивных/скрытых объектов используем admin API напрямую
+      let obj: Record<string, unknown> | null = null;
+
+      // Сначала пробуем публичный endpoint
+      const pub = await fetch(`${LISTINGS_URL}?id=${id}`).then(r => r.json());
+      if (pub.listing) {
+        obj = pub.listing;
+      } else {
+        // Fallback: admin endpoint — умеет находить любые объекты включая архивные
+        const adm = await req(`listings&id=${id}`);
+        if (adm && adm.id) obj = adm;
+        else if (adm && adm.listing) obj = adm.listing;
+      }
+
+      if (!obj || !obj.id) { setIdErr(`Объект #${id} не найден`); return; }
+
+      setLoadedListing({ id: Number(obj.id), title: String(obj.title || `Объект #${obj.id}`) });
       setForm({
-        category: r.category || 'office',
-        deal: r.deal || 'rent',
-        area: String(r.area || ''),
-        price: String(r.price || ''),
-        district: r.district || '',
+        category: String(obj.category || 'office'),
+        deal: String(obj.deal || 'rent'),
+        area: String(obj.area || ''),
+        price: String(obj.price || ''),
+        district: String(obj.district || ''),
       });
     } catch (e) { setIdErr(e instanceof Error ? e.message : 'Ошибка загрузки'); }
     finally { setIdLoading(false); }
@@ -425,7 +443,7 @@ function PricingTab() {
                   value={idInput}
                   onChange={e => { setIdInput(e.target.value); setIdErr(''); }}
                   onKeyDown={e => e.key === 'Enter' && loadById()}
-                  placeholder="Например: 54"
+                  placeholder="54 или #54 или ID-54"
                   className="w-full border border-border rounded-xl px-3 py-2 text-sm"
                 />
               </div>
