@@ -70,7 +70,7 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
   const [districts, setDistricts] = useState<District[]>([]);
 
   useEffect(() => {
-    fetchDistricts().then(d => setDistricts(d.filter(x => x.listings_count && x.listings_count > 0)));
+    fetchDistricts().then(d => setDistricts(d));
   }, []);
 
   const company = settings.company_name || 'Бизнес. Маркетинг. Недвижимость.';
@@ -164,26 +164,41 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
             </div>
           )}
 
-          {/* Районы города */}
+          {/* Районы города — SEO-ссылки, все 45 */}
           {districts.length > 0 && (
             <div className="border-t border-white/10 mt-6 pt-5">
               <div className="flex items-center gap-2 mb-3">
                 <Icon name="MapPin" size={14} className="text-white/60" />
-                <h3 className="font-semibold text-white/80 text-sm">Районы города</h3>
+                <h3 className="font-semibold text-white/80 text-sm">
+                  Коммерческая недвижимость по районам {city}а
+                </h3>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {districts.map(d => (
-                  <button
-                    key={d.id}
-                    onClick={() => navigate(`/district/${d.slug}`)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 hover:border-white/20 transition-all text-xs text-white/70 hover:text-white"
-                  >
-                    {d.name}
-                    {d.listings_count ? (
-                      <span className="text-white/40">{d.listings_count}</span>
-                    ) : null}
-                  </button>
-                ))}
+              <div className="flex flex-wrap gap-x-1 gap-y-1">
+                {districts.map(d => {
+                  const cnt = d.listings_count ?? 0;
+                  const big = cnt >= 10;
+                  const mid = cnt >= 3 && cnt < 10;
+                  return (
+                    <Link
+                      key={d.id}
+                      to={`/district/${d.slug}`}
+                      className={`inline-flex items-center gap-1 rounded-md transition-colors text-[11px] px-2 py-1 ${
+                        big
+                          ? 'bg-white/10 border border-white/15 text-white/85 hover:bg-white/18 hover:text-white'
+                          : mid
+                          ? 'bg-white/5 border border-white/8 text-white/65 hover:bg-white/10 hover:text-white/90'
+                          : 'text-white/45 hover:text-white/75'
+                      }`}
+                    >
+                      {d.name}
+                      {cnt > 0 && (
+                        <span className={`${big ? 'text-white/50' : 'text-white/30'} tabular-nums`}>
+                          {cnt}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
               </div>
             </div>
           )}
