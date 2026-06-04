@@ -103,7 +103,7 @@ export function S3Section({ s3, s3Loading, loadS3 }: S3SectionProps) {
               </div>
             )}
             <div className={`p-4 bg-brand-blue/5 border border-brand-blue/20 rounded-xl text-center ${ (s3 as { source?: string }).source === 'db' ? 'col-span-2' : '' }`}>
-              <div className="text-2xl font-bold text-brand-blue">{s3.total_files.toLocaleString()}</div>
+              <div className="text-2xl font-bold text-brand-blue">{Number(s3.total_files || 0).toLocaleString()}</div>
               <div className="text-xs text-muted-foreground mt-1">Файлов в хранилище</div>
             </div>
           </div>
