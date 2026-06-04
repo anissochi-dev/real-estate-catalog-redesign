@@ -89,14 +89,22 @@ export function S3Section({ s3, s3Loading, loadS3 }: S3SectionProps) {
       </div>
       {s3 && (
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="p-4 bg-brand-blue/5 border border-brand-blue/20 rounded-xl text-center">
-              <div className="text-2xl font-bold text-brand-blue">{s3.total_size_human}</div>
-              <div className="text-xs text-muted-foreground mt-1">Занято места</div>
+          {(s3 as { source?: string }).source === 'db' && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-muted/40 rounded-xl text-xs text-muted-foreground border border-border">
+              <Icon name="Info" size={13} />
+              Статистика по данным из базы — размер файлов недоступен
             </div>
-            <div className="p-4 bg-brand-blue/5 border border-brand-blue/20 rounded-xl text-center">
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            {(s3 as { source?: string }).source !== 'db' && (
+              <div className="p-4 bg-brand-blue/5 border border-brand-blue/20 rounded-xl text-center">
+                <div className="text-2xl font-bold text-brand-blue">{s3.total_size_human}</div>
+                <div className="text-xs text-muted-foreground mt-1">Занято места</div>
+              </div>
+            )}
+            <div className={`p-4 bg-brand-blue/5 border border-brand-blue/20 rounded-xl text-center ${ (s3 as { source?: string }).source === 'db' ? 'col-span-2' : '' }`}>
               <div className="text-2xl font-bold text-brand-blue">{s3.total_files.toLocaleString()}</div>
-              <div className="text-xs text-muted-foreground mt-1">Файлов всего</div>
+              <div className="text-xs text-muted-foreground mt-1">Файлов в хранилище</div>
             </div>
           </div>
           <div>
@@ -108,7 +116,7 @@ export function S3Section({ s3, s3Loading, loadS3 }: S3SectionProps) {
                     <Icon name="Folder" size={14} className="text-muted-foreground" />
                     <span className="font-mono text-xs">{folder}/</span>
                   </div>
-                  <span className="font-semibold">{count} файлов</span>
+                  <span className="font-semibold">{(count as number).toLocaleString()} файлов</span>
                 </div>
               ))}
             </div>

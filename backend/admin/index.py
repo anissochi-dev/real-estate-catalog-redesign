@@ -1179,97 +1179,43 @@ def _site_health(cur, conn, method, action, event, user):
             'message': f'Проверено {len(rows)} объявлений, найдено {len(broken)} битых фото'
         })
 
-    # ── СТАТИСТИКА S3 ────────────────────────────────────────────────────────
+    # ── СТАТИСТИКА S3 (из БД, т.к. листинг S3 недоступен на этом эндпоинте) ──
     if action == 's3_stats':
-        try:
-            import boto3
-            from botocore.config import Config as _BotoConfig
-            akey = os.environ.get('AWS_ACCESS_KEY_ID')
-            asec = os.environ.get('AWS_SECRET_ACCESS_KEY')
-            if not akey or not asec:
-                return _err(500, 'S3 не настроен: отсутствуют ключи доступа')
-            s3 = boto3.client(
-                's3',
-                endpoint_url='https://bucket.poehali.dev',
-                aws_access_key_id=akey,
-                aws_secret_access_key=asec,
-                config=_BotoConfig(connect_timeout=10, read_timeout=20, retries={'max_attempts': 2}),
-            )
-            folders = {'photos': 0, 'news': 0, 'uploads': 0, 'other': 0}
-            total_size = 0
-            total_files = 0
+        # Считаем файлы по ссылкам в БД
+        cur.execute(f"""
+            SELECT
+                SUM(CASE WHEN images IS NOT NULL AND images != ''
+                    THEN array_length(string_to_array(images, '|'), 1) ELSE 0 END) as photos_count
+            FROM {SCHEMA}.listings
+        """)
+        r = cur.fetchone()
+        photos_count = int(r['photos_count'] or 0)
 
-            # На общем S3-эндпоинте файлы проекта лежат под префиксом проекта.
-            # Определяем рабочий префикс автоматически.
-            candidate_prefixes = [
-                '',
-                f'projects/{akey}/bucket/',
-                f'projects/{akey}/',
-                f'{akey}/',
-            ]
-            base_prefix = ''
-            for pref in candidate_prefixes:
-                probe = s3.list_objects_v2(Bucket='files', Prefix=pref, MaxKeys=1)
-                cnt = probe.get('KeyCount', len(probe.get('Contents', [])))
-                print('S3_DEBUG probe prefix=%r count=%s' % (pref, cnt))
-                if cnt and cnt > 0:
-                    base_prefix = pref
-                    break
+        cur.execute(f"SELECT COUNT(*) as cnt FROM {SCHEMA}.news WHERE image IS NOT NULL AND image != ''")
+        r2 = cur.fetchone()
+        news_count = int(r2['cnt'] or 0)
 
-            token = None
-            pages_left = 5
-            first_keys = []
-            while pages_left > 0:
-                kwargs = {'Bucket': 'files', 'MaxKeys': 1000}
-                if base_prefix:
-                    kwargs['Prefix'] = base_prefix
-                if token:
-                    kwargs['ContinuationToken'] = token
-                resp = s3.list_objects_v2(**kwargs)
-                contents = resp.get('Contents', [])
-                if len(first_keys) < 5:
-                    first_keys.extend([o['Key'] for o in contents[:5]])
-                for obj in contents:
-                    key = obj['Key']
-                    # отрезаем префикс проекта для классификации по папкам
-                    rel = key[len(base_prefix):] if base_prefix and key.startswith(base_prefix) else key
-                    size = obj.get('Size', 0)
-                    total_size += size
-                    total_files += 1
-                    if rel.startswith('photos/') or '/photos/' in rel:
-                        folders['photos'] += 1
-                    elif rel.startswith('news/') or '/news/' in rel:
-                        folders['news'] += 1
-                    elif rel.startswith('uploads/') or rel.startswith('public/') or '/uploads/' in rel:
-                        folders['uploads'] += 1
-                    else:
-                        folders['other'] += 1
-                if resp.get('IsTruncated') and resp.get('NextContinuationToken'):
-                    token = resp['NextContinuationToken']
-                    pages_left -= 1
-                else:
-                    break
-            print('S3_DEBUG base_prefix=%r total=%d sample=%s' % (base_prefix, total_files, first_keys))
+        cur.execute(f"SELECT COUNT(*) as cnt FROM {SCHEMA}.listings WHERE image IS NOT NULL AND image != ''")
+        r3 = cur.fetchone()
+        upload_count = int(r3['cnt'] or 0)
 
-            def _fmt_size(b):
-                if b > 1024**3: return f'{b/1024**3:.1f} ГБ'
-                if b > 1024**2: return f'{b/1024**2:.1f} МБ'
-                if b > 1024: return f'{b/1024:.1f} КБ'
-                return f'{b} Б'
-
-            project_id = os.environ.get('AWS_ACCESS_KEY_ID', '')
-            cdn_base = f'https://cdn.poehali.dev/projects/{project_id}/bucket'
-            return _ok({
-                'total_files': total_files,
-                'total_size_bytes': total_size,
-                'total_size_human': _fmt_size(total_size),
-                'folders': folders,
-                'cdn_base': cdn_base,
-            })
-        except Exception as e:
-            import traceback
-            print('S3_STATS_ERROR:', traceback.format_exc())
-            return _err(500, f'S3 ошибка [{type(e).__name__}]: {str(e)[:300]}')
+        total_files = photos_count + news_count
+        folders = {
+            'photos': photos_count,
+            'news': news_count,
+            'uploads': upload_count,
+            'other': 0,
+        }
+        project_id = os.environ.get('AWS_ACCESS_KEY_ID', '')
+        cdn_base = f'https://cdn.poehali.dev/projects/{project_id}/bucket'
+        return _ok({
+            'total_files': total_files,
+            'total_size_bytes': 0,
+            'total_size_human': 'Н/Д',
+            'folders': folders,
+            'cdn_base': cdn_base,
+            'source': 'db',
+        })
 
     # ── ПРОВЕРКА XML-ФИДОВ ───────────────────────────────────────────────────
     if action == 'xml_check':
