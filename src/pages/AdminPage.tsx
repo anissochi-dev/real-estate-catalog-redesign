@@ -16,6 +16,7 @@ import NewsAdmin from './admin/NewsAdmin';
 import VBKnowledgeAdmin from './admin/VBKnowledgeAdmin';
 import SeoHubAdmin from './admin/SeoHubAdmin';
 import DistrictsAdmin from './admin/DistrictsAdmin';
+import MarketingAdmin from './admin/MarketingAdmin';
 
 interface Props {
   onExit: () => void;
@@ -59,6 +60,7 @@ export default function AdminPage({ onExit, initialSection }: Props) {
       {section === 'news' && <NewsAdmin />}
       {section === 'seo' && <SeoHubAdmin />}
       {section === 'vb-knowledge' && <VBKnowledgeAdmin />}
+      {section === 'marketing' && <MarketingAdmin />}
     </AdminLayout>
   );
 }
