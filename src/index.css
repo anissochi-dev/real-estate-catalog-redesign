@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Скрытый скроллбар для вкладок на мобильных */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 @keyframes progress-indeterminate {
   0% {
     transform: translateX(-100%) scaleX(0.4);

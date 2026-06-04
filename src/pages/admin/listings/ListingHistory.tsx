@@ -232,7 +232,7 @@ export default function ListingHistory({ listingId, listingTitle, onClose }: Pro
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-border shrink-0 overflow-x-auto">
+        <div className="flex border-b border-border shrink-0 overflow-x-auto scrollbar-hide">
           {([
             ['stats', 'Сводка', 'BarChart2'],
             ['platforms', 'По площадкам', 'Globe'],

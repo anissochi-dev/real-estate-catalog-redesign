@@ -71,7 +71,7 @@ export default function ListingEditorHeader({
       </div>
 
       {/* Вкладки */}
-      <div className="flex border-b border-border flex-shrink-0 overflow-x-auto">
+      <div className="flex border-b border-border flex-shrink-0 overflow-x-auto scrollbar-hide">
         {EDITOR_TABS.map(t => (
           <button
             key={t.id}

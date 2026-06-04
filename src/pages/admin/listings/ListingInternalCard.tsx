@@ -97,7 +97,7 @@ export default function ListingInternalCard({ listingId, onClose, onBrokerChange
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-border px-4 overflow-x-auto shrink-0">
+        <div className="flex border-b border-border px-4 overflow-x-auto shrink-0 scrollbar-hide">
           {TABS.map(t => (
             <button
               key={t.id}

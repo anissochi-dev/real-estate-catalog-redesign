@@ -156,7 +156,7 @@ export default function SeoAdmin() {
 
       {/* Вкладки */}
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-        <div className="flex border-b border-border">
+        <div className="flex border-b border-border overflow-x-auto scrollbar-hide">
           {([
             { id: 'run', label: 'Объекты', icon: 'Zap' },
             { id: 'pages', label: 'Страницы', icon: 'FileText' },
@@ -167,7 +167,7 @@ export default function SeoAdmin() {
             <button
               key={tab.id}
               onClick={() => { setActiveTab(tab.id); if (tab.id === 'history') loadHistory(); }}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold transition border-b-2 ${
+              className={`flex-shrink-0 flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold transition border-b-2 whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'border-brand-blue text-brand-blue'
                   : 'border-transparent text-muted-foreground hover:text-foreground'

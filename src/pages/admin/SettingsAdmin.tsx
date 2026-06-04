@@ -247,7 +247,7 @@ export default function SettingsAdmin() {
   return (
     <div className="max-w-4xl space-y-3">
       {/* Группы */}
-      <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm overflow-x-auto">
+      <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm overflow-x-auto scrollbar-hide">
         {GROUPS.map(g => {
           const active = currentGroup.id === g.id;
           return (
@@ -266,7 +266,7 @@ export default function SettingsAdmin() {
       </div>
 
       {/* Вкладки текущей группы */}
-      <div className="flex gap-1 bg-muted/40 rounded-xl p-1 overflow-x-auto">
+      <div className="flex gap-1 bg-muted/40 rounded-xl p-1 overflow-x-auto scrollbar-hide">
         {currentGroup.tabs.map(([id, label, icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`min-w-fit px-3 py-2 rounded-lg text-sm whitespace-nowrap transition inline-flex items-center justify-center gap-1.5 ${

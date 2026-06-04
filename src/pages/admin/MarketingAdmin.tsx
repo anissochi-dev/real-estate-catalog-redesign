@@ -771,7 +771,7 @@ export default function MarketingAdmin() {
       </div>
 
       {/* Вкладки */}
-      <div className="flex gap-1 overflow-x-auto pb-0.5">
+      <div className="flex gap-1 overflow-x-auto pb-0.5 scrollbar-hide">
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition flex-shrink-0 ${
