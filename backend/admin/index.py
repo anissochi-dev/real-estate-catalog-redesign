@@ -1200,21 +1200,26 @@ def _site_health(cur, conn, method, action, event, user):
             total_files = 0
             token = None
             pages_left = 3
+            first_keys = []
             while pages_left > 0:
                 kwargs = {'Bucket': 'files', 'MaxKeys': 1000}
                 if token:
                     kwargs['ContinuationToken'] = token
                 resp = s3.list_objects_v2(**kwargs)
-                for obj in resp.get('Contents', []):
+                contents = resp.get('Contents', [])
+                if len(first_keys) < 5:
+                    first_keys.extend([o['Key'] for o in contents[:5]])
+                print('S3_DEBUG keys=%d truncated=%s' % (len(contents), resp.get('IsTruncated')))
+                for obj in contents:
                     key = obj['Key']
                     size = obj.get('Size', 0)
                     total_size += size
                     total_files += 1
-                    if key.startswith('photos/'):
+                    if 'photos/' in key or 'photo' in key.lower():
                         folders['photos'] += 1
-                    elif key.startswith('news/'):
+                    elif 'news/' in key:
                         folders['news'] += 1
-                    elif key.startswith('uploads/'):
+                    elif 'uploads/' in key or 'public/' in key:
                         folders['uploads'] += 1
                     else:
                         folders['other'] += 1
@@ -1223,6 +1228,7 @@ def _site_health(cur, conn, method, action, event, user):
                     pages_left -= 1
                 else:
                     break
+            print('S3_DEBUG sample_keys=%s' % first_keys)
 
             def _fmt_size(b):
                 if b > 1024**3: return f'{b/1024**3:.1f} ГБ'
