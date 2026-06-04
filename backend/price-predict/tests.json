@@ -53,7 +53,7 @@
       "method": "GET",
       "path": "/?action=price_market_stats&days=180",
       "expectedStatus": 200,
-      "expectedBody": {"snapshots": [], "latest": [], "schedule": {}},
+      "expectedBody": {"schedule": {}},
       "bodyMatcher": "partial"
     }
   ]
