@@ -1184,19 +1184,28 @@ def _site_health(cur, conn, method, action, event, user):
         try:
             import boto3
             from botocore.config import Config as _BotoConfig
+            akey = os.environ.get('AWS_ACCESS_KEY_ID')
+            asec = os.environ.get('AWS_SECRET_ACCESS_KEY')
+            if not akey or not asec:
+                return _err(500, 'S3 не настроен: отсутствуют ключи доступа')
             s3 = boto3.client(
                 's3',
                 endpoint_url='https://bucket.poehali.dev',
-                aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
-                aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
-                config=_BotoConfig(connect_timeout=10, read_timeout=20),
+                aws_access_key_id=akey,
+                aws_secret_access_key=asec,
+                config=_BotoConfig(connect_timeout=10, read_timeout=20, retries={'max_attempts': 2}),
             )
-            paginator = s3.get_paginator('list_objects_v2')
             folders = {'photos': 0, 'news': 0, 'uploads': 0, 'other': 0}
             total_size = 0
             total_files = 0
-            for page in paginator.paginate(Bucket='files', PaginationConfig={'MaxItems': 2000}):
-                for obj in page.get('Contents', []):
+            token = None
+            pages_left = 3
+            while pages_left > 0:
+                kwargs = {'Bucket': 'files', 'MaxKeys': 1000}
+                if token:
+                    kwargs['ContinuationToken'] = token
+                resp = s3.list_objects_v2(**kwargs)
+                for obj in resp.get('Contents', []):
                     key = obj['Key']
                     size = obj.get('Size', 0)
                     total_size += size
@@ -1209,6 +1218,11 @@ def _site_health(cur, conn, method, action, event, user):
                         folders['uploads'] += 1
                     else:
                         folders['other'] += 1
+                if resp.get('IsTruncated') and resp.get('NextContinuationToken'):
+                    token = resp['NextContinuationToken']
+                    pages_left -= 1
+                else:
+                    break
 
             def _fmt_size(b):
                 if b > 1024**3: return f'{b/1024**3:.1f} ГБ'
@@ -1226,7 +1240,9 @@ def _site_health(cur, conn, method, action, event, user):
                 'cdn_base': cdn_base,
             })
         except Exception as e:
-            return _err(500, f'S3 ошибка: {str(e)[:300]}')
+            import traceback
+            print('S3_STATS_ERROR:', traceback.format_exc())
+            return _err(500, f'S3 ошибка [{type(e).__name__}]: {str(e)[:300]}')
 
     # ── ПРОВЕРКА XML-ФИДОВ ───────────────────────────────────────────────────
     if action == 'xml_check':
