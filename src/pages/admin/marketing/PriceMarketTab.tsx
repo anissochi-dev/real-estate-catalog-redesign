@@ -37,6 +37,8 @@ interface MarketStats {
   snapshots: Snapshot[];
   latest: LatestEntry[];
   schedule: { enabled: boolean; last_at: string | null; schedule?: string; next_run?: string; in_progress?: boolean; next_source?: string | null };
+  available_districts: string[];
+  available_combos: { category: string; deal: string }[];
 }
 
 // ── Справочники ───────────────────────────────────────────────────────────────
@@ -53,7 +55,7 @@ const PALETTE = [
   '#06b6d4','#f97316','#84cc16','#ec4899','#6366f1',
 ];
 
-const DISTRICTS = ['', 'Центральный', 'Прикубанский', 'Карасунский', 'Западный', 'Северный'];
+// Районы загружаются динамически из API (available_districts)
 
 // ── Утилиты ───────────────────────────────────────────────────────────────────
 
@@ -167,9 +169,12 @@ export default function PriceMarketTab() {
 
   // ── Подготовка данных для сравнения районов ───────────────────────────────
 
+  // Динамический список районов из API (только те что есть в снапшотах)
+  const dynamicDistricts = data?.available_districts ?? [];
+
   const compareData = (() => {
-    if (!data?.latest.length) return [];
-    return DISTRICTS.filter(d => d !== '').map(district => {
+    if (!data?.latest.length || !dynamicDistricts.length) return [];
+    return dynamicDistricts.map(district => {
       const row: Record<string, string | number> = { district };
       selectedCats.forEach(cat => {
         const entry = data.latest.find(l => l.category === cat && l.deal === filterDeal && l.district === district);
@@ -184,15 +189,17 @@ export default function PriceMarketTab() {
   const heatmapData = (() => {
     if (!data?.latest.length) return { cats: [] as string[], districts: [] as string[], matrix: {} as Record<string,Record<string,number|null>> };
     const cats = Object.keys(CAT_LABELS).filter(c => data.latest.some(l => l.category === c && l.deal === filterDeal));
+    // В тепловой карте показываем: «Все районы» (district='') + те что есть в снапшотах
+    const districtList = ['', ...dynamicDistricts];
     const matrix: Record<string, Record<string, number | null>> = {};
     cats.forEach(cat => {
       matrix[cat] = {};
-      DISTRICTS.forEach(d => {
+      districtList.forEach(d => {
         const e = data.latest.find(l => l.category === cat && l.deal === filterDeal && l.district === d);
         matrix[cat][d || 'Все районы'] = e?.price_per_m2_median || null;
       });
     });
-    return { cats, districts: DISTRICTS.map(d => d || 'Все районы'), matrix };
+    return { cats, districts: districtList.map(d => d || 'Все районы'), matrix };
   })();
 
   // ── Индекс перегрева рынка ─────────────────────────────────────────────────
@@ -269,11 +276,11 @@ export default function PriceMarketTab() {
             <option value={180}>6 месяцев</option>
             <option value={365}>1 год</option>
           </select>
-          {/* Район */}
+          {/* Район — из справочника районов */}
           <select value={filterDistrict} onChange={e => setFilterDistrict(e.target.value)}
             className="border border-border rounded-xl px-3 py-1.5 text-xs bg-white">
             <option value="">Все районы</option>
-            {DISTRICTS.filter(Boolean).map(d => <option key={d} value={d}>{d}</option>)}
+            {dynamicDistricts.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
           {loading && <Icon name="Loader2" size={14} className="animate-spin text-muted-foreground" />}
         </div>

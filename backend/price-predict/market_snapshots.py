@@ -50,14 +50,13 @@ def _get_active_combos(cur):
 
 
 def _get_active_districts(cur):
+    """Берём районы из справочника districts (синхронизировано с разделом Районы в админке)."""
     cur.execute(f"""
-        SELECT DISTINCT TRIM(district) AS d
-        FROM {SCHEMA}.listings
-        WHERE status IN ('active', 'archived')
-          AND district IS NOT NULL AND TRIM(district) != ''
-        ORDER BY d LIMIT 20
+        SELECT name FROM {SCHEMA}.districts
+        WHERE is_active = TRUE
+        ORDER BY sort_order ASC, name ASC
     """)
-    return [r['d'] for r in cur.fetchall()]
+    return [r['name'] for r in cur.fetchall()]
 
 
 # ── Утилиты ───────────────────────────────────────────────────────────────────
