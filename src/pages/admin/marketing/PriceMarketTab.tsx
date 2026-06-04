@@ -36,7 +36,7 @@ interface LatestEntry {
 interface MarketStats {
   snapshots: Snapshot[];
   latest: LatestEntry[];
-  schedule: { enabled: boolean; last_at: string | null; interval_days: number };
+  schedule: { enabled: boolean; last_at: string | null; schedule?: string; next_run?: string; in_progress?: boolean; next_source?: string | null };
 }
 
 // ── Справочники ───────────────────────────────────────────────────────────────
@@ -134,9 +134,12 @@ export default function PriceMarketTab() {
         body: JSON.stringify({ action: 'price_market_refresh', force }),
       }).then(r => r.json());
       if (r.skipped) {
-        toast.info(`Обновление пропущено: ${r.reason}`);
-      } else if (r.ok) {
-        toast.success(`Сохранено ${r.saved} снапшотов`);
+        toast.info(`Пропущено: ${r.reason}`);
+      } else if (r.done) {
+        toast.success(`Цикл завершён — сохранено ${r.saved} снапшотов`);
+        load();
+      } else if (r.source) {
+        toast.success(`Батч ${r.source} выполнен → следующий: ${r.next}`);
         load();
       } else {
         toast.error(r.error || 'Ошибка');
@@ -225,7 +228,8 @@ export default function PriceMarketTab() {
               Мониторинг рыночных цен
             </h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Автоматическое обновление каждые {sched?.interval_days ?? 14} дней
+              {sched?.schedule ?? '1-е число каждого месяца'}
+              {sched?.next_run && <span> · следующий: {new Date(sched.next_run).toLocaleDateString('ru', { day: 'numeric', month: 'long' })}</span>}
               {sched?.last_at && <span> · последнее: {lastDays === 0 ? 'сегодня' : `${lastDays}д назад`}</span>}
             </p>
           </div>

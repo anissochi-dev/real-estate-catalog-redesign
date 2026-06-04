@@ -234,18 +234,25 @@ def handle_refresh(cur, conn, force=False):
     today       = status.get('started_at') or str(datetime.date.today())
 
     if not in_progress:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        today_date = now.date()
+
+        # Запускаем только 1-го числа каждого месяца
+        if not force and today_date.day != 1:
+            return {'skipped': True, 'reason': f'not 1st day of month (today={today_date})'}
+
+        # Защита от повторного запуска в том же месяце
         last_at = cfg.get('price_refresh_last_at')
-        interval_days = int(cfg.get('price_refresh_interval_days') or 14)
         if last_at and not force:
             if isinstance(last_at, str):
                 last_at = datetime.datetime.fromisoformat(last_at)
-            age = (datetime.datetime.now(datetime.timezone.utc)
-                   - last_at.replace(tzinfo=datetime.timezone.utc)).days
-            if age < interval_days:
-                return {'skipped': True, 'reason': f'last run {age}d ago, interval={interval_days}d'}
+            last_date = last_at.date() if hasattr(last_at, 'date') else last_at
+            if last_date.year == today_date.year and last_date.month == today_date.month:
+                return {'skipped': True, 'reason': f'already ran this month ({last_date})'}
+
         next_batch = 0
-        today = str(datetime.date.today())
-        print(f'[price_refresh] starting new cycle, today={today}')
+        today = str(today_date)
+        print(f'[price_refresh] starting monthly cycle, today={today}')
 
     combos    = _get_active_combos(cur)
     districts = _get_active_districts(cur)
@@ -360,12 +367,20 @@ def handle_stats(cur, params):
             except Exception:
                 st = {}
         nb = st.get('next_batch')
+        # Вычисляем дату следующего запуска — 1-е число следующего месяца
+        _today = datetime.date.today()
+        if _today.month == 12:
+            _next_run = datetime.date(_today.year + 1, 1, 1)
+        else:
+            _next_run = datetime.date(_today.year, _today.month + 1, 1)
+
         schedule = {
-            'enabled':       srow.get('price_refresh_enabled'),
-            'last_at':       str(srow['price_refresh_last_at']) if srow.get('price_refresh_last_at') else None,
-            'interval_days': srow.get('price_refresh_interval_days') or 14,
-            'in_progress':   bool(st.get('in_progress')),
-            'next_source':   BATCH_SOURCES[int(nb)] if nb is not None and int(nb) < len(BATCH_SOURCES) else None,
+            'enabled':     srow.get('price_refresh_enabled'),
+            'last_at':     str(srow['price_refresh_last_at']) if srow.get('price_refresh_last_at') else None,
+            'schedule':    '1-е число каждого месяца',
+            'next_run':    str(_next_run),
+            'in_progress': bool(st.get('in_progress')),
+            'next_source': BATCH_SOURCES[int(nb)] if nb is not None and int(nb) < len(BATCH_SOURCES) else None,
         }
 
     cur.execute(f"SELECT DISTINCT category, deal FROM {SCHEMA}.price_market_snapshots ORDER BY category, deal")
