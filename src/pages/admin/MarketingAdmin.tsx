@@ -4,6 +4,7 @@ import Icon from '@/components/ui/icon';
 import { req } from '@/pages/admin/settings/siteHealthTypes';
 import SeoAuditTab from '@/pages/admin/seo/SeoAuditTab';
 import SeoTechnicalTab from '@/pages/admin/seo/SeoTechnicalTab';
+import PriceMarketTab from '@/pages/admin/marketing/PriceMarketTab';
 
 // ── Типы ─────────────────────────────────────────────────────────────────────
 
@@ -742,14 +743,15 @@ function UtmTab() {
 
 // ── Главный компонент ─────────────────────────────────────────────────────────
 
-type Tab = 'analytics' | 'pricing' | 'seo-audit' | 'seo-tech' | 'utm';
+type Tab = 'analytics' | 'pricing' | 'market-prices' | 'seo-audit' | 'seo-tech' | 'utm';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'analytics',  label: 'Аналитика',         icon: 'BarChart3' },
-  { id: 'pricing',    label: 'Ценообразование',    icon: 'Sparkles' },
-  { id: 'seo-audit',  label: 'SEO-аудит',          icon: 'ShieldCheck' },
-  { id: 'seo-tech',   label: 'Технический SEO',    icon: 'FileCode2' },
-  { id: 'utm',        label: 'UTM-ссылки',         icon: 'Link' },
+  { id: 'analytics',     label: 'Аналитика',         icon: 'BarChart3' },
+  { id: 'pricing',       label: 'Ценообразование',    icon: 'Sparkles' },
+  { id: 'market-prices', label: 'Рынок цен',          icon: 'TrendingUp' },
+  { id: 'seo-audit',     label: 'SEO-аудит',          icon: 'ShieldCheck' },
+  { id: 'seo-tech',      label: 'Технический SEO',    icon: 'FileCode2' },
+  { id: 'utm',           label: 'UTM-ссылки',         icon: 'Link' },
 ];
 
 export default function MarketingAdmin() {
@@ -784,11 +786,12 @@ export default function MarketingAdmin() {
       </div>
 
       {/* Контент */}
-      {tab === 'analytics'  && <AnalyticsTab />}
-      {tab === 'pricing'    && <PricingTab />}
-      {tab === 'seo-audit'  && <SeoAuditTab />}
-      {tab === 'seo-tech'   && <SeoTechnicalTab />}
-      {tab === 'utm'        && <UtmTab />}
+      {tab === 'analytics'     && <AnalyticsTab />}
+      {tab === 'pricing'       && <PricingTab />}
+      {tab === 'market-prices' && <PriceMarketTab />}
+      {tab === 'seo-audit'     && <SeoAuditTab />}
+      {tab === 'seo-tech'      && <SeoTechnicalTab />}
+      {tab === 'utm'           && <UtmTab />}
     </div>
   );
 }

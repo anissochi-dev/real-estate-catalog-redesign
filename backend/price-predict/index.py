@@ -1,5 +1,5 @@
 """
-Прогнозирование рыночной цены и окупаемости объекта недвижимости.
+Прогнозирование рыночной цены, окупаемости и мониторинг рынка.
 Использует статистическую модель на реальных данных из БД:
 - Сравнивает объект с похожими (категория, тип сделки, площадь ±50%, район)
 - Рассчитывает медиану/перцентили цен, цену за м², окупаемость
@@ -503,6 +503,15 @@ def handler(event: dict, context) -> dict:
 
             if body_data.get('action') == 'debug_scrape':
                 return _ok(handle_debug_scrape(body_data))
+
+            # Авто-обновление рыночных снапшотов по всем категориям
+            if params_all.get('action') == 'ping_cron' or body_data.get('action') == 'price_market_refresh':
+                from market_snapshots import handle_refresh as _msr
+                return _ok(_msr(cur, conn, force=body_data.get('force') is True))
+
+            if params_all.get('action') == 'price_market_stats':
+                from market_snapshots import handle_stats as _mss
+                return _ok(_mss(cur, params_all))
 
             if method == 'GET':
                 params = params_all

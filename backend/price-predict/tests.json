@@ -47,6 +47,14 @@
       "expectedStatus": 200,
       "expectedBody": {"demand": {}, "price_assessment": {}},
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET price_market_stats — возвращает снапшоты",
+      "method": "GET",
+      "path": "/?action=price_market_stats&days=180",
+      "expectedStatus": 200,
+      "expectedBody": {"snapshots": [], "latest": [], "schedule": {}},
+      "bodyMatcher": "partial"
     }
   ]
 }
