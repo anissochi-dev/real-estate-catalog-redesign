@@ -70,7 +70,7 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
   const [districts, setDistricts] = useState<District[]>([]);
 
   useEffect(() => {
-    fetchDistricts().then(d => setDistricts(d));
+    fetchDistricts().then(d => setDistricts(d.filter(x => x.listings_count && x.listings_count > 0)));
   }, []);
 
   const company = settings.company_name || 'Бизнес. Маркетинг. Недвижимость.';
