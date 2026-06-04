@@ -76,7 +76,7 @@ export default function ClientLeadsSection({ limit = 6 }: Props) {
           <div>
             <h2 className="font-display font-700 text-base text-foreground flex items-center gap-2 mb-1">
               <Icon name="Users" size={16} className="text-brand-blue" />
-              Готовый бизнес в Краснодаре — актуальные предложения
+              Куплю и сниму недвижимость в Краснодаре — актуальные заявки
             </h2>
             <p className="text-xs text-muted-foreground max-w-xl">
               Есть подходящий объект? Предложите его клиенту — заявка попадёт нашему менеджеру.
