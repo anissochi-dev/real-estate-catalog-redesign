@@ -317,7 +317,7 @@ def handler(event: dict, context) -> dict:
                 batch_size = int(body.get('batch_size') or 20)
                 cur.execute(f"""
                     SELECT id, address, city FROM {SCHEMA}.listings
-                    WHERE (district IS NULL OR district = '')
+                    WHERE (district IS NULL OR district = '' OR district = '-')
                       AND address IS NOT NULL AND address != ''
                       AND status IN ('active', 'archived')
                     ORDER BY id ASC
@@ -328,7 +328,7 @@ def handler(event: dict, context) -> dict:
                 # Считаем сколько осталось всего
                 cur.execute(f"""
                     SELECT COUNT(*) as cnt FROM {SCHEMA}.listings
-                    WHERE (district IS NULL OR district = '')
+                    WHERE (district IS NULL OR district = '' OR district = '-')
                       AND address IS NOT NULL AND address != ''
                       AND status IN ('active', 'archived')
                 """)
@@ -337,27 +337,37 @@ def handler(event: dict, context) -> dict:
                 if not listings:
                     return _ok({'updated': 0, 'remaining': 0, 'done': True})
 
-                # Формируем запрос к GPT: список адресов → районы
-                districts_list = '\n'.join(district_names)
-                addresses_block = '\n'.join([f"ID={l['id']}: {l['address']}, {l.get('city','Краснодар')}" for l in listings])
+                # Нумерованный список районов для промпта
+                districts_numbered = '\n'.join([f'{i+1}. {d}' for i, d in enumerate(district_names)])
+                addresses_block = '\n'.join([f"ID={l['id']}: {l['address']}" for l in listings])
 
                 system_prompt = (
-                    'Ты — эксперт по географии Краснодара. '
-                    'Тебе дан список адресов коммерческой недвижимости и список микрорайонов Краснодара. '
-                    'Для каждого адреса определи ТОЧНОЕ название микрорайона из предоставленного списка. '
-                    'Если адрес не относится ни к одному из списка — напиши пустую строку для значения. '
-                    'Отвечай строго в формате (одна строка на адрес): ID=<id>|<название микрорайона или пусто>\n'
-                    'Без пояснений, без markdown, только строки в указанном формате.'
+                    'Ты — эксперт по географии Краснодара. Ты отлично знаешь все улицы и микрорайоны города.\n'
+                    'Задача: для каждого адреса определи номер микрорайона из пронумерованного списка.\n'
+                    'Правила:\n'
+                    '- Отвечай ТОЛЬКО в формате: ID=<id>|<номер из списка>\n'
+                    '- Если не можешь определить — ставь номер ближайшего по смыслу\n'
+                    '- Одна строка на адрес, без пояснений\n'
+                    'Подсказки по Краснодару:\n'
+                    '- Красная, Ленина, Мира, Пушкина, Рашпилевская, Седина, Гоголя — Центральный (ЦМР)\n'
+                    '- Ставропольская (высокие номера 300+), Восточно-Кругликовская — Комсомольский (КМР)\n'
+                    '- им.Буденного, Уральская, Архитектора Петина — Юбилейный (ЮМР)\n'
+                    '- Северная, Нефтяников шоссе — Северный п.\n'
+                    '- Тургенева, Октябрьская — Фестивальный (ФМР)\n'
+                    '- Автолюбителей, Садовое кольцо — Музыкальный\n'
+                    '- Аэродромная — Аэропорт\n'
+                    '- Новокузнечная, Скандинавская — Энка (Жукова)\n'
                 )
-                user_text = f'Список микрорайонов Краснодара:\n{districts_list}\n\nАдреса:\n{addresses_block}'
+                user_text = f'Список микрорайонов:\n{districts_numbered}\n\nАдреса для определения:\n{addresses_block}'
 
-                result = _call_gpt(system_prompt, user_text, api_key, folder_id, max_tokens='1000')
+                result = _call_gpt(system_prompt, user_text, api_key, folder_id, max_tokens='800')
                 if 'error' in result:
                     return _err(502, result['error'])
 
-                # Парсим ответ GPT: ID=123|Центральный (ЦМР)
+                print(f'[auto_assign] GPT raw: {result["text"][:500]}')
+
+                # Парсим ответ GPT: ID=123|7 (номер из нумерованного списка)
                 assignments = {}
-                district_names_lower = {d.lower(): d for d in district_names}
                 for line in result['text'].splitlines():
                     line = line.strip()
                     if not line or '|' not in line or not line.startswith('ID='):
@@ -365,15 +375,27 @@ def handler(event: dict, context) -> dict:
                     parts = line.split('|', 1)
                     try:
                         lid = int(parts[0].replace('ID=', '').strip())
-                        dist_raw = parts[1].strip() if len(parts) > 1 else ''
-                        # Ищем точное совпадение (без учёта регистра)
-                        dist_matched = district_names_lower.get(dist_raw.lower(), '')
-                        if dist_matched:
-                            assignments[lid] = dist_matched
+                        val = parts[1].strip() if len(parts) > 1 else ''
+                        # Пробуем распознать как номер (1-45)
+                        try:
+                            idx = int(val) - 1
+                            if 0 <= idx < len(district_names):
+                                assignments[lid] = district_names[idx]
+                                continue
+                        except ValueError:
+                            pass
+                        # Фолбэк: нечёткое совпадение по подстроке
+                        val_lower = val.lower()
+                        for d in district_names:
+                            # Ищем ключевое слово из ответа в названии района
+                            key = val_lower.split('(')[0].strip()
+                            if key and key in d.lower():
+                                assignments[lid] = d
+                                break
                     except (ValueError, IndexError):
                         continue
 
-                # Обновляем в БД
+                # Обновляем в БД только те что определены, остальные помечаем '?' для пропуска
                 updated = 0
                 for listing in listings:
                     lid = listing['id']
@@ -382,12 +404,13 @@ def handler(event: dict, context) -> dict:
                         cur.execute(f"UPDATE {SCHEMA}.listings SET district = '{dist_safe}' WHERE id = {lid}")
                         updated += 1
                     else:
-                        # Ставим прочерк чтобы не обрабатывать повторно
-                        cur.execute(f"UPDATE {SCHEMA}.listings SET district = '-' WHERE id = {lid}")
+                        # Помечаем '?' — не удалось определить, не будем обрабатывать повторно
+                        cur.execute(f"UPDATE {SCHEMA}.listings SET district = '?' WHERE id = {lid}")
 
                 conn.commit()
 
                 remaining_after = remaining_total - len(listings)
+                print(f'[auto_assign] batch done: updated={updated}/{len(listings)}, remaining≈{remaining_after}')
                 return _ok({
                     'updated': updated,
                     'processed': len(listings),
