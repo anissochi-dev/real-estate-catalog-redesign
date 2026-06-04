@@ -355,8 +355,8 @@ export default function PropertyCard({
             })()}
           </div>
 
-          {/* Район */}
-          {property.district && (
+          {/* Район — показываем только если нет адреса (иначе район уже есть в строке адреса) */}
+          {property.district && !addressLine && (
             <button
               type="button"
               onClick={e => { e.preventDefault(); e.stopPropagation(); navigate(`/catalog?search=${encodeURIComponent(property.district || '')}`); }}
@@ -367,7 +367,7 @@ export default function PropertyCard({
             </button>
           )}
 
-          {/* Адрес */}
+          {/* Адрес (включает район) */}
           {addressLine && (
             <button
               type="button"
