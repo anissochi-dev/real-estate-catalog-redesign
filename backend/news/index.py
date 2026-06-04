@@ -640,6 +640,25 @@ def handler(event: dict, context) -> dict:
                     result['vb_retrain_error'] = str(e)[:100]
 
                 result['vb_retrain_triggered'] = vb_retrained
+
+                # ── Авто-обновление рыночных цен (батчевый, 1 шаг за вызов) ─
+                price_refresh_result = None
+                try:
+                    import urllib.request as _ur_pr
+                    _pr_req = _ur_pr.Request(
+                        'https://functions.poehali.dev/9986e5a6-c4d4-407a-919f-a303aa3eddf2',
+                        data=b'{"action":"price_market_refresh"}',
+                        headers={'Content-Type': 'application/json'},
+                        method='POST',
+                    )
+                    with _ur_pr.urlopen(_pr_req, timeout=25) as _pr_resp:
+                        _pr_body = _pr_resp.read(4096).decode('utf-8', errors='replace')
+                        import json as _json_pr
+                        price_refresh_result = _json_pr.loads(_pr_body)
+                except Exception as _pr_e:
+                    price_refresh_result = {'error': str(_pr_e)[:100]}
+                result['price_refresh'] = price_refresh_result
+
                 return _ok(result)
 
             # ── ПУБЛИЧНЫЙ СПИСОК ─────────────────────────────────────────
