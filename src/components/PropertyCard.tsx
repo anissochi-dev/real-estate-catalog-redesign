@@ -372,10 +372,10 @@ export default function PropertyCard({
             <button
               type="button"
               onClick={() => setMapOpen(true)}
-              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-brand-blue transition-colors text-left w-full group/addr"
+              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-brand-blue transition-colors text-left w-full min-w-0 group/addr"
             >
               <Icon name="MapPin" size={10} className="flex-shrink-0 text-brand-blue/50 group-hover/addr:text-brand-blue transition-colors" />
-              <span className="truncate">{addressLine}</span>
+              <span className="truncate min-w-0">{addressLine}</span>
             </button>
           )}
 
