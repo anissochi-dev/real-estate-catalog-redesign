@@ -1299,6 +1299,65 @@ def _site_health(cur, conn, method, action, event, user):
         all_ok = all(f.get('ok') for f in results)
         return _ok({'feeds': results, 'all_ok': all_ok, 'checked': len(results)})
 
+    # ── КАЧЕСТВО ОБЪЕКТОВ ДЛЯ XML-ЭКСПОРТА ───────────────────────────────────
+    if action == 'xml_quality':
+        cur.execute(f"""
+            SELECT id, title, category, deal, price, area, address, lat, lng,
+                   floor, total_floors, ceiling_height, condition, images, description
+            FROM {SCHEMA}.listings
+            WHERE status = 'active'
+            ORDER BY id DESC
+        """)
+        rows = cur.fetchall()
+
+        FIELDS = [
+            ('title',          'Название'),
+            ('description',    'Описание'),
+            ('price',          'Цена'),
+            ('area',           'Площадь'),
+            ('address',        'Адрес'),
+            ('lat',            'Координаты'),
+            ('images',         'Фотографии'),
+            ('floor',          'Этаж'),
+            ('ceiling_height', 'Высота потолков'),
+            ('condition',      'Состояние'),
+        ]
+
+        issues = []
+        field_stats = {k: 0 for k, _ in FIELDS}
+
+        for row in rows:
+            r = dict(row)
+            missing = []
+            for key, label in FIELDS:
+                val = r.get(key)
+                is_empty = (val is None or val == '' or (key not in ('lat', 'lng') and val == 0))
+                if is_empty:
+                    missing.append(label)
+                    field_stats[key] += 1
+            if missing:
+                issues.append({
+                    'id': r['id'],
+                    'title': r.get('title') or f'Объект #{r["id"]}',
+                    'missing': missing,
+                })
+
+        total = len(rows)
+        perfect = total - len(issues)
+        field_summary = [
+            {'key': k, 'label': l, 'count': field_stats[k]}
+            for k, l in FIELDS if field_stats[k] > 0
+        ]
+        field_summary.sort(key=lambda x: -x['count'])
+
+        return _ok({
+            'total': total,
+            'perfect': perfect,
+            'issues_count': len(issues),
+            'issues': issues[:50],
+            'field_summary': field_summary,
+        })
+
     # ── ДЕЙСТВИЯ ОБСЛУЖИВАНИЯ ────────────────────────────────────────────────
     if action == 'clear_ai_logs':
         try:

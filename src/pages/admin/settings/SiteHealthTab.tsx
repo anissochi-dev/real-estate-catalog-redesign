@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
 import {
   Section, SECTIONS, CleanAction, CLEAN_ACTIONS,
-  HealthResult, SecurityResult, PhotoResult, S3Result, XmlResult,
+  HealthResult, SecurityResult, PhotoResult, S3Result, XmlResult, XmlQualityResult,
   req,
 } from './siteHealthTypes';
 import { HealthSection, SecuritySection } from './SiteHealthDiagnostics';
@@ -27,6 +27,9 @@ export default function SiteHealthTab() {
 
   const [xml, setXml] = useState<XmlResult | null>(null);
   const [xmlLoading, setXmlLoading] = useState(false);
+
+  const [xmlQuality, setXmlQuality] = useState<XmlQualityResult | null>(null);
+  const [xmlQualityLoading, setXmlQualityLoading] = useState(false);
 
   const [running, setRunning] = useState<string | null>(null);
   const [actionLog, setActionLog] = useState<{ id: string; msg: string; ok: boolean }[]>([]);
@@ -64,6 +67,13 @@ export default function SiteHealthTab() {
     try { const d = await req('site_health&action=xml_check'); if (!d.error) setXml(d); else toast.error(d.error); }
     catch { toast.error('Ошибка проверки фидов'); }
     finally { setXmlLoading(false); }
+  };
+
+  const loadXmlQuality = async () => {
+    setXmlQualityLoading(true);
+    try { const d = await req('site_health&action=xml_quality'); if (!d.error) setXmlQuality(d); else toast.error(d.error); }
+    catch { toast.error('Ошибка анализа качества'); }
+    finally { setXmlQualityLoading(false); }
   };
 
   const runAction = async (action: CleanAction) => {
@@ -113,7 +123,10 @@ export default function SiteHealthTab() {
         <S3Section s3={s3} s3Loading={s3Loading} loadS3={loadS3} />
       )}
       {section === 'xml' && (
-        <XmlSection xml={xml} xmlLoading={xmlLoading} loadXml={loadXml} />
+        <XmlSection
+          xml={xml} xmlLoading={xmlLoading} loadXml={loadXml}
+          xmlQuality={xmlQuality} xmlQualityLoading={xmlQualityLoading} loadXmlQuality={loadXmlQuality}
+        />
       )}
       {section === 'clean' && (
         <SiteHealthClean running={running} actionLog={actionLog} runAction={runAction} />

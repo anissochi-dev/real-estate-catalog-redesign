@@ -53,6 +53,16 @@ export interface S3Result {
 export interface FeedItem { name: string; ok: boolean; status?: number; root_tag?: string; items?: number; size_kb?: number; error?: string; }
 export interface XmlResult { feeds: FeedItem[]; all_ok: boolean; checked: number; }
 
+export interface XmlQualityIssue { id: number; title: string; missing: string[]; }
+export interface XmlFieldStat { key: string; label: string; count: number; }
+export interface XmlQualityResult {
+  total: number;
+  perfect: number;
+  issues_count: number;
+  issues: XmlQualityIssue[];
+  field_summary: XmlFieldStat[];
+}
+
 export interface CleanAction {
   id: string; label: string; description: string; icon: string; danger?: boolean; confirm?: string;
 }
