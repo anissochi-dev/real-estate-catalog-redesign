@@ -1233,22 +1233,30 @@ def _site_health(cur, conn, method, action, event, user):
         import urllib.request as _ur3
         import xml.etree.ElementTree as ET
 
+        XML_FEED_URL = 'https://functions.poehali.dev/2e0b59c3-d76b-4a2e-ae96-a40cfe5f6ef7'
+        DEFAULT_FEEDS = [
+            {'name': 'Яндекс.Недвижимость', 'slug': 'yandex'},
+            {'name': 'Авито',               'slug': 'avito'},
+            {'name': 'ЦИАН',                'slug': 'cian'},
+        ]
+
         feeds_to_check = []
         try:
-            cur.execute(f"SELECT id, name, feed_type, is_active FROM {SCHEMA}.xml_feeds WHERE is_active=TRUE LIMIT 10")
+            cur.execute(f"SELECT id, slug, name, format, is_active FROM {SCHEMA}.xml_feeds WHERE is_active=TRUE ORDER BY id LIMIT 20")
             db_feeds = cur.fetchall()
             for f in db_feeds:
-                feeds_to_check.append({
-                    'name': f['name'] or f['feed_type'],
-                    'url': f'https://functions.poehali.dev/2e0b59c3-d76b-4a2e-ae96-a40cfe5f6ef7?type={f["feed_type"]}'
-                })
+                row = dict(f)
+                slug = row.get('slug') or row.get('format') or ''
+                label = row.get('name') or slug
+                if slug:
+                    feeds_to_check.append({'name': label, 'url': f'{XML_FEED_URL}?type={slug}'})
         except Exception:
             pass
 
         if not feeds_to_check:
             feeds_to_check = [
-                {'name': 'Avito XML', 'url': 'https://functions.poehali.dev/2e0b59c3-d76b-4a2e-ae96-a40cfe5f6ef7?type=avito'},
-                {'name': 'ЦИАН XML', 'url': 'https://functions.poehali.dev/2e0b59c3-d76b-4a2e-ae96-a40cfe5f6ef7?type=cian'},
+                {'name': d['name'], 'url': f'{XML_FEED_URL}?type={d["slug"]}'}
+                for d in DEFAULT_FEEDS
             ]
 
         results = []
