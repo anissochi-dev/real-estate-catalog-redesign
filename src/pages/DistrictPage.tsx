@@ -241,20 +241,15 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
               <h2 className="font-display font-700 text-lg mb-3">
                 О коммерческой недвижимости в {displayName}ом районе
               </h2>
-              {aiLoading && !aiText ? (
+              {aiLoading && !aiText && !districtData?.description ? (
                 <div className="space-y-2">
                   {[1, 2, 3].map(i => (
                     <div key={i} className={`h-3.5 bg-muted rounded animate-pulse ${i === 3 ? 'w-2/3' : 'w-full'}`} />
                   ))}
                 </div>
-              ) : aiText ? (
-                <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{aiText}</p>
               ) : (
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  Агентство помогает подобрать коммерческую недвижимость в {displayName}ом районе {city}а —
-                  офисы, торговые площади, склады, производственные помещения и готовый бизнес.
-                  Работаем с {settings.company_since_year || 2007} года, знаем рынок и поможем найти
-                  объект под ваши требования и бюджет.
+                <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
+                  {aiText || districtData?.description || `Актуальные объекты коммерческой недвижимости в ${displayName} районе ${city}а — офисы, торговые площади, склады, производственные помещения и готовый бизнес.`}
                 </p>
               )}
             </div>
