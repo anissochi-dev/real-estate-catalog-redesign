@@ -210,21 +210,29 @@ def _parse_html_analogs(html: str, source: str, min_price: float, area: float) -
 
 
 def _scrape_arrpro(listing: dict) -> list:
-    """Парсит krasnodar.arrpro.ru — агрегатор коммерческой недвижимости."""
+    """Парсит krasnodar.arrpro.ru/katalog/all/ — каталог коммерческой недвижимости Краснодара."""
     deal = (listing.get('deal') or 'sale').lower()
     area = float(listing.get('area') or 0)
-    # Главная страница содержит актуальные объявления (~189кб SSR HTML)
-    url = 'https://krasnodar.arrpro.ru/'
+    # Каталог всех объектов — больше объявлений чем на главной
+    url = 'https://krasnodar.arrpro.ru/katalog/all/'
     try:
-        html = _http_get(url, timeout=14)
+        req = urllib.request.Request(url, headers={
+            'User-Agent': USER_AGENT,
+            'Accept': 'text/html,application/xhtml+xml,*/*;q=0.9',
+            'Accept-Language': 'ru-RU,ru;q=0.9',
+            'Cache-Control': 'no-cache',
+            'Referer': 'https://krasnodar.arrpro.ru/',
+        })
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = resp.read(700_000)
+            html = raw.decode('utf-8', errors='replace')
         if len(html) < 1000:
             print(f'[mela_price] arrpro.ru: empty response ({len(html)} bytes)')
             return []
         print(f'[mela_price] arrpro.ru: html={len(html)} bytes, has_price={"₽" in html or "руб" in html}')
         min_p = 20_000 if deal == 'rent' else 300_000
-        # Широкий диапазон площадей — берём всё что есть на странице
-        broad_listing = dict(listing, area=area if area > 0 else 100)
-        res = _parse_html_analogs(html, 'arrpro.ru', min_p, broad_listing['area'])
+        broad_area = area if area > 0 else 100
+        res = _parse_html_analogs(html, 'arrpro.ru', min_p, broad_area)
         print(f'[mela_price] arrpro.ru: {len(res)} analogs found')
         return res
     except Exception as e:
@@ -245,8 +253,7 @@ def _scrape_kayan(listing: dict) -> list:
 def _scrape_ayax(listing: dict) -> list:
     """
     Парсит ayax.ru — крупное агентство Краснодара.
-    Сайт SSR: отдаёт цены в HTML, но нужно читать 500кб (не 300кб).
-    Работает только страница /kommercheskaya-nedvizhimost/ (без подпутей).
+    URL: /kommercheskaya-nedvizhimost/ для продажи и аренды (SSR, до 600кб).
     """
     deal = (listing.get('deal') or 'sale').lower()
     area = float(listing.get('area') or 0)
@@ -257,19 +264,40 @@ def _scrape_ayax(listing: dict) -> list:
             'Accept': 'text/html,application/xhtml+xml,*/*;q=0.9',
             'Accept-Language': 'ru-RU,ru;q=0.9',
             'Cache-Control': 'no-cache',
-            'Referer': 'https://www.google.com/',
+            'Referer': 'https://www.ayax.ru/',
+            'Connection': 'keep-alive',
         })
         with urllib.request.urlopen(req, timeout=15) as resp:
-            raw = resp.read(600_000)
+            raw = resp.read(700_000)
             html = raw.decode('utf-8', errors='replace')
-        print(f'[mela_price] ayax.ru: html={len(html)} bytes')
+        print(f'[mela_price] ayax.ru: html={len(html)} bytes, has_price={"₽" in html}')
         if len(html) < 10_000:
             print('[mela_price] ayax.ru: response too small, skipping')
             return []
         min_p = 20_000 if deal == 'rent' else 300_000
         res = _parse_html_analogs(html, 'ayax.ru', min_p, area)
+        # Дополнительный поиск цен в формате "цена: X ₽" и data-атрибутах
+        if len(res) < 3:
+            price_pat2 = re.compile(r'data-price=["\'](\d+)["\']', re.IGNORECASE)
+            area_pat2  = re.compile(r'data-area=["\'](\d+(?:\.\d+)?)["\']', re.IGNORECASE)
+            prices2 = [(m.start(), float(m.group(1))) for m in price_pat2.finditer(html)]
+            areas2  = [(m.start(), float(m.group(1))) for m in area_pat2.finditer(html)]
+            area_min = area * 0.2 if area > 0 else 5
+            area_max = area * 5.0 if area > 0 else 10000
+            used = set()
+            for pi, p in prices2:
+                if p < min_p or pi in used:
+                    continue
+                for ai, a_val in areas2:
+                    if area_min <= a_val <= area_max and abs(ai - pi) < 2000:
+                        res.append({'source': 'ayax.ru', 'price': p, 'area': a_val,
+                                    'price_per_m2': round(p / a_val), 'url': url})
+                        used.add(pi)
+                        break
+                if len(res) >= 10:
+                    break
         print(f'[mela_price] ayax.ru: {len(res)} analogs found')
-        return res
+        return res[:10]
     except Exception as e:
         print(f'[mela_price] ayax.ru error: {e}')
         return []
@@ -349,11 +377,72 @@ def _scrape_etagi(listing: dict) -> list:
 
 def _scrape_moreon(listing: dict) -> list:
     """
-    moreon-invest.ru — Bitrix-каталог, карточки объектов рендерятся через JS.
-    SSR отдаёт только форму фильтра без цен. Парсинг без headless невозможен.
+    Парсит moreon-invest.ru — краснодарское агентство коммерческой недвижимости.
+    URL с фильтром SSR: /commercii/offers/filter/type-is-prodaja/city-is-krasnodar-g/apply/
+    Для аренды: /commercii/offers/filter/type-is-arenda/city-is-krasnodar-g/apply/
     """
-    print('[mela_price] moreon-invest.ru: skipped (JS-rendered catalog)')
-    return []
+    deal = (listing.get('deal') or 'sale').lower()
+    area = float(listing.get('area') or 0)
+    deal_slug = 'arenda' if deal == 'rent' else 'prodaja'
+    url = f'https://moreon-invest.ru/commercii/offers/filter/type-is-{deal_slug}/city-is-krasnodar-g/apply/'
+    try:
+        req = urllib.request.Request(url, headers={
+            'User-Agent': USER_AGENT,
+            'Accept': 'text/html,application/xhtml+xml,*/*;q=0.9',
+            'Accept-Language': 'ru-RU,ru;q=0.9',
+            'Cache-Control': 'no-cache',
+            'Referer': 'https://moreon-invest.ru/commercii/',
+            'Connection': 'keep-alive',
+        })
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = resp.read(700_000)
+            html = raw.decode('utf-8', errors='replace')
+        print(f'[mela_price] moreon-invest.ru: html={len(html)} bytes, has_price={"₽" in html or "руб" in html}')
+        if len(html) < 5_000:
+            print('[mela_price] moreon-invest.ru: response too small, skipping')
+            return []
+        min_p = 20_000 if deal == 'rent' else 300_000
+        res = _parse_html_analogs(html, 'moreon-invest.ru', min_p, area)
+        # Дополнительно ищем цены в meta/JSON-LD разметке Bitrix
+        if len(res) < 3:
+            # Bitrix часто кладёт цены в атрибуты data-price или JSON
+            for pat in [
+                r'"price"\s*:\s*"?(\d{5,})"?',
+                r'data-price=["\'](\d{5,})["\']',
+                r'PRICE["\s]*:\s*(\d{5,})',
+            ]:
+                price_matches = [(m.start(), float(m.group(1))) for m in re.finditer(pat, html)]
+                area_matches  = [(m.start(), float(m.group(1))) for m in re.finditer(
+                    r'"square"\s*:\s*(\d+(?:\.\d+)?)|data-area=["\'](\d+(?:\.\d+)?)["\']|(\d+(?:\.\d+)?)\s*м²', html
+                )]
+                area_min = area * 0.2 if area > 0 else 5
+                area_max = area * 5.0 if area > 0 else 10000
+                used = set()
+                for pi, p in price_matches:
+                    if p < min_p or pi in used:
+                        continue
+                    for ai, *groups in area_matches:
+                        a_val_str = next((g for g in groups if g), None)
+                        if not a_val_str:
+                            continue
+                        try:
+                            a_val = float(a_val_str.replace(',', '.'))
+                        except Exception:
+                            continue
+                        if area_min <= a_val <= area_max and abs(ai - pi) < 3000:
+                            res.append({'source': 'moreon-invest.ru', 'price': p, 'area': a_val,
+                                        'price_per_m2': round(p / a_val), 'url': url})
+                            used.add(pi)
+                            break
+                    if len(res) >= 10:
+                        break
+                if len(res) >= 3:
+                    break
+        print(f'[mela_price] moreon-invest.ru: {len(res)} analogs found')
+        return res[:10]
+    except Exception as e:
+        print(f'[mela_price] moreon-invest.ru error: {e}')
+        return []
 
 
 def _scrape_local_sites(listing: dict) -> list:
@@ -364,6 +453,7 @@ def _scrape_local_sites(listing: dict) -> list:
         (_scrape_arrpro, 'arrpro'),
         (_scrape_ayax, 'ayax'),
         (_scrape_etagi, 'etagi'),
+        (_scrape_moreon, 'moreon'),
     ]:
         try:
             res = scraper(listing)
