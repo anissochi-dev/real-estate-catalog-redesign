@@ -53,6 +53,19 @@ def _ensure_table(cur):
     """)
 
 
+def _get_district_description(cur, district: str) -> str:
+    try:
+        cur.execute(
+            f"SELECT description FROM {SCHEMA}districts "
+            "WHERE is_active = TRUE AND (name ILIKE %s OR name ILIKE %s) LIMIT 1",
+            (f'%{district}%', district),
+        )
+        row = cur.fetchone()
+        return (row.get('description') or '').strip() if row else ''
+    except Exception:
+        return ''
+
+
 def _generate(district: str, city: str, stats: dict, cur) -> str:
     count = stats.get('count', 0)
     avg_price = stats.get('avg_price', 0)
@@ -60,6 +73,7 @@ def _generate(district: str, city: str, stats: dict, cur) -> str:
 
     type_str = ', '.join(TYPE_LABELS.get(t, t) for t in types[:4]) if types else 'офисы, торговые площади, склады'
     price_str = f'средняя стоимость — {int(avg_price):,} руб.'.replace(',', ' ') if avg_price else ''
+    district_desc = _get_district_description(cur, district)
 
     api_key = os.environ.get('YANDEX_API_KEY', '')
     folder_id = os.environ.get('YANDEX_FOLDER_ID', '')
@@ -75,14 +89,17 @@ def _generate(district: str, city: str, stats: dict, cur) -> str:
     if not api_key or not folder_id:
         return ''
 
+    desc_block = f'Характеристика района: {district_desc}\n' if district_desc else ''
+
     prompt = (
-        f'Напиши SEO-текст (3 абзаца, ~260 слов) о коммерческой недвижимости '
+        f'Напиши SEO-текст (3 абзаца, ~300 слов) о коммерческой недвижимости '
         f'в районе {district} города {city}.\n\n'
+        f'{desc_block}'
         f'Статистика: {count} активных объектов в базе. {price_str}\n'
-        f'Типы объектов: {type_str}.\n\n'
+        f'Типы объектов в этом районе: {type_str}.\n\n'
         'Требования:\n'
-        '- Опиши транспортную доступность и деловую активность района\n'
-        '- Упомяни доступные типы объектов и их особенности\n'
+        '- Раскрой коммерческую привлекательность района — для каких видов бизнеса он лучше всего подходит\n'
+        '- Упомяни конкретные типы доступных объектов и их особенности\n'
         '- Включи ключевые запросы: аренда/продажа, район, город\n'
         '- Заверши призывом обратиться в агентство\n'
         '- Только связный текст, без заголовков, без markdown\n'
