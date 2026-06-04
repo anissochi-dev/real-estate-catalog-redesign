@@ -43,9 +43,9 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
   useEffect(() => {
     if (!districtName) return;
     const company = settings.company_name || '';
-    const title = `Коммерческая недвижимость в ${districtName} районе, ${city}${company ? ` | ${company}` : ''}`;
+    const title = `Коммерческая недвижимость — район ${districtName}, ${city}${company ? ` | ${company}` : ''}`;
     document.title = title;
-    const desc = `Аренда и продажа коммерческой недвижимости в ${districtName} районе ${city}а. Офисы, склады, торговые помещения и другие объекты.`;
+    const desc = `Аренда и продажа коммерческой недвижимости в районе ${districtName}, ${city}. Офисы, склады, торговые помещения и другие объекты.`;
     const setMeta = (sel: string, attr: string, val: string) => {
       let el = document.querySelector(sel);
       if (!el) { el = document.createElement('meta'); document.head.appendChild(el); }
@@ -147,12 +147,12 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
                 Коммерческая недвижимость — {displayName} район
               </h1>
               <h2 className="font-display font-600 text-base text-white/75 mb-2 leading-snug">
-                Аренда и продажа объектов в {displayName}ом районе {city}а
+                Аренда и продажа объектов в районе {displayName}, {city}
               </h2>
               <p className="text-white/70 text-sm max-w-2xl leading-relaxed">
                 {items.length > 0
                   ? `В базе ${items.length} активных объектов в этом районе — офисы, торговые площади, склады и другие.`
-                  : `Актуальные объекты коммерческой недвижимости в ${displayName}ом районе.`}
+                  : `Актуальные объекты коммерческой недвижимости в районе ${displayName}.`}
               </p>
             </div>
           </div>
@@ -239,7 +239,7 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
             {/* AI SEO-текст */}
             <div className="mt-12 p-6 bg-white rounded-2xl border border-border">
               <h2 className="font-display font-700 text-lg mb-3">
-                О коммерческой недвижимости в {displayName}ом районе
+                О коммерческой недвижимости: район {displayName}
               </h2>
               {aiLoading && !aiText && !districtData?.description ? (
                 <div className="space-y-2">
@@ -249,7 +249,7 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
-                  {aiText || districtData?.description || `Актуальные объекты коммерческой недвижимости в ${displayName} районе ${city}а — офисы, торговые площади, склады, производственные помещения и готовый бизнес.`}
+                  {aiText || districtData?.description || `Актуальные объекты коммерческой недвижимости в районе ${displayName}, ${city} — офисы, торговые площади, склады, производственные помещения и готовый бизнес.`}
                 </p>
               )}
             </div>

@@ -170,7 +170,7 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
               <div className="flex items-center gap-2 mb-3">
                 <Icon name="MapPin" size={14} className="text-white/60" />
                 <h3 className="font-semibold text-white/80 text-sm">
-                  Коммерческая недвижимость по районам {city}а
+                  Коммерческая недвижимость по районам — {city}
                 </h3>
               </div>
               <div className="flex flex-wrap gap-x-1 gap-y-1">
