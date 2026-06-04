@@ -6,11 +6,12 @@ Returns: { text: str, cached: bool, stats: {count, avg_price} }
 """
 import json
 import os
+import urllib.request
+import urllib.error
 import psycopg2
 from psycopg2.extras import RealDictCursor
-import openai
 
-SCHEMA = 't_p71821556_real_estate_catalog_'
+SCHEMA = 't_p71821556_real_estate_catalog_.'
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -52,7 +53,7 @@ def _ensure_table(cur):
     """)
 
 
-def _generate(district: str, city: str, stats: dict) -> str:
+def _generate(district: str, city: str, stats: dict, cur) -> str:
     count = stats.get('count', 0)
     avg_price = stats.get('avg_price', 0)
     types = stats.get('types', [])
@@ -60,9 +61,23 @@ def _generate(district: str, city: str, stats: dict) -> str:
     type_str = ', '.join(TYPE_LABELS.get(t, t) for t in types[:4]) if types else 'офисы, торговые площади, склады'
     price_str = f'средняя стоимость — {int(avg_price):,} руб.'.replace(',', ' ') if avg_price else ''
 
+    api_key = os.environ.get('YANDEX_API_KEY', '')
+    folder_id = os.environ.get('YANDEX_FOLDER_ID', '')
+    if not api_key or not folder_id:
+        try:
+            cur.execute(f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}settings ORDER BY id ASC LIMIT 1")
+            row = cur.fetchone()
+            if row:
+                api_key = row.get('yandex_api_key') or api_key
+                folder_id = row.get('yandex_folder_id') or folder_id
+        except Exception:
+            pass
+    if not api_key or not folder_id:
+        return ''
+
     prompt = (
         f'Напиши SEO-текст (3 абзаца, ~260 слов) о коммерческой недвижимости '
-        f'в {district} районе города {city}.\n\n'
+        f'в районе {district} города {city}.\n\n'
         f'Статистика: {count} активных объектов в базе. {price_str}\n'
         f'Типы объектов: {type_str}.\n\n'
         'Требования:\n'
@@ -73,17 +88,28 @@ def _generate(district: str, city: str, stats: dict) -> str:
         '- Только связный текст, без заголовков, без markdown\n'
     )
 
-    client = openai.OpenAI(api_key=os.environ['OPENAI_API_KEY'])
-    resp = client.chat.completions.create(
-        model='gpt-4o-mini',
-        messages=[
-            {'role': 'system', 'content': 'SEO-копирайтер агентства коммерческой недвижимости. Только русский язык.'},
-            {'role': 'user', 'content': prompt},
+    payload = {
+        'modelUri': f'gpt://{folder_id}/yandexgpt/rc',
+        'completionOptions': {'stream': False, 'temperature': 0.6, 'maxTokens': '800'},
+        'messages': [
+            {'role': 'system', 'text': 'SEO-копирайтер агентства коммерческой недвижимости. Только русский язык.'},
+            {'role': 'user', 'text': prompt},
         ],
-        temperature=0.6,
-        max_tokens=600,
+    }
+    req = urllib.request.Request(
+        'https://llm.api.cloud.yandex.net/foundationModels/v1/completion',
+        data=json.dumps(payload).encode(),
+        headers={'Authorization': f'Api-Key {api_key}', 'Content-Type': 'application/json', 'x-folder-id': folder_id},
+        method='POST',
     )
-    return (resp.choices[0].message.content or '').strip()
+    try:
+        with urllib.request.urlopen(req, timeout=25) as resp:
+            data = json.loads(resp.read().decode())
+        alts = (data.get('result') or {}).get('alternatives') or []
+        return ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
+    except Exception as e:
+        print(f'[district-seo] YandexGPT error: {e}')
+        return ''
 
 
 def handler(event: dict, context) -> dict:
@@ -147,7 +173,7 @@ def handler(event: dict, context) -> dict:
                 'types': types,
             }
 
-            text = _generate(district, city, stats)
+            text = _generate(district, city, stats, cur)
             if not text:
                 return _err('GPT returned empty text', 502)
 
