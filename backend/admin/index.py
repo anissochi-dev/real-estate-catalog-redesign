@@ -1366,6 +1366,104 @@ def _site_health(cur, conn, method, action, event, user):
             'field_summary': field_summary,
         })
 
+    # ── МАРКЕТИНГОВАЯ АНАЛИТИКА ──────────────────────────────────────────────
+    if action == 'marketing_stats':
+        # 1. Лиды по источникам
+        cur.execute(f"""
+            SELECT COALESCE(NULLIF(source,''), 'Не указан') AS source,
+                   COUNT(*) AS cnt
+            FROM {SCHEMA}.leads
+            GROUP BY 1 ORDER BY cnt DESC
+        """)
+        leads_by_source = [dict(r) for r in cur.fetchall()]
+
+        # 2. Лиды по статусам
+        cur.execute(f"""
+            SELECT COALESCE(NULLIF(status,''), 'Не указан') AS status,
+                   COUNT(*) AS cnt
+            FROM {SCHEMA}.leads
+            GROUP BY 1 ORDER BY cnt DESC
+        """)
+        leads_by_status = [dict(r) for r in cur.fetchall()]
+
+        # 3. Лиды за последние 30 дней (по дням)
+        cur.execute(f"""
+            SELECT DATE(created_at) AS day, COUNT(*) AS cnt
+            FROM {SCHEMA}.leads
+            WHERE created_at >= NOW() - INTERVAL '30 days'
+            GROUP BY 1 ORDER BY 1
+        """)
+        leads_timeline = [{'day': str(r['day']), 'cnt': r['cnt']} for r in cur.fetchall()]
+
+        # 4. Статистика просмотров по источникам
+        cur.execute(f"""
+            SELECT COALESCE(NULLIF(source,''), 'site') AS source,
+                   event_type,
+                   SUM(count) AS total
+            FROM {SCHEMA}.listing_stats
+            GROUP BY 1, 2 ORDER BY total DESC
+        """)
+        stats_raw = cur.fetchall()
+        views_by_source = {}
+        for r in stats_raw:
+            s = r['source']
+            if s not in views_by_source:
+                views_by_source[s] = {}
+            views_by_source[s][r['event_type']] = r['total']
+
+        # 5. Топ объектов по просмотрам
+        cur.execute(f"""
+            SELECT id, title, category, deal, views_site, price
+            FROM {SCHEMA}.listings
+            WHERE status = 'active' AND views_site > 0
+            ORDER BY views_site DESC LIMIT 10
+        """)
+        top_listings = [dict(r) for r in cur.fetchall()]
+
+        # 6. Статистика объектов по категориям (просмотры + количество)
+        cur.execute(f"""
+            SELECT category, deal,
+                   COUNT(*) AS cnt,
+                   SUM(views_site) AS total_views,
+                   ROUND(AVG(views_site)::numeric, 1) AS avg_views
+            FROM {SCHEMA}.listings
+            WHERE status = 'active'
+            GROUP BY 1, 2 ORDER BY total_views DESC NULLS LAST
+        """)
+        listings_stats = [dict(r) for r in cur.fetchall()]
+
+        # 7. Сделки CRM по источникам
+        cur.execute(f"""
+            SELECT COALESCE(NULLIF(source,''), 'Не указан') AS source,
+                   COUNT(*) AS cnt,
+                   COALESCE(SUM(amount), 0) AS total_amount
+            FROM {SCHEMA}.crm_deals
+            GROUP BY 1 ORDER BY cnt DESC
+        """)
+        deals_by_source = [dict(r) for r in cur.fetchall()]
+
+        # 8. Общие итоги
+        cur.execute(f"""
+            SELECT
+                (SELECT COUNT(*) FROM {SCHEMA}.leads) AS total_leads,
+                (SELECT COUNT(*) FROM {SCHEMA}.leads WHERE created_at >= NOW() - INTERVAL '30 days') AS leads_30d,
+                (SELECT COALESCE(SUM(views_site),0) FROM {SCHEMA}.listings WHERE status='active') AS total_views,
+                (SELECT COUNT(*) FROM {SCHEMA}.listings WHERE status='active') AS active_listings,
+                (SELECT COUNT(*) FROM {SCHEMA}.crm_deals) AS total_deals
+        """)
+        totals = dict(cur.fetchone())
+
+        return _ok({
+            'totals': totals,
+            'leads_by_source': leads_by_source,
+            'leads_by_status': leads_by_status,
+            'leads_timeline': leads_timeline,
+            'views_by_source': views_by_source,
+            'top_listings': top_listings,
+            'listings_stats': listings_stats,
+            'deals_by_source': deals_by_source,
+        })
+
     # ── ДЕЙСТВИЯ ОБСЛУЖИВАНИЯ ────────────────────────────────────────────────
     if action == 'clear_ai_logs':
         try:
