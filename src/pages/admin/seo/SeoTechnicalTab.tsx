@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
 import { S } from '../settings/types';
-import { SeoStatus, seoUrl, seoHeaders, fmtDate, SITEMAP_BASE } from './seoTypes';
+import { SeoStatus, fmtDate, SITEMAP_BASE } from './seoTypes';
 
 export type CheckStatus = 'idle' | 'checking' | 'ok' | 'err';
 export interface CheckState { status: CheckStatus; message: string }
@@ -49,30 +49,12 @@ export default function SeoTechnicalTab() {
 
   const [seoStatus, setSeoStatus] = useState<SeoStatus | null>(null);
   const [seoLoading, setSeoLoading] = useState(false);
-  const [gptOk, setGptOk] = useState(false);
   const [seoErr, setSeoErr] = useState('');
 
   useEffect(() => {
     adminApi.getSettings().then(d => setS(d.settings || {}));
     loadSeoStatus();
   }, []);
-
-  const seoCall = async (payload: Record<string, unknown>) => {
-    const tok = refreshToken();
-    try {
-      const r = await fetch(seoUrl(tok), {
-        method: 'POST',
-        headers: seoHeaders(tok),
-        body: JSON.stringify({ ...payload, auth_token: tok || undefined }),
-      });
-      if (!r.ok) return { data: null, error: `Ошибка ${r.status}` };
-      const d = await r.json();
-      if (d?.error) return { data: null, error: String(d.error) };
-      return { data: d, error: null };
-    } catch (e) {
-      return { data: null, error: e instanceof Error ? e.message : 'Нет связи' };
-    }
-  };
 
   const sitemapCall = async (action: string) => {
     const tok = refreshToken();
@@ -83,6 +65,7 @@ export default function SeoTechnicalTab() {
         headers: { 'Content-Type': 'application/json', ...(tok ? { 'X-Auth-Token': tok } : {}) },
         body: JSON.stringify({ action, auth_token: tok || undefined }),
       });
+      if (!r.ok) return { data: null, error: `Ошибка ${r.status}` };
       const d = await r.json();
       if (d?.error) return { data: null, error: String(d.error) };
       return { data: d, error: null };
@@ -97,11 +80,7 @@ export default function SeoTechnicalTab() {
     const { data, error } = await sitemapCall('status');
     setSeoLoading(false);
     if (error) { setSeoErr(error); return; }
-    if (data) {
-      setSeoStatus(data as unknown as SeoStatus);
-      // gpt_configured берём из auto-seo если нужно
-      setGptOk(true);
-    }
+    if (data) setSeoStatus(data as unknown as SeoStatus);
   };
 
   const rebuildSitemap = async () => {
@@ -252,12 +231,7 @@ export default function SeoTechnicalTab() {
           </div>
         </div>
 
-        {!gptOk && (
-          <div className="flex items-start gap-2 text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-amber-800">
-            <Icon name="AlertCircle" size={13} className="mt-0.5 shrink-0" />
-            Для автогенерации robots.txt и sitemap настройте YandexGPT в Настройки → Интеграции.
-          </div>
-        )}
+
       </div>
 
       {/* Яндекс.Метрика */}

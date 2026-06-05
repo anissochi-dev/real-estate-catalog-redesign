@@ -240,9 +240,15 @@ def handler(event: dict, context) -> dict:
                 }
 
             if action == 'sitemap_xml':
-                cur.execute(f"SELECT content FROM {SCHEMA}.seo_artifacts WHERE kind='sitemap'")
+                cur.execute(f"SELECT content, urls_count FROM {SCHEMA}.seo_artifacts WHERE kind='sitemap'")
                 row = cur.fetchone()
-                xml = row['content'] if row and row.get('content') else _build_sitemap_xml(cur)[0]
+                has_cache = row and row.get('content') and int(row.get('urls_count') or 0) > 0
+                if has_cache:
+                    xml = row['content']
+                else:
+                    # Кэш пуст — генерируем и сохраняем сразу
+                    r = _save_sitemap(cur, conn)
+                    xml, _ = _build_sitemap_xml(cur)
                 return {
                     'statusCode': 200,
                     'headers': {**CORS, 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=1800'},
@@ -263,6 +269,13 @@ def handler(event: dict, context) -> dict:
                 row = cur.fetchone()
                 base = _site_base_url(cur)
                 sitemap_count = int(row['urls_count']) if row and row.get('urls_count') else 0
+
+                # Если кэш пуст — автоматически пересобираем
+                if sitemap_count == 0:
+                    result = _save_sitemap(cur, conn)
+                    sitemap_count = result['urls_count']
+                    cur.execute(f"SELECT updated_at FROM {SCHEMA}.seo_artifacts WHERE kind='sitemap'")
+                    row = cur.fetchone()
 
                 cur.execute(f"SELECT COUNT(id) as cnt FROM {SCHEMA}.listings WHERE status='active'")
                 listings = int((cur.fetchone() or {}).get('cnt') or 0)
