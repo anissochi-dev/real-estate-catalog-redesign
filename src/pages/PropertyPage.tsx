@@ -233,8 +233,8 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
       {faqSchema && <SchemaOrg schema={faqSchema} id="faq" />}
 
       <div className="container mx-auto px-4 py-4">
-        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-          <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="hidden md:block min-w-0 flex-1">
             <Breadcrumbs items={[
               { label: 'Главная', to: '/' },
               { label: 'Каталог', to: '/catalog' },
