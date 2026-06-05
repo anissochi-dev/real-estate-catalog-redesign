@@ -1,5 +1,5 @@
 """
-Business: Геокодирование адресов объектов через Яндекс Геокодер (v3) и автоисправление района.
+Business: Геокодирование адресов объектов через Яндекс Геокодер (v4) и автоисправление района.
 Запускается вручную: action=preview (показать что изменится) или action=apply (применить).
 Args: event с body {action: 'preview'|'apply', ids?: [int, ...]}, X-Auth-Token; context
 Returns: список изменений {id, address, district_old, district_new}
@@ -9,6 +9,7 @@ import json
 import os
 import urllib.request
 import urllib.parse
+import urllib.error
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -126,6 +127,9 @@ def _geocode_yandex(address: str, api_key: str) -> dict | None:
             result[kind] = name
 
         return result
+    except urllib.error.HTTPError as e:
+        body = e.read(500).decode('utf-8', errors='replace')
+        return {'error': f'HTTP {e.code}: {body[:200]}'}
     except Exception as e:
         return {'error': str(e)}
 
