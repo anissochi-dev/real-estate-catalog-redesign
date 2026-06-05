@@ -86,24 +86,30 @@ def _ok(body, status=200):
     }
 
 
-def _geocode_one(address: str, api_key: str, secret_key: str) -> dict:
-    """Стандартизирует один адрес через DaData."""
-    payload = json.dumps([address], ensure_ascii=False).encode('utf-8')
+def _geocode_one(address: str, api_key: str) -> dict:
+    """Ищет адрес через DaData Suggest. Возвращает data-объект первого результата."""
+    payload = json.dumps({
+        'query': f'Краснодар, {address}',
+        'count': 1,
+        'locations': [{'city': 'Краснодар'}],
+    }, ensure_ascii=False).encode('utf-8')
     req = urllib.request.Request(
-        'https://cleaner.dadata.ru/api/v1/clean/address',
+        'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address',
         data=payload,
         headers={
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             'Authorization': f'Token {api_key}',
-            'X-Secret': secret_key,
         },
         method='POST',
     )
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             result = json.loads(resp.read())
-            return result[0] if result else {}
+            suggestions = result.get('suggestions', [])
+            if not suggestions:
+                return {}
+            return suggestions[0].get('data', {})
     except urllib.error.HTTPError as e:
         body = e.read(300).decode('utf-8', errors='replace')
         return {'error': f'HTTP {e.code}: {body[:150]}'}
@@ -169,7 +175,7 @@ def handler(event: dict, context) -> dict:
         address = row['address']
         district_old = row['district']
 
-        geo = _geocode_one(f'Краснодар, {address}', api_key, secret_key)
+        geo = _geocode_one(address, api_key)
 
         if 'error' in geo:
             errors.append({'id': lid, 'address': address, 'error': geo['error']})
