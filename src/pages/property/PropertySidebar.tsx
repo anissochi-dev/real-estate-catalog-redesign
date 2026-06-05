@@ -39,25 +39,14 @@ export default function PropertySidebar({ item, agents }: Props) {
         <div className="bg-white rounded-2xl p-4 shadow-sm sticky top-20">
           <div className="text-[10px] text-muted-foreground mb-3 uppercase tracking-widest font-semibold">Представитель собственника</div>
           {agents.slice(0, 1).map(agent => (
-            <div key={agent.id} className="flex items-center gap-3">
-              {agent.avatar ? (
-                <img src={agent.avatar} alt={agent.name} referrerPolicy="no-referrer"
-                  className="w-12 h-12 rounded-full object-cover flex-shrink-0 border-2 border-border" />
-              ) : (
-                <div className="w-12 h-12 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
-                  <Icon name="User" size={20} className="text-brand-blue" />
-                </div>
+            <div key={agent.id}>
+              {agent.phone && (
+                <a href={`tel:${agent.phone}`}
+                  className="inline-flex items-center gap-2 text-lg font-bold text-brand-blue hover:underline">
+                  <Icon name="Phone" size={18} />
+                  {agent.phone}
+                </a>
               )}
-              <div className="flex-1 min-w-0">
-                <div className="font-display font-700 text-sm truncate">{agent.name}</div>
-                {agent.phone && (
-                  <a href={`tel:${agent.phone}`}
-                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-blue hover:underline mt-0.5">
-                    <Icon name="Phone" size={13} />
-                    {agent.phone}
-                  </a>
-                )}
-              </div>
             </div>
           ))}
         </div>
