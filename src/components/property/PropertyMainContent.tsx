@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import type { ListingDetail } from '@/lib/api';
 import Icon from '@/components/ui/icon';
+import DescriptionRenderer from '@/components/property/DescriptionRenderer';
 import PublicPhoneInput from '@/components/PublicPhoneInput';
 import PropertyMapInfrastructure from '@/components/PropertyMapInfrastructure';
 import SimilarListings from '@/components/SimilarListings';
@@ -184,8 +185,8 @@ export default function PropertyMainContent({
       {/* Описание */}
       {item.description && (
         <div className="bg-white rounded-2xl px-4 py-3 shadow-sm">
-          <h2 className="font-display font-700 text-base mb-2">Описание</h2>
-          <div className="text-sm whitespace-pre-wrap text-foreground/80 leading-relaxed">{item.description}</div>
+          <h2 className="font-display font-700 text-base mb-3">Описание</h2>
+          <DescriptionRenderer text={item.description} />
         </div>
       )}
 
