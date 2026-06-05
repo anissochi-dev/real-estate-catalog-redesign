@@ -150,22 +150,27 @@ export default function SeoAuditTab() {
   };
 
   const regenerateAllFaq = async () => {
-    if (!data?.all_listings) return;
-    const ids = data.all_listings.map(l => l.id);
     setRegeneratingAll(true);
-    setRegenProgress({ done: 0, total: ids.length });
     const tok = refreshToken();
-    for (let i = 0; i < ids.length; i++) {
-      try {
-        await fetch(FAQ_URL, {
+    const total = data?.total ?? 0;
+    setRegenProgress({ done: 0, total });
+    try {
+      let remaining = total;
+      while (remaining > 0) {
+        const r = await fetch(FAQ_URL, {
           method: 'POST',
           headers: { 'X-Auth-Token': tok || '', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ listing_id: ids[i], force: true }),
+          body: JSON.stringify({ action: 'batch', limit: 5, auth_token: tok || '' }),
         });
-        setFixedFaqIds(prev => new Set(prev).add(ids[i]));
-      } catch { /* продолжаем */ }
-      setRegenProgress({ done: i + 1, total: ids.length });
-    }
+        const d = await r.json();
+        if (!r.ok || d.error) break;
+        remaining = d.remaining ?? 0;
+        const processed = d.processed ?? 0;
+        if (processed === 0) break; // GPT недоступен или ничего не осталось
+        setRegenProgress(prev => ({ done: prev.done + processed, total }));
+        if (remaining === 0) break;
+      }
+    } catch { /* продолжаем */ }
     setRegeneratingAll(false);
     await load();
   };
@@ -407,16 +412,25 @@ export default function SeoAuditTab() {
                     Заполнено: {data.stats.has_faq || 0} из {data.total} объектов
                   </div>
                 </div>
-                <button
-                  onClick={regenerateAllFaq}
-                  disabled={regeneratingAll}
-                  className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl flex items-center gap-1.5 disabled:opacity-50 transition-colors"
-                >
-                  <Icon name={regeneratingAll ? 'Loader2' : 'RefreshCw'} size={13} className={regeneratingAll ? 'animate-spin' : ''} />
-                  {regeneratingAll
-                    ? `Генерирую ${regenProgress.done}/${regenProgress.total}...`
-                    : 'Перегенерировать все FAQ'}
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {missingFaq > 0 && (
+                    <button
+                      onClick={regenerateAllFaq}
+                      disabled={regeneratingAll}
+                      className="text-xs bg-brand-blue hover:bg-brand-blue/90 text-white px-3 py-2 rounded-xl flex items-center gap-1.5 disabled:opacity-50 transition-colors"
+                    >
+                      <Icon name={regeneratingAll ? 'Loader2' : 'Sparkles'} size={13} className={regeneratingAll ? 'animate-spin' : ''} />
+                      {regeneratingAll
+                        ? `Генерирую… ${regenProgress.done}/${regenProgress.total}`
+                        : `Сгенерировать недостающие (${missingFaq})`}
+                    </button>
+                  )}
+                  {missingFaq === 0 && !regeneratingAll && (
+                    <span className="text-xs text-emerald-600 flex items-center gap-1 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-xl">
+                      <Icon name="CheckCircle2" size={12} /> Все объекты заполнены
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Поиск и фильтр */}

@@ -67,11 +67,11 @@ def _load_yandex_keys(cur) -> tuple:
 
 def _check_seo_faq_column(cur) -> bool:
     """Проверяет наличие колонки seo_faq в таблице listings через information_schema."""
-    schema_name = SCHEMA.rstrip('.')  # SCHEMA уже содержит финальный _
+    schema_name = SCHEMA.rstrip('_').rstrip('.')
+    safe = schema_name.replace("'", "''")
     cur.execute(
-        "SELECT 1 FROM information_schema.columns "
-        "WHERE table_schema = %s AND table_name = 'listings' AND column_name = 'seo_faq'",
-        (schema_name,),
+        f"SELECT 1 FROM information_schema.columns "
+        f"WHERE table_schema = '{safe}' AND table_name = 'listings' AND column_name = 'seo_faq'"
     )
     return cur.fetchone() is not None
 
@@ -188,6 +188,19 @@ def handler(event: dict, context) -> dict:
     except Exception:
         return _json_resp(400, {'error': 'Invalid JSON body'})
 
+    # Batch-режим: генерация FAQ для всех объектов без него
+    if body.get('action') == 'batch':
+        raw_headers = event.get('headers') or {}
+        headers_lc = {k.lower(): v for k, v in raw_headers.items()}
+        qs = event.get('queryStringParameters') or {}
+        token = (
+            qs.get('auth_token')
+            or headers_lc.get('x-auth-token')
+            or headers_lc.get('x-authorization')
+            or body.get('auth_token', '')
+        )
+        return _batch_generate(token or '', event)
+
     listing_id = body.get('listing_id')
     if not listing_id:
         return _json_resp(400, {'error': 'listing_id is required'})
@@ -215,7 +228,7 @@ def handler(event: dict, context) -> dict:
             fields = 'id, title, description, category, deal, price, area, address, district, city'
             if has_seo_faq:
                 fields += ', seo_faq'
-            cur.execute(f"SELECT {fields} FROM {SCHEMA}.listings WHERE id = %s", (listing_id,))
+            cur.execute(f"SELECT {fields} FROM {SCHEMA}.listings WHERE id = {int(listing_id)}")
             listing = cur.fetchone()
             if not listing:
                 return _json_resp(404, {'error': 'Listing not found'})
@@ -251,14 +264,100 @@ def handler(event: dict, context) -> dict:
             # Сохраняем в БД
             if has_seo_faq:
                 try:
+                    safe_faq = json.dumps(faq, ensure_ascii=False).replace("'", "''")
                     cur.execute(
-                        f"UPDATE {SCHEMA}.listings SET seo_faq = %s WHERE id = %s",
-                        (json.dumps(faq, ensure_ascii=False), listing_id),
+                        f"UPDATE {SCHEMA}.listings SET seo_faq = '{safe_faq}' WHERE id = {int(listing_id)}"
                     )
                     conn.commit()
                 except Exception:
                     conn.rollback()
 
             return _json_resp(200, {'faq': faq, 'cached': False})
+    finally:
+        conn.close()
+
+
+def _batch_generate(auth_token: str, event: dict) -> dict:
+    """Генерирует FAQ для всех активных объектов без seo_faq.
+    Защищён авторизацией. Обрабатывает по одному за вызов (limit из body).
+    """
+    dsn = os.environ.get('DATABASE_URL')
+    if not dsn:
+        return _json_resp(500, {'error': 'DATABASE_URL not configured'})
+
+    conn = psycopg2.connect(dsn)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Проверка токена через sessions
+            safe_token = auth_token.replace("'", "''")[:100]
+            cur.execute(
+                f"SELECT u.id FROM {SCHEMA}.sessions s "
+                f"JOIN {SCHEMA}.users u ON u.id = s.user_id "
+                f"WHERE s.token = '{safe_token}' AND s.expires_at > NOW() AND u.is_active = TRUE LIMIT 1"
+            )
+            if not cur.fetchone():
+                return _json_resp(401, {'error': 'Unauthorized'})
+
+            api_key, folder_id = _load_yandex_keys(cur)
+            if not api_key or not folder_id:
+                return _json_resp(503, {'error': 'YandexGPT не настроен'})
+
+            body = {}
+            if event.get('body'):
+                try:
+                    body = json.loads(event['body'])
+                except Exception:
+                    pass
+            limit = min(int(body.get('limit', 5)), 20)
+
+            # Объекты без FAQ
+            cur.execute(
+                f"SELECT id, title, description, category, deal, price, area, address, district, city "
+                f"FROM {SCHEMA}.listings "
+                f"WHERE status = 'active' AND (seo_faq IS NULL OR seo_faq = 'null' OR seo_faq = '[]') "
+                f"ORDER BY id ASC LIMIT {limit}"
+            )
+            listings = [dict(r) for r in cur.fetchall()]
+
+            if not listings:
+                # Подсчитаем сколько уже есть
+                cur.execute(
+                    f"SELECT COUNT(*) as cnt FROM {SCHEMA}.listings "
+                    f"WHERE status = 'active' AND seo_faq IS NOT NULL AND seo_faq != 'null' AND seo_faq != '[]'"
+                )
+                done = int((cur.fetchone() or {}).get('cnt') or 0)
+                return _json_resp(200, {'done': done, 'remaining': 0, 'processed': 0, 'message': 'Все объекты уже имеют FAQ'})
+
+            processed, errors = 0, 0
+            for listing in listings:
+                prompt = _build_prompt(listing)
+                result = _call_yandex_gpt(api_key, folder_id, prompt)
+                if 'error' in result:
+                    errors += 1
+                    continue
+                try:
+                    faq = _parse_faq(result['text'])
+                    if faq:
+                        safe_faq = json.dumps(faq, ensure_ascii=False).replace("'", "''")
+                        cur.execute(
+                            f"UPDATE {SCHEMA}.listings SET seo_faq = '{safe_faq}' WHERE id = {int(listing['id'])}"
+                        )
+                        conn.commit()
+                        processed += 1
+                except Exception:
+                    errors += 1
+
+            # Сколько ещё осталось
+            cur.execute(
+                f"SELECT COUNT(*) as cnt FROM {SCHEMA}.listings "
+                f"WHERE status = 'active' AND (seo_faq IS NULL OR seo_faq = 'null' OR seo_faq = '[]')"
+            )
+            remaining = int((cur.fetchone() or {}).get('cnt') or 0)
+
+            return _json_resp(200, {
+                'processed': processed,
+                'errors': errors,
+                'remaining': remaining,
+            })
     finally:
         conn.close()
