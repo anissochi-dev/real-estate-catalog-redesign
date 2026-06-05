@@ -49,33 +49,16 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
           </div>
 
           {/* Представитель собственника */}
-          {agent && (
+          {agent && agent.phone && (
             <div className="px-4 py-3 border-t border-border">
               <div className="text-[10px] text-muted-foreground mb-2 uppercase tracking-widest font-semibold">
                 Представитель собственника
               </div>
-              <div className="flex items-center gap-2.5">
-                {agent.avatar ? (
-                  <img src={agent.avatar} alt={agent.name} referrerPolicy="no-referrer"
-                    className="w-9 h-9 rounded-full object-cover flex-shrink-0 border-2 border-border" />
-                ) : (
-                  <div className="w-9 h-9 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
-                    <Icon name="User" size={16} className="text-brand-blue" />
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="font-display font-700 text-sm truncate">{agent.name}</div>
-                  {agent.phone ? (
-                    <a href={`tel:${agent.phone}`}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-brand-blue hover:underline mt-0.5 font-mono">
-                      <Icon name="Phone" size={11} />
-                      {formatPhone(agent.phone)}
-                    </a>
-                  ) : (
-                    <span className="text-xs text-muted-foreground mt-0.5 block">Телефон не указан</span>
-                  )}
-                </div>
-              </div>
+              <a href={`tel:${agent.phone}`}
+                className="inline-flex items-center gap-2 text-lg font-bold text-brand-blue hover:underline">
+                <Icon name="Phone" size={18} />
+                {formatPhone(agent.phone)}
+              </a>
             </div>
           )}
         </div>
