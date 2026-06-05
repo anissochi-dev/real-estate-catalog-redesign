@@ -387,7 +387,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
           </div>
           <PropertySidebar
             item={item}
-            agents={agents}
+            agents={agents.filter(a => a.phone)}
             sent={sent}
             sending={sending}
             form={form}
