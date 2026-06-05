@@ -1,5 +1,5 @@
 """
-Business: Геокодирование адресов объектов через 2GIS API и автоисправление района.
+Business: Геокодирование адресов объектов через DaData API и автоисправление района.
 Запускается вручную: action=preview (показать что изменится) или action=apply (применить).
 Args: event с body {action: 'preview'|'apply', ids?: [int, ...]}, X-Auth-Token; context
 Returns: список изменений {id, address, district_old, district_new}
@@ -8,9 +8,7 @@ Returns: список изменений {id, address, district_old, district_ne
 import json
 import os
 import urllib.request
-import urllib.parse
 import urllib.error
-import time
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -22,13 +20,14 @@ CORS = {
     'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token',
 }
 
-# Карта: ключевые слова из ответа геокодера → название района в БД
+# Карта: ключевые слова из city_district → название района в БД
 DISTRICT_MAP = [
     # Карасунский округ
     ('Пашковский', 'Пашковский (ПМР)'),
     ('Фестивальный', 'Фестивальный (ФМР)'),
     ('Юбилейный', 'Юбилейный (ЮМР)'),
     ('Черёмушки', 'Черёмушки (ЧМР)'),
+    ('Черемушки', 'Черёмушки (ЧМР)'),
     ('Комсомольский', 'Комсомольский (КМР)'),
     ('Школьный', 'Школьный (ШМР)'),
     ('Славянский', 'Славянский (СМР)'),
@@ -45,6 +44,7 @@ DISTRICT_MAP = [
     ('Немецкая деревня', 'Немецкая деревня'),
     ('Авиагородок', 'Авиагородок'),
     ('Молодёжный', 'Молодёжный'),
+    ('Молодежный', 'Молодёжный'),
     ('Жукова', 'Энка (Жукова)'),
     ('Энка', 'Энка (Жукова)'),
     ('Лазурный', 'Лазурный п.'),
@@ -52,9 +52,9 @@ DISTRICT_MAP = [
     ('Победитель', 'Победитель п.'),
     ('Плодородный', 'Плодородный п.'),
     ('Краснодарский п', 'Краснодарский п.'),
-    ('посёлок Краснодарский', 'Краснодарский п.'),
     ('Индустриальный', 'Индустриальный п.'),
     ('Берёзовый', 'Берёзовый п.'),
+    ('Березовый', 'Берёзовый п.'),
     ('Колосистый', 'Колосистый п.'),
     ('Зиповский', 'Завод измерительных приборов (ЗИП)'),
     ('ЗИП', 'Завод измерительных приборов (ЗИП)'),
@@ -64,18 +64,17 @@ DISTRICT_MAP = [
     ('ТЭЦ', 'Теплоэлектростанция (ТЭЦ)'),
     ('ККБ', 'Краевая клиническая больница (ККБ)'),
     ('Елизаветинск', 'Индустриальный п.'),
-    # Западный округ — микрорайоны 2GIS
+    # Западный округ
     ('Кожевенный', 'Кожевенный завод (Кожзавод)'),
     ('Покровка', 'Кожевенный завод (Кожзавод)'),
     ('СХИ', 'Сельскохозяйственный институт (СХИ)'),
     ('Сельскохозяйственный', 'Сельскохозяйственный институт (СХИ)'),
-
-    # Центральный округ — микрорайоны 2GIS
+    # Центральный округ
     ('Табачная', 'Табачная фабрика (Табачка)'),
     ('ХБК', 'Хлопчато-бумажный комбинат (ХБК)'),
     ('Хлопчато', 'Хлопчато-бумажный комбинат (ХБК)'),
     ('Дубинка', 'Центральный (ЦМР)'),
-    ('Центральный м-н', 'Центральный (ЦМР)'),
+    ('Центральный', 'Центральный (ЦМР)'),
 ]
 
 
@@ -87,66 +86,44 @@ def _ok(body, status=200):
     }
 
 
-def _geocode_2gis(address: str, api_key: str) -> dict | None:
-    """Геокодирует адрес через 2GIS API. Возвращает словарь с полями адреса."""
-    query = urllib.parse.urlencode({
-        'q': f'Краснодар, {address}',
-        'fields': 'items.adm_div,items.address,items.full_name',
-        'key': api_key,
-        'locale': 'ru_RU',
-        'limit': 1,
-    })
-    url = f'https://catalog.api.2gis.com/3.0/items/geocode?{query}'
+def _geocode_one(address: str, api_key: str, secret_key: str) -> dict:
+    """Стандартизирует один адрес через DaData."""
+    payload = json.dumps([address], ensure_ascii=False).encode('utf-8')
+    req = urllib.request.Request(
+        'https://cleaner.dadata.ru/api/v1/clean/address',
+        data=payload,
+        headers={
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': f'Token {api_key}',
+            'X-Secret': secret_key,
+        },
+        method='POST',
+    )
     try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'biznest-geocoder/1.0'})
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            data = json.loads(resp.read())
-
-        items = data.get('result', {}).get('items', [])
-        if not items:
-            return None
-
-        item = items[0]
-        adm_div = item.get('adm_div', [])
-
-        result = {
-            'full_name': item.get('full_name', ''),
-            'adm_div_names': ' '.join(d.get('name', '') for d in adm_div),
-            '_raw_keys': list(item.keys()),
-            '_raw_adm_div': adm_div[:3],
-        }
-        for div in adm_div:
-            div_type = div.get('type', '')
-            result[div_type] = div.get('name', '')
-
-        return result
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read())
+            return result[0] if result else {}
     except urllib.error.HTTPError as e:
-        body = e.read(500).decode('utf-8', errors='replace')
-        return {'error': f'HTTP {e.code}: {body[:200]}'}
+        body = e.read(300).decode('utf-8', errors='replace')
+        return {'error': f'HTTP {e.code}: {body[:150]}'}
     except Exception as e:
         return {'error': str(e)}
 
 
-def _detect_district(geo: dict) -> str | None:
-    """Определяет район из нашего справочника по данным геокодера."""
-    if not geo or 'error' in geo:
+def _detect_district(search_str: str) -> str | None:
+    """Определяет район из нашего справочника по строке поиска."""
+    if not search_str:
         return None
-
-    search_parts = []
-    for val in geo.values():
-        if isinstance(val, str):
-            search_parts.append(val)
-
-    search_str = ' '.join(search_parts)
-
+    s = search_str.lower()
     for keyword, district_name in DISTRICT_MAP:
-        if keyword.lower() in search_str.lower():
+        if keyword.lower() in s:
             return district_name
     return None
 
 
 def handler(event: dict, context) -> dict:
-    """Геокодирует адреса объектов через 2GIS API и исправляет районы."""
+    """Стандартизирует адреса объектов через DaData и исправляет районы пакетно."""
 
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
@@ -161,9 +138,10 @@ def handler(event: dict, context) -> dict:
     action = body.get('action', 'preview')
     filter_ids = body.get('ids')
 
-    api_key = os.environ.get('TWOGIS_API_KEY', '')
-    if not api_key:
-        return _ok({'error': 'TWOGIS_API_KEY не задан'}, 500)
+    api_key = os.environ.get('DADATA_API_KEY', '')
+    secret_key = os.environ.get('DADATA_SECRET_KEY', '')
+    if not api_key or not secret_key:
+        return _ok({'error': 'DADATA_API_KEY или DADATA_SECRET_KEY не заданы'}, 500)
 
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -171,13 +149,13 @@ def handler(event: dict, context) -> dict:
     if filter_ids:
         ids_str = ','.join(str(i) for i in filter_ids)
         cur.execute(
-            f"SELECT id, title, address, district FROM {SCHEMA}.listings "
+            f"SELECT id, address, district FROM {SCHEMA}.listings "
             f"WHERE status = 'active' AND address IS NOT NULL AND address != '' "
             f"AND id IN ({ids_str}) ORDER BY id"
         )
     else:
         cur.execute(
-            f"SELECT id, title, address, district FROM {SCHEMA}.listings "
+            f"SELECT id, address, district FROM {SCHEMA}.listings "
             f"WHERE status = 'active' AND address IS NOT NULL AND address != '' "
             f"ORDER BY id"
         )
@@ -191,24 +169,36 @@ def handler(event: dict, context) -> dict:
         address = row['address']
         district_old = row['district']
 
-        geo = _geocode_2gis(address, api_key)
-        time.sleep(0.3)
+        geo = _geocode_one(f'Краснодар, {address}', api_key, secret_key)
 
-        if geo and 'error' in geo:
+        if 'error' in geo:
             errors.append({'id': lid, 'address': address, 'error': geo['error']})
             continue
 
-        district_new = _detect_district(geo)
+        city_district = geo.get('city_district', '') or ''
+        city_area = geo.get('city_area', '') or ''
+        settlement = geo.get('settlement_with_type', '') or ''
+        qc = geo.get('qc', -1)
+
+        if qc == 2:
+            errors.append({'id': lid, 'address': address, 'error': 'Адрес не распознан DaData (qc=2)'})
+            continue
+
+        # DaData не заполняет city_district для Краснодара — ищем по всем текстовым полям
+        search_str = ' '.join(filter(None, [city_district, city_area, settlement,
+            geo.get('street', ''), geo.get('area', ''), geo.get('result', '')]))
+        district_new = _detect_district(search_str)
 
         entry = {
             'id': lid,
             'address': address,
             'district_old': district_old,
             'district_new': district_new,
-            'geo_adm_div': geo.get('adm_div_names', '') if geo else '',
-            'geo_full_name': (geo.get('full_name', '') if geo else '')[:120],
-            'geo_raw_keys': geo.get('_raw_keys', []) if geo else [],
-            'geo_raw_adm_div': geo.get('_raw_adm_div', []) if geo else [],
+            'city_district': city_district,
+            'city_area': city_area,
+            'settlement': settlement,
+            'geo_result': geo.get('result', ''),
+            'qc': qc,
             'changed': district_new is not None and district_new != district_old,
         }
 
@@ -226,7 +216,7 @@ def handler(event: dict, context) -> dict:
     conn.close()
 
     changed = [r for r in results if r['changed']]
-    not_detected = [r for r in results if r['district_new'] is None]
+    not_detected = [r for r in results if not r['changed'] and r['district_new'] is None]
 
     return _ok({
         'action': action,
