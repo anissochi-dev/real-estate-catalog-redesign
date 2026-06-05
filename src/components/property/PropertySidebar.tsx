@@ -55,7 +55,7 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
                 Представитель собственника
               </div>
               <a href={`tel:${agent.phone}`}
-                className="inline-flex items-center gap-2 text-lg font-bold text-brand-blue hover:underline">
+                className="inline-flex items-center gap-2 text-lg font-bold text-white bg-orange-500 hover:bg-orange-600 transition px-4 py-2.5 rounded-xl shadow-[0_4px_14px_rgba(249,115,22,0.5)]">
                 <Icon name="Phone" size={18} />
                 {formatPhone(agent.phone)}
               </a>

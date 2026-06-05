@@ -350,7 +350,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
               {agents.filter(a => a.phone)[0] && (
                 <div className="px-4 py-3 border-t border-border">
                   <a href={`tel:${agents.filter(a => a.phone)[0].phone}`}
-                    className="w-full flex items-center justify-center gap-2 bg-brand-blue text-white text-sm font-bold px-4 py-2.5 rounded-xl">
+                    className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 transition text-white text-sm font-bold px-4 py-2.5 rounded-xl shadow-[0_4px_14px_rgba(249,115,22,0.5)]">
                     <Icon name="Phone" size={16} />
                     {agents.filter(a => a.phone)[0].phone}
                   </a>
