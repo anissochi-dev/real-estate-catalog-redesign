@@ -98,29 +98,31 @@ export default function XmlFeedsAdmin() {
         <div className="space-y-2">
           {items.map(f => (
             <div key={f.id} className="p-3 bg-muted/30 rounded-lg">
-              <div className="flex justify-between items-start gap-3">
+              <div className="flex justify-between items-start gap-2">
                 <div className="min-w-0 flex-1">
-                  <div className="font-semibold flex items-center gap-2">
-                    {f.name}
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${f.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-muted'}`}>
+                  <div className="font-semibold flex flex-wrap items-center gap-2">
+                    <span className="break-all">{f.name}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${f.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-muted'}`}>
                       {f.is_active ? 'Активен' : 'Выкл'}
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground">Платформа: {PLATFORMS.find(p => p[0] === f.platform)?.[1] || f.platform}</div>
-                  <div className="mt-2 flex items-center gap-2">
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
                     <input readOnly value={exportUrl(f.platform)}
-                      className="flex-1 px-2 py-1 text-xs border rounded bg-white" />
-                    <button onClick={() => copy(exportUrl(f.platform))}
-                      className="text-xs px-2 py-1 rounded bg-brand-blue text-white">
-                      <Icon name="Copy" size={12} />
-                    </button>
-                    <a href={exportUrl(f.platform)} target="_blank" rel="noopener noreferrer"
-                      className="text-xs px-2 py-1 rounded bg-muted hover:bg-muted/70">
-                      <Icon name="ExternalLink" size={12} />
-                    </a>
+                      className="w-full min-w-0 px-2 py-1 text-xs border rounded bg-white" />
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => copy(exportUrl(f.platform))}
+                        className="text-xs px-2 py-1 rounded bg-brand-blue text-white inline-flex items-center gap-1">
+                        <Icon name="Copy" size={12} /> Скопировать
+                      </button>
+                      <a href={exportUrl(f.platform)} target="_blank" rel="noopener noreferrer"
+                        className="text-xs px-2 py-1 rounded bg-muted hover:bg-muted/70 inline-flex items-center gap-1">
+                        <Icon name="ExternalLink" size={12} /> Открыть
+                      </a>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
                   <button onClick={() => setEditing(f)} className="text-brand-blue p-1">
                     <Icon name="Pencil" size={14} />
                   </button>
