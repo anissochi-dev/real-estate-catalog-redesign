@@ -258,7 +258,7 @@ export function useListingsState() {
       // Цену в описание НЕ передаём — по требованию её не должно быть в тексте
       const prompt = buildListingContext(editing, false);
       const r = await aiApi.ask('describe', prompt);
-      setEditing({ ...editing, description: (r.text || '').slice(0, 3500) });
+      setEditing({ ...editing, description: (r.text || '').slice(0, 3000) });
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Ошибка ИИ');
     } finally {
