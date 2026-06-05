@@ -91,6 +91,8 @@ export interface S {
   // МАХ Автоответ
   max_autoreply_enabled: boolean;
   max_autoreply_text: string;
+  // Файлы верификации
+  verification_files: { filename: string; content: string; comment?: string }[];
 }
 
 export interface City {

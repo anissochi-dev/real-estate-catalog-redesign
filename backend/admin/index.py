@@ -2661,6 +2661,12 @@ def _settings(cur, conn, method, event, user):
             rp = body['role_permissions']
             rp_json = _safe(json.dumps(rp, ensure_ascii=False), 50000)
             fields.append(f"role_permissions = '{rp_json}'")
+        if 'verification_files' in body:
+            vf = body['verification_files']
+            if not isinstance(vf, list):
+                vf = []
+            vf_json = json.dumps(vf, ensure_ascii=False).replace("'", "''")
+            fields.append(f"verification_files = '{vf_json}'::jsonb")
         if not fields:
             return _err(400, 'Нет полей')
         fields.append("updated_at = NOW()")

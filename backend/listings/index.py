@@ -43,6 +43,28 @@ def handler(event: dict, context) -> dict:
     params = event.get('queryStringParameters') or {}
     dsn = os.environ['DATABASE_URL']
 
+    # Файлы верификации (Яндекс, Google, Mail.ru и т.д.)
+    path = (event.get('path') or event.get('rawPath') or '').rstrip('/')
+    resource_param = params.get('resource', '')
+    if resource_param == 'verify_file' and params.get('filename'):
+        filename = params['filename']
+        conn = psycopg2.connect(dsn)
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(f"SELECT verification_files FROM t_p71821556_real_estate_catalog_.settings ORDER BY id LIMIT 1")
+            row = cur.fetchone()
+        conn.close()
+        files = (row or {}).get('verification_files') or []
+        if isinstance(files, str):
+            try:
+                files = json.loads(files)
+            except Exception:
+                files = []
+        for vf in files:
+            if vf.get('filename') == filename:
+                content = vf.get('content', '')
+                return {'statusCode': 200, 'headers': {'Content-Type': 'text/plain; charset=utf-8', 'Access-Control-Allow-Origin': '*'}, 'body': content}
+        return {'statusCode': 404, 'headers': {'Access-Control-Allow-Origin': '*'}, 'body': 'Not found'}
+
     # POST разрешён ТОЛЬКО для публичной записи согласия. Всё остальное — только GET.
     if method == 'POST':
         body_raw = event.get('body') or '{}'

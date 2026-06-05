@@ -20,6 +20,7 @@ import AutoPostingTab from './settings/AutoPostingTab';
 import BrandKitTab from './settings/BrandKitTab';
 import NotificationsTab from './settings/NotificationsTab';
 import SiteHealthTab from './settings/SiteHealthTab';
+import VerificationTab from './settings/VerificationTab';
 
 export default function SettingsAdmin() {
   const { reload } = useSettings();
@@ -30,7 +31,7 @@ export default function SettingsAdmin() {
   const [cityAdding, setCityAdding] = useState(false);
   type TabId = 'general' | 'watermark' | 'brand-kit' | 'footer' | 'legal'
     | 'integrations' | 'ad-platforms' | 'autoposting' | 'feeds' | 'notifications'
-    | 'cities' | 'purposes' | 'land-vri' | 'pages' | 'roles' | 'migration' | 'photo-optimize' | 'site-health';
+    | 'cities' | 'purposes' | 'land-vri' | 'pages' | 'roles' | 'migration' | 'photo-optimize' | 'site-health' | 'verification';
   const [tab, setTab] = useState<TabId>('general');
   const [showKey, setShowKey] = useState(false);
   const [showMapsKey, setShowMapsKey] = useState(false);
@@ -235,6 +236,7 @@ export default function SettingsAdmin() {
     {
       id: 'admin', label: 'Администрирование', icon: 'Shield', tabs: [
         ['roles', 'Роли и доступы', 'ShieldHalf'],
+        ['verification', 'Верификация', 'FileCheck'],
         ['migration', 'Экспорт/импорт', 'DatabaseBackup'],
         ['photo-optimize', 'Сжатие фото', 'ImageDown'],
         ['site-health', 'Диагностика', 'HeartPulse'],
@@ -316,6 +318,14 @@ export default function SettingsAdmin() {
       {tab === 'migration' && <MigrationTab />}
       {tab === 'photo-optimize' && <PhotoOptimizeTab />}
       {tab === 'site-health' && <SiteHealthTab />}
+      {tab === 'verification' && (
+        <VerificationTab
+          files={(s.verification_files as { filename: string; content: string; comment?: string }[]) || []}
+          onChange={files => setS(p => ({ ...p, verification_files: files }))}
+          saved={saved}
+          save={save}
+        />
+      )}
       {tab === 'pages' && <PagesAdmin />}
     </div>
   );
