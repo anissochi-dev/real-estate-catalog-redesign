@@ -3740,6 +3740,10 @@ def _phones(cur, conn, method, rid, action, event, user):
         if user['role'] not in ('admin', 'director'):
             return _err(403, 'Нет прав на удаление')
         cid = int(rid)
+        cur.execute(f"UPDATE {SCHEMA}.listings SET owner_phone_contact_id = NULL WHERE owner_phone_contact_id = {cid}")
+        cur.execute(f"UPDATE {SCHEMA}.listings SET owner_phone2_contact_id = NULL WHERE owner_phone2_contact_id = {cid}")
+        cur.execute(f"UPDATE {SCHEMA}.leads SET phone_contact_id = NULL WHERE phone_contact_id = {cid}")
+        cur.execute(f"UPDATE {SCHEMA}.crm_owners SET phone_contact_id = NULL WHERE phone_contact_id = {cid}")
         cur.execute(f"DELETE FROM {SCHEMA}.phone_lead_links WHERE phone_contact_id = {cid}")
         cur.execute(f"DELETE FROM {SCHEMA}.phone_listing_links WHERE phone_contact_id = {cid}")
         cur.execute(f"DELETE FROM {SCHEMA}.phone_contact_history WHERE phone_contact_id = {cid}")
