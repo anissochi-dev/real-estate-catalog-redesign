@@ -1,5 +1,5 @@
 """
-Business: Геокодирование адресов объектов через DaData API и автоисправление района.
+Business: Геокодирование адресов объектов через geocode.maps.co (OpenStreetMap) и автоисправление района.
 Запускается вручную: action=preview (показать что изменится) или action=apply (применить).
 Args: event с body {action: 'preview'|'apply', ids?: [int, ...]}, X-Auth-Token; context
 Returns: список изменений {id, address, district_old, district_new}
@@ -8,7 +8,9 @@ Returns: список изменений {id, address, district_old, district_ne
 import json
 import os
 import urllib.request
+import urllib.parse
 import urllib.error
+import time
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -20,7 +22,7 @@ CORS = {
     'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token',
 }
 
-# Карта: ключевые слова из city_district → название района в БД
+# Карта: ключевые слова из ответа OSM → название района в БД
 DISTRICT_MAP = [
     # Карасунский округ
     ('Пашковский', 'Пашковский (ПМР)'),
@@ -87,29 +89,31 @@ def _ok(body, status=200):
 
 
 def _geocode_one(address: str, api_key: str) -> dict:
-    """Ищет адрес через DaData Suggest. Возвращает data-объект первого результата."""
-    payload = json.dumps({
-        'query': f'Краснодар, {address}',
-        'count': 1,
-        'locations': [{'city': 'Краснодар'}],
-    }, ensure_ascii=False).encode('utf-8')
-    req = urllib.request.Request(
-        'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address',
-        data=payload,
-        headers={
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': f'Token {api_key}',
-        },
-        method='POST',
-    )
+    """Геокодирует адрес через geocode.maps.co (OSM Nominatim). Возвращает поля адреса."""
+    query = urllib.parse.urlencode({
+        'q': f'Краснодар, {address}',
+        'api_key': api_key,
+        'format': 'json',
+        'addressdetails': 1,
+        'limit': 1,
+        'countrycodes': 'ru',
+        'accept-language': 'ru',
+    })
+    url = f'https://geocode.maps.co/search?{query}'
     try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'biznest-geocoder/1.0'})
         with urllib.request.urlopen(req, timeout=10) as resp:
-            result = json.loads(resp.read())
-            suggestions = result.get('suggestions', [])
-            if not suggestions:
-                return {}
-            return suggestions[0].get('data', {})
+            results = json.loads(resp.read())
+        if not results:
+            return {}
+        addr = results[0].get('address', {})
+        return {
+            'display_name': results[0].get('display_name', ''),
+            'suburb': addr.get('suburb', ''),
+            'neighbourhood': addr.get('neighbourhood', ''),
+            'quarter': addr.get('quarter', ''),
+            'city_district': addr.get('city_district', ''),
+        }
     except urllib.error.HTTPError as e:
         body = e.read(300).decode('utf-8', errors='replace')
         return {'error': f'HTTP {e.code}: {body[:150]}'}
@@ -117,8 +121,17 @@ def _geocode_one(address: str, api_key: str) -> dict:
         return {'error': str(e)}
 
 
-def _detect_district(search_str: str) -> str | None:
-    """Определяет район из нашего справочника по строке поиска."""
+def _detect_district(geo: dict) -> str | None:
+    """Определяет район из нашего справочника по полям OSM-ответа."""
+    if not geo:
+        return None
+    search_str = ' '.join(filter(None, [
+        geo.get('suburb', ''),
+        geo.get('neighbourhood', ''),
+        geo.get('quarter', ''),
+        geo.get('city_district', ''),
+        geo.get('display_name', ''),
+    ]))
     if not search_str:
         return None
     s = search_str.lower()
@@ -129,7 +142,7 @@ def _detect_district(search_str: str) -> str | None:
 
 
 def handler(event: dict, context) -> dict:
-    """Стандартизирует адреса объектов через DaData и исправляет районы пакетно."""
+    """Геокодирует адреса объектов через geocode.maps.co и исправляет районы."""
 
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
@@ -144,10 +157,9 @@ def handler(event: dict, context) -> dict:
     action = body.get('action', 'preview')
     filter_ids = body.get('ids')
 
-    api_key = os.environ.get('DADATA_API_KEY', '')
-    secret_key = os.environ.get('DADATA_SECRET_KEY', '')
-    if not api_key or not secret_key:
-        return _ok({'error': 'DADATA_API_KEY или DADATA_SECRET_KEY не заданы'}, 500)
+    api_key = os.environ.get('MAPS_CO_API_KEY', '')
+    if not api_key:
+        return _ok({'error': 'MAPS_CO_API_KEY не задан'}, 500)
 
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -176,35 +188,22 @@ def handler(event: dict, context) -> dict:
         district_old = row['district']
 
         geo = _geocode_one(address, api_key)
+        time.sleep(1.1)
 
         if 'error' in geo:
             errors.append({'id': lid, 'address': address, 'error': geo['error']})
             continue
 
-        city_district = geo.get('city_district', '') or ''
-        city_area = geo.get('city_area', '') or ''
-        settlement = geo.get('settlement_with_type', '') or ''
-        qc = geo.get('qc', -1)
-
-        if qc == 2:
-            errors.append({'id': lid, 'address': address, 'error': 'Адрес не распознан DaData (qc=2)'})
-            continue
-
-        # DaData не заполняет city_district для Краснодара — ищем по всем текстовым полям
-        search_str = ' '.join(filter(None, [city_district, city_area, settlement,
-            geo.get('street', ''), geo.get('area', ''), geo.get('result', '')]))
-        district_new = _detect_district(search_str)
+        district_new = _detect_district(geo)
 
         entry = {
             'id': lid,
             'address': address,
             'district_old': district_old,
             'district_new': district_new,
-            'city_district': city_district,
-            'city_area': city_area,
-            'settlement': settlement,
-            'geo_result': geo.get('result', ''),
-            'qc': qc,
+            'osm_suburb': geo.get('suburb', ''),
+            'osm_neighbourhood': geo.get('neighbourhood', ''),
+            'osm_quarter': geo.get('quarter', ''),
             'changed': district_new is not None and district_new != district_old,
         }
 

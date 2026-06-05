@@ -1,10 +1,10 @@
 {
   "tests": [
     {
-      "name": "Preview geocoding",
+      "name": "Preview geocoding single",
       "method": "POST",
       "path": "/",
-      "body": {"action": "preview"},
+      "body": {"action": "preview", "ids": [60]},
       "expectedStatus": 200,
       "expectedBody": {"action": "preview"},
       "bodyMatcher": "partial"
