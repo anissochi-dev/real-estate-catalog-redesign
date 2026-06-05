@@ -8,6 +8,7 @@ import DistrictsTable from './districts/DistrictsTable';
 import AiResultGrid, { AiDistrict } from './districts/AiResultGrid';
 
 const DISTRICT_AI_URL = 'https://functions.poehali.dev/eddffe59-b37d-425e-90a3-59d12d44623f';
+const GEO_FIX_URL = 'https://functions.poehali.dev/abcb8991-211b-4918-a262-acf6aa113ff5';
 
 type AiTab = 'auto' | 'text';
 
@@ -33,6 +34,37 @@ export default function DistrictsAdmin() {
   const [editSaving, setEditSaving] = useState(false);
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  // Исправление районов
+  const [geoFixLoading, setGeoFixLoading] = useState(false);
+  const [geoFixResult, setGeoFixResult] = useState<{ changed_count: number; unchanged_count: number; not_found_count: number; changed: { id: number; address: string; district_old: string; district_new: string }[] } | null>(null);
+  const [geoFixApplying, setGeoFixApplying] = useState(false);
+
+  const handleGeoFixPreview = async () => {
+    setGeoFixLoading(true); setGeoFixResult(null);
+    try {
+      const res = await fetch(GEO_FIX_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'preview' }) });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || `Ошибка ${res.status}`);
+      setGeoFixResult(data);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Ошибка проверки');
+    } finally { setGeoFixLoading(false); }
+  };
+
+  const handleGeoFixApply = async () => {
+    if (!window.confirm(`Применить исправления районов для ${geoFixResult?.changed_count} объектов?`)) return;
+    setGeoFixApplying(true);
+    try {
+      const res = await fetch(GEO_FIX_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'apply' }) });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || `Ошибка ${res.status}`);
+      toast.success(`Исправлено районов: ${data.changed_count}`);
+      setGeoFixResult(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Ошибка применения');
+    } finally { setGeoFixApplying(false); }
+  };
 
   // ИИ-панель
   const [showAiPanel, setShowAiPanel] = useState(false);
@@ -233,6 +265,11 @@ export default function DistrictsAdmin() {
             <Icon name="Wand2" size={14} />
             Добавить через ИИ
           </button>
+          <button type="button" onClick={handleGeoFixPreview} disabled={geoFixLoading}
+            className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition disabled:opacity-50">
+            <Icon name={geoFixLoading ? 'Loader2' : 'MapPinCheck'} size={14} className={geoFixLoading ? 'animate-spin' : ''} />
+            Исправить районы объектов
+          </button>
           <button type="button" onClick={load} disabled={loading}
             className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl border border-border hover:bg-muted/50 transition disabled:opacity-50">
             <Icon name={loading ? 'Loader2' : 'RefreshCw'} size={14} className={loading ? 'animate-spin' : ''} />
@@ -251,6 +288,61 @@ export default function DistrictsAdmin() {
       {error && (
         <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center gap-2">
           <Icon name="AlertCircle" size={16} /> {error}
+        </div>
+      )}
+
+      {/* Панель результатов geo-fix */}
+      {geoFixResult && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 space-y-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <div className="font-semibold text-emerald-800 flex items-center gap-2">
+                <Icon name="MapPinCheck" size={16} /> Результат проверки районов
+              </div>
+              <div className="text-sm text-emerald-700 mt-0.5">
+                Найдено исправлений: <b>{geoFixResult.changed_count}</b> &nbsp;·&nbsp;
+                Верных: <b>{geoFixResult.unchanged_count}</b> &nbsp;·&nbsp;
+                Не определено: <b>{geoFixResult.not_found_count}</b>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setGeoFixResult(null)}
+                className="text-sm px-3 py-1.5 rounded-lg border border-emerald-300 text-emerald-700 hover:bg-emerald-100 transition">
+                Отмена
+              </button>
+              {geoFixResult.changed_count > 0 && (
+                <button onClick={handleGeoFixApply} disabled={geoFixApplying}
+                  className="text-sm px-4 py-1.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition disabled:opacity-50 flex items-center gap-1.5">
+                  <Icon name={geoFixApplying ? 'Loader2' : 'Check'} size={14} className={geoFixApplying ? 'animate-spin' : ''} />
+                  Применить {geoFixResult.changed_count} исправлений
+                </button>
+              )}
+            </div>
+          </div>
+          {geoFixResult.changed.length > 0 && (
+            <div className="bg-white rounded-xl border border-emerald-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-emerald-50 text-emerald-700 text-xs uppercase tracking-wide">
+                  <tr>
+                    <th className="px-3 py-2 text-left">ID</th>
+                    <th className="px-3 py-2 text-left">Адрес</th>
+                    <th className="px-3 py-2 text-left">Было</th>
+                    <th className="px-3 py-2 text-left">Станет</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-emerald-100">
+                  {geoFixResult.changed.map(r => (
+                    <tr key={r.id}>
+                      <td className="px-3 py-2 text-muted-foreground font-mono">#{r.id}</td>
+                      <td className="px-3 py-2 max-w-[200px] truncate">{r.address}</td>
+                      <td className="px-3 py-2 text-red-600 line-through text-xs">{r.district_old}</td>
+                      <td className="px-3 py-2 text-emerald-700 font-semibold text-xs">{r.district_new}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
