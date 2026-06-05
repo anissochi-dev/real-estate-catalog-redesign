@@ -93,7 +93,10 @@ def _geocode_yandex(address: str, api_key: str) -> dict | None:
     })
     url = f'https://geocode-maps.yandex.ru/1.x/?{query}'
     try:
-        req = urllib.request.Request(url)
+        req = urllib.request.Request(url, headers={
+            'Referer': 'https://biznest.ru',
+            'User-Agent': 'Mozilla/5.0',
+        })
         with urllib.request.urlopen(req, timeout=8) as resp:
             data = json.loads(resp.read())
 
