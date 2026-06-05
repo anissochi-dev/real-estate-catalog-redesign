@@ -1,5 +1,5 @@
 """
-Business: Геокодирование адресов объектов через geocode.maps.co (OpenStreetMap) и автоисправление района.
+Business: Определение района объекта по справочнику улиц (таблица street_district_map) и автоисправление.
 Запускается вручную: action=preview (показать что изменится) или action=apply (применить).
 Args: event с body {action: 'preview'|'apply', ids?: [int, ...]}, X-Auth-Token; context
 Returns: список изменений {id, address, district_old, district_new}
@@ -7,10 +7,7 @@ Returns: список изменений {id, address, district_old, district_ne
 
 import json
 import os
-import urllib.request
-import urllib.parse
-import urllib.error
-import time
+import re
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -22,63 +19,6 @@ CORS = {
     'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token',
 }
 
-# Карта: ключевые слова из ответа OSM → название района в БД
-DISTRICT_MAP = [
-    # Карасунский округ
-    ('Пашковский', 'Пашковский (ПМР)'),
-    ('Фестивальный', 'Фестивальный (ФМР)'),
-    ('Юбилейный', 'Юбилейный (ЮМР)'),
-    ('Черёмушки', 'Черёмушки (ЧМР)'),
-    ('Черемушки', 'Черёмушки (ЧМР)'),
-    ('Комсомольский', 'Комсомольский (КМР)'),
-    ('Школьный', 'Школьный (ШМР)'),
-    ('Славянский', 'Славянский (СМР)'),
-    ('Музыкальный', 'Музыкальный'),
-    ('Микрохирургия', 'Микрохирургия глаза (МХГ)'),
-    ('Панорама', 'Панорама (Стадион Краснодар)'),
-    ('40 лет Победы', '40 лет Победы'),
-    ('КСК', 'Камвольно-суконный комбинат (КСК)'),
-    ('Камвольно', 'Камвольно-суконный комбинат (КСК)'),
-    ('РИП', 'Завод радиоизмерительных приборов (РИП)'),
-    # Прикубанский округ
-    ('Гидростроителей', 'Гидростроителей (ГМР)'),
-    ('Губернский', 'Губернский'),
-    ('Немецкая деревня', 'Немецкая деревня'),
-    ('Авиагородок', 'Авиагородок'),
-    ('Молодёжный', 'Молодёжный'),
-    ('Молодежный', 'Молодёжный'),
-    ('Жукова', 'Энка (Жукова)'),
-    ('Энка', 'Энка (Жукова)'),
-    ('Лазурный', 'Лазурный п.'),
-    ('Российский', 'Российский п.'),
-    ('Победитель', 'Победитель п.'),
-    ('Плодородный', 'Плодородный п.'),
-    ('Краснодарский п', 'Краснодарский п.'),
-    ('Индустриальный', 'Индустриальный п.'),
-    ('Берёзовый', 'Берёзовый п.'),
-    ('Березовый', 'Берёзовый п.'),
-    ('Колосистый', 'Колосистый п.'),
-    ('Зиповский', 'Завод измерительных приборов (ЗИП)'),
-    ('ЗИП', 'Завод измерительных приборов (ЗИП)'),
-    ('Витаминкомбинат', 'Витаминкомбинат'),
-    ('9-й километр', '9-й километр'),
-    ('Западный обход', 'Западный обход'),
-    ('ТЭЦ', 'Теплоэлектростанция (ТЭЦ)'),
-    ('ККБ', 'Краевая клиническая больница (ККБ)'),
-    ('Елизаветинск', 'Индустриальный п.'),
-    # Западный округ
-    ('Кожевенный', 'Кожевенный завод (Кожзавод)'),
-    ('Покровка', 'Кожевенный завод (Кожзавод)'),
-    ('СХИ', 'Сельскохозяйственный институт (СХИ)'),
-    ('Сельскохозяйственный', 'Сельскохозяйственный институт (СХИ)'),
-    # Центральный округ
-    ('Табачная', 'Табачная фабрика (Табачка)'),
-    ('ХБК', 'Хлопчато-бумажный комбинат (ХБК)'),
-    ('Хлопчато', 'Хлопчато-бумажный комбинат (ХБК)'),
-    ('Дубинка', 'Центральный (ЦМР)'),
-    ('Центральный', 'Центральный (ЦМР)'),
-]
-
 
 def _ok(body, status=200):
     return {
@@ -88,61 +28,17 @@ def _ok(body, status=200):
     }
 
 
-def _geocode_one(address: str, api_key: str) -> dict:
-    """Геокодирует адрес через geocode.maps.co (OSM Nominatim). Возвращает поля адреса."""
-    query = urllib.parse.urlencode({
-        'q': f'Краснодар, {address}',
-        'api_key': api_key,
-        'format': 'json',
-        'addressdetails': 1,
-        'limit': 1,
-        'countrycodes': 'ru',
-        'accept-language': 'ru',
-    })
-    url = f'https://geocode.maps.co/search?{query}'
-    try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'biznest-geocoder/1.0'})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            results = json.loads(resp.read())
-        if not results:
-            return {}
-        addr = results[0].get('address', {})
-        return {
-            'display_name': results[0].get('display_name', ''),
-            'suburb': addr.get('suburb', ''),
-            'neighbourhood': addr.get('neighbourhood', ''),
-            'quarter': addr.get('quarter', ''),
-            'city_district': addr.get('city_district', ''),
-        }
-    except urllib.error.HTTPError as e:
-        body = e.read(300).decode('utf-8', errors='replace')
-        return {'error': f'HTTP {e.code}: {body[:150]}'}
-    except Exception as e:
-        return {'error': str(e)}
-
-
-def _detect_district(geo: dict) -> str | None:
-    """Определяет район из нашего справочника по полям OSM-ответа."""
-    if not geo:
-        return None
-    search_str = ' '.join(filter(None, [
-        geo.get('suburb', ''),
-        geo.get('neighbourhood', ''),
-        geo.get('quarter', ''),
-        geo.get('city_district', ''),
-        geo.get('display_name', ''),
-    ]))
-    if not search_str:
-        return None
-    s = search_str.lower()
-    for keyword, district_name in DISTRICT_MAP:
-        if keyword.lower() in s:
-            return district_name
-    return None
+def _extract_street(address: str) -> str:
+    """Извлекает название улицы из адреса — убирает номер дома и тип улицы."""
+    # Убираем номер дома: ", 123к4" или ", 12/5" и т.д.
+    street = re.sub(r',?\s*\d+.*$', '', address).strip()
+    # Убираем тип улицы в конце: "улица", "проспект", "шоссе", "переулок", "бульвар", "набережная"
+    street = re.sub(r'\s+(улица|проспект|шоссе|переулок|бульвар|аллея|проезд)$', '', street, flags=re.IGNORECASE).strip()
+    return street
 
 
 def handler(event: dict, context) -> dict:
-    """Геокодирует адреса объектов через geocode.maps.co и исправляет районы."""
+    """Определяет районы объектов по справочнику улиц и исправляет их в БД."""
 
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
@@ -157,12 +53,16 @@ def handler(event: dict, context) -> dict:
     action = body.get('action', 'preview')
     filter_ids = body.get('ids')
 
-    api_key = os.environ.get('MAPS_CO_API_KEY', '')
-    if not api_key:
-        return _ok({'error': 'MAPS_CO_API_KEY не задан'}, 500)
-
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor(cursor_factory=RealDictCursor)
+
+    # Загружаем справочник улиц (первая запись на каждый паттерн — приоритетная)
+    cur.execute(
+        f"SELECT DISTINCT ON (street_pattern) street_pattern, district "
+        f"FROM {SCHEMA}.street_district_map "
+        f"ORDER BY street_pattern, id ASC"
+    )
+    street_map = {row['street_pattern'].lower(): row['district'] for row in cur.fetchall()}
 
     if filter_ids:
         ids_str = ','.join(str(i) for i in filter_ids)
@@ -180,30 +80,32 @@ def handler(event: dict, context) -> dict:
 
     rows = cur.fetchall()
     results = []
-    errors = []
+    not_found = []
 
     for row in rows:
         lid = row['id']
         address = row['address']
         district_old = row['district']
 
-        geo = _geocode_one(address, api_key)
-        time.sleep(1.1)
+        street = _extract_street(address)
+        street_lower = street.lower()
 
-        if 'error' in geo:
-            errors.append({'id': lid, 'address': address, 'error': geo['error']})
-            continue
+        # Точное совпадение
+        district_new = street_map.get(street_lower)
 
-        district_new = _detect_district(geo)
+        # Если не нашли точно — ищем по вхождению паттерна в адрес
+        if not district_new:
+            for pattern, district in street_map.items():
+                if pattern in street_lower:
+                    district_new = district
+                    break
 
         entry = {
             'id': lid,
             'address': address,
+            'street': street,
             'district_old': district_old,
             'district_new': district_new,
-            'osm_suburb': geo.get('suburb', ''),
-            'osm_neighbourhood': geo.get('neighbourhood', ''),
-            'osm_quarter': geo.get('quarter', ''),
             'changed': district_new is not None and district_new != district_old,
         }
 
@@ -213,7 +115,10 @@ def handler(event: dict, context) -> dict:
                 f"UPDATE {SCHEMA}.listings SET district = '{dn}' WHERE id = {lid}"
             )
 
-        results.append(entry)
+        if district_new is None:
+            not_found.append(entry)
+        else:
+            results.append(entry)
 
     if action == 'apply':
         conn.commit()
@@ -221,15 +126,14 @@ def handler(event: dict, context) -> dict:
     conn.close()
 
     changed = [r for r in results if r['changed']]
-    not_detected = [r for r in results if not r['changed'] and r['district_new'] is None]
+    unchanged = [r for r in results if not r['changed']]
 
     return _ok({
         'action': action,
-        'total': len(results),
+        'total': len(results) + len(not_found),
         'changed_count': len(changed),
-        'not_detected_count': len(not_detected),
-        'error_count': len(errors),
+        'unchanged_count': len(unchanged),
+        'not_found_count': len(not_found),
         'changed': changed,
-        'not_detected': not_detected,
-        'errors': errors,
+        'not_found': not_found,
     })
