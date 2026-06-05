@@ -236,14 +236,29 @@ export function useListingsState() {
     return parts.join('; ');
   };
 
+  // Проверка обязательных полей перед генерацией ИИ
+  const checkRequiredForAi = (e: Partial<Listing>): string | null => {
+    const missing: string[] = [];
+    if (!e.deal) missing.push('Тип сделки');
+    if (!e.category) missing.push('Категория объекта');
+    if (!e.address && !e.district) missing.push('Адрес или район');
+    if (!e.area) missing.push('Площадь');
+    if (missing.length > 0) {
+      return `Для генерации ИИ необходимо заполнить:\n• ${missing.join('\n• ')}`;
+    }
+    return null;
+  };
+
   const aiDescribe = async () => {
     if (!editing) return;
+    const err = checkRequiredForAi(editing);
+    if (err) { alert(err); return; }
     setAiLoading(true);
     try {
       // Цену в описание НЕ передаём — по требованию её не должно быть в тексте
       const prompt = buildListingContext(editing, false);
       const r = await aiApi.ask('describe', prompt);
-      setEditing({ ...editing, description: (r.text || '').slice(0, 3000) });
+      setEditing({ ...editing, description: (r.text || '').slice(0, 3500) });
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Ошибка ИИ');
     } finally {
@@ -253,6 +268,8 @@ export function useListingsState() {
 
   const aiTitle = async () => {
     if (!editing) return;
+    const err = checkRequiredForAi(editing);
+    if (err) { alert(err); return; }
     setAiTitleLoading(true);
     try {
       const prompt = buildListingContext(editing, false);
