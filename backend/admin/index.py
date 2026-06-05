@@ -2189,6 +2189,10 @@ def _listings(cur, conn, method, rid, event, user):
             _link_phone_to_listing(cur, owner_pc_id, new_id, 'owner')
         if owner_pc2_id:
             _link_phone_to_listing(cur, owner_pc2_id, new_id, 'owner')
+        # Инвалидируем кэш sitemap — новый объект попадёт при следующем запросе
+        cur.execute(
+            f"UPDATE {SCHEMA}.seo_artifacts SET urls_count = 0 WHERE kind = 'sitemap'"
+        )
         conn.commit()
         return _ok({'id': new_id, 'success': True, 'slug': new_slug, 'owner_phone_contact_id': owner_pc_id})
 
@@ -2298,6 +2302,11 @@ def _listings(cur, conn, method, rid, event, user):
         if user and user.get('id'):
             fields.append(f"last_edited_by = {int(user['id'])}")
         cur.execute(f"UPDATE {SCHEMA}.listings SET {', '.join(fields)} WHERE id = {int(rid)}")
+        # Инвалидируем кэш sitemap если изменился статус или slug
+        if 'status' in body or 'title' in body:
+            cur.execute(
+                f"UPDATE {SCHEMA}.seo_artifacts SET urls_count = 0 WHERE kind = 'sitemap'"
+            )
 
         # ── Считаем diff и пишем подробную историю ─────────────────────────────
         try:
@@ -2341,6 +2350,7 @@ def _listings(cur, conn, method, rid, event, user):
                 return _err(500, f'Ошибка удаления: {type(e).__name__}: {str(e)[:200]}')
         else:
             cur.execute(f"UPDATE {SCHEMA}.listings SET status = 'archived' WHERE id = {int(rid)}")
+        cur.execute(f"UPDATE {SCHEMA}.seo_artifacts SET urls_count = 0 WHERE kind = 'sitemap'")
         conn.commit()
         return _ok({'success': True})
 

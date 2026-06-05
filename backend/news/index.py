@@ -778,6 +778,10 @@ def handler(event: dict, context) -> dict:
                     f"UPDATE {SCHEMA}.news SET is_published = {state}, published_at = {pub_at}, "
                     f"updated_at = NOW() WHERE id = {nid}"
                 )
+                # Инвалидируем кэш sitemap — новость появится/исчезнет при следующем запросе
+                cur.execute(
+                    f"UPDATE {SCHEMA}.seo_artifacts SET urls_count = 0 WHERE kind = 'sitemap'"
+                )
                 conn.commit()
                 return _ok({'ok': True})
 

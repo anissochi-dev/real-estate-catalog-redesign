@@ -241,18 +241,38 @@ def handler(event: dict, context) -> dict:
                 }
 
             if action == 'sitemap_xml':
-                cur.execute(f"SELECT content, urls_count FROM {SCHEMA}.seo_artifacts WHERE kind='sitemap'")
+                from datetime import datetime, timezone, timedelta
+                cur.execute(
+                    f"SELECT content, urls_count, updated_at FROM {SCHEMA}.seo_artifacts WHERE kind='sitemap'"
+                )
                 row = cur.fetchone()
-                has_cache = row and row.get('content') and int(row.get('urls_count') or 0) > 0
-                if has_cache:
-                    xml = row['content']
+                cache_age_minutes = None
+                if row and row.get('updated_at'):
+                    try:
+                        upd = row['updated_at']
+                        if upd.tzinfo is None:
+                            upd = upd.replace(tzinfo=timezone.utc)
+                        cache_age_minutes = (datetime.now(timezone.utc) - upd).total_seconds() / 60
+                    except Exception:
+                        cache_age_minutes = None
+
+                # Пересобираем если: кэш пуст, или старше 60 минут
+                cache_stale = (
+                    not row
+                    or not row.get('content')
+                    or int(row.get('urls_count') or 0) == 0
+                    or (cache_age_minutes is not None and cache_age_minutes > 60)
+                )
+                if cache_stale:
+                    _save_sitemap(cur, conn)
+                    cur.execute(f"SELECT content FROM {SCHEMA}.seo_artifacts WHERE kind='sitemap'")
+                    fresh = cur.fetchone()
+                    xml = fresh['content'] if fresh else ''
                 else:
-                    # Кэш пуст — генерируем и сохраняем сразу
-                    r = _save_sitemap(cur, conn)
-                    xml, _ = _build_sitemap_xml(cur)
+                    xml = row['content']
                 return {
                     'statusCode': 200,
-                    'headers': {**CORS, 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=1800'},
+                    'headers': {**CORS, 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600'},
                     'body': xml,
                 }
 
