@@ -2097,7 +2097,7 @@ def _listings(cur, conn, method, rid, event, user):
             f"LEFT JOIN {SCHEMA}.phone_contacts pc ON pc.id = l.owner_phone_contact_id "
             f"LEFT JOIN ("
             f"  SELECT listing_id, SUM(count) AS views FROM {SCHEMA}.listing_stats "
-            f"  WHERE event_type IN ('view','site_view','open') GROUP BY listing_id"
+            f"  WHERE event_type IN ('view','site_view','open','view_site') GROUP BY listing_id"
             f") sv ON sv.listing_id = l.id "
             f"LEFT JOIN ("
             f"  SELECT listing_id, SUM(count) AS calls FROM {SCHEMA}.listing_stats "
