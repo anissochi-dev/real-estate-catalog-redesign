@@ -1,5 +1,5 @@
 """
-Business: Геокодирование адресов объектов через Nominatim (OpenStreetMap) и автоисправление района.
+Business: Геокодирование адресов объектов через Яндекс Геокодер и автоисправление района.
 Запускается вручную: action=preview (показать что изменится) или action=apply (применить).
 Args: event с body {action: 'preview'|'apply', ids?: [int, ...]}, X-Auth-Token; context
 Returns: список изменений {id, address, district_old, district_new}
@@ -7,7 +7,6 @@ Returns: список изменений {id, address, district_old, district_ne
 
 import json
 import os
-import time
 import urllib.request
 import urllib.parse
 import psycopg2
@@ -24,9 +23,8 @@ CORS = {
 # Карта: ключевые слова из ответа геокодера → название района в БД
 # Порядок важен: более специфичные — выше
 DISTRICT_MAP = [
-    # Пашковский с/о — Карасунский округ
-    ('Пашковский', 'Пашковский (ПМР)'),
     # Карасунский округ
+    ('Пашковский', 'Пашковский (ПМР)'),
     ('Фестивальный', 'Фестивальный (ФМР)'),
     ('Юбилейный', 'Юбилейный (ЮМР)'),
     ('Черёмушки', 'Черёмушки (ЧМР)'),
@@ -36,6 +34,10 @@ DISTRICT_MAP = [
     ('Музыкальный', 'Музыкальный'),
     ('Микрохирургия', 'Микрохирургия глаза (МХГ)'),
     ('Панорама', 'Панорама (Стадион Краснодар)'),
+    ('40 лет Победы', '40 лет Победы'),
+    ('КСК', 'Камвольно-суконный комбинат (КСК)'),
+    ('Камвольно', 'Камвольно-суконный комбинат (КСК)'),
+    ('РИП', 'Завод радиоизмерительных приборов (РИП)'),
     # Прикубанский округ
     ('Гидростроителей', 'Гидростроителей (ГМР)'),
     ('Губернский', 'Губернский'),
@@ -43,6 +45,7 @@ DISTRICT_MAP = [
     ('Авиагородок', 'Авиагородок'),
     ('Молодёжный', 'Молодёжный'),
     ('Жукова', 'Энка (Жукова)'),
+    ('Энка', 'Энка (Жукова)'),
     ('Лазурный', 'Лазурный п.'),
     ('Российский', 'Российский п.'),
     ('Победитель', 'Победитель п.'),
@@ -52,10 +55,21 @@ DISTRICT_MAP = [
     ('Берёзовый', 'Берёзовый п.'),
     ('Колосистый', 'Колосистый п.'),
     ('Зиповский', 'Завод измерительных приборов (ЗИП)'),
+    ('ЗИП', 'Завод измерительных приборов (ЗИП)'),
+    ('Витаминкомбинат', 'Витаминкомбинат'),
+    ('9-й километр', '9-й километр'),
+    ('Западный обход', 'Западный обход'),
+    ('ТЭЦ', 'Теплоэлектростанция (ТЭЦ)'),
+    ('ККБ', 'Краевая клиническая больница (ККБ)'),
     ('Елизаветинск', 'Индустриальный п.'),
     # Западный округ
     ('Кожевенный', 'Кожевенный завод (Кожзавод)'),
-    # Центральный округ — последний
+    ('СХИ', 'Сельскохозяйственный институт (СХИ)'),
+    ('Сельскохозяйственный', 'Сельскохозяйственный институт (СХИ)'),
+    # Центральный округ
+    ('Табачная', 'Табачная фабрика (Табачка)'),
+    ('ХБК', 'Хлопчато-бумажный комбинат (ХБК)'),
+    ('Хлопчато', 'Хлопчато-бумажный комбинат (ХБК)'),
     ('Центральный', 'Центральный (ЦМР)'),
 ]
 
@@ -68,36 +82,47 @@ def _ok(body, status=200):
     }
 
 
-def _geocode_nominatim(address: str) -> dict | None:
-    """Геокодирует адрес через Nominatim (OSM). Возвращает словарь с полями адреса."""
+def _geocode_yandex(address: str, api_key: str) -> dict | None:
+    """Геокодирует адрес через Яндекс Геокодер. Возвращает словарь с полями адреса."""
     query = urllib.parse.urlencode({
-        'q': f'Краснодар, {address}',
+        'apikey': api_key,
+        'geocode': f'Краснодар, {address}',
         'format': 'json',
-        'addressdetails': 1,
-        'limit': 1,
-        'countrycodes': 'ru',
-        'accept-language': 'ru',
+        'results': 1,
+        'lang': 'ru_RU',
     })
-    url = f'https://nominatim.openstreetmap.org/search?{query}'
+    url = f'https://geocode-maps.yandex.ru/1.x/?{query}'
     try:
-        req = urllib.request.Request(
-            url,
-            headers={'User-Agent': 'biznest-geocoder/1.0 (krasnodar real estate)'}
-        )
+        req = urllib.request.Request(url)
         with urllib.request.urlopen(req, timeout=8) as resp:
             data = json.loads(resp.read())
-        if not data:
+
+        members = (
+            data
+            .get('response', {})
+            .get('GeoObjectCollection', {})
+            .get('featureMember', [])
+        )
+        if not members:
             return None
-        item = data[0]
-        addr = item.get('address', {})
-        return {
-            'display_name': item.get('display_name', ''),
-            'suburb': addr.get('suburb', ''),
-            'quarter': addr.get('quarter', ''),
-            'neighbourhood': addr.get('neighbourhood', ''),
-            'city_district': addr.get('city_district', ''),
-            'road': addr.get('road', ''),
+
+        geo_obj = members[0].get('GeoObject', {})
+        meta = geo_obj.get('metaDataProperty', {}).get('GeocoderMetaData', {})
+        address_meta = meta.get('Address', {})
+        components = address_meta.get('Components', [])
+
+        result = {
+            'display_name': geo_obj.get('description', '') + ' ' + geo_obj.get('name', ''),
+            'kind': meta.get('kind', ''),
+            'precision': meta.get('precision', ''),
         }
+
+        for comp in components:
+            kind = comp.get('kind', '')
+            name = comp.get('name', '')
+            result[kind] = name
+
+        return result
     except Exception as e:
         return {'error': str(e)}
 
@@ -106,13 +131,21 @@ def _detect_district(geo: dict) -> str | None:
     """Определяет район из нашего справочника по данным геокодера."""
     if not geo or 'error' in geo:
         return None
-    search_str = ' '.join([
-        geo.get('suburb', ''),
-        geo.get('quarter', ''),
-        geo.get('neighbourhood', ''),
-        geo.get('city_district', ''),
+
+    # Яндекс возвращает district, locality_name, display_name
+    search_parts = [
+        geo.get('district', ''),
+        geo.get('locality', ''),
         geo.get('display_name', ''),
-    ])
+        geo.get('Street', ''),
+    ]
+    # Также ищем по всем компонентам
+    for key, val in geo.items():
+        if isinstance(val, str):
+            search_parts.append(val)
+
+    search_str = ' '.join(search_parts)
+
     for keyword, district_name in DISTRICT_MAP:
         if keyword.lower() in search_str.lower():
             return district_name
@@ -120,7 +153,7 @@ def _detect_district(geo: dict) -> str | None:
 
 
 def handler(event: dict, context) -> dict:
-    """Геокодирует адреса объектов через OpenStreetMap и исправляет районы."""
+    """Геокодирует адреса объектов через Яндекс Геокодер и исправляет районы."""
 
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
@@ -134,6 +167,10 @@ def handler(event: dict, context) -> dict:
 
     action = body.get('action', 'preview')
     filter_ids = body.get('ids')
+
+    api_key = os.environ.get('YANDEX_GEOCODER_KEY', '')
+    if not api_key:
+        return _ok({'error': 'YANDEX_GEOCODER_KEY не задан'}, 500)
 
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -161,8 +198,7 @@ def handler(event: dict, context) -> dict:
         address = row['address']
         district_old = row['district']
 
-        geo = _geocode_nominatim(address)
-        time.sleep(1.1)  # Nominatim: не более 1 запроса в секунду
+        geo = _geocode_yandex(address, api_key)
 
         if geo and 'error' in geo:
             errors.append({'id': lid, 'address': address, 'error': geo['error']})
@@ -175,8 +211,7 @@ def handler(event: dict, context) -> dict:
             'address': address,
             'district_old': district_old,
             'district_new': district_new,
-            'geo_suburb': geo.get('suburb', '') if geo else '',
-            'geo_quarter': geo.get('quarter', '') if geo else '',
+            'geo_district': geo.get('district', '') if geo else '',
             'geo_display': (geo.get('display_name', '') if geo else '')[:120],
             'changed': district_new is not None and district_new != district_old,
         }
