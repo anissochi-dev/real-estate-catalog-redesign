@@ -10,6 +10,7 @@ import os
 import urllib.request
 import urllib.parse
 import urllib.error
+import time
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -191,6 +192,7 @@ def handler(event: dict, context) -> dict:
         district_old = row['district']
 
         geo = _geocode_2gis(address, api_key)
+        time.sleep(0.3)
 
         if geo and 'error' in geo:
             errors.append({'id': lid, 'address': address, 'error': geo['error']})
