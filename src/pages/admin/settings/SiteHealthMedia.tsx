@@ -316,20 +316,18 @@ export function XmlSection({ xml, xmlLoading, loadXml, xmlQuality, xmlQualityLoa
               </div>
               <div className="grid gap-2">
                 {(showAll ? xmlQuality.issues : xmlQuality.issues.slice(0, 10)).map(issue => (
-                  <div key={issue.id} className="flex items-start gap-3 px-3 py-2.5 bg-white border border-border rounded-xl text-sm hover:border-brand-blue/40 transition">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold truncate">{issue.title}</div>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {issue.missing.map(m => (
-                          <span key={m} className="text-xs px-1.5 py-0.5 bg-amber-50 border border-amber-200 text-amber-700 rounded">
-                            {m}
-                          </span>
-                        ))}
-                      </div>
+                  <div key={issue.id} className="flex flex-col gap-2 px-3 py-2.5 bg-white border border-border rounded-xl text-sm hover:border-brand-blue/40 transition">
+                    <div className="font-semibold break-words">{issue.title}</div>
+                    <div className="flex flex-wrap gap-1">
+                      {issue.missing.map(m => (
+                        <span key={m} className="text-xs px-1.5 py-0.5 bg-amber-50 border border-amber-200 text-amber-700 rounded">
+                          {m}
+                        </span>
+                      ))}
                     </div>
                     <button
                       onClick={() => openListing(issue.id)}
-                      className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-brand-blue/10 text-brand-blue text-xs font-semibold hover:bg-brand-blue/20 transition"
+                      className="self-start flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-brand-blue/10 text-brand-blue text-xs font-semibold hover:bg-brand-blue/20 transition"
                     >
                       <Icon name="Pencil" size={12} />
                       Открыть
