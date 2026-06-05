@@ -4,6 +4,7 @@ import { DEAL_LABELS } from './propertyLabels';
 import { formatPhone } from '@/lib/phone';
 import PublicPhoneInput from '@/components/PublicPhoneInput';
 import { fmtListingId } from '@/lib/formatPrice';
+import SmartCaptcha, { CaptchaResult } from '@/components/SmartCaptcha';
 
 interface Props {
   item: ListingDetail;
@@ -13,9 +14,12 @@ interface Props {
   form: { name: string; phone: string; message: string };
   setForm: (f: { name: string; phone: string; message: string }) => void;
   onSubmit: (e: React.FormEvent) => void;
+  captcha: CaptchaResult | null;
+  setCaptcha: (v: CaptchaResult | null) => void;
+  captchaKey: number;
 }
 
-export default function PropertySidebar({ item, agents, sent, sending, form, setForm, onSubmit }: Props) {
+export default function PropertySidebar({ item, agents, sent, sending, form, setForm, onSubmit, captcha, setCaptcha, captchaKey }: Props) {
   const agent = agents[0] || null;
 
   return (
@@ -85,7 +89,8 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
               <textarea placeholder="Комментарий (необязательно)" rows={2}
                 value={form.message} onChange={e => setForm({ ...form, message: e.target.value })}
                 className="w-full px-3 py-2.5 border rounded-lg text-sm" />
-              <button type="submit" disabled={sending}
+              <SmartCaptcha key={captchaKey} fieldCount={3} onVerify={setCaptcha} />
+              <button type="submit" disabled={sending || !captcha?.passed}
                 className="w-full btn-blue text-white py-3 rounded-xl font-semibold disabled:opacity-50 text-sm">
                 {sending ? 'Отправка...' : 'Заказать просмотр'}
               </button>

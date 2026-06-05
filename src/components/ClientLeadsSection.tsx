@@ -50,6 +50,7 @@ export default function ClientLeadsSection({ limit = 6 }: Props) {
           phone: form.phone,
           message: `Предложение объекта по заявке #${offerLead.id} от "${offerLead.name}". ${form.message}`,
           source: 'offer-to-lead',
+          captcha_token: captcha?.token,
         }),
       });
       setSent(true);

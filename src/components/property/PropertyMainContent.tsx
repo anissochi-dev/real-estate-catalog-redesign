@@ -6,6 +6,7 @@ import PropertyMapInfrastructure from '@/components/PropertyMapInfrastructure';
 import SimilarListings from '@/components/SimilarListings';
 import RecentlyViewed from '@/components/RecentlyViewed';
 import CharCount from '@/components/ui/CharCount';
+import SmartCaptcha, { CaptchaResult } from '@/components/SmartCaptcha';
 
 const InvestmentModel = lazy(() => import('@/components/property/InvestmentModel'));
 import {
@@ -23,6 +24,9 @@ interface Props {
   form: { name: string; phone: string; message: string };
   setForm: (f: { name: string; phone: string; message: string }) => void;
   onSubmit: (e: React.FormEvent) => void;
+  captcha: CaptchaResult | null;
+  setCaptcha: (v: CaptchaResult | null) => void;
+  captchaKey: number;
 }
 
 function ParamCard({ icon, label, value }: { icon: string; label: string; value: string }) {
@@ -40,7 +44,7 @@ function ParamCard({ icon, label, value }: { icon: string; label: string; value:
 }
 
 export default function PropertyMainContent({
-  item, dealLabel, typeLabel, sent, sending, form, setForm, onSubmit,
+  item, dealLabel, typeLabel, sent, sending, form, setForm, onSubmit, captcha, setCaptcha, captchaKey,
 }: Props) {
   const itemExt = item as ListingDetail & { condition?: string; parking?: string; entrance?: string; propertyRights?: string; landStatus?: string; landVri?: string };
   const isLand = item.type === 'land';
@@ -222,7 +226,10 @@ export default function PropertyMainContent({
                 value={form.message} onChange={e => setForm({ ...form, message: (e.target as HTMLTextAreaElement).value })}
                 className="text-sm" />
             </div>
-            <button type="submit" disabled={sending}
+            <div className="sm:col-span-2">
+              <SmartCaptcha key={captchaKey} fieldCount={3} onVerify={setCaptcha} />
+            </div>
+            <button type="submit" disabled={sending || !captcha?.passed}
               className="sm:col-span-2 w-full btn-blue text-white py-2.5 rounded-xl font-semibold disabled:opacity-50 text-sm">
               {sending ? 'Отправка...' : 'Заказать просмотр'}
             </button>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchListingById, ListingDetail, sendLead, fetchAgents, Agent } from '@/lib/api';
 import { fireLeadConversion } from '@/lib/analytics';
+import SmartCaptcha, { CaptchaResult } from '@/components/SmartCaptcha';
 import { recordView } from '@/components/RecentlyViewed';
 import { extractIdFromSlug } from '@/lib/slug';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -41,6 +42,8 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   const [aiOpen, setAiOpen] = useState(false);
   const [faq, setFaq] = useState<{ question: string; answer: string }[]>([]);
   const [faqLoading, setFaqLoading] = useState(false);
+  const [captcha, setCaptcha] = useState<CaptchaResult | null>(null);
+  const [captchaKey, setCaptchaKey] = useState(0);
 
   const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
 
@@ -173,11 +176,14 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!captcha?.passed) return;
     setSending(true);
     try {
-      await sendLead({ name: form.name, phone: form.phone, message: form.message, listing_id: item.id, source: 'property-page', object_url: window.location.href });
+      await sendLead({ name: form.name, phone: form.phone, message: form.message, listing_id: item.id, source: 'property-page', object_url: window.location.href, captcha_token: captcha.token });
       setSent(true);
       fireLeadConversion();
+      setCaptcha(null);
+      setCaptchaKey(k => k + 1);
     } finally {
       setSending(false);
     }
@@ -369,6 +375,9 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
               form={form}
               setForm={setForm}
               onSubmit={submit}
+              captcha={captcha}
+              setCaptcha={setCaptcha}
+              captchaKey={captchaKey}
             />
           </div>
           <PropertySidebar
@@ -379,6 +388,9 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
             form={form}
             setForm={setForm}
             onSubmit={submit}
+            captcha={captcha}
+            setCaptcha={setCaptcha}
+            captchaKey={captchaKey}
           />
         </div>
 

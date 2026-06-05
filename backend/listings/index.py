@@ -78,16 +78,18 @@ def handler(event: dict, context) -> dict:
 
         # ── consent_check: проверяем по IP есть ли согласие за последний год ──
         if action == 'consent_check':
-            if not ip_e:
+            if not ip or not ip_e:
                 return _ok({'accepted': False})
+            # Rate-limit: не более 30 проверок с одного IP в минуту
             conn = psycopg2.connect(dsn)
             try:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     cur.execute(
                         "SELECT id, accepted_at FROM t_p71821556_real_estate_catalog_.consent_log "
-                        f"WHERE ip_address = '{ip_e}' "
+                        "WHERE ip_address = %s "
                         "AND accepted_at > NOW() - INTERVAL '1 year' "
-                        "ORDER BY accepted_at DESC LIMIT 1"
+                        "ORDER BY accepted_at DESC LIMIT 1",
+                        (ip[:45],)
                     )
                     row = cur.fetchone()
                     if row:
@@ -97,17 +99,16 @@ def handler(event: dict, context) -> dict:
                 conn.close()
 
         # ── consent_save ──────────────────────────────────────────────────────
-        ua_e = _esc(ua)
         docs_opened = body.get('documents_opened') or []
-        page_url = body.get('page_url') or ''
-        session_id = body.get('session_id') or ''
-        pu_e = _esc(page_url)
-        sid_e = _esc(session_id)
+        page_url = (body.get('page_url') or '')[:500]
+        session_id = (body.get('session_id') or '')[:100]
+        ua_clean = (ua or '')[:500]
+
         if isinstance(docs_opened, list):
             docs_clean = [str(d)[:50] for d in docs_opened if d]
         else:
             docs_clean = []
-        docs_json = json.dumps(docs_clean, ensure_ascii=False).replace("'", "''")
+        docs_json = json.dumps(docs_clean, ensure_ascii=False)
 
         conn = psycopg2.connect(dsn)
         try:
@@ -115,9 +116,10 @@ def handler(event: dict, context) -> dict:
                 # Дедуп по IP за последний год — обновляем вместо дублирования
                 cur.execute(
                     "SELECT id, documents_opened FROM t_p71821556_real_estate_catalog_.consent_log "
-                    f"WHERE ip_address = '{ip_e}' "
+                    "WHERE ip_address = %s "
                     "AND accepted_at > NOW() - INTERVAL '1 year' "
-                    "ORDER BY accepted_at DESC LIMIT 1"
+                    "ORDER BY accepted_at DESC LIMIT 1",
+                    (ip[:45],)
                 )
                 existing = cur.fetchone()
                 if existing:
@@ -128,21 +130,21 @@ def handler(event: dict, context) -> dict:
                         except Exception:
                             old_docs = []
                     merged = list({*([str(d) for d in old_docs]), *docs_clean})
-                    merged_json = json.dumps(merged, ensure_ascii=False).replace("'", "''")
+                    merged_json = json.dumps(merged, ensure_ascii=False)
                     cur.execute(
                         "UPDATE t_p71821556_real_estate_catalog_.consent_log "
-                        f"SET documents_opened = '{merged_json}'::jsonb, "
-                        f"user_agent = '{ua_e}', page_url = '{pu_e}', "
-                        f"session_id = '{sid_e}', accepted_at = NOW() "
-                        f"WHERE id = {int(existing['id'])} RETURNING id"
+                        "SET documents_opened = %s::jsonb, user_agent = %s, "
+                        "page_url = %s, session_id = %s, accepted_at = NOW() "
+                        "WHERE id = %s RETURNING id",
+                        (merged_json, ua_clean, page_url, session_id, int(existing['id']))
                     )
                     new_id = cur.fetchone()['id']
                 else:
                     cur.execute(
                         "INSERT INTO t_p71821556_real_estate_catalog_.consent_log "
                         "(ip_address, user_agent, documents_opened, page_url, session_id) "
-                        f"VALUES ('{ip_e}', '{ua_e}', '{docs_json}'::jsonb, '{pu_e}', '{sid_e}') "
-                        "RETURNING id"
+                        "VALUES (%s, %s, %s::jsonb, %s, %s) RETURNING id",
+                        (ip[:45], ua_clean, docs_json, page_url, session_id)
                     )
                     new_id = cur.fetchone()['id']
                 conn.commit()
@@ -177,21 +179,29 @@ def handler(event: dict, context) -> dict:
                 return _ok({'settings': dict(row) if row else {}}, cache='public, max-age=300, stale-while-revalidate=60')
 
             if params.get('resource') == 'districts':
-                city_f = (params.get('city') or '').strip()
-                where_city = f"AND city = '{city_f.replace(chr(39), chr(39)*2)}'" if city_f else ''
-                cur.execute(
-                    "SELECT id, name, slug, city, description, sort_order "
-                    "FROM t_p71821556_real_estate_catalog_.districts "
-                    f"WHERE is_active = TRUE {where_city} "
-                    "ORDER BY sort_order ASC, name ASC"
-                )
-                districts = [dict(r) for r in cur.fetchall()]
-                # Добавляем количество активных объектов в каждом районе
-                for d in districts:
-                    name_esc = d['name'].replace("'", "''")
+                city_f = (params.get('city') or '').strip()[:100]
+                if city_f:
                     cur.execute(
-                        f"SELECT COUNT(*) AS c FROM t_p71821556_real_estate_catalog_.listings "
-                        f"WHERE status = 'active' AND district ILIKE '%{name_esc}%'"
+                        "SELECT id, name, slug, city, description, sort_order "
+                        "FROM t_p71821556_real_estate_catalog_.districts "
+                        "WHERE is_active = TRUE AND city = %s "
+                        "ORDER BY sort_order ASC, name ASC",
+                        (city_f,)
+                    )
+                else:
+                    cur.execute(
+                        "SELECT id, name, slug, city, description, sort_order "
+                        "FROM t_p71821556_real_estate_catalog_.districts "
+                        "WHERE is_active = TRUE "
+                        "ORDER BY sort_order ASC, name ASC"
+                    )
+                districts = [dict(r) for r in cur.fetchall()]
+                # Количество активных объектов в каждом районе — параметризованный запрос
+                for d in districts:
+                    cur.execute(
+                        "SELECT COUNT(*) AS c FROM t_p71821556_real_estate_catalog_.listings "
+                        "WHERE status = 'active' AND district = %s",
+                        (d['name'],)
                     )
                     d['listings_count'] = cur.fetchone()['c']
                 return _ok({'districts': districts}, cache='public, max-age=300, stale-while-revalidate=60')

@@ -153,6 +153,7 @@ export default function LeadsListPage() {
         message: contactForm.message,
         source: 'leads-page',
         object_url: typeof window !== 'undefined' ? window.location.href : '',
+        captcha_token: captcha?.token,
       });
       setContactSent(true);
     } finally {

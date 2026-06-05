@@ -248,6 +248,7 @@ export interface LeadInput {
   listing_id?: number;
   source?: string;
   object_url?: string;
+  captcha_token?: string;
 }
 
 export async function sendLead(payload: LeadInput): Promise<{ success: boolean; id?: number; error?: string }> {

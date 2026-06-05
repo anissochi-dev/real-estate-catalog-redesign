@@ -76,12 +76,17 @@ def handler(event: dict, context) -> dict:
     except json.JSONDecodeError:
         return _err(400, 'Invalid JSON')
 
-    name = (body.get('name') or '').strip()
-    phone = (body.get('phone') or '').strip()
-    email = (body.get('email') or '').strip() or None
-    message = (body.get('message') or '').strip() or None
+    name = (body.get('name') or '').strip()[:100]
+    phone = (body.get('phone') or '').strip()[:30]
+    email = ((body.get('email') or '').strip() or None)
+    if email:
+        email = email[:100]
+    message = ((body.get('message') or '').strip() or None)
+    if message:
+        message = message[:1500]
     listing_id = body.get('listing_id')
-    source = (body.get('source') or 'site').strip()
+    source = (body.get('source') or 'site').strip()[:50]
+    captcha_token = (body.get('captcha_token') or '').strip()
 
     if not name or not phone:
         return _err(400, 'Name and phone required')
@@ -90,6 +95,32 @@ def handler(event: dict, context) -> dict:
     phone_digits = re.sub(r'\D', '', phone)
     if len(phone_digits) < 10 or len(phone_digits) > 15:
         return _err(400, 'Некорректный номер телефона')
+
+    # Проверка captcha_token от SmartCaptcha (формат: sc_<ts>_<rand>_<scoreHex>)
+    # Только для публичных заявок с сайта
+    SITE_SOURCES_CAPTCHA = ('site', 'property-page', 'offer-to-lead', 'callback', 'hero', 'catalog', 'leads-page')
+    if source in SITE_SOURCES_CAPTCHA:
+        if not captcha_token or not captcha_token.startswith('sc_'):
+            return _err(403, 'Требуется подтверждение капчи')
+        # Декодируем score из токена (последний сегмент — hex score*100)
+        parts = captcha_token.split('_')
+        if len(parts) < 4:
+            return _err(403, 'Недействительный токен капчи')
+        try:
+            score_val = int(parts[-1], 16)  # 0..100
+            if score_val < 30:  # score < 0.30 — слишком подозрительно
+                return _err(403, 'Проверка капчи не пройдена')
+        except ValueError:
+            return _err(403, 'Недействительный токен капчи')
+        # Проверка свежести токена (не старше 10 минут)
+        try:
+            import time as _time
+            ts_b36 = parts[1]
+            token_ts = int(ts_b36, 36) / 1000  # ms → sec
+            if abs(_time.time() - token_ts) > 600:  # 10 минут
+                return _err(403, 'Токен капчи истёк. Обновите страницу.')
+        except Exception:
+            pass  # если не можем распарсить — не блокируем
 
     # Rate limiting: не более 5 заявок с одного IP за 15 минут
     raw_headers = event.get('headers') or {}
@@ -106,41 +137,28 @@ def handler(event: dict, context) -> dict:
     if len(norm_phone) == 11 and norm_phone.startswith('8'):
         norm_phone = '7' + norm_phone[1:]
 
-    name_s = name.replace("'", "''")[:100]
-    phone_s = phone.replace("'", "''")[:30]
-    email_s = "NULL" if email is None else "'" + email.replace("'", "''")[:100] + "'"
-    msg_s = "NULL" if message is None else "'" + message.replace("'", "''")[:1500] + "'"
-    listing_s = "NULL"
-    if listing_id is not None:
-        try:
-            listing_s = str(int(listing_id))
-        except (ValueError, TypeError):
-            listing_s = "NULL"
-    source_s = source.replace("'", "''")[:50]
-
     # Лиды с сайта проходят модерацию: статус 'pending'
     # Внутренние лиды (created_by_admin, crm и др.) сразу 'new'
-    SITE_SOURCES = ('site', 'property-page', 'offer-to-lead', 'callback', 'hero', 'catalog')
+    SITE_SOURCES = ('site', 'property-page', 'offer-to-lead', 'callback', 'hero', 'catalog', 'leads-page')
     initial_status = 'pending' if source in SITE_SOURCES else 'new'
+
+    # listing_id — только целое число
+    lid = None
+    if listing_id is not None:
+        try:
+            lid = int(listing_id)
+        except (ValueError, TypeError):
+            lid = None
 
     dsn = os.environ['DATABASE_URL']
     conn = psycopg2.connect(dsn)
     try:
         with conn.cursor() as cur:
-            # Rate limiting по IP: не более 5 заявок за 15 минут
-            safe_ip = client_ip.replace("'", "''")
+            # Rate limiting по телефону — не более 3 заявок с одного номера в час
             cur.execute(
                 f"SELECT COUNT(*) FROM {SCHEMA_LEADS}.leads "
-                f"WHERE source IN ('site','property-page','offer-to-lead','callback','hero','catalog') "
-                f"AND created_at > NOW() - INTERVAL '15 minutes' "
-                f"AND message IS NOT DISTINCT FROM message "  # любые заявки с этого IP
-            )
-            # IP не хранится в leads — проверяем по телефону (3 заявки с одного номера в час)
-            safe_phone = norm_phone.replace("'", "''")
-            cur.execute(
-                f"SELECT COUNT(*) FROM {SCHEMA_LEADS}.leads "
-                f"WHERE phone LIKE '%{safe_phone[-7:]}' "
-                f"AND created_at > NOW() - INTERVAL '1 hour'"
+                f"WHERE phone LIKE %s AND created_at > NOW() - INTERVAL '1 hour'",
+                (f'%{norm_phone[-7:]}',)
             )
             phone_count = cur.fetchone()[0]
             if phone_count >= 3:
@@ -148,25 +166,25 @@ def handler(event: dict, context) -> dict:
 
             # Авто-линковка к телефонной базе (единый источник имени/телефона)
             pc_id = _upsert_phone_contact(cur, phone, name)
-            pc_sql = str(pc_id) if pc_id else 'NULL'
 
-            sql = (
-                "INSERT INTO t_p71821556_real_estate_catalog_.leads "
-                "(name, phone, email, message, listing_id, source, status, phone_contact_id) VALUES ("
-                f"'{name_s}', '{phone_s}', {email_s}, {msg_s}, {listing_s}, '{source_s}', '{initial_status}', {pc_sql}"
-                ") RETURNING id"
+            # Параметризованный INSERT — защита от SQL-инъекций
+            cur.execute(
+                f"INSERT INTO {SCHEMA_LEADS}.leads "
+                "(name, phone, email, message, listing_id, source, status, phone_contact_id) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                (name, phone, email, message, lid, source, initial_status, pc_id)
             )
-            cur.execute(sql)
             lead_id = cur.fetchone()[0]
 
             # Связь phone_contact ↔ lead
             if pc_id:
                 cur.execute(
-                    "INSERT INTO t_p71821556_real_estate_catalog_.phone_lead_links "
+                    f"INSERT INTO {SCHEMA_LEADS}.phone_lead_links "
                     "(phone_contact_id, lead_id) VALUES (%s, %s) "
                     "ON CONFLICT (phone_contact_id, lead_id) DO NOTHING",
                     (pc_id, lead_id)
                 )
+            # Инвалидируем кэш sitemap при новом объекте — нет, лид не меняет sitemap
             conn.commit()
     finally:
         conn.close()
