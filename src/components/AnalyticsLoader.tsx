@@ -13,6 +13,9 @@ export default function AnalyticsLoader() {
   const gaId = settings.google_analytics_id;
   const ymVerify = settings.yandex_webmaster_verification;
   const gsVerify = settings.google_search_console_verification;
+  const vkPixelId = (settings as Record<string, unknown>).vk_pixel_id as string | undefined;
+  const calltouchId = (settings as Record<string, unknown>).calltouch_id as string | undefined;
+  const tgAdsPixel = (settings as Record<string, unknown>).telegram_ads_pixel as string | undefined;
   const [ready, setReady] = useState(false);
 
   // Откладываем загрузку аналитики до после LCP
@@ -96,6 +99,56 @@ export default function AnalyticsLoader() {
     gtag('js', new Date());
     gtag('config', gaId);
   }, [ready, gaId]);
+
+  // VK Пиксель — только после ready
+  useEffect(() => {
+    if (!ready || !vkPixelId) return;
+    const w = window as Window & { VK?: { Retargeting?: { Init?: (id: string) => void; Hit?: () => void } }; __vkLoaded?: boolean };
+    if (w.__vkLoaded) return;
+    w.__vkLoaded = true;
+
+    const s = document.createElement('script');
+    s.async = true;
+    s.src = 'https://vk.com/js/api/openapi.js?169';
+    s.onload = () => {
+      w.VK?.Retargeting?.Init?.(vkPixelId);
+      w.VK?.Retargeting?.Hit?.();
+    };
+    document.head.appendChild(s);
+  }, [ready, vkPixelId]);
+
+  // CallTouch — только после ready
+  useEffect(() => {
+    if (!ready || !calltouchId) return;
+    const w = window as Window & { __ctLoaded?: boolean };
+    if (w.__ctLoaded) return;
+    w.__ctLoaded = true;
+
+    const s = document.createElement('script');
+    s.async = true;
+    s.src = `https://mod.calltouch.ru/init.js?id=${calltouchId}`;
+    document.head.appendChild(s);
+  }, [ready, calltouchId]);
+
+  // Telegram Ads пиксель — только после ready
+  useEffect(() => {
+    if (!ready || !tgAdsPixel) return;
+    const w = window as Window & { __tgAdsLoaded?: boolean };
+    if (w.__tgAdsLoaded) return;
+    w.__tgAdsLoaded = true;
+
+    const s = document.createElement('script');
+    s.async = true;
+    s.src = 'https://telegram.org/js/telegram-web-app.js';
+    document.head.appendChild(s);
+
+    const pixel = document.createElement('script');
+    pixel.innerHTML = `
+      window.TelegramAnalytics = window.TelegramAnalytics || [];
+      window.TelegramAnalytics.push(['init', '${tgAdsPixel}']);
+    `;
+    document.head.appendChild(pixel);
+  }, [ready, tgAdsPixel]);
 
   return null;
 }

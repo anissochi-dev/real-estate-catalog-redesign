@@ -5,6 +5,7 @@ import IntegrationsSecuritySection from './IntegrationsSecuritySection';
 import IntegrationsWebmasterSection from './IntegrationsWebmasterSection';
 import IntegrationsMaxSection from './IntegrationsMaxSection';
 import IntegrationsSearchApiSection from './IntegrationsSearchApiSection';
+import IntegrationsAdsSection from './IntegrationsAdsSection';
 
 interface Props {
   s: Partial<S>;
@@ -50,6 +51,7 @@ export default function IntegrationsTab({
       <IntegrationsSecuritySection s={s} setS={setS} />
       <IntegrationsWebmasterSection s={s} setS={setS} saved={saved} save={save} />
       <IntegrationsSearchApiSection s={s} setS={setS} saved={saved} save={save} />
+      <IntegrationsAdsSection s={s} setS={setS} saved={saved} save={save} />
     </div>
   );
 }

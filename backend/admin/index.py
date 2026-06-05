@@ -2615,7 +2615,13 @@ def _settings(cur, conn, method, event, user):
                           # Вебмастер API
                           ('yandex_webmaster_token', 1000),
                           ('yandex_webmaster_user_id', 64),
-                          ('google_search_console_key', 10000)]:
+                          ('google_search_console_key', 10000),
+                          # Рекламные пиксели
+                          ('vk_pixel_id', 100),
+                          ('calltouch_id', 100),
+                          ('telegram_ads_pixel', 100),
+                          # МАХ автоответ
+                          ('max_autoreply_text', 2000)]:
             if f in body:
                 fields.append(f"{f} = {_str_or_null(body[f], length)}")
         if 'company_since_year' in body:
@@ -2637,7 +2643,8 @@ def _settings(cur, conn, method, event, user):
         for bf in ('notify_email_enabled', 'notify_email_on_lead', 'notify_email_on_deal', 'notify_email_on_complaint',
                    'notify_telegram_enabled', 'notify_telegram_on_lead', 'notify_telegram_on_deal',
                    'notify_telegram_on_complaint',
-                   'notify_max_enabled', 'notify_max_on_lead', 'notify_max_on_deal', 'notify_max_on_complaint'):
+                   'notify_max_enabled', 'notify_max_on_lead', 'notify_max_on_deal', 'notify_max_on_complaint',
+                   'ya_metrika_goals_enabled', 'max_autoreply_enabled'):
             if bf in body:
                 fields.append(f"{bf} = {_bool(body[bf])}")
         if 'role_permissions' in body:

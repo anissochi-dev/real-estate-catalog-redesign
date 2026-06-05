@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
+import { fireLeadConversion } from '@/lib/analytics';
 
 const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
 const LEADS_URL = 'https://functions.poehali.dev/45673fe4-a39d-4193-b529-174d4c8c8f97';
@@ -42,6 +43,7 @@ export default function NetworkTenantsPage() {
       }),
     });
     setSent(true);
+    fireLeadConversion({ source: 'network-tenant-offer' });
     setTimeout(() => {
       setOffer(null);
       setSent(false);

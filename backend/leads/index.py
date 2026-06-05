@@ -143,6 +143,10 @@ def handler(event: dict, context) -> dict:
                 _notify_max(name, phone, message, lead_id, dsn)
             except Exception:
                 pass
+            try:
+                _max_autoreply(name, phone, lead_id, dsn)
+            except Exception:
+                pass
         threading.Thread(target=_send_notifications, daemon=True).start()
 
     return {
@@ -278,6 +282,62 @@ def _notify_admins(name: str, phone: str, lead_id: int, dsn: str):
             except Exception:
                 pass
     except ImportError:
+        pass
+
+
+def _max_autoreply(name: str, phone: str, lead_id: int, dsn: str):
+    """
+    Отправляет автоответ клиенту через МАХ Мессенджер если включён max_autoreply_enabled.
+    Ищет клиента в phone_contacts по номеру и отправляет ему сообщение.
+    """
+    import urllib.request
+
+    SCHEMA = 't_p71821556_real_estate_catalog_'
+    conn2 = psycopg2.connect(dsn)
+    try:
+        with conn2.cursor() as cur2:
+            cur2.execute(
+                f"SELECT max_autoreply_enabled, max_autoreply_text, notify_max_bot_token "
+                f"FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
+            )
+            row = cur2.fetchone()
+            if not row:
+                return
+            enabled, tmpl, bot_token = row
+            if not enabled:
+                return
+            bot_token = (bot_token or '').strip()
+            if not bot_token or not tmpl:
+                return
+
+            # Ищем max_user_id клиента по номеру телефона
+            norm = _normalize_phone(phone)
+            cur2.execute(
+                f"SELECT pc.max_user_id FROM {SCHEMA}.phone_contacts pc "
+                f"WHERE pc.phone_normalized = %s AND pc.max_user_id IS NOT NULL LIMIT 1",
+                (norm,)
+            )
+            contact_row = cur2.fetchone()
+    finally:
+        conn2.close()
+
+    if not contact_row:
+        return
+
+    user_id = contact_row[0]
+    text = tmpl.replace('{name}', name).replace('{phone}', phone).replace('{id}', str(lead_id))
+
+    try:
+        payload = json.dumps({'text': text}, ensure_ascii=False).encode('utf-8')
+        req = urllib.request.Request(
+            f'https://botapi.max.ru/messages?user_id={user_id}',
+            data=payload,
+            headers={'Authorization': bot_token, 'Content-Type': 'application/json'},
+            method='POST',
+        )
+        with urllib.request.urlopen(req, timeout=8):
+            pass
+    except Exception:
         pass
 
 

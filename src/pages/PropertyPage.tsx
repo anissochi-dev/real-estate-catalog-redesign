@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchListingById, ListingDetail, sendLead, fetchAgents, Agent } from '@/lib/api';
+import { fireLeadConversion } from '@/lib/analytics';
 import { recordView } from '@/components/RecentlyViewed';
 import { extractIdFromSlug } from '@/lib/slug';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -176,6 +177,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
     try {
       await sendLead({ name: form.name, phone: form.phone, message: form.message, listing_id: item.id, source: 'property-page', object_url: window.location.href });
       setSent(true);
+      fireLeadConversion();
     } finally {
       setSending(false);
     }

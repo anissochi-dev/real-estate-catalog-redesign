@@ -83,6 +83,14 @@ export interface S {
   google_search_console_key: string;
   // PageSpeed
   google_pagespeed_api_key: string;
+  // Рекламные пиксели
+  vk_pixel_id: string;
+  calltouch_id: string;
+  telegram_ads_pixel: string;
+  ya_metrika_goals_enabled: boolean;
+  // МАХ Автоответ
+  max_autoreply_enabled: boolean;
+  max_autoreply_text: string;
 }
 
 export interface City {

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import Icon from '@/components/ui/icon';
 import SmartCaptcha, { CaptchaResult } from '@/components/SmartCaptcha';
 import PublicPhoneInput from '@/components/PublicPhoneInput';
+import { fireLeadConversion } from '@/lib/analytics';
 
 const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
 const LEADS_URL = 'https://functions.poehali.dev/45673fe4-a39d-4193-b529-174d4c8c8f97';
@@ -52,6 +53,7 @@ export default function ClientLeadsSection({ limit = 6 }: Props) {
         }),
       });
       setSent(true);
+      fireLeadConversion({ source: 'offer-to-lead' });
       setTimeout(() => {
         setOfferLead(null);
         setSent(false);
