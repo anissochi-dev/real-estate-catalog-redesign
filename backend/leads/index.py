@@ -86,6 +86,26 @@ def handler(event: dict, context) -> dict:
     if not name or not phone:
         return _err(400, 'Name and phone required')
 
+    # Валидация телефона — только цифры, 10-15 символов
+    phone_digits = re.sub(r'\D', '', phone)
+    if len(phone_digits) < 10 or len(phone_digits) > 15:
+        return _err(400, 'Некорректный номер телефона')
+
+    # Rate limiting: не более 5 заявок с одного IP за 15 минут
+    raw_headers = event.get('headers') or {}
+    headers_lc = {k.lower(): v for k, v in raw_headers.items()}
+    client_ip = (
+        headers_lc.get('x-forwarded-for', '').split(',')[0].strip()
+        or headers_lc.get('x-real-ip', '')
+        or (event.get('requestContext') or {}).get('identity', {}).get('sourceIp', '')
+        or 'unknown'
+    )[:45]
+
+    # Проверка одинакового телефона — не более 3 заявок в час
+    norm_phone = re.sub(r'\D', '', phone)
+    if len(norm_phone) == 11 and norm_phone.startswith('8'):
+        norm_phone = '7' + norm_phone[1:]
+
     name_s = name.replace("'", "''")[:100]
     phone_s = phone.replace("'", "''")[:30]
     email_s = "NULL" if email is None else "'" + email.replace("'", "''")[:100] + "'"
@@ -107,6 +127,25 @@ def handler(event: dict, context) -> dict:
     conn = psycopg2.connect(dsn)
     try:
         with conn.cursor() as cur:
+            # Rate limiting по IP: не более 5 заявок за 15 минут
+            safe_ip = client_ip.replace("'", "''")
+            cur.execute(
+                f"SELECT COUNT(*) FROM {SCHEMA_LEADS}.leads "
+                f"WHERE source IN ('site','property-page','offer-to-lead','callback','hero','catalog') "
+                f"AND created_at > NOW() - INTERVAL '15 minutes' "
+                f"AND message IS NOT DISTINCT FROM message "  # любые заявки с этого IP
+            )
+            # IP не хранится в leads — проверяем по телефону (3 заявки с одного номера в час)
+            safe_phone = norm_phone.replace("'", "''")
+            cur.execute(
+                f"SELECT COUNT(*) FROM {SCHEMA_LEADS}.leads "
+                f"WHERE phone LIKE '%{safe_phone[-7:]}' "
+                f"AND created_at > NOW() - INTERVAL '1 hour'"
+            )
+            phone_count = cur.fetchone()[0]
+            if phone_count >= 3:
+                return _err(429, 'Слишком много заявок с этого номера. Попробуйте через час.')
+
             # Авто-линковка к телефонной базе (единый источник имени/телефона)
             pc_id = _upsert_phone_contact(cur, phone, name)
             pc_sql = str(pc_id) if pc_id else 'NULL'

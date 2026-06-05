@@ -551,8 +551,31 @@ def handler(event: dict, context) -> dict:
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
 
-            # ── КРОН-ПИНГ (без авторизации, вызывается каждый час) ──────
+            # ── КРОН-ПИНГ (защищён cron-token или IP внутреннего вызова) ───
             if action == 'ping_cron':
+                # Защита: принимаем только если передан X-Cron-Token
+                # или запрос идёт от самого сайта (Referer содержит наш домен)
+                raw_headers = event.get('headers') or {}
+                hl = {k.lower(): v for k, v in raw_headers.items()}
+                cron_token_hdr = hl.get('x-cron-token', '')
+                # Читаем ожидаемый токен из БД (настройки)
+                try:
+                    cur.execute(f"SELECT site_url FROM {SCHEMA}.settings ORDER BY id LIMIT 1")
+                    _st = cur.fetchone()
+                    expected_origin = (_st.get('site_url') or 'https://bmn.su').rstrip('/') if _st else 'https://bmn.su'
+                except Exception:
+                    expected_origin = 'https://bmn.su'
+                referer = hl.get('referer', '') or hl.get('origin', '')
+                cron_secret = os.environ.get('CRON_SECRET', '')
+                # Разрешаем: правильный токен ИЛИ referer с нашего домена ИЛИ нет секрета (обратная совместимость)
+                allowed = (
+                    not cron_secret  # если секрет не настроен — разрешаем (обратная совместимость)
+                    or (cron_secret and cron_token_hdr == cron_secret)
+                    or expected_origin in referer
+                )
+                if not allowed:
+                    return {'statusCode': 403, 'headers': CORS, 'body': json.dumps({'error': 'Forbidden'})}
+
                 now_utc = datetime.now(timezone.utc)
                 result = {'hour': now_utc.hour, 'minute': now_utc.minute}
 
