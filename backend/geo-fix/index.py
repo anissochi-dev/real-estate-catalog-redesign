@@ -1,5 +1,5 @@
 """
-Business: Геокодирование адресов объектов через Яндекс Геокодер (v6) и автоисправление района.
+Business: Геокодирование адресов объектов через 2GIS API и автоисправление района.
 Запускается вручную: action=preview (показать что изменится) или action=apply (применить).
 Args: event с body {action: 'preview'|'apply', ids?: [int, ...]}, X-Auth-Token; context
 Returns: список изменений {id, address, district_old, district_new}
@@ -22,7 +22,6 @@ CORS = {
 }
 
 # Карта: ключевые слова из ответа геокодера → название района в БД
-# Порядок важен: более специфичные — выше
 DISTRICT_MAP = [
     # Карасунский округ
     ('Пашковский', 'Пашковский (ПМР)'),
@@ -83,48 +82,35 @@ def _ok(body, status=200):
     }
 
 
-def _geocode_yandex(address: str, api_key: str) -> dict | None:
-    """Геокодирует адрес через Яндекс Геокодер. Возвращает словарь с полями адреса."""
+def _geocode_2gis(address: str, api_key: str) -> dict | None:
+    """Геокодирует адрес через 2GIS API. Возвращает словарь с полями адреса."""
     query = urllib.parse.urlencode({
-        'apikey': api_key,
-        'geocode': f'Краснодар, {address}',
-        'format': 'json',
-        'results': 1,
-        'lang': 'ru_RU',
+        'q': f'Краснодар, {address}',
+        'fields': 'items.adm_div,items.address,items.full_name',
+        'key': api_key,
+        'locale': 'ru_RU',
+        'limit': 1,
     })
-    url = f'https://geocode-maps.yandex.ru/1.x/?{query}'
+    url = f'https://catalog.api.2gis.com/3.0/items/geocode?{query}'
     try:
-        req = urllib.request.Request(url, headers={
-            'Referer': 'https://biznest.ru',
-            'User-Agent': 'Mozilla/5.0',
-        })
+        req = urllib.request.Request(url, headers={'User-Agent': 'biznest-geocoder/1.0'})
         with urllib.request.urlopen(req, timeout=8) as resp:
             data = json.loads(resp.read())
 
-        members = (
-            data
-            .get('response', {})
-            .get('GeoObjectCollection', {})
-            .get('featureMember', [])
-        )
-        if not members:
+        items = data.get('result', {}).get('items', [])
+        if not items:
             return None
 
-        geo_obj = members[0].get('GeoObject', {})
-        meta = geo_obj.get('metaDataProperty', {}).get('GeocoderMetaData', {})
-        address_meta = meta.get('Address', {})
-        components = address_meta.get('Components', [])
+        item = items[0]
+        adm_div = item.get('adm_div', [])
 
         result = {
-            'display_name': geo_obj.get('description', '') + ' ' + geo_obj.get('name', ''),
-            'kind': meta.get('kind', ''),
-            'precision': meta.get('precision', ''),
+            'full_name': item.get('full_name', ''),
+            'adm_div_names': ' '.join(d.get('name', '') for d in adm_div),
         }
-
-        for comp in components:
-            kind = comp.get('kind', '')
-            name = comp.get('name', '')
-            result[kind] = name
+        for div in adm_div:
+            div_type = div.get('type', '')
+            result[div_type] = div.get('name', '')
 
         return result
     except urllib.error.HTTPError as e:
@@ -139,15 +125,8 @@ def _detect_district(geo: dict) -> str | None:
     if not geo or 'error' in geo:
         return None
 
-    # Яндекс возвращает district, locality_name, display_name
-    search_parts = [
-        geo.get('district', ''),
-        geo.get('locality', ''),
-        geo.get('display_name', ''),
-        geo.get('Street', ''),
-    ]
-    # Также ищем по всем компонентам
-    for key, val in geo.items():
+    search_parts = []
+    for val in geo.values():
         if isinstance(val, str):
             search_parts.append(val)
 
@@ -160,7 +139,7 @@ def _detect_district(geo: dict) -> str | None:
 
 
 def handler(event: dict, context) -> dict:
-    """Геокодирует адреса объектов через Яндекс Геокодер и исправляет районы."""
+    """Геокодирует адреса объектов через 2GIS API и исправляет районы."""
 
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
@@ -175,9 +154,9 @@ def handler(event: dict, context) -> dict:
     action = body.get('action', 'preview')
     filter_ids = body.get('ids')
 
-    api_key = os.environ.get('YANDEX_GEOCODER_KEY', '')
+    api_key = os.environ.get('TWOGIS_API_KEY', '')
     if not api_key:
-        return _ok({'error': 'YANDEX_GEOCODER_KEY не задан'}, 500)
+        return _ok({'error': 'TWOGIS_API_KEY не задан'}, 500)
 
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -205,7 +184,7 @@ def handler(event: dict, context) -> dict:
         address = row['address']
         district_old = row['district']
 
-        geo = _geocode_yandex(address, api_key)
+        geo = _geocode_2gis(address, api_key)
 
         if geo and 'error' in geo:
             errors.append({'id': lid, 'address': address, 'error': geo['error']})
@@ -218,8 +197,8 @@ def handler(event: dict, context) -> dict:
             'address': address,
             'district_old': district_old,
             'district_new': district_new,
-            'geo_district': geo.get('district', '') if geo else '',
-            'geo_display': (geo.get('display_name', '') if geo else '')[:120],
+            'geo_adm_div': geo.get('adm_div_names', '') if geo else '',
+            'geo_full_name': (geo.get('full_name', '') if geo else '')[:120],
             'changed': district_new is not None and district_new != district_old,
         }
 
