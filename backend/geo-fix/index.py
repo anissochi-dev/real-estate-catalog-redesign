@@ -28,13 +28,34 @@ def _ok(body, status=200):
     }
 
 
-def _extract_street(address: str) -> str:
-    """Извлекает название улицы из адреса — убирает номер дома и тип улицы."""
-    # Убираем номер дома: ", 123к4" или ", 12/5" и т.д.
+def _parse_address(address: str) -> tuple:
+    """Извлекает название улицы и номер дома из адреса."""
+    house_match = re.search(r',\s*(\d+)', address)
+    house_num = int(house_match.group(1)) if house_match else None
     street = re.sub(r',?\s*\d+.*$', '', address).strip()
-    # Убираем тип улицы в конце: "улица", "проспект", "шоссе", "переулок", "бульвар", "набережная"
     street = re.sub(r'\s+(улица|проспект|шоссе|переулок|бульвар|аллея|проезд)$', '', street, flags=re.IGNORECASE).strip()
-    return street
+    return street, house_num
+
+
+def _find_district(street: str, house_num, street_rules: list) -> str | None:
+    """Ищет район по улице и номеру дома в справочнике."""
+    street_lower = street.lower()
+    best = None
+    for rule in street_rules:
+        pat = rule['street_pattern'].lower()
+        if pat not in street_lower and pat != street_lower:
+            continue
+        h_from = rule['house_from']
+        h_to = rule['house_to']
+        # Без диапазона — общее правило (низкий приоритет)
+        if h_from is None and h_to is None:
+            if best is None:
+                best = rule['district']
+        # С диапазоном — точное правило (высокий приоритет)
+        elif house_num is not None:
+            if (h_from is None or house_num >= h_from) and (h_to is None or house_num <= h_to):
+                return rule['district']
+    return best
 
 
 def handler(event: dict, context) -> dict:
@@ -56,13 +77,12 @@ def handler(event: dict, context) -> dict:
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor(cursor_factory=RealDictCursor)
 
-    # Загружаем справочник улиц (первая запись на каждый паттерн — приоритетная)
+    # Загружаем весь справочник с диапазонами
     cur.execute(
-        f"SELECT DISTINCT ON (street_pattern) street_pattern, district "
-        f"FROM {SCHEMA}.street_district_map "
-        f"ORDER BY street_pattern, id ASC"
+        f"SELECT street_pattern, district, house_from, house_to "
+        f"FROM {SCHEMA}.street_district_map ORDER BY id ASC"
     )
-    street_map = {row['street_pattern'].lower(): row['district'] for row in cur.fetchall()}
+    street_rules = cur.fetchall()
 
     if filter_ids:
         ids_str = ','.join(str(i) for i in filter_ids)
@@ -87,18 +107,8 @@ def handler(event: dict, context) -> dict:
         address = row['address']
         district_old = row['district']
 
-        street = _extract_street(address)
-        street_lower = street.lower()
-
-        # Точное совпадение
-        district_new = street_map.get(street_lower)
-
-        # Если не нашли точно — ищем по вхождению паттерна в адрес
-        if not district_new:
-            for pattern, district in street_map.items():
-                if pattern in street_lower:
-                    district_new = district
-                    break
+        street, house_num = _parse_address(address)
+        district_new = _find_district(street, house_num, street_rules)
 
         entry = {
             'id': lid,
