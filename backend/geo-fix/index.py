@@ -50,7 +50,8 @@ DISTRICT_MAP = [
     ('Российский', 'Российский п.'),
     ('Победитель', 'Победитель п.'),
     ('Плодородный', 'Плодородный п.'),
-    ('Краснодарский', 'Краснодарский п.'),
+    ('Краснодарский п', 'Краснодарский п.'),
+    ('посёлок Краснодарский', 'Краснодарский п.'),
     ('Индустриальный', 'Индустриальный п.'),
     ('Берёзовый', 'Берёзовый п.'),
     ('Колосистый', 'Колосистый п.'),
@@ -66,6 +67,7 @@ DISTRICT_MAP = [
     ('Кожевенный', 'Кожевенный завод (Кожзавод)'),
     ('СХИ', 'Сельскохозяйственный институт (СХИ)'),
     ('Сельскохозяйственный', 'Сельскохозяйственный институт (СХИ)'),
+
     # Центральный округ
     ('Табачная', 'Табачная фабрика (Табачка)'),
     ('ХБК', 'Хлопчато-бумажный комбинат (ХБК)'),
@@ -107,6 +109,8 @@ def _geocode_2gis(address: str, api_key: str) -> dict | None:
         result = {
             'full_name': item.get('full_name', ''),
             'adm_div_names': ' '.join(d.get('name', '') for d in adm_div),
+            '_raw_keys': list(item.keys()),
+            '_raw_adm_div': adm_div[:3],
         }
         for div in adm_div:
             div_type = div.get('type', '')
@@ -199,6 +203,8 @@ def handler(event: dict, context) -> dict:
             'district_new': district_new,
             'geo_adm_div': geo.get('adm_div_names', '') if geo else '',
             'geo_full_name': (geo.get('full_name', '') if geo else '')[:120],
+            'geo_raw_keys': geo.get('_raw_keys', []) if geo else [],
+            'geo_raw_adm_div': geo.get('_raw_adm_div', []) if geo else [],
             'changed': district_new is not None and district_new != district_old,
         }
 
