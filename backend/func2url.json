@@ -1,4 +1,5 @@
 {
+  "sitemap-gen": "https://functions.poehali.dev/7db3cce2-3ae0-4bbb-bece-5c6076691344",
   "smart-budget": "https://functions.poehali.dev/3e599d66-bb63-498f-bf23-4069c3a06660",
   "geo-fix": "https://functions.poehali.dev/abcb8991-211b-4918-a262-acf6aa113ff5",
   "district-ai": "https://functions.poehali.dev/eddffe59-b37d-425e-90a3-59d12d44623f",
@@ -15,7 +16,6 @@
   "social-post": "https://functions.poehali.dev/2f8f20f3-5dba-4a58-a1f6-aa6e886f4e5e",
   "news": "https://functions.poehali.dev/984cad3a-0783-4408-a614-52ed36f8c77f",
   "migration": "https://functions.poehali.dev/35b499c9-243a-43e1-ac7b-2d6e84453233",
-  "auto-seo": "https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d",
   "listing-stats": "https://functions.poehali.dev/1d84bd40-ef8c-4bd3-82c3-af294b1ec0b1",
   "import-url": "https://functions.poehali.dev/59ce84ce-c6bb-46e7-9223-5d893748615f",
   "crm": "https://functions.poehali.dev/221e23fa-e0a4-416e-b878-c2da2914daac",

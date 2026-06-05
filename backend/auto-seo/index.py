@@ -398,10 +398,12 @@ def _site_base_url(cur) -> str:
 
 def _build_sitemap_xml(cur) -> tuple:
     """Возвращает (xml_string, urls_count).
-    Включает: статические страницы + активные объекты + опубликованные новости.
+    Включает: статические страницы + активные объекты + новости +
+              категории (только с объектами) + районы (только с объектами) + заявки.
     """
     base = _site_base_url(cur)
     urls = []
+    now = __import__('datetime').datetime.now()
 
     # 1. Статические страницы из seo_pages (только не noindex)
     cur.execute(
@@ -427,18 +429,45 @@ def _build_sitemap_xml(cur) -> tuple:
 
     # 3. Опубликованные новости — приоритет 0.6
     cur.execute(
-        f"SELECT slug, id, updated_at, published_at FROM {SCHEMA}.news "
+        f"SELECT slug, updated_at, published_at FROM {SCHEMA}.news "
         f"WHERE is_published = TRUE AND slug IS NOT NULL AND slug != '' "
         f"ORDER BY published_at DESC NULLS LAST LIMIT 2000"
     )
     for r in cur.fetchall():
         slug = r.get('slug')
-        nid = r.get('id')
         if not slug:
             continue
-        path = f"/news/{slug}"
         upd = r.get('updated_at') or r.get('published_at')
-        urls.append((base + path, upd, '0.6', 'monthly'))
+        urls.append((base + f"/news/{slug}", upd, '0.6', 'monthly'))
+
+    # 4. Категории — только те, в которых есть хотя бы 1 активный объект
+    cur.execute(
+        f"SELECT category, MAX(updated_at) as last_upd "
+        f"FROM {SCHEMA}.listings WHERE status = 'active' "
+        f"GROUP BY category HAVING COUNT(id) > 0"
+    )
+    for r in cur.fetchall():
+        cat = r.get('category') or ''
+        if not cat:
+            continue
+        urls.append((base + f"/catalog/{cat}", r.get('last_upd') or now, '0.8', 'weekly'))
+
+    # 5. Районы — только те, в которых есть хотя бы 1 активный объект
+    cur.execute(
+        f"SELECT d.slug as d_slug, MAX(l.updated_at) as last_upd "
+        f"FROM {SCHEMA}.districts d "
+        f"INNER JOIN {SCHEMA}.listings l ON l.district = d.name AND l.status = 'active' "
+        f"WHERE d.slug IS NOT NULL AND d.slug != '' AND d.is_active = TRUE "
+        f"GROUP BY d.slug"
+    )
+    for r in cur.fetchall():
+        d_slug = r.get('d_slug') or ''
+        if not d_slug:
+            continue
+        urls.append((base + f"/district/{d_slug}", r.get('last_upd') or now, '0.7', 'weekly'))
+
+    # 6. Страница заявок (публичная лента спроса)
+    urls.append((base + '/leads', now, '0.5', 'daily'))
 
     parts = [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -852,6 +881,27 @@ def handler(event: dict, context) -> dict:
                 r4 = cur.fetchone()
                 static_count = int(r4['cnt']) if r4 else 0
 
+                cur.execute(
+                    f"SELECT COUNT(DISTINCT category) as cnt FROM {SCHEMA}.listings "
+                    f"WHERE status = 'active'"
+                )
+                r5 = cur.fetchone()
+                categories_count = int(r5['cnt']) if r5 else 0
+
+                cur.execute(
+                    f"SELECT COUNT(DISTINCT d.slug) as cnt "
+                    f"FROM {SCHEMA}.districts d "
+                    f"INNER JOIN {SCHEMA}.listings l ON l.district = d.name AND l.status = 'active' "
+                    f"WHERE d.slug IS NOT NULL AND d.slug != '' AND d.is_active = TRUE"
+                )
+                r6 = cur.fetchone()
+                districts_count = int(r6['cnt']) if r6 else 0
+
+                total_expected = (
+                    active_listings + news_count + static_count +
+                    categories_count + districts_count + 1  # +1 за /leads
+                )
+
                 return _ok({
                     'robots_url': f'{base}/robots.txt',
                     'sitemap_url': f'{base}/sitemap.xml',
@@ -861,12 +911,14 @@ def handler(event: dict, context) -> dict:
                     'robots_exists': True,
                     'sitemap_exists': sitemap_count > 0,
                     'gpt_configured': bool(api_key and folder_id),
-                    # Разбивка по источникам (актуальные данные из БД, не из кэша)
                     'breakdown': {
                         'listings': active_listings,
                         'news': news_count,
                         'static': static_count,
-                        'total_expected': active_listings + news_count + static_count,
+                        'categories': categories_count,
+                        'districts': districts_count,
+                        'other': 1,
+                        'total_expected': total_expected,
                     },
                 })
 

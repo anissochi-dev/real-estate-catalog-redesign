@@ -1,4 +1,5 @@
 export const SEO_BASE = 'https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d';
+export const SITEMAP_BASE = 'https://functions.poehali.dev/7db3cce2-3ae0-4bbb-bece-5c6076691344';
 
 /**
  * Билдер URL для SEO-функции.
@@ -50,6 +51,9 @@ export interface SeoStatus {
     listings: number;
     news: number;
     static: number;
+    categories: number;
+    districts: number;
+    other: number;
     total_expected: number;
   };
 }

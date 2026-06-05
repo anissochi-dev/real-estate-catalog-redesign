@@ -1,0 +1,23 @@
+{
+  "tests": [
+    {
+      "name": "sitemap.xml публично",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "robots.txt публично",
+      "method": "GET",
+      "path": "/?action=robots_txt",
+      "expectedStatus": 200
+    },
+    {
+      "name": "rebuild без токена — 401",
+      "method": "POST",
+      "path": "/",
+      "body": { "action": "rebuild" },
+      "expectedStatus": 401
+    }
+  ]
+}

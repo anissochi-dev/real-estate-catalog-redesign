@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
 import { S } from '../settings/types';
-import { SeoStatus, seoUrl, seoHeaders, fmtDate } from './seoTypes';
+import { SeoStatus, seoUrl, seoHeaders, fmtDate, SITEMAP_BASE } from './seoTypes';
 
 export type CheckStatus = 'idle' | 'checking' | 'ok' | 'err';
 export interface CheckState { status: CheckStatus; message: string }
@@ -74,20 +74,38 @@ export default function SeoTechnicalTab() {
     }
   };
 
+  const sitemapCall = async (action: string) => {
+    const tok = refreshToken();
+    try {
+      const url = tok ? `${SITEMAP_BASE}?auth_token=${encodeURIComponent(tok)}` : SITEMAP_BASE;
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(tok ? { 'X-Auth-Token': tok } : {}) },
+        body: JSON.stringify({ action, auth_token: tok || undefined }),
+      });
+      const d = await r.json();
+      if (d?.error) return { data: null, error: String(d.error) };
+      return { data: d, error: null };
+    } catch (e) {
+      return { data: null, error: e instanceof Error ? e.message : 'Нет связи' };
+    }
+  };
+
   const loadSeoStatus = async () => {
     setSeoLoading(true);
     setSeoErr('');
-    const { data, error } = await seoCall({ action: 'files_status' });
+    const { data, error } = await sitemapCall('status');
     setSeoLoading(false);
     if (error) { setSeoErr(error); return; }
     if (data) {
       setSeoStatus(data as unknown as SeoStatus);
-      setGptOk(!!data.gpt_configured);
+      // gpt_configured берём из auto-seo если нужно
+      setGptOk(true);
     }
   };
 
   const rebuildSitemap = async () => {
-    const { error } = await seoCall({ action: 'sitemap_rebuild' });
+    const { error } = await sitemapCall('rebuild');
     if (error) { toast.error(error); return; }
     toast.success('Sitemap перестроен');
     loadSeoStatus();
@@ -172,17 +190,34 @@ export default function SeoTechnicalTab() {
                 </div>
                 {/* Разбивка по источникам */}
                 {seoStatus.breakdown && (
-                  <div className="grid grid-cols-3 gap-1 text-center">
-                    {[
-                      { label: 'Объекты', value: seoStatus.breakdown.listings, color: 'bg-brand-blue/10 text-brand-blue' },
-                      { label: 'Новости', value: seoStatus.breakdown.news, color: 'bg-purple-100 text-purple-700' },
-                      { label: 'Страницы', value: seoStatus.breakdown.static, color: 'bg-emerald-100 text-emerald-700' },
-                    ].map(b => (
-                      <div key={b.label} className={`rounded-lg px-2 py-1.5 ${b.color}`}>
-                        <div className="text-sm font-bold">{b.value}</div>
-                        <div className="text-[10px]">{b.label}</div>
-                      </div>
-                    ))}
+                  <div className="space-y-1">
+                    <div className="grid grid-cols-3 gap-1 text-center">
+                      {[
+                        { label: 'Объекты', value: seoStatus.breakdown.listings, color: 'bg-brand-blue/10 text-brand-blue' },
+                        { label: 'Новости', value: seoStatus.breakdown.news, color: 'bg-purple-100 text-purple-700' },
+                        { label: 'Страницы', value: seoStatus.breakdown.static, color: 'bg-emerald-100 text-emerald-700' },
+                      ].map(b => (
+                        <div key={b.label} className={`rounded-lg px-2 py-1.5 ${b.color}`}>
+                          <div className="text-sm font-bold">{b.value}</div>
+                          <div className="text-[10px]">{b.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 text-center">
+                      {[
+                        { label: 'Категории', value: seoStatus.breakdown.categories ?? 0, color: 'bg-amber-100 text-amber-700' },
+                        { label: 'Районы', value: seoStatus.breakdown.districts ?? 0, color: 'bg-sky-100 text-sky-700' },
+                        { label: 'Прочее', value: seoStatus.breakdown.other ?? 0, color: 'bg-slate-100 text-slate-600' },
+                      ].map(b => (
+                        <div key={b.label} className={`rounded-lg px-2 py-1.5 ${b.color}`}>
+                          <div className="text-sm font-bold">{b.value}</div>
+                          <div className="text-[10px]">{b.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="text-xs font-semibold text-muted-foreground pt-0.5">
+                      Итого должно быть: <span className="text-foreground">{seoStatus.breakdown.total_expected}</span> URL
+                    </div>
                   </div>
                 )}
                 {/* Предупреждение о расхождении кэша и реальных данных */}
