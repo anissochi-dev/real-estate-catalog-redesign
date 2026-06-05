@@ -347,29 +347,16 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
                   </div>
                 ) : null}
               </div>
-              {agents[0] && (
+              {agents.filter(a => a.phone)[0] && (
                 <div className="px-4 py-3 border-t border-border flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    {agents[0].avatar ? (
-                      <img src={agents[0].avatar} alt={agents[0].name} referrerPolicy="no-referrer"
-                        className="w-8 h-8 rounded-full object-cover flex-shrink-0 border-2 border-border" />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
-                        <Icon name="User" size={15} className="text-brand-blue" />
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <div className="font-display font-700 text-sm truncate">{agents[0].name}</div>
-                      <div className="text-[10px] text-muted-foreground">Представитель собственника</div>
-                    </div>
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">
+                    Представитель собственника
                   </div>
-                  {agents[0].phone && (
-                    <a href={`tel:${agents[0].phone}`}
-                      className="flex-shrink-0 inline-flex items-center gap-1.5 bg-brand-blue text-white text-xs font-semibold px-3 py-2 rounded-xl">
-                      <Icon name="Phone" size={13} />
-                      Позвонить
-                    </a>
-                  )}
+                  <a href={`tel:${agents.filter(a => a.phone)[0].phone}`}
+                    className="flex-shrink-0 inline-flex items-center gap-1.5 bg-brand-blue text-white text-sm font-bold px-4 py-2.5 rounded-xl">
+                    <Icon name="Phone" size={15} />
+                    {agents.filter(a => a.phone)[0].phone}
+                  </a>
                 </div>
               )}
             </div>
