@@ -263,6 +263,32 @@
 
     <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS COMMENT! -->
 
+    <!-- 404-детектор: ставит prerender-status-code до загрузки React.
+         Поисковики читают этот мета-тег и правильно квалифицируют ответ. -->
+    <script>
+      (function() {
+        var p = window.location.pathname.replace(/\/+$/, '') || '/';
+        var KNOWN = new Set(['/','/catalog','/map','/favorites','/compare',
+          '/network-tenants','/news','/leads','/declined',
+          '/catalog/office','/catalog/retail','/catalog/warehouse',
+          '/catalog/restaurant','/catalog/hotel','/catalog/business',
+          '/catalog/gab','/catalog/production','/catalog/land',
+          '/catalog/building','/catalog/free_purpose','/catalog/car_service']);
+        var PATTERNS = [/^\/object\/.+/,/^\/district\/.+/,/^\/news\/.+/];
+        var known = KNOWN.has(p) || PATTERNS.some(function(r){ return r.test(p); });
+        if (!known) {
+          var m = document.createElement('meta');
+          m.name = 'prerender-status-code';
+          m.content = '404';
+          document.head.appendChild(m);
+          var r = document.createElement('meta');
+          r.name = 'robots';
+          r.content = 'noindex, nofollow';
+          document.head.appendChild(r);
+        }
+      })();
+    </script>
+
     <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS COMMENT! -->
     <script src="https://cdn.poehali.dev/intertnal/js/pp-min-2.js"></script>
     <script src="https://cdn.poehali.dev/intertnal/js/route-min.js"></script>
