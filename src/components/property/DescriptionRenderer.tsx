@@ -67,7 +67,7 @@ export default function DescriptionRenderer({ text, className = '' }: Props) {
 
   return (
     <div className={`space-y-4 text-sm leading-relaxed text-foreground/80 ${className}`}>
-      {sections.map((section, i) => (
+      {sections.filter(s => s.header !== 'Призыв к действию').map((section, i) => (
         <div key={i}>
           {section.header && section.header !== 'От собственника' && (
             <div className="flex items-center gap-2 mb-1.5 mt-2">
