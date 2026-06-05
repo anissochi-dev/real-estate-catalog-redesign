@@ -1,6 +1,32 @@
+import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import CharCount from '@/components/ui/CharCount';
 import { Listing, fmtDate } from './types';
+
+const SECTION_HEADERS = [
+  'От собственника! Без комиссий и %!',
+  'Общие параметры и назначение',
+  'Локация и район',
+  'Характеристики объекта',
+  'Коммуникации',
+  'Финансовые перспективы и доходность',
+  'Условия и юридическая чистота',
+];
+
+function DescriptionPreview({ text }: { text: string }) {
+  return (
+    <div className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
+      {text.split('\n').map((line, i) => {
+        const isHeader = SECTION_HEADERS.includes(line.trim());
+        return (
+          <span key={i} className={isHeader ? 'block font-bold mt-2' : 'block'}>
+            {line || '\u00A0'}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 interface Props {
   editing: Partial<Listing>;
@@ -19,6 +45,7 @@ export default function ListingEditorContentSection({
   onDescribe, onGenerateTags,
   errors = {}, setErrors,
 }: Props) {
+  const [preview, setPreview] = useState(false);
   const descLen = (editing.description || '').trim().length;
   const descError = !!errors.description;
   return (
@@ -28,20 +55,35 @@ export default function ListingEditorContentSection({
           <label className="text-sm font-semibold flex items-center gap-1.5">
             Описание *
           </label>
-          <button onClick={onDescribe} disabled={aiLoading}
-            className="text-xs text-brand-orange hover:underline inline-flex items-center gap-1">
-            <Icon name="Sparkles" size={12} />
-            {aiLoading ? 'Генерация...' : 'Сгенерировать ИИ'}
-          </button>
+          <div className="flex items-center gap-3">
+            {descLen > 0 && (
+              <button onClick={() => setPreview(v => !v)}
+                className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                <Icon name={preview ? 'Pencil' : 'Eye'} size={12} />
+                {preview ? 'Редактировать' : 'Просмотр'}
+              </button>
+            )}
+            <button onClick={onDescribe} disabled={aiLoading}
+              className="text-xs text-brand-orange hover:underline inline-flex items-center gap-1">
+              <Icon name="Sparkles" size={12} />
+              {aiLoading ? 'Генерация...' : 'Сгенерировать ИИ'}
+            </button>
+          </div>
         </div>
-        <div className={descError ? 'rounded-lg ring-2 ring-red-300' : ''}>
-          <CharCount as="textarea" rows={6} max={3000} warnAt={2500}
-            value={editing.description || ''}
-            onChange={e => {
-              setEditing({ ...editing, description: (e.target as HTMLTextAreaElement).value });
-              if (descError) setErrors?.(v => ({ ...v, description: false }));
-            }} />
-        </div>
+        {preview && descLen > 0 ? (
+          <div className="px-3 py-2.5 border rounded-lg bg-white min-h-[120px]">
+            <DescriptionPreview text={editing.description || ''} />
+          </div>
+        ) : (
+          <div className={descError ? 'rounded-lg ring-2 ring-red-300' : ''}>
+            <CharCount as="textarea" rows={6} max={3000} warnAt={2500}
+              value={editing.description || ''}
+              onChange={e => {
+                setEditing({ ...editing, description: (e.target as HTMLTextAreaElement).value });
+                if (descError) setErrors?.(v => ({ ...v, description: false }));
+              }} />
+          </div>
+        )}
         {!descError && descLen > 0 && descLen < 30 && (
           <div className="text-[11px] text-amber-600">
             Ещё {30 - descLen} симв. до минимума.
