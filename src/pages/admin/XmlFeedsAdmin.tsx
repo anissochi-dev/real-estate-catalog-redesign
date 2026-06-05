@@ -107,16 +107,16 @@ export default function XmlFeedsAdmin() {
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground">Платформа: {PLATFORMS.find(p => p[0] === f.platform)?.[1] || f.platform}</div>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <div className="mt-2 flex flex-col gap-2 overflow-hidden">
                     <input readOnly value={exportUrl(f.platform)}
-                      className="w-full min-w-0 px-2 py-1 text-xs border rounded bg-white" />
+                      className="w-full min-w-0 px-2 py-1 text-xs border rounded bg-white truncate" />
                     <div className="flex items-center gap-2">
                       <button onClick={() => copy(exportUrl(f.platform))}
-                        className="text-xs px-2 py-1 rounded bg-brand-blue text-white inline-flex items-center gap-1">
+                        className="text-xs px-2 py-1 rounded bg-brand-blue text-white inline-flex items-center gap-1 shrink-0">
                         <Icon name="Copy" size={12} /> Скопировать
                       </button>
                       <a href={exportUrl(f.platform)} target="_blank" rel="noopener noreferrer"
-                        className="text-xs px-2 py-1 rounded bg-muted hover:bg-muted/70 inline-flex items-center gap-1">
+                        className="text-xs px-2 py-1 rounded bg-muted hover:bg-muted/70 inline-flex items-center gap-1 shrink-0">
                         <Icon name="ExternalLink" size={12} /> Открыть
                       </a>
                     </div>
