@@ -183,10 +183,11 @@ def _save_sitemap(cur, conn) -> dict:
 def _get_user(cur, token):
     if not token:
         return None
-    safe = token.replace("'", "''")[:200]
+    t = token.replace("'", "''")[:100]
     cur.execute(
-        f"SELECT id, role FROM {SCHEMA}.users "
-        f"WHERE auth_token = '{safe}' AND is_active = TRUE LIMIT 1"
+        f"SELECT u.id, u.role FROM {SCHEMA}.sessions s "
+        f"JOIN {SCHEMA}.users u ON u.id = s.user_id "
+        f"WHERE s.token = '{t}' AND s.expires_at > NOW() AND u.is_active = TRUE LIMIT 1"
     )
     return cur.fetchone()
 
