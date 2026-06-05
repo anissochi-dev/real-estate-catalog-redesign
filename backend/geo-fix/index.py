@@ -1,5 +1,5 @@
 """
-Business: Геокодирование адресов объектов через Яндекс Геокодер (v4) и автоисправление района.
+Business: Геокодирование адресов объектов через Яндекс Геокодер (v6) и автоисправление района.
 Запускается вручную: action=preview (показать что изменится) или action=apply (применить).
 Args: event с body {action: 'preview'|'apply', ids?: [int, ...]}, X-Auth-Token; context
 Returns: список изменений {id, address, district_old, district_new}
