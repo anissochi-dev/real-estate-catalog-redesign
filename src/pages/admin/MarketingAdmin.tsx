@@ -6,10 +6,12 @@ import PriceMarketTab from '@/pages/admin/marketing/PriceMarketTab';
 import AnalyticsTab from '@/pages/admin/marketing/AnalyticsTab';
 import PricingTab from '@/pages/admin/marketing/PricingTab';
 import UtmTab from '@/pages/admin/marketing/UtmTab';
+import SmartBudgetTab from '@/pages/admin/marketing/SmartBudgetTab';
 
-type Tab = 'analytics' | 'pricing' | 'market-prices' | 'seo-audit' | 'seo-tech' | 'utm';
+type Tab = 'analytics' | 'pricing' | 'market-prices' | 'seo-audit' | 'seo-tech' | 'utm' | 'smart-budget';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
+  { id: 'smart-budget',  label: 'Умный бюджет',      icon: 'Wallet' },
   { id: 'analytics',     label: 'Аналитика',         icon: 'BarChart3' },
   { id: 'pricing',       label: 'Ценообразование',    icon: 'Sparkles' },
   { id: 'market-prices', label: 'Рынок цен',          icon: 'TrendingUp' },
@@ -50,6 +52,7 @@ export default function MarketingAdmin() {
       </div>
 
       {/* Контент */}
+      {tab === 'smart-budget'  && <SmartBudgetTab />}
       {tab === 'analytics'     && <AnalyticsTab />}
       {tab === 'pricing'       && <PricingTab />}
       {tab === 'market-prices' && <PriceMarketTab />}
