@@ -45,6 +45,13 @@ export interface SeoStatus {
   sitemap_exists?: boolean;
   sitemap_urls_count?: number;
   sitemap_updated_at?: string | null;
+  sitemap_url?: string;
+  breakdown?: {
+    listings: number;
+    news: number;
+    static: number;
+    total_expected: number;
+  };
 }
 
 export interface Schedule {

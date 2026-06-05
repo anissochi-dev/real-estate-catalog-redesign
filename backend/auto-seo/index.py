@@ -397,11 +397,13 @@ def _site_base_url(cur) -> str:
 
 
 def _build_sitemap_xml(cur) -> tuple:
-    """Возвращает (xml_string, urls_count)."""
+    """Возвращает (xml_string, urls_count).
+    Включает: статические страницы + активные объекты + опубликованные новости.
+    """
     base = _site_base_url(cur)
     urls = []
 
-    # Статические страницы из seo_pages (только не noindex)
+    # 1. Статические страницы из seo_pages (только не noindex)
     cur.execute(
         f"SELECT path, updated_at FROM {SCHEMA}.seo_pages "
         f"WHERE noindex = FALSE ORDER BY path"
@@ -410,10 +412,9 @@ def _build_sitemap_xml(cur) -> tuple:
         p = r.get('path') or '/'
         if p.startswith('/admin') or p.startswith('/login') or p.startswith('/auth'):
             continue
-        upd = r.get('updated_at')
-        urls.append((base + p, upd))
+        urls.append((base + p, r.get('updated_at'), '0.8', 'weekly'))
 
-    # Активные объекты
+    # 2. Активные объекты — приоритет 1.0 (ключевой контент)
     cur.execute(
         f"SELECT id, slug, title, updated_at FROM {SCHEMA}.listings "
         f"WHERE status = 'active' ORDER BY updated_at DESC NULLS LAST LIMIT 5000"
@@ -422,11 +423,31 @@ def _build_sitemap_xml(cur) -> tuple:
         lid = r.get('id')
         slug = r.get('slug') or _make_slug(r.get('title') or '', lid)
         path = f"/object/{slug}"
-        urls.append((base + path, r.get('updated_at')))
+        urls.append((base + path, r.get('updated_at'), '1.0', 'daily'))
 
-    parts = ['<?xml version="1.0" encoding="UTF-8"?>',
-             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
-    for u, upd in urls:
+    # 3. Опубликованные новости — приоритет 0.6
+    cur.execute(
+        f"SELECT slug, id, updated_at, published_at FROM {SCHEMA}.news "
+        f"WHERE is_published = TRUE AND slug IS NOT NULL AND slug != '' "
+        f"ORDER BY published_at DESC NULLS LAST LIMIT 2000"
+    )
+    for r in cur.fetchall():
+        slug = r.get('slug')
+        nid = r.get('id')
+        if not slug:
+            continue
+        path = f"/news/{slug}"
+        upd = r.get('updated_at') or r.get('published_at')
+        urls.append((base + path, upd, '0.6', 'monthly'))
+
+    parts = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
+        'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
+        'xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 '
+        'http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">',
+    ]
+    for u, upd, priority, changefreq in urls:
         u_safe = u.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
         lastmod = ''
         if upd:
@@ -434,7 +455,11 @@ def _build_sitemap_xml(cur) -> tuple:
                 lastmod = f'<lastmod>{upd.strftime("%Y-%m-%d")}</lastmod>'
             except Exception:
                 lastmod = ''
-        parts.append(f'<url><loc>{u_safe}</loc>{lastmod}</url>')
+        parts.append(
+            f'<url><loc>{u_safe}</loc>{lastmod}'
+            f'<changefreq>{changefreq}</changefreq>'
+            f'<priority>{priority}</priority></url>'
+        )
     parts.append('</urlset>')
     return '\n'.join(parts), len(urls)
 
@@ -806,17 +831,43 @@ def handler(event: dict, context) -> dict:
                 base = _site_base_url(cur)
                 sitemap_count = int(row['urls_count']) if row and row.get('urls_count') else 0
                 sitemap_updated = row['updated_at'] if row else None
+
+                # Подсчёт реального количества по источникам для детального отображения
+                cur.execute(
+                    f"SELECT COUNT(id) as cnt FROM {SCHEMA}.listings WHERE status = 'active'"
+                )
+                r2 = cur.fetchone()
+                active_listings = int(r2['cnt']) if r2 else 0
+
+                cur.execute(
+                    f"SELECT COUNT(id) as cnt FROM {SCHEMA}.news "
+                    f"WHERE is_published = TRUE AND slug IS NOT NULL AND slug != ''"
+                )
+                r3 = cur.fetchone()
+                news_count = int(r3['cnt']) if r3 else 0
+
+                cur.execute(
+                    f"SELECT COUNT(id) as cnt FROM {SCHEMA}.seo_pages WHERE noindex = FALSE"
+                )
+                r4 = cur.fetchone()
+                static_count = int(r4['cnt']) if r4 else 0
+
                 return _ok({
                     'robots_url': f'{base}/robots.txt',
                     'sitemap_url': f'{base}/sitemap.xml',
                     'sitemap_urls_count': sitemap_count,
                     'sitemap_updated_at': sitemap_updated,
                     'robots_disallow': ROBOTS_DISALLOW,
-                    # robots.txt всегда генерируется динамически — считаем его существующим
                     'robots_exists': True,
-                    # sitemap существует если в кэше есть URL (> 0)
                     'sitemap_exists': sitemap_count > 0,
                     'gpt_configured': bool(api_key and folder_id),
+                    # Разбивка по источникам (актуальные данные из БД, не из кэша)
+                    'breakdown': {
+                        'listings': active_listings,
+                        'news': news_count,
+                        'static': static_count,
+                        'total_expected': active_listings + news_count + static_count,
+                    },
                 })
 
             if action == 'sitemap_rebuild':
