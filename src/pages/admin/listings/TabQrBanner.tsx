@@ -12,17 +12,12 @@ interface BrokerInfo { id: number; name: string; phone?: string | null; role: st
 interface Props { listing: Listing; siteUrl?: string }
 type ElementId = 'deal' | 'phone' | 'qr' | 'logo' | 'photo';
 interface Pos { x: number; y: number }
-interface BannerElement {
-  id: ElementId;
-  pos: Pos;
-  fontSize?: number;
-  imgSize?: number; // для logo/photo/qr
-}
+interface BannerElement { id: ElementId; pos: Pos; fontSize?: number; imgSize?: number }
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
-const BG_COLORS    = ['#1a56db','#16a34a','#dc2626','#f97316','#7c3aed','#111827','#facc15','#ffffff'];
-const TEXT_COLORS  = ['#ffffff','#111827','#facc15','#f97316','#1a56db','#dc2626','#16a34a','#7c3aed'];
+const BG_COLORS   = ['#facc15','#1a56db','#16a34a','#dc2626','#f97316','#7c3aed','#111827','#ffffff'];
+const TEXT_COLORS = ['#dc2626','#ffffff','#111827','#facc15','#f97316','#1a56db','#16a34a','#7c3aed'];
 
 type LayoutId = 'h-wide' | 'h-card' | 'v-sticker' | 'v-tall' | 'sq';
 interface Layout { id: LayoutId; label: string; icon: string; w: number; h: number; cmW: number; cmH: number }
@@ -35,24 +30,27 @@ const LAYOUTS: Layout[] = [
   { id: 'sq',        label: 'Квадратный',     icon: 'Square',              w: 300, h: 300, cmW: 15, cmH: 15 },
 ];
 
+// Позиции QR: всегда справа по центру
 const DEFAULT_POSITIONS: Record<LayoutId, Record<'deal'|'phone'|'qr', Pos>> = {
-  'h-wide':    { deal: { x: 28, y: 25 },  phone: { x: 28, y: 95 },  qr: { x: 472, y: 15 } },
-  'h-card':    { deal: { x: 28, y: 28 },  phone: { x: 28, y: 128 }, qr: { x: 386, y: 50 } },
-  'v-sticker': { deal: { x: 20, y: 22 },  phone: { x: 20, y: 118 }, qr: { x: 72,  y: 216 } },
-  'v-tall':    { deal: { x: 24, y: 30 },  phone: { x: 24, y: 156 }, qr: { x: 88,  y: 344 } },
-  'sq':        { deal: { x: 20, y: 24 },  phone: { x: 20, y: 136 }, qr: { x: 168, y: 92 } },
+  'h-wide':    { deal: { x: 24, y: 22 },  phone: { x: 24, y: 108 }, qr: { x: 468, y: 18 } },
+  'h-card':    { deal: { x: 24, y: 24 },  phone: { x: 24, y: 150 }, qr: { x: 376, y: 68 } },
+  'v-sticker': { deal: { x: 16, y: 20 },  phone: { x: 16, y: 130 }, qr: { x: 68,  y: 220 } },
+  'v-tall':    { deal: { x: 20, y: 28 },  phone: { x: 20, y: 180 }, qr: { x: 84,  y: 356 } },
+  'sq':        { deal: { x: 16, y: 20 },  phone: { x: 16, y: 150 }, qr: { x: 162, y: 100 } },
 };
 
+// Шрифты: deal занимает ~40% ширины, phone ~50%
+// Рассчитываем чтобы текст максимально заполнял доступную зону (до QR)
 const DEFAULT_FONTSIZES: Record<LayoutId, Record<'deal'|'phone', number>> = {
-  'h-wide':    { deal: 52, phone: 34 },
-  'h-card':    { deal: 60, phone: 32 },
-  'v-sticker': { deal: 38, phone: 22 },
-  'v-tall':    { deal: 54, phone: 28 },
-  'sq':        { deal: 44, phone: 24 },
+  'h-wide':    { deal: 76, phone: 46 },
+  'h-card':    { deal: 80, phone: 48 },
+  'v-sticker': { deal: 52, phone: 30 },
+  'v-tall':    { deal: 68, phone: 40 },
+  'sq':        { deal: 58, phone: 34 },
 };
 
 const DEFAULT_QR_SIZES: Record<LayoutId, number> = {
-  'h-wide': 104, 'h-card': 112, 'v-sticker': 82, 'v-tall': 90, 'sq': 100,
+  'h-wide': 110, 'h-card': 120, 'v-sticker': 88, 'v-tall': 96, 'sq': 104,
 };
 
 // ─── Banner Canvas ────────────────────────────────────────────────────────────
@@ -84,7 +82,6 @@ function BannerCanvas({
   showSize, cmW, cmH,
 }: CanvasProps) {
   const dragging = useRef<{ id: ElementId; startX: number; startY: number; origX: number; origY: number } | null>(null);
-
   const getEl = (id: ElementId) => elements.find(e => e.id === id);
 
   const onPointerDown = (e: React.PointerEvent, id: ElementId) => {
@@ -102,16 +99,17 @@ function BannerCanvas({
     e.preventDefault();
     const dx = e.clientX - dragging.current.startX;
     const dy = e.clientY - dragging.current.startY;
-    const newX = Math.max(0, Math.min(layout.w - 20, dragging.current.origX + dx));
-    const newY = Math.max(0, Math.min(layout.h - 20, dragging.current.origY + dy));
-    onDragMove(dragging.current.id, { x: newX, y: newY });
+    onDragMove(dragging.current.id, {
+      x: Math.max(0, Math.min(layout.w - 20, dragging.current.origX + dx)),
+      y: Math.max(0, Math.min(layout.h - 20, dragging.current.origY + dy)),
+    });
   };
 
   const onPointerUp = () => { dragging.current = null; };
 
   const selStyle = (id: ElementId): React.CSSProperties =>
     (!exportMode && selected === id)
-      ? { outline: '2px dashed rgba(255,255,255,0.8)', outlineOffset: 3, borderRadius: 4 }
+      ? { outline: '2px dashed rgba(255,255,255,0.85)', outlineOffset: 3, borderRadius: 4 }
       : {};
 
   const dealEl  = getEl('deal');
@@ -129,81 +127,64 @@ function BannerCanvas({
       onClick={e => { if (e.target === e.currentTarget && !exportMode) onSelect(null); }}
       style={{
         position: 'relative', width: layout.w, height: layout.h, background: bg,
-        borderRadius: exportMode ? 0 : 16, overflow: 'hidden',
+        borderRadius: exportMode ? 0 : 14, overflow: 'hidden',
         userSelect: 'none', fontFamily: 'Arial, Helvetica, sans-serif', touchAction: 'none',
       }}
     >
-      {/* Фото объекта — рендерится первым (под остальными) */}
+      {/* Фото — под остальными */}
       {photoEl && photoUrl && (
-        <div
-          onPointerDown={e => onPointerDown(e, 'photo')}
-          style={{
-            position: 'absolute', left: photoEl.pos.x, top: photoEl.pos.y,
-            width: photoEl.imgSize ?? 120, height: photoEl.imgSize ?? 120,
-            cursor: exportMode ? 'default' : 'grab',
-            borderRadius: 10, overflow: 'hidden',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.25)',
-            ...selStyle('photo'),
-          }}
-        >
+        <div onPointerDown={e => onPointerDown(e, 'photo')} style={{
+          position: 'absolute', left: photoEl.pos.x, top: photoEl.pos.y,
+          width: photoEl.imgSize ?? 120, height: photoEl.imgSize ?? 120,
+          cursor: exportMode ? 'default' : 'grab',
+          borderRadius: 10, overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.25)', ...selStyle('photo'),
+        }}>
           <img src={photoUrl} alt="фото" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} crossOrigin="anonymous" />
         </div>
       )}
 
       {/* Deal */}
       {dealEl && (
-        <div
-          onPointerDown={e => onPointerDown(e, 'deal')}
-          style={{
-            position: 'absolute', left: dealEl.pos.x, top: dealEl.pos.y,
-            fontSize: dealEl.fontSize, fontWeight: 900, color: textColor,
-            letterSpacing: 4, lineHeight: 1, cursor: exportMode ? 'default' : 'grab',
-            whiteSpace: 'nowrap', padding: 4, ...selStyle('deal'),
-          }}
-        >{dealText}</div>
+        <div onPointerDown={e => onPointerDown(e, 'deal')} style={{
+          position: 'absolute', left: dealEl.pos.x, top: dealEl.pos.y,
+          fontSize: dealEl.fontSize, fontWeight: 900, color: textColor,
+          letterSpacing: 3, lineHeight: 1, cursor: exportMode ? 'default' : 'grab',
+          whiteSpace: 'nowrap', padding: 4, ...selStyle('deal'),
+        }}>{dealText}</div>
       )}
 
       {/* Phone */}
       {phoneEl && (
-        <div
-          onPointerDown={e => onPointerDown(e, 'phone')}
-          style={{
-            position: 'absolute', left: phoneEl.pos.x, top: phoneEl.pos.y,
-            fontSize: phoneEl.fontSize, fontWeight: 800, color: textColor,
-            letterSpacing: 1, lineHeight: 1, cursor: exportMode ? 'default' : 'grab',
-            whiteSpace: 'nowrap', padding: 4, ...selStyle('phone'),
-          }}
-        >{phoneText || '+7 ─── ─── ────'}</div>
+        <div onPointerDown={e => onPointerDown(e, 'phone')} style={{
+          position: 'absolute', left: phoneEl.pos.x, top: phoneEl.pos.y,
+          fontSize: phoneEl.fontSize, fontWeight: 800, color: textColor,
+          letterSpacing: 1, lineHeight: 1, cursor: exportMode ? 'default' : 'grab',
+          whiteSpace: 'nowrap', padding: 4, ...selStyle('phone'),
+        }}>{phoneText || '+7 ─── ─── ────'}</div>
       )}
 
       {/* QR */}
       {qrEl && (
-        <div
-          onPointerDown={e => onPointerDown(e, 'qr')}
-          style={{
-            position: 'absolute', left: qrEl.pos.x, top: qrEl.pos.y,
-            width: (qrEl.imgSize ?? 104) + 12, height: (qrEl.imgSize ?? 104) + 12,
-            background: 'rgba(255,255,255,0.13)', borderRadius: 10, padding: 6,
-            cursor: exportMode ? 'default' : 'grab', ...selStyle('qr'),
-          }}
-        >
+        <div onPointerDown={e => onPointerDown(e, 'qr')} style={{
+          position: 'absolute', left: qrEl.pos.x, top: qrEl.pos.y,
+          width: (qrEl.imgSize ?? 110) + 12, height: (qrEl.imgSize ?? 110) + 12,
+          background: 'rgba(255,255,255,0.15)', borderRadius: 10, padding: 6,
+          cursor: exportMode ? 'default' : 'grab', ...selStyle('qr'),
+        }}>
           {qrDataUrl
-            ? <img src={qrDataUrl} alt="QR" style={{ width: qrEl.imgSize ?? 104, height: qrEl.imgSize ?? 104, display: 'block' }} />
-            : <div style={{ width: qrEl.imgSize ?? 104, height: qrEl.imgSize ?? 104, opacity: 0.25, border: `2px dashed ${textColor}`, borderRadius: 6 }} />
+            ? <img src={qrDataUrl} alt="QR" style={{ width: qrEl.imgSize ?? 110, height: qrEl.imgSize ?? 110, display: 'block' }} />
+            : <div style={{ width: qrEl.imgSize ?? 110, height: qrEl.imgSize ?? 110, opacity: 0.25, border: `2px dashed ${textColor}`, borderRadius: 6 }} />
           }
         </div>
       )}
 
       {/* Логотип */}
       {logoEl && logoUrl && (
-        <div
-          onPointerDown={e => onPointerDown(e, 'logo')}
-          style={{
-            position: 'absolute', left: logoEl.pos.x, top: logoEl.pos.y,
-            width: logoEl.imgSize ?? 80, height: logoEl.imgSize ?? 80,
-            cursor: exportMode ? 'default' : 'grab', ...selStyle('logo'),
-          }}
-        >
+        <div onPointerDown={e => onPointerDown(e, 'logo')} style={{
+          position: 'absolute', left: logoEl.pos.x, top: logoEl.pos.y,
+          width: logoEl.imgSize ?? 80, height: logoEl.imgSize ?? 80,
+          cursor: exportMode ? 'default' : 'grab', ...selStyle('logo'),
+        }}>
           <img src={logoUrl} alt="лого" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} crossOrigin="anonymous" />
         </div>
       )}
@@ -212,9 +193,8 @@ function BannerCanvas({
       {showSize && (
         <div style={{
           position: 'absolute', bottom: 10, right: 12,
-          fontSize: Math.max(10, layout.h * 0.07), fontWeight: 700,
-          color: textColor, opacity: 0.55,
-          fontFamily: 'Arial, sans-serif', letterSpacing: 0.5, whiteSpace: 'nowrap',
+          fontSize: Math.max(10, layout.h * 0.065), fontWeight: 700,
+          color: textColor, opacity: 0.55, letterSpacing: 0.5, whiteSpace: 'nowrap',
         }}>
           {cmW} см × {cmH} см
         </div>
@@ -230,7 +210,7 @@ function Swatch({ color, active, onClick }: { color: string; active: boolean; on
     <button onClick={onClick} className="w-7 h-7 rounded-lg flex-shrink-0 transition-all"
       style={{
         background: color,
-        border: `2px solid ${active ? (color === '#ffffff' || color === '#facc15' ? '#666' : color) : 'transparent'}`,
+        border: `2px solid ${active ? (color === '#ffffff' || color === '#facc15' ? '#555' : color) : 'transparent'}`,
         outline: active ? `2px solid ${color === '#ffffff' || color === '#facc15' ? '#666' : color}` : 'none',
         outlineOffset: 2,
         boxShadow: color === '#ffffff' ? 'inset 0 0 0 1px #ddd' : undefined,
@@ -241,34 +221,28 @@ function Swatch({ color, active, onClick }: { color: string; active: boolean; on
 
 // ─── Image upload button ──────────────────────────────────────────────────────
 
-function ImageUploadBtn({
-  label, icon, url, uploading, onFile, onRemove,
-}: {
+function ImageUploadBtn({ label, icon, url, uploading, onFile, onRemove }: {
   label: string; icon: string; url: string; uploading: boolean;
   onFile: (f: File) => void; onRemove: () => void;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   return (
     <div className="flex items-center gap-2">
-      <input ref={ref} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }} />
+      <input ref={ref} type="file" accept="image/*" className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }} />
       {url ? (
         <div className="flex items-center gap-2">
           <img src={url} alt={label} className="w-10 h-10 rounded-lg object-cover border border-border" />
-          <div className="text-xs text-muted-foreground">{label} загружен</div>
+          <span className="text-xs text-muted-foreground">{label} загружен</span>
           <button onClick={onRemove} className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1">
             <Icon name="X" size={12} /> Удалить
           </button>
         </div>
       ) : (
-        <button
-          onClick={() => ref.current?.click()}
-          disabled={uploading}
+        <button onClick={() => ref.current?.click()} disabled={uploading}
           className="flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-border hover:border-brand-blue text-sm text-muted-foreground hover:text-brand-blue transition-all disabled:opacity-50"
         >
-          {uploading
-            ? <Icon name="Loader2" size={14} className="animate-spin" />
-            : <Icon name={icon} size={14} />
-          }
+          {uploading ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name={icon} size={14} />}
           {uploading ? 'Загрузка...' : `Добавить ${label.toLowerCase()}`}
         </button>
       )}
@@ -278,13 +252,18 @@ function ImageUploadBtn({
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
+// Фиксированный размер контейнера превью
+const PREVIEW_W = 520;
+const PREVIEW_H = 300;
+
 export function TabQrBanner({ listing, siteUrl }: Props) {
   const exportRef = useRef<HTMLDivElement>(null);
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [broker, setBroker] = useState<BrokerInfo | null>(null);
 
-  const [bgColor, setBgColor] = useState('#1a56db');
-  const [textColor, setTextColor] = useState('#ffffff');
+  // стандарт: жёлтый фон, красный текст
+  const [bgColor, setBgColor] = useState('#facc15');
+  const [textColor, setTextColor] = useState('#dc2626');
 
   const [layoutId, setLayoutId] = useState<LayoutId>('h-wide');
   const [elements, setElements] = useState<BannerElement[]>([]);
@@ -312,17 +291,15 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   const makeBaseElements = useCallback((lid: LayoutId): BannerElement[] => {
     const pos = DEFAULT_POSITIONS[lid];
     const fs = DEFAULT_FONTSIZES[lid];
-    const qrSz = DEFAULT_QR_SIZES[lid];
     return [
       { id: 'deal',  pos: pos.deal,  fontSize: fs.deal },
       { id: 'phone', pos: pos.phone, fontSize: fs.phone },
-      { id: 'qr',    pos: pos.qr,    imgSize: qrSz },
+      { id: 'qr',    pos: pos.qr,   imgSize: DEFAULT_QR_SIZES[lid] },
     ];
   }, []);
 
   const initElements = useCallback((lid: LayoutId, prevEls?: BannerElement[]) => {
     const base = makeBaseElements(lid);
-    // сохраняем logo/photo если были
     const logo  = prevEls?.find(e => e.id === 'logo');
     const photo = prevEls?.find(e => e.id === 'photo');
     setElements([...base, ...(logo ? [logo] : []), ...(photo ? [photo] : [])]);
@@ -340,57 +317,38 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
 
   const resetPositions = () => {
     initElements(layoutId, elements);
-    const l = layout;
-    setCmW(String(l.cmW)); setCmH(String(l.cmH));
+    setCmW(String(layout.cmW)); setCmH(String(layout.cmH));
   };
 
-  // добавить/убрать логотип как элемент
   const addLogoElement = (url: string) => {
     setLogoUrl(url);
-    setElements(prev => {
-      const without = prev.filter(e => e.id !== 'logo');
-      return [...without, { id: 'logo', pos: { x: 16, y: 16 }, imgSize: 70 }];
-    });
+    setElements(prev => [...prev.filter(e => e.id !== 'logo'), { id: 'logo', pos: { x: 16, y: 16 }, imgSize: 70 }]);
   };
   const removeLogoElement = () => {
-    setLogoUrl('');
-    setElements(prev => prev.filter(e => e.id !== 'logo'));
+    setLogoUrl(''); setElements(prev => prev.filter(e => e.id !== 'logo'));
     if (selected === 'logo') setSelected(null);
   };
 
-  // добавить/убрать фото как элемент
   const addPhotoElement = (url: string) => {
     setPhotoUrl(url);
-    setElements(prev => {
-      const without = prev.filter(e => e.id !== 'photo');
-      return [...without, { id: 'photo', pos: { x: 16, y: layout.h - 136 }, imgSize: 120 }];
-    });
+    setElements(prev => [...prev.filter(e => e.id !== 'photo'), { id: 'photo', pos: { x: 16, y: layout.h - 136 }, imgSize: 120 }]);
   };
   const removePhotoElement = () => {
-    setPhotoUrl('');
-    setElements(prev => prev.filter(e => e.id !== 'photo'));
+    setPhotoUrl(''); setElements(prev => prev.filter(e => e.id !== 'photo'));
     if (selected === 'photo') setSelected(null);
   };
 
   const uploadLogo = async (file: File) => {
     setUploadingLogo(true);
     try { const r = await uploadFileEx(file, 'logo'); addLogoElement(r.url); }
-    catch { alert('Ошибка загрузки логотипа'); }
-    finally { setUploadingLogo(false); }
+    catch { alert('Ошибка загрузки логотипа'); } finally { setUploadingLogo(false); }
   };
-
   const uploadPhoto = async (file: File) => {
     setUploadingPhoto(true);
     try { const r = await uploadFileEx(file, 'photos'); addPhotoElement(r.url); }
-    catch { alert('Ошибка загрузки фото'); }
-    finally { setUploadingPhoto(false); }
+    catch { alert('Ошибка загрузки фото'); } finally { setUploadingPhoto(false); }
   };
-
-  // автоподставить фото объекта
-  const useListingPhoto = () => {
-    const img = listing.image;
-    if (img) addPhotoElement(img);
-  };
+  const useListingPhoto = () => { if (listing.image) addPhotoElement(listing.image); };
 
   useEffect(() => {
     adminApi.listUsers().then(r => {
@@ -427,7 +385,7 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
     if (!selected) return;
     if (selected === 'deal' || selected === 'phone') {
       setElements(prev => prev.map(e =>
-        e.id === selected ? { ...e, fontSize: Math.max(10, Math.min(120, (e.fontSize ?? 32) + delta)) } : e
+        e.id === selected ? { ...e, fontSize: Math.max(10, Math.min(140, (e.fontSize ?? 32) + delta)) } : e
       ));
     } else {
       setElements(prev => prev.map(e =>
@@ -457,48 +415,43 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
           URL.revokeObjectURL(url);
         }, mime, downloadFormat === 'jpg' ? 0.92 : 1);
       }
-    } catch { alert('Ошибка при скачивании'); }
-    finally { setDownloading(false); }
+    } catch { alert('Ошибка при скачивании'); } finally { setDownloading(false); }
   };
 
   const downloadQr = () => {
     if (!qrDataUrl) return;
-    const a = document.createElement('a');
-    a.href = qrDataUrl; a.download = `qr-${listing.id}.png`; a.click();
+    const a = document.createElement('a'); a.href = qrDataUrl; a.download = `qr-${listing.id}.png`; a.click();
   };
 
-  // ── размеры и ориентир ──────────────────────────────────────────────────────
+  // ── просчёт площади и ориентир ───────────────────────────────────────────────
   const numCmW = Math.max(1, Number(cmW) || 1);
   const numCmH = Math.max(1, Number(cmH) || 1);
   const sqM = ((numCmW * numCmH) / 10000).toFixed(4).replace(/\.?0+$/, '');
 
-  // Визуальный ориентир: пересчитываем пропорцию превью под реальные см
-  // базовая ширина контейнера 520px, масштабируем высоту пропорционально см
-  const PREVIEW_BASE_W = 520;
-  const orientW = PREVIEW_BASE_W;
-  const orientH = Math.round(PREVIEW_BASE_W * (numCmH / numCmW));
-  const clampedH = Math.min(Math.max(orientH, 80), 500);
+  // Масштаб баннера в фиксированный контейнер PREVIEW_W × PREVIEW_H
+  const previewScale = Math.min(PREVIEW_W / layout.w, PREVIEW_H / layout.h, 1);
 
-  // масштаб баннера в этот ориентир-контейнер
-  const previewScale = Math.min(orientW / layout.w, clampedH / layout.h, 1);
+  // Высота контейнера-ориентира пересчитывается по реальным пропорциям см
+  // но ограничена чтобы не быть слишком большой/маленькой
+  const orientH = Math.round(PREVIEW_W * (numCmH / numCmW));
+  const containerH = Math.min(Math.max(orientH, 90), 460);
 
   const canvasProps: Omit<CanvasProps, 'bannerRef' | 'exportMode'> = {
     layout, bg: bgColor, textColor, elements, dealText, phoneText,
     qrDataUrl, logoUrl, photoUrl,
     selected, onSelect: setSelected, onDragMove: updatePos,
-    showSize, cmW: Number(cmW) || 0, cmH: Number(cmH) || 0,
+    showSize, cmW: numCmW, cmH: numCmH,
   };
 
   if (elements.length === 0) return null;
 
-  const sizeLabel = (el: BannerElement) => {
-    if (el.id === 'deal' || el.id === 'phone') return { label: 'шрифт', value: el.fontSize ?? 32 };
-    return { label: 'размер', value: el.imgSize ?? 80 };
-  };
-
   const elLabel: Record<ElementId, string> = {
     deal: 'Надпись сделки', phone: 'Телефон', qr: 'QR-код', logo: 'Логотип', photo: 'Фото',
   };
+  const sizeInfo = (el: BannerElement) =>
+    (el.id === 'deal' || el.id === 'phone')
+      ? { label: 'шрифт', value: el.fontSize ?? 32 }
+      : { label: 'размер', value: el.imgSize ?? 80 };
 
   return (
     <div className="p-6 space-y-5">
@@ -529,7 +482,8 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
             {BG_COLORS.map(c => <Swatch key={c} color={c} active={bgColor === c} onClick={() => setBgColor(c)} />)}
           </div>
           <div className="flex items-center gap-2 border border-border rounded-lg px-2 py-1.5">
-            <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent flex-shrink-0" />
+            <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)}
+              className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent flex-shrink-0" />
             <span className="text-xs font-mono text-muted-foreground">Свой: {bgColor}</span>
           </div>
         </div>
@@ -539,7 +493,8 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
             {TEXT_COLORS.map(c => <Swatch key={c} color={c} active={textColor === c} onClick={() => setTextColor(c)} />)}
           </div>
           <div className="flex items-center gap-2 border border-border rounded-lg px-2 py-1.5">
-            <input type="color" value={textColor} onChange={e => setTextColor(e.target.value)} className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent flex-shrink-0" />
+            <input type="color" value={textColor} onChange={e => setTextColor(e.target.value)}
+              className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent flex-shrink-0" />
             <span className="text-xs font-mono text-muted-foreground">Свой: {textColor}</span>
           </div>
         </div>
@@ -560,7 +515,7 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
         </div>
       </div>
 
-      {/* Логотип и фото */}
+      {/* Изображения */}
       <div className="border border-border rounded-xl p-4 space-y-3">
         <div className="text-sm font-semibold">Изображения на баннере</div>
         <div className="space-y-2">
@@ -570,16 +525,13 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
             <ImageUploadBtn label="Фото объекта" icon="ImagePlus" url={photoUrl} uploading={uploadingPhoto}
               onFile={uploadPhoto} onRemove={removePhotoElement} />
             {!photoUrl && listing.image && (
-              <button onClick={useListingPhoto}
-                className="flex items-center gap-1.5 text-xs text-brand-blue hover:underline"
-              >
-                <Icon name="ImageIcon" size={12} />
-                Использовать фото объекта
+              <button onClick={useListingPhoto} className="flex items-center gap-1.5 text-xs text-brand-blue hover:underline">
+                <Icon name="ImageIcon" size={12} />Использовать фото объекта
               </button>
             )}
           </div>
         </div>
-        <div className="text-xs text-muted-foreground">После добавления — перетащи изображение в нужное место на баннере</div>
+        <div className="text-xs text-muted-foreground">После добавления — перетащи в нужное место на баннере</div>
       </div>
 
       {/* Размеры для печати */}
@@ -615,14 +567,12 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
               <Icon name="Square" size={13} className="text-brand-blue" />
               <span className="text-sm font-bold text-brand-blue">{sqM} м²</span>
             </div>
-            {showSize && (
-              <div className="text-xs text-muted-foreground px-1">На баннере: {numCmW} см × {numCmH} см</div>
-            )}
+            {showSize && <div className="text-xs text-muted-foreground px-1">На баннере: {numCmW}×{numCmH} см</div>}
           </div>
         </div>
         <div className="flex items-center gap-1.5 text-xs text-brand-blue/70 bg-brand-blue/5 rounded-lg px-3 py-1.5">
           <Icon name="Info" size={12} />
-          Ориентир пропорций в редакторе ниже обновляется автоматически
+          Пропорции в редакторе ниже обновляются автоматически
         </div>
       </div>
 
@@ -631,7 +581,9 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
         <div className="flex items-center justify-between">
           <div className="text-sm font-semibold">Редактор</div>
           <div className="flex items-center gap-3">
-            <button onClick={resetPositions} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+            <button onClick={resetPositions}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
               <Icon name="RotateCcw" size={12} />Сбросить позиции
             </button>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -640,39 +592,44 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
           </div>
         </div>
 
-        {/* Ориентир пропорций — контейнер меняет высоту под реальные см */}
+        {/* Контейнер-ориентир: ширина фиксирована, высота меняется по пропорции см */}
         <div
-          className="relative flex justify-center items-center bg-[#e0e0e0] rounded-2xl overflow-hidden transition-all duration-300"
-          style={{ width: '100%', height: clampedH + 32, minHeight: 120 }}
+          className="relative flex items-center justify-center bg-[#e0e0e0] rounded-2xl overflow-hidden transition-[height] duration-300"
+          style={{ width: '100%', height: containerH + 32 }}
         >
-          {/* Сетка-ориентир */}
-          <div className="absolute inset-0 opacity-20" style={{
-            backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 19px,#888 19px,#888 20px),repeating-linear-gradient(90deg,transparent,transparent 19px,#888 19px,#888 20px)',
+          {/* Сетка */}
+          <div className="absolute inset-0 opacity-[0.12]" style={{
+            backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 19px,#777 19px,#777 20px),repeating-linear-gradient(90deg,transparent,transparent 19px,#777 19px,#777 20px)',
           }} />
+          {/* Баннер — всегда по центру, масштаб фиксирован */}
           <div style={{
             transform: `scale(${previewScale})`,
             transformOrigin: 'center center',
             width: layout.w * previewScale,
             height: layout.h * previewScale,
+            flexShrink: 0,
           }}>
             <BannerCanvas {...canvasProps} bannerRef={{ current: null }} />
           </div>
-          {/* Подпись */}
-          <div className="absolute bottom-2 right-3 text-xs text-gray-500 bg-white/70 rounded px-2 py-0.5">
+          {/* Ориентир */}
+          <div className="absolute bottom-2 right-3 text-xs text-gray-500 bg-white/80 rounded px-2 py-0.5 select-none">
             Ориентир: {numCmW} × {numCmH} см
           </div>
         </div>
 
-        {/* Панель выбранного */}
+        {/* Панель выбранного элемента */}
         {selected && selectedEl && (
           <div className="flex items-center gap-3 bg-muted/50 rounded-xl px-4 py-2.5 text-sm flex-wrap">
-            <Icon name={selected === 'qr' ? 'QrCode' : selected === 'deal' ? 'Type' : selected === 'phone' ? 'Phone' : selected === 'logo' ? 'Building2' : 'Image'} size={14} className="text-muted-foreground" />
+            <Icon name={
+              selected === 'qr' ? 'QrCode' : selected === 'deal' ? 'Type' :
+              selected === 'phone' ? 'Phone' : selected === 'logo' ? 'Building2' : 'Image'
+            } size={14} className="text-muted-foreground" />
             <span className="text-muted-foreground">{elLabel[selected]}</span>
-            <span className="text-muted-foreground">· {sizeLabel(selectedEl).label}</span>
+            <span className="text-muted-foreground">· {sizeInfo(selectedEl).label}</span>
             <button onClick={() => updateSize(-2)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-muted border border-border">
               <Icon name="Minus" size={12} />
             </button>
-            <span className="font-bold w-8 text-center">{sizeLabel(selectedEl).value}</span>
+            <span className="font-bold w-8 text-center">{sizeInfo(selectedEl).value}</span>
             <button onClick={() => updateSize(2)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-muted border border-border">
               <Icon name="Plus" size={12} />
             </button>
@@ -681,7 +638,7 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
         )}
       </div>
 
-      {/* Скрытый для экспорта */}
+      {/* Скрытый экспорт */}
       <div style={{ position: 'fixed', left: -9999, top: -9999, pointerEvents: 'none', opacity: 0 }}>
         <BannerCanvas {...canvasProps} selected={null} bannerRef={exportRef} exportMode />
       </div>
@@ -708,8 +665,7 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
         <button onClick={downloadQr} disabled={!qrDataUrl}
           className="flex items-center gap-1.5 text-sm text-brand-blue hover:underline disabled:opacity-40"
         >
-          <Icon name="QrCode" size={14} />
-          Скачать QR-код отдельно (PNG)
+          <Icon name="QrCode" size={14} />Скачать QR-код отдельно (PNG)
         </button>
       </div>
 
