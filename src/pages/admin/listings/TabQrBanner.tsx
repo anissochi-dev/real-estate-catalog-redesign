@@ -428,13 +428,16 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   const numCmH = Math.max(1, Number(cmH) || 1);
   const sqM = ((numCmW * numCmH) / 10000).toFixed(4).replace(/\.?0+$/, '');
 
-  // Масштаб баннера в фиксированный контейнер PREVIEW_W × PREVIEW_H
-  const previewScale = Math.min(PREVIEW_W / layout.w, PREVIEW_H / layout.h, 1);
-
-  // Высота контейнера-ориентира пересчитывается по реальным пропорциям см
-  // но ограничена чтобы не быть слишком большой/маленькой
+  // Высота контейнера-ориентира по реальным пропорциям см, ограничена
   const orientH = Math.round(PREVIEW_W * (numCmH / numCmW));
-  const containerH = Math.min(Math.max(orientH, 90), 460);
+  const containerH = Math.min(Math.max(orientH, 100), 460);
+
+  // Масштаб баннера: вписываем в контейнер с отступом 48px по вертикали
+  const innerH = containerH - 48;
+  const previewScale = Math.min(PREVIEW_W / layout.w, innerH / layout.h, 1);
+  // Реальные размеры баннера после масштабирования
+  const scaledW = layout.w * previewScale;
+  const scaledH = layout.h * previewScale;
 
   const canvasProps: Omit<CanvasProps, 'bannerRef' | 'exportMode'> = {
     layout, bg: bgColor, textColor, elements, dealText, phoneText,
@@ -592,24 +595,33 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
           </div>
         </div>
 
-        {/* Контейнер-ориентир: ширина фиксирована, высота меняется по пропорции см */}
+        {/* Контейнер-ориентир: ширина фиксирована, высота по пропорции см */}
         <div
-          className="relative flex items-center justify-center bg-[#e0e0e0] rounded-2xl overflow-hidden transition-[height] duration-300"
-          style={{ width: '100%', height: containerH + 32 }}
+          className="relative bg-[#e0e0e0] rounded-2xl overflow-hidden transition-[height] duration-300"
+          style={{ width: '100%', height: containerH }}
         >
           {/* Сетка */}
           <div className="absolute inset-0 opacity-[0.12]" style={{
             backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 19px,#777 19px,#777 20px),repeating-linear-gradient(90deg,transparent,transparent 19px,#777 19px,#777 20px)',
           }} />
-          {/* Баннер — всегда по центру, масштаб фиксирован */}
+          {/* Баннер — строго по центру через абсолютное позиционирование */}
           <div style={{
-            transform: `scale(${previewScale})`,
-            transformOrigin: 'center center',
-            width: layout.w * previewScale,
-            height: layout.h * previewScale,
-            flexShrink: 0,
+            position: 'absolute',
+            left: '50%',
+            top: '50%',
+            width: scaledW,
+            height: scaledH,
+            transform: `translate(-50%, -50%)`,
           }}>
-            <BannerCanvas {...canvasProps} bannerRef={{ current: null }} />
+            {/* Внутри уже в натуральных пикселях, scale применяем через wrapper */}
+            <div style={{
+              width: layout.w,
+              height: layout.h,
+              transform: `scale(${previewScale})`,
+              transformOrigin: 'top left',
+            }}>
+              <BannerCanvas {...canvasProps} bannerRef={{ current: null }} />
+            </div>
           </div>
           {/* Ориентир */}
           <div className="absolute bottom-2 right-3 text-xs text-gray-500 bg-white/80 rounded px-2 py-0.5 select-none">
