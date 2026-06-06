@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { adminApi } from '@/lib/adminApi';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -17,6 +17,10 @@ interface Props {
   onEdit?: (listing: Listing) => void;
 }
 
+// Первые 6 — основные (всегда видны), остальные — в меню «Ещё»
+const PRIMARY_TABS: TabId[] = ['overview', 'photos', 'leads', 'comments', 'ai', 'qr_banner'];
+const MORE_TABS: TabId[] = ['price_history', 'stats', 'documents', 'broker'];
+
 export default function ListingInternalCard({ listingId, onClose, onBrokerChanged, onEdit }: Props) {
   const { user } = useAuth();
   const { settings } = useSettings();
@@ -24,6 +28,16 @@ export default function ListingInternalCard({ listingId, onClose, onBrokerChange
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setMoreOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -97,19 +111,52 @@ export default function ListingInternalCard({ listingId, onClose, onBrokerChange
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-border px-4 overflow-x-auto shrink-0 scrollbar-hide">
-          {TABS.map(t => (
+        <div className="flex items-stretch border-b border-border shrink-0 px-2 sm:px-4">
+          {/* Основные вкладки */}
+          {TABS.filter(t => PRIMARY_TABS.includes(t.id)).map(t => (
             <button
               key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex items-center gap-1.5 px-3 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+              onClick={() => { setTab(t.id); setMoreOpen(false); }}
+              className={`flex flex-col sm:flex-row items-center gap-0.5 sm:gap-1.5 px-2 sm:px-3 py-2 sm:py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors min-w-0 ${
                 tab === t.id ? 'border-brand-blue text-brand-blue' : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
-              <Icon name={t.icon} size={14} />
-              {t.label}
+              <Icon name={t.icon} size={15} />
+              <span className="leading-tight text-center">{t.label}</span>
             </button>
           ))}
+
+          {/* Кнопка «Ещё» */}
+          <div ref={moreRef} className="relative ml-auto flex-shrink-0">
+            <button
+              onClick={() => setMoreOpen(v => !v)}
+              className={`flex flex-col sm:flex-row items-center gap-0.5 sm:gap-1.5 px-2 sm:px-3 py-2 sm:py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors h-full ${
+                MORE_TABS.includes(tab)
+                  ? 'border-brand-blue text-brand-blue'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Icon name="MoreHorizontal" size={15} />
+              <span>{MORE_TABS.includes(tab) ? (TABS.find(t => t.id === tab)?.label ?? 'Ещё') : 'Ещё'}</span>
+            </button>
+
+            {moreOpen && (
+              <div className="absolute right-0 top-full mt-1 bg-white border border-border rounded-xl shadow-lg z-50 py-1 min-w-[160px]">
+                {TABS.filter(t => MORE_TABS.includes(t.id)).map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => { setTab(t.id); setMoreOpen(false); }}
+                    className={`flex items-center gap-2.5 w-full px-4 py-2.5 text-sm transition-colors ${
+                      tab === t.id ? 'text-brand-blue bg-brand-blue/5 font-semibold' : 'text-foreground hover:bg-muted'
+                    }`}
+                  >
+                    <Icon name={t.icon} size={15} />
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Content */}
