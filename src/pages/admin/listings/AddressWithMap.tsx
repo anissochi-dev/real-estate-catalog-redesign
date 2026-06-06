@@ -66,6 +66,7 @@ interface Suggestion {
   displayName: string;
   lat?: number | null;
   lon?: number | null;
+  district?: string;
 }
 
 export default function AddressWithMap({ editing, setEditing, cities, hasError, districtError, onCoordsManualChange }: AddressProps) {
@@ -154,7 +155,7 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
 
   const GEO_SUGGEST_URL = 'https://functions.poehali.dev/1e52d435-ff18-40dd-8fac-d6bdd9b29ecc';
 
-  interface DadataSuggestion { value: string; full: string; lat: number | null; lon: number | null; }
+  interface DadataSuggestion { value: string; full: string; lat: number | null; lon: number | null; district?: string; }
 
   /* Подсказки адресов через DaData (бэкенд). */
   const fetchSuggestions = (query: string) => {
@@ -172,12 +173,7 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
         .then((items: DadataSuggestion[]) => {
           const list: Suggestion[] = (items || [])
             .map(it => {
-              // Убираем «г Краснодар, » и подобные префиксы
-              const v = it.value
-                .replace(/^г\s+[^,]+,\s*/i, '')
-                .replace(/^г\.\s*[^,]+,\s*/i, '')
-                .trim();
-              return { value: v || it.value, displayName: v || it.value, lat: it.lat, lon: it.lon };
+              return { value: it.value, displayName: it.value, lat: it.lat, lon: it.lon, district: it.district || '' };
             })
             .filter(s => s.value);
           setSuggestions(list);
@@ -280,7 +276,13 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
       const coords: [number, number] = [s.lat, s.lon];
       markerRef.current?.geometry.setCoordinates(coords);
       ymapInstance.current?.setCenter(coords, 16, { duration: 400 });
-      setEditing({ ...editingRef.current, address: s.value, lat: s.lat, lng: s.lon });
+      setEditing({
+        ...editingRef.current,
+        address: s.value,
+        lat: s.lat,
+        lng: s.lon,
+        ...(s.district ? { district: s.district } : {}),
+      });
     } else {
       geocodeAddress(`${currentCity}, ${s.value}`, s.value);
     }

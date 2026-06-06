@@ -60,16 +60,23 @@ def handler(event: dict, context) -> dict:
         data_obj = s.get('data', {})
         lat = data_obj.get('geo_lat')
         lon = data_obj.get('geo_lon')
+        # Район из DaData: city_district_with_type или city_district
+        city_district = (
+            data_obj.get('city_district_with_type')
+            or data_obj.get('city_district')
+            or ''
+        )
         # Убираем страну, регион и город из начала строки для краткости
         short = value
-        for prefix in [f'Россия, ', f'Краснодарский край, ', f'{city}, ']:
-            if short.startswith(prefix):
+        for prefix in ['Россия, ', 'Краснодарский край, ', f'г {city}, ', f'{city}, ']:
+            while short.startswith(prefix):
                 short = short[len(prefix):]
         suggestions.append({
             'value': short,
             'full': value,
             'lat': float(lat) if lat else None,
             'lon': float(lon) if lon else None,
+            'district': city_district,
         })
 
     return {
