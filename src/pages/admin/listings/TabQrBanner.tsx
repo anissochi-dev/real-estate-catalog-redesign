@@ -469,41 +469,7 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
         </div>
       </div>
 
-      {/* Текст */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <div className="text-xs text-muted-foreground mb-1">Текст сделки</div>
-          <input value={dealText} onChange={e => setDealText(e.target.value.toUpperCase())}
-            className="w-full px-3 py-2 border border-border rounded-xl text-sm font-bold uppercase tracking-widest" maxLength={20} />
-        </div>
-        <div>
-          <div className="text-xs text-muted-foreground mb-1">Телефон</div>
-          <input value={phoneText} onChange={e => setPhoneText(e.target.value)}
-            className="w-full px-3 py-2 border border-border rounded-xl text-sm font-semibold"
-            placeholder="+7 000 000-00-00" maxLength={30} />
-        </div>
-      </div>
-
-      {/* Изображения */}
-      <div className="border border-border rounded-xl p-4 space-y-3">
-        <div className="text-sm font-semibold">Изображения на баннере</div>
-        <div className="space-y-2">
-          <ImageUploadBtn label="Логотип" icon="Building2" url={logoUrl} uploading={uploadingLogo}
-            onFile={uploadLogo} onRemove={removeLogoElement} />
-          <div className="flex items-center gap-2 flex-wrap">
-            <ImageUploadBtn label="Фото объекта" icon="ImagePlus" url={photoUrl} uploading={uploadingPhoto}
-              onFile={uploadPhoto} onRemove={removePhotoElement} />
-            {!photoUrl && listing.image && (
-              <button onClick={useListingPhoto} className="flex items-center gap-1.5 text-xs text-brand-blue hover:underline">
-                <Icon name="ImageIcon" size={12} />Использовать фото объекта
-              </button>
-            )}
-          </div>
-        </div>
-        <div className="text-xs text-muted-foreground">После добавления — перетащи в нужное место на баннере</div>
-      </div>
-
-      {/* Размеры для печати */}
+      {/* Размеры для печати — перед редактором */}
       <div className="border-2 border-brand-blue/30 bg-brand-blue/5 rounded-xl p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -519,8 +485,6 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
             {showSize ? 'На баннере: вкл' : 'Показать на баннере'}
           </button>
         </div>
-
-        {/* Пресеты */}
         <div className="flex flex-wrap gap-1.5">
           {SIZE_PRESETS.map(p => (
             <button key={p.label} onClick={() => applyPreset(p.w, p.h)}
@@ -534,7 +498,6 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
             </button>
           ))}
         </div>
-
         <div className="flex items-center gap-3 flex-wrap">
           <div>
             <div className="text-xs text-muted-foreground mb-1">Длина (см)</div>
@@ -554,7 +517,7 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
         </div>
       </div>
 
-      {/* Редактор */}
+      {/* Редактор — сразу под размерами */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <div className="text-sm font-semibold">Редактор</div>
@@ -570,7 +533,6 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
           </div>
         </div>
 
-        {/* Контейнер превью — фиксированная ширина, высота по реальной пропорции */}
         <div
           className="relative bg-[#e0e0e0] rounded-2xl overflow-hidden transition-[height] duration-300"
           style={{ width: '100%', height: containerH + PREVIEW_PAD }}
@@ -578,10 +540,8 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
           <div className="absolute inset-0 opacity-[0.1]" style={{
             backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 19px,#777 19px,#777 20px),repeating-linear-gradient(90deg,transparent,transparent 19px,#777 19px,#777 20px)',
           }} />
-          {/* Баннер строго по центру */}
           <div style={{
-            position: 'absolute',
-            left: '50%', top: '50%',
+            position: 'absolute', left: '50%', top: '50%',
             width: scaledW, height: scaledH,
             transform: 'translate(-50%, -50%)',
           }}>
@@ -594,7 +554,6 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
           </div>
         </div>
 
-        {/* Панель выбранного */}
         {selected && selectedEl && (
           <div className="flex items-center gap-3 bg-muted/50 rounded-xl px-4 py-2.5 text-sm flex-wrap">
             <Icon name={
@@ -613,6 +572,40 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
             <button onClick={() => setSelected(null)} className="ml-auto text-xs text-muted-foreground hover:text-foreground">✕ Снять</button>
           </div>
         )}
+      </div>
+
+      {/* Текст */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <div className="text-xs text-muted-foreground mb-1">Текст сделки</div>
+          <input value={dealText} onChange={e => setDealText(e.target.value.toUpperCase())}
+            className="w-full px-3 py-2 border border-border rounded-xl text-sm font-bold uppercase tracking-widest" maxLength={20} />
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground mb-1">Телефон</div>
+          <input value={phoneText} onChange={e => setPhoneText(e.target.value)}
+            className="w-full px-3 py-2 border border-border rounded-xl text-sm font-semibold"
+            placeholder="+7 000 000-00-00" maxLength={30} />
+        </div>
+      </div>
+
+      {/* Изображения — под текстом */}
+      <div className="border border-border rounded-xl p-4 space-y-3">
+        <div className="text-sm font-semibold">Изображения на баннере</div>
+        <div className="space-y-2">
+          <ImageUploadBtn label="Логотип" icon="Building2" url={logoUrl} uploading={uploadingLogo}
+            onFile={uploadLogo} onRemove={removeLogoElement} />
+          <div className="flex items-center gap-2 flex-wrap">
+            <ImageUploadBtn label="Фото объекта" icon="ImagePlus" url={photoUrl} uploading={uploadingPhoto}
+              onFile={uploadPhoto} onRemove={removePhotoElement} />
+            {!photoUrl && listing.image && (
+              <button onClick={useListingPhoto} className="flex items-center gap-1.5 text-xs text-brand-blue hover:underline">
+                <Icon name="ImageIcon" size={12} />Использовать фото объекта
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="text-xs text-muted-foreground">После добавления — перетащи в нужное место на баннере</div>
       </div>
 
       {/* Скрытый экспорт */}
