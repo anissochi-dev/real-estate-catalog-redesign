@@ -62,8 +62,10 @@ interface AddressProps {
 }
 
 interface Suggestion {
-  value: string;        // что показывать (улица, дом)
+  value: string;
   displayName: string;
+  lat?: number | null;
+  lon?: number | null;
 }
 
 export default function AddressWithMap({ editing, setEditing, cities, hasError, districtError, onCoordsManualChange }: AddressProps) {
@@ -150,44 +152,11 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey]);
 
-  /* Очистка текста подсказки от страны/региона/города. */
-  const cleanSuggestion = (raw: string): string => raw
-    .replace(/^Россия,\s*/i, '')
-    .replace(new RegExp(`(^|,\\s*)(${currentCity}(\\s+\\(.+?\\))?)(,\\s*|$)`, 'gi'), '$1')
-    .replace(/(^|,\s*)(Краснодарский край|[^,]+ область|[^,]+ край|[^,]+ Республика)(,\s*|$)/gi, '$1')
-    .replace(/^,\s*/, '')
-    .replace(/,\s*,/g, ',')
-    .trim();
+  const GEO_SUGGEST_URL = 'https://functions.poehali.dev/1e52d435-ff18-40dd-8fac-d6bdd9b29ecc';
 
-  const applySuggestions = (rawItems: string[]) => {
-    const list: Suggestion[] = rawItems
-      .map(raw => { const c = cleanSuggestion(raw); return { value: c || raw, displayName: c || raw }; })
-      .filter((s: Suggestion) => s.value);
-    setSuggestions(list);
-    setShowSuggestions(list.length > 0);
-    setHighlightIdx(-1);
-  };
+  interface DadataSuggestion { value: string; full: string; lat: number | null; lon: number | null; }
 
-  /* HTTP-фолбэк подсказок через геокодер (если suggest недоступен). */
-  const fetchSuggestionsHttp = (fullQuery: string) => {
-    const url = `https://geocode-maps.yandex.ru/1.x/?format=json&lang=ru_RU&results=8`
-      + (apiKey ? `&apikey=${encodeURIComponent(apiKey)}` : '')
-      + `&geocode=${encodeURIComponent(fullQuery)}`;
-    fetch(url)
-      .then(r => r.json())
-      .then((data: any) => {
-        const features = data?.response?.GeoObjectCollection?.featureMember || [];
-        const raws: string[] = features.map((f: any) => {
-          const obj = f.GeoObject || {};
-          return obj?.metaDataProperty?.GeocoderMetaData?.text || obj?.name || '';
-        });
-        applySuggestions(raws);
-      })
-      .catch(() => setSuggestions([]));
-  };
-
-  /* Подсказки через встроенный ymaps.suggest (часть JS API Карт).
-   * Работает с тем же ключом yandex_maps_api_key. При недоступности — HTTP-фолбэк. */
+  /* Подсказки адресов через DaData (бэкенд). */
   const fetchSuggestions = (query: string) => {
     if (suggestTimer.current) clearTimeout(suggestTimer.current);
     const q = query.trim();
@@ -197,18 +166,25 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
       return;
     }
     suggestTimer.current = setTimeout(() => {
-      const fullQuery = `${currentCity}, ${q}`;
-      if (window.ymaps && typeof window.ymaps.suggest === 'function') {
-        window.ymaps.suggest(fullQuery, { results: 8 })
-          .then((items: any[]) => {
-            const raws = (items || []).map((it) => it.displayName || it.value || '');
-            if (raws.length > 0) applySuggestions(raws);
-            else fetchSuggestionsHttp(fullQuery);
-          })
-          .catch(() => fetchSuggestionsHttp(fullQuery));
-      } else {
-        fetchSuggestionsHttp(fullQuery);
-      }
+      const url = `${GEO_SUGGEST_URL}?query=${encodeURIComponent(q)}&city=${encodeURIComponent(currentCity)}`;
+      fetch(url)
+        .then(r => r.json())
+        .then((items: DadataSuggestion[]) => {
+          const list: Suggestion[] = (items || [])
+            .map(it => {
+              // Убираем «г Краснодар, » и подобные префиксы
+              const v = it.value
+                .replace(/^г\s+[^,]+,\s*/i, '')
+                .replace(/^г\.\s*[^,]+,\s*/i, '')
+                .trim();
+              return { value: v || it.value, displayName: v || it.value, lat: it.lat, lon: it.lon };
+            })
+            .filter(s => s.value);
+          setSuggestions(list);
+          setShowSuggestions(list.length > 0);
+          setHighlightIdx(-1);
+        })
+        .catch(() => setSuggestions([]));
     }, 250);
   };
 
@@ -299,7 +275,15 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
   const pickSuggestion = (s: Suggestion) => {
     setStreetInput(s.value);
     setShowSuggestions(false);
-    geocodeAddress(`${currentCity}, ${s.value}`, s.value);
+    // Если DaData вернула координаты — сразу применяем, не делая лишний запрос геокодера
+    if (s.lat && s.lon) {
+      const coords: [number, number] = [s.lat, s.lon];
+      markerRef.current?.geometry.setCoordinates(coords);
+      ymapInstance.current?.setCenter(coords, 16, { duration: 400 });
+      setEditing({ ...editingRef.current, address: s.value, lat: s.lat, lng: s.lon });
+    } else {
+      geocodeAddress(`${currentCity}, ${s.value}`, s.value);
+    }
   };
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
