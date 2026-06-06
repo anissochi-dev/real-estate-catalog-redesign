@@ -4,7 +4,7 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
-import { Listing, DEALS } from './types';
+import { Listing } from './types';
 
 interface BrokerInfo {
   id: number;
@@ -29,6 +29,14 @@ const PRESETS = [
   { bg: '#fef9c3', text: '#111827', label: 'Жёлтый' },
 ];
 
+const SIZE_PRESETS = [
+  { label: 'Квадрат', w: 256, h: 256, desc: '256×256' },
+  { label: 'Стойкер', w: 200, h: 280, desc: '200×280' },
+  { label: 'А5', w: 210, h: 297, desc: 'A5 портрет' },
+  { label: 'А4', w: 297, h: 210, desc: 'A4 альбом' },
+  { label: 'Баннер', w: 320, h: 180, desc: '320×180' },
+];
+
 export function TabQrBanner({ listing, siteUrl }: Props) {
   const bannerRef = useRef<HTMLDivElement>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
@@ -37,6 +45,9 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   const [textColor, setTextColor] = useState('#ffffff');
   const [downloading, setDownloading] = useState(false);
   const [downloadFormat, setDownloadFormat] = useState<'png' | 'jpg' | 'pdf'>('png');
+  const [bannerW, setBannerW] = useState(256);
+  const [bannerH, setBannerH] = useState(320);
+  const [activeSizePreset, setActiveSizePreset] = useState<string | null>('Стойкер');
 
   const publicUrl = siteUrl && listing.slug
     ? `${siteUrl.replace(/\/$/, '')}/object/${listing.slug}`
@@ -82,6 +93,18 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
     setTextColor(preset.text);
   };
 
+  const applySizePreset = (p: typeof SIZE_PRESETS[0]) => {
+    setBannerW(p.w);
+    setBannerH(p.h);
+    setActiveSizePreset(p.label);
+  };
+
+  const handleSizeChange = (axis: 'w' | 'h', val: number) => {
+    if (axis === 'w') setBannerW(val);
+    else setBannerH(val);
+    setActiveSizePreset(null);
+  };
+
   const download = async () => {
     if (!bannerRef.current) return;
     setDownloading(true);
@@ -97,8 +120,11 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
 
       if (downloadFormat === 'pdf') {
         const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: [canvas.width / 3, canvas.height / 3] });
-        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width / 3, canvas.height / 3);
+        const w = canvas.width / 3;
+        const h = canvas.height / 3;
+        const orientation = w > h ? 'landscape' : 'portrait';
+        const pdf = new jsPDF({ orientation, unit: 'px', format: [w, h] });
+        pdf.addImage(imgData, 'PNG', 0, 0, w, h);
         pdf.save(`${name}.pdf`);
       } else {
         const mimeType = downloadFormat === 'jpg' ? 'image/jpeg' : 'image/png';
@@ -120,13 +146,24 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
     }
   };
 
+  // масштаб превью чтобы влезло в контейнер
+  const maxPreviewW = 480;
+  const maxPreviewH = 420;
+  const scale = Math.min(maxPreviewW / bannerW, maxPreviewH / bannerH, 1);
+  const isLandscape = bannerW > bannerH;
+
+  // размер QR и шрифт зависят от размера баннера
+  const qrSize = Math.max(80, Math.min(bannerW, bannerH) * 0.42);
+  const titleSize = Math.max(16, Math.min(bannerW, bannerH) * 0.13);
+  const phoneSize = Math.max(11, Math.min(bannerW, bannerH) * 0.07);
+
   return (
     <div className="p-6 space-y-6">
 
-      {/* Настройки */}
+      {/* Настройки — сетка */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-        {/* Цвет фона */}
+        {/* Цвет */}
         <div className="space-y-3">
           <div className="text-sm font-semibold">Цвет баннера</div>
           <div className="flex flex-wrap gap-2">
@@ -138,7 +175,7 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
                 className="w-8 h-8 rounded-lg border-2 transition-all"
                 style={{
                   background: p.bg,
-                  borderColor: bgColor === p.bg ? textColor === '#ffffff' ? '#ffffff' : '#111827' : 'transparent',
+                  borderColor: 'transparent',
                   outline: bgColor === p.bg ? `2px solid ${p.text === '#ffffff' ? '#1a56db' : '#666'}` : 'none',
                   outlineOffset: '2px',
                 }}
@@ -192,39 +229,98 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
         </div>
       </div>
 
-      {/* Превью баннера */}
+      {/* Размер баннера */}
       <div className="space-y-3">
-        <div className="text-sm font-semibold">Превью баннера</div>
-        <div className="flex justify-center">
-          <div
-            ref={bannerRef}
-            style={{ background: bgColor, color: textColor }}
-            className="w-64 rounded-2xl p-6 flex flex-col items-center gap-4 shadow-xl select-none"
-          >
-            {/* Тип сделки */}
-            <div style={{ color: textColor }} className="text-4xl font-black tracking-widest uppercase">
-              {dealLabel}
+        <div className="text-sm font-semibold">Размер баннера</div>
+        <div className="flex flex-wrap gap-2">
+          {SIZE_PRESETS.map(p => (
+            <button
+              key={p.label}
+              onClick={() => applySizePreset(p)}
+              className={`px-3 py-1.5 rounded-lg text-sm border transition-all ${
+                activeSizePreset === p.label
+                  ? 'bg-brand-blue text-white border-brand-blue'
+                  : 'border-border text-muted-foreground hover:border-brand-blue hover:text-brand-blue'
+              }`}
+            >
+              <span className="font-semibold">{p.label}</span>
+              <span className="ml-1.5 text-xs opacity-70">{p.desc}</span>
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-4 items-end">
+          <div>
+            <div className="text-xs text-muted-foreground mb-1">Ширина (px)</div>
+            <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-1.5 w-32">
+              <Icon name="ArrowLeftRight" size={13} className="text-muted-foreground shrink-0" />
+              <input
+                type="number"
+                min={100}
+                max={1200}
+                value={bannerW}
+                onChange={e => handleSizeChange('w', Number(e.target.value))}
+                className="w-full text-sm bg-transparent outline-none"
+              />
             </div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground mb-1">Высота (px)</div>
+            <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-1.5 w-32">
+              <Icon name="ArrowUpDown" size={13} className="text-muted-foreground shrink-0" />
+              <input
+                type="number"
+                min={100}
+                max={1200}
+                value={bannerH}
+                onChange={e => handleSizeChange('h', Number(e.target.value))}
+                className="w-full text-sm bg-transparent outline-none"
+              />
+            </div>
+          </div>
+          <div className="text-xs text-muted-foreground pb-2">{bannerW} × {bannerH} px</div>
+        </div>
+      </div>
 
-            {/* QR код */}
-            <div className="rounded-xl overflow-hidden p-2" style={{ background: 'rgba(255,255,255,0.15)' }}>
-              {qrDataUrl ? (
-                <img src={qrDataUrl} alt="QR" className="w-36 h-36" />
-              ) : (
-                <div className="w-36 h-36 flex items-center justify-center">
-                  <Icon name="Loader2" size={24} className="animate-spin opacity-50" />
+      {/* Превью */}
+      <div className="space-y-3">
+        <div className="text-sm font-semibold">Превью</div>
+        <div className="flex justify-center items-center bg-muted/30 rounded-2xl py-6 overflow-hidden">
+          <div style={{ transform: `scale(${scale})`, transformOrigin: 'center center', width: bannerW * scale, height: bannerH * scale }}>
+            <div
+              ref={bannerRef}
+              style={{
+                background: bgColor,
+                color: textColor,
+                width: bannerW,
+                height: bannerH,
+              }}
+              className={`rounded-2xl shadow-xl select-none overflow-hidden flex ${isLandscape ? 'flex-row items-center gap-6 px-8' : 'flex-col items-center justify-center gap-4 py-6'}`}
+            >
+              {/* Тип сделки */}
+              <div style={{ color: textColor, fontSize: titleSize, lineHeight: 1 }} className="font-black tracking-widest uppercase shrink-0">
+                {dealLabel}
+              </div>
+
+              {/* QR */}
+              <div className="rounded-xl overflow-hidden p-2 shrink-0" style={{ background: 'rgba(255,255,255,0.15)' }}>
+                {qrDataUrl ? (
+                  <img src={qrDataUrl} alt="QR" style={{ width: qrSize, height: qrSize }} />
+                ) : (
+                  <div style={{ width: qrSize, height: qrSize }} className="flex items-center justify-center">
+                    <Icon name="Loader2" size={24} className="animate-spin opacity-50" />
+                  </div>
+                )}
+              </div>
+
+              {/* Телефон + подпись */}
+              <div className={`flex flex-col ${isLandscape ? 'items-start' : 'items-center'} gap-1`}>
+                <div style={{ color: textColor, fontSize: phoneSize }} className="font-bold tracking-wider text-center">
+                  {phone || '+7 ─── ─── ────'}
                 </div>
-              )}
-            </div>
-
-            {/* Телефон */}
-            <div style={{ color: textColor }} className="text-xl font-bold tracking-wider text-center">
-              {phone || '+7 ─── ─── ────'}
-            </div>
-
-            {/* Подпись */}
-            <div style={{ color: textColor, opacity: 0.7 }} className="text-xs text-center">
-              Сканируй QR-код для просмотра объекта
+                <div style={{ color: textColor, opacity: 0.6, fontSize: Math.max(9, phoneSize * 0.7) }} className="text-center">
+                  Сканируй QR для просмотра
+                </div>
+              </div>
             </div>
           </div>
         </div>
