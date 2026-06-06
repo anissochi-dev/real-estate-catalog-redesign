@@ -23,19 +23,19 @@ const COLOR_PRESETS = [
   { bg: '#f97316', text: '#ffffff', qrDark: '#ffffff', label: 'Оранжевый' },
   { bg: '#7c3aed', text: '#ffffff', qrDark: '#ffffff', label: 'Фиолетовый' },
   { bg: '#111827', text: '#ffffff', qrDark: '#ffffff', label: 'Чёрный' },
+  { bg: '#facc15', text: '#111827', qrDark: '#111827', label: 'Жёлтый' },
   { bg: '#ffffff', text: '#111827', qrDark: '#111827', label: 'Белый' },
-  { bg: '#fef9c3', text: '#111827', qrDark: '#111827', label: 'Жёлтый' },
 ];
 
 type LayoutId = 'h-wide' | 'h-card' | 'v-sticker' | 'v-tall' | 'sq';
-interface Layout { id: LayoutId; label: string; icon: string; w: number; h: number }
+interface Layout { id: LayoutId; label: string; icon: string; w: number; h: number; cmW: number; cmH: number }
 
 const LAYOUTS: Layout[] = [
-  { id: 'h-wide',    label: 'Широкая полоса', icon: 'RectangleHorizontal', w: 600, h: 180 },
-  { id: 'h-card',    label: 'Горизонтальная', icon: 'RectangleHorizontal', w: 520, h: 260 },
-  { id: 'v-sticker', label: 'Стикер',         icon: 'RectangleVertical',   w: 240, h: 320 },
-  { id: 'v-tall',    label: 'Вертикальный',   icon: 'RectangleVertical',   w: 280, h: 480 },
-  { id: 'sq',        label: 'Квадратный',     icon: 'Square',              w: 300, h: 300 },
+  { id: 'h-wide',    label: 'Широкая полоса', icon: 'RectangleHorizontal', w: 600, h: 180, cmW: 30, cmH: 9 },
+  { id: 'h-card',    label: 'Горизонтальная', icon: 'RectangleHorizontal', w: 520, h: 260, cmW: 21, cmH: 10 },
+  { id: 'v-sticker', label: 'Стикер',         icon: 'RectangleVertical',   w: 240, h: 320, cmW: 10, cmH: 15 },
+  { id: 'v-tall',    label: 'Вертикальный',   icon: 'RectangleVertical',   w: 280, h: 480, cmW: 10, cmH: 20 },
+  { id: 'sq',        label: 'Квадратный',     icon: 'Square',              w: 300, h: 300, cmW: 15, cmH: 15 },
 ];
 
 const DEFAULT_POSITIONS: Record<LayoutId, Record<ElementId, Pos>> = {
@@ -74,11 +74,15 @@ interface CanvasProps {
   onDragMove: (id: ElementId, pos: Pos) => void;
   bannerRef: React.RefObject<HTMLDivElement>;
   exportMode?: boolean;
+  showSize?: boolean;
+  cmW?: number;
+  cmH?: number;
 }
 
 function BannerCanvas({
   layout, bg, textColor, elements, dealText, phoneText,
   qrDataUrl, qrSize, selected, onSelect, onDragMove, bannerRef, exportMode,
+  showSize, cmW, cmH,
 }: CanvasProps) {
   const dragging = useRef<{ id: ElementId; startX: number; startY: number; origX: number; origY: number } | null>(null);
 
@@ -108,7 +112,7 @@ function BannerCanvas({
 
   const selStyle = (id: ElementId): React.CSSProperties =>
     (!exportMode && selected === id)
-      ? { outline: '2px dashed rgba(255,255,255,0.65)', outlineOffset: 4, borderRadius: 4 }
+      ? { outline: '2px dashed rgba(255,255,255,0.7)', outlineOffset: 4, borderRadius: 4 }
       : {};
 
   return (
@@ -130,22 +134,14 @@ function BannerCanvas({
         touchAction: 'none',
       }}
     >
-      {/* Deal label */}
+      {/* Deal */}
       <div
         onPointerDown={e => onPointerDown(e, 'deal')}
         style={{
-          position: 'absolute',
-          left: getEl('deal').pos.x,
-          top: getEl('deal').pos.y,
-          fontSize: getEl('deal').fontSize,
-          fontWeight: 900,
-          color: textColor,
-          letterSpacing: 4,
-          lineHeight: 1,
-          cursor: exportMode ? 'default' : 'grab',
-          whiteSpace: 'nowrap',
-          padding: 4,
-          ...selStyle('deal'),
+          position: 'absolute', left: getEl('deal').pos.x, top: getEl('deal').pos.y,
+          fontSize: getEl('deal').fontSize, fontWeight: 900, color: textColor,
+          letterSpacing: 4, lineHeight: 1, cursor: exportMode ? 'default' : 'grab',
+          whiteSpace: 'nowrap', padding: 4, ...selStyle('deal'),
         }}
       >
         {dealText}
@@ -155,18 +151,10 @@ function BannerCanvas({
       <div
         onPointerDown={e => onPointerDown(e, 'phone')}
         style={{
-          position: 'absolute',
-          left: getEl('phone').pos.x,
-          top: getEl('phone').pos.y,
-          fontSize: getEl('phone').fontSize,
-          fontWeight: 800,
-          color: textColor,
-          letterSpacing: 1,
-          lineHeight: 1,
-          cursor: exportMode ? 'default' : 'grab',
-          whiteSpace: 'nowrap',
-          padding: 4,
-          ...selStyle('phone'),
+          position: 'absolute', left: getEl('phone').pos.x, top: getEl('phone').pos.y,
+          fontSize: getEl('phone').fontSize, fontWeight: 800, color: textColor,
+          letterSpacing: 1, lineHeight: 1, cursor: exportMode ? 'default' : 'grab',
+          whiteSpace: 'nowrap', padding: 4, ...selStyle('phone'),
         }}
       >
         {phoneText || '+7 ─── ─── ────'}
@@ -176,16 +164,10 @@ function BannerCanvas({
       <div
         onPointerDown={e => onPointerDown(e, 'qr')}
         style={{
-          position: 'absolute',
-          left: getEl('qr').pos.x,
-          top: getEl('qr').pos.y,
-          width: qrSize + 12,
-          height: qrSize + 12,
-          background: 'rgba(255,255,255,0.13)',
-          borderRadius: 10,
-          padding: 6,
-          cursor: exportMode ? 'default' : 'grab',
-          ...selStyle('qr'),
+          position: 'absolute', left: getEl('qr').pos.x, top: getEl('qr').pos.y,
+          width: qrSize + 12, height: qrSize + 12,
+          background: 'rgba(255,255,255,0.13)', borderRadius: 10, padding: 6,
+          cursor: exportMode ? 'default' : 'grab', ...selStyle('qr'),
         }}
       >
         {qrDataUrl
@@ -193,6 +175,17 @@ function BannerCanvas({
           : <div style={{ width: qrSize, height: qrSize, opacity: 0.25, border: `2px dashed ${textColor}`, borderRadius: 6 }} />
         }
       </div>
+
+      {/* Размеры в см */}
+      {showSize && cmW && cmH && (
+        <div style={{
+          position: 'absolute', bottom: 8, right: 10,
+          fontSize: 11, color: textColor, opacity: 0.45,
+          fontFamily: 'Arial, sans-serif', letterSpacing: 0.5,
+        }}>
+          {cmW} × {cmH} см
+        </div>
+      )}
     </div>
   );
 }
@@ -204,6 +197,8 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [broker, setBroker] = useState<BrokerInfo | null>(null);
   const [colorIdx, setColorIdx] = useState(0);
+  const [customBg, setCustomBg] = useState('');
+  const [customText, setCustomText] = useState('');
   const [layoutId, setLayoutId] = useState<LayoutId>('h-card');
   const [downloading, setDownloading] = useState(false);
   const [downloadFormat, setDownloadFormat] = useState<'png' | 'jpg' | 'pdf'>('png');
@@ -211,10 +206,18 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   const [elements, setElements] = useState<BannerElement[]>([]);
   const [dealText, setDealText] = useState('');
   const [phoneText, setPhoneText] = useState('');
+  const [showSize, setShowSize] = useState(false);
+  const [customCmW, setCustomCmW] = useState('');
+  const [customCmH, setCustomCmH] = useState('');
 
-  const color = COLOR_PRESETS[colorIdx];
+  const preset = COLOR_PRESETS[colorIdx];
+  const bg = customBg || preset.bg;
+  const textColor = customText || preset.text;
+  const qrDark = preset.qrDark;
   const layout = LAYOUTS.find(l => l.id === layoutId)!;
   const qrSize = QR_SIZES[layoutId];
+  const cmW = customCmW ? Number(customCmW) : layout.cmW;
+  const cmH = customCmH ? Number(customCmH) : layout.cmH;
 
   const publicUrl = siteUrl && listing.slug
     ? `${siteUrl.replace(/\/$/, '')}/object/${listing.slug}`
@@ -233,7 +236,9 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
 
   useEffect(() => { initElements('h-card'); }, []); // eslint-disable-line
 
-  const changeLayout = (lid: LayoutId) => { setLayoutId(lid); initElements(lid); };
+  const changeLayout = (lid: LayoutId) => { setLayoutId(lid); initElements(lid); setCustomCmW(''); setCustomCmH(''); };
+
+  const resetPositions = () => { initElements(layoutId); };
 
   useEffect(() => {
     adminApi.listUsers().then(r => {
@@ -254,10 +259,11 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   const generateQr = useCallback(async () => {
     const url = publicUrl || `${window.location.origin}/object/${listing.id}`;
     try {
-      const dataUrl = await QRCode.toDataURL(url, { width: 300, margin: 1, color: { dark: color.qrDark, light: '#00000000' } });
+      const dark = customText || qrDark;
+      const dataUrl = await QRCode.toDataURL(url, { width: 300, margin: 1, color: { dark, light: '#00000000' } });
       setQrDataUrl(dataUrl);
     } catch { setQrDataUrl(''); }
-  }, [publicUrl, listing.id, color.qrDark]);
+  }, [publicUrl, listing.id, qrDark, customText]);
 
   useEffect(() => { generateQr(); }, [generateQr]);
 
@@ -273,11 +279,12 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
 
   const selectedEl = elements.find(e => e.id === selected);
 
+  // скачать баннер
   const download = async () => {
     if (!exportRef.current) return;
     setDownloading(true);
     try {
-      const canvas = await html2canvas(exportRef.current, { scale: 3, useCORS: true, backgroundColor: color.bg, logging: false });
+      const canvas = await html2canvas(exportRef.current, { scale: 3, useCORS: true, backgroundColor: bg, logging: false });
       const name = `banner-${listing.id}-${layoutId}`;
       if (downloadFormat === 'pdf') {
         const imgData = canvas.toDataURL('image/png');
@@ -298,13 +305,22 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
     finally { setDownloading(false); }
   };
 
+  // скачать QR отдельно
+  const downloadQr = () => {
+    if (!qrDataUrl) return;
+    const a = document.createElement('a');
+    a.href = qrDataUrl;
+    a.download = `qr-${listing.id}.png`;
+    a.click();
+  };
+
   const maxW = 560; const maxH = 380;
   const previewScale = Math.min(maxW / layout.w, maxH / layout.h, 1);
 
   const canvasProps: Omit<CanvasProps, 'bannerRef' | 'exportMode'> = {
-    layout, bg: color.bg, textColor: color.text,
-    elements, dealText, phoneText, qrDataUrl, qrSize,
+    layout, bg, textColor, elements, dealText, phoneText, qrDataUrl, qrSize,
     selected, onSelect: setSelected, onDragMove: updatePos,
+    showSize, cmW, cmH,
   };
 
   if (elements.length === 0) return null;
@@ -330,21 +346,43 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
         </div>
       </div>
 
-      {/* Цвет */}
-      <div className="space-y-2">
+      {/* Цвет фона + цвет текста */}
+      <div className="space-y-3">
         <div className="text-sm font-semibold">Цвет</div>
         <div className="flex flex-wrap gap-2">
           {COLOR_PRESETS.map((p, i) => (
-            <button key={p.bg} onClick={() => setColorIdx(i)} title={p.label}
+            <button key={p.bg} onClick={() => { setColorIdx(i); setCustomBg(''); setCustomText(''); }} title={p.label}
               className="w-8 h-8 rounded-lg transition-all"
               style={{
                 background: p.bg,
-                border: `2px solid ${colorIdx === i ? (p.text === '#ffffff' ? '#aaa' : '#333') : 'transparent'}`,
-                outline: colorIdx === i ? `2px solid ${p.bg === '#ffffff' ? '#999' : p.bg}` : 'none',
+                border: `2px solid ${(colorIdx === i && !customBg) ? (p.text === '#ffffff' ? '#aaa' : '#333') : 'transparent'}`,
+                outline: (colorIdx === i && !customBg) ? `2px solid ${p.bg === '#ffffff' ? '#999' : p.bg}` : 'none',
                 outlineOffset: 2,
               }}
             />
           ))}
+        </div>
+        <div className="flex gap-3 flex-wrap">
+          <div>
+            <div className="text-xs text-muted-foreground mb-1">Свой цвет фона</div>
+            <div className="flex items-center gap-2 border border-border rounded-lg px-2 py-1.5">
+              <input type="color" value={customBg || preset.bg}
+                onChange={e => { setCustomBg(e.target.value); }}
+                className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent"
+              />
+              <span className="text-xs font-mono text-muted-foreground">{customBg || preset.bg}</span>
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground mb-1">Свой цвет текста</div>
+            <div className="flex items-center gap-2 border border-border rounded-lg px-2 py-1.5">
+              <input type="color" value={customText || preset.text}
+                onChange={e => { setCustomText(e.target.value); }}
+                className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent"
+              />
+              <span className="text-xs font-mono text-muted-foreground">{customText || preset.text}</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -366,13 +404,53 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
         </div>
       </div>
 
+      {/* Размеры для печати */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowSize(v => !v)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-sm transition-all ${
+              showSize ? 'bg-brand-blue text-white border-brand-blue' : 'border-border text-muted-foreground hover:border-brand-blue'
+            }`}
+          >
+            <Icon name={showSize ? 'RulerIcon' : 'Ruler'} size={13} />
+            {showSize ? 'Размеры на баннере: вкл' : 'Показать размеры на баннере'}
+          </button>
+        </div>
+        {showSize && (
+          <div className="flex gap-3 items-end flex-wrap">
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Ширина (см)</div>
+              <input type="number" value={customCmW || layout.cmW} min={1} max={999}
+                onChange={e => setCustomCmW(e.target.value)}
+                className="w-24 px-3 py-1.5 border border-border rounded-lg text-sm"
+              />
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Высота (см)</div>
+              <input type="number" value={customCmH || layout.cmH} min={1} max={999}
+                onChange={e => setCustomCmH(e.target.value)}
+                className="w-24 px-3 py-1.5 border border-border rounded-lg text-sm"
+              />
+            </div>
+            <div className="text-xs text-muted-foreground pb-1.5">Отображается в правом нижнем углу</div>
+          </div>
+        )}
+      </div>
+
       {/* Редактор */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <div className="text-sm font-semibold">Редактор</div>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Icon name="Move" size={12} />
-            Кликни элемент и перетащи
+          <div className="flex items-center gap-3">
+            <button onClick={resetPositions} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+              <Icon name="RotateCcw" size={12} />
+              Сбросить позиции
+            </button>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Icon name="Move" size={12} />
+              Перетащи элемент
+            </div>
           </div>
         </div>
 
@@ -387,7 +465,7 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
           </div>
         </div>
 
-        {/* Панель выбранного */}
+        {/* Панель выбранного элемента */}
         {selected && (
           <div className="flex items-center gap-3 bg-muted/50 rounded-xl px-4 py-2.5 text-sm">
             <Icon name={selected === 'qr' ? 'QrCode' : selected === 'deal' ? 'Type' : 'Phone'} size={14} className="text-muted-foreground" />
@@ -417,25 +495,37 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
       </div>
 
       {/* Скачать */}
-      <div className="flex flex-wrap gap-2 items-center">
-        {(['png', 'jpg', 'pdf'] as const).map(fmt => (
-          <button key={fmt} onClick={() => setDownloadFormat(fmt)}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-all ${
-              downloadFormat === fmt ? 'bg-brand-blue text-white border-brand-blue' : 'border-border text-muted-foreground hover:border-brand-blue hover:text-brand-blue'
-            }`}
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-2 items-center">
+          {(['png', 'jpg', 'pdf'] as const).map(fmt => (
+            <button key={fmt} onClick={() => setDownloadFormat(fmt)}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-all ${
+                downloadFormat === fmt ? 'bg-brand-blue text-white border-brand-blue' : 'border-border text-muted-foreground hover:border-brand-blue hover:text-brand-blue'
+              }`}
+            >
+              {fmt.toUpperCase()}
+            </button>
+          ))}
+          <button
+            onClick={download}
+            disabled={downloading || !qrDataUrl}
+            className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-blue text-white text-sm font-semibold hover:bg-brand-blue/90 disabled:opacity-50 transition ml-auto"
           >
-            {fmt.toUpperCase()}
+            {downloading
+              ? <><Icon name="Loader2" size={15} className="animate-spin" />Подготовка...</>
+              : <><Icon name="Download" size={15} />Скачать {downloadFormat.toUpperCase()}</>
+            }
           </button>
-        ))}
+        </div>
+
+        {/* Ссылка скачать QR */}
         <button
-          onClick={download}
-          disabled={downloading || !qrDataUrl}
-          className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-blue text-white text-sm font-semibold hover:bg-brand-blue/90 disabled:opacity-50 transition ml-auto"
+          onClick={downloadQr}
+          disabled={!qrDataUrl}
+          className="flex items-center gap-1.5 text-sm text-brand-blue hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          {downloading
-            ? <><Icon name="Loader2" size={15} className="animate-spin" />Подготовка...</>
-            : <><Icon name="Download" size={15} />Скачать {downloadFormat.toUpperCase()}</>
-          }
+          <Icon name="QrCode" size={14} />
+          Скачать QR-код отдельно (PNG)
         </button>
       </div>
 
