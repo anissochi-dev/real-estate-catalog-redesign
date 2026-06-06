@@ -32,7 +32,7 @@ export default function MarketingAdmin() {
         </div>
         <div>
           <h2 className="text-lg font-bold leading-none">Маркетолог</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">Аналитика, ценообразование, SEO и UTM-ссылки</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Аналитика, ценообразование,<br />SEO и UTM-ссылки</p>
         </div>
       </div>
 
