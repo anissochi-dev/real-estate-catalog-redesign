@@ -199,7 +199,7 @@ export default function AnalyticsTab() {
                 <div key={l.id} className="flex items-center gap-3 text-sm">
                   <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground flex-shrink-0">{i + 1}</span>
                   <div className="flex-1 min-w-0 overflow-hidden">
-                    <div className="font-medium truncate">{l.title}</div>
+                    <div className="font-medium break-words">{l.title}</div>
                     <div className="text-xs text-muted-foreground truncate">
                       {CATEGORY_LABELS[l.category] || l.category} · {DEAL_LABELS[l.deal] || l.deal} · {fmtMoney(l.price)}
                     </div>
