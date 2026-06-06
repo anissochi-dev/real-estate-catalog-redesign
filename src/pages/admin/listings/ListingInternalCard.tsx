@@ -7,7 +7,7 @@ import { Listing, CATS, DEALS } from './types';
 import { TabId, TABS } from './internalCardTypes';
 import { Spinner, TabOverview, TabPriceHistory, TabStats, TabLeads, TabComments } from './InternalCardTabs1';
 import { fmtListingId } from '@/lib/formatPrice';
-import { TabAi, TabDocuments, TabBroker } from './InternalCardTabs2';
+import { TabAi, TabDocuments, TabBroker, TabQrBanner } from './InternalCardTabs2';
 import TabPhotos from './TabPhotos';
 
 interface Props {
@@ -123,6 +123,7 @@ export default function ListingInternalCard({ listingId, onClose, onBrokerChange
           {tab === 'ai' && <TabAi listing={listing} />}
           {tab === 'documents' && <TabDocuments listingId={listingId} />}
           {tab === 'broker' && <TabBroker listing={listing} onSaved={() => { onBrokerChanged?.(); }} currentUserId={user?.id} />}
+          {tab === 'qr_banner' && <TabQrBanner listing={listing} siteUrl={settings.site_url} />}
         </div>
       </div>
     </div>
