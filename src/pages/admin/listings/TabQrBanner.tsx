@@ -467,8 +467,20 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
     a.href = qrDataUrl; a.download = `qr-${listing.id}.png`; a.click();
   };
 
-  const maxW = 560; const maxH = 360;
-  const previewScale = Math.min(maxW / layout.w, maxH / layout.h, 1);
+  // ── размеры и ориентир ──────────────────────────────────────────────────────
+  const numCmW = Math.max(1, Number(cmW) || 1);
+  const numCmH = Math.max(1, Number(cmH) || 1);
+  const sqM = ((numCmW * numCmH) / 10000).toFixed(4).replace(/\.?0+$/, '');
+
+  // Визуальный ориентир: пересчитываем пропорцию превью под реальные см
+  // базовая ширина контейнера 520px, масштабируем высоту пропорционально см
+  const PREVIEW_BASE_W = 520;
+  const orientW = PREVIEW_BASE_W;
+  const orientH = Math.round(PREVIEW_BASE_W * (numCmH / numCmW));
+  const clampedH = Math.min(Math.max(orientH, 80), 500);
+
+  // масштаб баннера в этот ориентир-контейнер
+  const previewScale = Math.min(orientW / layout.w, clampedH / layout.h, 1);
 
   const canvasProps: Omit<CanvasProps, 'bannerRef' | 'exportMode'> = {
     layout, bg: bgColor, textColor, elements, dealText, phoneText,
@@ -598,11 +610,19 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
             <input type="number" value={cmH} min={1} max={9999} onChange={e => setCmH(e.target.value)}
               className="w-28 px-3 py-2 border-2 border-border rounded-xl text-sm font-semibold focus:border-brand-blue outline-none" />
           </div>
-          {showSize && (
-            <div className="mt-4 px-3 py-2 bg-white border border-border rounded-lg text-sm">
-              На баннере: <span className="font-semibold">{cmW} см × {cmH} см</span>
+          <div className="mt-4 flex flex-col gap-1">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-brand-blue/30 rounded-lg">
+              <Icon name="Square" size={13} className="text-brand-blue" />
+              <span className="text-sm font-bold text-brand-blue">{sqM} м²</span>
             </div>
-          )}
+            {showSize && (
+              <div className="text-xs text-muted-foreground px-1">На баннере: {numCmW} см × {numCmH} см</div>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-brand-blue/70 bg-brand-blue/5 rounded-lg px-3 py-1.5">
+          <Icon name="Info" size={12} />
+          Ориентир пропорций в редакторе ниже обновляется автоматически
         </div>
       </div>
 
@@ -620,9 +640,26 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
           </div>
         </div>
 
-        <div className="flex justify-center items-center bg-[#e0e0e0] rounded-2xl py-8" style={{ minHeight: 200 }}>
-          <div style={{ transform: `scale(${previewScale})`, transformOrigin: 'center center', width: layout.w * previewScale, height: layout.h * previewScale }}>
+        {/* Ориентир пропорций — контейнер меняет высоту под реальные см */}
+        <div
+          className="relative flex justify-center items-center bg-[#e0e0e0] rounded-2xl overflow-hidden transition-all duration-300"
+          style={{ width: '100%', height: clampedH + 32, minHeight: 120 }}
+        >
+          {/* Сетка-ориентир */}
+          <div className="absolute inset-0 opacity-20" style={{
+            backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 19px,#888 19px,#888 20px),repeating-linear-gradient(90deg,transparent,transparent 19px,#888 19px,#888 20px)',
+          }} />
+          <div style={{
+            transform: `scale(${previewScale})`,
+            transformOrigin: 'center center',
+            width: layout.w * previewScale,
+            height: layout.h * previewScale,
+          }}>
             <BannerCanvas {...canvasProps} bannerRef={{ current: null }} />
+          </div>
+          {/* Подпись */}
+          <div className="absolute bottom-2 right-3 text-xs text-gray-500 bg-white/70 rounded px-2 py-0.5">
+            Ориентир: {numCmW} × {numCmH} см
           </div>
         </div>
 
