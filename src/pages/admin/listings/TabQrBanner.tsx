@@ -16,16 +16,8 @@ interface BannerElement { id: ElementId; pos: Pos; fontSize?: number }
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
-const COLOR_PRESETS = [
-  { bg: '#1a56db', text: '#ffffff', qrDark: '#ffffff', label: 'Синий' },
-  { bg: '#16a34a', text: '#ffffff', qrDark: '#ffffff', label: 'Зелёный' },
-  { bg: '#dc2626', text: '#ffffff', qrDark: '#ffffff', label: 'Красный' },
-  { bg: '#f97316', text: '#ffffff', qrDark: '#ffffff', label: 'Оранжевый' },
-  { bg: '#7c3aed', text: '#ffffff', qrDark: '#ffffff', label: 'Фиолетовый' },
-  { bg: '#111827', text: '#ffffff', qrDark: '#ffffff', label: 'Чёрный' },
-  { bg: '#facc15', text: '#111827', qrDark: '#111827', label: 'Жёлтый' },
-  { bg: '#ffffff', text: '#111827', qrDark: '#111827', label: 'Белый' },
-];
+const BG_COLORS = ['#1a56db','#16a34a','#dc2626','#f97316','#7c3aed','#111827','#facc15','#ffffff'];
+const TEXT_COLORS = ['#ffffff','#111827','#facc15','#f97316','#1a56db','#dc2626','#16a34a','#7c3aed'];
 
 type LayoutId = 'h-wide' | 'h-card' | 'v-sticker' | 'v-tall' | 'sq';
 interface Layout { id: LayoutId; label: string; icon: string; w: number; h: number; cmW: number; cmH: number }
@@ -39,11 +31,11 @@ const LAYOUTS: Layout[] = [
 ];
 
 const DEFAULT_POSITIONS: Record<LayoutId, Record<ElementId, Pos>> = {
-  'h-wide':    { deal: { x: 28, y: 28 },   phone: { x: 28, y: 98 },  qr: { x: 476, y: 20 } },
-  'h-card':    { deal: { x: 28, y: 28 },   phone: { x: 28, y: 128 }, qr: { x: 386, y: 50 } },
-  'v-sticker': { deal: { x: 20, y: 22 },   phone: { x: 20, y: 118 }, qr: { x: 72,  y: 216 } },
-  'v-tall':    { deal: { x: 24, y: 30 },   phone: { x: 24, y: 156 }, qr: { x: 88,  y: 344 } },
-  'sq':        { deal: { x: 20, y: 24 },   phone: { x: 20, y: 136 }, qr: { x: 168, y: 92 } },
+  'h-wide':    { deal: { x: 28, y: 25 },  phone: { x: 28, y: 95 },  qr: { x: 472, y: 15 } },
+  'h-card':    { deal: { x: 28, y: 28 },  phone: { x: 28, y: 128 }, qr: { x: 386, y: 50 } },
+  'v-sticker': { deal: { x: 20, y: 22 },  phone: { x: 20, y: 118 }, qr: { x: 72,  y: 216 } },
+  'v-tall':    { deal: { x: 24, y: 30 },  phone: { x: 24, y: 156 }, qr: { x: 88,  y: 344 } },
+  'sq':        { deal: { x: 20, y: 24 },  phone: { x: 20, y: 136 }, qr: { x: 168, y: 92 } },
 };
 
 const DEFAULT_FONTSIZES: Record<LayoutId, Record<'deal' | 'phone', number>> = {
@@ -54,8 +46,8 @@ const DEFAULT_FONTSIZES: Record<LayoutId, Record<'deal' | 'phone', number>> = {
   'sq':        { deal: 44, phone: 24 },
 };
 
-const QR_SIZES: Record<LayoutId, number> = {
-  'h-wide': 100, 'h-card': 110, 'v-sticker': 80, 'v-tall': 88, 'sq': 98,
+const DEFAULT_QR_SIZES: Record<LayoutId, number> = {
+  'h-wide': 104, 'h-card': 112, 'v-sticker': 82, 'v-tall': 90, 'sq': 100,
 };
 
 // ─── Banner Canvas ────────────────────────────────────────────────────────────
@@ -74,9 +66,9 @@ interface CanvasProps {
   onDragMove: (id: ElementId, pos: Pos) => void;
   bannerRef: React.RefObject<HTMLDivElement>;
   exportMode?: boolean;
-  showSize?: boolean;
-  cmW?: number;
-  cmH?: number;
+  showSize: boolean;
+  cmW: number;
+  cmH: number;
 }
 
 function BannerCanvas({
@@ -90,8 +82,7 @@ function BannerCanvas({
 
   const onPointerDown = (e: React.PointerEvent, id: ElementId) => {
     if (exportMode) return;
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     onSelect(id);
     const el = getEl(id);
     dragging.current = { id, startX: e.clientX, startY: e.clientY, origX: el.pos.x, origY: el.pos.y };
@@ -112,7 +103,7 @@ function BannerCanvas({
 
   const selStyle = (id: ElementId): React.CSSProperties =>
     (!exportMode && selected === id)
-      ? { outline: '2px dashed rgba(255,255,255,0.7)', outlineOffset: 4, borderRadius: 4 }
+      ? { outline: '2px dashed rgba(255,255,255,0.75)', outlineOffset: 4, borderRadius: 4 }
       : {};
 
   return (
@@ -123,15 +114,9 @@ function BannerCanvas({
       onPointerLeave={onPointerUp}
       onClick={e => { if (e.target === e.currentTarget && !exportMode) onSelect(null); }}
       style={{
-        position: 'relative',
-        width: layout.w,
-        height: layout.h,
-        background: bg,
-        borderRadius: exportMode ? 0 : 16,
-        overflow: 'hidden',
-        userSelect: 'none',
-        fontFamily: 'Arial, Helvetica, sans-serif',
-        touchAction: 'none',
+        position: 'relative', width: layout.w, height: layout.h, background: bg,
+        borderRadius: exportMode ? 0 : 16, overflow: 'hidden',
+        userSelect: 'none', fontFamily: 'Arial, Helvetica, sans-serif', touchAction: 'none',
       }}
     >
       {/* Deal */}
@@ -143,9 +128,7 @@ function BannerCanvas({
           letterSpacing: 4, lineHeight: 1, cursor: exportMode ? 'default' : 'grab',
           whiteSpace: 'nowrap', padding: 4, ...selStyle('deal'),
         }}
-      >
-        {dealText}
-      </div>
+      >{dealText}</div>
 
       {/* Phone */}
       <div
@@ -156,9 +139,7 @@ function BannerCanvas({
           letterSpacing: 1, lineHeight: 1, cursor: exportMode ? 'default' : 'grab',
           whiteSpace: 'nowrap', padding: 4, ...selStyle('phone'),
         }}
-      >
-        {phoneText || '+7 ─── ─── ────'}
-      </div>
+      >{phoneText || '+7 ─── ─── ────'}</div>
 
       {/* QR */}
       <div
@@ -176,17 +157,36 @@ function BannerCanvas({
         }
       </div>
 
-      {/* Размеры в см */}
-      {showSize && cmW && cmH && (
+      {/* Размеры */}
+      {showSize && (
         <div style={{
-          position: 'absolute', bottom: 8, right: 10,
-          fontSize: 11, color: textColor, opacity: 0.45,
-          fontFamily: 'Arial, sans-serif', letterSpacing: 0.5,
+          position: 'absolute', bottom: 10, right: 12,
+          fontSize: Math.max(10, layout.h * 0.07), fontWeight: 700,
+          color: textColor, opacity: 0.55,
+          fontFamily: 'Arial, sans-serif', letterSpacing: 0.5, whiteSpace: 'nowrap',
         }}>
-          {cmW} × {cmH} см
+          {cmW} см × {cmH} см
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Colour swatch ────────────────────────────────────────────────────────────
+
+function Swatch({ color, active, onClick }: { color: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-7 h-7 rounded-lg flex-shrink-0 transition-all"
+      style={{
+        background: color,
+        border: `2px solid ${active ? (color === '#ffffff' || color === '#facc15' ? '#666' : color) : 'transparent'}`,
+        outline: active ? `2px solid ${color === '#ffffff' || color === '#facc15' ? '#666' : color}` : 'none',
+        outlineOffset: 2,
+        boxShadow: color === '#ffffff' ? 'inset 0 0 0 1px #ddd' : undefined,
+      }}
+    />
   );
 }
 
@@ -196,32 +196,35 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   const exportRef = useRef<HTMLDivElement>(null);
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [broker, setBroker] = useState<BrokerInfo | null>(null);
-  const [colorIdx, setColorIdx] = useState(0);
-  const [customBg, setCustomBg] = useState('');
-  const [customText, setCustomText] = useState('');
-  const [layoutId, setLayoutId] = useState<LayoutId>('h-card');
-  const [downloading, setDownloading] = useState(false);
-  const [downloadFormat, setDownloadFormat] = useState<'png' | 'jpg' | 'pdf'>('png');
-  const [selected, setSelected] = useState<ElementId | null>(null);
+
+  // цвета
+  const [bgColor, setBgColor] = useState('#1a56db');
+  const [textColor, setTextColor] = useState('#ffffff');
+
+  // макет
+  const [layoutId, setLayoutId] = useState<LayoutId>('h-wide');
   const [elements, setElements] = useState<BannerElement[]>([]);
+  const [qrSize, setQrSize] = useState(DEFAULT_QR_SIZES['h-wide']);
+
+  // тексты
   const [dealText, setDealText] = useState('');
   const [phoneText, setPhoneText] = useState('');
-  const [showSize, setShowSize] = useState(false);
-  const [customCmW, setCustomCmW] = useState('');
-  const [customCmH, setCustomCmH] = useState('');
 
-  const preset = COLOR_PRESETS[colorIdx];
-  const bg = customBg || preset.bg;
-  const textColor = customText || preset.text;
-  const qrDark = preset.qrDark;
+  // редактор
+  const [selected, setSelected] = useState<ElementId | null>(null);
+
+  // размеры для печати
+  const [showSize, setShowSize] = useState(true);
+  const [cmW, setCmW] = useState('30');
+  const [cmH, setCmH] = useState('9');
+
+  // скачивание
+  const [downloading, setDownloading] = useState(false);
+  const [downloadFormat, setDownloadFormat] = useState<'png' | 'jpg' | 'pdf'>('png');
+
   const layout = LAYOUTS.find(l => l.id === layoutId)!;
-  const qrSize = QR_SIZES[layoutId];
-  const cmW = customCmW ? Number(customCmW) : layout.cmW;
-  const cmH = customCmH ? Number(customCmH) : layout.cmH;
-
   const publicUrl = siteUrl && listing.slug
-    ? `${siteUrl.replace(/\/$/, '')}/object/${listing.slug}`
-    : null;
+    ? `${siteUrl.replace(/\/$/, '')}/object/${listing.slug}` : null;
 
   const initElements = useCallback((lid: LayoutId) => {
     const pos = DEFAULT_POSITIONS[lid];
@@ -231,14 +234,19 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
       { id: 'phone', pos: pos.phone, fontSize: fs.phone },
       { id: 'qr',    pos: pos.qr },
     ]);
+    setQrSize(DEFAULT_QR_SIZES[lid]);
     setSelected(null);
   }, []);
 
-  useEffect(() => { initElements('h-card'); }, []); // eslint-disable-line
+  useEffect(() => { initElements('h-wide'); }, []); // eslint-disable-line
 
-  const changeLayout = (lid: LayoutId) => { setLayoutId(lid); initElements(lid); setCustomCmW(''); setCustomCmH(''); };
-
-  const resetPositions = () => { initElements(layoutId); };
+  const changeLayout = (lid: LayoutId) => {
+    setLayoutId(lid);
+    initElements(lid);
+    const l = LAYOUTS.find(x => x.id === lid)!;
+    setCmW(String(l.cmW));
+    setCmH(String(l.cmH));
+  };
 
   useEffect(() => {
     adminApi.listUsers().then(r => {
@@ -259,11 +267,10 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   const generateQr = useCallback(async () => {
     const url = publicUrl || `${window.location.origin}/object/${listing.id}`;
     try {
-      const dark = customText || qrDark;
-      const dataUrl = await QRCode.toDataURL(url, { width: 300, margin: 1, color: { dark, light: '#00000000' } });
+      const dataUrl = await QRCode.toDataURL(url, { width: 300, margin: 1, color: { dark: textColor, light: '#00000000' } });
       setQrDataUrl(dataUrl);
     } catch { setQrDataUrl(''); }
-  }, [publicUrl, listing.id, qrDark, customText]);
+  }, [publicUrl, listing.id, textColor]);
 
   useEffect(() => { generateQr(); }, [generateQr]);
 
@@ -279,12 +286,11 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
 
   const selectedEl = elements.find(e => e.id === selected);
 
-  // скачать баннер
   const download = async () => {
     if (!exportRef.current) return;
     setDownloading(true);
     try {
-      const canvas = await html2canvas(exportRef.current, { scale: 3, useCORS: true, backgroundColor: bg, logging: false });
+      const canvas = await html2canvas(exportRef.current, { scale: 3, useCORS: true, backgroundColor: bgColor, logging: false });
       const name = `banner-${listing.id}-${layoutId}`;
       if (downloadFormat === 'pdf') {
         const imgData = canvas.toDataURL('image/png');
@@ -305,22 +311,19 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
     finally { setDownloading(false); }
   };
 
-  // скачать QR отдельно
   const downloadQr = () => {
     if (!qrDataUrl) return;
     const a = document.createElement('a');
-    a.href = qrDataUrl;
-    a.download = `qr-${listing.id}.png`;
-    a.click();
+    a.href = qrDataUrl; a.download = `qr-${listing.id}.png`; a.click();
   };
 
-  const maxW = 560; const maxH = 380;
+  const maxW = 560; const maxH = 360;
   const previewScale = Math.min(maxW / layout.w, maxH / layout.h, 1);
 
   const canvasProps: Omit<CanvasProps, 'bannerRef' | 'exportMode'> = {
-    layout, bg, textColor, elements, dealText, phoneText, qrDataUrl, qrSize,
-    selected, onSelect: setSelected, onDragMove: updatePos,
-    showSize, cmW, cmH,
+    layout, bg: bgColor, textColor, elements, dealText, phoneText,
+    qrDataUrl, qrSize, selected, onSelect: setSelected, onDragMove: updatePos,
+    showSize, cmW: Number(cmW) || 0, cmH: Number(cmH) || 0,
   };
 
   if (elements.length === 0) return null;
@@ -346,47 +349,42 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
         </div>
       </div>
 
-      {/* Цвет фона + цвет текста */}
-      <div className="space-y-3">
-        <div className="text-sm font-semibold">Цвет</div>
-        <div className="flex flex-wrap gap-2">
-          {COLOR_PRESETS.map((p, i) => (
-            <button key={p.bg} onClick={() => { setColorIdx(i); setCustomBg(''); setCustomText(''); }} title={p.label}
-              className="w-8 h-8 rounded-lg transition-all"
-              style={{
-                background: p.bg,
-                border: `2px solid ${(colorIdx === i && !customBg) ? (p.text === '#ffffff' ? '#aaa' : '#333') : 'transparent'}`,
-                outline: (colorIdx === i && !customBg) ? `2px solid ${p.bg === '#ffffff' ? '#999' : p.bg}` : 'none',
-                outlineOffset: 2,
-              }}
-            />
-          ))}
-        </div>
-        <div className="flex gap-3 flex-wrap">
-          <div>
-            <div className="text-xs text-muted-foreground mb-1">Свой цвет фона</div>
-            <div className="flex items-center gap-2 border border-border rounded-lg px-2 py-1.5">
-              <input type="color" value={customBg || preset.bg}
-                onChange={e => { setCustomBg(e.target.value); }}
-                className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent"
-              />
-              <span className="text-xs font-mono text-muted-foreground">{customBg || preset.bg}</span>
-            </div>
+      {/* Цвета — 2 колонки */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* Фон */}
+        <div className="space-y-2 border border-border rounded-xl p-3">
+          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Фон</div>
+          <div className="flex flex-wrap gap-1.5">
+            {BG_COLORS.map(c => (
+              <Swatch key={c} color={c} active={bgColor === c} onClick={() => setBgColor(c)} />
+            ))}
           </div>
-          <div>
-            <div className="text-xs text-muted-foreground mb-1">Свой цвет текста</div>
-            <div className="flex items-center gap-2 border border-border rounded-lg px-2 py-1.5">
-              <input type="color" value={customText || preset.text}
-                onChange={e => { setCustomText(e.target.value); }}
-                className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent"
-              />
-              <span className="text-xs font-mono text-muted-foreground">{customText || preset.text}</span>
-            </div>
+          <div className="flex items-center gap-2 border border-border rounded-lg px-2 py-1.5 mt-1">
+            <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)}
+              className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent flex-shrink-0"
+            />
+            <span className="text-xs font-mono text-muted-foreground">Свой цвет: {bgColor}</span>
+          </div>
+        </div>
+
+        {/* Текст */}
+        <div className="space-y-2 border border-border rounded-xl p-3">
+          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Текст</div>
+          <div className="flex flex-wrap gap-1.5">
+            {TEXT_COLORS.map(c => (
+              <Swatch key={c} color={c} active={textColor === c} onClick={() => setTextColor(c)} />
+            ))}
+          </div>
+          <div className="flex items-center gap-2 border border-border rounded-lg px-2 py-1.5 mt-1">
+            <input type="color" value={textColor} onChange={e => setTextColor(e.target.value)}
+              className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent flex-shrink-0"
+            />
+            <span className="text-xs font-mono text-muted-foreground">Свой цвет: {textColor}</span>
           </div>
         </div>
       </div>
 
-      {/* Текст */}
+      {/* Текст на баннере */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <div className="text-xs text-muted-foreground mb-1">Текст сделки</div>
@@ -404,38 +402,45 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
         </div>
       </div>
 
-      {/* Размеры для печати */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-3">
+      {/* Размеры для печати — всегда открыт */}
+      <div className="border-2 border-brand-blue/30 bg-brand-blue/5 rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Icon name="Ruler" size={15} className="text-brand-blue" />
+            <span className="text-sm font-semibold text-brand-blue">Размеры для печати</span>
+          </div>
           <button
             onClick={() => setShowSize(v => !v)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-sm transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border transition-all ${
               showSize ? 'bg-brand-blue text-white border-brand-blue' : 'border-border text-muted-foreground hover:border-brand-blue'
             }`}
           >
-            <Icon name={showSize ? 'RulerIcon' : 'Ruler'} size={13} />
-            {showSize ? 'Размеры на баннере: вкл' : 'Показать размеры на баннере'}
+            <Icon name={showSize ? 'Eye' : 'EyeOff'} size={12} />
+            {showSize ? 'На баннере: вкл' : 'Показать на баннере'}
           </button>
         </div>
-        {showSize && (
-          <div className="flex gap-3 items-end flex-wrap">
-            <div>
-              <div className="text-xs text-muted-foreground mb-1">Ширина (см)</div>
-              <input type="number" value={customCmW || layout.cmW} min={1} max={999}
-                onChange={e => setCustomCmW(e.target.value)}
-                className="w-24 px-3 py-1.5 border border-border rounded-lg text-sm"
-              />
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground mb-1">Высота (см)</div>
-              <input type="number" value={customCmH || layout.cmH} min={1} max={999}
-                onChange={e => setCustomCmH(e.target.value)}
-                className="w-24 px-3 py-1.5 border border-border rounded-lg text-sm"
-              />
-            </div>
-            <div className="text-xs text-muted-foreground pb-1.5">Отображается в правом нижнем углу</div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div>
+            <div className="text-xs text-muted-foreground mb-1">Длина (см)</div>
+            <input type="number" value={cmW} min={1} max={9999}
+              onChange={e => setCmW(e.target.value)}
+              className="w-28 px-3 py-2 border-2 border-border rounded-xl text-sm font-semibold focus:border-brand-blue outline-none"
+            />
           </div>
-        )}
+          <div className="text-lg font-bold text-muted-foreground mt-4">×</div>
+          <div>
+            <div className="text-xs text-muted-foreground mb-1">Высота (см)</div>
+            <input type="number" value={cmH} min={1} max={9999}
+              onChange={e => setCmH(e.target.value)}
+              className="w-28 px-3 py-2 border-2 border-border rounded-xl text-sm font-semibold focus:border-brand-blue outline-none"
+            />
+          </div>
+          {showSize && (
+            <div className="mt-4 text-sm text-muted-foreground bg-white border border-border rounded-lg px-3 py-2">
+              На баннере: <span className="font-semibold text-foreground">{cmW} см × {cmH} см</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Редактор */}
@@ -443,7 +448,9 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
         <div className="flex items-center justify-between">
           <div className="text-sm font-semibold">Редактор</div>
           <div className="flex items-center gap-3">
-            <button onClick={resetPositions} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+            <button onClick={() => { initElements(layoutId); setCmW(String(layout.cmW)); setCmH(String(layout.cmH)); }}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
               <Icon name="RotateCcw" size={12} />
               Сбросить позиции
             </button>
@@ -454,7 +461,7 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
           </div>
         </div>
 
-        <div className="flex justify-center items-center bg-[#e8e8e8] rounded-2xl py-8" style={{ minHeight: 200 }}>
+        <div className="flex justify-center items-center bg-[#e0e0e0] rounded-2xl py-8" style={{ minHeight: 200 }}>
           <div style={{
             transform: `scale(${previewScale})`,
             transformOrigin: 'center center',
@@ -467,23 +474,38 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
 
         {/* Панель выбранного элемента */}
         {selected && (
-          <div className="flex items-center gap-3 bg-muted/50 rounded-xl px-4 py-2.5 text-sm">
+          <div className="flex items-center gap-3 bg-muted/50 rounded-xl px-4 py-2.5 text-sm flex-wrap">
             <Icon name={selected === 'qr' ? 'QrCode' : selected === 'deal' ? 'Type' : 'Phone'} size={14} className="text-muted-foreground" />
             <span className="text-muted-foreground">
               {selected === 'deal' ? 'Надпись сделки' : selected === 'phone' ? 'Телефон' : 'QR-код'}
             </span>
+
             {selected !== 'qr' && selectedEl && (
               <>
                 <span className="text-muted-foreground">· шрифт</span>
-                <button onClick={() => updateFontSize(-2)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-muted border border-border transition-colors">
+                <button onClick={() => updateFontSize(-2)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-muted border border-border">
                   <Icon name="Minus" size={12} />
                 </button>
                 <span className="font-bold w-7 text-center">{selectedEl.fontSize}</span>
-                <button onClick={() => updateFontSize(2)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-muted border border-border transition-colors">
+                <button onClick={() => updateFontSize(2)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-muted border border-border">
                   <Icon name="Plus" size={12} />
                 </button>
               </>
             )}
+
+            {selected === 'qr' && (
+              <>
+                <span className="text-muted-foreground">· размер QR</span>
+                <button onClick={() => setQrSize(s => Math.max(40, s - 10))} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-muted border border-border">
+                  <Icon name="Minus" size={12} />
+                </button>
+                <span className="font-bold w-8 text-center">{qrSize}</span>
+                <button onClick={() => setQrSize(s => Math.min(240, s + 10))} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-muted border border-border">
+                  <Icon name="Plus" size={12} />
+                </button>
+              </>
+            )}
+
             <button onClick={() => setSelected(null)} className="ml-auto text-xs text-muted-foreground hover:text-foreground">✕ Снять</button>
           </div>
         )}
@@ -507,8 +529,7 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
             </button>
           ))}
           <button
-            onClick={download}
-            disabled={downloading || !qrDataUrl}
+            onClick={download} disabled={downloading || !qrDataUrl}
             className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-blue text-white text-sm font-semibold hover:bg-brand-blue/90 disabled:opacity-50 transition ml-auto"
           >
             {downloading
@@ -517,12 +538,8 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
             }
           </button>
         </div>
-
-        {/* Ссылка скачать QR */}
-        <button
-          onClick={downloadQr}
-          disabled={!qrDataUrl}
-          className="flex items-center gap-1.5 text-sm text-brand-blue hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+        <button onClick={downloadQr} disabled={!qrDataUrl}
+          className="flex items-center gap-1.5 text-sm text-brand-blue hover:underline disabled:opacity-40"
         >
           <Icon name="QrCode" size={14} />
           Скачать QR-код отдельно (PNG)
