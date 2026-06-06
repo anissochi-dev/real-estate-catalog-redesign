@@ -1,1 +1,0 @@
-{"tests": [{"name": "Проверка ключей геокодера", "method": "GET", "path": "/", "expectedStatus": 200, "expectedBody": {"test_query": "string"}, "bodyMatcher": "partial"}]}
