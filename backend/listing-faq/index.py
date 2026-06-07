@@ -15,7 +15,7 @@ from psycopg2.extras import RealDictCursor
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
 YANDEX_GPT_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
-YANDEX_MODEL = 'yandexgpt/rc'
+YANDEX_MODEL = 'yandexgpt-5-pro/latest'
 
 DEAL_LABELS = {
     'sale': 'продажа',
@@ -62,7 +62,7 @@ def _load_yandex_keys(cur) -> tuple:
             return row.get('yandex_api_key') or '', row.get('yandex_folder_id') or ''
     except Exception:
         pass
-    return os.environ.get('YANDEX_API_KEY', ''), os.environ.get('YANDEX_FOLDER_ID', '')
+    return (os.environ.get('AISTUDIO_API_KEY') or os.environ.get('YANDEX_API_KEY', '')), os.environ.get('YANDEX_FOLDER_ID', '')
 
 
 def _check_seo_faq_column(cur) -> bool:
@@ -124,22 +124,22 @@ def _call_yandex_gpt(api_key: str, folder_id: str, user_text: str) -> dict:
         'Отвечай СТРОГО в формате JSON-массива без markdown и пояснений:\n'
         '[{"question": "...", "answer": "..."}, ...]'
     )
+    model_uri = f'gpt://{folder_id}/{YANDEX_MODEL}' if folder_id else YANDEX_MODEL
     payload = {
-        'modelUri': f'gpt://{folder_id}/{YANDEX_MODEL}',
+        'modelUri': model_uri,
         'completionOptions': {'stream': False, 'temperature': 0.4, 'maxTokens': '1200'},
         'messages': [
             {'role': 'system', 'text': system},
             {'role': 'user', 'text': user_text},
         ],
     }
+    headers = {'Authorization': f'Api-Key {api_key}', 'Content-Type': 'application/json'}
+    if folder_id:
+        headers['x-folder-id'] = folder_id
     req = urllib.request.Request(
         YANDEX_GPT_URL,
         data=json.dumps(payload).encode(),
-        headers={
-            'Authorization': f'Api-Key {api_key}',
-            'Content-Type': 'application/json',
-            'x-folder-id': folder_id,
-        },
+        headers=headers,
         method='POST',
     )
     try:

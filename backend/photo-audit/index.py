@@ -47,12 +47,12 @@ def _load_yandex_keys() -> tuple[str, str]:
                 return (row.get('yandex_api_key') or ''), (row.get('yandex_folder_id') or '')
     except Exception as e:
         print(f'[photo-audit] DB key error: {e}')
-        return os.environ.get('YANDEX_API_KEY', ''), os.environ.get('YANDEX_FOLDER_ID', '')
+        return (os.environ.get('AISTUDIO_API_KEY') or os.environ.get('YANDEX_API_KEY', '')), os.environ.get('YANDEX_FOLDER_ID', '')
 
 
 def _call_gpt(prompt: str, api_key: str, folder_id: str) -> str:
     payload = {
-        'modelUri': f'gpt://{folder_id}/yandexgpt/rc',
+        'modelUri': f'gpt://{folder_id}/yandexgpt-5-pro/latest' if folder_id else 'yandexgpt-5-pro/latest',
         'completionOptions': {'stream': False, 'temperature': 0.1, 'maxTokens': '2000'},
         'messages': [{'role': 'user', 'text': prompt}],
     }

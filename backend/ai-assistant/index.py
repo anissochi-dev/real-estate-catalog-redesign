@@ -18,9 +18,9 @@ from psycopg2.extras import RealDictCursor
 SCHEMA = 't_p71821556_real_estate_catalog_'
 YANDEX_GPT_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
 # YandexGPT 5 Pro 32k — расширенный контекст (32k токенов), лучшая работа с длинными диалогами и памятью.
-YANDEX_MODEL_NAME = 'yandexgpt-32k/rc'
-# Для технических/быстрых задач (seo, теги) — обычная Pro.
-YANDEX_MODEL_SHORT = 'yandexgpt/rc'
+YANDEX_MODEL_NAME = 'yandexgpt-5-pro/latest'
+# Для технических/быстрых задач (seo, теги) — Lite.
+YANDEX_MODEL_SHORT = 'yandexgpt-5-lite/latest'
 
 # S3 настройки для оптимизации изображений
 S3_BUCKET = 'files'
@@ -669,12 +669,10 @@ def _call_yandex_gpt(
     последние 10-15 сообщений. Передаётся между system и текущим user-сообщением,
     чтобы модель помнила контекст диалога и не повторяла одни и те же вопросы.
     """
-    api_key = db_key or os.environ.get('YANDEX_API_KEY', '')
+    api_key = db_key or os.environ.get('AISTUDIO_API_KEY') or os.environ.get('YANDEX_API_KEY', '')
     folder_id = db_folder or os.environ.get('YANDEX_FOLDER_ID', '')
     if not api_key:
         return {'error': 'YandexGPT API-ключ не настроен. Добавьте его в админке: Настройки → Интеграции.'}
-    if not folder_id:
-        return {'error': 'YandexGPT Folder ID не настроен. Добавьте его в админке: Настройки → Интеграции.'}
 
     messages = [{'role': 'system', 'text': system_prompt}]
     # Подмешиваем историю диалога (32k-модель позволяет хранить больше)
@@ -698,7 +696,7 @@ def _call_yandex_gpt(
         messages.append({'role': 'user', 'text': user_prompt})
 
     model_name = model or YANDEX_MODEL_NAME
-    model_uri = f'gpt://{folder_id}/{model_name}'
+    model_uri = f'gpt://{folder_id}/{model_name}' if folder_id else model_name
     payload = {
         'modelUri': model_uri,
         'completionOptions': {
@@ -709,14 +707,13 @@ def _call_yandex_gpt(
         'messages': messages,
     }
 
+    hdrs = {'Authorization': f'Api-Key {api_key}', 'Content-Type': 'application/json'}
+    if folder_id:
+        hdrs['x-folder-id'] = folder_id
     req = urllib.request.Request(
         YANDEX_GPT_URL,
         data=json.dumps(payload).encode('utf-8'),
-        headers={
-            'Authorization': f'Api-Key {api_key}',
-            'Content-Type': 'application/json',
-            'x-folder-id': folder_id,
-        },
+        headers=hdrs,
         method='POST',
     )
     try:

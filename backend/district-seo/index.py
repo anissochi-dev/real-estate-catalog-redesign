@@ -75,7 +75,7 @@ def _generate(district: str, city: str, stats: dict, cur) -> str:
     price_str = f'средняя стоимость — {int(avg_price):,} руб.'.replace(',', ' ') if avg_price else ''
     district_desc = _get_district_description(cur, district)
 
-    api_key = os.environ.get('YANDEX_API_KEY', '')
+    api_key = os.environ.get('AISTUDIO_API_KEY') or os.environ.get('YANDEX_API_KEY', '')
     folder_id = os.environ.get('YANDEX_FOLDER_ID', '')
     if not api_key or not folder_id:
         try:
@@ -106,7 +106,7 @@ def _generate(district: str, city: str, stats: dict, cur) -> str:
     )
 
     payload = {
-        'modelUri': f'gpt://{folder_id}/yandexgpt/rc',
+        'modelUri': f'gpt://{folder_id}/yandexgpt-5-pro/latest' if folder_id else 'yandexgpt-5-pro/latest',
         'completionOptions': {'stream': False, 'temperature': 0.6, 'maxTokens': '800'},
         'messages': [
             {'role': 'system', 'text': 'SEO-копирайтер агентства коммерческой недвижимости. Только русский язык.'},

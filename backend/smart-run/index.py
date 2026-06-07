@@ -56,7 +56,7 @@ def _load_gpt_keys(cur):
 def _gpt_short(prompt: str, system: str, api_key: str, folder_id: str) -> str:
     """Быстрый вызов YandexGPT (короткая модель)."""
     body = json.dumps({
-        'modelUri': f'gpt://{folder_id}/yandexgpt/rc',
+        'modelUri': f'gpt://{folder_id}/yandexgpt-5-pro/latest' if folder_id else 'yandexgpt-5-pro/latest',
         'completionOptions': {'stream': False, 'temperature': 0.3, 'maxTokens': 400},
         'messages': [
             {'role': 'system', 'text': system},

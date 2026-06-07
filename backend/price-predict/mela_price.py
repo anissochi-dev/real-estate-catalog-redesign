@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
 YANDEX_GPT_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
-YANDEX_MODEL_NAME = 'yandexgpt/rc'
+YANDEX_MODEL_NAME = 'yandexgpt-5-pro/latest'
 YANDEX_SEARCH_URL = 'https://yandex.ru/search/xml'
 CACHE_TTL_DAYS = 3
 

@@ -33,7 +33,7 @@ from psycopg2.extras import RealDictCursor
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
 YANDEX_GPT_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
-YANDEX_MODEL = 'yandexgpt/rc'
+YANDEX_MODEL = 'yandexgpt-5-pro/latest'
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -216,7 +216,7 @@ def _load_gpt_keys(cur):
             return (row.get('yandex_api_key') or '').strip(), (row.get('yandex_folder_id') or '').strip()
     except Exception:
         pass
-    return os.environ.get('YANDEX_API_KEY', ''), os.environ.get('YANDEX_FOLDER_ID', '')
+    return (os.environ.get('AISTUDIO_API_KEY') or os.environ.get('YANDEX_API_KEY', '')), os.environ.get('YANDEX_FOLDER_ID', '')
 
 
 def _fetch_news_snippets(query: str, limit: int = 8) -> tuple[list[dict], str]:
