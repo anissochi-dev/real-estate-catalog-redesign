@@ -8,8 +8,7 @@ import { BannerCanvas, CanvasProps } from './QrBannerCanvas';
 import { ColorPicker, SizePanel, EditorPanel, TextPanel, ImagesPanel, DownloadPanel } from './QrBannerControls';
 import {
   BrokerInfo, BannerElement, ElementId, Pos,
-  PX_PER_CM, PREVIEW_MAX_H, PREVIEW_PAD,
-  makeElements,
+  PX_PER_CM, makeElements,
 } from './QrBannerTypes';
 
 interface Props { listing: Listing; siteUrl?: string }
@@ -23,12 +22,15 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
 
   // ── реальная ширина контейнера (ResizeObserver) ────────────────────────────
   useEffect(() => {
-    if (!containerRef.current) return;
+    const el = containerRef.current;
+    if (!el) return;
+    // начальное значение
+    setContainerW(el.getBoundingClientRect().width || 480);
     const ro = new ResizeObserver(entries => {
       const w = entries[0]?.contentRect.width;
-      if (w) setContainerW(w);
+      if (w > 0) setContainerW(w);
     });
-    ro.observe(containerRef.current);
+    ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
@@ -55,20 +57,24 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   const publicUrl = siteUrl && listing.slug
     ? `${siteUrl.replace(/\/$/, '')}/object/${listing.slug}` : null;
 
-  // ── размеры ───────────────────────────────────────────────────────────────
+  // ── размеры баннера (px для рендера) ──────────────────────────────────────
   const numCmW = Math.max(1, parseFloat(cmW) || 1);
   const numCmH = Math.max(1, parseFloat(cmH) || 1);
   const sqM = ((numCmW * numCmH) / 10000).toFixed(4).replace(/\.?0+$/, '');
   const bannerW = Math.round(numCmW * PX_PER_CM);
   const bannerH = Math.round(numCmH * PX_PER_CM);
 
-  // ── превью — масштаб от реальной ширины контейнера ───────────────────────
-  const availW = Math.max(120, containerW - PREVIEW_PAD);
-  const availH = PREVIEW_MAX_H - PREVIEW_PAD;
+  // ── масштаб превью: вписываем баннер в доступную ширину ───────────────────
+  // отступ 24px (p-3 с двух сторон)
+  const PAD = 24;
+  const MAX_PREVIEW_H = 320;
+  const availW = Math.max(100, containerW - PAD);
+  const availH = MAX_PREVIEW_H;
   const previewScale = Math.min(availW / bannerW, availH / bannerH, 1);
   const scaledW = Math.round(bannerW * previewScale);
   const scaledH = Math.round(bannerH * previewScale);
-  const containerH = Math.min(scaledH + PREVIEW_PAD, PREVIEW_MAX_H);
+  // минимальная высота превью-контейнера: 80px, чтобы узкие горизонтали не схлопывались
+  const previewH = Math.max(80, scaledH + 24);
 
   // ── элементы ──────────────────────────────────────────────────────────────
   const prevElsRef = useRef<BannerElement[]>([]);
@@ -207,13 +213,36 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   if (elements.length === 0) return null;
 
   return (
-    <div ref={containerRef} className="p-6 space-y-5">
+    <div ref={containerRef} className="p-4 space-y-4">
 
+      {/* 1. Телефон и текст сделки — главные данные сразу видны */}
+      <TextPanel
+        dealText={dealText} setDealText={setDealText}
+        phoneText={phoneText} setPhoneText={setPhoneText}
+      />
+
+      {/* 2. Редактор — превью баннера */}
+      <EditorPanel
+        canvasProps={canvasProps}
+        bannerW={bannerW} bannerH={bannerH}
+        scaledW={scaledW} scaledH={scaledH}
+        previewScale={previewScale}
+        previewH={previewH}
+        numCmW={numCmW} numCmH={numCmH}
+        selected={selected}
+        selectedEl={selectedEl}
+        onResetPositions={resetPositions}
+        onUpdateSize={updateSize}
+        onDeselect={() => setSelected(null)}
+      />
+
+      {/* 3. Цвета */}
       <ColorPicker
         bgColor={bgColor} setBgColor={setBgColor}
         textColor={textColor} setTextColor={setTextColor}
       />
 
+      {/* 4. Размеры для печати */}
       <SizePanel
         cmW={cmW} setCmW={setCmW}
         cmH={cmH} setCmH={setCmH}
@@ -223,25 +252,7 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
         applyPreset={applyPreset}
       />
 
-      <EditorPanel
-        canvasProps={canvasProps}
-        bannerW={bannerW} bannerH={bannerH}
-        scaledW={scaledW} scaledH={scaledH}
-        previewScale={previewScale}
-        containerH={containerH}
-        numCmW={numCmW} numCmH={numCmH}
-        selected={selected}
-        selectedEl={selectedEl}
-        onResetPositions={resetPositions}
-        onUpdateSize={updateSize}
-        onDeselect={() => setSelected(null)}
-      />
-
-      <TextPanel
-        dealText={dealText} setDealText={setDealText}
-        phoneText={phoneText} setPhoneText={setPhoneText}
-      />
-
+      {/* 5. Изображения */}
       <ImagesPanel
         logoUrl={logoUrl} uploadingLogo={uploadingLogo}
         photoUrl={photoUrl} uploadingPhoto={uploadingPhoto}
@@ -256,6 +267,7 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
         <BannerCanvas {...canvasProps} selected={null} bannerRef={exportRef} exportMode />
       </div>
 
+      {/* 6. Скачать */}
       <DownloadPanel
         downloadFormat={downloadFormat} setDownloadFormat={setDownloadFormat}
         downloading={downloading} qrDataUrl={qrDataUrl}

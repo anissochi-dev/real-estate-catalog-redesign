@@ -1,5 +1,5 @@
 import Icon from '@/components/ui/icon';
-import { BannerElement, BG_COLORS, ElementId, EL_LABEL, getSizeInfo, PREVIEW_PAD, SIZE_PRESETS, TEXT_COLORS } from './QrBannerTypes';
+import { BannerElement, BG_COLORS, ElementId, EL_LABEL, getSizeInfo, SIZE_PRESETS, TEXT_COLORS } from './QrBannerTypes';
 import { BannerCanvas, CanvasProps, ImageUploadBtn, Swatch } from './QrBannerCanvas';
 
 // ─── ColorPicker ──────────────────────────────────────────────────────────────
@@ -107,7 +107,7 @@ interface EditorPanelProps {
   bannerW: number; bannerH: number;
   scaledW: number; scaledH: number;
   previewScale: number;
-  containerH: number;
+  previewH: number;
   numCmW: number; numCmH: number;
   selected: ElementId | null;
   selectedEl: BannerElement | undefined;
@@ -118,7 +118,7 @@ interface EditorPanelProps {
 
 export function EditorPanel({
   canvasProps, bannerW, bannerH, scaledW, scaledH, previewScale,
-  containerH, numCmW, numCmH,
+  previewH, numCmW, numCmH,
   selected, selectedEl, onResetPositions, onUpdateSize, onDeselect,
 }: EditorPanelProps) {
   return (
@@ -129,17 +129,17 @@ export function EditorPanel({
           <button onClick={onResetPositions}
             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
-            <Icon name="RotateCcw" size={12} />Сбросить позиции
+            <Icon name="RotateCcw" size={12} />Сбросить
           </button>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Icon name="Move" size={12} />Перетащи элемент
+            <Icon name="Move" size={12} />Перетащи
           </div>
         </div>
       </div>
 
       <div
-        className="relative bg-[#e0e0e0] rounded-2xl overflow-hidden transition-[height] duration-300"
-        style={{ width: '100%', height: containerH + PREVIEW_PAD }}
+        className="relative bg-[#e0e0e0] rounded-2xl overflow-hidden"
+        style={{ width: '100%', height: previewH }}
       >
         <div className="absolute inset-0 opacity-[0.1]" style={{
           backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 19px,#777 19px,#777 20px),repeating-linear-gradient(90deg,transparent,transparent 19px,#777 19px,#777 20px)',
