@@ -63,7 +63,103 @@ export default function ListingsTable({
   const allSelected = items.length > 0 && items.every(i => selected.has(i.id));
 
   return (
-    <div className="bg-white rounded-2xl overflow-hidden shadow-sm overflow-x-auto">
+    <>
+    {/* ── Мобильный вид (карточки) ── */}
+    <div className="sm:hidden bg-white rounded-2xl overflow-hidden shadow-sm divide-y divide-border">
+      {/* Шапка с чекбоксом */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-muted/50">
+        <input type="checkbox" checked={allSelected}
+          onChange={allSelected ? onDeselectAll : onSelectAll} className="rounded" />
+        <span className="text-xs text-muted-foreground font-medium">Выбрать все ({items.length})</span>
+      </div>
+      {items.map(it => {
+        const dm = dealMeta(it.deal);
+        const m2 = perM2(it.price, it.area);
+        return (
+          <div key={it.id}
+            className={`px-3 py-2.5 ${selected.has(it.id) ? 'bg-brand-blue/5' : ''} ${it.is_visible === false ? 'bg-red-50/40' : ''}`}>
+            <div className="flex gap-2.5">
+              {/* Чекбокс + Фото */}
+              <div className="flex flex-col items-center gap-1.5 shrink-0">
+                <input type="checkbox" checked={selected.has(it.id)}
+                  onChange={() => onToggleSelect(it.id)} className="rounded" />
+                <PhotoCell it={it} />
+              </div>
+              {/* Контент */}
+              <div className="flex-1 min-w-0">
+                {/* Название + ID */}
+                <div className="flex items-start justify-between gap-1.5">
+                  <button
+                    onClick={() => onInternalCard?.(it)}
+                    className="font-semibold text-sm text-left hover:text-brand-blue transition-colors leading-snug"
+                  >
+                    {it.title}
+                  </button>
+                  <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue shrink-0">
+                    #{fmtListingId(it.id)}
+                  </span>
+                </div>
+                {/* Адрес */}
+                <div className="text-xs text-muted-foreground mt-0.5 leading-snug">
+                  {it.city || 'Краснодар'}{it.district ? ` · ${it.district}` : ''}
+                  {canSeeFullDetails && it.address ? <span className="block">{it.address}</span> : null}
+                </div>
+                {/* Сделка + Цена + Площадь */}
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  {dm && <span className={`text-xs px-2 py-0.5 rounded ${dm[2]} font-semibold`}>{dm[1]}</span>}
+                  <span className="text-xs font-semibold">{(it.price || 0).toLocaleString('ru')} ₽</span>
+                  {m2 > 0 && <span className="text-xs text-muted-foreground">{m2.toLocaleString('ru')} ₽/м²</span>}
+                  {it.area ? <span className="text-xs text-muted-foreground">{it.area} м²</span> : null}
+                </div>
+                {/* Бейджи статуса */}
+                <div className="flex items-center gap-1 mt-1 flex-wrap">
+                  {it.is_visible === false && (
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-700 inline-flex items-center gap-0.5">
+                      <Icon name="EyeOff" size={10} /> Скрыт
+                    </span>
+                  )}
+                  {it.status === 'archived' && (
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">Архив</span>
+                  )}
+                  {it.export_yandex && <span title="Яндекс" className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-50 text-red-600 border border-red-200">Я</span>}
+                  {it.export_avito  && <span title="Авито"  className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200">A</span>}
+                  {it.export_cian   && <span title="ЦИАН"   className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200">Ц</span>}
+                </div>
+                {/* Кнопки действий */}
+                <div className="flex items-center justify-between mt-2">
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <button onClick={() => onInternalCard?.(it)} className="flex items-center gap-1 hover:text-brand-blue">
+                      <Icon name="MessageSquare" size={13} /> Чат
+                    </button>
+                    <button onClick={() => onHistory(it)} className="flex items-center gap-1 hover:text-brand-blue">
+                      <Icon name="BarChart2" size={13} /> Ядро
+                    </button>
+                    <a href={`/object/${it.slug || it.id}`} target="_blank" rel="noreferrer"
+                      className="flex items-center gap-1 text-brand-orange hover:opacity-80">
+                      <Icon name="Globe" size={13} /> Сайт
+                    </a>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => onEdit(it)} className="text-brand-blue hover:opacity-70">
+                      <Icon name="Pencil" size={16} />
+                    </button>
+                    <button
+                      onClick={() => onArchive(it.id)}
+                      title={it.status === 'archived' ? 'Восстановить' : 'Архивировать'}
+                      className={it.status === 'archived' ? 'text-emerald-600 hover:opacity-70' : 'text-orange-500 hover:opacity-70'}>
+                      <Icon name={it.status === 'archived' ? 'RotateCcw' : 'Archive'} size={16} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+
+    {/* ── Десктопный вид (таблица) ── */}
+    <div className="hidden sm:block bg-white rounded-2xl overflow-hidden shadow-sm overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="bg-muted/50 text-left">
           <tr>
@@ -206,5 +302,6 @@ export default function ListingsTable({
         </tbody>
       </table>
     </div>
+    </>
   );
 }
