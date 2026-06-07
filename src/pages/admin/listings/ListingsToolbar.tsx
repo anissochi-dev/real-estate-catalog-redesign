@@ -59,15 +59,6 @@ export default function ListingsToolbar({
 
       {/* Кнопки действий */}
       <div className="flex items-center gap-2 flex-wrap">
-        {hasDraft && (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold">
-            <Icon name="FileEdit" size={12} />
-            Черновик сохранён
-            <button onClick={() => { clearDraft(); setHasDraft(false); }} className="hover:text-red-600 transition-colors ml-0.5" title="Удалить">
-              <Icon name="X" size={12} />
-            </button>
-          </span>
-        )}
         <button
           onClick={() => setImportOpen(true)}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
@@ -81,6 +72,15 @@ export default function ListingsToolbar({
           <Icon name="Plus" size={15} />
           {hasDraft ? 'Продолжить черновик' : 'Добавить объект'}
         </button>
+        {hasDraft && (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold">
+            <Icon name="FileEdit" size={12} />
+            Черновик сохранён
+            <button onClick={() => { clearDraft(); setHasDraft(false); }} className="hover:text-red-600 transition-colors ml-0.5" title="Удалить">
+              <Icon name="X" size={12} />
+            </button>
+          </span>
+        )}
       </div>
 
       {/* Поиск и фильтр категории */}
