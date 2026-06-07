@@ -1,6 +1,8 @@
 import { Benchmarks, ModelResult, UserParams, YearRow } from './types';
 
-/** Локальный пересчёт модели (зеркало backend-логики, чтобы ползунки работали мгновенно). */
+/** Локальный пересчёт модели (зеркало backend-логики, ползунки работают мгновенно).
+ *  NPV включает Terminal Value (реверсию) — стандарт DCF для недвижимости.
+ */
 export function computeModel(
   listing: { area: number; price: number },
   bench: Benchmarks,
@@ -14,6 +16,7 @@ export function computeModel(
   const opex_per_m2  = params.opex_per_m2  ?? bench.opex_per_m2;
   const tax_pct      = params.property_tax_pct ?? bench.property_tax_pct;
   const indexation   = params.avg_indexation_pct ?? bench.avg_indexation_pct;
+  const market_cap   = bench.market_cap_rate_pct;
 
   const ltv_pct    = params.ltv_pct    ?? 0;
   const loan_rate  = params.loan_rate_pct ?? 18;
@@ -52,6 +55,7 @@ export function computeModel(
   let cumulative = initial_equity;
   let payback_years: number | null = null;
   const yearly: YearRow[] = [];
+  let noi_year10 = noi_year1;
 
   for (let year = 1; year <= 10; year++) {
     const indexFactor = Math.pow(1 + indexation / 100, year - 1);
@@ -61,6 +65,7 @@ export function computeModel(
     const opexYear = opex_per_m2 * 12 * area * Math.pow(1 + 0.5 * indexation / 100, year - 1);
     const taxYear  = price * tax_pct / 100;
     const noiYear  = egiYear - opexYear - taxYear;
+    if (year === 10) noi_year10 = noiYear;
     const debtYear = year <= loan_years ? debt_service_annual : 0;
     const cashYear = noiYear - debtYear;
     cashFlows.push(cashYear);
@@ -83,13 +88,26 @@ export function computeModel(
     }
   }
 
-  const npv = computeNPV(cashFlows, discount);
-  const irr = computeIRR(cashFlows);
+  // Terminal Value: стоимость актива при продаже на конец года 10
+  const terminal_value = market_cap > 0 ? noi_year10 / (market_cap / 100) : 0;
+  const r = discount / 100;
+  const pv_terminal = r > 0 ? terminal_value / Math.pow(1 + r, 10) : terminal_value;
+
+  const npv_operations = computeNPV(cashFlows, discount);
+  const npv_total = npv_operations + pv_terminal;
+
+  // IRR с учётом продажи актива: добавляем TV к CF последнего года
+  const cashFlowsWithTV = [...cashFlows];
+  cashFlowsWithTV[cashFlowsWithTV.length - 1] += terminal_value;
+  const irr = computeIRR(cashFlowsWithTV);
 
   return {
     noi_year1: Math.round(noi_year1),
     cap_rate_pct: Number(cap_rate.toFixed(2)),
-    npv_10y: Math.round(npv),
+    npv_10y: Math.round(npv_total),
+    npv_operations: Math.round(npv_operations),
+    terminal_value: Math.round(terminal_value),
+    pv_terminal: Math.round(pv_terminal),
     irr_pct: Number(irr.toFixed(2)),
     payback_years: payback_years !== null ? Number(payback_years.toFixed(1)) : null,
     discount_pct: Number(discount.toFixed(2)),

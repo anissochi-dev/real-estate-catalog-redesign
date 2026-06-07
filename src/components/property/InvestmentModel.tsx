@@ -142,6 +142,29 @@ export default function InvestmentModel({ listingId, price, area, deal }: Props)
                 </div>
               )}
 
+              {/* Предупреждение: объект на продажу без арендатора */}
+              {!data.listing.has_tenant && deal === 'sale' && (
+                <div className="flex items-start gap-2 text-[11px] bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-2.5 py-1.5">
+                  <Icon name="AlertTriangle" size={12} className="shrink-0 text-amber-600 mt-0.5" />
+                  <span className="leading-relaxed">
+                    <span className="font-semibold">Прогнозный сценарий.</span>{' '}
+                    Объект без действующего арендатора — доходность рассчитана на основе рыночных ставок аренды. Фактические показатели зависят от заполняемости.
+                  </span>
+                </div>
+              )}
+
+              {/* Рыночный апсайд для ГАБ */}
+              {data.market_rent_rate && data.actual_rent_rate && data.market_rent_rate > data.actual_rent_rate * 1.1 && (
+                <div className="flex items-start gap-2 text-[11px] bg-sky-50 border border-sky-200 text-sky-800 rounded-lg px-2.5 py-1.5">
+                  <Icon name="TrendingUp" size={12} className="shrink-0 text-sky-600 mt-0.5" />
+                  <span className="leading-relaxed">
+                    <span className="font-semibold">Апсайд при смене арендатора.</span>{' '}
+                    Текущая ставка {Math.round(data.actual_rent_rate)} ₽/м²/мес vs рынок {Math.round(data.market_rent_rate)} ₽/м²/мес.{' '}
+                    Потенциал роста NOI: +{Math.round((data.market_rent_rate / data.actual_rent_rate - 1) * 100)}%
+                  </span>
+                </div>
+              )}
+
               {/* KPI */}
               <KpiCards result={liveResult} />
 
@@ -173,6 +196,15 @@ export default function InvestmentModel({ listingId, price, area, deal }: Props)
                         <>
                           <Row label="Сумма кредита" value={fmtMoneyFull(liveResult.loan_amount)} />
                           <Row label="Обслуживание долга (год)" value={fmtMoneyFull(-liveResult.debt_service_annual)} negative />
+                        </>
+                      )}
+                      {liveResult.terminal_value > 0 && (
+                        <>
+                          <div className="border-t border-border/40 mt-2 pt-2 font-semibold text-sm">Стоимость выхода (год 10)</div>
+                          <Row label="Terminal Value (продажа актива)" value={fmtMoneyFull(liveResult.terminal_value)} />
+                          <Row label="PV Terminal Value (дисконт.)" value={fmtMoneyFull(liveResult.pv_terminal)} />
+                          <Row label="NPV операционный (без TV)" value={fmtMoneyFull(liveResult.npv_operations)} />
+                          <Row label="= NPV полный (с выходом)" value={fmtMoneyFull(liveResult.npv_10y)} bold />
                         </>
                       )}
                     </div>

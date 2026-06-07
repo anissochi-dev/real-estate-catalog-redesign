@@ -21,6 +21,9 @@ export interface ModelResult {
   noi_year1: number;
   cap_rate_pct: number;
   npv_10y: number;
+  npv_operations: number;
+  terminal_value: number;
+  pv_terminal: number;
   irr_pct: number;
   payback_years: number | null;
   discount_pct: number;
@@ -56,10 +59,13 @@ export interface NoiApiResponse {
     building_class?: string | null;
     building_year?: number | null;
     total_floors?: number | null;
+    has_tenant?: boolean;
   };
   benchmarks: Benchmarks;
   scenarios: Scenarios;
   data_source?: 'real_rent' | 'yandex_gpt' | 'fallback';
+  market_rent_rate?: number | null;
+  actual_rent_rate?: number | null;
 }
 
 export interface UserParams {
