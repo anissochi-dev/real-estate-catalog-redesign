@@ -380,25 +380,28 @@ def compute_model(listing: dict, bench: dict, params: dict) -> dict:
     yearly_breakdown = []
     noi_year10 = noi_year1  # будет пересчитан в цикле
 
-    for year in range(1, 11):
-        index_factor = (1 + indexation / 100.0) ** (year - 1)
-        infra_factor = 1.0
+    def _calc_year(year):
+        """Рассчитывает денежный поток для произвольного года."""
+        idx = (1 + indexation / 100.0) ** (year - 1)
+        infra = 1.0
         if infra_year and year >= infra_year:
-            infra_factor = 1 + infra_rent_uplift_pct / 100.0
+            infra = 1 + infra_rent_uplift_pct / 100.0
         if is_land and rent_rate == 0:
-            rent_year = 0.0
+            rent_y = 0.0
         else:
-            rent_year = rent_rate * 12 * area * index_factor * infra_factor
-        egi_year    = rent_year * (1 - vacancy_pct / 100.0)
-        # OPEX индексируется медленнее аренды (инфраструктурные расходы, не бизнес)
-        opex_year   = opex_per_m2 * 12 * area * ((1 + 0.4 * indexation / 100.0) ** (year - 1))
-        tax_year    = price * tax_pct / 100.0
-        noi_year    = egi_year - opex_year - tax_year
+            rent_y = rent_rate * 12 * area * idx * infra
+        egi_y  = rent_y * (1 - vacancy_pct / 100.0)
+        opex_y = opex_per_m2 * 12 * area * ((1 + 0.4 * indexation / 100.0) ** (year - 1))
+        tax_y  = price * tax_pct / 100.0
+        noi_y  = egi_y - opex_y - tax_y
+        debt_y = debt_service_annual if year <= loan_years else 0
+        return noi_y, debt_y, noi_y - debt_y
+
+    for year in range(1, 11):
+        noi_year, debt_year, cash_year = _calc_year(year)
         if year == 10:
             noi_year10 = noi_year
 
-        debt_year = debt_service_annual if year <= loan_years else 0
-        cash_year = noi_year - debt_year
         cash_flows.append(cash_year)
         cumulative += cash_year
         yearly_breakdown.append({
@@ -415,6 +418,20 @@ def compute_model(listing: dict, bench: dict, params: dict) -> dict:
                 payback_years = (year - 1) + max(0, min(1, frac))
             else:
                 payback_years = year
+
+    # Продолжаем считать окупаемость до 30 лет (без записи в yearly)
+    if payback_years is None:
+        for year in range(11, 31):
+            _, _, cash_year = _calc_year(year)
+            cumulative += cash_year
+            if cumulative >= 0:
+                prev_cum = cumulative - cash_year
+                if cash_year > 0:
+                    frac = -prev_cum / cash_year
+                    payback_years = (year - 1) + max(0, min(1, frac))
+                else:
+                    payback_years = float(year)
+                break
 
     # Terminal Value (реверсия)
     if is_land and rent_rate == 0:

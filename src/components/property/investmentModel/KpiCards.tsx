@@ -103,12 +103,20 @@ export default function KpiCards({ result, objectType }: Props) {
     },
     {
       label: 'Окупаемость',
-      value: result.payback_years != null ? `${result.payback_years} лет` : '>10 лет',
+      value: result.payback_years != null
+        ? `${Number.isInteger(result.payback_years) ? result.payback_years : result.payback_years.toFixed(1)} лет`
+        : '>30 лет',
       icon: 'Hourglass',
-      color: result.payback_years != null && result.payback_years <= 10
-        ? 'bg-purple-50 text-purple-700 border-purple-200'
-        : 'bg-slate-50 text-slate-500 border-slate-200',
-      hint: result.loan_amount > 0 ? 'С учётом кредита' : 'Без кредита',
+      color: result.payback_years == null
+        ? 'bg-red-50 text-red-600 border-red-200'
+        : result.payback_years <= 10
+          ? 'bg-purple-50 text-purple-700 border-purple-200'
+          : result.payback_years <= 15
+            ? 'bg-amber-50 text-amber-700 border-amber-200'
+            : 'bg-slate-50 text-slate-500 border-slate-200',
+      hint: result.payback_years != null && result.payback_years > 10
+        ? 'Долгосрочная инвестиция'
+        : result.loan_amount > 0 ? 'С учётом кредита' : 'Без кредита',
     },
   ];
 

@@ -59,18 +59,21 @@ export function computeModel(
   const yearly: YearRow[] = [];
   let noi_year10 = noi_year1;
 
-  for (let year = 1; year <= 10; year++) {
+  const calcYear = (year: number) => {
     const indexFactor = Math.pow(1 + indexation / 100, year - 1);
     const infraFactor = infra_year && year >= infra_year ? 1 + infra_uplift / 100 : 1;
     const rentYear = (is_land && rent_rate === 0) ? 0 : rent_rate * 12 * area * indexFactor * infraFactor;
     const egiYear  = rentYear * (1 - vacancy_pct / 100);
-    // OPEX индексируется медленнее аренды (0.4× вместо 1×)
     const opexYear = opex_per_m2 * 12 * area * Math.pow(1 + 0.4 * indexation / 100, year - 1);
     const taxYear  = price * tax_pct / 100;
     const noiYear  = egiYear - opexYear - taxYear;
-    if (year === 10) noi_year10 = noiYear;
     const debtYear = year <= loan_years ? debt_service_annual : 0;
-    const cashYear = noiYear - debtYear;
+    return { noiYear, debtYear, cashYear: noiYear - debtYear };
+  };
+
+  for (let year = 1; year <= 10; year++) {
+    const { noiYear, debtYear, cashYear } = calcYear(year);
+    if (year === 10) noi_year10 = noiYear;
     cashFlows.push(cashYear);
     const prevCum = cumulative;
     cumulative += cashYear;
@@ -87,6 +90,24 @@ export function computeModel(
         payback_years = (year - 1) + Math.max(0, Math.min(1, frac));
       } else {
         payback_years = year;
+      }
+    }
+  }
+
+  // Продолжаем считать окупаемость до 30 лет (без записи в yearly)
+  if (payback_years === null) {
+    for (let year = 11; year <= 30; year++) {
+      const { cashYear } = calcYear(year);
+      const prevCum = cumulative;
+      cumulative += cashYear;
+      if (cumulative >= 0) {
+        if (cashYear > 0) {
+          const frac = -prevCum / cashYear;
+          payback_years = (year - 1) + Math.max(0, Math.min(1, frac));
+        } else {
+          payback_years = year;
+        }
+        break;
       }
     }
   }
