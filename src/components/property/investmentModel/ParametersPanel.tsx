@@ -29,8 +29,8 @@ export default function ParametersPanel({ bench, params, setParam, onReset }: Pr
           label="Арендная ставка"
           value={params.rent_rate}
           benchmark={bench.rent_rate}
-          min={Math.max(50, Math.round(bench.rent_rate * 0.4))}
-          max={Math.round(bench.rent_rate * 2)}
+          min={Math.max(50, Math.round(bench.rent_rate * 0.3))}
+          max={Math.round(Math.max(bench.rent_rate, bench.market_rent_rate ?? bench.rent_rate) * 2.5)}
           step={10}
           unit=" ₽/м²/мес"
           onChange={v => setParam('rent_rate', v)}
