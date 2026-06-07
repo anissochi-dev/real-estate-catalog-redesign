@@ -64,7 +64,11 @@ export default function InvestmentModel({ listingId, price, area, deal }: Props)
 
   const liveResult = useMemo(() => {
     if (!data || !params) return null;
-    return computeModel({ area: data.listing.area, price: data.listing.price }, data.benchmarks, params);
+    return computeModel(
+      { area: data.listing.area, price: data.listing.price, type: data.listing.type },
+      data.benchmarks,
+      params,
+    );
   }, [data, params]);
 
   // Не показываем для сделок «аренда» — модель строится на покупке актива
@@ -166,7 +170,7 @@ export default function InvestmentModel({ listingId, price, area, deal }: Props)
               )}
 
               {/* KPI */}
-              <KpiCards result={liveResult} />
+              <KpiCards result={liveResult} objectType={data.listing.type} />
 
               {/* Параметры + график */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">

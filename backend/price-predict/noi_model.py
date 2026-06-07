@@ -68,24 +68,38 @@ def _load_keys(cur):
 
 
 def _fallback_benchmarks(listing: dict) -> dict:
+    """
+    Дефолтные бенчмарки по типу объекта. Калиброваны под Краснодар 2025-2026.
+    МЕТОДОЛОГИЯ:
+    - OPEX: отель/ресторан — только коммунальные расходы и обслуживание здания (не бизнес-расходы).
+      При аренде ГАБ арендатор сам несёт бизнес-расходы, собственник платит только за содержание здания.
+    - Вакантность: для ГАБ с арендатором — 0-5%, для пустых объектов — рыночная.
+    - Налог: дифференцирован по НК РФ и КК.
+    - hotel с OPEX 1400 применяется ТОЛЬКО если объект эксплуатируется собственником.
+      Если продаётся как ГАБ (есть арендатор) — OPEX ниже (только здание).
+    - land: применяется специальная логика апрециации, не аренды.
+    """
     type_key = (listing.get('type') or 'office').lower()
-    # OPEX скорректирован по реальным рыночным данным:
-    # hotel/restaurant — высокий OPEX: персонал, коммуналка, обслуживание
-    # Налог на имущество дифференцирован по НК РФ и региональным ставкам КК
+    has_tenant = bool(listing.get('monthly_rent') or listing.get('yearly_rent') or listing.get('tenant_name'))
+
+    # Для hotel/restaurant — разделяем OPEX: с арендатором (содержание здания) vs без (операционный бизнес)
+    hotel_opex = 350 if has_tenant else 1200   # с ГАБ — только здание; без — бизнес-расходы
+    restaurant_opex = 200 if has_tenant else 550
+
     defaults = {
-        # тип: rent_rate, vacancy_pct, opex_per_m2, property_tax_pct, market_cap_rate_pct, avg_indexation_pct
-        'office':       {'rent_rate': 950,  'vacancy_pct': 10, 'opex_per_m2': 200,  'property_tax_pct': 1.8,  'market_cap_rate_pct': 10.0, 'avg_indexation_pct': 7},
-        'retail':       {'rent_rate': 1600, 'vacancy_pct': 7,  'opex_per_m2': 250,  'property_tax_pct': 2.2,  'market_cap_rate_pct': 9.5,  'avg_indexation_pct': 7},
-        'warehouse':    {'rent_rate': 600,  'vacancy_pct': 5,  'opex_per_m2': 100,  'property_tax_pct': 1.5,  'market_cap_rate_pct': 12.0, 'avg_indexation_pct': 8},
-        'restaurant':   {'rent_rate': 1800, 'vacancy_pct': 10, 'opex_per_m2': 600,  'property_tax_pct': 2.0,  'market_cap_rate_pct': 11.0, 'avg_indexation_pct': 7},
-        'hotel':        {'rent_rate': 2200, 'vacancy_pct': 30, 'opex_per_m2': 1400, 'property_tax_pct': 2.0,  'market_cap_rate_pct': 11.5, 'avg_indexation_pct': 6},
-        'gab':          {'rent_rate': 1200, 'vacancy_pct': 5,  'opex_per_m2': 180,  'property_tax_pct': 1.8,  'market_cap_rate_pct': 10.0, 'avg_indexation_pct': 7},
-        'business':     {'rent_rate': 1400, 'vacancy_pct': 8,  'opex_per_m2': 220,  'property_tax_pct': 1.8,  'market_cap_rate_pct': 11.0, 'avg_indexation_pct': 7},
-        'production':   {'rent_rate': 500,  'vacancy_pct': 6,  'opex_per_m2': 90,   'property_tax_pct': 1.5,  'market_cap_rate_pct': 12.5, 'avg_indexation_pct': 7},
-        'building':     {'rent_rate': 850,  'vacancy_pct': 8,  'opex_per_m2': 180,  'property_tax_pct': 1.8,  'market_cap_rate_pct': 10.5, 'avg_indexation_pct': 7},
-        'free_purpose': {'rent_rate': 1050, 'vacancy_pct': 8,  'opex_per_m2': 190,  'property_tax_pct': 1.8,  'market_cap_rate_pct': 10.0, 'avg_indexation_pct': 7},
-        'car_service':  {'rent_rate': 750,  'vacancy_pct': 6,  'opex_per_m2': 140,  'property_tax_pct': 1.5,  'market_cap_rate_pct': 12.0, 'avg_indexation_pct': 7},
-        'land':         {'rent_rate': 220,  'vacancy_pct': 10, 'opex_per_m2': 25,   'property_tax_pct': 0.3,  'market_cap_rate_pct': 7.0,  'avg_indexation_pct': 6},
+        # тип: rent_rate ₽/м²/мес, vacancy %, opex ₽/м²/мес, tax % от стоимости, cap rate %, indexation %
+        'office':       {'rent_rate': 950,  'vacancy_pct': 10, 'opex_per_m2': 200,          'property_tax_pct': 1.8, 'market_cap_rate_pct': 10.0, 'avg_indexation_pct': 7},
+        'retail':       {'rent_rate': 1600, 'vacancy_pct': 7,  'opex_per_m2': 250,          'property_tax_pct': 2.0, 'market_cap_rate_pct': 9.5,  'avg_indexation_pct': 7},
+        'warehouse':    {'rent_rate': 600,  'vacancy_pct': 5,  'opex_per_m2': 80,           'property_tax_pct': 1.5, 'market_cap_rate_pct': 12.0, 'avg_indexation_pct': 8},
+        'restaurant':   {'rent_rate': 1800, 'vacancy_pct': 10, 'opex_per_m2': restaurant_opex, 'property_tax_pct': 2.0, 'market_cap_rate_pct': 11.0, 'avg_indexation_pct': 7},
+        'hotel':        {'rent_rate': 2200, 'vacancy_pct': 25, 'opex_per_m2': hotel_opex,   'property_tax_pct': 2.0, 'market_cap_rate_pct': 11.5, 'avg_indexation_pct': 6},
+        'gab':          {'rent_rate': 1200, 'vacancy_pct': 5,  'opex_per_m2': 150,          'property_tax_pct': 1.8, 'market_cap_rate_pct': 10.0, 'avg_indexation_pct': 7},
+        'business':     {'rent_rate': 1400, 'vacancy_pct': 8,  'opex_per_m2': 200,          'property_tax_pct': 1.8, 'market_cap_rate_pct': 11.0, 'avg_indexation_pct': 7},
+        'production':   {'rent_rate': 500,  'vacancy_pct': 6,  'opex_per_m2': 80,           'property_tax_pct': 1.5, 'market_cap_rate_pct': 12.5, 'avg_indexation_pct': 7},
+        'building':     {'rent_rate': 900,  'vacancy_pct': 8,  'opex_per_m2': 160,          'property_tax_pct': 1.8, 'market_cap_rate_pct': 10.5, 'avg_indexation_pct': 7},
+        'free_purpose': {'rent_rate': 1050, 'vacancy_pct': 8,  'opex_per_m2': 170,          'property_tax_pct': 1.8, 'market_cap_rate_pct': 10.0, 'avg_indexation_pct': 7},
+        'car_service':  {'rent_rate': 700,  'vacancy_pct': 6,  'opex_per_m2': 100,          'property_tax_pct': 1.5, 'market_cap_rate_pct': 12.0, 'avg_indexation_pct': 7},
+        'land':         {'rent_rate': 0,    'vacancy_pct': 0,  'opex_per_m2': 5,            'property_tax_pct': 0.3, 'market_cap_rate_pct': 7.0,  'avg_indexation_pct': 8},
     }
     base = defaults.get(type_key, defaults['office'])
     return {
@@ -284,11 +298,15 @@ def _compute_irr(cash_flows: list) -> float:
 def compute_model(listing: dict, bench: dict, params: dict) -> dict:
     """
     Считает NOI/CapRate/NPV(с Terminal Value)/IRR/payback по бенчмаркам и параметрам.
-    Terminal Value = NOI года 10 / market_cap_rate (гордоновская модель реверсии).
+    Terminal Value = NOI года 10 / market_cap_rate (метод прямой капитализации / гордоновская реверсия).
     NPV включает TV — это стандарт DCF-оценки недвижимости.
+
+    Для land: особый режим — доход только от апрециации (рост цены), не от аренды.
+    Terminal Value = price × (1 + indexation/100)^10 — оцениваем рост цены земли.
     """
     area = float(listing.get('area') or 0) or 1
     price = float(listing.get('price') or 0) or 1
+    is_land = (listing.get('type') or listing.get('category') or '').lower() == 'land'
 
     rent_rate    = float(params.get('rent_rate',    bench['rent_rate']))
     vacancy_pct  = float(params.get('vacancy_pct',  bench['vacancy_pct']))
@@ -308,7 +326,11 @@ def compute_model(listing: dict, bench: dict, params: dict) -> dict:
     risk_premium = float(params.get('risk_premium_pct', 4))
     discount     = cb_rate + risk_premium
 
-    gpi = rent_rate * 12 * area
+    # Для земли — нет арендного дохода, только расходы на содержание и налог
+    if is_land and rent_rate == 0:
+        gpi = 0.0
+    else:
+        gpi = rent_rate * 12 * area
     egi = gpi * (1 - vacancy_pct / 100.0)
     opex_total = opex_per_m2 * 12 * area
     tax_total  = price * tax_pct / 100.0
@@ -322,12 +344,12 @@ def compute_model(listing: dict, bench: dict, params: dict) -> dict:
     if ltv_pct > 0:
         loan_amount = price * (ltv_pct / 100.0)
         cash_flows[0] = -(price - loan_amount)
-        r = loan_rate / 100.0 / 12
-        n = int(loan_years * 12)
-        if r > 0 and n > 0:
-            monthly = loan_amount * (r * (1 + r) ** n) / ((1 + r) ** n - 1)
+        r_m = loan_rate / 100.0 / 12
+        n_m = int(loan_years * 12)
+        if r_m > 0 and n_m > 0:
+            monthly = loan_amount * (r_m * (1 + r_m) ** n_m) / ((1 + r_m) ** n_m - 1)
         else:
-            monthly = loan_amount / max(n, 1)
+            monthly = loan_amount / max(n_m, 1)
         debt_service_annual = monthly * 12
 
     cumulative = cash_flows[0]
@@ -340,9 +362,13 @@ def compute_model(listing: dict, bench: dict, params: dict) -> dict:
         infra_factor = 1.0
         if infra_year and year >= infra_year:
             infra_factor = 1 + infra_rent_uplift_pct / 100.0
-        rent_year   = rent_rate * 12 * area * index_factor * infra_factor
+        if is_land and rent_rate == 0:
+            rent_year = 0.0
+        else:
+            rent_year = rent_rate * 12 * area * index_factor * infra_factor
         egi_year    = rent_year * (1 - vacancy_pct / 100.0)
-        opex_year   = opex_per_m2 * 12 * area * ((1 + 0.5 * indexation / 100.0) ** (year - 1))
+        # OPEX индексируется медленнее аренды (инфраструктурные расходы, не бизнес)
+        opex_year   = opex_per_m2 * 12 * area * ((1 + 0.4 * indexation / 100.0) ** (year - 1))
         tax_year    = price * tax_pct / 100.0
         noi_year    = egi_year - opex_year - tax_year
         if year == 10:
@@ -367,9 +393,17 @@ def compute_model(listing: dict, bench: dict, params: dict) -> dict:
             else:
                 payback_years = year
 
-    # Terminal Value (реверсия): стоимость актива на конец года 10
-    # по рыночной ставке капитализации (метод прямой капитализации)
-    terminal_value = (noi_year10 / (market_cap / 100.0)) if market_cap > 0 else 0
+    # Terminal Value (реверсия)
+    if is_land and rent_rate == 0:
+        # Для земли без аренды: TV = апрециация цены (рост земли ≈ indexation% в год)
+        terminal_value = price * ((1 + indexation / 100.0) ** 10)
+    elif market_cap > 0 and noi_year10 > 0:
+        # Метод прямой капитализации: TV = NOI₁₀ / cap_rate
+        # Ограничиваем TV: не более 3× от цены покупки (защита от нереалистичных значений)
+        terminal_value = min(noi_year10 / (market_cap / 100.0), price * 3)
+    else:
+        # NOI отрицательный или нулевой — Terminal Value = 0 (актив не окупаем)
+        terminal_value = 0
 
     # NPV без TV (операционный, 10 лет)
     npv_operations = _compute_npv(cash_flows, discount)
@@ -484,6 +518,10 @@ def handle_noi_request(cur, conn, qs: dict) -> dict:
     listing = load_listing(cur, listing_id)
     if not listing:
         return {'_status': 404, 'error': 'Объект не найден'}
+
+    # NOI-модель применима только к продаже — для аренды модель неприменима
+    if listing.get('deal') == 'rent':
+        return {'_status': 400, 'error': 'NOI-модель применима только для объектов на продажу'}
 
     bench = None if refresh else load_cached(cur, listing_id)
     if bench is None:

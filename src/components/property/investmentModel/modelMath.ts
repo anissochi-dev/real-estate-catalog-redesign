@@ -4,7 +4,7 @@ import { Benchmarks, ModelResult, UserParams, YearRow } from './types';
  *  NPV включает Terminal Value (реверсию) — стандарт DCF для недвижимости.
  */
 export function computeModel(
-  listing: { area: number; price: number },
+  listing: { area: number; price: number; type?: string },
   bench: Benchmarks,
   params: Partial<UserParams> = {},
 ): ModelResult {
@@ -29,7 +29,9 @@ export function computeModel(
   const risk_premium = 4;
   const discount = cb_rate + risk_premium;
 
-  const gpi = rent_rate * 12 * area;
+  const is_land = listing.type === 'land';
+
+  const gpi = (is_land && rent_rate === 0) ? 0 : rent_rate * 12 * area;
   const egi = gpi * (1 - vacancy_pct / 100);
   const opex_total = opex_per_m2 * 12 * area;
   const tax_total = price * tax_pct / 100;
@@ -60,9 +62,10 @@ export function computeModel(
   for (let year = 1; year <= 10; year++) {
     const indexFactor = Math.pow(1 + indexation / 100, year - 1);
     const infraFactor = infra_year && year >= infra_year ? 1 + infra_uplift / 100 : 1;
-    const rentYear = rent_rate * 12 * area * indexFactor * infraFactor;
+    const rentYear = (is_land && rent_rate === 0) ? 0 : rent_rate * 12 * area * indexFactor * infraFactor;
     const egiYear  = rentYear * (1 - vacancy_pct / 100);
-    const opexYear = opex_per_m2 * 12 * area * Math.pow(1 + 0.5 * indexation / 100, year - 1);
+    // OPEX индексируется медленнее аренды (0.4× вместо 1×)
+    const opexYear = opex_per_m2 * 12 * area * Math.pow(1 + 0.4 * indexation / 100, year - 1);
     const taxYear  = price * tax_pct / 100;
     const noiYear  = egiYear - opexYear - taxYear;
     if (year === 10) noi_year10 = noiYear;
@@ -89,7 +92,16 @@ export function computeModel(
   }
 
   // Terminal Value: стоимость актива при продаже на конец года 10
-  const terminal_value = market_cap > 0 ? noi_year10 / (market_cap / 100) : 0;
+  let terminal_value: number;
+  if (is_land && rent_rate === 0) {
+    // Земля без аренды: TV = апрециация цены
+    terminal_value = price * Math.pow(1 + indexation / 100, 10);
+  } else if (market_cap > 0 && noi_year10 > 0) {
+    // Метод прямой капитализации, не более 3× от цены покупки
+    terminal_value = Math.min(noi_year10 / (market_cap / 100), price * 3);
+  } else {
+    terminal_value = 0;
+  }
   const r = discount / 100;
   const pv_terminal = r > 0 ? terminal_value / Math.pow(1 + r, 10) : terminal_value;
 
