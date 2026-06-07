@@ -146,10 +146,9 @@ export function EditorPanel({
         }} />
         <div style={{
           position: 'absolute', left: '50%', top: '50%',
-          width: scaledW, height: scaledH,
           transform: 'translate(-50%, -50%)',
         }}>
-          <div style={{ width: bannerW, height: bannerH, transform: `scale(${previewScale})`, transformOrigin: 'top left' }}>
+          <div style={{ zoom: previewScale }}>
             <BannerCanvas {...canvasProps} bannerRef={{ current: null }} />
           </div>
         </div>
