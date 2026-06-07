@@ -113,43 +113,45 @@ export default function ListingsBulkBar({
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 p-2.5 bg-brand-blue/5 border border-brand-blue/20 rounded-xl">
-      <span className="text-xs font-semibold text-brand-blue bg-white px-2 py-1 rounded-md border border-brand-blue/30">
-        <Icon name="CheckSquare" size={12} className="inline -mt-0.5 mr-1" />
-        {selected.size}
-      </span>
+    <div className="bg-brand-blue/5 border border-brand-blue/20 rounded-xl p-2.5 space-y-2">
+      {/* Строка 1: счётчик + статус + видимость */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-xs font-semibold text-brand-blue bg-white px-2 py-1 rounded-md border border-brand-blue/30 shrink-0">
+          <Icon name="CheckSquare" size={12} className="inline -mt-0.5 mr-1" />
+          {selected.size}
+        </span>
+        {BULK_OPS.map(op => (
+          <button
+            key={op.op}
+            disabled={bulkLoading}
+            onClick={() => {
+              const realOp = op.realOp || op.op;
+              const doIt = () => onBulk(realOp, op.value);
+              if (op.confirm) {
+                if (confirm(`${op.label} — применить к ${selected.size} объект(ам)?`)) doIt();
+              } else { doIt(); }
+            }}
+            className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border transition disabled:opacity-50 ${op.className}`}
+            title={op.label}
+          >
+            <Icon name={op.icon} size={11} />
+            <span className="hidden sm:inline">{op.label}</span>
+          </button>
+        ))}
+      </div>
 
-      {BULK_OPS.map(op => (
-        <button
-          key={op.op}
-          disabled={bulkLoading}
-          onClick={() => {
-            const realOp = op.realOp || op.op;
-            const doIt = () => onBulk(realOp, op.value);
-            if (op.confirm) {
-              if (confirm(`${op.label} — применить к ${selected.size} объект(ам)?`)) doIt();
-            } else {
-              doIt();
-            }
-          }}
-          className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border transition disabled:opacity-50 ${op.className}`}
-          title={op.label}
-        >
-          <Icon name={op.icon} size={11} />
-          {op.label}
-        </button>
-      ))}
-
+      {/* Строка 2: XML, агент, удалить, снять */}
+      <div className="flex items-center gap-1.5 flex-wrap">
       {/* XML-выгрузка */}
       <div className="relative" ref={xmlBtnRef}>
         <button
           disabled={bulkLoading}
           onClick={() => setShowXml(s => !s)}
           className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border bg-teal-50 text-teal-700 hover:bg-teal-100 border-teal-200 disabled:opacity-50"
-          title="Добавить/убрать из XML-выгрузки"
+          title="XML-выгрузка"
         >
           <Icon name="FileCode2" size={11} />
-          XML-выгрузка
+          <span className="hidden sm:inline">XML-выгрузка</span>
           <Icon name={showXml ? 'ChevronUp' : 'ChevronDown'} size={10} />
         </button>
 
@@ -196,7 +198,7 @@ export default function ListingsBulkBar({
             title="Передать выбранные объекты другому агенту"
           >
             <Icon name="UserCheck" size={11} />
-            Передать агенту
+            <span className="hidden sm:inline">Передать агенту</span>
             <Icon name={showBrokers ? 'ChevronUp' : 'ChevronDown'} size={10} />
           </button>
 
@@ -251,17 +253,21 @@ export default function ListingsBulkBar({
           disabled={bulkLoading}
           onClick={onBulkDelete}
           className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border bg-red-50 text-red-700 hover:bg-red-100 border-red-200 disabled:opacity-50"
+          title="Удалить"
         >
           <Icon name="Trash2" size={11} />
-          Удалить
+          <span className="hidden sm:inline">Удалить</span>
         </button>
       )}
 
       <button onClick={onDeselect}
-        className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 inline-flex items-center gap-1">
+        className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 inline-flex items-center gap-1"
+        title="Снять выделение"
+      >
         <Icon name="X" size={11} />
-        Снять
+        <span className="hidden sm:inline">Снять</span>
       </button>
+      </div>{/* конец строки 2 */}
     </div>
   );
 }
