@@ -1,5 +1,8 @@
 import ImageUploader from '@/components/admin/ImageUploader';
+import PhotoAuditPanel from '@/components/admin/PhotoAuditPanel';
 import { Listing, detectVideoType } from './types';
+
+const PHOTO_AUDIT_URL = 'https://functions.poehali.dev/ccf52d36-5d2e-4b2a-8a40-e747dc90080f';
 
 interface Props {
   editing: Partial<Listing>;
@@ -8,9 +11,10 @@ interface Props {
   setPhotos: (p: string[]) => void;
   errors: Record<string, boolean>;
   setErrors: (fn: (v: Record<string, boolean>) => Record<string, boolean>) => void;
+  auditUrl?: string;
 }
 
-export default function ListingEditorPhotosTab({ editing, setEditing, photos, setPhotos, errors, setErrors }: Props) {
+export default function ListingEditorPhotosTab({ editing, setEditing, photos, setPhotos, errors, setErrors, auditUrl }: Props) {
   const errWrap = (field: string) => errors[field] ? { 'data-field-error': 'true' as const } : {};
 
   return (
@@ -21,6 +25,17 @@ export default function ListingEditorPhotosTab({ editing, setEditing, photos, se
         </label>
         <ImageUploader value={photos} onChange={p => { setPhotos(p); setErrors(v => ({ ...v, photos: false })); }} folder="photos" multiple applyWatermark={!!editing.use_watermark} />
       </div>
+
+      {/* ИИ-аудит: запускается автоматически после загрузки каждого фото */}
+      {photos.length > 0 && (
+        <PhotoAuditPanel
+          photos={photos}
+          category={editing.category}
+          area={editing.area ?? undefined}
+          city={editing.city ?? undefined}
+          auditUrl={auditUrl || PHOTO_AUDIT_URL}
+        />
+      )}
 
       <div className="border-t border-border pt-3 space-y-2">
         <div className="text-sm font-semibold">Метки и оформление</div>
