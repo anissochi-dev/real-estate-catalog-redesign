@@ -59,32 +59,37 @@ export default function ListingsToolbar({
 
       {/* Кнопки действий */}
       <div className="flex items-center gap-2 flex-wrap">
-        {hasDraft && (
-          <div className="flex items-center gap-1 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-sm font-semibold">
-            <Icon name="FileEdit" size={14} />
-            <span>Черновик сохранён</span>
-            <button
-              onClick={() => { clearDraft(); setHasDraft(false); }}
-              className="ml-1 hover:text-red-600 transition-colors"
-              title="Удалить черновик"
-            >
-              <Icon name="X" size={14} />
-            </button>
-          </div>
-        )}
         <button
           onClick={() => setImportOpen(true)}
           className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-sm font-semibold hover:bg-muted transition-colors"
         >
           <Icon name="Link" size={15} /> Импорт по ссылке
         </button>
-        <button
-          onClick={onAdd}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl btn-blue text-white text-sm font-semibold"
-        >
-          <Icon name="Plus" size={16} />
-          {hasDraft ? 'Продолжить черновик' : 'Добавить'}
-        </button>
+        <div className="inline-flex items-center rounded-xl overflow-hidden border border-brand-blue">
+          <button
+            onClick={onAdd}
+            className="inline-flex items-center gap-2 px-4 py-2 btn-blue text-white text-sm font-semibold"
+          >
+            <Icon name="Plus" size={16} />
+            {hasDraft ? 'Продолжить черновик' : 'Добавить'}
+          </button>
+          {hasDraft && (
+            <>
+              <div className="w-px h-6 bg-white/30" />
+              <div className="inline-flex items-center gap-1.5 px-3 py-2 bg-amber-50 text-amber-700 text-sm font-semibold">
+                <Icon name="FileEdit" size={14} />
+                <span className="hidden sm:inline">Черновик сохранён</span>
+                <button
+                  onClick={() => { clearDraft(); setHasDraft(false); }}
+                  className="hover:text-red-600 transition-colors"
+                  title="Удалить черновик"
+                >
+                  <Icon name="X" size={14} />
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Поиск и фильтр категории */}
