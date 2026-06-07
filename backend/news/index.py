@@ -426,41 +426,77 @@ def _gpt(api_key, folder_id, topic, key_rate: float | None = None, news_snippets
 
 
 def _generate_image(title: str, logo_url: str = '') -> str:
-    """Генерирует обложку статьи через FLUX и загружает в S3. Возвращает CDN URL или ''."""
+    """Генерирует обложку статьи через YandexART 2.0 и загружает в S3. Возвращает CDN URL или ''."""
+    import time as _time
+    import secrets as _secrets
     try:
-        flux_url = 'https://api.poehali.dev/v1/images/generations'
-        flux_key = os.environ.get('FLUX_API_KEY', '')
-        if not flux_key:
+        api_key = os.environ.get('AISTUDIO_API_KEY') or os.environ.get('YANDEX_API_KEY', '')
+        folder_id = os.environ.get('YANDEX_FOLDER_ID', '')
+        if not api_key:
+            print('[news] YandexART: нет API-ключа')
             return ''
-        # Формируем SEO-промпт на основе заголовка
+
+        # Промпт на русском — YandexART лучше понимает русский
         prompt = (
-            f'Professional business real estate photo for article about: {title}. '
-            'Modern commercial building in Krasnodar Russia, golden hour lighting, '
-            'clean architectural photography, high quality, 16:9 aspect ratio, '
-            'no text, no watermark, photorealistic'
+            f'Профессиональная фотография коммерческой недвижимости для статьи: {title}. '
+            'Современное деловое здание в Краснодаре, архитектурная съёмка, '
+            'дневное освещение, чистый фон, высокое качество, без текста, без людей, '
+            'реалистичная фотография, широкоформатный кадр 16:9'
         )
+
+        model_uri = f'art://{folder_id}/yandex-art/latest' if folder_id else 'yandex-art/latest'
+
+        # 1. Запускаем генерацию (асинхронная операция)
+        req_body = json.dumps({
+            'modelUri': model_uri,
+            'generationOptions': {
+                'seed': _secrets.randbelow(2**31),
+                'aspectRatio': {'widthRatio': 16, 'heightRatio': 9},
+            },
+            'messages': [{'weight': 1, 'text': prompt}],
+        }).encode()
+
         req = urllib.request.Request(
-            flux_url,
-            data=json.dumps({'prompt': prompt, 'n': 1, 'size': '1024x576'}).encode(),
-            headers={'Authorization': f'Bearer {flux_key}', 'Content-Type': 'application/json'},
+            'https://llm.api.cloud.yandex.net/foundationModels/v1/imageGenerationAsync',
+            data=req_body,
+            headers={
+                'Authorization': f'Api-Key {api_key}',
+                'Content-Type': 'application/json',
+                **(({'x-folder-id': folder_id}) if folder_id else {}),
+            },
             method='POST',
         )
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            data = json.loads(resp.read().decode())
-        # Получаем URL или base64
-        img_data = (data.get('data') or [{}])[0]
-        img_url = img_data.get('url', '')
-        img_b64 = img_data.get('b64_json', '')
-        if not img_url and not img_b64:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            op = json.loads(resp.read().decode())
+
+        operation_id = op.get('id', '')
+        if not operation_id:
+            print(f'[news] YandexART: нет operation_id, ответ: {op}')
             return ''
-        # Скачиваем или декодируем
-        if img_b64:
-            img_bytes = base64.b64decode(img_b64)
-        else:
-            with urllib.request.urlopen(img_url, timeout=30) as r:
-                img_bytes = r.read()
-        # Загружаем в S3
-        import secrets as _secrets
+
+        # 2. Polling — ждём завершения (до 50 сек)
+        poll_url = f'https://llm.api.cloud.yandex.net/operations/{operation_id}'
+        poll_headers = {
+            'Authorization': f'Api-Key {api_key}',
+            **(({'x-folder-id': folder_id}) if folder_id else {}),
+        }
+        img_b64 = ''
+        for attempt in range(10):
+            _time.sleep(5)
+            poll_req = urllib.request.Request(poll_url, headers=poll_headers, method='GET')
+            with urllib.request.urlopen(poll_req, timeout=15) as pr:
+                result = json.loads(pr.read().decode())
+            if result.get('done'):
+                img_b64 = (result.get('response') or {}).get('image', '')
+                break
+
+        if not img_b64:
+            print('[news] YandexART: генерация не завершилась за 50 сек')
+            return ''
+
+        img_bytes = base64.b64decode(img_b64)
+
+        # 3. Загружаем в S3
         s3 = boto3.client(
             's3',
             endpoint_url='https://bucket.poehali.dev',
@@ -470,9 +506,11 @@ def _generate_image(title: str, logo_url: str = '') -> str:
         key = f'news/{_secrets.token_urlsafe(12)}.jpg'
         s3.put_object(Bucket='files', Key=key, Body=img_bytes, ContentType='image/jpeg')
         cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
+        print(f'[news] YandexART: обложка создана → {cdn_url}')
         return cdn_url
+
     except Exception as e:
-        print(f'[news] image generation error: {e}')
+        print(f'[news] YandexART error: {e}')
         return ''
 
 

@@ -1,0 +1,23 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "GET — 405",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 405
+    },
+    {
+      "name": "POST пустой query — 400",
+      "method": "POST",
+      "path": "/",
+      "body": {"query": ""},
+      "expectedStatus": 400
+    }
+  ]
+}

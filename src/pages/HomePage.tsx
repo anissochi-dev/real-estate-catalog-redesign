@@ -7,7 +7,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { NEWS_URL } from '@/lib/adminApi';
 import SeoHead from '@/components/SeoHead';
 import SchemaOrg, { makeFaqSchema } from '@/components/SchemaOrg';
-
+import SmartSearchModal from '@/components/SmartSearchModal';
 
 const ClientLeadsSection = lazy(() => import('@/components/ClientLeadsSection'));
 const AIMatchModal = lazy(() => import('@/components/AIMatchModal'));
@@ -62,6 +62,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   const [leadsCount, setLeadsCount] = useState(pf?.leadsCount ?? 0);
 
   const [aiOpen, setAiOpen] = useState(false);
+  const [smartSearchOpen, setSmartSearchOpen] = useState(false);
   const [latestNews, setLatestNews] = useState<NewsPreview[] | null>(null);
   const newsLimit = settings.home_news_limit ?? 10;
   const showNewsOnHome = settings.show_news_on_home;
@@ -206,6 +207,11 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: orgLdJson }}
       />
+      <SmartSearchModal
+        open={smartSearchOpen}
+        initialQuery={searchQuery}
+        onClose={() => setSmartSearchOpen(false)}
+      />
       {/* Hero — компактный */}
       <section className="hero-bg text-white py-10 md:py-14">
         <div className="container mx-auto px-4 relative z-10">
@@ -222,19 +228,20 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
             <form
               onSubmit={e => {
                 e.preventDefault();
-                setAiOpen(true);
+                if (searchQuery.trim().length >= 3) setSmartSearchOpen(true);
+                else setAiOpen(true);
               }}
               className="flex flex-col sm:flex-row gap-2 animate-fade-in-up stagger-3"
             >
               <div className="w-full sm:flex-1 flex items-center gap-2 bg-white/10 border border-white/25 rounded-xl px-3 py-3 sm:py-2 backdrop-blur-sm focus-within:border-white/60 transition-colors">
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-orange to-rose-500 flex items-center justify-center flex-shrink-0">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center flex-shrink-0">
                   <Icon name="Sparkles" size={14} className="text-white" />
                 </div>
                 <input
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Опишите объект…"
-                  aria-label="ИИ-поиск объекта"
+                  placeholder="Опишите объект: «офис до 100м² в центре»…"
+                  aria-label="Умный поиск объекта"
                   className="bg-transparent text-white placeholder:text-white/55 outline-none w-full text-base sm:text-sm min-w-0"
                 />
               </div>
@@ -243,12 +250,12 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
                 aria-label="Найти с ИИ"
                 className="btn-orange text-white w-full sm:w-auto px-3 sm:px-5 py-3 sm:py-2.5 rounded-xl font-semibold font-display text-base sm:text-sm flex-shrink-0 inline-flex items-center justify-center gap-1.5 min-h-[48px] sm:min-h-[44px]"
               >
-                <Icon name="Sparkles" size={16} />
-                Найти с ИИ
+                <Icon name="Search" size={16} />
+                Найти
               </button>
             </form>
             <div className="text-[11px] text-white/55 mt-1.5 animate-fade-in-up stagger-3">
-              Опишите задачу обычным языком — ИИ подберёт подходящие объекты
+              Умный поиск понимает обычный язык — площадь, район, тип, назначение
             </div>
           </div>
         </div>
