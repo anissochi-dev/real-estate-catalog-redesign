@@ -166,21 +166,27 @@ export function EditorPanel({
       </div>
 
       {selected && selectedEl && (
-        <div className="flex items-center gap-3 bg-muted/50 rounded-xl px-4 py-2.5 text-sm flex-wrap">
-          <Icon name={
-            selected === 'qr' ? 'QrCode' : selected === 'deal' ? 'Type' :
-            selected === 'phone' ? 'Phone' : selected === 'logo' ? 'Building2' : 'Image'
-          } size={14} className="text-muted-foreground" />
-          <span className="text-muted-foreground">{EL_LABEL[selected]}</span>
-          <span className="text-muted-foreground">· {getSizeInfo(selectedEl).label}</span>
-          <button onClick={() => onUpdateSize(-2)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-muted border border-border">
-            <Icon name="Minus" size={12} />
-          </button>
-          <span className="font-bold w-8 text-center">{getSizeInfo(selectedEl).value}</span>
-          <button onClick={() => onUpdateSize(2)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-muted border border-border">
-            <Icon name="Plus" size={12} />
-          </button>
-          <button onClick={onDeselect} className="ml-auto text-xs text-muted-foreground hover:text-foreground">✕ Снять</button>
+        <div className="bg-muted/50 rounded-xl px-4 py-2.5 text-sm">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Icon name={
+                selected === 'qr' ? 'QrCode' : selected === 'deal' ? 'Type' :
+                selected === 'phone' ? 'Phone' : selected === 'logo' ? 'Building2' : 'Image'
+              } size={14} className="text-muted-foreground flex-shrink-0" />
+              <span className="text-muted-foreground truncate">{EL_LABEL[selected]}</span>
+              <span className="text-muted-foreground flex-shrink-0">· {getSizeInfo(selectedEl).label}</span>
+            </div>
+            <button onClick={onDeselect} className="text-xs text-muted-foreground hover:text-foreground flex-shrink-0">✕ Снять</button>
+          </div>
+          <div className="flex items-center gap-3 mt-2">
+            <button onClick={() => onUpdateSize(-2)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted border border-border">
+              <Icon name="Minus" size={14} />
+            </button>
+            <span className="font-bold w-10 text-center text-base">{getSizeInfo(selectedEl).value}</span>
+            <button onClick={() => onUpdateSize(2)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted border border-border">
+              <Icon name="Plus" size={14} />
+            </button>
+          </div>
         </div>
       )}
     </div>
