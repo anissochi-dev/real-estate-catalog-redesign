@@ -1,5 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import Icon from '@/components/ui/icon';
+import { CONDITIONS, BUILDING_CLASSES, FINISHING } from '@/pages/admin/listings/types';
+import type { Listing } from '@/pages/admin/listings/types';
 
 const PHOTO_AUDIT_URL = 'https://functions.poehali.dev/ccf52d36-5d2e-4b2a-8a40-e747dc90080f';
 
@@ -7,6 +9,7 @@ interface AuditResult {
   score: number;
   condition: string;
   building_class: string;
+  finishing: string;
   price_per_m2_min: number;
   price_per_m2_max: number;
   rent_per_m2_min: number;
@@ -14,267 +17,336 @@ interface AuditResult {
   pros: string[];
   cons: string[];
   recommendations: string[];
+  photo_tips: string[];
   summary: string;
-}
-
-interface PhotoAudit {
-  url: string;
-  status: 'pending' | 'loading' | 'done' | 'error';
-  result?: AuditResult;
-  error?: string;
 }
 
 interface Props {
   photos: string[];
-  category?: string;
-  area?: number;
-  city?: string;
-  auditUrl: string;
+  editing: Partial<Listing>;
+  onApply: (fields: Partial<Listing>) => void;
+  auditUrl?: string;
 }
 
-function scoreColor(score: number) {
-  if (score >= 8) return 'text-emerald-600';
-  if (score >= 6) return 'text-amber-500';
-  if (score >= 4) return 'text-orange-500';
+type Status = 'idle' | 'loading' | 'done' | 'error';
+
+function scoreColor(s: number) {
+  if (s >= 8) return 'text-emerald-600';
+  if (s >= 6) return 'text-amber-500';
+  if (s >= 4) return 'text-orange-500';
   return 'text-red-500';
 }
-
-function scoreLabel(score: number) {
-  if (score === 0) return 'Не определено';
-  if (score >= 9) return 'Отлично';
-  if (score >= 7) return 'Хорошее';
-  if (score >= 5) return 'Среднее';
-  if (score >= 3) return 'Плохое';
+function scoreBg(s: number) {
+  if (s >= 8) return 'bg-emerald-50 border-emerald-200';
+  if (s >= 6) return 'bg-amber-50 border-amber-200';
+  if (s >= 4) return 'bg-orange-50 border-orange-200';
+  return 'bg-red-50 border-red-200';
+}
+function scoreLabel(s: number) {
+  if (s >= 9) return 'Отлично';
+  if (s >= 7) return 'Хорошее';
+  if (s >= 5) return 'Среднее';
+  if (s >= 3) return 'Плохое';
   return 'Критичное';
 }
-
 function fmtPrice(n: number) {
-  if (!n) return '—';
-  return n.toLocaleString('ru-RU') + ' ₽';
+  return n ? n.toLocaleString('ru-RU') + ' ₽' : '—';
 }
 
-export default function PhotoAuditPanel({ photos, category, area, city, auditUrl }: Props) {
-  const [audits, setAudits] = useState<Record<string, PhotoAudit>>({});
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [globalDone, setGlobalDone] = useState(false);
+// Маппинг текстовых значений ИИ → коды из types.ts
+const CONDITION_MAP: Record<string, string> = {
+  'черновая': 'shellcore',
+  'черновая отделка': 'shellcore',
+  'без отделки': 'rough',
+  'требует ремонта': 'cosmetic',
+  'требуется косметика': 'cosmetic',
+  'удовлетворительное': 'good',
+  'хорошее': 'good',
+  'евроремонт': 'euro',
+  'люкс': 'euro',
+  'новое': 'new',
+};
 
-  const runAudit = useCallback(async (url: string) => {
-    setAudits(prev => ({ ...prev, [url]: { url, status: 'loading' } }));
+const FINISHING_MAP: Record<string, string> = {
+  'черновая': 'rough',
+  'черновая отделка': 'rough',
+  'без отделки': 'none',
+  'предчистовая': 'pre_finish',
+  'косметический ремонт': 'cosmetic',
+  'евроремонт': 'euro',
+  'дизайнерский': 'designer',
+  'дизайнерский ремонт': 'designer',
+};
+
+const CLASS_MAP: Record<string, string> = {
+  'a': 'A', 'a+': 'A+', 'b+': 'B+', 'b': 'B', 'c': 'C',
+};
+
+function conditionLabel(code: string) {
+  return CONDITIONS.find(([v]) => v === code)?.[1] ?? code;
+}
+function classLabel(code: string) {
+  return BUILDING_CLASSES.find(([v]) => v === code)?.[1] ?? `Класс ${code}`;
+}
+function finishingLabel(code: string) {
+  return FINISHING.find(([v]) => v === code)?.[1] ?? code;
+}
+
+export default function PhotoAuditPanel({ photos, editing, onApply, auditUrl }: Props) {
+  const [status, setStatus] = useState<Status>('idle');
+  const [result, setResult] = useState<AuditResult | null>(null);
+  const [error, setError] = useState('');
+  const [applied, setApplied] = useState(false);
+
+  const url = auditUrl || PHOTO_AUDIT_URL;
+
+  const runAudit = async () => {
+    if (!photos.length) return;
+    setStatus('loading');
+    setResult(null);
+    setError('');
+    setApplied(false);
+
     try {
-      const res = await fetch(auditUrl, {
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image_url: url, category, area, city }),
+        body: JSON.stringify({
+          image_urls: photos,
+          category: editing.category,
+          area: editing.area,
+          city: editing.city,
+          deal: editing.deal,
+        }),
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Ошибка анализа');
-      setAudits(prev => ({ ...prev, [url]: { url, status: 'done', result: data.audit } }));
+      setResult(data.audit);
+      setStatus('done');
     } catch (e: unknown) {
-      setAudits(prev => ({
-        ...prev,
-        [url]: { url, status: 'error', error: e instanceof Error ? e.message : 'Ошибка' },
-      }));
+      setError(e instanceof Error ? e.message : 'Неизвестная ошибка');
+      setStatus('error');
     }
-  }, [auditUrl, category, area, city]);
+  };
 
-  // Авто-запуск для новых фото (которые ещё не в audits)
-  useEffect(() => {
-    photos.forEach(url => {
-      if (!audits[url]) {
-        runAudit(url);
-      }
-    });
-  }, [photos]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Применить характеристики в форму
+  const applyToForm = () => {
+    if (!result) return;
+    const fields: Partial<Listing> = {};
 
-  // Проверяем завершение всех
-  useEffect(() => {
-    if (photos.length === 0) return;
-    const allDone = photos.every(u => audits[u]?.status === 'done' || audits[u]?.status === 'error');
-    setGlobalDone(allDone);
-  }, [audits, photos]);
+    const condKey = CONDITION_MAP[result.condition?.toLowerCase() ?? ''];
+    if (condKey) fields.condition = condKey;
+
+    const classKey = CLASS_MAP[result.building_class?.toLowerCase() ?? ''];
+    if (classKey) fields.building_class = classKey;
+
+    const finKey = FINISHING_MAP[result.finishing?.toLowerCase() ?? ''];
+    if (finKey) fields.finishing = finKey;
+
+    onApply(fields);
+    setApplied(true);
+  };
 
   if (photos.length === 0) return null;
 
-  const doneCount = photos.filter(u => audits[u]?.status === 'done').length;
-  const loadingCount = photos.filter(u => audits[u]?.status === 'loading').length;
-
-  // Общая сводка по всем фото
-  const allResults = photos.map(u => audits[u]?.result).filter(Boolean) as AuditResult[];
-  const avgScore = allResults.length
-    ? Math.round(allResults.reduce((s, r) => s + r.score, 0) / allResults.length)
-    : null;
-  const bestCondition = allResults.length
-    ? allResults.sort((a, b) => b.score - a.score)[0]?.condition
-    : null;
-
   return (
-    <div className="rounded-xl border border-violet-200 bg-violet-50/60 overflow-hidden mt-3">
-      {/* Шапка */}
-      <div className="flex items-center justify-between px-3 py-2.5 bg-violet-100/70 border-b border-violet-200">
+    <div className="rounded-xl border border-violet-200 bg-violet-50/40 overflow-hidden">
+
+      {/* Шапка с кнопкой */}
+      <div className="flex items-center justify-between px-4 py-3 bg-violet-100/80 border-b border-violet-200">
         <div className="flex items-center gap-2">
-          <Icon name="ScanEye" size={15} className="text-violet-600" />
-          <span className="text-sm font-semibold text-violet-900">ИИ-аудит фотографий</span>
-          {loadingCount > 0 && (
-            <span className="text-[11px] text-violet-600 flex items-center gap-1">
-              <Icon name="Loader2" size={11} className="animate-spin" />
-              Анализирую {loadingCount} фото…
-            </span>
-          )}
-          {globalDone && avgScore !== null && (
-            <span className={`text-sm font-bold ${scoreColor(avgScore)}`}>
-              {avgScore}/10 · {scoreLabel(avgScore)}
-            </span>
-          )}
+          <Icon name="ScanEye" size={16} className="text-violet-600" />
+          <span className="text-sm font-semibold text-violet-900">ИИ-анализ объекта</span>
+          <span className="text-[11px] text-violet-500">{photos.length} фото</span>
         </div>
-        <div className="text-[11px] text-violet-500">{doneCount}/{photos.length} проанализировано</div>
+
+        <button
+          onClick={runAudit}
+          disabled={status === 'loading'}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
+            bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+        >
+          {status === 'loading'
+            ? <><Icon name="Loader2" size={12} className="animate-spin" />Анализирую…</>
+            : <><Icon name="Sparkles" size={12} />Анализировать фото</>
+          }
+        </button>
       </div>
 
-      {/* Общая сводка */}
-      {globalDone && allResults.length > 0 && (
-        <div className="px-3 py-2 border-b border-violet-200 bg-white/50 flex flex-wrap gap-4 text-xs">
-          {bestCondition && (
-            <div>
-              <span className="text-muted-foreground">Состояние: </span>
-              <span className="font-semibold capitalize">{bestCondition}</span>
-            </div>
-          )}
-          {allResults[0]?.building_class && allResults[0].building_class !== 'не определён' && (
-            <div>
-              <span className="text-muted-foreground">Класс: </span>
-              <span className="font-semibold">{allResults[0].building_class}</span>
-            </div>
-          )}
-          {allResults[0]?.price_per_m2_min > 0 && (
-            <div>
-              <span className="text-muted-foreground">Продажа/м²: </span>
-              <span className="font-semibold">
-                {fmtPrice(allResults[0].price_per_m2_min)} – {fmtPrice(allResults[0].price_per_m2_max)}
-              </span>
-            </div>
-          )}
-          {allResults[0]?.rent_per_m2_min > 0 && (
-            <div>
-              <span className="text-muted-foreground">Аренда/м²: </span>
-              <span className="font-semibold">
-                {fmtPrice(allResults[0].rent_per_m2_min)} – {fmtPrice(allResults[0].rent_per_m2_max)}/мес
-              </span>
-            </div>
-          )}
+      {/* Подсказка при idle */}
+      {status === 'idle' && (
+        <div className="px-4 py-3 text-xs text-violet-500 flex items-center gap-2">
+          <Icon name="Info" size={13} />
+          Нажмите «Анализировать фото» — ИИ изучит все {photos.length} фото и выдаст оценку состояния, класс объекта, ценовой диапазон и рекомендации.
         </div>
       )}
 
-      {/* Список фото с результатами */}
-      <div className="divide-y divide-violet-100">
-        {photos.map((url, idx) => {
-          const audit = audits[url];
-          const isOpen = expanded === url;
+      {/* Ошибка */}
+      {status === 'error' && (
+        <div className="px-4 py-3 flex items-start gap-2 text-xs text-red-600">
+          <Icon name="AlertCircle" size={14} className="mt-0.5 shrink-0" />
+          <div>
+            <div className="font-semibold">Ошибка анализа</div>
+            <div className="text-red-500 mt-0.5">{error}</div>
+            <button onClick={runAudit} className="mt-1.5 underline text-red-600 hover:text-red-700">Попробовать снова</button>
+          </div>
+        </div>
+      )}
 
-          return (
-            <div key={url + idx}>
+      {/* Результат */}
+      {status === 'done' && result && (
+        <div className="p-4 space-y-4">
+
+          {/* Балл + сводка */}
+          <div className={`flex items-start gap-4 p-3 rounded-xl border ${scoreBg(result.score)}`}>
+            <div className="text-center shrink-0">
+              <div className={`text-3xl font-black ${scoreColor(result.score)}`}>{result.score}</div>
+              <div className="text-[10px] text-muted-foreground leading-tight">из 10</div>
+              <div className={`text-[11px] font-semibold mt-0.5 ${scoreColor(result.score)}`}>{scoreLabel(result.score)}</div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-muted-foreground leading-relaxed">{result.summary}</p>
+            </div>
+          </div>
+
+          {/* Характеристики + кнопка применить */}
+          <div className="rounded-xl border border-border bg-white overflow-hidden">
+            <div className="flex items-center justify-between px-3 py-2 bg-muted/40 border-b border-border">
+              <span className="text-xs font-semibold">Определённые характеристики</span>
               <button
-                onClick={() => audit?.status === 'done' ? setExpanded(isOpen ? null : url) : undefined}
-                className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors
-                  ${audit?.status === 'done' ? 'hover:bg-violet-100/50 cursor-pointer' : 'cursor-default'}`}
+                onClick={applyToForm}
+                disabled={applied}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-colors
+                  ${applied
+                    ? 'bg-emerald-100 text-emerald-700 cursor-default'
+                    : 'bg-violet-600 text-white hover:bg-violet-700'
+                  }`}
               >
-                {/* Миниатюра */}
-                <img src={url} alt="" className="w-12 h-10 object-cover rounded-md shrink-0 border border-violet-200" />
-
-                {/* Статус / результат */}
-                <div className="flex-1 min-w-0">
-                  {audit?.status === 'loading' && (
-                    <div className="flex items-center gap-1.5 text-xs text-violet-600">
-                      <Icon name="Loader2" size={12} className="animate-spin" />
-                      Анализирую…
-                    </div>
-                  )}
-                  {audit?.status === 'error' && (
-                    <div className="flex items-center gap-1.5 text-xs text-red-500">
-                      <Icon name="AlertCircle" size={12} />
-                      <span className="truncate">{audit.error}</span>
-                    </div>
-                  )}
-                  {audit?.status === 'done' && audit.result && (
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <span className={`font-bold text-sm ${scoreColor(audit.result.score)}`}>
-                        {audit.result.score}/10
-                      </span>
-                      <span className="text-xs text-muted-foreground capitalize">{audit.result.condition}</span>
-                      {audit.result.building_class !== 'не определён' && (
-                        <span className="text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full font-medium">
-                          Класс {audit.result.building_class}
-                        </span>
-                      )}
-                      <span className="text-xs text-muted-foreground truncate hidden sm:block">{audit.result.summary}</span>
-                    </div>
-                  )}
-                  {!audit && (
-                    <div className="text-xs text-muted-foreground">Ожидает…</div>
-                  )}
-                </div>
-
-                {audit?.status === 'done' && (
-                  <Icon name={isOpen ? 'ChevronUp' : 'ChevronDown'} size={14} className="text-violet-400 shrink-0" />
-                )}
+                {applied
+                  ? <><Icon name="Check" size={12} />Применено</>
+                  : <><Icon name="ArrowDownToLine" size={12} />Вставить в объект</>
+                }
               </button>
-
-              {/* Развёрнутые детали */}
-              {isOpen && audit?.result && (
-                <div className="px-4 pb-3 pt-1 bg-white/60 space-y-3 text-xs">
-                  {audit.result.summary && (
-                    <p className="text-muted-foreground italic">{audit.result.summary}</p>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-2">
-                    {audit.result.pros.length > 0 && (
-                      <div>
-                        <div className="font-semibold text-emerald-700 mb-1 flex items-center gap-1">
-                          <Icon name="ThumbsUp" size={11} /> Плюсы
-                        </div>
-                        <ul className="space-y-0.5">
-                          {audit.result.pros.map((p, i) => (
-                            <li key={i} className="text-emerald-800 flex items-start gap-1">
-                              <span className="shrink-0 mt-0.5">·</span>{p}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {audit.result.cons.length > 0 && (
-                      <div>
-                        <div className="font-semibold text-red-600 mb-1 flex items-center gap-1">
-                          <Icon name="ThumbsDown" size={11} /> Минусы
-                        </div>
-                        <ul className="space-y-0.5">
-                          {audit.result.cons.map((c, i) => (
-                            <li key={i} className="text-red-700 flex items-start gap-1">
-                              <span className="shrink-0 mt-0.5">·</span>{c}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-
-                  {audit.result.recommendations.length > 0 && (
-                    <div>
-                      <div className="font-semibold text-amber-700 mb-1 flex items-center gap-1">
-                        <Icon name="Lightbulb" size={11} /> Рекомендации
-                      </div>
-                      <ul className="space-y-0.5">
-                        {audit.result.recommendations.map((r, i) => (
-                          <li key={i} className="text-amber-800 flex items-start gap-1">
-                            <span className="shrink-0 mt-0.5">{i + 1}.</span>{r}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+            </div>
+            <div className="divide-y divide-border text-xs">
+              {result.condition && (
+                <div className="flex items-center justify-between px-3 py-2">
+                  <span className="text-muted-foreground">Состояние</span>
+                  <span className="font-semibold">
+                    {conditionLabel(CONDITION_MAP[result.condition.toLowerCase()] || '') || result.condition}
+                  </span>
+                </div>
+              )}
+              {result.building_class && result.building_class !== 'не определён' && (
+                <div className="flex items-center justify-between px-3 py-2">
+                  <span className="text-muted-foreground">Класс здания</span>
+                  <span className="font-semibold">
+                    {classLabel(CLASS_MAP[result.building_class.toLowerCase()] || result.building_class)}
+                  </span>
+                </div>
+              )}
+              {result.finishing && (
+                <div className="flex items-center justify-between px-3 py-2">
+                  <span className="text-muted-foreground">Отделка</span>
+                  <span className="font-semibold">
+                    {finishingLabel(FINISHING_MAP[result.finishing.toLowerCase()] || '') || result.finishing}
+                  </span>
+                </div>
+              )}
+              {result.price_per_m2_min > 0 && (
+                <div className="flex items-center justify-between px-3 py-2">
+                  <span className="text-muted-foreground">Продажа/м²</span>
+                  <span className="font-semibold text-emerald-700">
+                    {fmtPrice(result.price_per_m2_min)} — {fmtPrice(result.price_per_m2_max)}
+                  </span>
+                </div>
+              )}
+              {result.rent_per_m2_min > 0 && (
+                <div className="flex items-center justify-between px-3 py-2">
+                  <span className="text-muted-foreground">Аренда/м²/мес</span>
+                  <span className="font-semibold text-blue-700">
+                    {fmtPrice(result.rent_per_m2_min)} — {fmtPrice(result.rent_per_m2_max)}
+                  </span>
                 </div>
               )}
             </div>
-          );
-        })}
-      </div>
+          </div>
+
+          {/* Плюсы и минусы */}
+          {(result.pros.length > 0 || result.cons.length > 0) && (
+            <div className="grid grid-cols-2 gap-3">
+              {result.pros.length > 0 && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 mb-2">
+                    <Icon name="ThumbsUp" size={12} /> Сильные стороны
+                  </div>
+                  <ul className="space-y-1">
+                    {result.pros.map((p, i) => (
+                      <li key={i} className="text-[11px] text-emerald-800 flex items-start gap-1">
+                        <span className="shrink-0 text-emerald-500 mt-0.5">✓</span>{p}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {result.cons.length > 0 && (
+                <div className="rounded-xl border border-red-200 bg-red-50/50 p-3">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-red-600 mb-2">
+                    <Icon name="ThumbsDown" size={12} /> Слабые стороны
+                  </div>
+                  <ul className="space-y-1">
+                    {result.cons.map((c, i) => (
+                      <li key={i} className="text-[11px] text-red-700 flex items-start gap-1">
+                        <span className="shrink-0 text-red-400 mt-0.5">✗</span>{c}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Рекомендации по объекту */}
+          {result.recommendations.length > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 mb-2">
+                <Icon name="Lightbulb" size={12} /> Рекомендации по объекту
+              </div>
+              <ol className="space-y-1">
+                {result.recommendations.map((r, i) => (
+                  <li key={i} className="text-[11px] text-amber-800 flex items-start gap-1.5">
+                    <span className="shrink-0 text-amber-500 font-bold mt-0.5">{i + 1}.</span>{r}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          {/* Советы по фото */}
+          {result.photo_tips && result.photo_tips.length > 0 && (
+            <div className="rounded-xl border border-sky-200 bg-sky-50/50 p-3">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-sky-700 mb-2">
+                <Icon name="Camera" size={12} /> Советы по фотосъёмке
+              </div>
+              <ul className="space-y-1">
+                {result.photo_tips.map((t, i) => (
+                  <li key={i} className="text-[11px] text-sky-800 flex items-start gap-1">
+                    <span className="shrink-0 text-sky-400 mt-0.5">·</span>{t}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Повторный анализ */}
+          <button
+            onClick={runAudit}
+            className="w-full text-xs text-violet-500 hover:text-violet-700 py-1 flex items-center justify-center gap-1 transition-colors"
+          >
+            <Icon name="RefreshCw" size={11} /> Повторить анализ
+          </button>
+        </div>
+      )}
     </div>
   );
 }

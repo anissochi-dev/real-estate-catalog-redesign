@@ -2,8 +2,6 @@ import ImageUploader from '@/components/admin/ImageUploader';
 import PhotoAuditPanel from '@/components/admin/PhotoAuditPanel';
 import { Listing, detectVideoType } from './types';
 
-const PHOTO_AUDIT_URL = 'https://functions.poehali.dev/ccf52d36-5d2e-4b2a-8a40-e747dc90080f';
-
 interface Props {
   editing: Partial<Listing>;
   setEditing: (l: Partial<Listing>) => void;
@@ -11,11 +9,14 @@ interface Props {
   setPhotos: (p: string[]) => void;
   errors: Record<string, boolean>;
   setErrors: (fn: (v: Record<string, boolean>) => Record<string, boolean>) => void;
-  auditUrl?: string;
 }
 
-export default function ListingEditorPhotosTab({ editing, setEditing, photos, setPhotos, errors, setErrors, auditUrl }: Props) {
+export default function ListingEditorPhotosTab({ editing, setEditing, photos, setPhotos, errors, setErrors }: Props) {
   const errWrap = (field: string) => errors[field] ? { 'data-field-error': 'true' as const } : {};
+
+  const handleApplyAudit = (fields: Partial<Listing>) => {
+    setEditing({ ...editing, ...fields });
+  };
 
   return (
     <div className="space-y-4">
@@ -23,17 +24,21 @@ export default function ListingEditorPhotosTab({ editing, setEditing, photos, se
         <label className={`text-sm font-semibold block mb-2 ${errors.photos ? 'text-red-600' : ''}`}>
           Фотографии *{errors.photos && <span className="ml-2 text-xs font-normal text-red-500">Добавьте хотя бы одно фото</span>}
         </label>
-        <ImageUploader value={photos} onChange={p => { setPhotos(p); setErrors(v => ({ ...v, photos: false })); }} folder="photos" multiple applyWatermark={!!editing.use_watermark} />
+        <ImageUploader
+          value={photos}
+          onChange={p => { setPhotos(p); setErrors(v => ({ ...v, photos: false })); }}
+          folder="photos"
+          multiple
+          applyWatermark={!!editing.use_watermark}
+        />
       </div>
 
-      {/* ИИ-аудит: запускается автоматически после загрузки каждого фото */}
+      {/* ИИ-аудит: ручной запуск после загрузки фото */}
       {photos.length > 0 && (
         <PhotoAuditPanel
           photos={photos}
-          category={editing.category}
-          area={editing.area ?? undefined}
-          city={editing.city ?? undefined}
-          auditUrl={auditUrl || PHOTO_AUDIT_URL}
+          editing={editing}
+          onApply={handleApplyAudit}
         />
       )}
 
