@@ -8,7 +8,7 @@ import { BannerCanvas, CanvasProps } from './QrBannerCanvas';
 import { ColorPicker, SizePanel, EditorPanel, TextPanel, ImagesPanel, DownloadPanel } from './QrBannerControls';
 import {
   BrokerInfo, BannerElement, ElementId, Pos,
-  PX_PER_CM, PREVIEW_MAX_W, PREVIEW_MAX_H, PREVIEW_PAD,
+  PX_PER_CM, PREVIEW_MAX_H, PREVIEW_PAD,
   makeElements,
 } from './QrBannerTypes';
 
@@ -16,8 +16,21 @@ interface Props { listing: Listing; siteUrl?: string }
 
 export function TabQrBanner({ listing, siteUrl }: Props) {
   const exportRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerW, setContainerW] = useState(480);
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [broker, setBroker] = useState<BrokerInfo | null>(null);
+
+  // ── реальная ширина контейнера (ResizeObserver) ────────────────────────────
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver(entries => {
+      const w = entries[0]?.contentRect.width;
+      if (w) setContainerW(w);
+    });
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
 
   const [bgColor, setBgColor] = useState('#facc15');
   const [textColor, setTextColor] = useState('#dc2626');
@@ -49,8 +62,8 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   const bannerW = Math.round(numCmW * PX_PER_CM);
   const bannerH = Math.round(numCmH * PX_PER_CM);
 
-  // ── превью ────────────────────────────────────────────────────────────────
-  const availW = PREVIEW_MAX_W - PREVIEW_PAD;
+  // ── превью — масштаб от реальной ширины контейнера ───────────────────────
+  const availW = Math.max(120, containerW - PREVIEW_PAD);
   const availH = PREVIEW_MAX_H - PREVIEW_PAD;
   const previewScale = Math.min(availW / bannerW, availH / bannerH, 1);
   const scaledW = Math.round(bannerW * previewScale);
@@ -194,7 +207,7 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   if (elements.length === 0) return null;
 
   return (
-    <div className="p-6 space-y-5">
+    <div ref={containerRef} className="p-6 space-y-5">
 
       <ColorPicker
         bgColor={bgColor} setBgColor={setBgColor}
