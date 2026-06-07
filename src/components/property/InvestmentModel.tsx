@@ -225,11 +225,6 @@ export default function InvestmentModel({ listingId, price, area, deal }: Props)
                   <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                     <Icon name="BarChart3" size={14} className="text-blue-500" />
                     Сравнение с рынком
-                    {data.comparables?.sources && data.comparables.sources.length > 0 && (
-                      <span className="text-[10px] font-normal text-muted-foreground ml-auto">
-                        Источники: {data.comparables.sources.filter(s => s !== 'база системы').join(', ') || data.comparables.sources.join(', ')}
-                      </span>
-                    )}
                   </div>
 
                   {/* Цена vs рынок */}
