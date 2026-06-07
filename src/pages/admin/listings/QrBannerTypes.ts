@@ -36,26 +36,43 @@ export function getSizeInfo(el: BannerElement): { label: string; value: number }
     : { label: 'размер', value: el.imgSize ?? 60 };
 }
 
-export function makeElements(w: number, h: number, prevEls?: BannerElement[]): BannerElement[] {
+// Подбирает максимальный fontSize, при котором text влезает в maxWidth
+function fitFontSize(text: string, weight: string, maxWidth: number, maxFs: number, minFs = 8): number {
+  const cv = document.createElement('canvas');
+  const ctx = cv.getContext('2d')!;
+  let fs = Math.round(maxFs);
+  while (fs > minFs) {
+    ctx.font = `${weight} ${fs}px Arial, sans-serif`;
+    if (ctx.measureText(text).width <= maxWidth) break;
+    fs -= 1;
+  }
+  return fs;
+}
+
+export function makeElements(
+  w: number, h: number,
+  prevEls?: BannerElement[],
+  dealText = 'ПРОДАЮ',
+  phoneText = '+7 000 000 0000',
+): BannerElement[] {
   const isLandscape = w >= h;
 
   if (isLandscape) {
-    // QR занимает правую колонку: высота баннера - отступы
-    const qrSz   = Math.round(h * 0.72);
-    const qrPad  = Math.round((h - qrSz) / 2);
-    const qrX    = w - qrSz - qrPad;
-    const qrY    = qrPad;
+    // QR — правая колонка, вписан по высоте
+    const qrSz  = Math.round(h * 0.72);
+    const qrPad = Math.round((h - qrSz) / 2);
+    const qrX   = w - qrSz - qrPad;
+    const qrY   = qrPad;
 
-    // текст занимает левую часть до QR (с запасом 12px)
-    const textMaxW = qrX - 20 - 12;
-    // подбираем шрифт так, чтобы "ПРОДАЮ" влезло в textMaxW
-    // Arial 900: ≈0.65 * fontSize * кол-во символов (приблизительно)
-    // Используем фиксированные доли высоты, но ограничиваем по ширине
-    const dealFs  = Math.min(Math.round(h * 0.38), Math.round(textMaxW / 5.5));
-    const phoneFs = Math.min(Math.round(h * 0.26), Math.round(textMaxW / 8.5));
+    // текст — левая зона до QR
+    const textMaxW = qrX - 18 - 10;
+    const maxDealFs  = Math.round(h * 0.42);
+    const maxPhoneFs = Math.round(h * 0.28);
+    const dealFs  = fitFontSize(dealText  || 'ПРОДАЮ',  '900', textMaxW, maxDealFs);
+    const phoneFs = fitFontSize(phoneText || '+7 000 000 0000', '800', textMaxW, maxPhoneFs);
 
     const base: BannerElement[] = [
-      { id: 'deal',  pos: { x: 18, y: Math.round(h * 0.08) }, fontSize: Math.max(12, dealFs) },
+      { id: 'deal',  pos: { x: 18, y: Math.round(h * 0.06) }, fontSize: Math.max(12, dealFs) },
       { id: 'phone', pos: { x: 18, y: Math.round(h * 0.52) }, fontSize: Math.max(10, phoneFs) },
       { id: 'qr',    pos: { x: qrX, y: qrY }, imgSize: Math.max(30, qrSz) },
     ];
@@ -67,11 +84,12 @@ export function makeElements(w: number, h: number, prevEls?: BannerElement[]): B
     const qrSz  = Math.round(w * 0.38);
     const qrX   = Math.round((w - qrSz) / 2);
     const qrY   = h - qrSz - 18;
-    const dealFs  = Math.round(h * 0.1);
-    const phoneFs = Math.round(h * 0.065);
+    const textMaxW = w - 36;
+    const dealFs  = fitFontSize(dealText  || 'ПРОДАЮ',  '900', textMaxW, Math.round(h * 0.12));
+    const phoneFs = fitFontSize(phoneText || '+7 000 000 0000', '800', textMaxW, Math.round(h * 0.08));
     const base: BannerElement[] = [
       { id: 'deal',  pos: { x: 18, y: Math.round(h * 0.06) }, fontSize: Math.max(12, dealFs) },
-      { id: 'phone', pos: { x: 18, y: Math.round(h * 0.18) }, fontSize: Math.max(10, phoneFs) },
+      { id: 'phone', pos: { x: 18, y: Math.round(h * 0.20) }, fontSize: Math.max(10, phoneFs) },
       { id: 'qr',    pos: { x: qrX, y: qrY }, imgSize: Math.max(40, qrSz) },
     ];
     const logo  = prevEls?.find(e => e.id === 'logo');

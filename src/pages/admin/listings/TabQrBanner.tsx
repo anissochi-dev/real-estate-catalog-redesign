@@ -81,16 +81,31 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
 
   useEffect(() => {
     setElements(prev => {
-      const next = makeElements(bannerW, bannerH, prev);
+      const next = makeElements(bannerW, bannerH, prev, dealText, phoneText);
       prevElsRef.current = next;
       return next;
     });
     setSelected(null);
-   
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bannerW, bannerH]);
 
+  // пересчитываем шрифты при изменении текста (только если пользователь не двигал элементы)
+  useEffect(() => {
+    setElements(prev => {
+      // проверяем: позиции совпадают с дефолтными — значит пользователь не трогал
+      const def = makeElements(bannerW, bannerH, prev, dealText, phoneText);
+      return prev.map(el => {
+        const d = def.find(e => e.id === el.id);
+        if (!d) return el;
+        // обновляем только fontSize/imgSize, позицию не трогаем
+        return { ...el, fontSize: d.fontSize ?? el.fontSize, imgSize: d.imgSize ?? el.imgSize };
+      });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dealText, phoneText]);
+
   const resetPositions = () => {
-    setElements(prev => makeElements(bannerW, bannerH, prev));
+    setElements(prev => makeElements(bannerW, bannerH, prev, dealText, phoneText));
     setSelected(null);
   };
 
