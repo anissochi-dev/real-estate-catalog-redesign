@@ -51,7 +51,83 @@ export default function LeadsTable({ leads, onOpen, onDelete }: Props) {
   const typeOf = (t: string | null) => LEAD_TYPES.find(x => x[0] === t);
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+    <>
+    {/* ── Мобильный вид (карточки) ── */}
+    <div className="sm:hidden bg-white rounded-2xl shadow-sm divide-y divide-border">
+      {sorted.length === 0 && (
+        <div className="py-12 text-center text-muted-foreground">
+          <Icon name="Inbox" size={28} className="mx-auto mb-2 opacity-40" />
+          Нет заявок
+        </div>
+      )}
+      {sorted.map(l => {
+        const st = statusOf(l.status);
+        const tp = typeOf(l.lead_type);
+        return (
+          <div key={l.id} onClick={() => onOpen(l)}
+            className="px-4 py-3 cursor-pointer hover:bg-muted/20 transition">
+            {/* Строка 1: дата + статус */}
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <span className="text-xs text-muted-foreground">{fmtDate(l.created_at)}</span>
+              <div className="flex items-center gap-1.5">
+                {tp && <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${tp[2]}`}>{tp[1]}</span>}
+                {st && (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium">
+                    <span className={`w-2 h-2 rounded-full ${st[2]}`} />
+                    {st[1]}
+                  </span>
+                )}
+              </div>
+            </div>
+            {/* Строка 2: имя + телефон */}
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <div className="font-semibold text-sm">{l.name || '—'}</div>
+                {l.company && <div className="text-xs text-purple-700">{l.company}</div>}
+              </div>
+              <div className="text-right shrink-0">
+                <a href={`tel:${l.phone}`} onClick={e => e.stopPropagation()}
+                   className={`text-sm font-mono font-semibold hover:underline ${l.phone_hidden ? 'text-muted-foreground' : 'text-brand-blue'}`}>
+                  {l.phone ? formatPhone(l.phone) : '—'}
+                </a>
+                {l.phone_hidden && <Icon name="EyeOff" size={11} className="text-amber-500 inline ml-1" />}
+                {l.email && <div className="text-[11px] text-muted-foreground">{l.email}</div>}
+              </div>
+            </div>
+            {/* Строка 3: источник + бюджет + бейджи */}
+            <div className="flex items-center justify-between gap-2 mt-1.5">
+              <div className="flex items-center gap-1 flex-wrap">
+                {l.is_network_tenant && (
+                  <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full text-[10px] font-semibold">
+                    <Icon name="Network" size={10} /> Сетевик
+                  </span>
+                )}
+                {l.broker_id && (
+                  <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full text-[10px] font-semibold">
+                    <Icon name="UserCheck" size={10} /> Брокер
+                  </span>
+                )}
+                <span className="text-[11px] text-muted-foreground">{SOURCE_LABELS[l.source] || l.source || '—'}</span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {l.budget != null && l.budget > 0 && (
+                  <span className="text-xs font-semibold">{l.budget.toLocaleString('ru')} ₽</span>
+                )}
+                {onDelete && (
+                  <button onClick={e => { e.stopPropagation(); onDelete(l.id); }}
+                    className="p-1.5 rounded-lg hover:bg-red-50 text-red-400" title="Удалить">
+                    <Icon name="Trash2" size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+
+    {/* ── Десктопный вид (таблица) ── */}
+    <div className="hidden sm:block bg-white rounded-2xl shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/40 border-b border-border">
@@ -158,5 +234,6 @@ export default function LeadsTable({ leads, onOpen, onDelete }: Props) {
         </table>
       </div>
     </div>
+    </>
   );
 }
