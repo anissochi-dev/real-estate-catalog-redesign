@@ -44,10 +44,22 @@ def handler(event: dict, context) -> dict:
     dsn = os.environ['DATABASE_URL']
 
     # Файлы верификации (Яндекс, Google, Mail.ru и т.д.)
-    path = (event.get('path') or event.get('rawPath') or '').rstrip('/')
+    path = (event.get('path') or event.get('rawPath') or '').strip('/')
     resource_param = params.get('resource', '')
-    if resource_param == 'verify_file' and params.get('filename'):
-        filename = params['filename']
+
+    # Определяем имя файла: из ?filename= ИЛИ из пути (например /mailru-domainXXX)
+    verify_filename = params.get('filename', '')
+    if not verify_filename and path:
+        # Путь вида mailru-domainXXX, yandex_XXX.html, googleXXX.html
+        basename = path.split('/')[-1]
+        if (basename.startswith('mailru-domain')
+                or basename.startswith('yandex_')
+                or basename.startswith('google')
+                or basename.startswith('mail.')
+                or basename.endswith('.html') and 'verification' in basename.lower()):
+            verify_filename = basename
+
+    if (resource_param == 'verify_file' or verify_filename) and verify_filename:
         conn = psycopg2.connect(dsn)
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(f"SELECT verification_files FROM t_p71821556_real_estate_catalog_.settings ORDER BY id LIMIT 1")
@@ -60,7 +72,7 @@ def handler(event: dict, context) -> dict:
             except Exception:
                 files = []
         for vf in files:
-            if vf.get('filename') == filename:
+            if vf.get('filename') == verify_filename:
                 content = vf.get('content', '')
                 return {'statusCode': 200, 'headers': {'Content-Type': 'text/plain; charset=utf-8', 'Access-Control-Allow-Origin': '*'}, 'body': content}
         return {'statusCode': 404, 'headers': {'Access-Control-Allow-Origin': '*'}, 'body': 'Not found'}

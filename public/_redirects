@@ -2,6 +2,11 @@
 /sitemap_index.xml    https://functions.poehali.dev/7db3cce2-3ae0-4bbb-bece-5c6076691344?action=sitemap_xml    200
 /robots.txt    https://functions.poehali.dev/7db3cce2-3ae0-4bbb-bece-5c6076691344?action=robots_txt    200
 
+# Файлы верификации доменов (Яндекс, Google, Mail.ru и др.)
+/yandex_*    https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa/yandex_:splat    200
+/google*    https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa/google:splat    200
+/mailru-domain*    https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa/mailru-domain:splat    200
+
 # Известные страницы SPA — всегда 200
 /    /index.html    200
 /catalog    /index.html    200
