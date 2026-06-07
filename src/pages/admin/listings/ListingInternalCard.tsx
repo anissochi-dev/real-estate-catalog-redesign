@@ -77,37 +77,45 @@ export default function ListingInternalCard({ listingId, onClose, onBrokerChange
       <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl">
 
         {/* Header */}
-        <div className="flex items-start gap-3 px-6 py-4 border-b border-border shrink-0">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-display font-700 text-base truncate">{listing.title}</span>
-              <button
-                onClick={() => copyId(fmtListingId(listing.id))}
-                title="Нажмите, чтобы скопировать ID"
-                className="text-xs px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue font-mono font-semibold shrink-0 hover:bg-brand-blue/20 transition-colors flex items-center gap-1 cursor-pointer"
-              >
-                {copied ? <Icon name="Check" size={10} /> : <Icon name="Copy" size={10} />}
-                #{fmtListingId(listing.id)}
-              </button>
-              {listing.is_hot && <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-semibold shrink-0">Горячее</span>}
-              {listing.is_new && <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold shrink-0">Новинка</span>}
-              {listing.is_exclusive && <span className="text-xs px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-semibold shrink-0">Эксклюзив</span>}
-              {listing.is_urgent && <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold shrink-0">Срочно</span>}
+        <div className="px-4 sm:px-6 py-4 border-b border-border shrink-0">
+          {/* Строка 1: заголовок + X */}
+          <div className="flex items-start gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-display font-700 text-base leading-snug">{listing.title}</span>
+                <button
+                  onClick={() => copyId(fmtListingId(listing.id))}
+                  title="Нажмите, чтобы скопировать ID"
+                  className="text-xs px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue font-mono font-semibold shrink-0 hover:bg-brand-blue/20 transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  {copied ? <Icon name="Check" size={10} /> : <Icon name="Copy" size={10} />}
+                  #{fmtListingId(listing.id)}
+                </button>
+                {listing.is_hot && <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-semibold shrink-0">Горячее</span>}
+                {listing.is_new && <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold shrink-0">Новинка</span>}
+                {listing.is_exclusive && <span className="text-xs px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-semibold shrink-0">Эксклюзив</span>}
+                {listing.is_urgent && <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold shrink-0">Срочно</span>}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {catLabel} · {dealLabel}{listing.city ? ` · ${listing.city}${listing.district ? `, ${listing.district}` : ''}` : ''}
+              </div>
             </div>
-            <div className="text-xs text-muted-foreground mt-0.5">{catLabel} · {dealLabel} · {listing.city}{listing.district ? `, ${listing.district}` : ''}</div>
-          </div>
-          {onEdit && (
-            <button
-              onClick={() => { onEdit(listing); onClose(); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-blue text-white text-sm font-semibold hover:bg-brand-blue/90 transition shrink-0"
-            >
-              <Icon name="Pencil" size={14} />
-              Редактировать
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted shrink-0 -mt-1">
+              <Icon name="X" size={18} />
             </button>
+          </div>
+          {/* Строка 2: кнопка редактировать */}
+          {onEdit && (
+            <div className="mt-2">
+              <button
+                onClick={() => { onEdit(listing); onClose(); }}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-blue text-white text-sm font-semibold hover:bg-brand-blue/90 transition w-full sm:w-auto justify-center sm:justify-start"
+              >
+                <Icon name="Pencil" size={14} />
+                Редактировать
+              </button>
+            </div>
           )}
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted shrink-0">
-            <Icon name="X" size={18} />
-          </button>
         </div>
 
         {/* Tabs */}
