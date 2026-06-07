@@ -45,6 +45,25 @@ export interface Scenarios {
   growth_high: ModelResult;
 }
 
+export interface MarketSnapshot {
+  price_per_m2: number;
+  price_median?: number | null;
+  price_min?: number | null;
+  price_max?: number | null;
+  analogs_count: number;
+  district: string;
+  snapshot_date?: string | null;
+}
+
+export interface PriceVsMarket {
+  obj_price_per_m2: number;
+  market_price_per_m2: number;
+  diff_pct: number;
+  assessment: 'above' | 'below' | 'fair';
+  analogs_count: number;
+  district: string;
+}
+
 export interface NoiApiResponse {
   listing: {
     id: number;
@@ -66,6 +85,13 @@ export interface NoiApiResponse {
   data_source?: 'real_rent' | 'yandex_gpt' | 'fallback';
   market_rent_rate?: number | null;
   actual_rent_rate?: number | null;
+  comparables?: {
+    rent?: MarketSnapshot | null;
+    sale?: MarketSnapshot | null;
+    sources: string[];
+    snapshot_date?: string | null;
+  };
+  price_vs_market?: PriceVsMarket | null;
 }
 
 export interface UserParams {
