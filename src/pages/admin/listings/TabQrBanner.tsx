@@ -177,8 +177,18 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   const download = async () => {
     if (!exportRef.current) return;
     setDownloading(true);
+    // Временно делаем элемент видимым в DOM чтобы html2canvas корректно рендерил на мобиле
+    const el = exportRef.current;
+    const prev = { position: el.style.position, left: el.style.left, top: el.style.top, opacity: el.style.opacity, visibility: el.style.visibility, zIndex: el.style.zIndex };
+    el.style.position = 'fixed';
+    el.style.left = '0';
+    el.style.top = '0';
+    el.style.opacity = '1';
+    el.style.visibility = 'visible';
+    el.style.zIndex = '-1';
+    await new Promise(r => setTimeout(r, 50));
     try {
-      const canvas = await html2canvas(exportRef.current, { scale: 4, useCORS: true, backgroundColor: bgColor, logging: false });
+      const canvas = await html2canvas(el, { scale: 4, useCORS: true, backgroundColor: bgColor, logging: false });
       const name = `banner-${listing.id}`;
       if (downloadFormat === 'pdf') {
         const imgData = canvas.toDataURL('image/png');
@@ -195,7 +205,16 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
           URL.revokeObjectURL(url);
         }, mime, downloadFormat === 'jpg' ? 0.92 : 1);
       }
-    } catch { alert('Ошибка при скачивании'); } finally { setDownloading(false); }
+    } catch { alert('Ошибка при скачивании'); } finally {
+      // восстанавливаем скрытие
+      el.style.position = prev.position;
+      el.style.left = prev.left;
+      el.style.top = prev.top;
+      el.style.opacity = prev.opacity;
+      el.style.visibility = prev.visibility;
+      el.style.zIndex = prev.zIndex;
+      setDownloading(false);
+    }
   };
 
   const downloadQr = () => {
@@ -262,8 +281,8 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
         onUseListingPhoto={useListingPhoto}
       />
 
-      {/* Скрытый экспорт */}
-      <div style={{ position: 'fixed', left: -9999, top: -9999, pointerEvents: 'none', opacity: 0 }}>
+      {/* Скрытый экспорт — visibility:hidden чтобы html2canvas мог рендерить */}
+      <div style={{ position: 'fixed', left: -9999, top: -9999, pointerEvents: 'none', visibility: 'hidden' }}>
         <BannerCanvas {...canvasProps} selected={null} bannerRef={exportRef} exportMode />
       </div>
 
