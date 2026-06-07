@@ -145,44 +145,67 @@ def _normalize_benchmarks(raw: dict, listing: dict) -> dict:
 
 def _real_rent_benchmarks(listing: dict) -> dict:
     """
-    Если объект уже сдан (есть monthly_rent/yearly_rent) — строим бенчмарки из реальных данных.
-    Текущая ставка арендатора используется как rent_rate (факт),
-    рыночный потенциал сохраняется в market_rent_rate для справки.
-    OPEX и налог берутся из актуальных нормативов по типу объекта.
+    Объект сдан в аренду (ГАБ-режим): арендатор платит фиксированную плату,
+    собственник несёт только налоговую нагрузку.
+
+    МЕТОДОЛОГИЯ ГАБ:
+    - Доход = фактическая арендная плата (из поля monthly_rent / yearly_rent)
+    - OPEX = 0: все операционные расходы (коммуналка, персонал, ремонт) несёт АРЕНДАТОР
+    - Налог = 6% УСН «Доходы» от годовой аренды (типично для ИП-арендодателей)
+      Это реальная нагрузка: 6% от дохода, а не от кадастровой стоимости
+    - Вакантность = 0: объект занят арендатором
+    - property_tax_pct используется ТОЛЬКО для расчёта налога на имущество физлица
+      (0.5% от кадастра ≈ ~0.5% от цены), добавляем отдельно
+
+    При самостоятельном управлении (без арендатора) расчёт другой —
+    тогда используется fallback с полным OPEX отеля/ресторана.
     """
     area = float(listing.get('area') or 1)
     monthly_rent = float(listing.get('monthly_rent') or 0)
     yearly_rent = float(listing.get('yearly_rent') or 0)
 
     annual = yearly_rent if yearly_rent > 0 else monthly_rent * 12
+    monthly = monthly_rent if monthly_rent > 0 else (yearly_rent / 12 if yearly_rent > 0 else 0)
     real_rent_rate = round(annual / 12 / area, 2) if area > 0 and annual > 0 else 0
 
     fallback = _fallback_benchmarks(listing)
     market_rent_rate = fallback['rent_rate']
 
-    # Для ГАБ/отелей с арендатором: если рыночная ставка выше текущей —
-    # используем текущую (консервативный сценарий), но фиксируем разрыв.
-    rent_rate = real_rent_rate if real_rent_rate > 0 else market_rent_rate
-    upside = round((market_rent_rate / rent_rate - 1) * 100, 1) if rent_rate > 0 and market_rent_rate > rent_rate else 0
+    # Налоговая нагрузка собственника-ГАБ:
+    # УСН 6% от дохода — стандарт для ИП-арендодателей в РФ
+    # Выражаем в % от стоимости объекта для совместимости с моделью
+    price = float(listing.get('price') or 1)
+    usn_annual = annual * 0.06  # 6% УСН от годового дохода
+    # Дополнительно налог на имущество физлица/ООО (~0.5% от кадастра ≈ от цены)
+    property_tax_annual = price * 0.005
+    total_tax_as_pct = round((usn_annual + property_tax_annual) / price * 100, 3) if price > 0 else 0.5
 
-    tenant = listing.get('tenant_name') or 'есть'
+    # Апсайд: разрыв текущей ставки с рынком
+    upside = round((market_rent_rate / real_rent_rate - 1) * 100, 1) if real_rent_rate > 0 and market_rent_rate > real_rent_rate else 0
     upside_note = f' Рыночный потенциал +{upside}% при смене арендатора.' if upside > 5 else ''
+
+    tenant = listing.get('tenant_name') or 'компания'
     comment = (
-        f"Реальная аренда: {int(annual):,} ₽/год, арендатор: {tenant}. "
-        f"OPEX — нормативный.{upside_note}"
+        f"ГАБ: арендатор ({tenant}) платит {int(monthly):,} ₽/мес. "
+        f"OPEX = 0 (все расходы на арендаторе). "
+        f"Налог: УСН 6% + налог на имущество ≈ {int(usn_annual + property_tax_annual):,} ₽/год.{upside_note}"
     ).replace(',', ' ')
 
     return {
-        'rent_rate': rent_rate,
-        'market_rent_rate': market_rent_rate,  # рыночный потенциал
-        'actual_rent_rate': real_rent_rate,     # факт текущего арендатора
+        'rent_rate': real_rent_rate,
+        'market_rent_rate': market_rent_rate,
+        'actual_rent_rate': real_rent_rate,
         'vacancy_pct': 0,
-        'opex_per_m2': fallback['opex_per_m2'],
-        'property_tax_pct': fallback['property_tax_pct'],
+        'opex_per_m2': 0,           # OPEX = 0: арендатор несёт все расходы
+        'property_tax_pct': round(total_tax_as_pct, 3),  # суммарная налоговая нагрузка как % от цены
         'market_cap_rate_pct': fallback['market_cap_rate_pct'],
         'avg_indexation_pct': fallback['avg_indexation_pct'],
-        'comment': comment[:400],
+        'comment': comment[:500],
         'source': 'real_data',
+        'is_gab': True,             # флаг: объект в аренде, считаем по ГАБ-методологии
+        'usn_annual': round(usn_annual),
+        'property_tax_annual': round(property_tax_annual),
+        'net_income_annual': round(annual - usn_annual - property_tax_annual),
     }
 
 

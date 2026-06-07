@@ -7,6 +7,11 @@ export interface Benchmarks {
   avg_indexation_pct: number;
   comment: string;
   source: 'yandex_gpt' | 'fallback' | 'real_data';
+  // ГАБ-режим: объект сдан в аренду, арендатор несёт все расходы
+  is_gab?: boolean;
+  usn_annual?: number;
+  property_tax_annual?: number;
+  net_income_annual?: number;
 }
 
 export interface YearRow {

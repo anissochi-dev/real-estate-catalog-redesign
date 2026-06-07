@@ -118,7 +118,32 @@ export default function InvestmentModel({ listingId, price, area, deal }: Props)
           {data && liveResult && params && (
             <>
               {/* Источник бенчмарков */}
-              {data.data_source === 'real_rent' ? (
+              {data.benchmarks.is_gab ? (
+                /* ГАБ-режим: объект сдан в аренду, особая раскладка */
+                <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 space-y-2">
+                  <div className="flex items-center gap-2 text-[12px] font-semibold text-emerald-800">
+                    <Icon name="Building2" size={13} className="text-emerald-600" />
+                    Готовый арендный бизнес — расчёт по фактическому доходу
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-[11px]">
+                    <div className="bg-white/70 rounded-lg p-2 border border-emerald-100">
+                      <div className="text-emerald-700/70 mb-0.5">Аренда в год</div>
+                      <div className="font-semibold text-emerald-900">{fmtMoneyFull(data.benchmarks.net_income_annual! + data.benchmarks.usn_annual! + data.benchmarks.property_tax_annual!)}</div>
+                    </div>
+                    <div className="bg-white/70 rounded-lg p-2 border border-emerald-100">
+                      <div className="text-emerald-700/70 mb-0.5">УСН 6% + налог</div>
+                      <div className="font-semibold text-red-600">−{fmtMoneyFull(data.benchmarks.usn_annual! + data.benchmarks.property_tax_annual!)}</div>
+                    </div>
+                    <div className="bg-white/70 rounded-lg p-2 border border-emerald-100">
+                      <div className="text-emerald-700/70 mb-0.5">Чистый доход</div>
+                      <div className="font-semibold text-emerald-800">{fmtMoneyFull(data.benchmarks.net_income_annual!)}</div>
+                    </div>
+                  </div>
+                  <div className="text-[10px] text-emerald-700/70">
+                    OPEX = 0 ₽ — все операционные расходы (коммуналка, персонал, обслуживание) несёт арендатор по договору аренды.
+                  </div>
+                </div>
+              ) : data.data_source === 'real_rent' ? (
                 <div className="flex items-start gap-2 text-[11px] bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-2.5 py-1.5">
                   <Icon name="CheckCircle2" size={12} className="shrink-0 text-emerald-600 mt-0.5" />
                   <span className="leading-relaxed">
@@ -191,11 +216,23 @@ export default function InvestmentModel({ listingId, price, area, deal }: Props)
                   {showAdvanced && (
                     <div className="bg-muted/30 rounded-xl p-3 space-y-1.5 text-xs">
                       <div className="font-semibold text-sm mb-1">Раскладка 1-го года</div>
-                      <Row label="Потенциальный доход (GPI)" value={fmtMoneyFull(liveResult.gpi_year1)} />
-                      <Row label="Эффективный доход (EGI, с вакантностью)" value={fmtMoneyFull(liveResult.egi_year1)} />
-                      <Row label="− Операционные расходы" value={fmtMoneyFull(-liveResult.opex_year1)} negative />
-                      <Row label="− Налог на имущество" value={fmtMoneyFull(-liveResult.tax_year1)} negative />
-                      <Row label="= NOI" value={fmtMoneyFull(liveResult.noi_year1)} bold />
+                      <Row label="Доход от аренды (GPI)" value={fmtMoneyFull(liveResult.gpi_year1)} />
+                      {!data.benchmarks.is_gab && (
+                        <Row label="Эффективный доход (EGI, с вакантностью)" value={fmtMoneyFull(liveResult.egi_year1)} />
+                      )}
+                      {data.benchmarks.is_gab ? (
+                        <>
+                          <Row label="− УСН 6% от дохода" value={fmtMoneyFull(-(data.benchmarks.usn_annual ?? 0))} negative />
+                          <Row label="− Налог на имущество" value={fmtMoneyFull(-(data.benchmarks.property_tax_annual ?? 0))} negative />
+                          <Row label="OPEX (расходы арендатора)" value="0 ₽" />
+                        </>
+                      ) : (
+                        <>
+                          <Row label="− Операционные расходы" value={fmtMoneyFull(-liveResult.opex_year1)} negative />
+                          <Row label="− Налог на имущество" value={fmtMoneyFull(-liveResult.tax_year1)} negative />
+                        </>
+                      )}
+                      <Row label="= NOI (чистый доход)" value={fmtMoneyFull(liveResult.noi_year1)} bold />
                       {liveResult.loan_amount > 0 && (
                         <>
                           <Row label="Сумма кредита" value={fmtMoneyFull(liveResult.loan_amount)} />
