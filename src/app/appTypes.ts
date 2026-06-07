@@ -73,18 +73,17 @@ export const IN_ADMIN_KEY = 'biznest_in_admin';
 
 export function loadInitialView(): AppView {
   try {
-    // 1. Если сотрудник работал в админке — восстанавливаем её при перезагрузке
-    //    ПЕРВЫМ делом, до проверки публичных путей. Обычных посетителей это
-    //    не затрагивает: у них флага нет.
-    if (localStorage.getItem(IN_ADMIN_KEY) === '1') return 'admin';
-
     const path = window.location.pathname;
 
-    // 2. Публичные страницы (включая главную «/») открываем как сайт.
-    //    Иначе сохранённый в localStorage admin-режим перехватывал рендер
-    //    главной и показывал бесконечное колесо загрузки вместо контента.
+    // 1. Публичные страницы — ВСЕГДА открываем как сайт, даже если сотрудник
+    //    работал в админке. Это нужно чтобы ссылки "открыть на сайте" из
+    //    админки корректно открывались в новой вкладке публичным контентом.
     const publicPaths = ['/object', '/catalog', '/map', '/favorites', '/compare', '/network-tenants', '/news', '/leads', '/declined'];
     if (path === '/' || publicPaths.some(p => path.startsWith(p))) return 'site';
+
+    // 2. Если сотрудник работал в админке — восстанавливаем её при перезагрузке
+    //    (F5 внутри админки где в адресной строке остался прежний путь).
+    if (localStorage.getItem(IN_ADMIN_KEY) === '1') return 'admin';
 
     // 3. Если в localStorage сохранён admin/login — восстанавливаем его.
     const v = localStorage.getItem(VIEW_KEY);
