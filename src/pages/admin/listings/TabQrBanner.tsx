@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import QRCode from 'qrcode';
-import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { adminApi, uploadFileEx } from '@/lib/adminApi';
 import { Listing } from './types';
-import { BannerCanvas, CanvasProps } from './QrBannerCanvas';
+import { BannerCanvas } from './QrBannerCanvas';
+import type { CanvasProps } from './QrBannerCanvas';
 import { ColorPicker, SizePanel, EditorPanel, TextPanel, ImagesPanel, DownloadPanel } from './QrBannerControls';
 import {
   BrokerInfo, BannerElement, ElementId, Pos,
@@ -14,7 +14,6 @@ import {
 interface Props { listing: Listing; siteUrl?: string }
 
 export function TabQrBanner({ listing, siteUrl }: Props) {
-  const exportRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerW, setContainerW] = useState(480);
   const [qrDataUrl, setQrDataUrl] = useState('');
@@ -173,48 +172,121 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
 
   const applyPreset = (w: number, h: number) => { setCmW(String(w)); setCmH(String(h)); };
 
-  // ── скачивание ────────────────────────────────────────────────────────────
+  // ── скачивание через Canvas API (без html2canvas) ─────────────────────────
   const download = async () => {
-    if (!exportRef.current) return;
     setDownloading(true);
-    // Временно делаем элемент видимым в DOM чтобы html2canvas корректно рендерил на мобиле
-    const el = exportRef.current;
-    const prev = { position: el.style.position, left: el.style.left, top: el.style.top, opacity: el.style.opacity, visibility: el.style.visibility, zIndex: el.style.zIndex };
-    el.style.position = 'fixed';
-    el.style.left = '0';
-    el.style.top = '0';
-    el.style.opacity = '1';
-    el.style.visibility = 'visible';
-    el.style.zIndex = '-1';
-    await new Promise(r => setTimeout(r, 50));
     try {
-      const canvas = await html2canvas(el, { scale: 4, useCORS: true, backgroundColor: bgColor, logging: false });
+      const SCALE = 4;
+      const W = bannerW * SCALE;
+      const H = bannerH * SCALE;
+      const cv = document.createElement('canvas');
+      cv.width = W; cv.height = H;
+      const ctx = cv.getContext('2d')!;
+      ctx.scale(SCALE, SCALE);
+
+      // фон
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(0, 0, bannerW, bannerH);
+
+      // вспомогалка: загрузить изображение по url
+      const loadImg = (src: string): Promise<HTMLImageElement> =>
+        new Promise((res, rej) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => res(img);
+          img.onerror = rej;
+          img.src = src;
+        });
+
+      // фото
+      const photoEl = elements.find(e => e.id === 'photo');
+      if (photoEl && photoUrl) {
+        try {
+          const img = await loadImg(photoUrl);
+          const sz = photoEl.imgSize ?? 120;
+          ctx.save();
+          ctx.beginPath();
+          ctx.roundRect(photoEl.pos.x, photoEl.pos.y, sz, sz, 10);
+          ctx.clip();
+          ctx.drawImage(img, photoEl.pos.x, photoEl.pos.y, sz, sz);
+          ctx.restore();
+        } catch { /* пропускаем если не загрузилось */ }
+      }
+
+      // надпись сделки
+      const dealEl = elements.find(e => e.id === 'deal');
+      if (dealEl) {
+        ctx.fillStyle = textColor;
+        ctx.font = `900 ${dealEl.fontSize ?? 20}px Arial, sans-serif`;
+        ctx.letterSpacing = '3px';
+        ctx.fillText(dealText, dealEl.pos.x + 4, dealEl.pos.y + (dealEl.fontSize ?? 20));
+      }
+
+      // телефон
+      const phoneEl = elements.find(e => e.id === 'phone');
+      if (phoneEl) {
+        ctx.fillStyle = textColor;
+        ctx.font = `800 ${phoneEl.fontSize ?? 20}px Arial, sans-serif`;
+        ctx.letterSpacing = '1px';
+        ctx.fillText(phoneText || '+7 ─── ─── ────', phoneEl.pos.x + 4, phoneEl.pos.y + (phoneEl.fontSize ?? 20));
+      }
+
+      // QR-код
+      const qrEl = elements.find(e => e.id === 'qr');
+      if (qrEl && qrDataUrl) {
+        try {
+          const img = await loadImg(qrDataUrl);
+          const sz = qrEl.imgSize ?? 80;
+          ctx.save();
+          ctx.globalAlpha = 0.15;
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.roundRect(qrEl.pos.x, qrEl.pos.y, sz + 10, sz + 10, 10);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.restore();
+          ctx.drawImage(img, qrEl.pos.x + 5, qrEl.pos.y + 5, sz, sz);
+        } catch { /* пропускаем */ }
+      }
+
+      // логотип
+      const logoEl = elements.find(e => e.id === 'logo');
+      if (logoEl && logoUrl) {
+        try {
+          const img = await loadImg(logoUrl);
+          const sz = logoEl.imgSize ?? 70;
+          ctx.drawImage(img, logoEl.pos.x, logoEl.pos.y, sz, sz);
+        } catch { /* пропускаем */ }
+      }
+
+      // подпись размера
+      if (showSize) {
+        const label = `${numCmW} см × ${numCmH} см`;
+        const fs = Math.max(10, bannerH * 0.065);
+        ctx.fillStyle = textColor;
+        ctx.globalAlpha = 0.55;
+        ctx.font = `700 ${fs}px Arial, sans-serif`;
+        ctx.letterSpacing = '0.5px';
+        ctx.fillText(label, bannerW - ctx.measureText(label).width - 10, bannerH - 8);
+        ctx.globalAlpha = 1;
+      }
+
       const name = `banner-${listing.id}`;
       if (downloadFormat === 'pdf') {
-        const imgData = canvas.toDataURL('image/png');
-        const w = canvas.width / 4; const h = canvas.height / 4;
-        const pdf = new jsPDF({ orientation: w > h ? 'landscape' : 'portrait', unit: 'px', format: [w, h] });
-        pdf.addImage(imgData, 'PNG', 0, 0, w, h);
+        const imgData = cv.toDataURL('image/png');
+        const pdf = new jsPDF({ orientation: W > H ? 'landscape' : 'portrait', unit: 'px', format: [bannerW, bannerH] });
+        pdf.addImage(imgData, 'PNG', 0, 0, bannerW, bannerH);
         pdf.save(`${name}.pdf`);
       } else {
         const mime = downloadFormat === 'jpg' ? 'image/jpeg' : 'image/png';
-        canvas.toBlob(blob => {
+        cv.toBlob(blob => {
           if (!blob) return;
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a'); a.href = url; a.download = `${name}.${downloadFormat}`; a.click();
           URL.revokeObjectURL(url);
         }, mime, downloadFormat === 'jpg' ? 0.92 : 1);
       }
-    } catch { alert('Ошибка при скачивании'); } finally {
-      // восстанавливаем скрытие
-      el.style.position = prev.position;
-      el.style.left = prev.left;
-      el.style.top = prev.top;
-      el.style.opacity = prev.opacity;
-      el.style.visibility = prev.visibility;
-      el.style.zIndex = prev.zIndex;
-      setDownloading(false);
-    }
+    } catch { alert('Ошибка при скачивании'); } finally { setDownloading(false); }
   };
 
   const downloadQr = () => {
@@ -280,11 +352,6 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
         onUploadPhoto={uploadPhoto} onRemovePhoto={removePhotoElement}
         onUseListingPhoto={useListingPhoto}
       />
-
-      {/* Скрытый экспорт — visibility:hidden чтобы html2canvas мог рендерить */}
-      <div style={{ position: 'fixed', left: -9999, top: -9999, pointerEvents: 'none', visibility: 'hidden' }}>
-        <BannerCanvas {...canvasProps} selected={null} bannerRef={exportRef} exportMode />
-      </div>
 
       {/* 6. Скачать */}
       <DownloadPanel
