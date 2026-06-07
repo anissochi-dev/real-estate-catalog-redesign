@@ -105,7 +105,6 @@ export function SizePanel({ cmW, setCmW, cmH, setCmH, numCmW, numCmH, sqM, showS
 interface EditorPanelProps {
   canvasProps: Omit<CanvasProps, 'bannerRef' | 'exportMode'>;
   bannerW: number; bannerH: number;
-  scaledW: number; scaledH: number;
   previewScale: number;
   previewH: number;
   numCmW: number; numCmH: number;
@@ -117,7 +116,7 @@ interface EditorPanelProps {
 }
 
 export function EditorPanel({
-  canvasProps, bannerW, bannerH, scaledW, scaledH, previewScale,
+  canvasProps, bannerW, bannerH, previewScale,
   previewH, numCmW, numCmH,
   selected, selectedEl, onResetPositions, onUpdateSize, onDeselect,
 }: EditorPanelProps) {

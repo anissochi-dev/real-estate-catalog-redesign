@@ -20,18 +20,22 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [broker, setBroker] = useState<BrokerInfo | null>(null);
 
-  // ── реальная ширина контейнера (ResizeObserver) ────────────────────────────
+  // ── реальная ширина контейнера ────────────────────────────────────────────
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    // начальное значение
-    setContainerW(el.getBoundingClientRect().width || 480);
-    const ro = new ResizeObserver(entries => {
-      const w = entries[0]?.contentRect.width;
+    const measure = () => {
+      const el = containerRef.current;
+      if (!el) return;
+      const w = el.getBoundingClientRect().width;
       if (w > 0) setContainerW(w);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (containerRef.current) ro.observe(containerRef.current);
+    // также слушаем resize окна — на мобиле modal может открыться позже
+    window.addEventListener('resize', measure);
+    // небольшая задержка на случай анимации открытия modal
+    const t = setTimeout(measure, 150);
+    return () => { ro.disconnect(); window.removeEventListener('resize', measure); clearTimeout(t); };
   }, []);
 
   const [bgColor, setBgColor] = useState('#facc15');
@@ -65,16 +69,12 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   const bannerH = Math.round(numCmH * PX_PER_CM);
 
   // ── масштаб превью: вписываем баннер в доступную ширину ───────────────────
-  // отступ 24px (p-3 с двух сторон)
-  const PAD = 24;
   const MAX_PREVIEW_H = 320;
-  const availW = Math.max(100, containerW - PAD);
-  const availH = MAX_PREVIEW_H;
-  const previewScale = Math.min(availW / bannerW, availH / bannerH, 1);
+  // containerW — реальная ширина div.p-4, баннер занимает всю ширину без доп. отступов
+  const previewScale = Math.min(containerW / bannerW, MAX_PREVIEW_H / bannerH, 1);
   const scaledW = Math.round(bannerW * previewScale);
   const scaledH = Math.round(bannerH * previewScale);
-  // минимальная высота превью-контейнера: 80px, чтобы узкие горизонтали не схлопывались
-  const previewH = Math.max(80, scaledH + 24);
+  const previewH = Math.max(80, scaledH + 16);
 
   // ── элементы ──────────────────────────────────────────────────────────────
   const prevElsRef = useRef<BannerElement[]>([]);
@@ -225,7 +225,6 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
       <EditorPanel
         canvasProps={canvasProps}
         bannerW={bannerW} bannerH={bannerH}
-        scaledW={scaledW} scaledH={scaledH}
         previewScale={previewScale}
         previewH={previewH}
         numCmW={numCmW} numCmH={numCmH}
