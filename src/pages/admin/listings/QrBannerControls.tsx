@@ -156,9 +156,8 @@ export function EditorPanel({
             height: canvasProps.bannerH,
             transform: `scale(${previewScale})`,
             transformOrigin: '0 0',
-            pointerEvents: 'none',
           }}>
-            <BannerCanvas {...canvasProps} bannerRef={{ current: null }} />
+            <BannerCanvas {...canvasProps} bannerRef={{ current: null }} previewScale={previewScale} />
           </div>
         </div>
         <div className="absolute bottom-2 right-3 text-xs text-gray-500 bg-white/80 rounded px-2 py-0.5 select-none">

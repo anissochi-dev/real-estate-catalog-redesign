@@ -23,13 +23,14 @@ export interface CanvasProps {
   showSize: boolean;
   cmW: number;
   cmH: number;
+  previewScale?: number;
 }
 
 export function BannerCanvas({
   bannerW, bannerH, bg, textColor, elements, dealText, phoneText,
   qrDataUrl, logoUrl, photoUrl,
   selected, onSelect, onDragMove, bannerRef, exportMode,
-  showSize, cmW, cmH,
+  showSize, cmW, cmH, previewScale = 1,
 }: CanvasProps) {
   const dragging = useRef<{ id: ElementId; startX: number; startY: number; origX: number; origY: number } | null>(null);
   const getEl = (id: ElementId) => elements.find(e => e.id === id);
@@ -47,8 +48,9 @@ export function BannerCanvas({
   const onPointerMove = (e: React.PointerEvent) => {
     if (!dragging.current) return;
     e.preventDefault();
-    const dx = e.clientX - dragging.current.startX;
-    const dy = e.clientY - dragging.current.startY;
+    // делим на previewScale, т.к. события идут в экранных координатах, а позиции — в баннерных
+    const dx = (e.clientX - dragging.current.startX) / previewScale;
+    const dy = (e.clientY - dragging.current.startY) / previewScale;
     onDragMove(dragging.current.id, {
       x: Math.max(0, Math.min(bannerW - 20, dragging.current.origX + dx)),
       y: Math.max(0, Math.min(bannerH - 20, dragging.current.origY + dy)),
