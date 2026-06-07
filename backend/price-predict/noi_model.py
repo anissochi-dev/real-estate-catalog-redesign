@@ -448,20 +448,26 @@ def handle_noi_request(cur, conn, qs: dict) -> dict:
 
     has_real_rent = bool(listing.get('monthly_rent') or listing.get('yearly_rent'))
 
+    def _f(v):
+        return float(v) if v is not None else None
+
+    def _i(v):
+        return int(v) if v is not None else None
+
     return {
         'listing': {
             'id': listing['id'],
             'title': listing.get('title'),
-            'area': float(listing.get('area') or 0),
-            'price': float(listing.get('price') or 0),
+            'area': _f(listing.get('area')) or 0,
+            'price': _f(listing.get('price')) or 0,
             'type': listing.get('type'),
             'deal': listing.get('deal'),
-            'monthly_rent': listing.get('monthly_rent'),
-            'yearly_rent': listing.get('yearly_rent'),
+            'monthly_rent': _f(listing.get('monthly_rent')),
+            'yearly_rent': _f(listing.get('yearly_rent')),
             'tenant_name': listing.get('tenant_name'),
             'building_class': listing.get('building_class'),
-            'building_year': listing.get('building_year'),
-            'total_floors': listing.get('total_floors'),
+            'building_year': _i(listing.get('building_year')),
+            'total_floors': _i(listing.get('total_floors')),
         },
         'benchmarks': bench,
         'scenarios': scenarios,
