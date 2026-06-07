@@ -112,35 +112,55 @@ export default function ListingsBulkBar({
     setBrokerQuery('');
   };
 
+  const mkBtn = (op: BulkOp) => (
+    <button
+      key={op.op}
+      disabled={bulkLoading}
+      onClick={() => {
+        const realOp = op.realOp || op.op;
+        const doIt = () => onBulk(realOp, op.value);
+        if (op.confirm) {
+          if (confirm(`${op.label} — применить к ${selected.size} объект(ам)?`)) doIt();
+        } else { doIt(); }
+      }}
+      className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border transition disabled:opacity-50 ${op.className}`}
+      title={op.label}
+    >
+      <Icon name={op.icon} size={11} />
+      {op.label}
+    </button>
+  );
+
+  const getOp = (id: string) => BULK_OPS.find(o => o.op === id)!;
+
   return (
-    <div className="bg-brand-blue/5 border border-brand-blue/20 rounded-xl p-2.5 space-y-2">
-      {/* Строка 1: счётчик + статус + видимость */}
+    <div className="bg-brand-blue/5 border border-brand-blue/20 rounded-xl p-2.5 space-y-1.5">
+
+      {/* Строка 1: счётчик + Снять + Активные + В архив */}
       <div className="flex items-center gap-1.5 flex-wrap">
         <span className="text-xs font-semibold text-brand-blue bg-white px-2 py-1 rounded-md border border-brand-blue/30 shrink-0">
           <Icon name="CheckSquare" size={12} className="inline -mt-0.5 mr-1" />
-          {selected.size}
+          {selected.size} выбрано
         </span>
-        {BULK_OPS.map(op => (
-          <button
-            key={op.op}
-            disabled={bulkLoading}
-            onClick={() => {
-              const realOp = op.realOp || op.op;
-              const doIt = () => onBulk(realOp, op.value);
-              if (op.confirm) {
-                if (confirm(`${op.label} — применить к ${selected.size} объект(ам)?`)) doIt();
-              } else { doIt(); }
-            }}
-            className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border transition disabled:opacity-50 ${op.className}`}
-            title={op.label}
-          >
-            <Icon name={op.icon} size={11} />
-            <span className="hidden sm:inline">{op.label}</span>
-          </button>
-        ))}
+        <button onClick={onDeselect}
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border border-border text-muted-foreground hover:bg-muted transition">
+          <Icon name="X" size={11} /> Снять
+        </button>
+        {mkBtn(getOp('activate'))}
+        {mkBtn(getOp('archive'))}
       </div>
 
-      {/* Строка 2: XML, агент, удалить, снять */}
+      {/* Строка 2: Горячее · Новинка · Видимость */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {mkBtn(getOp('set_hot'))}
+        {mkBtn(getOp('set_hot_off'))}
+        {mkBtn(getOp('set_new'))}
+        {mkBtn(getOp('set_new_off'))}
+        {mkBtn(getOp('set_visible'))}
+        {mkBtn(getOp('set_visible_off'))}
+      </div>
+
+      {/* Строка 3: XML, агент, удалить */}
       <div className="flex items-center gap-1.5 flex-wrap">
       {/* XML-выгрузка */}
       <div className="relative" ref={xmlBtnRef}>
@@ -253,21 +273,11 @@ export default function ListingsBulkBar({
           disabled={bulkLoading}
           onClick={onBulkDelete}
           className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border bg-red-50 text-red-700 hover:bg-red-100 border-red-200 disabled:opacity-50"
-          title="Удалить"
         >
-          <Icon name="Trash2" size={11} />
-          <span className="hidden sm:inline">Удалить</span>
+          <Icon name="Trash2" size={11} /> Удалить
         </button>
       )}
-
-      <button onClick={onDeselect}
-        className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 inline-flex items-center gap-1"
-        title="Снять выделение"
-      >
-        <Icon name="X" size={11} />
-        <span className="hidden sm:inline">Снять</span>
-      </button>
-      </div>{/* конец строки 2 */}
+      </div>{/* конец строки 3 */}
     </div>
   );
 }
