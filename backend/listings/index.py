@@ -539,8 +539,10 @@ def handler(event: dict, context) -> dict:
 
             if params.get('resource') == 'public_home_data':
                 # Все данные для главной страницы одним запросом
+                # Фильтр идентичен каталогу: active + is_visible не выключен
+                _vis = "status = 'active' AND (is_visible IS NULL OR is_visible = TRUE)"
                 cur.execute(
-                    "SELECT COUNT(*) AS c FROM t_p71821556_real_estate_catalog_.listings WHERE status = 'active'"
+                    f"SELECT COUNT(*) AS c FROM t_p71821556_real_estate_catalog_.listings WHERE {_vis}"
                 )
                 total = cur.fetchone()['c']
                 cur.execute(
@@ -550,13 +552,13 @@ def handler(event: dict, context) -> dict:
                 cur.execute(
                     "SELECT category, COUNT(*) AS c "
                     "FROM t_p71821556_real_estate_catalog_.listings "
-                    "WHERE status = 'active' GROUP BY category"
+                    f"WHERE {_vis} GROUP BY category"
                 )
                 by_cat = {r['category']: r['c'] for r in cur.fetchall()}
                 cur.execute(
                     "SELECT deal, COUNT(*) AS c "
                     "FROM t_p71821556_real_estate_catalog_.listings "
-                    "WHERE status = 'active' GROUP BY deal"
+                    f"WHERE {_vis} GROUP BY deal"
                 )
                 by_deal = {r['deal']: r['c'] for r in cur.fetchall()}
                 cur.execute(
