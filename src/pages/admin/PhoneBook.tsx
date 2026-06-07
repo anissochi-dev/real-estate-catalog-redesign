@@ -259,7 +259,46 @@ export default function PhoneBook() {
           {search ? 'Ничего не найдено' : 'Телефонная база пуста. Нажмите «Синхронизировать» для автозаполнения.'}
         </div>
       ) : (
-        <div className="bg-white rounded-2xl overflow-hidden shadow-sm overflow-x-auto">
+        <>
+        {/* Мобильный вид */}
+        <div className="sm:hidden bg-white rounded-2xl shadow-sm divide-y divide-border">
+          {contacts.map(c => (
+            <div key={c.id} onClick={() => setSelectedId(c.id)}
+              className="px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-muted/20 transition">
+              <div className="shrink-0">
+                {c.photo_url
+                  ? <img src={c.photo_url} alt="" className="w-10 h-10 rounded-full object-cover" />
+                  : <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+                      <Icon name="User" size={16} className="text-muted-foreground" />
+                    </div>
+                }
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-mono font-semibold text-brand-blue text-sm">{formatPhone(c.phone)}</div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {(c.listings_count || 0) > 0 && (
+                      <span className="bg-brand-blue/10 text-brand-blue text-xs font-semibold px-2 py-0.5 rounded-full">{c.listings_count} obj</span>
+                    )}
+                    {(c.leads_count || 0) > 0 && (
+                      <span className="bg-brand-orange/10 text-brand-orange text-xs font-semibold px-2 py-0.5 rounded-full">{c.leads_count} лид</span>
+                    )}
+                  </div>
+                </div>
+                {(c.name || c.company) && (
+                  <div className="text-sm mt-0.5">
+                    {c.name && <span className="font-medium">{c.name}</span>}
+                    {c.company && <span className="text-xs text-muted-foreground ml-1">{c.company}</span>}
+                  </div>
+                )}
+                <div className="text-xs text-muted-foreground mt-0.5">{fmtDate(c.created_at)}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Десктопный вид */}
+        <div className="hidden sm:block bg-white rounded-2xl overflow-hidden shadow-sm overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left">
               <tr>
@@ -310,6 +349,7 @@ export default function PhoneBook() {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       {pages > 1 && !search && (

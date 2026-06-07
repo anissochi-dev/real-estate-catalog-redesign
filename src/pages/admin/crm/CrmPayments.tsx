@@ -185,7 +185,63 @@ export default function CrmPayments() {
           <Icon name="Loader2" size={22} className="animate-spin mr-2" />Загрузка...
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-border overflow-hidden overflow-x-auto">
+        <>
+        {/* Мобильный вид */}
+        <div className="sm:hidden bg-white rounded-2xl border border-border overflow-hidden divide-y divide-border">
+          {payments.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">Платежей пока нет</div>
+          ) : payments.map(p => {
+            const si = STATUS_INFO[p.status] || { label: p.status, cls: 'bg-muted text-foreground', icon: 'Circle' };
+            const ri = p.refund_status ? REFUND_INFO[p.refund_status] : null;
+            return (
+              <div key={p.id} onClick={() => setDetailPayment(p)}
+                className="px-4 py-3 cursor-pointer hover:bg-muted/20 transition">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm truncate">{p.description}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{typeLabel(p.payment_type)} · {fmtDate(p.created_at)}</div>
+                    {p.listing_title && (
+                      <div className="text-xs text-brand-blue mt-0.5 flex items-center gap-1 truncate">
+                        <Icon name="Building2" size={10} />{p.listing_title}
+                      </div>
+                    )}
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <div className="font-semibold text-brand-blue text-sm">{fmtMoney(p.amount)}</div>
+                    <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold mt-1 ${si.cls}`}>
+                      <Icon name={si.icon} size={10} />{si.label}
+                    </span>
+                  </div>
+                </div>
+                {(p.buyer_email || p.buyer_phone || p.owner_name) && (
+                  <div className="text-xs text-muted-foreground mt-1.5 flex items-center gap-2">
+                    {p.owner_name && <span>{p.owner_name}</span>}
+                    {p.buyer_phone && <span>{p.buyer_phone}</span>}
+                    {p.buyer_email && <span>{p.buyer_email}</span>}
+                  </div>
+                )}
+                {ri && <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold mt-1 inline-block ${ri.cls}`}>{ri.label}</span>}
+              </div>
+            );
+          })}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">Всего: {total}</span>
+              <div className="flex gap-2 items-center">
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                  <Icon name="ChevronLeft" size={15} />
+                </Button>
+                <span className="text-sm px-2">{page} / {totalPages}</span>
+                <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+                  <Icon name="ChevronRight" size={15} />
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Десктопный вид */}
+        <div className="hidden sm:block bg-white rounded-2xl border border-border overflow-hidden overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 border-b border-border">
               <tr>
@@ -272,6 +328,7 @@ export default function CrmPayments() {
             </div>
           )}
         </div>
+        </>
       )}
 
       {/* Создать платёж */}

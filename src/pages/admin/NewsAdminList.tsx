@@ -88,14 +88,55 @@ export function NewsAdminList({ news, loading, headers, onNewsChange }: Props) {
         </div>
       ) : (
         <div className="flex">
-          {/* Таблица */}
-          <div className={`flex-1 min-w-0 overflow-x-auto transition-all ${report ? 'hidden lg:block' : ''}`}>
+          {/* Список / таблица */}
+          <div className={`flex-1 min-w-0 transition-all ${report ? 'hidden lg:block' : ''}`}>
+
+            {/* Мобильный вид — карточки */}
+            <div className="sm:hidden divide-y divide-border">
+              {news.map(n => (
+                <div key={n.id}
+                  onClick={() => openReport(n)}
+                  className={`px-4 py-3 cursor-pointer hover:bg-muted/20 transition ${report?.id === n.id ? 'bg-brand-blue/5' : ''}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm line-clamp-2">{n.title}</div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${n.is_auto ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {n.is_auto ? 'Авто' : 'Ручная'}
+                        </span>
+                        <span className="text-xs text-muted-foreground">{fmtDate(n.published_at || n.created_at)}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                      {n.is_published ? (
+                        <button onClick={() => publish(n.id, false)}
+                          className="text-xs px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 font-medium">
+                          Опубл.
+                        </button>
+                      ) : (
+                        <button onClick={() => publish(n.id, true)}
+                          className="text-xs px-2 py-1 rounded-lg bg-muted font-medium">
+                          Опубл.
+                        </button>
+                      )}
+                      <a href={`${window.location.origin}/news/${n.slug}`} target="_blank" rel="noopener noreferrer"
+                        className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
+                        <Icon name="ExternalLink" size={14} />
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Десктопный вид — таблица */}
+            <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/50">
                 <tr>
                   <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Заголовок</th>
                   <th className="px-4 py-3 text-left font-semibold text-muted-foreground w-24">Тип</th>
-                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground w-36 hidden sm:table-cell">Дата</th>
+                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground w-36">Дата</th>
                   <th className="px-4 py-3 text-right font-semibold text-muted-foreground w-36">Действия</th>
                 </tr>
               </thead>
@@ -114,16 +155,14 @@ export function NewsAdminList({ news, loading, headers, onNewsChange }: Props) {
                         {n.is_auto ? 'Авто' : 'Ручная'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground hidden sm:table-cell">{fmtDate(n.published_at || n.created_at)}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{fmtDate(n.published_at || n.created_at)}</td>
                     <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => openReport(n)}
                           className={`text-xs px-2.5 py-1 rounded-lg transition font-medium flex items-center gap-1 ${report?.id === n.id ? 'bg-brand-blue text-white' : 'bg-muted hover:bg-brand-blue/10 hover:text-brand-blue'}`}
-                          title="Отчёт по статье"
                         >
-                          <Icon name="BarChart2" size={12} />
-                          <span className="hidden sm:inline">Отчёт</span>
+                          <Icon name="BarChart2" size={12} /> Отчёт
                         </button>
                         {n.is_published ? (
                           <button onClick={() => publish(n.id, false)}
@@ -146,6 +185,7 @@ export function NewsAdminList({ news, loading, headers, onNewsChange }: Props) {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
 
           {/* Панель отчёта / редактирования */}

@@ -145,7 +145,54 @@ export default function DistrictsTable({
           <p className="text-sm">Ничего не найдено по запросу «{search}»</p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <>
+        {/* Мобильный вид */}
+        <div className="sm:hidden divide-y divide-border">
+          {filtered.map(district => {
+            const isEditing = editId === district.id;
+            const isDeleting = deletingId === district.id;
+            const isToggling = togglingId === district.id;
+            if (isEditing) return null; // редактирование только в десктопе
+            return (
+              <div key={district.id}
+                className={`px-4 py-3 ${isDeleting ? 'opacity-40 pointer-events-none' : ''}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-sm">{district.name}</div>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Icon name="Building2" size={11} />{district.city}
+                      </span>
+                      <code className="text-xs font-mono bg-muted/60 px-1.5 py-0.5 rounded text-muted-foreground">{district.slug}</code>
+                      <ListingsBadge count={district.listings_count} />
+                    </div>
+                    {district.description && (
+                      <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{district.description}</div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <ActiveToggle
+                      value={district.is_active}
+                      disabled={isToggling}
+                      onChange={() => onToggleActive(district)}
+                    />
+                    <button onClick={() => onEdit(district.id)}
+                      className="p-1.5 rounded-lg hover:bg-muted text-brand-blue">
+                      <Icon name="Pencil" size={15} />
+                    </button>
+                    <button onClick={() => onDelete(district)}
+                      className="p-1.5 rounded-lg hover:bg-red-50 text-red-500">
+                      <Icon name="Trash2" size={15} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Десктопный вид */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30 text-xs text-muted-foreground uppercase tracking-wide">
@@ -264,6 +311,7 @@ export default function DistrictsTable({
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   );

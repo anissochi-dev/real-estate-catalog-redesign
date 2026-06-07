@@ -110,7 +110,57 @@ export default function UsersAdmin() {
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl overflow-hidden shadow-sm overflow-x-auto">
+      <>
+      {/* Мобильный вид */}
+      <div className="sm:hidden bg-white rounded-2xl shadow-sm divide-y divide-border">
+        {users.map(u => (
+          <div key={u.id} className="px-4 py-3 flex items-center gap-3">
+            <div className="shrink-0">
+              {u.avatar ? (
+                <img src={u.avatar} alt={u.name} className="w-10 h-10 rounded-full object-cover" />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-brand-blue/10 flex items-center justify-center">
+                  <Icon name="User" size={18} className="text-brand-blue" />
+                </div>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-semibold text-sm truncate">{u.name}</div>
+                <button onClick={() => setEditing(u)} className="text-brand-blue shrink-0">
+                  <Icon name="Pencil" size={16} />
+                </button>
+              </div>
+              <div className="text-xs text-muted-foreground mt-0.5">{u.phone || u.email}</div>
+              <div className="flex items-center gap-2 mt-1">
+                {isAdmin ? (
+                  roleChanging === u.id ? (
+                    <span className="text-xs text-muted-foreground">Сохранение...</span>
+                  ) : (
+                    <select
+                      value={u.role}
+                      onChange={e => handleRoleChange(u.id, e.target.value as Role)}
+                      className={`text-xs font-semibold px-2 py-0.5 rounded-full border-0 outline-none cursor-pointer appearance-none ${ROLE_COLORS[u.role] ?? 'bg-slate-100 text-slate-600'}`}
+                    >
+                      {ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+                    </select>
+                  )
+                ) : (
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${ROLE_COLORS[u.role] ?? 'bg-slate-100 text-slate-600'}`}>
+                    {ROLES.find(r => r.id === u.role)?.label}
+                  </span>
+                )}
+                <span className={`text-xs px-2 py-0.5 rounded ${u.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                  {u.is_active ? 'Активен' : 'Отключён'}
+                </span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Десктопный вид */}
+      <div className="hidden sm:block bg-white rounded-2xl overflow-hidden shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-left">
             <tr>
@@ -183,6 +233,7 @@ export default function UsersAdmin() {
           </tbody>
         </table>
       </div>
+      </>
 
       {editing && (
         <div className="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4">
