@@ -324,6 +324,7 @@ export default function SettingsAdmin() {
           onChange={files => setS(p => ({ ...p, verification_files: files }))}
           saved={saved}
           save={save}
+          siteUrl={s.site_url as string | undefined}
         />
       )}
       {tab === 'pages' && <PagesAdmin />}

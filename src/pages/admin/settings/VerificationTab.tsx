@@ -15,13 +15,19 @@ interface Props {
   onChange: (files: VerifFile[]) => void;
   saved: boolean;
   save: () => Promise<void>;
+  siteUrl?: string;
 }
 
-export default function VerificationTab({ files, onChange, saved, save }: Props) {
+export default function VerificationTab({ files, onChange, saved, save, siteUrl }: Props) {
   const [saving, setSaving] = useState(false);
   const [newFile, setNewFile] = useState<VerifFile>({ filename: '', content: '', comment: '' });
   const [adding, setAdding] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+
+  const getSiteFileUrl = (filename: string) => {
+    const base = siteUrl ? siteUrl.replace(/\/$/, '') : window.location.origin;
+    return `${base}/${filename}`;
+  };
 
   const addFile = () => {
     if (!newFile.filename.trim() || !newFile.content.trim()) return;
@@ -45,7 +51,7 @@ export default function VerificationTab({ files, onChange, saved, save }: Props)
   };
 
   const copyUrl = (filename: string) => {
-    const url = `${LISTINGS_URL}?resource=verify_file&filename=${encodeURIComponent(filename)}`;
+    const url = getSiteFileUrl(filename);
     navigator.clipboard.writeText(url).then(() => {
       setCopied(filename);
       setTimeout(() => setCopied(null), 2000);
@@ -58,7 +64,7 @@ export default function VerificationTab({ files, onChange, saved, save }: Props)
         <h2 className="text-base font-semibold text-foreground">Файлы верификации</h2>
         <p className="text-sm text-foreground/50 mt-1">
           Для подтверждения домена в Яндекс.Вебмастере, Google Search Console, Mail.ru и других сервисах.
-          Добавьте файл — он будет доступен по специальной ссылке.
+          Добавьте файл — он будет доступен по адресу вашего сайта{siteUrl ? ` (${siteUrl.replace(/\/$/, '')})` : ''}.
         </p>
       </div>
 
@@ -81,17 +87,22 @@ export default function VerificationTab({ files, onChange, saved, save }: Props)
                 </button>
               </div>
 
-              <div className="flex items-center gap-2 pt-1 border-t border-border/50">
-                <div className="flex-1 bg-muted rounded-lg px-3 py-1.5 font-mono text-xs text-foreground/50 truncate">
-                  {LISTINGS_URL}?resource=verify_file&amp;filename={f.filename}
+              <div className="pt-1 border-t border-border/50 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5 font-mono text-xs text-emerald-800 truncate">
+                    {getSiteFileUrl(f.filename)}
+                  </div>
+                  <button
+                    onClick={() => copyUrl(f.filename)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-blue/10 text-brand-blue hover:bg-brand-blue/20 transition shrink-0"
+                  >
+                    <Icon name={copied === f.filename ? 'Check' : 'Copy'} size={13} />
+                    {copied === f.filename ? 'Скопировано' : 'Скопировать URL'}
+                  </button>
                 </div>
-                <button
-                  onClick={() => copyUrl(f.filename)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-blue/10 text-brand-blue hover:bg-brand-blue/20 transition shrink-0"
-                >
-                  <Icon name={copied === f.filename ? 'Check' : 'Copy'} size={13} />
-                  {copied === f.filename ? 'Скопировано' : 'Скопировать URL'}
-                </button>
+                <p className="text-[11px] text-foreground/40">
+                  Именно этот URL вставляйте в Яндекс.Вебмастер, Google Search Console и другие сервисы
+                </p>
               </div>
             </div>
           ))}
