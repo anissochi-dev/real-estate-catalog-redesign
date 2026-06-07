@@ -57,40 +57,46 @@ export function makeElements(
 ): BannerElement[] {
   const isLandscape = w >= h;
 
+  // Стандартные размеры (абсолютные, не зависят от размера баннера)
+  const DEAL_FS  = 94;
+  const PHONE_FS = 72;
+  const QR_SZ    = 72;
+
   if (isLandscape) {
-    // QR — правая колонка, вписан по высоте
-    const qrSz  = Math.round(h * 0.72);
-    const qrPad = Math.round((h - qrSz) / 2);
-    const qrX   = w - qrSz - qrPad;
+    // QR — правая колонка, вертикально по центру
+    const qrPad = Math.round((h - QR_SZ) / 2);
+    const qrX   = w - QR_SZ - 14;
     const qrY   = qrPad;
 
-    // текст — левая зона до QR
+    // Если текст не влезает — уменьшаем через fitFontSize, но не больше стандарта
     const textMaxW = qrX - 18 - 10;
-    const maxDealFs  = Math.round(h * 0.42);
-    const maxPhoneFs = Math.round(h * 0.28);
-    const dealFs  = fitFontSize(dealText  || 'ПРОДАЮ',  '900', textMaxW, maxDealFs);
-    const phoneFs = fitFontSize(phoneText || '+7 000 000 0000', '800', textMaxW, maxPhoneFs);
+    const dealFs  = fitFontSize(dealText  || 'ПРОДАЮ',          '900', textMaxW, DEAL_FS);
+    const phoneFs = fitFontSize(phoneText || '+7 000 000 0000',  '800', textMaxW, PHONE_FS);
+
+    // Вертикальные позиции: текст + телефон равномерно по высоте
+    const dealY  = Math.round((h - dealFs - phoneFs - 6) / 2);
+    const phoneY = dealY + dealFs + 6;
 
     const base: BannerElement[] = [
-      { id: 'deal',  pos: { x: 18, y: Math.round(h * 0.06) }, fontSize: Math.max(12, dealFs) },
-      { id: 'phone', pos: { x: 18, y: Math.round(h * 0.52) }, fontSize: Math.max(10, phoneFs) },
-      { id: 'qr',    pos: { x: qrX, y: qrY }, imgSize: Math.max(30, qrSz) },
+      { id: 'deal',  pos: { x: 18, y: dealY  }, fontSize: Math.max(12, dealFs)  },
+      { id: 'phone', pos: { x: 18, y: phoneY }, fontSize: Math.max(10, phoneFs) },
+      { id: 'qr',    pos: { x: qrX, y: qrY },  imgSize: QR_SZ },
     ];
     const logo  = prevEls?.find(e => e.id === 'logo');
     const photo = prevEls?.find(e => e.id === 'photo');
     return [...base, ...(logo ? [logo] : []), ...(photo ? [photo] : [])];
   } else {
     // вертикальный: QR снизу по центру, текст сверху
-    const qrSz  = Math.round(w * 0.38);
+    const qrSz  = Math.round(w * 0.5);
     const qrX   = Math.round((w - qrSz) / 2);
     const qrY   = h - qrSz - 18;
     const textMaxW = w - 36;
-    const dealFs  = fitFontSize(dealText  || 'ПРОДАЮ',  '900', textMaxW, Math.round(h * 0.12));
-    const phoneFs = fitFontSize(phoneText || '+7 000 000 0000', '800', textMaxW, Math.round(h * 0.08));
+    const dealFs  = fitFontSize(dealText  || 'ПРОДАЮ',         '900', textMaxW, DEAL_FS);
+    const phoneFs = fitFontSize(phoneText || '+7 000 000 0000', '800', textMaxW, PHONE_FS);
     const base: BannerElement[] = [
-      { id: 'deal',  pos: { x: 18, y: Math.round(h * 0.06) }, fontSize: Math.max(12, dealFs) },
-      { id: 'phone', pos: { x: 18, y: Math.round(h * 0.20) }, fontSize: Math.max(10, phoneFs) },
-      { id: 'qr',    pos: { x: qrX, y: qrY }, imgSize: Math.max(40, qrSz) },
+      { id: 'deal',  pos: { x: 18, y: 16 },              fontSize: Math.max(12, dealFs)  },
+      { id: 'phone', pos: { x: 18, y: 16 + dealFs + 6 }, fontSize: Math.max(10, phoneFs) },
+      { id: 'qr',    pos: { x: qrX, y: qrY },            imgSize: Math.max(40, qrSz) },
     ];
     const logo  = prevEls?.find(e => e.id === 'logo');
     const photo = prevEls?.find(e => e.id === 'photo');
