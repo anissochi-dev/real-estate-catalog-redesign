@@ -68,10 +68,11 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   const bannerW = Math.round(numCmW * PX_PER_CM);
   const bannerH = Math.round(numCmH * PX_PER_CM);
 
-  // ── масштаб превью: вписываем баннер в доступную ширину ───────────────────
-  const MAX_PREVIEW_H = 320;
-  // containerW — реальная ширина div.p-4, баннер занимает всю ширину без доп. отступов
-  const previewScale = Math.min(containerW / bannerW, MAX_PREVIEW_H / bannerH, 1);
+  // ── масштаб превью ────────────────────────────────────────────────────────
+  const MAX_PREVIEW_H = 260;
+  // вычитаем p-4 (16px × 2 = 32px) и ещё 16px запаса чтобы гарантированно не вылезало
+  const availableW = Math.max(60, containerW - 48);
+  const previewScale = Math.min(availableW / bannerW, MAX_PREVIEW_H / bannerH, 1);
   const scaledW = Math.round(bannerW * previewScale);
   const scaledH = Math.round(bannerH * previewScale);
   const previewH = Math.max(80, scaledH + 16);

@@ -144,10 +144,20 @@ export function EditorPanel({
           backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 19px,#777 19px,#777 20px),repeating-linear-gradient(90deg,transparent,transparent 19px,#777 19px,#777 20px)',
         }} />
         <div style={{
-          position: 'absolute', left: '50%', top: '50%',
+          position: 'absolute',
+          left: '50%', top: '50%',
+          width: Math.round(canvasProps.bannerW * previewScale),
+          height: Math.round(canvasProps.bannerH * previewScale),
           transform: 'translate(-50%, -50%)',
+          overflow: 'hidden',
         }}>
-          <div style={{ zoom: previewScale }}>
+          <div style={{
+            width: canvasProps.bannerW,
+            height: canvasProps.bannerH,
+            transform: `scale(${previewScale})`,
+            transformOrigin: '0 0',
+            pointerEvents: 'none',
+          }}>
             <BannerCanvas {...canvasProps} bannerRef={{ current: null }} />
           </div>
         </div>
