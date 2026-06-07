@@ -42,60 +42,64 @@ export default function ListingsToolbar({
 
   return (
     <>
-      <div className="flex flex-wrap justify-between items-center gap-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          {([
-            ['active', `Активные (${activeCount})`, 'CheckCircle'],
-            ['archived', `Архив (${archivedCount})`, 'Archive'],
-            ['all', `Все (${totalCount})`, 'List'],
-          ] as [StatusFilter, string, string][]).map(([v, l, ic]) => (
-            <button key={v} onClick={() => { setStatusFilter(v); setSelected(new Set()); }}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${statusFilter === v ? 'bg-brand-blue text-white' : 'border border-border hover:bg-muted'}`}>
-              <Icon name={ic} size={14} />
-              {l}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
-          {hasDraft && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg font-semibold inline-flex items-center gap-1">
-                <Icon name="FileEdit" size={12} /> Черновик сохранён
-              </span>
-              <button
-                onClick={() => { clearDraft(); setHasDraft(false); }}
-                className="text-xs text-muted-foreground hover:text-red-600"
-                title="Удалить черновик"
-              >
-                <Icon name="X" size={14} />
-              </button>
-            </div>
-          )}
-          <button
-            onClick={() => setImportOpen(true)}
-            className="border border-border text-foreground px-3 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2 hover:bg-muted transition-colors"
-          >
-            <Icon name="Link" size={15} /> Импорт по ссылке
+      {/* Фильтры статуса */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {([
+          ['active', `Активные (${activeCount})`, 'CheckCircle'],
+          ['archived', `Архив (${archivedCount})`, 'Archive'],
+          ['all', `Все (${totalCount})`, 'List'],
+        ] as [StatusFilter, string, string][]).map(([v, l, ic]) => (
+          <button key={v} onClick={() => { setStatusFilter(v); setSelected(new Set()); }}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${statusFilter === v ? 'bg-brand-blue text-white' : 'border border-border hover:bg-muted'}`}>
+            <Icon name={ic} size={14} />
+            {l}
           </button>
-          <button onClick={onAdd}
-            className="btn-blue text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2">
-            <Icon name="Plus" size={16} /> {hasDraft ? 'Продолжить черновик' : 'Добавить'}
-          </button>
-        </div>
+        ))}
       </div>
 
-      <div className="flex gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[200px]">
-          <Icon name="Search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+      {/* Кнопки действий */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {hasDraft && (
+          <div className="flex items-center gap-1 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-sm font-semibold">
+            <Icon name="FileEdit" size={14} />
+            <span>Черновик сохранён</span>
+            <button
+              onClick={() => { clearDraft(); setHasDraft(false); }}
+              className="ml-1 hover:text-red-600 transition-colors"
+              title="Удалить черновик"
+            >
+              <Icon name="X" size={14} />
+            </button>
+          </div>
+        )}
+        <button
+          onClick={() => setImportOpen(true)}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-sm font-semibold hover:bg-muted transition-colors"
+        >
+          <Icon name="Link" size={15} /> Импорт по ссылке
+        </button>
+        <button
+          onClick={onAdd}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl btn-blue text-white text-sm font-semibold"
+        >
+          <Icon name="Plus" size={16} />
+          {hasDraft ? 'Продолжить черновик' : 'Добавить'}
+        </button>
+      </div>
+
+      {/* Поиск и фильтр категории */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <Icon name="Search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
           <input
-            className="w-full pl-9 pr-3 py-2 border border-border rounded-xl text-sm"
+            className="w-full pl-9 pr-3 py-2.5 border border-border rounded-xl text-sm"
             placeholder="Поиск по названию, адресу, телефону, ID..."
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
         </div>
         <select
-          className="border border-border rounded-xl px-3 py-2 text-sm"
+          className="w-full sm:w-48 border border-border rounded-xl px-3 py-2.5 text-sm bg-white"
           value={catFilter}
           onChange={e => setCatFilter(e.target.value)}
         >
