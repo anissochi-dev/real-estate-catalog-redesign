@@ -166,7 +166,7 @@ export default function App() {
           fireCron(SEO_CRON_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ping' }) });
         }
         const newsLast = parseInt(localStorage.getItem('news_cron_last_ping') || '0', 10);
-        if (Date.now() - newsLast > THROTTLE_MS) {
+        if (Date.now() - newsLast > 10 * 60 * 1000) {
           localStorage.setItem('news_cron_last_ping', String(Date.now()));
           fireCron(`${NEWS_CRON_URL}?action=ping_cron`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
         }

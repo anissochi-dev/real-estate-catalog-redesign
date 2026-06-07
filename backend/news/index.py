@@ -587,8 +587,12 @@ def handler(event: dict, context) -> dict:
                     run_hour = sch.get('run_hour', 9)
                     run_minute = sch.get('run_minute', 0)
                     last_run = sch.get('last_run_at')
-                    time_ok = (now_utc.hour == run_hour and now_utc.minute >= run_minute)
-                    already_ran = last_run and (now_utc - last_run).total_seconds() < 3600 * 20
+                    # Публикуем если: текущий час >= нужного И сегодня ещё не публиковали
+                    time_ok = now_utc.hour >= run_hour
+                    already_ran = (
+                        last_run and hasattr(last_run, 'date')
+                        and last_run.date() >= now_utc.date()
+                    )
                     if time_ok and not already_ran:
                         api_key, folder_id = _load_gpt_keys(cur)
                         logo_url = _load_logo_url(cur)
