@@ -1,12 +1,14 @@
 """
-Бизнес: ИИ-аудит фото объекта недвижимости — анализирует изображение через YandexGPT Vision
-и возвращает: состояние, класс, ориентировочную цену/м², балл 1-10, плюсы/минусы и рекомендации.
+Бизнес: ИИ-аудит фото объекта недвижимости через YandexGPT Vision (multimodal).
+Скачивает изображение, кодирует в base64, отправляет в модель yandex-gpt-lite/vision-preview.
+Возвращает: состояние, класс, цена/м², балл 1-10, плюсы/минусы, рекомендации.
 Args: POST body { image_url: str, category?: str, area?: float, city?: str }
-Returns: { score, condition, building_class, price_per_m2_min, price_per_m2_max, pros, cons, recommendations, summary }
+Returns: { ok, audit: { score, condition, building_class, price_per_m2_min, ... } }
 """
 
 import json
 import os
+import base64
 import urllib.request
 import urllib.error
 
@@ -16,6 +18,9 @@ CORS = {
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token, X-Authorization',
 }
+
+# YandexGPT Vision endpoint — multimodal completions
+VISION_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
 
 
 def _ok(body, status=200):
@@ -30,44 +35,64 @@ def _err(code, msg):
     return _ok({'error': msg}, code)
 
 
-def _yandex_vision(image_url: str, prompt: str, api_key: str, folder_id: str) -> str:
-    """Вызов YandexGPT Pro с Vision (multimodal) через imageUrl."""
+def _fetch_image_b64(url: str) -> tuple[str, str]:
+    """Скачивает изображение и возвращает (base64_data, mime_type)."""
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        data = resp.read()
+        ct = resp.headers.get('Content-Type', 'image/jpeg').split(';')[0].strip()
+    # Нормализуем mime
+    if 'png' in ct:
+        mime = 'image/png'
+    elif 'webp' in ct:
+        mime = 'image/webp'
+    else:
+        mime = 'image/jpeg'
+    return base64.b64encode(data).decode('utf-8'), mime
+
+
+def _call_vision(b64_data: str, mime: str, prompt: str, api_key: str, folder_id: str) -> str:
+    """
+    Вызов YandexGPT multimodal с изображением в base64.
+    Модель: yandexgpt/rc — поддерживает image_url через data URI.
+    Сообщение: role=user, parts: [{image_url}, {text}]
+    """
+    # YandexGPT Vision принимает изображение как data URI в поле image_url
+    data_uri = f'data:{mime};base64,{b64_data}'
+
     payload = {
-        'modelUri': f'gpt://{folder_id}/yandexgpt/latest',
+        'modelUri': f'gpt://{folder_id}/yandexgpt/rc',
         'completionOptions': {
             'stream': False,
-            'temperature': 0.2,
-            'maxTokens': 1200,
+            'temperature': 0.1,
+            'maxTokens': '1500',
         },
         'messages': [
             {
                 'role': 'user',
-                'content': [
-                    {
-                        'type': 'image_url',
-                        'image_url': {'url': image_url},
-                    },
-                    {
-                        'type': 'text',
-                        'text': prompt,
-                    },
-                ],
+                'text': prompt,
+                'image': data_uri,  # YandexGPT multimodal поле
             }
         ],
     }
+
     data = json.dumps(payload).encode('utf-8')
     req = urllib.request.Request(
-        'https://llm.api.cloud.yandex.net/foundationModels/v1/completion',
+        VISION_URL,
         data=data,
         headers={
             'Content-Type': 'application/json',
             'Authorization': f'Api-Key {api_key}',
+            'x-folder-id': folder_id,
         },
         method='POST',
     )
-    with urllib.request.urlopen(req, timeout=25) as resp:
+    with urllib.request.urlopen(req, timeout=30) as resp:
         result = json.loads(resp.read().decode('utf-8'))
-    return result['result']['alternatives'][0]['message']['text']
+    alternatives = result.get('result', {}).get('alternatives', [])
+    if not alternatives:
+        raise ValueError(f'Пустой ответ от модели: {json.dumps(result)[:300]}')
+    return alternatives[0]['message']['text']
 
 
 def _build_prompt(category: str, area: float, city: str) -> str:
@@ -75,34 +100,49 @@ def _build_prompt(category: str, area: float, city: str) -> str:
         'office': 'офис', 'retail': 'торговое помещение', 'warehouse': 'склад',
         'hotel': 'гостиница/отель', 'restaurant': 'ресторан/кафе',
         'building': 'здание', 'land': 'земельный участок', 'other': 'коммерческая недвижимость',
+        'free_purpose': 'свободного назначения', 'production': 'производственное помещение',
     }.get(category, 'коммерческая недвижимость')
 
     area_hint = f', площадь {int(area)} м²' if area else ''
     city_hint = city or 'Краснодар'
 
-    return f"""Ты — эксперт по оценке коммерческой недвижимости в России.
-Проанализируй фотографию объекта: {cat_ru}{area_hint}, {city_hint}.
+    return (
+        f'Ты — эксперт по оценке коммерческой недвижимости в России.\n'
+        f'Проанализируй фотографию объекта: {cat_ru}{area_hint}, {city_hint}.\n\n'
+        f'Верни ТОЛЬКО валидный JSON без markdown и пояснений:\n'
+        f'{{\n'
+        f'  "score": <целое 1-10, общий балл состояния>,\n'
+        f'  "condition": "<черновая|требует ремонта|удовлетворительное|хорошее|евроремонт|люкс>",\n'
+        f'  "building_class": "<A|B+|B|C|не определён>",\n'
+        f'  "price_per_m2_min": <целое, нижняя граница цены продажи ₽/м²>,\n'
+        f'  "price_per_m2_max": <целое, верхняя граница цены продажи ₽/м²>,\n'
+        f'  "rent_per_m2_min": <целое, нижняя граница аренды ₽/м²/мес>,\n'
+        f'  "rent_per_m2_max": <целое, верхняя граница аренды ₽/м²/мес>,\n'
+        f'  "pros": ["плюс1","плюс2"],\n'
+        f'  "cons": ["минус1","минус2"],\n'
+        f'  "recommendations": ["рек1","рек2"],\n'
+        f'  "summary": "1-2 предложения о состоянии объекта"\n'
+        f'}}\n\n'
+        f'Правила: оценивай только видимое. Цены — рынок {city_hint}. '
+        f'Если фото нечёткое или не недвижимость — score=0, пустые массивы.'
+    )
 
-Верни ТОЛЬКО валидный JSON без markdown-обёртки, без пояснений, строго такой формат:
-{{
-  "score": <целое число 1-10, общий балл состояния>,
-  "condition": "<одно из: черновая | требует ремонта | удовлетворительное | хорошее | евроремонт | люкс>",
-  "building_class": "<одно из: A | B+ | B | C | не определён>",
-  "price_per_m2_min": <целое число, нижняя граница рыночной цены продажи ₽/м²>,
-  "price_per_m2_max": <целое число, верхняя граница рыночной цены продажи ₽/м²>,
-  "rent_per_m2_min": <целое число, нижняя граница арендной ставки ₽/м²/мес>,
-  "rent_per_m2_max": <целое число, верхняя граница арендной ставки ₽/м²/мес>,
-  "pros": ["<плюс 1>", "<плюс 2>", "<плюс 3>"],
-  "cons": ["<минус 1>", "<минус 2>"],
-  "recommendations": ["<рекомендация 1>", "<рекомендация 2>", "<рекомендация 3>"],
-  "summary": "<1-2 предложения — общая характеристика объекта по фото>"
-}}
 
-Правила:
-- Оценивай только то, что видно на фото. Не выдумывай.
-- pros, cons, recommendations — массивы строк, 1-4 элемента каждый.
-- Цены ориентируй на рынок {city_hint} {cat_ru}.
-- Если на фото плохо видно объект или это не недвижимость — верни score=0 и пустые массивы."""
+def _parse_json(raw: str) -> dict:
+    """Парсит JSON из ответа модели, убирает ```json обёртку."""
+    text = raw.strip()
+    # Убираем ```json ... ``` или ``` ... ```
+    if '```' in text:
+        parts = text.split('```')
+        for part in parts:
+            part = part.strip()
+            if part.startswith('json'):
+                part = part[4:].strip()
+            try:
+                return json.loads(part)
+            except Exception:
+                continue
+    return json.loads(text)
 
 
 def handler(event: dict, context) -> dict:
@@ -124,38 +164,48 @@ def handler(event: dict, context) -> dict:
     api_key = os.environ.get('YANDEX_API_KEY', '')
     folder_id = os.environ.get('YANDEX_FOLDER_ID', '')
     if not api_key or not folder_id:
-        return _err(500, 'YandexGPT не настроен')
+        return _err(500, 'YandexGPT не настроен: добавьте YANDEX_API_KEY и YANDEX_FOLDER_ID')
 
     category = str(body.get('category') or 'other').lower()
     area = float(body.get('area') or 0)
     city = str(body.get('city') or 'Краснодар')
 
+    # 1. Скачиваем изображение → base64
+    try:
+        b64_data, mime = _fetch_image_b64(image_url)
+    except Exception as e:
+        return _err(502, f'Не удалось загрузить фото: {str(e)[:200]}')
+
+    # Ограничение: не более ~4 МБ base64 (≈3 МБ исходник)
+    if len(b64_data) > 5_500_000:
+        # Пробуем уменьшить — берём только первые байты для превью не выйдет,
+        # сообщаем об ошибке
+        return _err(413, 'Фото слишком большое для анализа (максимум ~4 МБ). Загрузите фото меньшего размера.')
+
     prompt = _build_prompt(category, area, city)
 
+    # 2. Вызываем YandexGPT Vision
     try:
-        raw = _yandex_vision(image_url, prompt, api_key, folder_id)
+        raw = _call_vision(b64_data, mime, prompt, api_key, folder_id)
     except urllib.error.HTTPError as e:
         err_body = e.read().decode('utf-8', errors='replace')
-        return _err(502, f'YandexGPT error {e.code}: {err_body[:300]}')
+        return _err(502, f'YandexGPT error {e.code}: {err_body[:400]}')
     except Exception as e:
-        return _err(502, f'Vision call failed: {str(e)[:200]}')
+        return _err(502, f'Vision call failed: {str(e)[:300]}')
 
-    # Парсим JSON из ответа
+    # 3. Парсим JSON ответ
     try:
-        # YandexGPT иногда оборачивает в ```json ... ```
-        text = raw.strip()
-        if text.startswith('```'):
-            text = text.split('```')[1]
-            if text.startswith('json'):
-                text = text[4:]
-        result = json.loads(text.strip())
+        result = _parse_json(raw)
     except Exception:
         return _err(502, f'Не удалось разобрать ответ модели: {raw[:300]}')
 
-    # Санитизация
+    # 4. Санитизация значений
     result['score'] = max(0, min(10, int(result.get('score') or 0)))
-    result['pros'] = (result.get('pros') or [])[:4]
-    result['cons'] = (result.get('cons') or [])[:4]
-    result['recommendations'] = (result.get('recommendations') or [])[:4]
+    result['pros'] = [str(x) for x in (result.get('pros') or [])][:4]
+    result['cons'] = [str(x) for x in (result.get('cons') or [])][:4]
+    result['recommendations'] = [str(x) for x in (result.get('recommendations') or [])][:4]
+    result['condition'] = str(result.get('condition') or 'не определён')
+    result['building_class'] = str(result.get('building_class') or 'не определён')
+    result['summary'] = str(result.get('summary') or '')[:400]
 
     return _ok({'ok': True, 'audit': result, 'image_url': image_url})
