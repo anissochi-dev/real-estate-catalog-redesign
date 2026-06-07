@@ -1,5 +1,4 @@
 import ImageUploader from '@/components/admin/ImageUploader';
-import PhotoAuditPanel from '@/components/admin/PhotoAuditPanel';
 import { Listing, detectVideoType } from './types';
 
 interface Props {
@@ -13,10 +12,6 @@ interface Props {
 
 export default function ListingEditorPhotosTab({ editing, setEditing, photos, setPhotos, errors, setErrors }: Props) {
   const errWrap = (field: string) => errors[field] ? { 'data-field-error': 'true' as const } : {};
-
-  const handleApplyAudit = (fields: Partial<Listing>) => {
-    setEditing({ ...editing, ...fields });
-  };
 
   return (
     <div className="space-y-4">
@@ -32,15 +27,6 @@ export default function ListingEditorPhotosTab({ editing, setEditing, photos, se
           applyWatermark={!!editing.use_watermark}
         />
       </div>
-
-      {/* ИИ-аудит: ручной запуск после загрузки фото */}
-      {photos.length > 0 && (
-        <PhotoAuditPanel
-          photos={photos}
-          editing={editing}
-          onApply={handleApplyAudit}
-        />
-      )}
 
       <div className="border-t border-border pt-3 space-y-2">
         <div className="text-sm font-semibold">Метки и оформление</div>
