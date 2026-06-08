@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useSettings } from '@/contexts/SettingsContext';
 
 const SEO_BASE = 'https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d';
 
@@ -90,6 +91,8 @@ export default function SeoHead({
   path, title, description, h1, noindex, keywords, ogImage,
 }: SeoHeadProps) {
   const location = useLocation();
+  const { settings } = useSettings();
+  const siteOrigin = (settings.site_url || '').replace(/\/$/, '');
   const effectivePath = path || location.pathname || '/';
   const [remote, setRemote] = useState<RemoteSeo | null>(() => cache.get(effectivePath) || null);
 
@@ -120,7 +123,7 @@ export default function SeoHead({
     setMeta('og:description', finalDesc || null, true);
     if (finalOg) setMeta('og:image', finalOg, true);
     setMeta('og:type', 'website', true);
-    setMeta('og:url', window.location.href, true);
+    setMeta('og:url', (siteOrigin || window.location.origin) + effectivePath, true);
 
     // Twitter
     setMeta('twitter:card', 'summary_large_image');
@@ -132,9 +135,9 @@ export default function SeoHead({
     setMeta('robots', finalNoindex ? 'noindex, nofollow' : 'index, follow');
 
     // canonical (без query)
-    setLinkCanonical(window.location.origin + effectivePath);
+    setLinkCanonical((siteOrigin || window.location.origin) + effectivePath);
   }, [
-    effectivePath, remote, title, description, h1, noindex, keywords, ogImage,
+    effectivePath, remote, title, description, h1, noindex, keywords, ogImage, siteOrigin,
   ]);
 
   return null;

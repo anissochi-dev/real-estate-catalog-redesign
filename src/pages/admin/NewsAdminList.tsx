@@ -3,6 +3,7 @@ import { NEWS_URL } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
 import { NewsItem, fmtDate } from './newsAdminTypes';
+import { useSettings } from '@/contexts/SettingsContext';
 
 interface Props {
   news: NewsItem[];
@@ -12,6 +13,8 @@ interface Props {
 }
 
 export function NewsAdminList({ news, loading, headers, onNewsChange }: Props) {
+  const { settings } = useSettings();
+  const siteOrigin = (settings.site_url || '').replace(/\/$/, '') || window.location.origin;
   const [report, setReport] = useState<NewsItem | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState({ title: '', summary: '', content: '', source_url: '', source_name: '' });
@@ -119,7 +122,7 @@ export function NewsAdminList({ news, loading, headers, onNewsChange }: Props) {
                           Опубл.
                         </button>
                       )}
-                      <a href={`${window.location.origin}/news/${n.slug}`} target="_blank" rel="noopener noreferrer"
+                      <a href={`${siteOrigin}/news/${n.slug}`} target="_blank" rel="noopener noreferrer"
                         className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
                         <Icon name="ExternalLink" size={14} />
                       </a>
@@ -175,7 +178,7 @@ export function NewsAdminList({ news, loading, headers, onNewsChange }: Props) {
                             Опубл.
                           </button>
                         )}
-                        <a href={`${window.location.origin}/news/${n.slug}`} target="_blank" rel="noopener noreferrer"
+                        <a href={`${siteOrigin}/news/${n.slug}`} target="_blank" rel="noopener noreferrer"
                           className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-brand-blue transition">
                           <Icon name="ExternalLink" size={14} />
                         </a>

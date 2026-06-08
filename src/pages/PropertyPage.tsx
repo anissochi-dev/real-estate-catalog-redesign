@@ -146,8 +146,9 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
     }
     let canon = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
     if (!canon) { canon = document.createElement('link'); canon.rel = 'canonical'; document.head.appendChild(canon); }
-    canon.href = window.location.origin + window.location.pathname;
-  }, [item, settings.company_name]);
+    const siteOrigin = (settings.site_url || '').replace(/\/$/, '') || window.location.origin;
+    canon.href = siteOrigin + window.location.pathname;
+  }, [item, settings.company_name, settings.site_url]);
 
   if (loading) {
     return <div className="container mx-auto px-4 py-20 text-center text-muted-foreground">Загрузка объекта...</div>;

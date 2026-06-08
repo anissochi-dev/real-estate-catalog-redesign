@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import Icon from '@/components/ui/icon';
 import SchemaOrg from '@/components/SchemaOrg';
+import { useSettings } from '@/contexts/SettingsContext';
 
 export interface Crumb {
   label: string;
@@ -13,7 +14,8 @@ interface Props {
 }
 
 export default function Breadcrumbs({ items, light }: Props) {
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const { settings } = useSettings();
+  const origin = (settings.site_url || '').replace(/\/$/, '') || (typeof window !== 'undefined' ? window.location.origin : '');
 
   const breadcrumbSchema = {
     '@context': 'https://schema.org',
