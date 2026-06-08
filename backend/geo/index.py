@@ -549,6 +549,201 @@ def _handle_audit(body: dict, cur, conn) -> dict:
     })
 
 
+# ── action=parse_osm ─────────────────────────────────────────────────────────
+# Потоковый парсер OSM PBF: читает первые 60 МБ Range-запросом,
+# извлекает улицы и районы, сравнивает с нашей БД.
+
+_HW = {'residential','primary','secondary','tertiary','unclassified',
+       'service','living_street','trunk','motorway','primary_link','secondary_link'}
+_PL = {'suburb','neighbourhood','quarter','village','hamlet','town'}
+
+
+def _vi(d, p):
+    r = s = 0
+    while p < len(d):
+        b = d[p]; p += 1; r |= (b & 0x7F) << s
+        if not (b & 0x80): return r, p
+        s += 7
+    return r, p
+
+
+def _pf(data):
+    f = {}; p = 0; n = len(data)
+    while p < n:
+        try:
+            tag, p = _vi(data, p); fn = tag >> 3; wt = tag & 7
+            if wt == 0:
+                v, p = _vi(data, p); f.setdefault(fn, []).append(v)
+            elif wt == 1:
+                import struct as _s; v = _s.unpack_from('<Q', data, p)[0]; p += 8; f.setdefault(fn, []).append(v)
+            elif wt == 2:
+                l, p = _vi(data, p); v = data[p:p+l]; p += l; f.setdefault(fn, []).append(v)
+            elif wt == 5:
+                import struct as _s; v = _s.unpack_from('<I', data, p)[0]; p += 4; f.setdefault(fn, []).append(v)
+            else: break
+        except Exception: break
+    return f
+
+
+def _uvi(raw):
+    if not raw: return []
+    if isinstance(raw, int): return [raw]
+    r = []; p = 0
+    while p < len(raw): v, p = _vi(raw, p); r.append(v)
+    return r
+
+
+def _st(raw):
+    st = []; p = 0; n = len(raw)
+    while p < n:
+        try:
+            tag, p = _vi(raw, p); fn = tag >> 3; wt = tag & 7
+            if wt == 2:
+                l, p = _vi(raw, p); v = raw[p:p+l]; p += l
+                if fn == 1: st.append(v.decode('utf-8', errors='replace'))
+            elif wt == 0: _, p = _vi(raw, p)
+            elif wt == 1: p += 8
+            elif wt == 5: p += 4
+            else: break
+        except Exception: break
+    return st
+
+
+def _tg(kr, vr, st):
+    k = _uvi(kr); v = _uvi(vr)
+    return {st[i] if i < len(st) else '': st[j] if j < len(st) else '' for i, j in zip(k, v) if i < len(st)}
+
+
+def _blk(raw, streets, places, MS=12000, MP=800):
+    import zlib as _z
+    pb = _pf(raw)
+    s = _st(pb.get(1, [b''])[0]) if pb.get(1) else []
+    if not s: return
+    for pg in pb.get(2, []):
+        pgf = _pf(pg)
+        for wd in pgf.get(3, []):
+            if len(streets) >= MS: break
+            wf = _pf(wd)
+            t = _tg(wf.get(2,[b''])[0] if wf.get(2) else b'', wf.get(3,[b''])[0] if wf.get(3) else b'', s)
+            if t.get('highway') in _HW and t.get('name'): streets.add(t['name'])
+        for nd in pgf.get(1, []):
+            if len(places) >= MP: break
+            nf = _pf(nd)
+            t = _tg(nf.get(2,[b''])[0] if nf.get(2) else b'', nf.get(3,[b''])[0] if nf.get(3) else b'', s)
+            if t.get('place') in _PL and t.get('name'): places[t['name']] = t['place']
+        for dd in pgf.get(2, []):
+            if len(places) >= MP: break
+            df = _pf(dd); kv = _uvi(df.get(10,[b''])[0] if df.get(10) else b'')
+            cur = {}; i = 0
+            while i < len(kv):
+                k = kv[i]
+                if k == 0:
+                    if cur.get('place') in _PL and cur.get('name') and len(places) < MP:
+                        places[cur['name']] = cur['place']
+                    cur = {}
+                elif i + 1 < len(kv):
+                    ks = s[k] if k < len(s) else ''; vs = s[kv[i+1]] if kv[i+1] < len(s) else ''
+                    if ks: cur[ks] = vs; i += 1
+                i += 1
+        for rd in pgf.get(4, []):
+            if len(places) >= MP: break
+            rf = _pf(rd)
+            t = _tg(rf.get(2,[b''])[0] if rf.get(2) else b'', rf.get(3,[b''])[0] if rf.get(3) else b'', s)
+            if t.get('name') and (t.get('place') in _PL or t.get('boundary') == 'administrative'):
+                places[t['name']] = t.get('place') or f"adm:{t.get('admin_level','')}"
+
+
+def _parse_pbf(data):
+    import struct as _s, zlib as _z
+    streets = set(); places = {}; p = 0; blks = 0
+    while p < len(data):
+        if p + 4 > len(data): break
+        hl = _s.unpack('>I', data[p:p+4])[0]; p += 4
+        if hl > 65536 or p + hl > len(data): break
+        hf = _pf(data[p:p+hl]); p += hl
+        bt = hf.get(1,[b''])[0]
+        if isinstance(bt, bytes): bt = bt.decode('utf-8', errors='replace')
+        bs = hf.get(3,[0])[0]
+        if p + bs > len(data): break
+        bd = data[p:p+bs]; p += bs
+        if bt != 'OSMData': continue
+        bf = _pf(bd)
+        if bf.get(3):
+            try: raw = _z.decompress(bf[3][0])
+            except Exception: continue
+        elif bf.get(1): raw = bf[1][0]
+        else: continue
+        _blk(raw, streets, places)
+        blks += 1
+    print(f'[geo parse_osm] блоков={blks} улиц={len(streets)} мест={len(places)}')
+    return streets, places
+
+
+def _norm_st(s):
+    for sf in [' улица',' проспект',' переулок',' бульвар',' шоссе',
+               ' проезд',' аллея',' набережная',' тупик',' площадь',' линия']:
+        if s.lower().endswith(sf): return s[:len(s)-len(sf)].strip()
+    return s.strip()
+
+
+def _handle_parse_osm(body: dict, cur) -> dict:
+    url = body.get('url', '').strip()
+    if not url: return _err('url обязателен', 400)
+
+    MAX_R = int(body.get('max_mb', 25)) * 1024 * 1024
+    MAX_R = min(MAX_R, 55 * 1024 * 1024)
+    print(f'[geo parse_osm] скачиваем {url} range=0-{MAX_R}')
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0', 'Range': f'bytes=0-{MAX_R-1}'})
+        with urllib.request.urlopen(req, timeout=25) as r:
+            data = r.read(MAX_R)
+        print(f'[geo parse_osm] получено {len(data):,} байт')
+    except Exception as e:
+        return _err(f'Скачивание: {e}', 502)
+
+    try:
+        streets, places = _parse_pbf(data)
+    except Exception as e:
+        import traceback
+        return _err(f'Парсинг: {e} | {traceback.format_exc()[:400]}', 500)
+
+    cur.execute(f"SELECT DISTINCT street_pattern FROM {SCHEMA}.street_district_map ORDER BY street_pattern")
+    our_st = {r['street_pattern'] for r in cur.fetchall()}
+    cur.execute(f"SELECT name FROM {SCHEMA}.districts WHERE is_active = TRUE ORDER BY name")
+    our_di = {r['name'] for r in cur.fetchall()}
+
+    our_norm = {_norm_st(s).lower(): s for s in our_st}
+    missing_st = sorted(
+        [{'osm': s, 'base': _norm_st(s)} for s in streets
+         if _norm_st(s).lower() not in our_norm and len(_norm_st(s)) > 3],
+        key=lambda x: x['base']
+    )
+
+    our_dl = {d.lower(): d for d in our_di}
+    matched_pl, missing_pl = [], []
+    for nm, pt in sorted(places.items()):
+        nl = nm.lower()
+        if nl in our_dl:
+            matched_pl.append({'osm': nm, 'db': our_dl[nl], 'type': pt})
+        else:
+            fz = next((our_dl[k] for k in our_dl if nl in k or k in nl), None)
+            if fz: matched_pl.append({'osm': nm, 'db': fz, 'type': pt, 'fuzzy': True})
+            else:   missing_pl.append({'name': nm, 'type': pt})
+
+    return _ok({
+        'read_mb': round(len(data)/1024/1024, 1),
+        'osm_streets': len(streets),
+        'osm_places': len(places),
+        'db_streets': len(our_st),
+        'db_districts': len(our_di),
+        'missing_streets_count': len(missing_st),
+        'missing_streets': missing_st[:300],
+        'places_matched': matched_pl,
+        'places_missing': missing_pl,
+        'all_osm_places': sorted(places.keys()),
+    })
+
+
 # ── Handler ───────────────────────────────────────────────────────────────────
 
 def handler(event: dict, context) -> dict:
@@ -579,7 +774,9 @@ def handler(event: dict, context) -> dict:
                 return _handle_normalize(body, cur, conn)
             elif action == 'audit':
                 return _handle_audit(body, cur, conn)
+            elif action == 'parse_osm':
+                return _handle_parse_osm(body, cur)
             else:
-                return _err(f'Неизвестный action: {action}. Доступные: suggest, fix, normalize, audit')
+                return _err(f'Неизвестный action: {action}. Доступные: suggest, fix, normalize, audit, parse_osm')
     finally:
         conn.close()
