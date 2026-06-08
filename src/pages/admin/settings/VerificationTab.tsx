@@ -128,7 +128,6 @@ export default function VerificationTab({ siteUrl }: Props) {
         <div className="space-y-3">
           {files.map((f) => {
             const siteUrl_ = getSiteFileUrl(f.filename);
-            const urlToCopy = f.cdn_url ? siteUrl_ : siteUrl_;
             return (
               <div key={f.filename} className="border border-border rounded-xl p-4 space-y-3">
                 <div className="flex items-start justify-between gap-3">
@@ -157,7 +156,7 @@ export default function VerificationTab({ siteUrl }: Props) {
                   </button>
                 </div>
 
-                {/* URL для вставки в сервис */}
+                {/* URL для вставки в сервис — всегда URL сайта, не CDN */}
                 <div className="space-y-2 pt-1 border-t border-border/50">
                   <p className="text-xs font-medium text-foreground/60">URL для вставки в сервис верификации:</p>
                   <div className="flex items-center gap-2">
@@ -172,7 +171,7 @@ export default function VerificationTab({ siteUrl }: Props) {
                       {copied === f.filename ? 'Скопировано' : 'Скопировать'}
                     </button>
                     <a
-                      href={f.cdn_url || siteUrl_}
+                      href={siteUrl_}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="p-1.5 rounded-lg bg-muted hover:bg-muted/70 text-muted-foreground transition"
