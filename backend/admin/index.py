@@ -3286,6 +3286,8 @@ def _districts(cur, conn, method, rid, event, user):
             fields.append(f"is_active = {_bool(body['is_active'])}")
         if 'sort_order' in body:
             fields.append(f"sort_order = {_int_or_null(body['sort_order'])}")
+        if 'parent_id' in body:
+            fields.append(f"parent_id = {_int_or_null(body['parent_id'])}")
         if not fields:
             return _err(400, 'Нет полей для обновления')
         cur.execute(

@@ -6,6 +6,7 @@ import { District, FormState, buildHeaders, buildUrl } from './districts/Distric
 import { AddForm } from './districts/DistrictForms';
 import DistrictsTable from './districts/DistrictsTable';
 import AiResultGrid, { AiDistrict } from './districts/AiResultGrid';
+import DistrictHierarchy from './districts/DistrictHierarchy';
 
 const DISTRICT_AI_URL = 'https://functions.poehali.dev/eddffe59-b37d-425e-90a3-59d12d44623f';
 const GEO_FIX_URL = 'https://functions.poehali.dev/9b2f9622-9d12-4809-a614-023af6958251';
@@ -28,6 +29,7 @@ export default function DistrictsAdmin() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const [showHierarchy, setShowHierarchy] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [addSaving, setAddSaving] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
@@ -370,7 +372,13 @@ export default function DistrictsAdmin() {
           <p className="text-sm text-muted-foreground mt-0.5">Управление районами для фильтрации и группировки объектов</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button type="button" onClick={() => { setShowAiPanel(v => !v); setShowAddForm(false); setEditId(null); }}
+          <button type="button"
+            onClick={() => { setShowHierarchy(v => !v); setShowAiPanel(false); setShowAddForm(false); }}
+            className={`inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl border transition font-semibold ${showHierarchy ? 'border-brand-blue bg-brand-blue text-white' : 'border-brand-blue/30 bg-brand-blue/5 text-brand-blue hover:bg-brand-blue/10'}`}>
+            <Icon name="Network" size={14} />
+            Округа
+          </button>
+          <button type="button" onClick={() => { setShowAiPanel(v => !v); setShowAddForm(false); setEditId(null); setShowHierarchy(false); }}
             className={`inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl border transition ${showAiPanel ? 'border-violet-400 bg-violet-100 text-violet-800' : 'border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100'}`}>
             <Icon name="Wand2" size={14} />
             Добавить через ИИ
@@ -406,6 +414,15 @@ export default function DistrictsAdmin() {
         <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center gap-2">
           <Icon name="AlertCircle" size={16} /> {error}
         </div>
+      )}
+
+      {/* ── Иерархия округов ──────────────────────────────────────────────── */}
+      {showHierarchy && (
+        <DistrictHierarchy
+          districts={districts}
+          token={refreshToken()}
+          onSaved={load}
+        />
       )}
 
       {/* Панель результатов geo-fix */}

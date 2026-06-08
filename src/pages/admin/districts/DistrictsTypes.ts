@@ -9,6 +9,7 @@ export interface District {
   sort_order: number;
   is_active: boolean;
   listings_count?: number;
+  parent_id?: number | null;
 }
 
 export interface FormState {
