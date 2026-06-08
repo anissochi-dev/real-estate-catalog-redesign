@@ -211,15 +211,27 @@ export default function VerificationTab({ files, onChange, saved, save, siteUrl 
         </button>
       </div>
 
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm space-y-1.5 text-amber-800">
+        <p className="font-semibold flex items-center gap-1.5">
+          <Icon name="Info" size={14} />
+          Важно: файл станет доступен после следующего билда
+        </p>
+        <p className="text-xs">
+          После добавления и сохранения файла сообщите разработчику — файл появится на сайте после ближайшей публикации.
+          Проверяйте доступность по скопированному URL.
+        </p>
+      </div>
+
       <div className="bg-muted/60 rounded-xl p-4 text-sm space-y-2 text-foreground/60">
         <p className="font-semibold text-foreground/80">Как использовать:</p>
         <ol className="list-decimal list-inside space-y-1">
-          <li>Добавьте файл верификации и нажмите «Сохранить»</li>
+          <li>Выберите сервис или введите данные вручную и нажмите «Сохранить»</li>
           <li>Скопируйте URL файла кнопкой «Скопировать URL»</li>
           <li>Вставьте этот URL в поле верификации нужного сервиса</li>
+          <li>После следующего билда — проверьте что URL открывается</li>
         </ol>
         <p className="text-xs text-foreground/40 pt-1">
-          Поддерживаются все сервисы, которые проверяют домен через HTTP-запрос к файлу: Яндекс.Вебмастер, Google Search Console, Mail.ru и другие.
+          Поддерживаются: Яндекс.Вебмастер, Google Search Console, Mail.ru / VK, Bing Webmaster, Rambler и любые другие сервисы.
         </p>
       </div>
     </div>

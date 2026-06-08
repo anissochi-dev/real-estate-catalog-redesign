@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "GET без filename — 400",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 400
+    },
+    {
+      "name": "GET несуществующего файла — 404",
+      "method": "GET",
+      "path": "/?filename=nonexistent-file.html",
+      "expectedStatus": 404
+    }
+  ]
+}

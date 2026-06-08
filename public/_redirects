@@ -1,56 +1,42 @@
-/sitemap.xml    https://functions.poehali.dev/7db3cce2-3ae0-4bbb-bece-5c6076691344?action=sitemap_xml    200
-/sitemap_index.xml    https://functions.poehali.dev/7db3cce2-3ae0-4bbb-bece-5c6076691344?action=sitemap_xml    200
-/robots.txt    https://functions.poehali.dev/7db3cce2-3ae0-4bbb-bece-5c6076691344?action=robots_txt    200
+/sitemap.xml         https://functions.poehali.dev/7db3cce2-3ae0-4bbb-bece-5c6076691344?action=sitemap_xml    200
+/sitemap_index.xml   https://functions.poehali.dev/7db3cce2-3ae0-4bbb-bece-5c6076691344?action=sitemap_xml    200
+/robots.txt          https://functions.poehali.dev/7db3cce2-3ae0-4bbb-bece-5c6076691344?action=robots_txt     200
 
-# Файлы верификации — универсальный редирект через ?resource=verify_file&filename=
-# Яндекс: yandex_*.html и yandex_* (без расширения)
-/yandex_*    https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa?resource=verify_file&filename=yandex_:splat    200
-# Google: googleXXX.html
-/google*    https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa?resource=verify_file&filename=google:splat    200
-# Mail.ru: mailru-domainXXX (без расширения)
-/mailru-domain*    https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa?resource=verify_file&filename=mailru-domain:splat    200
-# Bing/Microsoft: BingSiteAuth.xml
-/BingSiteAuth*    https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa?resource=verify_file&filename=BingSiteAuth:splat    200
-# Rambler
-/rambler-*    https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa?resource=verify_file&filename=rambler-:splat    200
-# Любой файл верификации по паттерну *verification* или *verify*
-/verification*    https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa?resource=verify_file&filename=verification:splat    200
-
-# Известные страницы SPA — всегда 200
-/    /index.html    200
+# Известные страницы SPA
+/           /index.html    200
 /catalog    /index.html    200
-/catalog/    /index.html    200
-/catalog/office    /index.html    200
-/catalog/retail    /index.html    200
+/catalog/   /index.html    200
+/catalog/office       /index.html    200
+/catalog/retail       /index.html    200
 /catalog/warehouse    /index.html    200
-/catalog/restaurant    /index.html    200
-/catalog/hotel    /index.html    200
-/catalog/business    /index.html    200
-/catalog/gab    /index.html    200
-/catalog/production    /index.html    200
-/catalog/land    /index.html    200
-/catalog/building    /index.html    200
-/catalog/free_purpose    /index.html    200
-/catalog/car_service    /index.html    200
-/map    /index.html    200
-/map/    /index.html    200
-/favorites    /index.html    200
-/favorites/    /index.html    200
+/catalog/restaurant   /index.html    200
+/catalog/hotel        /index.html    200
+/catalog/business     /index.html    200
+/catalog/gab          /index.html    200
+/catalog/production   /index.html    200
+/catalog/land         /index.html    200
+/catalog/building     /index.html    200
+/catalog/free_purpose /index.html    200
+/catalog/car_service  /index.html    200
+/map        /index.html    200
+/map/       /index.html    200
+/favorites  /index.html    200
+/favorites/ /index.html    200
 /compare    /index.html    200
-/compare/    /index.html    200
-/network-tenants    /index.html    200
-/network-tenants/    /index.html    200
-/news    /index.html    200
-/news/    /index.html    200
-/leads    /index.html    200
-/leads/    /index.html    200
-/declined    /index.html    200
-/declined/    /index.html    200
+/compare/   /index.html    200
+/network-tenants  /index.html    200
+/network-tenants/ /index.html    200
+/news       /index.html    200
+/news/      /index.html    200
+/leads      /index.html    200
+/leads/     /index.html    200
+/declined   /index.html    200
+/declined/  /index.html    200
 
-# Динамические страницы — паттерн с wildcard, 200
-/object/*    /index.html    200
-/district/*    /index.html    200
-/news/*    /index.html    200
+# Динамические страницы
+/object/*   /index.html    200
+/district/* /index.html    200
+/news/*     /index.html    200
 
-# Всё остальное — 404 (несуществующие страницы)
-/*    /index.html   404
+# Всё остальное — 404
+/*          /index.html    404
