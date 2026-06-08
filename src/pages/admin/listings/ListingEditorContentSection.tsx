@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import CharCount from '@/components/ui/CharCount';
 import { Listing, fmtDate } from './types';
+import VoiceInputButton, { VoiceFields } from '@/components/admin/VoiceInputButton';
 
 const SECTION_HEADERS = [
   'От собственника! Без комиссий и %!',
@@ -37,6 +38,7 @@ interface Props {
   onGenerateTags: () => void;
   errors?: Record<string, boolean>;
   setErrors?: (fn: (prev: Record<string, boolean>) => Record<string, boolean>) => void;
+  onVoiceFields?: (fields: VoiceFields, text: string) => void;
 }
 
 export default function ListingEditorContentSection({
@@ -44,10 +46,37 @@ export default function ListingEditorContentSection({
   aiLoading, aiTagsLoading,
   onDescribe, onGenerateTags,
   errors = {}, setErrors,
+  onVoiceFields,
 }: Props) {
   const [preview, setPreview] = useState(false);
+  const [voiceToast, setVoiceToast] = useState('');
   const descLen = (editing.description || '').trim().length;
   const descError = !!errors.description;
+
+  const handleVoiceFields = (fields: VoiceFields, text: string) => {
+    const patch: Partial<Listing> = {};
+    if (fields.description) patch.description = fields.description;
+    else if (text) patch.description = (editing.description ? editing.description + '\n' + text : text);
+    if (fields.title && !editing.title) patch.title = fields.title;
+    if (fields.category) patch.category = fields.category as Listing['category'];
+    if (fields.deal) patch.deal = fields.deal as Listing['deal'];
+    if (fields.area) patch.area = fields.area;
+    if (fields.price) patch.price = fields.price;
+    if (fields.price_unit) patch.price_unit = fields.price_unit as Listing['price_unit'];
+    if (fields.floor != null) patch.floor = fields.floor;
+    if (fields.floors_total != null) patch.total_floors = fields.floors_total;
+    if (fields.ceiling_height) patch.ceiling_height = fields.ceiling_height;
+    if (fields.address) patch.address = fields.address;
+    if (fields.district) patch.district = fields.district;
+    if (fields.condition) patch.condition = fields.condition as Listing['condition'];
+    setEditing({ ...editing, ...patch });
+    setErrors?.(v => ({ ...v, description: false }));
+    onVoiceFields?.(fields, text);
+    const filled = Object.keys(patch).filter(k => k !== 'description').length;
+    setVoiceToast(filled > 0 ? `Заполнено полей: ${filled + 1}` : 'Описание добавлено');
+    setTimeout(() => setVoiceToast(''), 3000);
+  };
+
   return (
     <>
       <div className="space-y-1" data-field-error={descError ? 'true' : undefined}>
@@ -55,7 +84,23 @@ export default function ListingEditorContentSection({
           <label className="text-sm font-semibold flex items-center gap-1.5">
             Описание *
           </label>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            {/* Голосовой ввод */}
+            <div className="relative flex items-center gap-1">
+              <VoiceInputButton
+                mode="parse"
+                size="sm"
+                onFields={handleVoiceFields}
+                onText={t => { if (!t) return; }}
+              />
+              <span className="text-[10px] text-muted-foreground">Голос</span>
+              {voiceToast && (
+                <span className="absolute -top-7 right-0 text-[11px] bg-emerald-600 text-white px-2 py-0.5 rounded whitespace-nowrap shadow-md z-50">
+                  ✓ {voiceToast}
+                </span>
+              )}
+            </div>
+            <div className="w-px h-3 bg-border" />
             {descLen > 0 && (
               <button onClick={() => setPreview(v => !v)}
                 className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1">

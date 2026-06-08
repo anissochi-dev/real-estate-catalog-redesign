@@ -1,0 +1,23 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "GET — 405",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 405
+    },
+    {
+      "name": "POST без audio_b64 — 400",
+      "method": "POST",
+      "path": "/",
+      "body": {"mode": "stt"},
+      "expectedStatus": 400
+    }
+  ]
+}
