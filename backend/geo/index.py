@@ -1129,7 +1129,11 @@ class GeoLimitExceeded(Exception):
     pass
 
 def _geocode_yandex(street: str, api_key: str) -> dict:
-    """Яндекс Геокодер HTTP API — бесплатный с ограничениями."""
+    """Яндекс Геокодер HTTP API — бесплатный с ограничениями.
+    Яндекс возвращает district-компоненты типа:
+      'Прикубанский внутригородской округ', 'Центральный округ' и т.д.
+    Все district-компоненты складываем в city_district и suburb для совместимости с _match_okrug.
+    """
     import urllib.parse as _up
     q = _up.quote(f'Краснодар, {street}')
     url = (
@@ -1139,7 +1143,12 @@ def _geocode_yandex(street: str, api_key: str) -> dict:
     )
     req = urllib.request.Request(url, headers={'User-Agent': 'KrasnodarRealEstate/1.0'})
     with urllib.request.urlopen(req, timeout=10) as resp:
+        status = resp.status
         raw = resp.read().decode('utf-8')
+    if status == 403:
+        raise GeoLimitExceeded('yandex: 403 Forbidden / лимит исчерпан')
+    if status == 429:
+        raise GeoLimitExceeded('yandex: 429 Too Many Requests')
     data = json.loads(raw)
     members = (
         data.get('response', {})
@@ -1152,18 +1161,20 @@ def _geocode_yandex(street: str, api_key: str) -> dict:
     meta = obj.get('metaDataProperty', {}).get('GeocoderMetaData', {})
     addr = meta.get('Address', {})
     components = addr.get('Components', [])
-    result = {'suburb': '', 'quarter': '', 'city_district': '', 'neighbourhood': '', 'raw': {}}
-    for comp in components:
-        kind = comp.get('kind', '')
-        name = comp.get('name', '')
-        if kind == 'district':
-            result['city_district'] = name
-        elif kind == 'locality':
-            pass
-        elif kind == 'street':
-            pass
-    locality_meta = meta.get('AddressDetails', {})
-    result['raw'] = {'components': components, 'address': addr.get('formatted', '')}
+    # Яндекс хранит округ в компонентах kind='district'
+    # Может быть несколько (район + округ), берём все
+    districts = [c['name'] for c in components if c.get('kind') == 'district']
+    # Первый district обычно округ, второй — район внутри округа
+    city_district = districts[0] if districts else ''
+    suburb = districts[1] if len(districts) > 1 else city_district
+    result = {
+        'suburb':        suburb,
+        'quarter':       '',
+        'city_district': city_district,
+        'neighbourhood': '',
+        'raw':           {'components': components, 'address': addr.get('formatted', '')},
+    }
+    print(f'[yandex] компоненты: {[(c.get("kind"), c.get("name")) for c in components]} → city_district={city_district!r}')
     return result
 
 
