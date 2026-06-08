@@ -1,5 +1,4 @@
 {
-  "remove-watermark": "https://functions.poehali.dev/41600b6b-6704-429a-9e7d-b211b69cd1ab",
   "verify-file": "https://functions.poehali.dev/f18a8295-a9d1-474d-9c3a-211d8092ef47",
   "speech-to-text": "https://functions.poehali.dev/0600dfc2-44ac-4c03-be62-771c9e9183e4",
   "smart-search": "https://functions.poehali.dev/32925bd2-c418-4a8c-8e32-97b5385e67da",
@@ -28,7 +27,6 @@
   "crm-payments": "https://functions.poehali.dev/74ca5694-a05f-4053-992d-5e04cc5bc7a4",
   "crm-checks": "https://functions.poehali.dev/be6cb907-b50e-48fa-b9e2-092dd541a82a",
   "price-predict": "https://functions.poehali.dev/9986e5a6-c4d4-407a-919f-a303aa3eddf2",
-  "uploads": "https://functions.poehali.dev/82b9e0bc-2ffa-4045-a74b-a09985cec2b5",
   "upload": "https://functions.poehali.dev/8983c0a8-a8c8-47ff-97ed-59cc1571aa15",
   "xml-feeds": "https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7",
   "auth": "https://functions.poehali.dev/e5d9d96a-a3ca-45cd-9ea3-3e2982b626f7",

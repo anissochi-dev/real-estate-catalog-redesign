@@ -1,9 +1,11 @@
 """
-Пакетная перезаливка фотографий объявлений: скачивает с внешних доменов,
-конвертирует в WebP (качество 82, макс 1920px), заливает на наш CDN,
-обновляет URL в БД. Обрабатывает по batch_size объявлений за вызов.
-Args: action=rehost_batch&offset=0&batch_size=20 (GET) или POST body
-Returns: JSON с прогрессом и результатами
+Работа с фотографиями объявлений: перезаливка и удаление водяных знаков.
+
+action=status        — сколько фото ещё на внешних CDN
+action=rehost_batch  — пакетная перезаливка на наш CDN (WebP, макс 1920px)
+action=remove_watermark — удаление логотипа/водяного знака через Яндекс Vision + PIL
+                          POST { action, url, sensitivity? }
+                          Returns { url, detected, regions }
 """
 
 import io
@@ -165,8 +167,104 @@ def _rehost_listing(listing, s3_client):
     }
 
 
+VISION_URL = 'https://vision.api.cloud.yandex.net/vision/v1/batchAnalyze'
+
+
+def _get_yandex_keys():
+    """API-ключ и folder_id из env или БД."""
+    api_key = os.environ.get('AISTUDIO_API_KEY') or os.environ.get('YANDEX_API_KEY', '')
+    folder_id = os.environ.get('YANDEX_FOLDER_ID', '')
+    if api_key and folder_id:
+        return api_key, folder_id
+    try:
+        conn0 = psycopg2.connect(os.environ['DATABASE_URL'])
+        with conn0.cursor(cursor_factory=RealDictCursor) as cur0:
+            cur0.execute(f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
+            row = cur0.fetchone() or {}
+        conn0.close()
+        return (
+            api_key or row.get('yandex_api_key') or '',
+            folder_id or row.get('yandex_folder_id') or '',
+        )
+    except Exception:
+        return api_key, folder_id
+
+
+def _vision_find_regions(image_b64: str, api_key: str, folder_id: str) -> list:
+    """Яндекс Vision — ищет логотипы и текстовые блоки (водяные знаки)."""
+    import urllib.request as _ur
+    payload = {
+        'folderId': folder_id,
+        'analyzeSpecs': [{
+            'content': image_b64,
+            'features': [
+                {'type': 'OBJECT_DETECTION', 'objectDetectionConfig': {'objectTypes': ['logo', 'watermark'], 'maxAnnotations': 20}},
+                {'type': 'TEXT_DETECTION', 'textDetectionConfig': {'languageCodes': ['ru', 'en']}},
+            ],
+        }],
+    }
+    hdrs = {'Authorization': f'Api-Key {api_key}', 'Content-Type': 'application/json'}
+    if folder_id:
+        hdrs['x-folder-id'] = folder_id
+    req = _ur.Request(VISION_URL, data=json.dumps(payload).encode(), headers=hdrs, method='POST')
+    with _ur.urlopen(req, timeout=20) as resp:
+        data = json.loads(resp.read().decode())
+
+    regions = []
+    for ann_wrapper in (data.get('results') or [{}])[0].get('results', []):
+        for obj in (ann_wrapper.get('objectAnnotations') or {}).get('objects', []):
+            if obj.get('confidence', 0) < 0.3:
+                continue
+            vs = (obj.get('boundingBox') or {}).get('vertices', [])
+            if len(vs) >= 2:
+                xs = [v.get('x', 0) for v in vs]; ys = [v.get('y', 0) for v in vs]
+                regions.append({'x': min(xs), 'y': min(ys), 'w': max(xs)-min(xs), 'h': max(ys)-min(ys), 'conf': obj.get('confidence', 0.5)})
+        for block in (ann_wrapper.get('textAnnotations') or {}).get('blocks', []):
+            vs = (block.get('boundingBox') or {}).get('vertices', [])
+            if len(vs) >= 2:
+                xs = [v.get('x', 0) for v in vs]; ys = [v.get('y', 0) for v in vs]
+                regions.append({'x': min(xs), 'y': min(ys), 'w': max(xs)-min(xs), 'h': max(ys)-min(ys), 'conf': 0.6})
+    return regions
+
+
+def _erase_regions(image_bytes: bytes, regions: list, sensitivity: float) -> bytes:
+    """PIL — стирает найденные регионы (размытие + смешение с фоном)."""
+    try:
+        from PIL import Image, ImageFilter
+        img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+        w, h = img.size
+        for r in regions:
+            if r.get('conf', 0) < (1 - sensitivity):
+                continue
+            pad_x, pad_y = int(r['w'] * 0.15), int(r['h'] * 0.15)
+            x1, y1 = max(0, r['x'] - pad_x), max(0, r['y'] - pad_y)
+            x2, y2 = min(w, r['x'] + r['w'] + pad_x), min(h, r['y'] + r['h'] + pad_y)
+            if x2 <= x1 or y2 <= y1:
+                continue
+            crop = img.crop((x1, y1, x2, y2))
+            rw, rh = crop.size
+            blurred = crop.filter(ImageFilter.GaussianBlur(radius=max(rw, rh) // 4))
+            # Цвет фона — среднее соседних полос
+            strips = []
+            if y1 > 0: strips.append(img.crop((x1, max(0, y1-20), x2, y1)))
+            if y2 < h: strips.append(img.crop((x1, y2, x2, min(h, y2+20))))
+            if strips:
+                avg = tuple(int(sum(s.resize((1,1), Image.LANCZOS).getpixel((0,0))[i] for s in strips) / len(strips)) for i in range(3))
+                from PIL import Image as _PI
+                patch = _PI.blend(blurred, _PI.new('RGB', (rw, rh), avg), alpha=0.6)
+            else:
+                patch = blurred
+            img.paste(patch, (x1, y1))
+        out = io.BytesIO()
+        img.save(out, format='JPEG', quality=92, optimize=True)
+        return out.getvalue()
+    except Exception as e:
+        print(f'[bulk-rehost] erase_regions error: {e}')
+        return image_bytes
+
+
 def handler(event: dict, context) -> dict:
-    """Пакетная перезаливка фото объявлений с внешних CDN на наш S3 в формате WebP."""
+    """Пакетная перезаливка фото и удаление водяных знаков через Яндекс Vision."""
     method = event.get('httpMethod', 'GET')
 
     if method == 'OPTIONS':
@@ -309,8 +407,54 @@ def handler(event: dict, context) -> dict:
                     ),
                 })
 
+            # ── Удаление водяного знака через Яндекс Vision ────────────────
+            elif action == 'remove_watermark':
+                url = (body.get('url') or '').strip()
+                if not url:
+                    return _err(400, 'url обязателен')
+                sensitivity = max(0.1, min(0.95, float(body.get('sensitivity') or 0.45)))
+
+                # Скачиваем фото
+                try:
+                    import base64 as _b64
+                    raw = _fetch_image(url)
+                except Exception as e:
+                    return _err(502, f'Не удалось скачать фото: {str(e)[:150]}')
+
+                image_b64 = _b64.b64encode(raw).decode()
+                api_key, folder_id = _get_yandex_keys()
+
+                # Яндекс Vision — ищем логотипы/текст
+                regions = []
+                vision_used = False
+                if api_key and folder_id:
+                    try:
+                        regions = _vision_find_regions(image_b64, api_key, folder_id)
+                        vision_used = True
+                        print(f'[bulk-rehost] Vision нашёл {len(regions)} регионов')
+                    except Exception as e:
+                        print(f'[bulk-rehost] Vision error: {e}')
+
+                detected = len(regions) > 0
+                result_bytes = _erase_regions(raw, regions, sensitivity) if detected else raw
+
+                # Заливаем в S3
+                try:
+                    s3c = _s3()
+                    cdn = _upload(s3c, result_bytes, 'image/jpeg')
+                except Exception as e:
+                    return _err(502, f'Ошибка загрузки S3: {str(e)[:150]}')
+
+                return _ok({
+                    'ok': True,
+                    'url': cdn,
+                    'detected': detected,
+                    'vision_used': vision_used,
+                    'regions': [{'x': r['x'], 'y': r['y'], 'w': r['w'], 'h': r['h']} for r in regions],
+                })
+
             else:
-                return _err(400, f'Неизвестный action: {action}. Доступные: status, rehost_batch')
+                return _err(400, f'Неизвестный action: {action}. Доступные: status, rehost_batch, remove_watermark')
 
     finally:
         conn.close()

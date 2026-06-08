@@ -2,7 +2,7 @@ import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import { Listing, splitImages } from './types';
 
-const REMOVE_WM_URL = 'https://functions.poehali.dev/41600b6b-6704-429a-9e7d-b211b69cd1ab';
+const REMOVE_WM_URL = 'https://functions.poehali.dev/d86482e4-0555-457a-8063-0d3305c171ff';
 
 interface Props {
   listing: Listing;
@@ -32,7 +32,7 @@ export default function PhotoPickModal({ listing, onClose }: Props) {
           const r = await fetch(REMOVE_WM_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
-            body: JSON.stringify({ url }),
+            body: JSON.stringify({ action: 'remove_watermark', url }),
           });
           const data = await r.json();
           const finalUrl = data.url || url;

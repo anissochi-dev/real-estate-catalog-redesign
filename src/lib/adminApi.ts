@@ -17,9 +17,8 @@ export const AI_RETRAIN_URL = 'https://functions.poehali.dev/e2f1d357-fb83-4fbb-
 const AI_URL = 'https://functions.poehali.dev/34bfc4a2-89b9-4c89-bcbc-d82314730aef';
 const DEVOPS_URL = 'https://functions.poehali.dev/8dc0ef1b-de31-4ede-94b2-c1779c324922';
 const SMART_RUN_URL = 'https://functions.poehali.dev/880b61c2-dbe7-491a-a147-ffd926b3fe73';
-// Используем функцию upload/ (поддерживает водяной знак и возвращает original_url)
 const UPLOADS_URL = 'https://functions.poehali.dev/8983c0a8-a8c8-47ff-97ed-59cc1571aa15';
-const REMOVE_WM_URL = 'https://functions.poehali.dev/41600b6b-6704-429a-9e7d-b211b69cd1ab';
+const REMOVE_WM_URL = 'https://functions.poehali.dev/d86482e4-0555-457a-8063-0d3305c171ff';
 export const CRM_URL = 'https://functions.poehali.dev/221e23fa-e0a4-416e-b878-c2da2914daac';
 
 /** Билдер URL для CRM-функции.
