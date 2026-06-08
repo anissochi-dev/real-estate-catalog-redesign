@@ -1185,7 +1185,7 @@ def _handle_geo_okrug(body: dict, cur, conn) -> dict:
     import time as _time
 
     mode = body.get('mode', 'preview')
-    limit = min(int(body.get('limit') or 15), 50)
+    limit = min(int(body.get('limit') or 30), 100)
     force = body.get('force', False)
 
     api_key = os.environ.get('MAPS_CO_API_KEY', '')
