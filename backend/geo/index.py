@@ -1,13 +1,17 @@
 """
-Геолокация и адреса: подсказки DaData и исправление районов.
+Геолокация и адреса: подсказки DaData, исправление и нормализация районов.
 
-action=suggest   GET  ?query=Красная&city=Краснодар
-                 → [{value, full, lat, lon, district}]
+action=suggest    GET  ?query=Красная&city=Краснодар
+                  → [{value, full, lat, lon, district}]
 
-action=fix       POST {action: 'fix', mode: 'preview'|'apply', ids?: [int,...]}
-                 → {changed_count, not_found_count, changed: [...]}
+action=fix        POST {action: 'fix', mode: 'preview'|'apply', ids?: [int,...]}
+                  → {changed_count, not_found_count, changed: [...]}
+                  Определяет район по справочнику улиц (street_district_map).
 
-Общая логика: справочник street_district_map → определение микрорайона.
+action=normalize  POST {action: 'normalize', mode: 'preview'|'apply'}
+                  → {changed_count, already_ok_count, changed: [...]}
+                  Нормализует значения district в listings к каноничным названиям
+                  из таблицы districts (точное или нечёткое совпадение).
 """
 import json
 import os
@@ -205,6 +209,93 @@ def _handle_fix(body: dict, cur, conn) -> dict:
     })
 
 
+# ── action=normalize ─────────────────────────────────────────────────────────
+
+def _handle_normalize(body: dict, cur, conn) -> dict:
+    """
+    Нормализует district в listings к каноничным значениям из таблицы districts.
+    Алгоритм для каждого объекта:
+      1. Точное совпадение → уже ок
+      2. ILIKE совпадение (подстрока в обе стороны) → берём каноничное
+      3. Не нашли → оставляем как есть, пишем в not_matched
+    """
+    mode = body.get('mode', 'preview')
+
+    # Загружаем все каноничные названия районов
+    cur.execute(
+        f"SELECT name FROM {SCHEMA}.districts WHERE is_active = TRUE ORDER BY name ASC"
+    )
+    canonical = [r['name'] for r in cur.fetchall()]
+    canonical_lower = {n.lower(): n for n in canonical}
+
+    # Загружаем все объекты с непустым district
+    cur.execute(
+        f"SELECT id, district FROM {SCHEMA}.listings "
+        f"WHERE district IS NOT NULL AND district != '' ORDER BY id ASC"
+    )
+    rows = cur.fetchall()
+
+    changed, already_ok, not_matched = [], [], []
+
+    for row in rows:
+        lid = row['id']
+        current = (row['district'] or '').strip()
+        if not current:
+            continue
+
+        cur_lower = current.lower()
+
+        # 1. Точное совпадение
+        if cur_lower in canonical_lower:
+            canon = canonical_lower[cur_lower]
+            if current == canon:
+                already_ok.append({'id': lid, 'district': current})
+            else:
+                # Совпадает регистр-нечувствительно, но разный регистр — исправляем
+                changed.append({'id': lid, 'district_old': current, 'district_new': canon})
+            continue
+
+        # 2. Нечёткое: ищем каноничное имя которое содержит current или наоборот
+        best = None
+        best_score = -1
+        for name in canonical:
+            name_l = name.lower()
+            if cur_lower in name_l or name_l in cur_lower:
+                # Предпочитаем более длинное совпадение (специфичнее)
+                score = len(name_l) + (1000 if cur_lower == name_l else 0)
+                if score > best_score:
+                    best = name
+                    best_score = score
+
+        if best:
+            if best != current:
+                changed.append({'id': lid, 'district_old': current, 'district_new': best})
+            else:
+                already_ok.append({'id': lid, 'district': current})
+        else:
+            not_matched.append({'id': lid, 'district': current})
+
+    # Применяем если mode=apply
+    if mode == 'apply':
+        for item in changed:
+            dn = item['district_new'].replace("'", "''")
+            cur.execute(
+                f"UPDATE {SCHEMA}.listings SET district = '{dn}' WHERE id = {item['id']}"
+            )
+        conn.commit()
+        print(f'[geo normalize] применено {len(changed)} исправлений')
+
+    return _ok({
+        'mode': mode,
+        'total': len(rows),
+        'changed_count': len(changed),
+        'already_ok_count': len(already_ok),
+        'not_matched_count': len(not_matched),
+        'changed': changed,
+        'not_matched': not_matched,
+    })
+
+
 # ── Handler ───────────────────────────────────────────────────────────────────
 
 def handler(event: dict, context) -> dict:
@@ -231,7 +322,9 @@ def handler(event: dict, context) -> dict:
                 return _handle_suggest(event, cur)
             elif action == 'fix':
                 return _handle_fix(body, cur, conn)
+            elif action == 'normalize':
+                return _handle_normalize(body, cur, conn)
             else:
-                return _err(f'Неизвестный action: {action}. Доступные: suggest, fix')
+                return _err(f'Неизвестный action: {action}. Доступные: suggest, fix, normalize')
     finally:
         conn.close()
