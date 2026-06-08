@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
@@ -42,84 +42,91 @@ export default function DistrictsAdmin() {
 
   // Заполнение улиц через Overpass + ИИ
   type StreetItem = { street: string; base: string };
+  type OsmMeta = { osm_total: number; in_map: number; missing_count: number };
+
   const [osmLoading, setOsmLoading] = useState(false);
-  const [osmResult, setOsmResult] = useState<{ osm_total: number; in_map: number; missing_count: number; missing: StreetItem[]; has_more: boolean } | null>(null);
-  const [osmOffset, setOsmOffset] = useState(0);
+  const [osmMeta, setOsmMeta] = useState<OsmMeta | null>(null);        // статистика из первого запроса
+  const [osmQueue, setOsmQueue] = useState<StreetItem[]>([]);           // ВСЕ недостающие улицы
+  const [osmCurrentBatch, setOsmCurrentBatch] = useState<StreetItem[]>([]); // текущий батч на экране
   const [osmAdding, setOsmAdding] = useState(false);
-  const [osmAddedTotal, setOsmAddedTotal] = useState(0);
   const [osmRunAll, setOsmRunAll] = useState(false);
-  const [osmStopFlag, setOsmStopFlag] = useState(false);
+  const [osmAddedTotal, setOsmAddedTotal] = useState(0);
   const [osmProgress, setOsmProgress] = useState({ done: 0, total: 0 });
-  const OSM_BATCH = 20;
+  const stopRef = useRef(false);
+  const OSM_BATCH = 10;
 
-  const fetchOsmPage = async (offset: number): Promise<{ osm_total: number; in_map: number; missing_count: number; missing: StreetItem[]; has_more: boolean }> => {
-    const res = await fetch(GEO_FIX_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'overpass_streets', offset, limit: OSM_BATCH }) });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    return data;
-  };
-
-  const addBatch = async (streets: StreetItem[]): Promise<number> => {
-    const res = await fetch(GEO_FIX_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'ai_map_streets', streets }) });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    return data.added_count || 0;
-  };
-
-  const handleOsmLoad = async (offset = 0) => {
+  // Загружаем ВСЕ недостающие улицы за один Overpass-запрос (лимит 2500)
+  const handleOsmLoad = async () => {
     setOsmLoading(true);
     try {
-      const data = await fetchOsmPage(offset);
-      setOsmResult(data); setOsmOffset(offset);
+      const res = await fetch(GEO_FIX_URL, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'overpass_streets', offset: 0, limit: 2500 }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setOsmMeta({ osm_total: data.osm_total, in_map: data.in_map, missing_count: data.missing_count });
+      setOsmQueue(data.missing || []);
+      setOsmCurrentBatch((data.missing || []).slice(0, OSM_BATCH));
+      setOsmAddedTotal(0);
+      setOsmProgress({ done: 0, total: data.missing_count });
     } catch (e) { toast.error(e instanceof Error ? e.message : 'Ошибка загрузки OSM'); }
     finally { setOsmLoading(false); }
   };
 
+  // Добавить один батч вручную
   const handleOsmAddBatch = async () => {
-    if (!osmResult?.missing?.length) return;
+    if (!osmCurrentBatch.length) return;
     setOsmAdding(true);
     try {
-      const added = await addBatch(osmResult.missing);
-      setOsmAddedTotal(t => t + added);
+      const res = await fetch(GEO_FIX_URL, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'ai_map_streets', streets: osmCurrentBatch }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      const added = data.added_count || 0;
+      const newTotal = osmAddedTotal + added;
+      setOsmAddedTotal(newTotal);
       toast.success(`Добавлено ${added} улиц`);
-      const next = await fetchOsmPage(osmOffset + OSM_BATCH);
-      setOsmResult(next); setOsmOffset(osmOffset + OSM_BATCH);
-    } catch (e) { toast.error(e instanceof Error ? e.message : 'Ошибка'); }
+      // Сдвигаем очередь
+      const remaining = osmQueue.slice(OSM_BATCH);
+      setOsmQueue(remaining);
+      setOsmCurrentBatch(remaining.slice(0, OSM_BATCH));
+      setOsmProgress({ done: newTotal, total: osmMeta?.missing_count ?? 0 });
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Ошибка ИИ'); }
     finally { setOsmAdding(false); }
   };
 
+  // Запустить все батчи автоматически
   const handleOsmRunAll = async () => {
-    setOsmRunAll(true); setOsmStopFlag(false);
-    let offset = osmOffset;
+    if (!osmQueue.length) return;
+    stopRef.current = false;
+    setOsmRunAll(true);
+    let queue = [...osmQueue];
     let totalAdded = osmAddedTotal;
-    let missingTotal = osmResult?.missing_count ?? 0;
-    setOsmProgress({ done: offset, total: missingTotal });
+    const grandTotal = osmMeta?.missing_count ?? queue.length;
+
     try {
-       
-      while (true) {
-        // Загружаем страницу
-        const page = await fetchOsmPage(offset);
-        missingTotal = page.missing_count;
-        setOsmResult(page); setOsmOffset(offset);
-        setOsmProgress({ done: offset, total: missingTotal });
-        if (!page.missing.length) break;
-        // Проверяем флаг остановки через замыкание — используем ref-подобный трюк через state
-        // Передаём через setOsmStopFlag callback чтобы прочитать текущее значение
-        let stopped = false;
-        setOsmStopFlag(v => { stopped = v; return v; });
-        if (stopped) { toast('Остановлено'); break; }
-        // Отправляем батч в ИИ
-        const added = await addBatch(page.missing);
-        totalAdded += added;
+      while (queue.length > 0) {
+        if (stopRef.current) { toast('Остановлено'); break; }
+        const batch = queue.slice(0, OSM_BATCH);
+        const res = await fetch(GEO_FIX_URL, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'ai_map_streets', streets: batch }),
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        totalAdded += data.added_count || 0;
+        queue = queue.slice(OSM_BATCH);
+        setOsmQueue(queue);
+        setOsmCurrentBatch(queue.slice(0, OSM_BATCH));
         setOsmAddedTotal(totalAdded);
-        offset += OSM_BATCH;
-        if (!page.has_more) break;
+        setOsmProgress({ done: grandTotal - queue.length, total: grandTotal });
       }
-      toast.success(`Готово! Всего добавлено улиц: ${totalAdded}`);
+      if (!stopRef.current) toast.success(`Готово! Добавлено улиц: ${totalAdded}`);
     } catch (e) { toast.error(e instanceof Error ? e.message : 'Ошибка в процессе'); }
-    finally { setOsmRunAll(false); setOsmStopFlag(false); }
+    finally { setOsmRunAll(false); stopRef.current = false; }
   };
 
   const handleGeoFixPreview = async () => {
@@ -352,10 +359,12 @@ export default function DistrictsAdmin() {
             <Icon name={geoFixLoading ? 'Loader2' : 'MapPinCheck'} size={14} className={geoFixLoading ? 'animate-spin' : ''} />
             Исправить районы объектов
           </button>
-          <button type="button" onClick={() => osmResult ? setOsmResult(null) : handleOsmLoad(0)} disabled={osmLoading}
-            className={`inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl border transition disabled:opacity-50 ${osmResult ? 'border-sky-400 bg-sky-100 text-sky-800' : 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100'}`}>
+          <button type="button"
+            onClick={() => osmMeta ? (setOsmMeta(null), setOsmQueue([]), setOsmCurrentBatch([]), setOsmAddedTotal(0)) : handleOsmLoad()}
+            disabled={osmLoading || osmRunAll}
+            className={`inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl border transition disabled:opacity-50 ${osmMeta ? 'border-sky-400 bg-sky-100 text-sky-800' : 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100'}`}>
             <Icon name={osmLoading ? 'Loader2' : 'Map'} size={14} className={osmLoading ? 'animate-spin' : ''} />
-            Улицы из OSM
+            {osmLoading ? 'Загружаю улицы...' : 'Улицы из OSM'}
           </button>
           <button type="button" onClick={load} disabled={loading}
             className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl border border-border hover:bg-muted/50 transition disabled:opacity-50">
@@ -434,87 +443,99 @@ export default function DistrictsAdmin() {
       )}
 
       {/* ── OSM-панель (Overpass + ИИ) ─────────────────────────────────────── */}
-      {osmResult && (
+      {osmMeta && (
         <div className="bg-sky-50 border border-sky-200 rounded-2xl p-5 space-y-4">
+
+          {/* Заголовок */}
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
               <div className="font-semibold text-sky-800 flex items-center gap-2">
                 <Icon name="Map" size={16} /> Улицы из OpenStreetMap
               </div>
               <div className="text-sm text-sky-700 mt-0.5">
-                Всего в OSM: <b>{osmResult.osm_total}</b> &nbsp;·&nbsp;
-                Уже в справочнике: <b>{osmResult.in_map}</b> &nbsp;·&nbsp;
-                Недостаёт: <b>{osmResult.missing_count}</b>
-                {osmAddedTotal > 0 && <> &nbsp;·&nbsp; Добавлено за сессию: <b className="text-sky-900">{osmAddedTotal}</b></>}
+                Всего в OSM: <b>{osmMeta.osm_total}</b> &nbsp;·&nbsp;
+                Уже в справочнике: <b>{osmMeta.in_map}</b> &nbsp;·&nbsp;
+                Осталось добавить: <b>{osmQueue.length}</b>
+                {osmAddedTotal > 0 && <> &nbsp;·&nbsp; Добавлено сейчас: <b className="text-emerald-700">{osmAddedTotal}</b></>}
               </div>
             </div>
-            <button onClick={() => { if (!osmRunAll) { setOsmResult(null); setOsmAddedTotal(0); } }}
+            <button onClick={() => { setOsmMeta(null); setOsmQueue([]); setOsmCurrentBatch([]); setOsmAddedTotal(0); }}
               disabled={osmRunAll}
-              className="text-sky-400 hover:text-sky-600 disabled:opacity-30"><Icon name="X" size={16} /></button>
+              className="text-sky-400 hover:text-sky-600 disabled:opacity-30">
+              <Icon name="X" size={16} />
+            </button>
           </div>
 
-          {/* Прогресс-бар во время "Запустить всё" */}
-          {osmRunAll && osmProgress.total > 0 && (
+          {/* Прогресс-бар */}
+          {(osmRunAll || osmAddedTotal > 0) && osmProgress.total > 0 && (
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs text-sky-700">
-                <span>Обрабатываю улицы...</span>
-                <span>{Math.min(osmProgress.done + OSM_BATCH, osmProgress.total)} / {osmProgress.total}</span>
+                <span>{osmRunAll ? 'Обрабатываю...' : 'Прогресс'}</span>
+                <span>{osmProgress.done} / {osmProgress.total}</span>
               </div>
-              <div className="h-2 bg-sky-200 rounded-full overflow-hidden">
-                <div className="h-full bg-sky-500 rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(100, ((osmProgress.done + OSM_BATCH) / osmProgress.total) * 100)}%` }} />
+              <div className="h-2.5 bg-sky-200 rounded-full overflow-hidden">
+                <div className="h-full bg-sky-500 rounded-full transition-all duration-300"
+                  style={{ width: `${Math.min(100, (osmProgress.done / osmProgress.total) * 100)}%` }} />
               </div>
             </div>
           )}
 
-          {osmResult.missing.length > 0 ? (
+          {osmCurrentBatch.length > 0 ? (
             <>
+              {/* Таблица текущего батча */}
               <div className="bg-white rounded-xl border border-sky-200 overflow-hidden max-h-48 overflow-y-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-sky-50 text-sky-700 text-xs uppercase tracking-wide sticky top-0">
                     <tr>
-                      <th className="px-3 py-2 text-left">Улица (OSM)</th>
-                      <th className="px-3 py-2 text-left">Основа</th>
+                      <th className="px-3 py-2 text-left w-8">#</th>
+                      <th className="px-3 py-2 text-left">Улица</th>
+                      <th className="px-3 py-2 text-left hidden sm:table-cell">Основа для маппинга</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-sky-50">
-                    {osmResult.missing.map((s, i) => (
-                      <tr key={i}>
+                    {osmCurrentBatch.map((s, i) => (
+                      <tr key={i} className="hover:bg-sky-50/50">
+                        <td className="px-3 py-1.5 text-xs text-muted-foreground">{i + 1}</td>
                         <td className="px-3 py-1.5 font-medium">{s.street}</td>
-                        <td className="px-3 py-1.5 text-muted-foreground text-xs">{s.base}</td>
+                        <td className="px-3 py-1.5 text-muted-foreground text-xs hidden sm:table-cell">{s.base}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+
+              {/* Кнопки */}
               <div className="flex items-center gap-3 flex-wrap">
-                {/* Запустить ВСЁ автоматически */}
                 {!osmRunAll ? (
-                  <button onClick={handleOsmRunAll} disabled={osmAdding || osmLoading}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-sky-700 text-white text-sm font-semibold hover:bg-sky-800 transition disabled:opacity-50">
-                    <Icon name="PlayCircle" size={14} />
-                    Запустить все {osmResult.missing_count} улиц автоматически
-                  </button>
+                  <>
+                    <button onClick={handleOsmRunAll} disabled={osmAdding || osmLoading}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-sky-700 text-white text-sm font-semibold hover:bg-sky-800 transition disabled:opacity-50">
+                      <Icon name="PlayCircle" size={14} />
+                      Запустить все {osmQueue.length} улиц автоматически
+                    </button>
+                    <button onClick={handleOsmAddBatch} disabled={osmAdding || osmLoading}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-sky-300 text-sky-700 text-sm hover:bg-sky-100 transition disabled:opacity-50">
+                      <Icon name={osmAdding ? 'Loader2' : 'Sparkles'} size={14} className={osmAdding ? 'animate-spin' : ''} />
+                      {osmAdding ? 'Добавляю...' : `Батч из ${osmCurrentBatch.length}`}
+                    </button>
+                  </>
                 ) : (
-                  <button onClick={() => setOsmStopFlag(true)}
+                  <button onClick={() => { stopRef.current = true; }}
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition">
                     <Icon name="StopCircle" size={14} />
                     Остановить
                   </button>
                 )}
-                {/* Батч вручную */}
-                <button onClick={handleOsmAddBatch} disabled={osmAdding || osmLoading || osmRunAll}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-sky-300 text-sky-700 text-sm hover:bg-sky-100 transition disabled:opacity-50">
-                  <Icon name={osmAdding ? 'Loader2' : 'Sparkles'} size={14} className={osmAdding ? 'animate-spin' : ''} />
-                  {osmAdding ? 'Добавляю...' : `Только этот батч (${osmResult.missing.length})`}
-                </button>
-                <span className="text-xs text-sky-500">
-                  {osmOffset + 1}–{osmOffset + osmResult.missing.length} из {osmResult.missing_count}
+                <span className="text-xs text-sky-500 ml-auto">
+                  В очереди: {osmQueue.length} улиц
                 </span>
               </div>
             </>
           ) : (
-            <div className="text-sm text-sky-700 py-2">Все улицы из OSM уже есть в справочнике!</div>
+            <div className="flex items-center gap-2 text-sm text-emerald-700 py-1">
+              <Icon name="CheckCircle2" size={16} className="text-emerald-500" />
+              Все улицы из OSM добавлены в справочник!
+            </div>
           )}
         </div>
       )}
