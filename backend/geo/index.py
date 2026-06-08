@@ -1120,6 +1120,155 @@ def _handle_ai_map(body: dict, cur, conn) -> dict:
     })
 
 
+# ── action=geo_okrug ─────────────────────────────────────────────────────────
+
+def _geocode_maps_co(street: str, api_key: str) -> dict:
+    """
+    geocode.maps.co (Nominatim-совместимый) — ищет улицу в Краснодаре.
+    Возвращает поля: suburb, quarter, city_district из address.
+    """
+    import urllib.parse as _up
+    q = _up.quote(f'Краснодар, {street}')
+    url = (
+        f'https://geocode.maps.co/search'
+        f'?q={q}&api_key={api_key}&format=json&addressdetails=1&limit=1&accept-language=ru'
+    )
+    req = urllib.request.Request(url, headers={'User-Agent': 'KrasnodarRealEstate/1.0'})
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        data = json.loads(resp.read().decode('utf-8'))
+    if not data or not isinstance(data, list):
+        return {}
+    addr = data[0].get('address') or {}
+    return {
+        'suburb':        addr.get('suburb', ''),
+        'quarter':       addr.get('quarter', ''),
+        'city_district': addr.get('city_district', ''),
+        'neighbourhood': addr.get('neighbourhood', ''),
+        'raw':           addr,
+    }
+
+
+def _match_okrug(geo: dict, okrugs: list):
+    """
+    Сопоставляет поля suburb/quarter/city_district из geocode.maps.co с 4 округами.
+    Возвращает строку из okrugs или None.
+    Окружа: [{id, name}]
+    """
+    candidates = [
+        geo.get('city_district', ''),
+        geo.get('suburb', ''),
+        geo.get('quarter', ''),
+        geo.get('neighbourhood', ''),
+    ]
+    for raw in candidates:
+        if not raw:
+            continue
+        raw_l = raw.lower().strip()
+        for okrug in okrugs:
+            ok_l = okrug['name'].lower()
+            ok_first = ok_l.split()[0]  # "центральный", "прикубанский" и т.д.
+            if ok_first in raw_l or raw_l in ok_l:
+                return okrug
+    return None
+
+
+def _handle_geo_okrug(body: dict, cur, conn) -> dict:
+    """
+    action=geo_okrug — для каждой уникальной улицы из street_district_map
+    запрашивает geocode.maps.co, определяет округ (okrug_id) и сохраняет в БД.
+
+    mode=preview — только показать что найдено, без записи
+    mode=apply   — сохранить okrug_id в street_district_map
+    limit=N      — обработать не более N уникальных улиц (по умолчанию 50)
+    force=true   — перезаписывать даже те у кого okrug_id уже стоит
+    """
+    import time as _time
+
+    mode = body.get('mode', 'preview')
+    limit = min(int(body.get('limit') or 50), 200)
+    force = body.get('force', False)
+
+    api_key = os.environ.get('MAPS_CO_API_KEY', '')
+    if not api_key:
+        return _err('Нужен MAPS_CO_API_KEY', 500)
+
+    # Загружаем 4 округа
+    cur.execute(
+        f"SELECT id, name FROM {SCHEMA}.districts WHERE is_okrug = TRUE AND is_active = TRUE ORDER BY sort_order"
+    )
+    okrugs = [dict(r) for r in cur.fetchall()]
+    if not okrugs:
+        return _err('Не найдены округа (is_okrug=true)', 500)
+
+    # Уникальные улицы из street_district_map (у которых okrug_id не задан или force=true)
+    if force:
+        cur.execute(
+            f"SELECT DISTINCT street_pattern FROM {SCHEMA}.street_district_map ORDER BY street_pattern LIMIT {limit}"
+        )
+    else:
+        cur.execute(
+            f"SELECT DISTINCT street_pattern FROM {SCHEMA}.street_district_map "
+            f"WHERE okrug_id IS NULL ORDER BY street_pattern LIMIT {limit}"
+        )
+    streets = [r['street_pattern'] for r in cur.fetchall()]
+
+    print(f'[geo_okrug] улиц к обработке: {len(streets)}, окружа: {[o["name"] for o in okrugs]}')
+
+    results = []
+    matched_count = 0
+    not_found = []
+
+    for street in streets:
+        try:
+            geo = _geocode_maps_co(street, api_key)
+            okrug = _match_okrug(geo, okrugs)
+
+            entry = {
+                'street': street,
+                'okrug': okrug['name'] if okrug else None,
+                'okrug_id': okrug['id'] if okrug else None,
+                'suburb': geo.get('suburb', ''),
+                'quarter': geo.get('quarter', ''),
+                'city_district': geo.get('city_district', ''),
+            }
+            results.append(entry)
+
+            if okrug:
+                matched_count += 1
+                if mode == 'apply':
+                    cur.execute(
+                        f"UPDATE {SCHEMA}.street_district_map "
+                        f"SET okrug_id = {okrug['id']} "
+                        f"WHERE street_pattern = %s",
+                        (street,)
+                    )
+                print(f'[geo_okrug] ✓ "{street}" → {okrug["name"]} (suburb={geo.get("suburb")!r})')
+            else:
+                not_found.append(street)
+                print(f'[geo_okrug] ? "{street}" — округ не определён (suburb={geo.get("suburb")!r}, city_district={geo.get("city_district")!r})')
+
+            # geocode.maps.co лимит: 2 запроса в секунду на бесплатном тарифе
+            _time.sleep(0.6)
+
+        except Exception as e:
+            print(f'[geo_okrug] ошибка "{street}": {e}')
+            not_found.append(f'{street} (ошибка: {e})')
+
+    if mode == 'apply':
+        conn.commit()
+        print(f'[geo_okrug] сохранено okrug_id для {matched_count} улиц')
+
+    return _ok({
+        'mode': mode,
+        'total_streets': len(streets),
+        'matched_count': matched_count,
+        'not_found_count': len(not_found),
+        'okrugs': okrugs,
+        'results': results,
+        'not_found': not_found,
+    })
+
+
 # ── Handler ───────────────────────────────────────────────────────────────────
 
 def handler(event: dict, context) -> dict:
@@ -1156,7 +1305,9 @@ def handler(event: dict, context) -> dict:
                 return _handle_overpass(body, cur)
             elif action == 'ai_map_streets':
                 return _handle_ai_map(body, cur, conn)
+            elif action == 'geo_okrug':
+                return _handle_geo_okrug(body, cur, conn)
             else:
-                return _err(f'Неизвестный action: {action}. Доступные: suggest, fix, normalize, audit, parse_osm, overpass_streets, ai_map_streets')
+                return _err(f'Неизвестный action: {action}. Доступные: suggest, fix, normalize, audit, parse_osm, overpass_streets, ai_map_streets, geo_okrug')
     finally:
         conn.close()

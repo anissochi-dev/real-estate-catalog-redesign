@@ -37,6 +37,12 @@ export default function DistrictsAdmin() {
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
+  // Обновление округов улиц через geocode.maps.co
+  const [geoOkrugLoading, setGeoOkrugLoading] = useState(false);
+  type GeoOkrugResult = { total_streets: number; matched_count: number; not_found_count: number; results: { street: string; okrug: string | null; suburb: string; city_district: string }[] };
+  const [geoOkrugResult, setGeoOkrugResult] = useState<GeoOkrugResult | null>(null);
+  const [geoOkrugApplying, setGeoOkrugApplying] = useState(false);
+
   // Исправление районов
   const [geoFixLoading, setGeoFixLoading] = useState(false);
   const [geoFixResult, setGeoFixResult] = useState<{ changed_count: number; unchanged_count: number; not_found_count: number; changed: { id: number; address: string; district_old: string; district_new: string }[] } | null>(null);
@@ -150,6 +156,32 @@ export default function DistrictsAdmin() {
       if (!stopRef.current) toast.success(`Готово! Добавлено: ${totalAdded}, не определён район: ${totalSkipped}`);
     } catch (e) { toast.error(e instanceof Error ? e.message : 'Ошибка в процессе'); }
     finally { setOsmRunAll(false); stopRef.current = false; }
+  };
+
+  const handleGeoOkrugPreview = async () => {
+    setGeoOkrugLoading(true); setGeoOkrugResult(null);
+    try {
+      const res = await fetch(GEO_FIX_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'geo_okrug', mode: 'preview', limit: 50 }) });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || `Ошибка ${res.status}`);
+      setGeoOkrugResult(data);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Ошибка проверки округов');
+    } finally { setGeoOkrugLoading(false); }
+  };
+
+  const handleGeoOkrugApply = async () => {
+    if (!window.confirm(`Применить округа для ${geoOkrugResult?.matched_count} улиц?`)) return;
+    setGeoOkrugApplying(true);
+    try {
+      const res = await fetch(GEO_FIX_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'geo_okrug', mode: 'apply', limit: 50 }) });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || `Ошибка ${res.status}`);
+      toast.success(`Округа присвоены для ${data.matched_count} улиц`);
+      setGeoOkrugResult(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Ошибка применения');
+    } finally { setGeoOkrugApplying(false); }
   };
 
   const handleGeoFixPreview = async () => {
@@ -383,6 +415,11 @@ export default function DistrictsAdmin() {
             <Icon name="Wand2" size={14} />
             Добавить через ИИ
           </button>
+          <button type="button" onClick={handleGeoOkrugPreview} disabled={geoOkrugLoading}
+            className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 transition disabled:opacity-50">
+            <Icon name={geoOkrugLoading ? 'Loader2' : 'Globe'} size={14} className={geoOkrugLoading ? 'animate-spin' : ''} />
+            {geoOkrugLoading ? 'Запрашиваю geocode...' : 'Округа по улицам'}
+          </button>
           <button type="button" onClick={handleGeoFixPreview} disabled={geoFixLoading}
             className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition disabled:opacity-50">
             <Icon name={geoFixLoading ? 'Loader2' : 'MapPinCheck'} size={14} className={geoFixLoading ? 'animate-spin' : ''} />
@@ -423,6 +460,65 @@ export default function DistrictsAdmin() {
           token={refreshToken()}
           onSaved={load}
         />
+      )}
+
+      {/* Панель результатов geo-okrug */}
+      {geoOkrugResult && (
+        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-5 space-y-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <div className="font-semibold text-orange-800 flex items-center gap-2">
+                <Icon name="Globe" size={16} /> Округа по улицам — geocode.maps.co
+              </div>
+              <div className="text-sm text-orange-700 mt-0.5">
+                Улиц обработано: <b>{geoOkrugResult.total_streets}</b> &nbsp;·&nbsp;
+                Округ определён: <b>{geoOkrugResult.matched_count}</b> &nbsp;·&nbsp;
+                Не определено: <b>{geoOkrugResult.not_found_count}</b>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setGeoOkrugResult(null)}
+                className="text-sm px-3 py-1.5 rounded-lg border border-orange-300 text-orange-700 hover:bg-orange-100 transition">
+                Закрыть
+              </button>
+              {geoOkrugResult.matched_count > 0 && (
+                <button onClick={handleGeoOkrugApply} disabled={geoOkrugApplying}
+                  className="text-sm px-4 py-1.5 rounded-lg bg-orange-600 text-white font-semibold hover:bg-orange-700 transition disabled:opacity-50 flex items-center gap-1.5">
+                  <Icon name={geoOkrugApplying ? 'Loader2' : 'Check'} size={14} className={geoOkrugApplying ? 'animate-spin' : ''} />
+                  Сохранить {geoOkrugResult.matched_count} округов
+                </button>
+              )}
+            </div>
+          </div>
+          {geoOkrugResult.results.length > 0 && (
+            <div className="bg-white rounded-xl border border-orange-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-orange-50 text-orange-700 text-xs uppercase">
+                  <tr>
+                    <th className="text-left px-3 py-2">Улица</th>
+                    <th className="text-left px-3 py-2">Округ</th>
+                    <th className="text-left px-3 py-2 hidden sm:table-cell">suburb / city_district</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-orange-100">
+                  {geoOkrugResult.results.map((r, i) => (
+                    <tr key={i} className={r.okrug ? '' : 'opacity-50'}>
+                      <td className="px-3 py-1.5 font-medium">{r.street}</td>
+                      <td className="px-3 py-1.5">
+                        {r.okrug
+                          ? <span className="text-orange-700 font-semibold">{r.okrug}</span>
+                          : <span className="text-muted-foreground italic">не определён</span>}
+                      </td>
+                      <td className="px-3 py-1.5 text-muted-foreground hidden sm:table-cell text-xs">
+                        {[r.suburb, r.city_district].filter(Boolean).join(' / ') || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Панель результатов geo-fix */}
