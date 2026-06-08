@@ -687,25 +687,69 @@ def _norm_st(s):
 
 
 def _handle_parse_osm(body: dict, cur) -> dict:
+    """
+    Скачивает PBF целиком потоково через urllib, накапливает данные в памяти
+    построчно — не читает весь файл сразу, парсит блоки на лету.
+    """
     url = body.get('url', '').strip()
     if not url: return _err('url обязателен', 400)
 
-    MAX_R = int(body.get('max_mb', 25)) * 1024 * 1024
-    MAX_R = min(MAX_R, 55 * 1024 * 1024)
-    print(f'[geo parse_osm] скачиваем {url} range=0-{MAX_R}')
-    try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0', 'Range': f'bytes=0-{MAX_R-1}'})
-        with urllib.request.urlopen(req, timeout=25) as r:
-            data = r.read(MAX_R)
-        print(f'[geo parse_osm] получено {len(data):,} байт')
-    except Exception as e:
-        return _err(f'Скачивание: {e}', 502)
+    import struct as _s, zlib as _z
 
+    streets = set(); places = {}
+    blks = 0; total_bytes = 0
+    buf = bytearray()
+
+    print(f'[geo parse_osm] потоковое чтение {url}')
     try:
-        streets, places = _parse_pbf(data)
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=25) as r:
+            # Читаем кусками по 512 КБ, парсим PBF-блоки на лету
+            CHUNK = 512 * 1024
+            while True:
+                chunk = r.read(CHUNK)
+                if not chunk:
+                    break
+                buf.extend(chunk)
+                total_bytes += len(chunk)
+
+                # Пробуем извлечь полные PBF-блоки из буфера
+                pos = 0
+                while pos < len(buf):
+                    if pos + 4 > len(buf): break
+                    hl = _s.unpack('>I', buf[pos:pos+4])[0]
+                    if hl > 65536: break
+                    if pos + 4 + hl > len(buf): break
+                    hf = _pf(bytes(buf[pos+4:pos+4+hl]))
+                    bt = hf.get(1,[b''])[0]
+                    if isinstance(bt, bytes): bt = bt.decode('utf-8', errors='replace')
+                    bs = hf.get(3,[0])[0]
+                    blob_start = pos + 4 + hl
+                    if blob_start + bs > len(buf): break
+                    # Полный блок получен
+                    bd = bytes(buf[blob_start:blob_start+bs])
+                    pos = blob_start + bs
+                    if bt == 'OSMData':
+                        bf = _pf(bd)
+                        if bf.get(3):
+                            try: raw = _z.decompress(bf[3][0])
+                            except Exception: continue
+                        elif bf.get(1): raw = bf[1][0]
+                        else: continue
+                        _blk(raw, streets, places)
+                        blks += 1
+
+                # Оставляем только непрочитанный хвост
+                del buf[:pos]
+
+                # Лимит: достаточно улиц или обработали весь Краснодар
+                if len(streets) >= 12000 and len(places) >= 500:
+                    print('[geo parse_osm] лимит достигнут, прерываем')
+                    break
+
+        print(f'[geo parse_osm] итого: {total_bytes//1024//1024} МБ, блоков={blks}, улиц={len(streets)}, мест={len(places)}')
     except Exception as e:
-        import traceback
-        return _err(f'Парсинг: {e} | {traceback.format_exc()[:400]}', 500)
+        return _err(f'Скачивание/парсинг: {e}', 502)
 
     cur.execute(f"SELECT DISTINCT street_pattern FROM {SCHEMA}.street_district_map ORDER BY street_pattern")
     our_st = {r['street_pattern'] for r in cur.fetchall()}
@@ -731,7 +775,8 @@ def _handle_parse_osm(body: dict, cur) -> dict:
             else:   missing_pl.append({'name': nm, 'type': pt})
 
     return _ok({
-        'read_mb': round(len(data)/1024/1024, 1),
+        'total_mb': round(total_bytes/1024/1024, 1),
+        'blocks_parsed': blks,
         'osm_streets': len(streets),
         'osm_places': len(places),
         'db_streets': len(our_st),
