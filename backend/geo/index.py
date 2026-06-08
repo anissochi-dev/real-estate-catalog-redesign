@@ -867,29 +867,29 @@ def _norm_street(name: str) -> str:
 
 def _handle_overpass(body: dict, cur) -> dict:
     """
-    Загружает улицы Краснодара через Overpass API и сравнивает с нашим справочником.
-    mode=preview — только показывает список недостающих улиц (по умолчанию)
-    mode=auto_add — добавляет улицы у которых ИИ смог определить район (требует api_key)
-    limit=N — ограничение числа улиц в ответе (по умолчанию 500)
+    action=overpass_streets — загружает улицы Краснодара через Overpass API,
+    сравнивает с street_district_map, возвращает список недостающих.
+    offset=N — пропустить первые N недостающих улиц (для постраничной загрузки)
+    limit=N  — сколько вернуть (по умолчанию 20)
     """
     import urllib.request as _ur, json as _j
 
-    mode = body.get('mode', 'preview')
-    limit_out = int(body.get('limit', 500))
+    limit_out = int(body.get('limit', 20))
+    offset = int(body.get('offset', 0))
 
-    # Overpass запрос: все именованные улицы в bbox Краснодара
-    overpass_query = '''
-[out:json][timeout:50];
-area["name"="Краснодар"]["boundary"="administrative"]["admin_level"="8"]->.krd;
-(
-  way["highway"~"^(residential|primary|secondary|tertiary|unclassified|service|living_street|trunk|pedestrian|primary_link|secondary_link|tertiary_link)$"]["name"](area.krd);
-);
-out tags;
-'''
+    overpass_query = (
+        '[out:json][timeout:50];'
+        '('
+        'way["highway"~"^(residential|primary|secondary|tertiary|unclassified|'
+        'service|living_street|trunk|pedestrian|primary_link|secondary_link|tertiary_link)$"]'
+        '["name"](44.95,38.85,45.20,39.25);'
+        ');'
+        'out tags;'
+    )
     print('[geo overpass] запрос к Overpass API...')
     req = _ur.Request(
         'https://overpass-api.de/api/interpreter',
-        data=overpass_query.strip().encode('utf-8'),
+        data=overpass_query.encode('utf-8'),
         headers={'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'KrasnodarRealEstate/1.0'},
         method='POST',
     )
@@ -899,7 +899,6 @@ out tags;
     except Exception as e:
         return _err(f'Overpass API ошибка: {e}', 502)
 
-    # Собираем уникальные имена улиц
     osm_streets = set()
     for el in data.get('elements', []):
         nm = (el.get('tags') or {}).get('name', '').strip()
@@ -908,116 +907,129 @@ out tags;
 
     print(f'[geo overpass] получено улиц из OSM: {len(osm_streets)}')
 
-    # Загружаем текущий справочник
-    cur.execute(f"SELECT DISTINCT street_pattern FROM {SCHEMA}.street_district_map ORDER BY street_pattern")
+    cur.execute(f"SELECT DISTINCT street_pattern FROM {SCHEMA}.street_district_map")
     existing = {r['street_pattern'].lower().strip() for r in cur.fetchall()}
 
-    cur.execute(f"SELECT name FROM {SCHEMA}.districts WHERE is_active = TRUE ORDER BY name")
-    districts = [r['name'] for r in cur.fetchall()]
-
-    # Находим улицы которых нет в справочнике
     missing = []
     for nm in sorted(osm_streets):
         base = _norm_street(nm)
         if nm.lower() not in existing and base.lower() not in existing:
             missing.append({'street': nm, 'base': base})
 
-    print(f'[geo overpass] недостающих улиц: {len(missing)}')
+    print(f'[geo overpass] недостающих: {len(missing)}')
 
-    result = {
+    return _ok({
         'osm_total': len(osm_streets),
         'in_map': len(osm_streets) - len(missing),
         'missing_count': len(missing),
-        'missing': missing[:limit_out],
-        'districts_available': len(districts),
+        'offset': offset,
+        'limit': limit_out,
+        'missing': missing[offset:offset + limit_out],
+        'has_more': (offset + limit_out) < len(missing),
+    })
+
+
+def _handle_ai_map(body: dict, cur, conn) -> dict:
+    """
+    action=ai_map_streets — принимает список улиц [{street, base}, ...],
+    определяет район через YandexGPT-5-Pro для одного батча (≤20 улиц),
+    сохраняет в street_district_map.
+    streets=[...] — список объектов {street, base}
+    """
+    import urllib.request as _ur2, json as _j2, re as _re2
+
+    streets = body.get('streets', [])
+    if not streets:
+        return _err('streets обязателен')
+    if len(streets) > 20:
+        streets = streets[:20]
+
+    api_key = os.environ.get('YANDEX_API_KEY', '')
+    folder_id = os.environ.get('YANDEX_FOLDER_ID', '')
+    if not api_key or not folder_id:
+        try:
+            cur.execute(f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings LIMIT 1")
+            row = cur.fetchone()
+            if row:
+                api_key = row.get('yandex_api_key', '') or ''
+                folder_id = row.get('yandex_folder_id', '') or ''
+        except Exception:
+            pass
+    if not api_key or not folder_id:
+        return _err('Нет YANDEX_API_KEY / YANDEX_FOLDER_ID')
+
+    cur.execute(f"SELECT name FROM {SCHEMA}.districts WHERE is_active = TRUE ORDER BY name")
+    districts = [r['name'] for r in cur.fetchall()]
+    districts_numbered = '\n'.join([f'{i+1}. {d}' for i, d in enumerate(districts)])
+
+    streets_list = '\n'.join([f'{i+1}. {s["street"]}' for i, s in enumerate(streets)])
+    payload = {
+        'modelUri': f'gpt://{folder_id}/yandexgpt-5-pro/latest',
+        'completionOptions': {'stream': False, 'temperature': 0.05, 'maxTokens': '500'},
+        'messages': [
+            {'role': 'system', 'text': (
+                'Ты — риелтор-эксперт по микрорайонам Краснодара.\n'
+                'Для каждой улицы из нумерованного списка определи ОДИН номер микрорайона из справочника.\n'
+                'Формат ответа — строго по одной строке:\n'
+                'N: M\n'
+                'где N — номер улицы, M — номер микрорайона из справочника (0 если не знаешь).\n'
+                'Только цифры, никаких пояснений.\n\n'
+                f'Справочник микрорайонов Краснодара:\n{districts_numbered}'
+            )},
+            {'role': 'user', 'text': f'Улицы Краснодара:\n{streets_list}'},
+        ],
     }
+    gpt_req = _ur2.Request(
+        'https://llm.api.cloud.yandex.net/foundationModels/v1/completion',
+        data=_j2.dumps(payload).encode(),
+        headers={'Authorization': f'Api-Key {api_key}', 'Content-Type': 'application/json', 'x-folder-id': folder_id},
+        method='POST',
+    )
+    try:
+        with _ur2.urlopen(gpt_req, timeout=25) as gr:
+            gpt_data = _j2.loads(gr.read().decode())
+    except Exception as e:
+        return _err(f'YandexGPT ошибка: {e}', 502)
 
-    if mode == 'auto_add':
-        # Добавляем улицы через ИИ-определение района (батчи по 10)
-        api_key = os.environ.get('YANDEX_API_KEY', '')
-        folder_id = os.environ.get('YANDEX_FOLDER_ID', '')
-        if not api_key or not folder_id:
-            try:
-                cur.execute(f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings LIMIT 1")
-                row = cur.fetchone()
-                if row:
-                    api_key = row.get('yandex_api_key', '') or ''
-                    folder_id = row.get('yandex_folder_id', '') or ''
-            except Exception:
-                pass
+    alts = (gpt_data.get('result') or {}).get('alternatives') or []
+    text = ((alts[0].get('message') or {}).get('text') or '') if alts else ''
+    print(f'[geo ai_map] GPT ответ: {text[:300]}')
 
-        if not api_key or not folder_id:
-            result['auto_add_error'] = 'Нет YANDEX_API_KEY / YANDEX_FOLDER_ID'
-            return _ok(result)
-
-        districts_numbered = '\n'.join([f'{i+1}. {d}' for i, d in enumerate(districts)])
-        batch_size = 10
-        max_streets = int(body.get('max_streets', 50))
-        to_add = missing[:max_streets]
-        added = []; errors_add = []
-
-        import urllib.request as _ur2
-        for i in range(0, len(to_add), batch_size):
-            batch = to_add[i:i+batch_size]
-            streets_list = '\n'.join([f'- {s["street"]}' for s in batch])
-            payload = {
-                'modelUri': f'gpt://{folder_id}/yandexgpt-5-pro/latest',
-                'completionOptions': {'stream': False, 'temperature': 0.05, 'maxTokens': '300'},
-                'messages': [
-                    {'role': 'system', 'text': (
-                        f'Ты — риелтор-эксперт по Краснодару. '
-                        f'Для каждой улицы из списка определи номер микрорайона из справочника.\n'
-                        f'Формат ответа строго (по одной строке на улицу):\n'
-                        f'НазваниеУлицы: НОМЕР\n\n'
-                        f'Если не знаешь — пиши 0.\n\n'
-                        f'Справочник микрорайонов Краснодара:\n{districts_numbered}'
-                    )},
-                    {'role': 'user', 'text': f'Улицы:\n{streets_list}'},
-                ],
-            }
-            gpt_req = _ur2.Request(
-                'https://llm.api.cloud.yandex.net/foundationModels/v1/completion',
-                data=_j.dumps(payload).encode(),
-                headers={'Authorization': f'Api-Key {api_key}', 'Content-Type': 'application/json', 'x-folder-id': folder_id},
-                method='POST',
+    added = []; skipped = []
+    for line in text.strip().split('\n'):
+        m = _re2.match(r'(\d+)\s*:\s*(\d+)', line.strip())
+        if not m:
+            continue
+        st_idx = int(m.group(1)) - 1
+        di_idx = int(m.group(2)) - 1
+        if st_idx < 0 or st_idx >= len(streets):
+            continue
+        if di_idx < 0 or di_idx >= len(districts):
+            skipped.append(streets[st_idx]['street'])
+            continue
+        st_obj = streets[st_idx]
+        pattern = _norm_street(st_obj['street'])
+        district = districts[di_idx]
+        try:
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.street_district_map (street_pattern, district, note) "
+                f"VALUES (%s, %s, 'overpass+ai') ON CONFLICT DO NOTHING",
+                (pattern, district)
             )
-            try:
-                with _ur2.urlopen(gpt_req, timeout=20) as gr:
-                    gpt_data = _j.loads(gr.read().decode())
-                alts = (gpt_data.get('result') or {}).get('alternatives') or []
-                text = ((alts[0].get('message') or {}).get('text') or '') if alts else ''
-                # Парсим ответ
-                import re as _re2
-                for line in text.strip().split('\n'):
-                    m = _re2.search(r':\s*(\d+)', line)
-                    if not m:
-                        continue
-                    idx = int(m.group(1)) - 1
-                    if idx < 0 or idx >= len(districts):
-                        continue
-                    # Находим улицу по части названия в строке
-                    street_name = line.split(':')[0].strip()
-                    matched_st = next((s['street'] for s in batch if s['street'] in street_name or street_name in s['street']), None)
-                    if matched_st:
-                        try:
-                            cur.execute(
-                                f"INSERT INTO {SCHEMA}.street_district_map (street_pattern, district, note) "
-                                f"VALUES (%s, %s, 'overpass+ai') ON CONFLICT DO NOTHING",
-                                (_norm_street(matched_st), districts[idx])
-                            )
-                            added.append({'street': matched_st, 'district': districts[idx]})
-                        except Exception as ex:
-                            errors_add.append(str(ex))
-            except Exception as e:
-                errors_add.append(f'batch {i}: {e}')
+            added.append({'street': st_obj['street'], 'pattern': pattern, 'district': district})
+        except Exception as ex:
+            skipped.append(f'{st_obj["street"]}: {ex}')
 
-        import psycopg2 as _pg2
-        cur.connection.commit()
-        result['auto_added'] = len(added)
-        result['added_sample'] = added[:50]
-        result['add_errors'] = errors_add[:10]
+    conn.commit()
+    print(f'[geo ai_map] добавлено {len(added)}, пропущено {len(skipped)}')
 
-    return _ok(result)
+    return _ok({
+        'added_count': len(added),
+        'skipped_count': len(skipped),
+        'added': added,
+        'skipped': skipped[:10],
+        'gpt_raw': text[:500],
+    })
 
 
 # ── Handler ───────────────────────────────────────────────────────────────────
@@ -1054,7 +1066,9 @@ def handler(event: dict, context) -> dict:
                 return _handle_parse_osm(body, cur)
             elif action == 'overpass_streets':
                 return _handle_overpass(body, cur)
+            elif action == 'ai_map_streets':
+                return _handle_ai_map(body, cur, conn)
             else:
-                return _err(f'Неизвестный action: {action}. Доступные: suggest, fix, normalize, audit, parse_osm, overpass_streets')
+                return _err(f'Неизвестный action: {action}. Доступные: suggest, fix, normalize, audit, parse_osm, overpass_streets, ai_map_streets')
     finally:
         conn.close()

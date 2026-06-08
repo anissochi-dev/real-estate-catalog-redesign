@@ -40,6 +40,44 @@ export default function DistrictsAdmin() {
   const [geoFixResult, setGeoFixResult] = useState<{ changed_count: number; unchanged_count: number; not_found_count: number; changed: { id: number; address: string; district_old: string; district_new: string }[] } | null>(null);
   const [geoFixApplying, setGeoFixApplying] = useState(false);
 
+  // Заполнение улиц через Overpass + ИИ
+  type StreetItem = { street: string; base: string };
+  const [osmLoading, setOsmLoading] = useState(false);
+  const [osmResult, setOsmResult] = useState<{ osm_total: number; in_map: number; missing_count: number; missing: StreetItem[]; has_more: boolean } | null>(null);
+  const [osmOffset, setOsmOffset] = useState(0);
+  const [osmAdding, setOsmAdding] = useState(false);
+  const [osmAddedTotal, setOsmAddedTotal] = useState(0);
+  const OSM_BATCH = 20;
+
+  const handleOsmLoad = async (offset = 0) => {
+    setOsmLoading(true);
+    try {
+      const res = await fetch(GEO_FIX_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'overpass_streets', offset, limit: OSM_BATCH }) });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setOsmResult(data); setOsmOffset(offset);
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Ошибка загрузки OSM'); }
+    finally { setOsmLoading(false); }
+  };
+
+  const handleOsmAddBatch = async () => {
+    if (!osmResult?.missing?.length) return;
+    setOsmAdding(true);
+    try {
+      const res = await fetch(GEO_FIX_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'ai_map_streets', streets: osmResult.missing }) });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      const added = data.added_count || 0;
+      setOsmAddedTotal(t => t + added);
+      toast.success(`Добавлено ${added} улиц в справочник`);
+      // Загружаем следующий батч
+      await handleOsmLoad(osmOffset + OSM_BATCH);
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Ошибка ИИ-добавления'); }
+    finally { setOsmAdding(false); }
+  };
+
   const handleGeoFixPreview = async () => {
     setGeoFixLoading(true); setGeoFixResult(null);
     try {
@@ -270,6 +308,11 @@ export default function DistrictsAdmin() {
             <Icon name={geoFixLoading ? 'Loader2' : 'MapPinCheck'} size={14} className={geoFixLoading ? 'animate-spin' : ''} />
             Исправить районы объектов
           </button>
+          <button type="button" onClick={() => osmResult ? setOsmResult(null) : handleOsmLoad(0)} disabled={osmLoading}
+            className={`inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl border transition disabled:opacity-50 ${osmResult ? 'border-sky-400 bg-sky-100 text-sky-800' : 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100'}`}>
+            <Icon name={osmLoading ? 'Loader2' : 'Map'} size={14} className={osmLoading ? 'animate-spin' : ''} />
+            Улицы из OSM
+          </button>
           <button type="button" onClick={load} disabled={loading}
             className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl border border-border hover:bg-muted/50 transition disabled:opacity-50">
             <Icon name={loading ? 'Loader2' : 'RefreshCw'} size={14} className={loading ? 'animate-spin' : ''} />
@@ -342,6 +385,66 @@ export default function DistrictsAdmin() {
                 </tbody>
               </table>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* ── OSM-панель (Overpass + ИИ) ─────────────────────────────────────── */}
+      {osmResult && (
+        <div className="bg-sky-50 border border-sky-200 rounded-2xl p-5 space-y-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <div className="font-semibold text-sky-800 flex items-center gap-2">
+                <Icon name="Map" size={16} /> Улицы из OpenStreetMap
+              </div>
+              <div className="text-sm text-sky-700 mt-0.5">
+                Всего в OSM: <b>{osmResult.osm_total}</b> &nbsp;·&nbsp;
+                Уже в справочнике: <b>{osmResult.in_map}</b> &nbsp;·&nbsp;
+                Недостаёт: <b>{osmResult.missing_count}</b>
+                {osmAddedTotal > 0 && <> &nbsp;·&nbsp; Добавлено за сессию: <b className="text-sky-900">{osmAddedTotal}</b></>}
+              </div>
+            </div>
+            <button onClick={() => { setOsmResult(null); setOsmAddedTotal(0); }}
+              className="text-sky-400 hover:text-sky-600"><Icon name="X" size={16} /></button>
+          </div>
+
+          {osmResult.missing.length > 0 ? (
+            <>
+              <div className="bg-white rounded-xl border border-sky-200 overflow-hidden max-h-56 overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-sky-50 text-sky-700 text-xs uppercase tracking-wide sticky top-0">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Улица (OSM)</th>
+                      <th className="px-3 py-2 text-left">Основа</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-sky-50">
+                    {osmResult.missing.map((s, i) => (
+                      <tr key={i}>
+                        <td className="px-3 py-1.5 font-medium">{s.street}</td>
+                        <td className="px-3 py-1.5 text-muted-foreground text-xs">{s.base}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <button onClick={handleOsmAddBatch} disabled={osmAdding || osmLoading}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-sky-600 text-white text-sm font-semibold hover:bg-sky-700 transition disabled:opacity-50">
+                  <Icon name={osmAdding ? 'Loader2' : 'Sparkles'} size={14} className={osmAdding ? 'animate-spin' : ''} />
+                  {osmAdding ? 'ИИ определяет районы...' : `Добавить эти ${osmResult.missing.length} улиц через ИИ`}
+                </button>
+                {osmResult.has_more && (
+                  <button onClick={() => handleOsmLoad(osmOffset + OSM_BATCH)} disabled={osmLoading}
+                    className="text-sm px-3 py-2 rounded-xl border border-sky-300 text-sky-700 hover:bg-sky-100 transition disabled:opacity-50">
+                    Следующие {OSM_BATCH} →
+                  </button>
+                )}
+                <span className="text-xs text-sky-500">Показано {osmOffset + 1}–{osmOffset + osmResult.missing.length} из {osmResult.missing_count}</span>
+              </div>
+            </>
+          ) : (
+            <div className="text-sm text-sky-700 py-2">Все улицы из OSM уже есть в справочнике!</div>
           )}
         </div>
       )}
