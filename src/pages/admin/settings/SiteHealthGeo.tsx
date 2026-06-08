@@ -239,7 +239,7 @@ export default function SiteHealthGeo() {
             ))}
           </div>
           <div className="mt-3 text-sm text-muted-foreground">
-            Итого в базе: {Object.values(loadResult.total_in_db).reduce((a, b) => a + b, 0)} объектов
+            Итого в базе: {Object.values(loadResult.total_in_db || {}).reduce((a: number, b) => a + (b as number), 0)} объектов
           </div>
         </div>
       )}
