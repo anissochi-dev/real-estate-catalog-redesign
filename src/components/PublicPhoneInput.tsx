@@ -12,7 +12,6 @@ interface Props {
 export default function PublicPhoneInput({ value, onChange, placeholder = '+7 900 000-00-00', className = '', required }: Props) {
   const [display, setDisplay] = useState(() => value ? formatPhone(value) : '');
   const inputRef = useRef<HTMLInputElement>(null);
-  const caretRef = useRef<number>(0);
 
   useEffect(() => {
     const formatted = value ? formatPhone(value) : '';
@@ -21,8 +20,8 @@ export default function PublicPhoneInput({ value, onChange, placeholder = '+7 90
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const el = e.target;
-    const selEnd = el.selectionEnd ?? el.value.length;
-    const digitsBeforeCaret = extractDigits(el.value.slice(0, selEnd)).length;
+    const selStart = el.selectionStart ?? el.value.length;
+    const digitsBeforeCaret = extractDigits(el.value.slice(0, selStart)).length;
 
     const digits = extractDigits(el.value).slice(0, 10);
     const normalized = digits ? normalizePhone('+7' + digits) : '';
@@ -30,15 +29,13 @@ export default function PublicPhoneInput({ value, onChange, placeholder = '+7 90
     setDisplay(formatted);
     onChange(normalized);
 
-    // восстанавливаем позицию курсора после ре-рендера
-    caretRef.current = digitsBeforeCaret;
+    const targetDigits = Math.min(digitsBeforeCaret, digits.length);
     requestAnimationFrame(() => {
       if (!inputRef.current) return;
       const s = inputRef.current.value;
       let pos = 0;
       let count = 0;
-      // ищем позицию в новой строке где будет столько же цифр до курсора
-      while (pos < s.length && count < caretRef.current) {
+      while (pos < s.length && count < targetDigits) {
         if (/\d/.test(s[pos])) count++;
         pos++;
       }

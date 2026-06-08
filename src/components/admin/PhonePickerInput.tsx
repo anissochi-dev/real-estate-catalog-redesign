@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import PhoneCardModal from './PhoneCardModal';
@@ -30,7 +30,6 @@ export default function PhonePickerInput({ value, onChange, onNameChange, placeh
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const caretDigitsRef = useRef<number>(0);
 
   // синхронизируем display когда value меняется снаружи
   useEffect(() => {
@@ -75,24 +74,12 @@ export default function PhonePickerInput({ value, onChange, onNameChange, placeh
     }, 300);
   };
 
-  const restoreCaret = useCallback(() => {
-    requestAnimationFrame(() => {
-      if (!inputRef.current) return;
-      const s = inputRef.current.value;
-      let pos = 0;
-      let count = 0;
-      while (pos < s.length && count < caretDigitsRef.current) {
-        if (/\d/.test(s[pos])) count++;
-        pos++;
-      }
-      inputRef.current.setSelectionRange(pos, pos);
-    });
-  }, []);
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const el = e.target;
-    const selEnd = el.selectionEnd ?? el.value.length;
-    caretDigitsRef.current = extractDigits(el.value.slice(0, selEnd)).length;
+    const selStart = el.selectionStart ?? el.value.length;
+    const rawBefore = el.value.slice(0, selStart);
+    // Считаем сколько цифр (без +7) было ДО курсора в старом значении
+    const digitsBeforeCaret = extractDigits(rawBefore).length;
 
     const raw = el.value;
     const digits = extractDigits(raw).slice(0, 10);
@@ -102,7 +89,20 @@ export default function PhonePickerInput({ value, onChange, onNameChange, placeh
     onChange(normalized);
     search(normalized);
     if (!digits) { setSuggestions([]); setOpen(false); setMatchedContact(null); }
-    restoreCaret();
+
+    // После ре-рендера восстанавливаем курсор по числу цифр до него в новом display
+    const targetDigits = Math.min(digitsBeforeCaret, digits.length);
+    requestAnimationFrame(() => {
+      if (!inputRef.current) return;
+      const s = inputRef.current.value;
+      let pos = 0;
+      let count = 0;
+      while (pos < s.length && count < targetDigits) {
+        if (/\d/.test(s[pos])) count++;
+        pos++;
+      }
+      inputRef.current.setSelectionRange(pos, pos);
+    });
   };
 
   const pick = (c: PhoneContact) => {
