@@ -1,68 +1,107 @@
 import { useState } from 'react';
-import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
+
+const VERIFY_URL = 'https://functions.poehali.dev/f18a8295-a9d1-474d-9c3a-211d8092ef47';
 
 const SERVICE_PRESETS = [
   { label: 'Яндекс.Вебмастер', fileHint: 'yandex_xxxxxxxx.html', contentHint: 'yandex-verification: xxxxxxxx', comment: 'Яндекс.Вебмастер' },
   { label: 'Google Search Console', fileHint: 'googlexxxxxxxx.html', contentHint: 'google-site-verification: xxxxxxxx', comment: 'Google Search Console' },
-  { label: 'Mail.ru / VK Вебмастер', fileHint: 'mailru-domainXXXXXXXX', contentHint: 'mailru-domain: XXXXXXXX', comment: 'Mail.ru Вебмастер' },
+  { label: 'Mail.ru / VK Вебмастер', fileHint: 'mailru-domainXXXXXXXX', contentHint: 'mailru-домен: XXXXXXXX', comment: 'Mail.ru Вебмастер' },
   { label: 'Bing Webmaster', fileHint: 'BingSiteAuth.xml', contentHint: '<?xml version="1.0"?>\n<users>\n  <user>XXXXXXXX</user>\n</users>', comment: 'Bing Webmaster' },
   { label: 'Rambler', fileHint: 'rambler-xxxxxxxxxx.html', contentHint: 'rambler-site-verification: xxxxxxxxxx', comment: 'Rambler' },
 ];
-
-const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
 
 interface VerifFile {
   filename: string;
   content: string;
   comment?: string;
+  cdn_url?: string;
 }
 
 interface Props {
-  files: VerifFile[];
-  onChange: (files: VerifFile[]) => void;
-  saved: boolean;
-  save: () => Promise<void>;
   siteUrl?: string;
 }
 
-export default function VerificationTab({ files, onChange, saved, save, siteUrl }: Props) {
-  const [saving, setSaving] = useState(false);
+export default function VerificationTab({ siteUrl }: Props) {
+  const [files, setFiles] = useState<VerifFile[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(false);
+
   const [newFile, setNewFile] = useState<VerifFile>({ filename: '', content: '', comment: '' });
   const [adding, setAdding] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const [copied, setCopied] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
-  const getSiteFileUrl = (filename: string) => {
-    const base = (siteUrl || '').replace(/\/$/, '');
-    if (!base) return `/${filename}`;
-    return `${base}/${filename}`;
-  };
-
-  const addFile = () => {
-    if (!newFile.filename.trim() || !newFile.content.trim()) return;
-    const filename = newFile.filename.trim().replace(/^\/+/, '');
-    onChange([...files, { ...newFile, filename }]);
-    setNewFile({ filename: '', content: '', comment: '' });
-    setAdding(false);
-  };
-
-  const removeFile = (i: number) => {
-    onChange(files.filter((_, idx) => idx !== i));
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
+  // Загружаем список при открытии вкладки
+  const loadFiles = async () => {
+    setLoading(true);
     try {
-      await save();
+      const r = await fetch(`${VERIFY_URL}?action=list`);
+      const d = await r.json();
+      setFiles(d.files || []);
+      setLoaded(true);
+    } catch {
+      setLoaded(true);
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
   };
 
-  const copyUrl = (filename: string) => {
-    const url = getSiteFileUrl(filename);
+  if (!loaded && !loading) {
+    loadFiles();
+  }
+
+  const getSiteFileUrl = (filename: string) => {
+    const base = (siteUrl || '').replace(/\/$/, '');
+    return base ? `${base}/${filename}` : `/${filename}`;
+  };
+
+  // Загружаем файл в S3 через verify-file?action=upload
+  const handleUpload = async () => {
+    const filename = newFile.filename.trim().replace(/^\/+/, '');
+    const content = newFile.content.trim();
+    if (!filename || !content) return;
+
+    setUploading(true);
+    setUploadError('');
+    try {
+      const r = await fetch(VERIFY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'upload', filename, content, comment: newFile.comment }),
+      });
+      const d = await r.json();
+      if (!r.ok || d.error) throw new Error(d.error || 'Ошибка загрузки');
+      // Обновляем список
+      await loadFiles();
+      setNewFile({ filename: '', content: '', comment: '' });
+      setAdding(false);
+    } catch (e: unknown) {
+      setUploadError(e instanceof Error ? e.message : 'Ошибка');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDelete = async (filename: string) => {
+    setDeleting(filename);
+    try {
+      await fetch(VERIFY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', filename }),
+      });
+      setFiles(prev => prev.filter(f => f.filename !== filename));
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  const copyUrl = (url: string, key: string) => {
     navigator.clipboard.writeText(url).then(() => {
-      setCopied(filename);
+      setCopied(key);
       setTimeout(() => setCopied(null), 2000);
     });
   };
@@ -72,64 +111,95 @@ export default function VerificationTab({ files, onChange, saved, save, siteUrl 
       <div>
         <h2 className="text-base font-semibold text-foreground">Файлы верификации</h2>
         <p className="text-sm text-foreground/50 mt-1">
-          Для подтверждения домена в Яндекс.Вебмастере, Google Search Console, Mail.ru и других сервисах.
-          Добавьте файл — он будет доступен по адресу вашего сайта{siteUrl ? ` (${siteUrl.replace(/\/$/, '')})` : ''}.
+          Подтверждение домена в Яндекс.Вебмастере, Google Search Console, Mail.ru и других сервисах.
+          Файл публикуется мгновенно и сразу доступен по URL сайта.
         </p>
       </div>
 
-      {files.length > 0 && (
-        <div className="space-y-3">
-          {files.map((f, i) => (
-            <div key={i} className="border border-border rounded-xl p-4 space-y-2">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono text-sm font-semibold text-foreground">{f.filename}</span>
-                    {f.comment && (
-                      <span className="text-xs text-foreground/40 bg-muted px-2 py-0.5 rounded-full">{f.comment}</span>
-                    )}
-                  </div>
-                  <p className="text-xs text-foreground/40 mt-0.5 font-mono truncate">{f.content.slice(0, 80)}{f.content.length > 80 ? '…' : ''}</p>
-                </div>
-                <button onClick={() => removeFile(i)} className="p-1.5 rounded-lg hover:bg-red-50 text-foreground/30 hover:text-red-500 shrink-0 transition">
-                  <Icon name="Trash2" size={15} />
-                </button>
-              </div>
-
-              <div className="pt-1 border-t border-border/50 space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5 font-mono text-xs text-emerald-800 truncate">
-                    {getSiteFileUrl(f.filename)}
-                  </div>
-                  <button
-                    onClick={() => copyUrl(f.filename)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-blue/10 text-brand-blue hover:bg-brand-blue/20 transition shrink-0"
-                  >
-                    <Icon name={copied === f.filename ? 'Check' : 'Copy'} size={13} />
-                    {copied === f.filename ? 'Скопировано' : 'Скопировать URL'}
-                  </button>
-                </div>
-                <p className="text-[11px] text-foreground/40">
-                  Именно этот URL вставляйте в Яндекс.Вебмастер, Google Search Console и другие сервисы
-                </p>
-              </div>
-            </div>
-          ))}
+      {/* Список файлов */}
+      {loading && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+          <Icon name="Loader2" size={16} className="animate-spin" />
+          Загрузка…
         </div>
       )}
 
-      {files.length === 0 && !adding && (
+      {!loading && files.length > 0 && (
+        <div className="space-y-3">
+          {files.map((f) => {
+            const siteUrl_ = getSiteFileUrl(f.filename);
+            const urlToCopy = f.cdn_url ? siteUrl_ : siteUrl_;
+            return (
+              <div key={f.filename} className="border border-border rounded-xl p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-sm font-semibold text-foreground">{f.filename}</span>
+                      {f.comment && (
+                        <span className="text-xs text-foreground/40 bg-muted px-2 py-0.5 rounded-full">{f.comment}</span>
+                      )}
+                      {f.cdn_url && (
+                        <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                          <Icon name="CheckCircle" size={11} /> Опубликован
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-foreground/40 mt-0.5 font-mono truncate">
+                      {f.content.slice(0, 80)}{f.content.length > 80 ? '…' : ''}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleDelete(f.filename)}
+                    disabled={deleting === f.filename}
+                    className="p-1.5 rounded-lg hover:bg-red-50 text-foreground/30 hover:text-red-500 shrink-0 transition"
+                  >
+                    <Icon name={deleting === f.filename ? 'Loader2' : 'Trash2'} size={15} className={deleting === f.filename ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+
+                {/* URL для вставки в сервис */}
+                <div className="space-y-2 pt-1 border-t border-border/50">
+                  <p className="text-xs font-medium text-foreground/60">URL для вставки в сервис верификации:</p>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5 font-mono text-xs text-emerald-800 truncate">
+                      {siteUrl_}
+                    </div>
+                    <button
+                      onClick={() => copyUrl(siteUrl_, f.filename)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-blue/10 text-brand-blue hover:bg-brand-blue/20 transition shrink-0"
+                    >
+                      <Icon name={copied === f.filename ? 'Check' : 'Copy'} size={13} />
+                      {copied === f.filename ? 'Скопировано' : 'Скопировать'}
+                    </button>
+                    <a
+                      href={f.cdn_url || siteUrl_}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1.5 rounded-lg bg-muted hover:bg-muted/70 text-muted-foreground transition"
+                      title="Проверить файл"
+                    >
+                      <Icon name="ExternalLink" size={14} />
+                    </a>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {!loading && files.length === 0 && !adding && (
         <div className="text-center py-10 text-foreground/30 text-sm border-2 border-dashed border-border rounded-xl">
           <Icon name="FileCheck" size={32} className="mx-auto mb-2 opacity-30" />
           Файлы верификации не добавлены
         </div>
       )}
 
+      {/* Форма добавления */}
       {adding && (
         <div className="border border-brand-blue/30 rounded-xl p-4 bg-brand-blue/5 space-y-4">
           <p className="text-sm font-semibold text-foreground/70">Новый файл верификации</p>
 
-          {/* Быстрые пресеты */}
           <div>
             <p className="text-xs text-foreground/50 mb-2">Выберите сервис для автозаполнения:</p>
             <div className="flex flex-wrap gap-2">
@@ -146,7 +216,7 @@ export default function VerificationTab({ files, onChange, saved, save, siteUrl 
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-3">
             <div>
               <label className="text-xs text-foreground/50 mb-1 block">Имя файла (точно как указано в сервисе)</label>
               <input
@@ -155,7 +225,6 @@ export default function VerificationTab({ files, onChange, saved, save, siteUrl 
                 value={newFile.filename}
                 onChange={e => setNewFile(p => ({ ...p, filename: e.target.value }))}
               />
-              <p className="text-xs text-foreground/40 mt-1">Скопируйте точное имя файла из инструкции сервиса верификации</p>
             </div>
             <div>
               <label className="text-xs text-foreground/50 mb-1 block">Содержимое файла</label>
@@ -177,61 +246,53 @@ export default function VerificationTab({ files, onChange, saved, save, siteUrl 
               />
             </div>
           </div>
+
+          {uploadError && (
+            <div className="text-sm text-red-600 flex items-center gap-2">
+              <Icon name="AlertCircle" size={14} />
+              {uploadError}
+            </div>
+          )}
+
           <div className="flex gap-2 pt-1">
             <button
-              onClick={addFile}
-              disabled={!newFile.filename.trim() || !newFile.content.trim()}
-              className="px-4 py-2 rounded-lg bg-brand-blue text-white text-sm font-semibold hover:bg-brand-blue/90 disabled:opacity-40 transition"
+              onClick={handleUpload}
+              disabled={uploading || !newFile.filename.trim() || !newFile.content.trim()}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-blue text-white text-sm font-semibold hover:bg-brand-blue/90 disabled:opacity-40 transition"
             >
-              Добавить
+              <Icon name={uploading ? 'Loader2' : 'Upload'} size={15} className={uploading ? 'animate-spin' : ''} />
+              {uploading ? 'Публикуем…' : 'Опубликовать файл'}
             </button>
-            <button onClick={() => { setAdding(false); setNewFile({ filename: '', content: '', comment: '' }); }}
-              className="px-4 py-2 rounded-lg text-sm text-foreground/60 hover:bg-muted transition">
+            <button
+              onClick={() => { setAdding(false); setNewFile({ filename: '', content: '', comment: '' }); setUploadError(''); }}
+              className="px-4 py-2 rounded-lg text-sm text-foreground/60 hover:bg-muted transition"
+            >
               Отмена
             </button>
           </div>
         </div>
       )}
 
-      <div className="flex items-center gap-3 pt-2">
-        {!adding && (
-          <button onClick={() => setAdding(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-brand-blue/30 text-brand-blue text-sm font-semibold hover:bg-brand-blue/5 transition">
-            <Icon name="Plus" size={15} />
-            Добавить файл
-          </button>
-        )}
+      {/* Кнопка добавить */}
+      {!adding && (
         <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-blue text-white text-sm font-semibold hover:bg-brand-blue/90 disabled:opacity-50 transition ml-auto"
+          onClick={() => setAdding(true)}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-brand-blue/30 text-brand-blue text-sm font-semibold hover:bg-brand-blue/5 transition"
         >
-          <Icon name={saved && !saving ? 'Check' : 'Save'} size={15} />
-          {saving ? 'Сохраняем…' : saved ? 'Сохранено!' : 'Сохранить'}
+          <Icon name="Plus" size={15} />
+          Добавить файл
         </button>
-      </div>
-
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm space-y-1.5 text-amber-800">
-        <p className="font-semibold flex items-center gap-1.5">
-          <Icon name="Info" size={14} />
-          Важно: файл станет доступен после следующего билда
-        </p>
-        <p className="text-xs">
-          После добавления и сохранения файла сообщите разработчику — файл появится на сайте после ближайшей публикации.
-          Проверяйте доступность по скопированному URL.
-        </p>
-      </div>
+      )}
 
       <div className="bg-muted/60 rounded-xl p-4 text-sm space-y-2 text-foreground/60">
         <p className="font-semibold text-foreground/80">Как использовать:</p>
         <ol className="list-decimal list-inside space-y-1">
-          <li>Выберите сервис или введите данные вручную и нажмите «Сохранить»</li>
-          <li>Скопируйте URL файла кнопкой «Скопировать URL»</li>
-          <li>Вставьте этот URL в поле верификации нужного сервиса</li>
-          <li>После следующего билда — проверьте что URL открывается</li>
+          <li>Нажмите «Добавить файл», выберите сервис или введите данные вручную</li>
+          <li>Нажмите «Опубликовать файл» — файл сразу становится доступен</li>
+          <li>Скопируйте URL и вставьте в поле верификации сервиса</li>
         </ol>
         <p className="text-xs text-foreground/40 pt-1">
-          Поддерживаются: Яндекс.Вебмастер, Google Search Console, Mail.ru / VK, Bing Webmaster, Rambler и любые другие сервисы.
+          Файл публикуется мгновенно — без ожидания билда. Поддерживаются: Яндекс, Google, Mail.ru / VK, Bing, Rambler и любые другие.
         </p>
       </div>
     </div>

@@ -316,10 +316,6 @@ export default function SettingsAdmin() {
       {tab === 'site-health' && <SiteHealthTab />}
       {tab === 'verification' && (
         <VerificationTab
-          files={(s.verification_files as { filename: string; content: string; comment?: string }[]) || []}
-          onChange={files => setS(p => ({ ...p, verification_files: files }))}
-          saved={saved}
-          save={save}
           siteUrl={s.site_url as string | undefined}
         />
       )}

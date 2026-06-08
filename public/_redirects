@@ -38,8 +38,8 @@
 /district/* /index.html    200
 /news/*     /index.html    200
 
-# Файлы верификации — точные маршруты (один файл = одна строка)
-/mailru-domain6dS7udsVWBpJx77O  https://functions.poehali.dev/f18a8295-a9d1-474d-9c3a-211d8092ef47?filename=mailru-domain6dS7udsVWBpJx77O  200
+# Файлы верификации — прямой прокси на CDN (добавлять по одной строке на каждый файл)
+/mailru-domain6dS7udsVWBpJx77O  https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/bucket/verify/mailru-domain6dS7udsVWBpJx77O  200
 
 # Всё остальное — SPA
 /*          /index.html    200
