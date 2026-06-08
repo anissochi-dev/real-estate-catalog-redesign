@@ -53,6 +53,7 @@ export default function DistrictsAdmin() {
 
   const ALL_PROVIDERS = [
     { id: 'yandex',    label: 'Яндекс' },
+    { id: 'dadata',    label: 'DaData' },
     { id: 'maps_co',   label: 'maps.co' },
     { id: 'nominatim', label: 'Nominatim' },
   ];

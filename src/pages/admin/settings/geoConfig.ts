@@ -10,7 +10,7 @@ export function loadGeoConfig(): GeoProvidersConfig {
   if (raw) {
     try { return JSON.parse(raw); } catch { /* ignore */ }
   }
-  return { providers: ['yandex', 'maps_co', 'nominatim'], limits: { yandex: 9999, maps_co: 9999, nominatim: 9999 } };
+  return { providers: ['yandex', 'dadata', 'maps_co', 'nominatim'], limits: { yandex: 9999, dadata: 9999, maps_co: 9999, nominatim: 9999 } };
 }
 
 export function saveGeoConfig(cfg: GeoProvidersConfig) {

@@ -1123,7 +1123,7 @@ def _handle_ai_map(body: dict, cur, conn) -> dict:
 # ── action=geo_okrug ─────────────────────────────────────────────────────────
 
 # Список геокодеров — порядок = приоритет fallback
-GEO_PROVIDERS = ['yandex', 'maps_co', 'nominatim']
+GEO_PROVIDERS = ['yandex', 'dadata', 'maps_co', 'nominatim']
 
 class GeoLimitExceeded(Exception):
     pass
@@ -1228,6 +1228,43 @@ def _geocode_nominatim(street: str, api_key: str) -> dict:
     }
 
 
+def _geocode_dadata(street: str, api_key: str, secret_key: str) -> dict:
+    """DaData — стандартизация адресов, определяет округ через federal_district / city_district."""
+    payload = json.dumps([f'Краснодар, {street}']).encode('utf-8')
+    req = urllib.request.Request(
+        'https://cleaner.dadata.ru/api/v1/clean/address',
+        data=payload,
+        headers={
+            'Content-Type': 'application/json',
+            'Authorization': f'Token {api_key}',
+            'X-Secret': secret_key,
+            'User-Agent': 'KrasnodarRealEstate/1.0',
+        }
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        status = resp.status
+        raw = resp.read().decode('utf-8')
+    if status == 402:
+        raise GeoLimitExceeded('dadata: 402 Payment Required / лимит исчерпан')
+    if status == 429:
+        raise GeoLimitExceeded('dadata: 429 Too Many Requests')
+    data = json.loads(raw)
+    if not data or not isinstance(data, list):
+        return {}
+    addr = data[0]
+    # DaData возвращает city_district для внутригородских округов Краснодара
+    city_district = addr.get('city_district', '') or ''
+    suburb = addr.get('settlement', '') or ''
+    print(f'[dadata] city_district={city_district!r}, settlement={suburb!r}, result_code={addr.get("result_code")}')
+    return {
+        'suburb':        suburb,
+        'quarter':       '',
+        'city_district': city_district,
+        'neighbourhood': '',
+        'raw':           addr,
+    }
+
+
 def _geocode_with_fallback(street: str, providers: list, provider_limits: dict, keys: dict) -> tuple:
     """
     Геокодирует улицу через цепочку провайдеров с авто-переключением при превышении лимита.
@@ -1247,6 +1284,14 @@ def _geocode_with_fallback(street: str, providers: list, provider_limits: dict, 
                     provider_limits['yandex'] = 0
                     continue
                 geo = _geocode_yandex(street, key)
+            elif provider == 'dadata':
+                key = keys.get('dadata', '')
+                secret = keys.get('dadata_secret', '')
+                if not key or not secret:
+                    print('[geo_okrug] dadata: нет DADATA_API_KEY/DADATA_SECRET_KEY, пропускаю')
+                    provider_limits['dadata'] = 0
+                    continue
+                geo = _geocode_dadata(street, key, secret)
             elif provider == 'maps_co':
                 key = keys.get('maps_co', '')
                 if not key:
@@ -1318,16 +1363,19 @@ def _handle_geo_okrug(body: dict, cur, conn) -> dict:
     raw_limits = body.get('provider_limits') or {}
     provider_limits = {
         'yandex':    int(raw_limits.get('yandex', 9999)),
+        'dadata':    int(raw_limits.get('dadata', 9999)),
         'maps_co':   int(raw_limits.get('maps_co', 9999)),
         'nominatim': int(raw_limits.get('nominatim', 9999)),
     }
     keys = {
-        'yandex':  os.environ.get('YANDEX_GEOCODER_KEY', ''),
-        'maps_co': os.environ.get('MAPS_CO_API_KEY', ''),
+        'yandex':        os.environ.get('YANDEX_GEOCODER_KEY', ''),
+        'dadata':        os.environ.get('DADATA_API_KEY', ''),
+        'dadata_secret': os.environ.get('DADATA_SECRET_KEY', ''),
+        'maps_co':       os.environ.get('MAPS_CO_API_KEY', ''),
     }
 
     # Задержки между запросами (сек) по провайдеру
-    delays = {'yandex': 0.1, 'maps_co': 0.5, 'nominatim': 1.1}
+    delays = {'yandex': 0.1, 'dadata': 0.1, 'maps_co': 0.5, 'nominatim': 1.1}
 
     # Загружаем округа
     cur.execute(

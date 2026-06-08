@@ -4,13 +4,14 @@ import { loadGeoConfig, saveGeoConfig } from './geoConfig';
 
 const ALL_PROVIDERS = [
   { id: 'yandex',    label: 'Яндекс Геокодер', desc: 'Бесплатный с ограничениями. Ключ: developer.tech.yandex.ru' },
+  { id: 'dadata',    label: 'DaData',           desc: 'Стандартизация адресов. Ключ: dadata.ru → API-ключи' },
   { id: 'maps_co',   label: 'geocode.maps.co',  desc: 'Бесплатный с ограничениями. Ключ: geocode.maps.co' },
   { id: 'nominatim', label: 'Nominatim OSM',    desc: 'Полностью бесплатный, без ключа, 1 запрос/сек' },
 ];
 
 export default function IntegrationsGeoSection() {
-  const [providers, setProviders] = useState<string[]>(['yandex', 'maps_co', 'nominatim']);
-  const [limits, setLimits] = useState<Record<string, number>>({ yandex: 9999, maps_co: 9999, nominatim: 9999 });
+  const [providers, setProviders] = useState<string[]>(['yandex', 'dadata', 'maps_co', 'nominatim']);
+  const [limits, setLimits] = useState<Record<string, number>>({ yandex: 9999, dadata: 9999, maps_co: 9999, nominatim: 9999 });
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
