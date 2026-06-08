@@ -22,14 +22,18 @@ export default function PublicPhoneInput({ value, onChange, placeholder = '+7 90
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const el = e.target;
     const selEnd = el.selectionEnd ?? el.value.length;
-    // считаем сколько цифр было до курсора
-    const digitsBeforeCaret = extractDigits(el.value.slice(0, selEnd)).length;
 
     const digits = extractDigits(el.value).slice(0, 10);
     const normalized = digits ? normalizePhone('+7' + digits) : '';
     const formatted = digits ? formatPhone('+7' + digits) : '';
     setDisplay(formatted);
     onChange(normalized);
+
+    // считаем цифры до курсора, но не более чем итоговое число цифр
+    const digitsBeforeCaret = Math.min(
+      extractDigits(el.value.slice(0, selEnd)).length,
+      digits.length
+    );
 
     // восстанавливаем позицию курсора после ре-рендера
     caretRef.current = digitsBeforeCaret;

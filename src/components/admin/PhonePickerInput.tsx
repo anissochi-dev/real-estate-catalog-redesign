@@ -92,12 +92,20 @@ export default function PhonePickerInput({ value, onChange, onNameChange, placeh
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const el = e.target;
     const selEnd = el.selectionEnd ?? el.value.length;
-    caretDigitsRef.current = extractDigits(el.value.slice(0, selEnd)).length;
 
     const raw = el.value;
     const digits = extractDigits(raw).slice(0, 10);
     const normalized = digits ? '+7' + digits : '';
     const display = digits ? formatPhone('+7' + digits) : '';
+
+    // Считаем количество цифр до курсора в уже отрезанных digits
+    // Берём срез по позиции курсора из исходного raw, но ограничиваем 10 цифрами
+    const digitsBeforeCaret = Math.min(
+      extractDigits(raw.slice(0, selEnd)).length,
+      digits.length
+    );
+    caretDigitsRef.current = digitsBeforeCaret;
+
     setInputDisplay(display);
     onChange(normalized);
     search(normalized);
