@@ -1979,6 +1979,41 @@ def _consent_log(cur, conn, method, event, user):
     return _ok({'logs': items, 'total': total, 'page': page, 'limit': limit})
 
 
+def _normalize_district(cur, district: str) -> str:
+    """
+    Приводит district к каноничному значению из таблицы districts.
+    Точное совпадение → возврат как есть.
+    ILIKE совпадение → возврат канонического имени из справочника.
+    Не найдено → возврат исходной строки (не ломаем данные).
+    """
+    if not district or not district.strip():
+        return district
+    d = district.strip()
+    try:
+        # Точное совпадение
+        cur.execute(
+            f"SELECT name FROM {SCHEMA}.districts WHERE is_active = TRUE AND name = %s LIMIT 1",
+            (d,)
+        )
+        row = cur.fetchone()
+        if row:
+            return row['name']
+        # Нечёткое: ищем по вхождению в обе стороны
+        cur.execute(
+            f"SELECT name FROM {SCHEMA}.districts "
+            f"WHERE is_active = TRUE AND (name ILIKE %s OR %s ILIKE '%%' || name || '%%') "
+            f"ORDER BY LENGTH(name) DESC LIMIT 1",
+            (f'%{d}%', d)
+        )
+        row = cur.fetchone()
+        if row:
+            print(f'[normalize_district] "{d}" → "{row["name"]}"')
+            return row['name']
+    except Exception as e:
+        print(f'[normalize_district] error: {e}')
+    return d  # не нашли — возвращаем как есть
+
+
 def _auto_district(cur, address: str, city: str = 'Краснодар') -> str:
     """Определяет район по адресу через YandexGPT. Возвращает название из справочника или ''."""
     if not address or not address.strip():
@@ -2133,6 +2168,9 @@ def _listings(cur, conn, method, rid, event, user):
             district_val = _auto_district(cur, address_val, city_val)
             if district_val:
                 body['district'] = district_val
+        # Нормализация к каноничному названию из справочника
+        if body.get('district'):
+            body['district'] = _normalize_district(cur, body['district'])
 
         # Авто-линковка собственника с единой телефонной базой
         owner_pc_id = _upsert_phone_contact(cur, body.get('owner_phone'), body.get('owner_name'), user['id'])
@@ -2204,6 +2242,9 @@ def _listings(cur, conn, method, rid, event, user):
             auto_d = _auto_district(cur, address_val, city_val)
             if auto_d:
                 body['district'] = auto_d
+        # Нормализация к каноничному названию из справочника
+        if body.get('district'):
+            body['district'] = _normalize_district(cur, body['district'])
 
         # ── Снимаем "до" — для diff и истории ─────────────────────────────────
         diff_cols = [

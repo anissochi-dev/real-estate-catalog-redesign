@@ -46,21 +46,47 @@ def _load_street_rules(cur) -> list:
 
 
 def _find_district(street: str, house_num, rules: list) -> str | None:
-    """Ищет микрорайон по улице и номеру дома."""
+    """
+    Ищет микрорайон по улице и номеру дома.
+    Приоритеты (от высшего к низшему):
+      1. Точное совпадение улицы + номер дома в диапазоне
+      2. Точное совпадение улицы (без диапазона)
+      3. Частичное совпадение + номер дома в диапазоне
+      4. Частичное совпадение (без диапазона) — берём с наидлиннейшим паттерном
+    """
     street_lower = street.lower().strip()
-    best = None
+    best = None          # лучшее совпадение без диапазона (паттерн, район)
+    best_pat_len = -1    # длина паттерна для best
+
     for rule in rules:
         pat = rule['street_pattern'].lower().strip()
-        if pat not in street_lower and pat != street_lower:
+        # Точное совпадение улицы имеет наивысший приоритет
+        exact = (pat == street_lower)
+        partial = (pat in street_lower)
+        if not exact and not partial:
             continue
+
         h_from = rule['house_from']
         h_to = rule['house_to']
-        if h_from is None and h_to is None:
-            if best is None:
+        has_range = h_from is not None or h_to is not None
+
+        if has_range and house_num is not None:
+            in_range = (h_from is None or house_num >= h_from) and (h_to is None or house_num <= h_to)
+            if in_range:
+                # Точное совпадение улицы + диапазон — наивысший приоритет, выходим сразу
+                if exact:
+                    return rule['district']
+                # Частичное + диапазон — запоминаем как кандидата
+                if best_pat_len < len(pat):
+                    best = rule['district']
+                    best_pat_len = len(pat)
+        elif not has_range:
+            # Без диапазона: предпочитаем точное совпадение и более длинный паттерн
+            score = (1000 if exact else 0) + len(pat)
+            if score > best_pat_len:
                 best = rule['district']
-        elif house_num is not None:
-            if (h_from is None or house_num >= h_from) and (h_to is None or house_num <= h_to):
-                return rule['district']
+                best_pat_len = score
+
     return best
 
 
