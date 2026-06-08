@@ -84,14 +84,19 @@ export default function DistrictsTable({
   onDelete,
 }: DistrictsTableProps) {
   const [search, setSearch] = useState('');
+  const [showInactive, setShowInactive] = useState(false);
 
-  const filtered = search.trim()
-    ? districts.filter(d =>
-        d.name.toLowerCase().includes(search.toLowerCase()) ||
-        d.city.toLowerCase().includes(search.toLowerCase()) ||
-        (d.description || '').toLowerCase().includes(search.toLowerCase())
-      )
-    : districts;
+  const activeCount = districts.filter(d => d.is_active).length;
+  const inactiveCount = districts.length - activeCount;
+
+  const filtered = districts.filter(d => {
+    if (!showInactive && !d.is_active) return false;
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return d.name.toLowerCase().includes(q) ||
+      d.city.toLowerCase().includes(q) ||
+      (d.description || '').toLowerCase().includes(q);
+  });
 
   return (
     <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
@@ -105,13 +110,31 @@ export default function DistrictsTable({
             </span>
           ) : (
             <span>
-              Районов: <strong className="text-foreground">{filtered.length}</strong>
-              {search && filtered.length !== districts.length && (
-                <span className="text-muted-foreground"> из {districts.length}</span>
+              Активных: <strong className="text-foreground">{activeCount}</strong>
+              {inactiveCount > 0 && (
+                <span className="text-muted-foreground"> · скрытых: {inactiveCount}</span>
+              )}
+              {search && (
+                <span className="text-muted-foreground"> · найдено: {filtered.length}</span>
               )}
             </span>
           )}
         </div>
+
+        {inactiveCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowInactive(v => !v)}
+            className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border transition ${
+              showInactive
+                ? 'bg-amber-50 border-amber-300 text-amber-700'
+                : 'bg-muted border-border text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Icon name={showInactive ? 'EyeOff' : 'Eye'} size={12} />
+            {showInactive ? 'Скрыть неактивные' : `Показать неактивные (${inactiveCount})`}
+          </button>
+        )}
 
         <div className="flex-1 min-w-[180px] max-w-xs relative">
           <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
@@ -155,7 +178,7 @@ export default function DistrictsTable({
             if (isEditing) return null; // редактирование только в десктопе
             return (
               <div key={district.id}
-                className={`px-4 py-3 ${isDeleting ? 'opacity-40 pointer-events-none' : ''}`}>
+                className={`px-4 py-3 ${isDeleting ? 'opacity-40 pointer-events-none' : ''} ${!district.is_active ? 'opacity-50 bg-muted/30' : ''}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-sm">{district.name}</div>
@@ -228,7 +251,7 @@ export default function DistrictsTable({
                     key={district.id}
                     className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors ${
                       isDeleting ? 'opacity-40 pointer-events-none' : ''
-                    }`}
+                    } ${!district.is_active ? 'opacity-50 bg-muted/20' : ''}`}
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
