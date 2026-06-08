@@ -42,6 +42,8 @@ export default function DistrictsAdmin() {
   type GeoOkrugResult = { total_streets: number; matched_count: number; not_found_count: number; results: { street: string; okrug: string | null; suburb: string; city_district: string }[] };
   const [geoOkrugResult, setGeoOkrugResult] = useState<GeoOkrugResult | null>(null);
   const [geoOkrugApplying, setGeoOkrugApplying] = useState(false);
+  const [geoOkrugBatch, setGeoOkrugBatch] = useState(30);
+  const GEO_OKRUG_BATCHES = [30, 50, 70, 90, 110, 150, 200];
 
   // Исправление районов
   const [geoFixLoading, setGeoFixLoading] = useState(false);
@@ -161,7 +163,7 @@ export default function DistrictsAdmin() {
   const handleGeoOkrugPreview = async () => {
     setGeoOkrugLoading(true); setGeoOkrugResult(null);
     try {
-      const res = await fetch(GEO_FIX_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'geo_okrug', mode: 'preview', limit: 30 }) });
+      const res = await fetch(GEO_FIX_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'geo_okrug', mode: 'preview', limit: geoOkrugBatch }) });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || `Ошибка ${res.status}`);
       setGeoOkrugResult(data);
@@ -174,7 +176,7 @@ export default function DistrictsAdmin() {
     if (!window.confirm(`Применить округа для ${geoOkrugResult?.matched_count} улиц?`)) return;
     setGeoOkrugApplying(true);
     try {
-      const res = await fetch(GEO_FIX_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'geo_okrug', mode: 'apply', limit: 30 }) });
+      const res = await fetch(GEO_FIX_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'geo_okrug', mode: 'apply', limit: geoOkrugBatch }) });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || `Ошибка ${res.status}`);
       toast.success(`Округа присвоены для ${data.matched_count} улиц`);
@@ -415,11 +417,22 @@ export default function DistrictsAdmin() {
             <Icon name="Wand2" size={14} />
             Добавить через ИИ
           </button>
-          <button type="button" onClick={handleGeoOkrugPreview} disabled={geoOkrugLoading}
-            className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 transition disabled:opacity-50">
-            <Icon name={geoOkrugLoading ? 'Loader2' : 'Globe'} size={14} className={geoOkrugLoading ? 'animate-spin' : ''} />
-            {geoOkrugLoading ? 'Запрашиваю geocode...' : 'Округа по улицам'}
-          </button>
+          <div className="inline-flex items-center rounded-xl border border-orange-200 bg-orange-50 overflow-hidden">
+            <button type="button" onClick={handleGeoOkrugPreview} disabled={geoOkrugLoading}
+              className="inline-flex items-center gap-1.5 text-sm px-3 py-2 text-orange-700 hover:bg-orange-100 transition disabled:opacity-50">
+              <Icon name={geoOkrugLoading ? 'Loader2' : 'Globe'} size={14} className={geoOkrugLoading ? 'animate-spin' : ''} />
+              {geoOkrugLoading ? 'Запрашиваю...' : 'Округа по улицам'}
+            </button>
+            <div className="w-px h-5 bg-orange-200" />
+            <select
+              value={geoOkrugBatch}
+              onChange={e => setGeoOkrugBatch(Number(e.target.value))}
+              disabled={geoOkrugLoading}
+              className="text-sm px-2 py-2 bg-transparent text-orange-700 border-none outline-none cursor-pointer disabled:opacity-50"
+            >
+              {GEO_OKRUG_BATCHES.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
           <button type="button" onClick={handleGeoFixPreview} disabled={geoFixLoading}
             className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition disabled:opacity-50">
             <Icon name={geoFixLoading ? 'Loader2' : 'MapPinCheck'} size={14} className={geoFixLoading ? 'animate-spin' : ''} />
