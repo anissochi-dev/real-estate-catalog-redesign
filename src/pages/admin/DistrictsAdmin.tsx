@@ -45,6 +45,7 @@ export default function DistrictsAdmin() {
   type OsmMeta = { osm_total: number; in_map: number; missing_count: number };
 
   const [osmLoading, setOsmLoading] = useState(false);
+  const [osmError, setOsmError] = useState<string | null>(null);
   const [osmOpen, setOsmOpen] = useState(false);                        // панель открыта/закрыта
   const [osmMeta, setOsmMeta] = useState<OsmMeta | null>(null);        // статистика из первого запроса
   const [osmQueue, setOsmQueue] = useState<StreetItem[]>([]);           // ВСЕ недостающие улицы
@@ -65,6 +66,7 @@ export default function DistrictsAdmin() {
       return;
     }
     setOsmLoading(true);
+    setOsmError(null);
     try {
       const res = await fetch(GEO_FIX_URL, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -78,7 +80,11 @@ export default function DistrictsAdmin() {
       setOsmAddedTotal(0);
       setOsmProgress({ done: 0, total: data.missing_count });
       setOsmOpen(true);
-    } catch (e) { toast.error(e instanceof Error ? e.message : 'Ошибка загрузки OSM'); }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Ошибка загрузки OSM';
+      setOsmError(msg);
+      setOsmOpen(true); // открываем панель чтобы показать ошибку с кнопкой retry
+    }
     finally { setOsmLoading(false); }
   };
 
@@ -447,6 +453,32 @@ export default function DistrictsAdmin() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── OSM-панель: ошибка загрузки ──────────────────────────────────────── */}
+      {osmOpen && osmError && !osmMeta && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-5">
+          <div className="flex items-start gap-3">
+            <Icon name="AlertTriangle" size={18} className="text-red-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <div className="font-semibold text-red-800 mb-1">Ошибка загрузки из OpenStreetMap</div>
+              <div className="text-sm text-red-700 mb-3">{osmError}</div>
+              <div className="text-xs text-red-600 mb-3">
+                Серверы OpenStreetMap иногда перегружены. Подождите 1–2 минуты и попробуйте снова.
+              </div>
+              <button
+                onClick={() => handleOsmLoad(true)}
+                disabled={osmLoading}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition disabled:opacity-50">
+                <Icon name={osmLoading ? 'Loader2' : 'RefreshCw'} size={14} className={osmLoading ? 'animate-spin' : ''} />
+                {osmLoading ? 'Загружаю...' : 'Попробовать снова'}
+              </button>
+            </div>
+            <button onClick={() => setOsmOpen(false)} className="text-red-300 hover:text-red-500">
+              <Icon name="X" size={16} />
+            </button>
+          </div>
         </div>
       )}
 

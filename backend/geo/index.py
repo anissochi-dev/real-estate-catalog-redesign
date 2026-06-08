@@ -871,33 +871,64 @@ def _handle_overpass(body: dict, cur) -> dict:
     сравнивает с street_district_map, возвращает список недостающих.
     offset=N — пропустить первые N недостающих улиц (для постраничной загрузки)
     limit=N  — сколько вернуть (по умолчанию 20)
+
+    Стратегия надёжности:
+    - Несколько зеркал Overpass (fallback при 504/503)
+    - Упрощённый запрос: только основные типы дорог
+    - Таймаут 25 сек (влезает в лимит функции 30 сек)
     """
-    import urllib.request as _ur, json as _j
+    import urllib.request as _ur, urllib.error as _ue, json as _j, time as _t
 
     limit_out = int(body.get('limit', 20))
     offset = int(body.get('offset', 0))
 
+    # Зеркала Overpass API — пробуем по очереди
+    OVERPASS_MIRRORS = [
+        'https://overpass-api.de/api/interpreter',
+        'https://overpass.kumi.systems/api/interpreter',
+        'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+    ]
+
+    # Упрощённый запрос — только основные типы, без service/pedestrian/unclassified
+    # (их тысячи, они дают 504) — добавим отдельным запросом если нужно
     overpass_query = (
-        '[out:json][timeout:50];'
-        '('
-        'way["highway"~"^(residential|primary|secondary|tertiary|unclassified|'
-        'service|living_street|trunk|pedestrian|primary_link|secondary_link|tertiary_link)$"]'
+        '[out:json][timeout:25];'
+        'way["highway"~"^(residential|primary|secondary|tertiary|living_street|trunk)$"]'
         '["name"](44.95,38.85,45.20,39.25);'
-        ');'
         'out tags;'
     )
-    print('[geo overpass] запрос к Overpass API...')
-    req = _ur.Request(
-        'https://overpass-api.de/api/interpreter',
-        data=overpass_query.encode('utf-8'),
-        headers={'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'KrasnodarRealEstate/1.0'},
-        method='POST',
-    )
-    try:
-        with _ur.urlopen(req, timeout=55) as resp:
-            data = _j.loads(resp.read().decode('utf-8'))
-    except Exception as e:
-        return _err(f'Overpass API ошибка: {e}', 502)
+
+    data = None
+    last_err = None
+    for mirror in OVERPASS_MIRRORS:
+        print(f'[geo overpass] запрос к {mirror}...')
+        req = _ur.Request(
+            mirror,
+            data=overpass_query.encode('utf-8'),
+            headers={
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': 'KrasnodarRealEstate/1.0',
+            },
+            method='POST',
+        )
+        try:
+            with _ur.urlopen(req, timeout=27) as resp:
+                data = _j.loads(resp.read().decode('utf-8'))
+            print(f'[geo overpass] успех от {mirror}')
+            break
+        except _ue.HTTPError as e:
+            last_err = f'HTTP Error {e.code} от {mirror}'
+            print(f'[geo overpass] {last_err}')
+            if e.code in (429, 504, 503, 502):
+                _t.sleep(1)  # небольшая пауза перед следующим зеркалом
+            continue
+        except Exception as e:
+            last_err = str(e)
+            print(f'[geo overpass] ошибка от {mirror}: {e}')
+            continue
+
+    if data is None:
+        return _err(f'Все зеркала Overpass недоступны. Последняя ошибка: {last_err}', 502)
 
     osm_streets = set()
     for el in data.get('elements', []):
