@@ -19,28 +19,21 @@ const OKRUG_COLOR_LIST = [
 ];
 
 export default function DistrictHierarchy({ districts, onSaved, token }: Props) {
-  // Округа = районы без parent_id
-  const okrugs = districts.filter(d => d.parent_id == null && d.is_active);
-  // Микрорайоны = районы с parent_id или без (те что не округа — у них нет детей)
-  const mikrorayons = districts.filter(d => {
-    if (!d.is_active) return false;
-    // Округ — если у него есть дочерние районы ИЛИ у него нет parent_id и он уже является окружным уровнем
-    // Простая логика: если parent_id задан — точно микрорайон
-    // Если parent_id null — может быть округом или нераспределённым
-    return true;
-  });
+  // Округа — только те у кого is_okrug = true
+  const okrugs = districts.filter(d => d.is_okrug && d.is_active)
+    .sort((a, b) => a.sort_order - b.sort_order);
 
   // Назначаем цвета округам
   okrugs.forEach((o, i) => {
     OKRUG_COLORS[o.id] = OKRUG_COLOR_LIST[i % OKRUG_COLOR_LIST.length];
   });
 
-  // Нераспределённые = is_active, parent_id null, не является округом
-  const okrugIds = new Set(okrugs.map(o => o.id));
+  // Нераспределённые = активные, не округа, без parent_id
   const unassigned = districts.filter(d =>
-    d.is_active && d.parent_id == null && !okrugIds.has(d.id)
+    d.is_active && !d.is_okrug && d.parent_id == null
   );
-  const assigned = districts.filter(d => d.is_active && d.parent_id != null);
+  // Назначенные = активные, не округа, с parent_id
+  const assigned = districts.filter(d => d.is_active && !d.is_okrug && d.parent_id != null);
 
   // Выбранные для массового назначения
   const [selected, setSelected] = useState<Set<number>>(new Set());

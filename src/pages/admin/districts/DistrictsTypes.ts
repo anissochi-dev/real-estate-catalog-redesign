@@ -10,6 +10,7 @@ export interface District {
   is_active: boolean;
   listings_count?: number;
   parent_id?: number | null;
+  is_okrug?: boolean;
 }
 
 export interface FormState {

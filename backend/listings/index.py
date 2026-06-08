@@ -221,7 +221,7 @@ def handler(event: dict, context) -> dict:
                 city_f = (params.get('city') or '').strip()[:100]
                 if city_f:
                     cur.execute(
-                        "SELECT id, name, slug, city, description, sort_order, parent_id "
+                        "SELECT id, name, slug, city, description, sort_order, parent_id, is_okrug "
                         "FROM t_p71821556_real_estate_catalog_.districts "
                         "WHERE is_active = TRUE AND city = %s "
                         "ORDER BY sort_order ASC, name ASC",
@@ -229,7 +229,7 @@ def handler(event: dict, context) -> dict:
                     )
                 else:
                     cur.execute(
-                        "SELECT id, name, slug, city, description, sort_order, parent_id "
+                        "SELECT id, name, slug, city, description, sort_order, parent_id, is_okrug "
                         "FROM t_p71821556_real_estate_catalog_.districts "
                         "WHERE is_active = TRUE "
                         "ORDER BY sort_order ASC, name ASC"
