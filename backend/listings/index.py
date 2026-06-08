@@ -43,20 +43,25 @@ def handler(event: dict, context) -> dict:
     params = event.get('queryStringParameters') or {}
     dsn = os.environ['DATABASE_URL']
 
-    # Файлы верификации (Яндекс, Google, Mail.ru и т.д.)
+    # Файлы верификации (Яндекс, Google, Mail.ru, Bing и любые другие)
     path = (event.get('path') or event.get('rawPath') or '').strip('/')
     resource_param = params.get('resource', '')
 
-    # Определяем имя файла: из ?filename= ИЛИ из пути (например /mailru-domainXXX)
+    # Определяем имя файла: из ?filename= (приоритет) ИЛИ из пути
     verify_filename = params.get('filename', '')
     if not verify_filename and path:
-        # Путь вида mailru-domainXXX, yandex_XXX.html, googleXXX.html
         basename = path.split('/')[-1]
-        if (basename.startswith('mailru-domain')
-                or basename.startswith('yandex_')
-                or basename.startswith('google')
-                or basename.startswith('mail.')
-                or basename.endswith('.html') and 'verification' in basename.lower()):
+        # Универсальный список известных префиксов верификации
+        VERIFY_PREFIXES = (
+            'yandex_', 'google', 'mailru-domain', 'mail.',
+            'BingSiteAuth', 'rambler-', 'verification', 'verify',
+        )
+        VERIFY_EXTENSIONS = ('.html', '.txt', '.xml')
+        is_verify = (
+            any(basename.startswith(p) for p in VERIFY_PREFIXES)
+            or any(basename.endswith(e) and ('verif' in basename.lower() or 'domain' in basename.lower()) for e in VERIFY_EXTENSIONS)
+        )
+        if is_verify:
             verify_filename = basename
 
     if (resource_param == 'verify_file' or verify_filename) and verify_filename:

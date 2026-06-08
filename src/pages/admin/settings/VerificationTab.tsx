@@ -2,6 +2,14 @@ import { useState } from 'react';
 import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 
+const SERVICE_PRESETS = [
+  { label: 'Яндекс.Вебмастер', fileHint: 'yandex_xxxxxxxx.html', contentHint: 'yandex-verification: xxxxxxxx', comment: 'Яндекс.Вебмастер' },
+  { label: 'Google Search Console', fileHint: 'googlexxxxxxxx.html', contentHint: 'google-site-verification: xxxxxxxx', comment: 'Google Search Console' },
+  { label: 'Mail.ru / VK Вебмастер', fileHint: 'mailru-domainXXXXXXXX', contentHint: 'mailru-domain: XXXXXXXX', comment: 'Mail.ru Вебмастер' },
+  { label: 'Bing Webmaster', fileHint: 'BingSiteAuth.xml', contentHint: '<?xml version="1.0"?>\n<users>\n  <user>XXXXXXXX</user>\n</users>', comment: 'Bing Webmaster' },
+  { label: 'Rambler', fileHint: 'rambler-xxxxxxxxxx.html', contentHint: 'rambler-site-verification: xxxxxxxxxx', comment: 'Rambler' },
+];
+
 const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
 
 interface VerifFile {
@@ -118,18 +126,36 @@ export default function VerificationTab({ files, onChange, saved, save, siteUrl 
       )}
 
       {adding && (
-        <div className="border border-brand-blue/30 rounded-xl p-4 bg-brand-blue/5 space-y-3">
+        <div className="border border-brand-blue/30 rounded-xl p-4 bg-brand-blue/5 space-y-4">
           <p className="text-sm font-semibold text-foreground/70">Новый файл верификации</p>
+
+          {/* Быстрые пресеты */}
+          <div>
+            <p className="text-xs text-foreground/50 mb-2">Выберите сервис для автозаполнения:</p>
+            <div className="flex flex-wrap gap-2">
+              {SERVICE_PRESETS.map(p => (
+                <button
+                  key={p.label}
+                  type="button"
+                  onClick={() => setNewFile({ filename: p.fileHint, content: p.contentHint, comment: p.comment })}
+                  className="text-xs px-3 py-1.5 rounded-lg border border-brand-blue/30 text-brand-blue hover:bg-brand-blue/10 transition font-medium"
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="space-y-2">
             <div>
-              <label className="text-xs text-foreground/50 mb-1 block">Имя файла</label>
+              <label className="text-xs text-foreground/50 mb-1 block">Имя файла (точно как указано в сервисе)</label>
               <input
                 className="w-full border border-border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
                 placeholder="yandex_1234abcd.html"
                 value={newFile.filename}
                 onChange={e => setNewFile(p => ({ ...p, filename: e.target.value }))}
               />
-              <p className="text-xs text-foreground/40 mt-1">Например: yandex_7099028f3e2220eb.html или google1234abcd.html</p>
+              <p className="text-xs text-foreground/40 mt-1">Скопируйте точное имя файла из инструкции сервиса верификации</p>
             </div>
             <div>
               <label className="text-xs text-foreground/50 mb-1 block">Содержимое файла</label>
