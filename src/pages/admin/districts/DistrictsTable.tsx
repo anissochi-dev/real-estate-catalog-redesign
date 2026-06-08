@@ -84,13 +84,12 @@ export default function DistrictsTable({
   onDelete,
 }: DistrictsTableProps) {
   const [search, setSearch] = useState('');
-  const [showInactive, setShowInactive] = useState(false);
 
   const activeCount = districts.filter(d => d.is_active).length;
   const inactiveCount = districts.length - activeCount;
 
   const filtered = districts.filter(d => {
-    if (!showInactive && !d.is_active) return false;
+    if (!d.is_active) return false;
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return d.name.toLowerCase().includes(q) ||
@@ -121,20 +120,7 @@ export default function DistrictsTable({
           )}
         </div>
 
-        {inactiveCount > 0 && (
-          <button
-            type="button"
-            onClick={() => setShowInactive(v => !v)}
-            className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border transition ${
-              showInactive
-                ? 'bg-amber-50 border-amber-300 text-amber-700'
-                : 'bg-muted border-border text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Icon name={showInactive ? 'EyeOff' : 'Eye'} size={12} />
-            {showInactive ? 'Скрыть неактивные' : `Показать неактивные (${inactiveCount})`}
-          </button>
-        )}
+
 
         <div className="flex-1 min-w-[180px] max-w-xs relative">
           <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
