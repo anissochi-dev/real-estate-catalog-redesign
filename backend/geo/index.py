@@ -1185,7 +1185,7 @@ def _handle_geo_okrug(body: dict, cur, conn) -> dict:
     import time as _time
 
     mode = body.get('mode', 'preview')
-    limit = min(int(body.get('limit') or 50), 200)
+    limit = min(int(body.get('limit') or 15), 50)
     force = body.get('force', False)
 
     api_key = os.environ.get('MAPS_CO_API_KEY', '')
@@ -1248,7 +1248,7 @@ def _handle_geo_okrug(body: dict, cur, conn) -> dict:
                 print(f'[geo_okrug] ? "{street}" — округ не определён (suburb={geo.get("suburb")!r}, city_district={geo.get("city_district")!r})')
 
             # geocode.maps.co лимит: 2 запроса в секунду на бесплатном тарифе
-            _time.sleep(0.6)
+            _time.sleep(0.5)
 
         except Exception as e:
             print(f'[geo_okrug] ошибка "{street}": {e}')

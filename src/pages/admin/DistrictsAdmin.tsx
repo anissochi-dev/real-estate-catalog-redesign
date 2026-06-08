@@ -161,7 +161,7 @@ export default function DistrictsAdmin() {
   const handleGeoOkrugPreview = async () => {
     setGeoOkrugLoading(true); setGeoOkrugResult(null);
     try {
-      const res = await fetch(GEO_FIX_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'geo_okrug', mode: 'preview', limit: 50 }) });
+      const res = await fetch(GEO_FIX_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'geo_okrug', mode: 'preview', limit: 15 }) });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || `Ошибка ${res.status}`);
       setGeoOkrugResult(data);
@@ -174,7 +174,7 @@ export default function DistrictsAdmin() {
     if (!window.confirm(`Применить округа для ${geoOkrugResult?.matched_count} улиц?`)) return;
     setGeoOkrugApplying(true);
     try {
-      const res = await fetch(GEO_FIX_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'geo_okrug', mode: 'apply', limit: 50 }) });
+      const res = await fetch(GEO_FIX_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'geo_okrug', mode: 'apply', limit: 15 }) });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || `Ошибка ${res.status}`);
       toast.success(`Округа присвоены для ${data.matched_count} улиц`);
