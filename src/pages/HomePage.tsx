@@ -61,7 +61,6 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   const [leadsCount, setLeadsCount] = useState(pf?.leadsCount ?? 0);
 
   const [aiOpen, setAiOpen] = useState(false);
-  const [smartSearchOpen, setSmartSearchOpen] = useState(false);
   const [latestNews, setLatestNews] = useState<NewsPreview[] | null>(null);
   const newsLimit = settings.home_news_limit ?? 10;
   const showNewsOnHome = settings.show_news_on_home;
@@ -206,11 +205,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: orgLdJson }}
       />
-      <SmartSearchModal
-        open={smartSearchOpen}
-        initialQuery={searchQuery}
-        onClose={() => setSmartSearchOpen(false)}
-      />
+
       {/* Hero — компактный */}
       <section className="hero-bg text-white py-10 md:py-14">
         <div className="container mx-auto px-4 relative z-10">
@@ -227,8 +222,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
             <form
               onSubmit={e => {
                 e.preventDefault();
-                if (searchQuery.trim().length >= 3) setSmartSearchOpen(true);
-                else setAiOpen(true);
+                setAiOpen(true);
               }}
               className="flex flex-col sm:flex-row gap-2 animate-fade-in-up stagger-3"
             >
