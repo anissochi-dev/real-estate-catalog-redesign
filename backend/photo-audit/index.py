@@ -19,8 +19,8 @@ SCHEMA = os.environ.get('MAIN_DB_SCHEMA', 't_p71821556_real_estate_catalog_')
 # AI Studio endpoint — поддерживает все модели включая мультимодальные
 AI_STUDIO_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
 
-# Qwen2 VL — видит изображения (Vision)
-VISION_MODEL = 'ds://bt1234567/qwen2-vl-7b-instruct'  # будет переопределён из AI Studio folder
+# Qwen2 VL — Vision модель в AI Studio (URI строится динамически из folder_id)
+VISION_MODEL_NAME = 'qwen2-vl-7b-instruct'
 # YandexGPT 5 Pro — текстовый fallback
 TEXT_MODEL = 'yandexgpt-5-pro/latest'
 
@@ -76,8 +76,9 @@ def _call_vision(image_urls: list, prompt_text: str, api_key: str, folder_id: st
         content_parts.append({'type': 'image_url', 'image_url': {'url': url}})
     content_parts.append({'type': 'text', 'text': prompt_text})
 
+    model_uri = f'ds://{folder_id}/{VISION_MODEL_NAME}' if folder_id else VISION_MODEL_NAME
     payload = {
-        'modelUri': 'ds://bt1t3b7cqk49av04b2nm/qwen2-vl-7b-instruct',
+        'modelUri': model_uri,
         'completionOptions': {
             'stream': False,
             'temperature': 0.1,

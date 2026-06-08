@@ -8,7 +8,7 @@ import DistrictsTable from './districts/DistrictsTable';
 import AiResultGrid, { AiDistrict } from './districts/AiResultGrid';
 
 const DISTRICT_AI_URL = 'https://functions.poehali.dev/eddffe59-b37d-425e-90a3-59d12d44623f';
-const GEO_FIX_URL = 'https://functions.poehali.dev/abcb8991-211b-4918-a262-acf6aa113ff5';
+const GEO_FIX_URL = 'https://functions.poehali.dev/9b2f9622-9d12-4809-a614-023af6958251';
 
 type AiTab = 'auto' | 'text';
 
@@ -43,7 +43,7 @@ export default function DistrictsAdmin() {
   const handleGeoFixPreview = async () => {
     setGeoFixLoading(true); setGeoFixResult(null);
     try {
-      const res = await fetch(GEO_FIX_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'preview' }) });
+      const res = await fetch(GEO_FIX_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'fix', mode: 'preview' }) });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || `Ошибка ${res.status}`);
       setGeoFixResult(data);
@@ -56,7 +56,7 @@ export default function DistrictsAdmin() {
     if (!window.confirm(`Применить исправления районов для ${geoFixResult?.changed_count} объектов?`)) return;
     setGeoFixApplying(true);
     try {
-      const res = await fetch(GEO_FIX_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'apply' }) });
+      const res = await fetch(GEO_FIX_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'fix', mode: 'apply' }) });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || `Ошибка ${res.status}`);
       toast.success(`Исправлено районов: ${data.changed_count}`);

@@ -1,1 +1,0 @@
-{"tests": [{"name": "Подсказки адресов DaData", "method": "GET", "path": "/?query=Красная 1&city=Краснодар", "expectedStatus": 200, "bodyMatcher": "none"}]}

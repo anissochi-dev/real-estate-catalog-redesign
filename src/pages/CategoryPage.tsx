@@ -9,7 +9,7 @@ import AIMatchModal from '@/components/AIMatchModal';
 import SchemaOrg, { makeItemListSchema, makeBreadcrumbSchema } from '@/components/SchemaOrg';
 import { getSiteUrl } from '@/lib/siteUrl';
 
-const CATEGORY_SEO_URL = 'https://functions.poehali.dev/8dee3c78-5067-465a-905c-2193471100ce';
+const CATEGORY_SEO_URL = 'https://functions.poehali.dev/4f6d05ce-e38c-4e10-8a8b-f282e1ed2ddd';
 
 interface Props {
   properties: Property[];

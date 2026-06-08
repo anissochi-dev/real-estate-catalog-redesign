@@ -9,7 +9,7 @@ import SchemaOrg, { makeItemListSchema, makeBreadcrumbSchema } from '@/component
 import { fetchDistricts, District } from '@/lib/api';
 import { getSiteUrl } from '@/lib/siteUrl';
 
-const DISTRICT_SEO_URL = 'https://functions.poehali.dev/935f6aa4-e24d-49ac-bc65-6b55db9d2ae3';
+const DISTRICT_SEO_URL = 'https://functions.poehali.dev/4f6d05ce-e38c-4e10-8a8b-f282e1ed2ddd';
 const PAGE_SIZE = 12;
 
 interface Props {

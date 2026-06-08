@@ -153,7 +153,7 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey]);
 
-  const GEO_SUGGEST_URL = 'https://functions.poehali.dev/1e52d435-ff18-40dd-8fac-d6bdd9b29ecc';
+  const GEO_SUGGEST_URL = 'https://functions.poehali.dev/9b2f9622-9d12-4809-a614-023af6958251';
 
   interface DadataSuggestion { value: string; full: string; lat: number | null; lon: number | null; district?: string; }
 
