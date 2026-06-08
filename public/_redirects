@@ -38,5 +38,8 @@
 /district/* /index.html    200
 /news/*     /index.html    200
 
-# Всё остальное — 404
-/*          /index.html    404
+# Файлы верификации — точные маршруты (один файл = одна строка)
+/mailru-domain6dS7udsVWBpJx77O  https://functions.poehali.dev/f18a8295-a9d1-474d-9c3a-211d8092ef47?filename=mailru-domain6dS7udsVWBpJx77O  200
+
+# Всё остальное — SPA
+/*          /index.html    200
