@@ -20,26 +20,33 @@ export default function PublicPhoneInput({ value, onChange, placeholder = '+7 90
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const el = e.target;
-    const selStart = el.selectionStart ?? el.value.length;
-    const digitsBeforeCaret = extractDigits(el.value.slice(0, selStart)).length;
+    const oldValue = el.value;
+    const cursorPos = el.selectionStart ?? oldValue.length;
 
-    const digits = extractDigits(el.value).slice(0, 10);
+    // Считаем цифры ДО курсора в старом значении
+    const digitsBeforeCursor = oldValue.slice(0, cursorPos).replace(/\D/g, '').length;
+
+    const digits = extractDigits(oldValue).slice(0, 10);
     const normalized = digits ? normalizePhone('+7' + digits) : '';
     const formatted = digits ? formatPhone('+7' + digits) : '';
     setDisplay(formatted);
     onChange(normalized);
 
-    const targetDigits = Math.min(digitsBeforeCaret, digits.length);
     requestAnimationFrame(() => {
       if (!inputRef.current) return;
       const s = inputRef.current.value;
-      let pos = 0;
-      let count = 0;
-      while (pos < s.length && count < targetDigits) {
-        if (/\d/.test(s[pos])) count++;
-        pos++;
+      let newPos = 0;
+      let digitCount = 0;
+      for (let i = 0; i < s.length; i++) {
+        if (/\d/.test(s[i])) {
+          if (digitCount === digitsBeforeCursor) { newPos = i; break; }
+          digitCount++;
+        }
+        if (i === s.length - 1) newPos = s.length;
       }
-      inputRef.current.setSelectionRange(pos, pos);
+      // Если курсор перед разделителем — сдвигаем за него вправо
+      while (newPos < s.length && !/\d/.test(s[newPos]) && newPos > 0) newPos++;
+      inputRef.current.setSelectionRange(newPos, newPos);
     });
   };
 

@@ -76,13 +76,13 @@ export default function PhonePickerInput({ value, onChange, onNameChange, placeh
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const el = e.target;
-    const selStart = el.selectionStart ?? el.value.length;
-    const rawBefore = el.value.slice(0, selStart);
-    // Считаем сколько цифр (без +7) было ДО курсора в старом значении
-    const digitsBeforeCaret = extractDigits(rawBefore).length;
+    const oldValue = el.value;
+    const cursorPos = el.selectionStart ?? oldValue.length;
 
-    const raw = el.value;
-    const digits = extractDigits(raw).slice(0, 10);
+    // Считаем цифры ДО курсора в старом (ещё не отформатированном) значении
+    const digitsBeforeCursor = oldValue.slice(0, cursorPos).replace(/\D/g, '').length;
+
+    const digits = extractDigits(oldValue).slice(0, 10);
     const normalized = digits ? '+7' + digits : '';
     const display = digits ? formatPhone('+7' + digits) : '';
     setInputDisplay(display);
@@ -90,18 +90,22 @@ export default function PhonePickerInput({ value, onChange, onNameChange, placeh
     search(normalized);
     if (!digits) { setSuggestions([]); setOpen(false); setMatchedContact(null); }
 
-    // После ре-рендера восстанавливаем курсор по числу цифр до него в новом display
-    const targetDigits = Math.min(digitsBeforeCaret, digits.length);
+    // После ре-рендера находим позицию в новом отформатированном значении
     requestAnimationFrame(() => {
       if (!inputRef.current) return;
       const s = inputRef.current.value;
-      let pos = 0;
-      let count = 0;
-      while (pos < s.length && count < targetDigits) {
-        if (/\d/.test(s[pos])) count++;
-        pos++;
+      let newPos = 0;
+      let digitCount = 0;
+      for (let i = 0; i < s.length; i++) {
+        if (/\d/.test(s[i])) {
+          if (digitCount === digitsBeforeCursor) { newPos = i; break; }
+          digitCount++;
+        }
+        if (i === s.length - 1) newPos = s.length;
       }
-      inputRef.current.setSelectionRange(pos, pos);
+      // Если курсор перед разделителем — сдвигаем за него вправо
+      while (newPos < s.length && !/\d/.test(s[newPos]) && newPos > 0) newPos++;
+      inputRef.current.setSelectionRange(newPos, newPos);
     });
   };
 
