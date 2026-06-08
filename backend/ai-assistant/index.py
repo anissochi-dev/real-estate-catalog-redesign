@@ -357,48 +357,33 @@ SYSTEM_PROMPTS = {
         'Пример: офис, центр, парковка, евроремонт, открытая планировка'
     ),
     'match': (
-        'Ты — опытный консультант агентства коммерческой недвижимости BIZNEST в Краснодаре. '
-        'Клиент описал задачу (свободная форма или диалог). Тебе дан список объектов в JSON. '
+        'Ты — строгий консультант агентства коммерческой недвижимости BIZNEST в Краснодаре. '
+        'Клиент описал задачу. Тебе дан список объектов в JSON — все они уже отфильтрованы по типу.\n\n'
         'Поля объектов:\n'
-        '- id — номер объекта\n'
-        '- title — название\n'
-        '- category: office/retail/warehouse/restaurant/hotel/business/gab/production/land/building/free_purpose/car_service\n'
-        '- deal: sale=продажа / rent=аренда / business=готовый бизнес\n'
-        '- price — цена (руб), price_per_m2 — цена за м²\n'
-        '- area — площадь м²\n'
-        '- district — район, address — адрес\n'
-        '- floor — этаж, total_floors — этажность здания\n'
-        '- condition — состояние помещения\n'
-        '- road_line: 1=первая линия / 2=вторая / 3=третья / yard=двор\n'
-        '- rooms — количество комнат\n'
-        '- parking: street=на улице / building=в здании\n'
-        '- entrance: street=с улицы / yard=со двора\n'
-        '- ceiling_height — высота потолков (м)\n'
-        '- electricity_kw — электромощность (кВт)\n'
-        '- utilities — коммуникации\n'
-        '- purpose — назначение (под какой бизнес)\n'
-        '- building_class — класс здания (A/B/C)\n'
-        '- building_year — год постройки\n'
-        '- tenant_name — имя арендатора (если ГАБ)\n'
-        '- monthly_rent — месячный арендный поток (руб)\n'
-        '- yearly_rent — годовой арендный поток (руб)\n'
-        '- profit — доходность (руб/мес)\n'
-        '- payback — окупаемость (месяцев)\n'
-        '- description — краткое описание\n'
-        '- _keyword_match: true — объект найден текстовым поиском по словам клиента\n\n'
-        'ПРАВИЛА ПОДБОРА:\n'
-        '1. Объекты с _keyword_match:true ОБЯЗАТЕЛЬНО включи в результат если хоть немного подходят.\n'
-        '2. Если клиент написал номер — ищи объект с этим id или близкой ценой/площадью.\n'
-        '3. Если клиент написал улицу/район — ищи по частичному совпадению в address/district.\n'
-        '4. Если указан диапазон цены или площади — фильтруй строго по нему.\n'
-        '5. Учитывай все критерии: тип, бюджет, площадь, адрес, назначение, этаж, состояние, '
-        'линию, парковку, вход, потолки, мощность, коммуникации, доходность, окупаемость, класс здания.\n'
-        '6. Сортируй id от наиболее к наименее релевантному.\n'
-        '7. Если подходящих нет — верни пустой массив и объясни почему.\n\n'
+        '- id, title, category, deal (sale=продажа/rent=аренда), price (руб), area (м²)\n'
+        '- district, address, floor, total_floors, condition, road_line (1/2/3/yard)\n'
+        '- parking, entrance (street/yard), ceiling_height (м), electricity_kw (кВт)\n'
+        '- utilities, purpose, building_class, building_year, description\n'
+        '- payback (мес окупаемости), profit (руб/мес), monthly_rent, yearly_rent, tenant_name\n'
+        '- _keyword_match: true — совпадение по ключевым словам\n\n'
+        'СТРОГИЕ ПРАВИЛА:\n'
+        '1. КАТЕГОРИЯ: если клиент указал тип (офис/склад/магазин/ресторан и т.д.) — '
+        'включай ТОЛЬКО объекты с совпадающей category. Никогда не предлагай гостиницу вместо офиса, '
+        'склад вместо магазина и т.п. Категория — ЖЁСТКИЙ фильтр.\n'
+        '2. ТИП СДЕЛКИ: если указано "снять/аренда" — только deal=rent; '
+        '"купить/продажа" — только deal=sale.\n'
+        '3. ПЛОЩАДЬ: если указан диапазон ("до 100 м²", "от 200 м²") — строго соблюдай. '
+        'Объект площадью 693 м² НЕ подходит под запрос "до 100 м²".\n'
+        '4. ЦЕНА: если указан бюджет — не превышай его.\n'
+        '5. _keyword_match: полезная подсказка, но НЕ обязательный критерий включения.\n'
+        '6. Показывай максимум 8-10 лучших совпадений. Лучше меньше, но точнее.\n'
+        '7. Если ни один объект не подходит — верни пустой массив, '
+        'объясни почему и что именно нужно изменить в запросе.\n'
+        '8. Сортируй: сначала самые точные совпадения по всем критериям.\n\n'
         'Ответь СТРОГО в формате JSON без markdown:\n'
         '{"ids": [id1, id2, ...], '
         '"reasoning": "1-2 предложения: какие критерии учёл и почему эти объекты", '
-        '"advice": "1-2 предложения совета клиенту: что уточнить, расчёт окупаемости если применимо"}'
+        '"advice": "1-2 предложения совета клиенту: что уточнить или какие альтернативы рассмотреть"}'
     ),
     'analyze_property': (
         'Ты — опытный коммерческий брокер и аналитик с 15-летним стажем. Специализация — продажа и аренда коммерческой недвижимости. '
@@ -4293,17 +4278,46 @@ def handler(event, context):
             matches = []
             leads_for_search = []
             if is_public and not is_search_leads:
+                # Базовый WHERE — только активные и видимые объекты
+                BASE_WHERE = f"status = 'active' AND is_visible = TRUE"
+
                 SELECT_FIELDS = (
                     f"SELECT id, title, category, deal, price, price_per_m2, area, district, address, "
                     f"payback, profit, monthly_rent, yearly_rent, tenant_name, image, "
                     f"floor, total_floors, condition, road_line, rooms, parking, entrance, "
                     f"ceiling_height, electricity_kw, utilities, purpose, building_class, "
                     f"building_year, description "
-                    f"FROM {SCHEMA}.listings WHERE status = 'active'"
+                    f"FROM {SCHEMA}.listings WHERE {BASE_WHERE}"
                 )
 
-                # ── Гибридный поиск по ключевым словам ──────────────────────────
-                # Токены из запроса (слова >= 3 символов)
+                # ── Предварительный фильтр по категории из запроса ───────────────
+                # Если клиент явно назвал тип объекта — фильтруем сразу в SQL
+                CATEGORY_KEYWORDS = {
+                    'office': ['офис', 'офисн', 'кабинет', 'office'],
+                    'retail': ['магазин', 'торгов', 'ритейл', 'торговое', 'retail'],
+                    'warehouse': ['склад', 'складск', 'warehouse'],
+                    'restaurant': ['ресторан', 'кафе', 'общепит', 'кофейн', 'столов', 'ресторанн'],
+                    'hotel': ['гостиниц', 'отель', 'хостел', 'hotel'],
+                    'business': ['готовый бизнес', 'бизнес под ключ'],
+                    'gab': ['арендный бизнес', 'габ', 'gab'],
+                    'production': ['производств', 'завод', 'цех'],
+                    'land': ['земл', 'участок', 'земельн'],
+                    'building': ['здание', 'здани'],
+                    'free_purpose': ['свободн', 'своб назначени'],
+                    'car_service': ['автосервис', 'автомойк', 'шиномонт'],
+                }
+                text_lower = user_text.lower()
+                detected_category = None
+                for cat, kws in CATEGORY_KEYWORDS.items():
+                    if any(kw in text_lower for kw in kws):
+                        detected_category = cat
+                        break
+
+                # SQL фильтр по категории если определена
+                cat_filter = f" AND category = '{detected_category}'" if detected_category else ''
+
+                # ── Keyword-поиск ТОЛЬКО по «сильным» полям (не description) ─────
+                # description даёт ложные совпадения — там часто пишут "можно использовать под X"
                 raw_tokens = [w.strip(",.!?:;\"'()[]") for w in user_text.split()]
                 tokens = [t for t in raw_tokens if len(t) >= 3]
 
@@ -4312,41 +4326,35 @@ def handler(event, context):
                     like_parts = []
                     for tok in tokens[:8]:
                         st = tok.replace("'", "''")
-                        # Числовые токены — ищем по цене, площади, этажу, id
                         if tok.isdigit():
                             num = int(tok)
                             like_parts.append(
                                 f"(id = {num} OR "
-                                f"CAST(price AS TEXT) LIKE '%{st}%' OR "
-                                f"CAST(COALESCE(price_per_m2,0) AS TEXT) LIKE '%{st}%' OR "
                                 f"CAST(area AS TEXT) LIKE '%{st}%' OR "
-                                f"CAST(COALESCE(floor,0) AS TEXT) = '{st}' OR "
-                                f"CAST(COALESCE(rooms,0) AS TEXT) = '{st}')"
+                                f"CAST(COALESCE(floor,0) AS TEXT) = '{st}')"
                             )
                         else:
                             like_parts.append(
-                                f"(LOWER(address) LIKE LOWER('%{st}%') OR "
-                                f"LOWER(title) LIKE LOWER('%{st}%') OR "
-                                f"LOWER(COALESCE(description,'')) LIKE LOWER('%{st}%') OR "
+                                f"(LOWER(title) LIKE LOWER('%{st}%') OR "
                                 f"LOWER(COALESCE(district,'')) LIKE LOWER('%{st}%') OR "
+                                f"LOWER(COALESCE(address,'')) LIKE LOWER('%{st}%') OR "
                                 f"LOWER(COALESCE(purpose,'')) LIKE LOWER('%{st}%') OR "
-                                f"LOWER(COALESCE(utilities,'')) LIKE LOWER('%{st}%') OR "
-                                f"LOWER(COALESCE(condition,'')) LIKE LOWER('%{st}%') OR "
-                                f"LOWER(COALESCE(category,'')) LIKE LOWER('%{st}%') OR "
-                                f"LOWER(COALESCE(deal,'')) LIKE LOWER('%{st}%') OR "
-                                f"LOWER(COALESCE(road_line,'')) LIKE LOWER('%{st}%') OR "
-                                f"LOWER(COALESCE(building_class,'')) LIKE LOWER('%{st}%') OR "
-                                f"LOWER(COALESCE(tenant_name,'')) LIKE LOWER('%{st}%'))"
+                                f"LOWER(COALESCE(category,'')) LIKE LOWER('%{st}%'))"
                             )
                     where_kw = ' OR '.join(like_parts)
-                    cur.execute(f"{SELECT_FIELDS} AND ({where_kw}) ORDER BY id DESC LIMIT 30")
+                    cur.execute(
+                        f"{SELECT_FIELDS}{cat_filter} AND ({where_kw}) "
+                        f"ORDER BY updated_at DESC LIMIT 40"
+                    )
                     kw_rows = [dict(r) for r in cur.fetchall()]
                     keyword_ids = {r['id'] for r in kw_rows}
                 else:
                     kw_rows = []
 
-                # Все остальные объекты
-                cur.execute(f"{SELECT_FIELDS} ORDER BY id DESC LIMIT 80")
+                # Все объекты нужной категории (или все если не определена)
+                cur.execute(
+                    f"{SELECT_FIELDS}{cat_filter} ORDER BY updated_at DESC LIMIT 100"
+                )
                 all_rows = [dict(r) for r in cur.fetchall()]
 
                 # Объединяем: keyword-совпадения первыми, без дублей
@@ -4356,7 +4364,7 @@ def handler(event, context):
                     if r['id'] not in seen:
                         seen.add(r['id'])
                         merged.append(r)
-                matches = merged[:80]
+                matches = merged[:100]
 
                 def _make_compact(r, is_keyword_match=False):
                     obj = {
