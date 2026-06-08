@@ -2,7 +2,8 @@
 НЭИ — Наиболее эффективное использование (Highest and Best Use).
 Перебираем альтернативные сценарии использования объекта,
 для каждого считаем NOI/Cap Rate/стоимость чисто математически.
-YandexGPT только интерпретирует результат и проверяет юридическую допустимость.
+YandexGPT только формулирует итоговую рекомендацию (текст).
+Юридическая допустимость — детерминированные правила по ВРИ/правам.
 """
 
 import json
@@ -175,57 +176,101 @@ def _filter_feasible(area: float, params: dict) -> bool:
     return params['min_area'] <= area <= params['max_area']
 
 
-def _gpt_legal_check(listing: dict, scenario_keys: list, api_key: str, folder_id: str) -> dict:
+# Матрица юридической совместимости ВРИ → допустимые сценарии НЭИ
+# Ключ — подстрока в land_vri (lower), значение — dict сценарий→статус
+# Источник: классификатор ВРИ (Приказ Минэкономразвития №540) + практика Краснодара
+VRI_LEGAL_MAP = {
+    # Торговля
+    'торговл': {
+        'retail': 'допустимо', 'office': 'допустимо', 'restaurant': 'допустимо',
+        'free_purpose': 'допустимо', 'warehouse': 'ограничено',
+        'hotel': 'ограничено', 'production': 'недопустимо', 'coworking': 'допустимо',
+    },
+    # Офисы / деловое
+    'офис': {
+        'office': 'допустимо', 'coworking': 'допустимо', 'retail': 'ограничено',
+        'free_purpose': 'допустимо', 'hotel': 'ограничено',
+        'warehouse': 'недопустимо', 'production': 'недопустимо', 'restaurant': 'ограничено',
+    },
+    'деловой': {
+        'office': 'допустимо', 'coworking': 'допустимо', 'retail': 'допустимо',
+        'restaurant': 'допустимо', 'hotel': 'допустимо', 'free_purpose': 'допустимо',
+        'warehouse': 'ограничено', 'production': 'недопустимо',
+    },
+    # Производство / склад
+    'производств': {
+        'production': 'допустимо', 'warehouse': 'допустимо',
+        'office': 'ограничено', 'retail': 'недопустимо',
+        'restaurant': 'недопустимо', 'hotel': 'недопустимо',
+        'free_purpose': 'ограничено', 'coworking': 'недопустимо',
+    },
+    'склад': {
+        'warehouse': 'допустимо', 'production': 'допустимо',
+        'office': 'ограничено', 'retail': 'недопустимо',
+        'restaurant': 'недопустимо', 'hotel': 'недопустимо',
+        'free_purpose': 'ограничено', 'coworking': 'недопустимо',
+    },
+    # Общепит
+    'общепит': {
+        'restaurant': 'допустимо', 'retail': 'допустимо', 'office': 'ограничено',
+        'free_purpose': 'допустимо', 'hotel': 'ограничено',
+        'warehouse': 'недопустимо', 'production': 'недопустимо', 'coworking': 'ограничено',
+    },
+    # Гостиница
+    'гостиниц': {
+        'hotel': 'допустимо', 'office': 'ограничено', 'retail': 'ограничено',
+        'restaurant': 'допустимо', 'free_purpose': 'ограничено',
+        'warehouse': 'недопустимо', 'production': 'недопустимо', 'coworking': 'ограничено',
+    },
+    # Сельхоз / рекреация → коммерция недопустима
+    'сельскохоз': {k: 'недопустимо' for k in NEI_SCENARIOS},
+    'рекреац': {k: 'недопустимо' for k in NEI_SCENARIOS},
+    # Жилая зона (ИЖС, МКД) — коммерция ограничена или недопустима
+    'жил': {
+        'free_purpose': 'ограничено', 'office': 'ограничено', 'retail': 'ограничено',
+        'restaurant': 'ограничено', 'hotel': 'ограничено',
+        'warehouse': 'недопустимо', 'production': 'недопустимо', 'coworking': 'ограничено',
+    },
+}
+
+# Корректировка по типу прав собственности
+RIGHTS_PENALTY = {
+    'short_lease':  'ограничено',   # краткосрочная аренда снижает всё
+    'municipal':    'ограничено',   # госсобственность — ограничения
+}
+
+
+def _legal_check(listing: dict, scenario_keys: list) -> dict:
     """
-    GPT проверяет юридическую допустимость каждого сценария
-    на основе ВРИ земли, категории, property_rights.
-    Возвращает {scenario_key: 'допустимо'|'ограничено'|'недопустимо', ...}
+    Детерминированная проверка юридической допустимости каждого сценария.
+    Возвращает {scenario_key: 'допустимо'|'ограничено'|'недопустимо'}.
     """
-    scenarios_text = '\n'.join([
-        f"- {k}: {NEI_SCENARIOS[k]['label']}" for k in scenario_keys
-    ])
-    prompt = (
-        f"Объект: категория={listing.get('category','?')}, "
-        f"ВРИ земли={listing.get('land_vri','не указан')}, "
-        f"статус земли={listing.get('land_status','не указан')}, "
-        f"права={listing.get('property_rights','не указаны')}, "
-        f"район={listing.get('district','?')}.\n\n"
-        f"Оцени юридическую допустимость каждого сценария использования "
-        f"(кратко: допустимо / ограничено / недопустимо):\n{scenarios_text}\n\n"
-        f"Отвечай строго в формате JSON: {{\"scenario_key\": \"допустимо|ограничено|недопустимо\", ...}}"
-        f" — только JSON, ничего лишнего."
-    )
-    payload = {
-        'modelUri': f'gpt://{folder_id}/{YANDEX_MODEL}',
-        'completionOptions': {'stream': False, 'temperature': 0.1, 'maxTokens': '400'},
-        'messages': [
-            {'role': 'system', 'text': 'Ты — юрист по недвижимости. Отвечай строго в формате JSON.'},
-            {'role': 'user',   'text': prompt},
-        ],
-    }
-    try:
-        req = urllib.request.Request(
-            YANDEX_GPT_URL,
-            data=json.dumps(payload).encode(),
-            headers={
-                'Authorization': f'Api-Key {api_key}',
-                'Content-Type': 'application/json',
-                'x-folder-id': folder_id,
-            },
-            method='POST',
-        )
-        with urllib.request.urlopen(req, timeout=15) as r:
-            data = json.loads(r.read().decode())
-        alts = (data.get('result') or {}).get('alternatives') or []
-        text = ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
-        # Извлекаем JSON из ответа
-        import re
-        m = re.search(r'\{.*\}', text, re.DOTALL)
-        if m:
-            return json.loads(m.group())
-    except Exception:
-        pass
-    return {k: 'не определено' for k in scenario_keys}
+    land_vri = (listing.get('land_vri') or '').lower()
+    rights   = (listing.get('property_rights') or '').lower().replace(' ', '_')
+
+    # Находим подходящую строку матрицы по ВРИ
+    vri_rules = None
+    for keyword, rules in VRI_LEGAL_MAP.items():
+        if keyword in land_vri:
+            vri_rules = rules
+            break
+
+    result = {}
+    for key in scenario_keys:
+        if vri_rules:
+            status = vri_rules.get(key, 'ограничено')
+        else:
+            # ВРИ не указан → всё условно допустимо, требует проверки
+            status = 'ограничено'
+
+        # Права собственности могут понизить статус
+        rights_penalty = RIGHTS_PENALTY.get(rights)
+        if rights_penalty == 'ограничено' and status == 'допустимо':
+            status = 'ограничено'
+
+        result[key] = status
+
+    return result
 
 
 def _gpt_recommendation(listing: dict, ranked: list, api_key: str, folder_id: str) -> str:
@@ -334,10 +379,10 @@ def handle_nei(event: dict, cur, conn, api_key: str, folder_id: str) -> dict:
             **calc,
         })
 
-    # ── 3. GPT проверяет юридическую допустимость ───────────────────────────
-    legal = _gpt_legal_check(listing, feasible_keys, api_key, folder_id)
+    # ── 3. Детерминированная проверка юридической допустимости ──────────────
+    legal = _legal_check(listing, feasible_keys)
     for s in scenarios_calc:
-        s['legal_status'] = legal.get(s['key'], 'не определено')
+        s['legal_status'] = legal.get(s['key'], 'ограничено')
 
     # ── 4. Ранжируем: только юридически допустимые, по value_net_of_capex ───
     ranked = sorted(

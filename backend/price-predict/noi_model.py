@@ -225,92 +225,105 @@ def _real_rent_benchmarks(listing: dict) -> dict:
     }
 
 
-def _gpt_benchmarks(listing: dict, api_key: str, folder_id: str) -> dict:
-    # Если есть реальная аренда — используем факт, ИИ не нужен
+def _gpt_comment_only(listing: dict, bench: dict, api_key: str, folder_id: str) -> str:
+    """
+    GPT формулирует ТОЛЬКО текстовый комментарий к уже рассчитанным бенчмаркам.
+    Не возвращает цифры, не влияет на расчёты.
+    """
+    if not api_key or not folder_id:
+        return ''
+    type_key = (listing.get('type') or listing.get('category') or '').lower()
+    prompt = (
+        f"Объект: {TYPE_RU.get(type_key, type_key)}, {listing.get('area', '?')} м², "
+        f"район {listing.get('district', '?')}, состояние {listing.get('condition', '?')}.\n"
+        f"Применены бенчмарки: аренда {bench['rent_rate']} ₽/м²/мес, "
+        f"вакантность {bench['vacancy_pct']}%, OPEX {bench['opex_per_m2']} ₽/м²/мес, "
+        f"cap rate {bench['market_cap_rate_pct']}%.\n"
+        f"Напиши 1–2 предложения: почему эти параметры актуальны для данного объекта "
+        f"и на что обратить внимание инвестору. Только текст."
+    )
+    payload = {
+        'modelUri': f'gpt://{folder_id}/{YANDEX_MODEL_NAME}',
+        'completionOptions': {'stream': False, 'temperature': 0.3, 'maxTokens': '200'},
+        'messages': [
+            {'role': 'system', 'text': 'Ты — аналитик коммерческой недвижимости Краснодара. Отвечай кратко.'},
+            {'role': 'user', 'text': prompt},
+        ],
+    }
+    try:
+        req = urllib.request.Request(
+            YANDEX_GPT_URL,
+            data=json.dumps(payload).encode(),
+            headers={
+                'Authorization': f'Api-Key {api_key}',
+                'Content-Type': 'application/json',
+                'x-folder-id': folder_id,
+            },
+            method='POST',
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode())
+        alts = (data.get('result') or {}).get('alternatives') or []
+        return ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
+    except Exception:
+        return ''
+
+
+def _get_benchmarks(listing: dict, api_key: str, folder_id: str) -> dict:
+    """
+    Возвращает бенчмарки для объекта. Все числа — из детерминированного кода.
+    YandexGPT добавляет только текстовый комментарий.
+    """
+    # Если есть реальная аренда — используем факт, GPT не нужен
     if listing.get('monthly_rent') or listing.get('yearly_rent'):
         return _real_rent_benchmarks(listing)
 
-    if not api_key or not folder_id:
-        return _fallback_benchmarks(listing)
+    # Все числовые параметры — из таблицы DEFAULT_BENCHMARKS
+    bench = _fallback_benchmarks(listing)
 
-    type_key = (listing.get('type') or '').lower()
-    deal_key = (listing.get('deal') or '').lower()
-    parts = [
-        f"Тип: {TYPE_RU.get(type_key, type_key or 'коммерческая недвижимость')}",
-        f"Сделка: {DEAL_RU.get(deal_key, deal_key or 'не указано')}",
-        f"Площадь: {listing.get('area') or 0} м²",
-    ]
-    if listing.get('address'):
-        parts.append(f"Адрес: {listing['address']}")
-    if listing.get('city'):
-        parts.append(f"Город: {listing['city']}")
-    if listing.get('district'):
-        parts.append(f"Район: {listing['district']}")
-    if listing.get('floor') and listing.get('total_floors'):
-        parts.append(f"Этаж: {listing['floor']} из {listing['total_floors']}")
-    elif listing.get('floor'):
-        parts.append(f"Этаж: {listing['floor']}")
-    if listing.get('total_floors'):
-        parts.append(f"Этажность здания: {listing['total_floors']}")
-    if listing.get('building_class'):
-        parts.append(f"Класс здания: {listing['building_class']}")
-    if listing.get('building_year'):
-        parts.append(f"Год постройки: {listing['building_year']}")
-    if listing.get('condition'):
-        label = CONDITION_RU.get(listing['condition'], listing['condition'])
-        parts.append(f"Состояние: {label}")
-    if listing.get('finishing'):
-        label = FINISHING_RU.get(listing['finishing'], listing['finishing'])
-        parts.append(f"Отделка: {label}")
-    if listing.get('ceiling_height'):
-        parts.append(f"Высота потолков: {listing['ceiling_height']} м")
-    if listing.get('parking'):
-        label = PARKING_RU.get(listing['parking'], listing['parking'])
-        parts.append(f"Парковка: {label}")
-    if listing.get('road_line'):
-        label = ROAD_LINE_RU.get(str(listing['road_line']), listing['road_line'])
-        parts.append(f"Линия улицы: {label}")
-    if listing.get('rooms'):
-        parts.append(f"Помещений/секций: {listing['rooms']}")
-    if listing.get('purpose'):
-        parts.append(f"Назначение: {listing['purpose']}")
-    if listing.get('price'):
-        parts.append(f"Цена продажи: {listing['price']:,} ₽".replace(',', ' '))
+    # Точечные поправки по атрибутам объекта (детерминированные правила)
+    type_key = (listing.get('type') or listing.get('category') or '').lower()
+    condition = (listing.get('condition') or '').lower()
+    road_line = str(listing.get('road_line') or '')
+    building_class = (listing.get('building_class') or '').upper()
+    floor = int(listing.get('floor') or 0)
 
-    user_text = '\n'.join(parts)
-    payload = {
-        'modelUri': f'gpt://{folder_id}/{YANDEX_MODEL_NAME}',
-        'completionOptions': {'stream': False, 'temperature': 0.2, 'maxTokens': '400'},
-        'messages': [
-            {'role': 'system', 'text': SYSTEM_PROMPT},
-            {'role': 'user', 'text': user_text},
-        ],
+    # Поправка на состояние → влияет на ставку аренды
+    CONDITION_RENT_DELTA = {
+        'new': 1.15, 'euro': 1.10, 'good': 1.05, 'cosmetic': 1.0,
+        'working': 0.92, 'rough': 0.80, 'shellcore': 0.82, 'needs_repair': 0.70,
     }
-    req = urllib.request.Request(
-        YANDEX_GPT_URL,
-        data=json.dumps(payload).encode(),
-        headers={
-            'Authorization': f'Api-Key {api_key}',
-            'Content-Type': 'application/json',
-            'x-folder-id': folder_id,
-        },
-        method='POST',
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=45) as resp:
-            data = json.loads(resp.read().decode())
-        alts = (data.get('result') or {}).get('alternatives') or []
-        text = ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
-        if not text:
-            return _fallback_benchmarks(listing)
-        text = text.replace('```json', '').replace('```', '').strip()
-        try:
-            parsed = json.loads(text)
-        except Exception:
-            return _fallback_benchmarks(listing)
-        return _normalize_benchmarks(parsed, listing)
-    except Exception:
-        return _fallback_benchmarks(listing)
+    rent_mult = CONDITION_RENT_DELTA.get(condition, 1.0)
+    bench['rent_rate'] = round(bench['rent_rate'] * rent_mult, 0)
+
+    # Поправка на класс здания → влияет на аренду и cap rate
+    CLASS_ADJUSTMENTS = {
+        'A':  {'rent_mult': 1.25, 'cap_rate_delta': -1.0},
+        'B+': {'rent_mult': 1.10, 'cap_rate_delta': -0.5},
+        'B':  {'rent_mult': 1.0,  'cap_rate_delta':  0.0},
+        'C':  {'rent_mult': 0.80, 'cap_rate_delta': +1.0},
+        'D':  {'rent_mult': 0.65, 'cap_rate_delta': +2.0},
+    }
+    if building_class in CLASS_ADJUSTMENTS:
+        adj = CLASS_ADJUSTMENTS[building_class]
+        bench['rent_rate'] = round(bench['rent_rate'] * adj['rent_mult'], 0)
+        bench['market_cap_rate_pct'] = round(bench['market_cap_rate_pct'] + adj['cap_rate_delta'], 2)
+
+    # Поправка на линию улицы → влияет на аренду ритейла
+    if type_key in ('retail', 'restaurant', 'free_purpose') and road_line:
+        ROAD_LINE_RENT = {'1': 1.20, '2': 1.0, '3': 0.85, 'yard': 0.75}
+        bench['rent_rate'] = round(bench['rent_rate'] * ROAD_LINE_RENT.get(road_line, 1.0), 0)
+
+    # Поправка на этаж → выше 2-го этажа ритейл теряет
+    if type_key in ('retail', 'restaurant') and floor > 2:
+        bench['rent_rate'] = round(bench['rent_rate'] * 0.85, 0)
+        bench['vacancy_pct'] = min(bench['vacancy_pct'] + 5, 40)
+
+    # GPT добавляет только текстовый комментарий
+    bench['comment'] = _gpt_comment_only(listing, bench, api_key, folder_id) \
+                       or f"Бенчмарки рассчитаны по рыночным данным Краснодара 2025 для сегмента {type_key}."
+    bench['source'] = 'deterministic'
+    return bench
 
 
 def _compute_npv(cash_flows: list, discount_pct: float) -> float:
@@ -632,7 +645,7 @@ def handle_noi_request(cur, conn, qs: dict) -> dict:
     bench = None if refresh else load_cached(cur, listing_id)
     if bench is None:
         api_key, folder_id = _load_keys(cur)
-        bench = _gpt_benchmarks(listing, api_key, folder_id)
+        bench = _get_benchmarks(listing, api_key, folder_id)
         try:
             save_cache(cur, conn, listing_id, bench)
         except Exception:
