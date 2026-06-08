@@ -12,6 +12,12 @@ action=normalize  POST {action: 'normalize', mode: 'preview'|'apply'}
                   → {changed_count, already_ok_count, changed: [...]}
                   Нормализует значения district в listings к каноничным названиям
                   из таблицы districts (точное или нечёткое совпадение).
+
+action=audit      POST {action: 'audit', mode: 'preview'|'apply', limit?: int}
+                  → {mismatch_count, ok_count, no_geodata_count, items: [...]}
+                  Обратное геокодирование через Яндекс Геокодер (lat/lng → адрес).
+                  Сравнивает полученный район с сохранённым в listings.district.
+                  mode=apply — исправляет расхождения в БД.
 """
 import json
 import os
@@ -296,6 +302,253 @@ def _handle_normalize(body: dict, cur, conn) -> dict:
     })
 
 
+# ── action=audit ─────────────────────────────────────────────────────────────
+
+def _geocode_twogis(address: str, city: str, api_key: str) -> dict:
+    """
+    2GIS Geocoder API: геокодирование адреса → координаты + район.
+    2GIS хорошо знает микрорайоны Краснодара (district в ответе).
+    Docs: https://docs.2gis.com/ru/api/search/geocoder/overview
+    """
+    import urllib.parse
+    q = urllib.parse.quote(f'{city}, {address}')
+    url = (
+        f'https://catalog.api.2gis.com/3.0/items/geocode'
+        f'?q={q}&fields=items.point,items.address,items.address_name'
+        f'&key={api_key}'
+    )
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        data = json.loads(resp.read().decode('utf-8'))
+
+    items = (data.get('result') or {}).get('items') or []
+    if not items:
+        return {}
+
+    item = items[0]
+    point = item.get('point') or {}
+    addr = item.get('address') or {}
+    components = addr.get('components') or []
+
+    result = {
+        'lat': point.get('lat'),
+        'lon': point.get('lon'),
+        'district': '',
+        'city': '',
+        'street': '',
+        'full': item.get('full_name', '') or item.get('address_name', ''),
+    }
+
+    # 2GIS компоненты: тип district содержит микрорайон
+    for comp in components:
+        t = comp.get('type', '')
+        name = comp.get('street_name') or comp.get('name') or ''
+        if t == 'district':
+            result['district'] = name
+        elif t == 'city':
+            result['city'] = name
+        elif t == 'street':
+            result['street'] = name
+
+    return result
+
+
+def _geocode_dadata_clean(address: str, city: str, api_key: str, secret_key: str) -> dict:
+    """
+    DaData API /clean/address (стандартизация): точнее чем suggest,
+    возвращает city_district для городских адресов.
+    """
+    payload = json.dumps([f'{city}, {address}']).encode('utf-8')
+    req = urllib.request.Request(
+        'https://cleaner.dadata.ru/api/v1/clean/address',
+        data=payload,
+        headers={
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': f'Token {api_key}',
+            'X-Secret': secret_key,
+        },
+        method='POST',
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        data = json.loads(resp.read().decode('utf-8'))
+
+    if not data or not isinstance(data, list):
+        return {}
+
+    d = data[0]
+    return {
+        'geo_lat': d.get('geo_lat'),
+        'geo_lon': d.get('geo_lon'),
+        'city_district': d.get('city_district_with_type') or d.get('city_district') or '',
+        'settlement': d.get('settlement_with_type') or d.get('settlement') or '',
+        'street': d.get('street_with_type') or d.get('street') or '',
+        'house': d.get('house') or '',
+        'full': d.get('result', ''),
+        'qc_geo': d.get('qc_geo'),  # 0=точный, 1=улица, 2=город, 4=нет
+    }
+
+
+def _match_district(yandex_district: str, our_district: str, canonical: list) -> str | None:
+    """
+    Пытается сопоставить район от Яндекса с каноничным названием из справочника.
+    Возвращает каноничное название если нашли совпадение, иначе None.
+    """
+    if not yandex_district:
+        return None
+    ya = yandex_district.lower().strip()
+    # Убираем типовые суффиксы которые Яндекс добавляет
+    for suffix in [' микрорайон', ' мкр', ' район', ' квартал', ' посёлок', ' п.', ' пос.']:
+        if ya.endswith(suffix):
+            ya = ya[:-len(suffix)].strip()
+
+    best = None
+    best_score = -1
+    for name in canonical:
+        n = name.lower()
+        # Ищем вхождение в обе стороны
+        if ya in n or n in ya:
+            score = len(n) + (1000 if ya == n else 0)
+            if score > best_score:
+                best = name
+                best_score = score
+    return best
+
+
+def _handle_audit(body: dict, cur, conn) -> dict:
+    """
+    Аудит районов через 2GIS + DaData clean.
+    Алгоритм для каждого объекта:
+      1. Геокодируем адрес через 2GIS → district компонент
+      2. Если 2GIS не дал район — пробуем DaData /clean/address
+      3. Сопоставляем с каноничным справочником districts
+      4. Сравниваем с district в БД
+    """
+    mode = body.get('mode', 'preview')
+    limit = min(int(body.get('limit') or 200), 500)
+
+    twogis_key = os.environ.get('TWOGIS_API_KEY', '')
+    dadata_key = os.environ.get('DADATA_API_KEY', '')
+    dadata_secret = os.environ.get('DADATA_SECRET_KEY', '')
+
+    if not twogis_key and not dadata_key:
+        return _err('Нужен TWOGIS_API_KEY или DADATA_API_KEY', 500)
+
+    # Загружаем всё заранее — один раз, вне цикла
+    cur.execute(
+        f"SELECT name FROM {SCHEMA}.districts WHERE is_active = TRUE ORDER BY name ASC"
+    )
+    canonical = [r['name'] for r in cur.fetchall()]
+
+    # Справочник улиц — загружаем один раз
+    street_rules = _load_street_rules(cur)
+
+    # Все активные видимые объекты
+    cur.execute(f"""
+        SELECT id, title, address, district,
+               COALESCE(city, 'Краснодар') as city
+        FROM {SCHEMA}.listings
+        WHERE status = 'active' AND is_visible = TRUE
+          AND address IS NOT NULL AND address != ''
+        ORDER BY id ASC
+        LIMIT {limit}
+    """)
+    rows = cur.fetchall()
+
+    mismatch, ok_items, no_geodata, errors = [], [], [], []
+
+    for row in rows:
+        lid = row['id']
+        our = (row['district'] or '').strip()
+        address = row['address']
+        city = row['city'] or 'Краснодар'
+
+        geo_raw = {}
+        source = ''
+
+        # 1. Пробуем 2GIS
+        if twogis_key:
+            try:
+                geo_raw = _geocode_twogis(address, city, twogis_key)
+                source = '2gis'
+            except Exception as e:
+                print(f'[geo audit] id={lid} 2GIS error: {e}')
+
+        # 2. Fallback: DaData /clean/address
+        if not geo_raw.get('district') and dadata_key:
+            try:
+                dd = _geocode_dadata_clean(address, city, dadata_key, dadata_secret)
+                if dd.get('city_district') or dd.get('settlement'):
+                    geo_raw = {
+                        'district': dd.get('settlement') or dd.get('city_district') or '',
+                        'city_district': dd.get('city_district', ''),
+                        'settlement': dd.get('settlement', ''),
+                    }
+                    source = 'dadata'
+            except Exception as e:
+                print(f'[geo audit] id={lid} DaData error: {e}')
+
+        raw_district = geo_raw.get('district', '')
+        matched = _match_district(raw_district, our, canonical)
+
+        # 3. Fallback: наш справочник street_district_map
+        if not matched:
+            street, house_num = _parse_address(address)
+            street_match = _find_district(street, house_num, street_rules)
+            if street_match:
+                matched = street_match
+                source = 'street_map'
+
+        item = {
+            'id': lid,
+            'title': row['title'],
+            'address': address,
+            'district_db': our,
+            'geocoder_district_raw': raw_district,
+            'geocoder_matched': matched,
+            'source': source,
+        }
+
+        if not matched:
+            no_geodata.append(item)
+        elif matched == our:
+            ok_items.append(item)
+        else:
+            item['district_suggested'] = matched
+            mismatch.append(item)
+            print(
+                f'[geo audit] id={lid} РАСХОЖДЕНИЕ: '
+                f'БД="{our}" геокодер="{matched}" '
+                f'(raw="{raw_district}" source={source})'
+            )
+
+    # Применяем только уверенные исправления (не из street_map — он менее надёжен)
+    confirmed = [x for x in mismatch if x.get('source') != 'street_map']
+
+    if mode == 'apply' and confirmed:
+        for item in confirmed:
+            dn = item['district_suggested'].replace("'", "''")
+            cur.execute(
+                f"UPDATE {SCHEMA}.listings SET district = '{dn}', updated_at = NOW() "
+                f"WHERE id = {item['id']}"
+            )
+        conn.commit()
+        print(f'[geo audit] применено {len(confirmed)} исправлений')
+
+    return _ok({
+        'mode': mode,
+        'total_checked': len(rows),
+        'ok_count': len(ok_items),
+        'mismatch_count': len(mismatch),
+        'confirmed_mismatch_count': len(confirmed),
+        'no_geodata_count': len(no_geodata),
+        'error_count': len(errors),
+        'mismatch': mismatch,
+        'no_geodata_sample': no_geodata[:10],
+        'errors': errors,
+    })
+
+
 # ── Handler ───────────────────────────────────────────────────────────────────
 
 def handler(event: dict, context) -> dict:
@@ -324,7 +577,9 @@ def handler(event: dict, context) -> dict:
                 return _handle_fix(body, cur, conn)
             elif action == 'normalize':
                 return _handle_normalize(body, cur, conn)
+            elif action == 'audit':
+                return _handle_audit(body, cur, conn)
             else:
-                return _err(f'Неизвестный action: {action}. Доступные: suggest, fix, normalize')
+                return _err(f'Неизвестный action: {action}. Доступные: suggest, fix, normalize, audit')
     finally:
         conn.close()
