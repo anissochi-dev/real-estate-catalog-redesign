@@ -45,6 +45,7 @@ export default function DistrictsAdmin() {
   type OsmMeta = { osm_total: number; in_map: number; missing_count: number };
 
   const [osmLoading, setOsmLoading] = useState(false);
+  const [osmOpen, setOsmOpen] = useState(false);                        // панель открыта/закрыта
   const [osmMeta, setOsmMeta] = useState<OsmMeta | null>(null);        // статистика из первого запроса
   const [osmQueue, setOsmQueue] = useState<StreetItem[]>([]);           // ВСЕ недостающие улицы
   const [osmCurrentBatch, setOsmCurrentBatch] = useState<StreetItem[]>([]); // текущий батч на экране
@@ -56,7 +57,13 @@ export default function DistrictsAdmin() {
   const OSM_BATCH = 20;
 
   // Загружаем ВСЕ недостающие улицы за один Overpass-запрос (лимит 2500)
-  const handleOsmLoad = async () => {
+  // force=true — принудительно перезагружает список (сбрасывает прогресс)
+  const handleOsmLoad = async (force = false) => {
+    // Если панель уже открыта и данные есть — просто показываем (не перезагружаем)
+    if (!force && osmMeta) {
+      setOsmOpen(true);
+      return;
+    }
     setOsmLoading(true);
     try {
       const res = await fetch(GEO_FIX_URL, {
@@ -70,6 +77,7 @@ export default function DistrictsAdmin() {
       setOsmCurrentBatch((data.missing || []).slice(0, OSM_BATCH));
       setOsmAddedTotal(0);
       setOsmProgress({ done: 0, total: data.missing_count });
+      setOsmOpen(true);
     } catch (e) { toast.error(e instanceof Error ? e.message : 'Ошибка загрузки OSM'); }
     finally { setOsmLoading(false); }
   };
@@ -360,11 +368,11 @@ export default function DistrictsAdmin() {
             Исправить районы объектов
           </button>
           <button type="button"
-            onClick={() => osmMeta ? (setOsmMeta(null), setOsmQueue([]), setOsmCurrentBatch([]), setOsmAddedTotal(0)) : handleOsmLoad()}
+            onClick={() => osmOpen ? setOsmOpen(false) : handleOsmLoad()}
             disabled={osmLoading || osmRunAll}
-            className={`inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl border transition disabled:opacity-50 ${osmMeta ? 'border-sky-400 bg-sky-100 text-sky-800' : 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100'}`}>
+            className={`inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl border transition disabled:opacity-50 ${osmOpen ? 'border-sky-400 bg-sky-100 text-sky-800' : 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100'}`}>
             <Icon name={osmLoading ? 'Loader2' : 'Map'} size={14} className={osmLoading ? 'animate-spin' : ''} />
-            {osmLoading ? 'Загружаю улицы...' : 'Улицы из OSM'}
+            {osmLoading ? 'Загружаю улицы...' : osmMeta ? `Улицы из OSM (${Math.max(0, osmMeta.missing_count - osmAddedTotal)} ост.)` : 'Улицы из OSM'}
           </button>
           <button type="button" onClick={load} disabled={loading}
             className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl border border-border hover:bg-muted/50 transition disabled:opacity-50">
@@ -443,7 +451,7 @@ export default function DistrictsAdmin() {
       )}
 
       {/* ── OSM-панель (Overpass + ИИ) ─────────────────────────────────────── */}
-      {osmMeta && (
+      {osmOpen && osmMeta && (
         <div className="bg-sky-50 border border-sky-200 rounded-2xl p-5 space-y-4">
 
           {/* Заголовок */}
@@ -459,11 +467,19 @@ export default function DistrictsAdmin() {
                 {osmAddedTotal > 0 && <> &nbsp;·&nbsp; Добавлено сейчас: <b className="text-emerald-700">{osmAddedTotal}</b></>}
               </div>
             </div>
-            <button onClick={() => { setOsmMeta(null); setOsmQueue([]); setOsmCurrentBatch([]); setOsmAddedTotal(0); }}
-              disabled={osmRunAll}
-              className="text-sky-400 hover:text-sky-600 disabled:opacity-30">
-              <Icon name="X" size={16} />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleOsmLoad(true)}
+                disabled={osmLoading || osmRunAll}
+                title="Обновить список из OSM (сбросит прогресс)"
+                className="text-sky-400 hover:text-sky-600 disabled:opacity-30">
+                <Icon name={osmLoading ? 'Loader2' : 'RefreshCw'} size={15} className={osmLoading ? 'animate-spin' : ''} />
+              </button>
+              <button onClick={() => setOsmOpen(false)} disabled={osmRunAll}
+                className="text-sky-400 hover:text-sky-600 disabled:opacity-30">
+                <Icon name="X" size={16} />
+              </button>
+            </div>
           </div>
 
           {/* Прогресс-бар */}
