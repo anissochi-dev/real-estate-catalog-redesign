@@ -929,15 +929,14 @@ def _handle_overpass(body: dict, cur) -> dict:
     })
 
 
-def _dadata_street_coords(street_name: str, api_key: str, secret_key: str):
+def _dadata_street_full(street_name: str, api_key: str, secret_key: str):
     """
-    Геокодирует улицу Краснодара через DaData (с домом 1) и возвращает (lat, lon, street_clean) или None.
-    DaData не возвращает микрорайон для запроса без номера дома, поэтому берём координаты
-    и потом определяем район через наш справочник.
+    Геокодирует улицу Краснодара через DaData.
+    Возвращает dict с полями: street_clean, city_district, lat, lon — или None.
+    Использует city_district из ответа DaData напрямую (не зависит от нашего справочника).
     """
     import urllib.request as _ur, json as _j
-    # Пробуем несколько номеров домов чтобы найти хоть один результат с координатами
-    for house in ('1', '10', '5'):
+    for house in ('1', '10', '5', '20'):
         payload = _j.dumps({
             'query': f'Краснодар, {street_name}, {house}',
             'count': 1,
@@ -962,23 +961,62 @@ def _dadata_street_coords(street_name: str, api_key: str, secret_key: str):
             if not suggs:
                 continue
             d = suggs[0].get('data', {})
-            lat = d.get('geo_lat'); lon = d.get('geo_lon')
             street_clean = d.get('street') or ''
-            if lat and lon and street_clean:
-                return (street_clean, d.get('house') or house)
+            if not street_clean:
+                continue
+            # city_district_with_type: "Прикубанский округ" / "Центральный округ" и т.д.
+            city_district = (
+                d.get('city_district') or
+                d.get('city_district_with_type') or
+                d.get('area') or ''
+            ).strip()
+            lat = d.get('geo_lat')
+            lon = d.get('geo_lon')
+            if street_clean:
+                return {
+                    'street_clean': street_clean,
+                    'city_district': city_district,
+                    'lat': lat, 'lon': lon,
+                }
         except Exception as _e:
             print(f'[dadata] ошибка "{street_name}": {_e}')
     return None
+
+
+# Маппинг district_with_type из DaData → канонические названия районов Краснодара
+_DADATA_DISTRICT_MAP = {
+    'центральный': 'Центральный (ЦМР)',
+    'прикубанский': 'Прикубанский',
+    'карасунский': 'Карасунский',
+    'западный': 'Западный',
+    'восточный': 'Восточный',
+    'фестивальный': 'Фестивальный (ФМР)',
+    'фмр': 'Фестивальный (ФМР)',
+    'цмр': 'Центральный (ЦМР)',
+    'прикуб': 'Прикубанский',
+    'карас': 'Карасунский',
+}
+
+
+def _map_dadata_district(city_district: str) -> str:
+    """Приводит city_district из DaData к каноническому названию района."""
+    if not city_district:
+        return ''
+    dl = city_district.lower()
+    for key, canon in _DADATA_DISTRICT_MAP.items():
+        if key in dl:
+            return canon
+    # Возвращаем как есть — лучше неточное значение чем ничего
+    return city_district.strip()
 
 
 def _handle_ai_map(body: dict, cur, conn) -> dict:
     """
     action=ai_map_streets — принимает список улиц [{street, base}, ...],
     геокодирует каждую через DaData и сохраняет в street_district_map.
+    Определяет район из city_district DaData — НЕ из нашего справочника.
     streets=[...] — список объектов {street, base} (макс 20)
     """
-    import re as _re2
-
     streets = body.get('streets', [])
     if not streets:
         return _err('streets обязателен')
@@ -990,8 +1028,10 @@ def _handle_ai_map(body: dict, cur, conn) -> dict:
     if not dadata_key:
         return _err('Нет DADATA_API_KEY')
 
-    # Загружаем справочник улица→район
-    rules = _load_street_rules(cur)
+    # Загружаем существующие паттерны чтобы не дублировать
+    cur.execute(f"SELECT DISTINCT street_pattern FROM {SCHEMA}.street_district_map")
+    existing = {r['street_pattern'].lower().strip() for r in cur.fetchall()}
+
     added = []; skipped = []
 
     for s in streets:
@@ -999,25 +1039,25 @@ def _handle_ai_map(body: dict, cur, conn) -> dict:
         if not street_name:
             continue
 
-        # DaData нормализует название улицы и возвращает чистое имя
-        result = _dadata_street_coords(street_name, dadata_key, dadata_secret)
+        # Пропускаем если уже есть
+        pattern = _norm_street(street_name)
+        if pattern.lower() in existing or street_name.lower() in existing:
+            skipped.append(f'{street_name} (уже есть)')
+            continue
+
+        # DaData геокодирует и возвращает city_district напрямую
+        result = _dadata_street_full(street_name, dadata_key, dadata_secret)
         if not result:
             skipped.append(street_name)
             continue
 
-        street_clean, house = result
-        # Ищем район через наш справочник по нормализованному имени
-        import re as _re2
-        m = _re2.match(r'(\d+)', str(house))
-        house_num = int(m.group(1)) if m else None
-        district = _find_district(street_clean, house_num, rules)
-
+        # Берём район из DaData city_district — не зависим от нашего справочника
+        district = _map_dadata_district(result['city_district'])
         if not district:
-            print(f'[geo dadata] "{street_name}" → clean="{street_clean}" h={house} — нет в справочнике')
+            print(f'[geo dadata] "{street_name}" → нет city_district в ответе DaData')
             skipped.append(street_name)
             continue
 
-        pattern = _norm_street(street_name)
         try:
             cur.execute(
                 f"INSERT INTO {SCHEMA}.street_district_map (street_pattern, district, note) "
@@ -1025,6 +1065,7 @@ def _handle_ai_map(body: dict, cur, conn) -> dict:
                 (pattern, district)
             )
             added.append({'street': street_name, 'pattern': pattern, 'district': district})
+            existing.add(pattern.lower())
             print(f'[geo dadata] ✓ "{street_name}" → "{district}"')
         except Exception as ex:
             skipped.append(f'{street_name}: {ex}')

@@ -454,8 +454,8 @@ export default function DistrictsAdmin() {
               </div>
               <div className="text-sm text-sky-700 mt-0.5">
                 Всего в OSM: <b>{osmMeta.osm_total}</b> &nbsp;·&nbsp;
-                Уже в справочнике: <b>{osmMeta.in_map}</b> &nbsp;·&nbsp;
-                Осталось добавить: <b>{osmQueue.length}</b>
+                Уже в справочнике: <b>{osmMeta.in_map + osmAddedTotal}</b> &nbsp;·&nbsp;
+                Осталось добавить: <b>{Math.max(0, osmMeta.missing_count - osmAddedTotal)}</b>
                 {osmAddedTotal > 0 && <> &nbsp;·&nbsp; Добавлено сейчас: <b className="text-emerald-700">{osmAddedTotal}</b></>}
               </div>
             </div>
