@@ -956,9 +956,56 @@ def _handle_ai_map(body: dict, cur, conn) -> dict:
     districts = [r['name'] for r in cur.fetchall()]
     districts_numbered = '\n'.join([f'{i+1}. {d}' for i, d in enumerate(districts)])
 
-    # Используем base (без типа улицы) для лучшего распознавания
-    streets_list = '\n'.join([f'{i+1}. {s["base"] or s["street"]}' for i, s in enumerate(streets)])
-    # folder_id для AISTUDIO_API_KEY берём из сообщения об ошибке / env
+    # --- Шаг 1: fuzzy-matching по названию прямо в Python (без ИИ) ---
+    # Для улиц вида "1-й Знаменский проезд" ищем район по ключевому слову
+    import re as _re3
+    pre_added = []
+    remaining_streets = []
+    remaining_idx = []   # оригинальные индексы в streets[]
+
+    # Нормализуем названия районов для быстрого поиска
+    dist_lower = [d.lower() for d in districts]
+
+    for i, s in enumerate(streets):
+        base = (s.get('base') or s['street']).strip()
+        # Убираем порядковый номер типа "1-й", "2-й" из начала
+        clean = _re3.sub(r'^\d+-[йяе]\s+', '', base, flags=_re3.IGNORECASE).strip()
+        # Ищем совпадение с названием района
+        found_dist = None
+        for di, dn in enumerate(districts):
+            # Берём первое слово района (до скобки и пробела)
+            dkey = _re3.split(r'[\s(]', dn)[0].lower()
+            if len(dkey) >= 4 and dkey in clean.lower():
+                found_dist = (di, dn)
+                break
+        if found_dist:
+            pattern = _norm_street(s['street'])
+            try:
+                cur.execute(
+                    f"INSERT INTO {SCHEMA}.street_district_map (street_pattern, district, note) "
+                    f"VALUES (%s, %s, 'overpass+fuzzy') ON CONFLICT DO NOTHING",
+                    (pattern, found_dist[1])
+                )
+                pre_added.append({'street': s['street'], 'pattern': pattern, 'district': found_dist[1]})
+            except Exception:
+                remaining_streets.append(s)
+                remaining_idx.append(i)
+        else:
+            remaining_streets.append(s)
+            remaining_idx.append(i)
+
+    print(f'[geo ai_map] fuzzy добавлено: {len(pre_added)}, на ИИ: {len(remaining_streets)}')
+
+    # --- Шаг 2: ИИ для улиц которые не нашли через fuzzy ---
+    added = list(pre_added)
+    skipped = []
+
+    if not remaining_streets:
+        conn.commit()
+        return _ok({'added_count': len(added), 'skipped_count': 0, 'added': added, 'skipped': [], 'gpt_raw': 'fuzzy only'})
+
+    streets_list = '\n'.join([f'{i+1}. {s["base"] or s["street"]}' for i, s in enumerate(remaining_streets)])
+    # folder_id для AISTUDIO_API_KEY
     aistudio_folder = os.environ.get('YANDEX_FOLDER_ID', '') or 'b1g3c3russgao6k4432n'
     effective_folder = folder_id if use_folder else aistudio_folder
     model_uri = f'gpt://{effective_folder}/yandexgpt-5-pro/latest'
@@ -969,16 +1016,15 @@ def _handle_ai_map(body: dict, cur, conn) -> dict:
         'messages': [
             {'role': 'system', 'text': (
                 'Ты — эксперт по микрорайонам Краснодара.\n'
-                'Тебе дан пронумерованный список улиц. Для каждой улицы определи микрорайон из справочника.\n'
-                'ВАЖНО: отвечай строго в формате "N->M" где N — порядковый номер улицы (1,2,3...), M — номер микрорайона из справочника.\n'
-                'Если улица неизвестна или не относится к конкретному микрорайону — пиши "N->0".\n'
-                'Только строки в формате N->M, ничего другого.\n\n'
-                f'Справочник микрорайонов Краснодара ({len(districts)} штук):\n{districts_numbered}'
+                'Для каждой улицы укажи номер микрорайона из справочника.\n'
+                'Формат строго: N->M (N=порядковый номер улицы, M=номер района из справочника).\n'
+                'Если не знаешь — N->0. Никаких пояснений, только строки N->M.\n\n'
+                f'Микрорайоны:\n{districts_numbered}'
             )},
-            {'role': 'user', 'text': f'Улицы ({len(streets)} штук):\n{streets_list}\n\nОтвет ({len(streets)} строк):'},
+            {'role': 'user', 'text': f'Улицы ({len(remaining_streets)}):\n{streets_list}\n\nОтвет:'},
         ],
     }
-    print(f'[geo ai_map] modelUri={model_uri}')
+    print(f'[geo ai_map] modelUri={model_uri}, remaining={len(remaining_streets)}')
     gpt_req = _ur2.Request(
         'https://llm.api.cloud.yandex.net/foundationModels/v1/completion',
         data=_j2.dumps(payload).encode(),
@@ -1002,23 +1048,21 @@ def _handle_ai_map(body: dict, cur, conn) -> dict:
     text = ((alts[0].get('message') or {}).get('text') or '') if alts else ''
     print(f'[geo ai_map] GPT ответ: {text[:300]}')
 
-    added = []; skipped = []
     for line in text.strip().split('\n'):
-        # Формат: N->M  или N: M  или N - M
         m = _re2.search(r'(\d+)\s*(?:->|-|:)\s*(\d+)', line.strip())
         if not m:
             continue
         st_idx = int(m.group(1)) - 1
         di_idx = int(m.group(2)) - 1
-        if st_idx < 0 or st_idx >= len(streets):
+        if st_idx < 0 or st_idx >= len(remaining_streets):
             continue
-        if di_idx == -1:  # 0 = не знаю
+        if di_idx <= -1:  # 0 = не знаю
+            skipped.append(remaining_streets[st_idx]['street'])
             continue
-        if di_idx < 0 or di_idx >= len(districts):
-            if st_idx < len(streets):
-                skipped.append(streets[st_idx]['street'])
+        if di_idx >= len(districts):
+            skipped.append(remaining_streets[st_idx]['street'])
             continue
-        st_obj = streets[st_idx]
+        st_obj = remaining_streets[st_idx]
         pattern = _norm_street(st_obj['street'])
         district = districts[di_idx]
         try:
@@ -1032,7 +1076,7 @@ def _handle_ai_map(body: dict, cur, conn) -> dict:
             skipped.append(f'{st_obj["street"]}: {ex}')
 
     conn.commit()
-    print(f'[geo ai_map] добавлено {len(added)}, пропущено {len(skipped)}')
+    print(f'[geo ai_map] итого добавлено {len(added)} (fuzzy={len(pre_added)}, ai={len(added)-len(pre_added)}), пропущено {len(skipped)}')
 
     return _ok({
         'added_count': len(added),
