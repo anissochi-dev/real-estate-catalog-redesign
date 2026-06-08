@@ -139,7 +139,7 @@ export default function SiteHealthGeo() {
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {stats.by_type.map(item => {
+                {(stats.by_type || []).map(item => {
                   const cfg = OSM_TYPES.find(t => t.key === item.infra_type);
                   return (
                     <div key={item.infra_type}
@@ -224,7 +224,7 @@ export default function SiteHealthGeo() {
             Результат загрузки
           </div>
           <div className="space-y-1.5">
-            {loadResult.results.map(r => (
+            {(loadResult.results || []).map(r => (
               <div key={r.type}
                 className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm
                   ${r.status === 'ok' ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'}`}>
