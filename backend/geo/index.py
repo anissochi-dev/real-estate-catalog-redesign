@@ -1122,16 +1122,85 @@ def _handle_ai_map(body: dict, cur, conn) -> dict:
 
 # ── action=geo_okrug ─────────────────────────────────────────────────────────
 
+# Список геокодеров — порядок = приоритет fallback
+GEO_PROVIDERS = ['yandex', 'maps_co', 'nominatim']
+
+class GeoLimitExceeded(Exception):
+    pass
+
+def _geocode_yandex(street: str, api_key: str) -> dict:
+    """Яндекс Геокодер HTTP API — бесплатный с ограничениями."""
+    import urllib.parse as _up
+    q = _up.quote(f'Краснодар, {street}')
+    url = (
+        f'https://geocode-maps.yandex.ru/1.x/'
+        f'?apikey={api_key}&geocode={q}&format=json&lang=ru_RU&results=1'
+        f'&ll=38.9766,45.0355&spn=0.5,0.5&rspn=1'
+    )
+    req = urllib.request.Request(url, headers={'User-Agent': 'KrasnodarRealEstate/1.0'})
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        raw = resp.read().decode('utf-8')
+    data = json.loads(raw)
+    members = (
+        data.get('response', {})
+            .get('GeoObjectCollection', {})
+            .get('featureMember', [])
+    )
+    if not members:
+        return {}
+    obj = members[0].get('GeoObject', {})
+    meta = obj.get('metaDataProperty', {}).get('GeocoderMetaData', {})
+    addr = meta.get('Address', {})
+    components = addr.get('Components', [])
+    result = {'suburb': '', 'quarter': '', 'city_district': '', 'neighbourhood': '', 'raw': {}}
+    for comp in components:
+        kind = comp.get('kind', '')
+        name = comp.get('name', '')
+        if kind == 'district':
+            result['city_district'] = name
+        elif kind == 'locality':
+            pass
+        elif kind == 'street':
+            pass
+    locality_meta = meta.get('AddressDetails', {})
+    result['raw'] = {'components': components, 'address': addr.get('formatted', '')}
+    return result
+
+
 def _geocode_maps_co(street: str, api_key: str) -> dict:
-    """
-    geocode.maps.co (Nominatim-совместимый) — ищет улицу в Краснодаре.
-    Возвращает поля: suburb, quarter, city_district из address.
-    """
+    """geocode.maps.co (Nominatim-совместимый) — ищет улицу в Краснодаре."""
     import urllib.parse as _up
     q = _up.quote(f'Краснодар, {street}')
     url = (
         f'https://geocode.maps.co/search'
         f'?q={q}&api_key={api_key}&format=json&addressdetails=1&limit=1&accept-language=ru'
+    )
+    req = urllib.request.Request(url, headers={'User-Agent': 'KrasnodarRealEstate/1.0'})
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        status = resp.status
+        raw = resp.read().decode('utf-8')
+    if status == 429:
+        raise GeoLimitExceeded('maps_co: 429 Too Many Requests')
+    data = json.loads(raw)
+    if not data or not isinstance(data, list):
+        return {}
+    addr = data[0].get('address') or {}
+    return {
+        'suburb':        addr.get('suburb', ''),
+        'quarter':       addr.get('quarter', ''),
+        'city_district': addr.get('city_district', ''),
+        'neighbourhood': addr.get('neighbourhood', ''),
+        'raw':           addr,
+    }
+
+
+def _geocode_nominatim(street: str, api_key: str) -> dict:
+    """Nominatim OSM — полностью бесплатный, без ключа, лимит 1 rps."""
+    import urllib.parse as _up
+    q = _up.quote(f'Краснодар, {street}')
+    url = (
+        f'https://nominatim.openstreetmap.org/search'
+        f'?q={q}&format=json&addressdetails=1&limit=1&accept-language=ru'
     )
     req = urllib.request.Request(url, headers={'User-Agent': 'KrasnodarRealEstate/1.0'})
     with urllib.request.urlopen(req, timeout=10) as resp:
@@ -1148,11 +1217,55 @@ def _geocode_maps_co(street: str, api_key: str) -> dict:
     }
 
 
+def _geocode_with_fallback(street: str, providers: list, provider_limits: dict, keys: dict) -> tuple:
+    """
+    Геокодирует улицу через цепочку провайдеров с авто-переключением при превышении лимита.
+    Возвращает (geo_dict, used_provider).
+    provider_limits = {provider: remaining_count}  — уменьшается при каждом запросе
+    """
+    for provider in providers:
+        limit_left = provider_limits.get(provider, 9999)
+        if limit_left <= 0:
+            print(f'[geo_okrug] {provider}: лимит исчерпан, переключаюсь...')
+            continue
+        try:
+            if provider == 'yandex':
+                key = keys.get('yandex', '')
+                if not key:
+                    print('[geo_okrug] yandex: нет YANDEX_GEOCODER_KEY, пропускаю')
+                    provider_limits['yandex'] = 0
+                    continue
+                geo = _geocode_yandex(street, key)
+            elif provider == 'maps_co':
+                key = keys.get('maps_co', '')
+                if not key:
+                    print('[geo_okrug] maps_co: нет MAPS_CO_API_KEY, пропускаю')
+                    provider_limits['maps_co'] = 0
+                    continue
+                geo = _geocode_maps_co(street, key)
+            elif provider == 'nominatim':
+                geo = _geocode_nominatim(street, '')
+            else:
+                continue
+
+            provider_limits[provider] = limit_left - 1
+            return geo, provider
+
+        except GeoLimitExceeded as e:
+            print(f'[geo_okrug] {provider}: лимит по API ({e}), переключаюсь...')
+            provider_limits[provider] = 0
+            continue
+        except Exception as e:
+            print(f'[geo_okrug] {provider}: ошибка для "{street}": {e}')
+            continue
+
+    return {}, None
+
+
 def _match_okrug(geo: dict, okrugs: list):
     """
-    Сопоставляет поля suburb/quarter/city_district из geocode.maps.co с 4 округами.
+    Сопоставляет поля suburb/quarter/city_district из геокодера с 4 округами.
     Возвращает строку из okrugs или None.
-    Окружа: [{id, name}]
     """
     candidates = [
         geo.get('city_district', ''),
@@ -1166,7 +1279,7 @@ def _match_okrug(geo: dict, okrugs: list):
         raw_l = raw.lower().strip()
         for okrug in okrugs:
             ok_l = okrug['name'].lower()
-            ok_first = ok_l.split()[0]  # "центральный", "прикубанский" и т.д.
+            ok_first = ok_l.split()[0]
             if ok_first in raw_l or raw_l in ok_l:
                 return okrug
     return None
@@ -1174,25 +1287,38 @@ def _match_okrug(geo: dict, okrugs: list):
 
 def _handle_geo_okrug(body: dict, cur, conn) -> dict:
     """
-    action=geo_okrug — для каждой уникальной улицы из street_district_map
-    запрашивает geocode.maps.co, определяет округ (okrug_id) и сохраняет в БД.
+    action=geo_okrug — определяет округ для улиц через цепочку геокодеров с авто-fallback.
 
     mode=preview — только показать что найдено, без записи
     mode=apply   — сохранить okrug_id в street_district_map
-    limit=N      — обработать не более N уникальных улиц (по умолчанию 50)
+    limit=N      — обработать не более N уникальных улиц (по умолчанию 30)
     force=true   — перезаписывать даже те у кого okrug_id уже стоит
+    providers    — список провайдеров в порядке приоритета, напр. ["yandex","maps_co","nominatim"]
+    provider_limits — лимиты запросов: {"yandex": 1000, "maps_co": 500, "nominatim": 9999}
     """
     import time as _time
 
     mode = body.get('mode', 'preview')
-    limit = min(int(body.get('limit') or 30), 200)
+    limit = min(int(body.get('limit') or 30), 500)
     force = body.get('force', False)
 
-    api_key = os.environ.get('MAPS_CO_API_KEY', '')
-    if not api_key:
-        return _err('Нужен MAPS_CO_API_KEY', 500)
+    # Провайдеры и лимиты из запроса (UI передаёт)
+    providers = body.get('providers') or GEO_PROVIDERS
+    raw_limits = body.get('provider_limits') or {}
+    provider_limits = {
+        'yandex':    int(raw_limits.get('yandex', 9999)),
+        'maps_co':   int(raw_limits.get('maps_co', 9999)),
+        'nominatim': int(raw_limits.get('nominatim', 9999)),
+    }
+    keys = {
+        'yandex':  os.environ.get('YANDEX_GEOCODER_KEY', ''),
+        'maps_co': os.environ.get('MAPS_CO_API_KEY', ''),
+    }
 
-    # Загружаем 4 округа
+    # Задержки между запросами (сек) по провайдеру
+    delays = {'yandex': 0.1, 'maps_co': 0.5, 'nominatim': 1.1}
+
+    # Загружаем округа
     cur.execute(
         f"SELECT id, name FROM {SCHEMA}.districts WHERE is_okrug = TRUE AND is_active = TRUE ORDER BY sort_order"
     )
@@ -1200,7 +1326,7 @@ def _handle_geo_okrug(body: dict, cur, conn) -> dict:
     if not okrugs:
         return _err('Не найдены округа (is_okrug=true)', 500)
 
-    # Уникальные улицы из street_district_map (у которых okrug_id не задан или force=true)
+    # Улицы без округа
     if force:
         cur.execute(
             f"SELECT DISTINCT street_pattern FROM {SCHEMA}.street_district_map ORDER BY street_pattern LIMIT {limit}"
@@ -1212,47 +1338,50 @@ def _handle_geo_okrug(body: dict, cur, conn) -> dict:
         )
     streets = [r['street_pattern'] for r in cur.fetchall()]
 
-    print(f'[geo_okrug] улиц к обработке: {len(streets)}, окружа: {[o["name"] for o in okrugs]}')
+    print(f'[geo_okrug] улиц: {len(streets)}, провайдеры: {providers}, лимиты: {provider_limits}')
 
     results = []
     matched_count = 0
     not_found = []
+    provider_stats = {p: 0 for p in providers}
 
     for street in streets:
-        try:
-            geo = _geocode_maps_co(street, api_key)
-            okrug = _match_okrug(geo, okrugs)
+        geo, used_provider = _geocode_with_fallback(street, providers, provider_limits, keys)
+        if used_provider is None:
+            not_found.append(street)
+            results.append({'street': street, 'okrug': None, 'okrug_id': None,
+                            'suburb': '', 'quarter': '', 'city_district': '', 'provider': None})
+            continue
 
-            entry = {
-                'street': street,
-                'okrug': okrug['name'] if okrug else None,
-                'okrug_id': okrug['id'] if okrug else None,
-                'suburb': geo.get('suburb', ''),
-                'quarter': geo.get('quarter', ''),
-                'city_district': geo.get('city_district', ''),
-            }
-            results.append(entry)
+        provider_stats[used_provider] = provider_stats.get(used_provider, 0) + 1
+        okrug = _match_okrug(geo, okrugs)
 
-            if okrug:
-                matched_count += 1
-                if mode == 'apply':
-                    cur.execute(
-                        f"UPDATE {SCHEMA}.street_district_map "
-                        f"SET okrug_id = {okrug['id']} "
-                        f"WHERE street_pattern = %s",
-                        (street,)
-                    )
-                print(f'[geo_okrug] ✓ "{street}" → {okrug["name"]} (suburb={geo.get("suburb")!r})')
-            else:
-                not_found.append(street)
-                print(f'[geo_okrug] ? "{street}" — округ не определён (suburb={geo.get("suburb")!r}, city_district={geo.get("city_district")!r})')
+        entry = {
+            'street': street,
+            'okrug': okrug['name'] if okrug else None,
+            'okrug_id': okrug['id'] if okrug else None,
+            'suburb': geo.get('suburb', ''),
+            'quarter': geo.get('quarter', ''),
+            'city_district': geo.get('city_district', ''),
+            'provider': used_provider,
+        }
+        results.append(entry)
 
-            # geocode.maps.co лимит: 2 запроса в секунду на бесплатном тарифе
-            _time.sleep(0.5)
+        if okrug:
+            matched_count += 1
+            if mode == 'apply':
+                cur.execute(
+                    f"UPDATE {SCHEMA}.street_district_map "
+                    f"SET okrug_id = {okrug['id']} "
+                    f"WHERE street_pattern = %s",
+                    (street,)
+                )
+            print(f'[geo_okrug] ✓ [{used_provider}] "{street}" → {okrug["name"]}')
+        else:
+            not_found.append(street)
+            print(f'[geo_okrug] ? [{used_provider}] "{street}" — не определён')
 
-        except Exception as e:
-            print(f'[geo_okrug] ошибка "{street}": {e}')
-            not_found.append(f'{street} (ошибка: {e})')
+        _time.sleep(delays.get(used_provider, 0.5))
 
     if mode == 'apply':
         conn.commit()
@@ -1266,6 +1395,8 @@ def _handle_geo_okrug(body: dict, cur, conn) -> dict:
         'okrugs': okrugs,
         'results': results,
         'not_found': not_found,
+        'provider_stats': provider_stats,
+        'provider_limits_remaining': provider_limits,
     })
 
 
