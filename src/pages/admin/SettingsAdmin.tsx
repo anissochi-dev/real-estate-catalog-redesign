@@ -155,10 +155,6 @@ export default function SettingsAdmin() {
   useEffect(() => {
     adminApi.getSettings().then(d => {
       const settings = d.settings || {};
-      if (!settings.site_url) {
-        settings.site_url = window.location.origin;
-        adminApi.updateSettings(settings as Record<string, unknown>).catch(() => {});
-      }
       setS(settings);
     });
     loadCities();

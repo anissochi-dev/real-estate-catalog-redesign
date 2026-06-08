@@ -25,7 +25,8 @@ export default function VerificationTab({ files, onChange, saved, save, siteUrl 
   const [copied, setCopied] = useState<string | null>(null);
 
   const getSiteFileUrl = (filename: string) => {
-    const base = siteUrl ? siteUrl.replace(/\/$/, '') : window.location.origin;
+    const base = (siteUrl || '').replace(/\/$/, '');
+    if (!base) return `/${filename}`;
     return `${base}/${filename}`;
   };
 
