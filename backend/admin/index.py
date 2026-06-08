@@ -2041,15 +2041,20 @@ def _auto_district(cur, address: str, city: str = 'Краснодар') -> str:
         return ''
     districts_numbered = '\n'.join([f'{i+1}. {d}' for i, d in enumerate(districts)])
     payload = {
-        'modelUri': f'gpt://{folder_id}/yandexgpt/rc',
-        'completionOptions': {'stream': False, 'temperature': 0.1, 'maxTokens': '50'},
+        'modelUri': f'gpt://{folder_id}/yandexgpt-5-pro/latest',
+        'completionOptions': {'stream': False, 'temperature': 0.05, 'maxTokens': '10'},
         'messages': [
             {'role': 'system', 'text': (
-                f'Ты — эксперт по географии {city}а. Определи номер микрорайона из списка для адреса.\n'
-                f'Отвечай ТОЛЬКО числом (номером из списка). Без пояснений.\n'
-                f'Список:\n{districts_numbered}'
+                f'Ты — риелтор-эксперт по микрорайонам {city}а. '
+                f'По адресу определи ОДИН номер микрорайона из списка ниже.\n'
+                f'Правила:\n'
+                f'- Отвечай ТОЛЬКО цифрой (номером из списка), ничем другим\n'
+                f'- Учитывай улицу и номер дома — они определяют микрорайон\n'
+                f'- Если улица на границе нескольких районов — выбери по номеру дома\n'
+                f'- Если не знаешь точно — выбери ближайший по смыслу\n\n'
+                f'Список микрорайонов {city}а:\n{districts_numbered}'
             )},
-            {'role': 'user', 'text': f'Адрес: {address}, {city}'},
+            {'role': 'user', 'text': f'Определи микрорайон для адреса: {address}'},
         ],
     }
     req = urllib.request.Request(
