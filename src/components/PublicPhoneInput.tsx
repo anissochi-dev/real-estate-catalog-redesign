@@ -23,8 +23,8 @@ export default function PublicPhoneInput({ value, onChange, placeholder = '+7 90
     const oldValue = el.value;
     const cursorPos = el.selectionStart ?? oldValue.length;
 
-    // Считаем цифры ДО курсора в старом значении
-    const digitsBeforeCursor = oldValue.slice(0, cursorPos).replace(/\D/g, '').length;
+    const oldFullRaw = oldValue.replace(/\D/g, '');
+    const rawPosBefore = oldValue.slice(0, cursorPos).replace(/\D/g, '').length;
 
     const digits = extractDigits(oldValue).slice(0, 10);
     const normalized = digits ? normalizePhone('+7' + digits) : '';
@@ -34,19 +34,22 @@ export default function PublicPhoneInput({ value, onChange, placeholder = '+7 90
 
     requestAnimationFrame(() => {
       if (!inputRef.current) return;
-      const s = inputRef.current.value;
-      let newPos = 0;
-      let digitCount = 0;
-      for (let i = 0; i < s.length; i++) {
-        if (/\d/.test(s[i])) {
-          if (digitCount === digitsBeforeCursor) { newPos = i; break; }
-          digitCount++;
+      const newFormatted = inputRef.current.value;
+      const newFullRaw = newFormatted.replace(/\D/g, '');
+      const delta = newFullRaw.length - oldFullRaw.length;
+      const rawPosAfter = Math.max(0, Math.min(rawPosBefore + delta, newFullRaw.length));
+
+      let newCursorPos = newFormatted.length;
+      if (rawPosAfter < newFullRaw.length) {
+        let digitCount = 0;
+        for (let i = 0; i < newFormatted.length; i++) {
+          if (/\d/.test(newFormatted[i])) {
+            if (digitCount === rawPosAfter) { newCursorPos = i; break; }
+            digitCount++;
+          }
         }
-        if (i === s.length - 1) newPos = s.length;
       }
-      // Если курсор перед разделителем — сдвигаем за него вправо
-      while (newPos < s.length && !/\d/.test(s[newPos]) && newPos > 0) newPos++;
-      inputRef.current.setSelectionRange(newPos, newPos);
+      inputRef.current.setSelectionRange(newCursorPos, newCursorPos);
     });
   };
 
