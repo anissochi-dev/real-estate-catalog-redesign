@@ -53,7 +53,7 @@ export default function DistrictsAdmin() {
   const [osmAddedTotal, setOsmAddedTotal] = useState(0);
   const [osmProgress, setOsmProgress] = useState({ done: 0, total: 0 });
   const stopRef = useRef(false);
-  const OSM_BATCH = 10;
+  const OSM_BATCH = 20;
 
   // Загружаем ВСЕ недостающие улицы за один Overpass-запрос (лимит 2500)
   const handleOsmLoad = async () => {

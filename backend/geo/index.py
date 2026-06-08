@@ -929,161 +929,114 @@ def _handle_overpass(body: dict, cur) -> dict:
     })
 
 
+def _dadata_street_coords(street_name: str, api_key: str, secret_key: str):
+    """
+    Геокодирует улицу Краснодара через DaData (с домом 1) и возвращает (lat, lon, street_clean) или None.
+    DaData не возвращает микрорайон для запроса без номера дома, поэтому берём координаты
+    и потом определяем район через наш справочник.
+    """
+    import urllib.request as _ur, json as _j
+    # Пробуем несколько номеров домов чтобы найти хоть один результат с координатами
+    for house in ('1', '10', '5'):
+        payload = _j.dumps({
+            'query': f'Краснодар, {street_name}, {house}',
+            'count': 1,
+            'locations': [{'city': 'Краснодар'}],
+            'restrict_value': False,
+        }).encode('utf-8')
+        req = _ur.Request(
+            'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address',
+            data=payload,
+            headers={
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': f'Token {api_key}',
+                'X-Secret': secret_key,
+            },
+            method='POST',
+        )
+        try:
+            with _ur.urlopen(req, timeout=8) as resp:
+                data = _j.loads(resp.read().decode('utf-8'))
+            suggs = data.get('suggestions', [])
+            if not suggs:
+                continue
+            d = suggs[0].get('data', {})
+            lat = d.get('geo_lat'); lon = d.get('geo_lon')
+            street_clean = d.get('street') or ''
+            if lat and lon and street_clean:
+                return (street_clean, d.get('house') or house)
+        except Exception as _e:
+            print(f'[dadata] ошибка "{street_name}": {_e}')
+    return None
+
+
 def _handle_ai_map(body: dict, cur, conn) -> dict:
     """
     action=ai_map_streets — принимает список улиц [{street, base}, ...],
-    определяет район через YandexGPT-5-Pro для одного батча (≤20 улиц),
-    сохраняет в street_district_map.
-    streets=[...] — список объектов {street, base}
+    геокодирует каждую через DaData и сохраняет в street_district_map.
+    streets=[...] — список объектов {street, base} (макс 20)
     """
-    import urllib.request as _ur2, json as _j2, re as _re2
+    import re as _re2
 
     streets = body.get('streets', [])
     if not streets:
         return _err('streets обязателен')
-    if len(streets) > 10:
-        streets = streets[:10]
+    if len(streets) > 20:
+        streets = streets[:20]
 
-    # Используем AISTUDIO_API_KEY — он работает с Foundation Models напрямую
-    api_key = os.environ.get('AISTUDIO_API_KEY', '')
-    folder_id = ''
-    use_folder = False
-    print(f'[geo ai_map] AISTUDIO_API_KEY present={bool(api_key)}, len={len(api_key)}, streets={len(streets)}')
-    if not api_key:
-        return _err('Нет AISTUDIO_API_KEY в переменных окружения')
+    dadata_key = os.environ.get('DADATA_API_KEY', '')
+    dadata_secret = os.environ.get('DADATA_SECRET_KEY', '')
+    if not dadata_key:
+        return _err('Нет DADATA_API_KEY')
 
-    cur.execute(f"SELECT name FROM {SCHEMA}.districts WHERE is_active = TRUE ORDER BY name")
-    districts = [r['name'] for r in cur.fetchall()]
-    districts_numbered = '\n'.join([f'{i+1}. {d}' for i, d in enumerate(districts)])
+    # Загружаем справочник улица→район
+    rules = _load_street_rules(cur)
+    added = []; skipped = []
 
-    # --- Шаг 1: fuzzy-matching по названию прямо в Python (без ИИ) ---
-    # Для улиц вида "1-й Знаменский проезд" ищем район по ключевому слову
-    import re as _re3
-    pre_added = []
-    remaining_streets = []
-    remaining_idx = []   # оригинальные индексы в streets[]
-
-    # Нормализуем названия районов для быстрого поиска
-    dist_lower = [d.lower() for d in districts]
-
-    for i, s in enumerate(streets):
-        base = (s.get('base') or s['street']).strip()
-        # Убираем порядковый номер типа "1-й", "2-й" из начала
-        clean = _re3.sub(r'^\d+-[йяе]\s+', '', base, flags=_re3.IGNORECASE).strip()
-        # Ищем совпадение с названием района
-        found_dist = None
-        for di, dn in enumerate(districts):
-            # Берём первое слово района (до скобки и пробела)
-            dkey = _re3.split(r'[\s(]', dn)[0].lower()
-            if len(dkey) >= 4 and dkey in clean.lower():
-                found_dist = (di, dn)
-                break
-        if found_dist:
-            pattern = _norm_street(s['street'])
-            try:
-                cur.execute(
-                    f"INSERT INTO {SCHEMA}.street_district_map (street_pattern, district, note) "
-                    f"VALUES (%s, %s, 'overpass+fuzzy') ON CONFLICT DO NOTHING",
-                    (pattern, found_dist[1])
-                )
-                pre_added.append({'street': s['street'], 'pattern': pattern, 'district': found_dist[1]})
-            except Exception:
-                remaining_streets.append(s)
-                remaining_idx.append(i)
-        else:
-            remaining_streets.append(s)
-            remaining_idx.append(i)
-
-    print(f'[geo ai_map] fuzzy добавлено: {len(pre_added)}, на ИИ: {len(remaining_streets)}')
-
-    # --- Шаг 2: ИИ для улиц которые не нашли через fuzzy ---
-    added = list(pre_added)
-    skipped = []
-
-    if not remaining_streets:
-        conn.commit()
-        return _ok({'added_count': len(added), 'skipped_count': 0, 'added': added, 'skipped': [], 'gpt_raw': 'fuzzy only'})
-
-    streets_list = '\n'.join([f'{i+1}. {s["base"] or s["street"]}' for i, s in enumerate(remaining_streets)])
-    # folder_id для AISTUDIO_API_KEY
-    aistudio_folder = os.environ.get('YANDEX_FOLDER_ID', '') or 'b1g3c3russgao6k4432n'
-    effective_folder = folder_id if use_folder else aistudio_folder
-    model_uri = f'gpt://{effective_folder}/yandexgpt-5-pro/latest'
-    extra_h = {'x-folder-id': effective_folder}
-    payload = {
-        'modelUri': model_uri,
-        'completionOptions': {'stream': False, 'temperature': 0.1, 'maxTokens': '300'},
-        'messages': [
-            {'role': 'system', 'text': (
-                'Ты — эксперт по микрорайонам Краснодара.\n'
-                'Для каждой улицы укажи номер микрорайона из справочника.\n'
-                'Формат строго: N->M (N=порядковый номер улицы, M=номер района из справочника).\n'
-                'Если не знаешь — N->0. Никаких пояснений, только строки N->M.\n\n'
-                f'Микрорайоны:\n{districts_numbered}'
-            )},
-            {'role': 'user', 'text': f'Улицы ({len(remaining_streets)}):\n{streets_list}\n\nОтвет:'},
-        ],
-    }
-    print(f'[geo ai_map] modelUri={model_uri}, remaining={len(remaining_streets)}')
-    gpt_req = _ur2.Request(
-        'https://llm.api.cloud.yandex.net/foundationModels/v1/completion',
-        data=_j2.dumps(payload).encode(),
-        headers={'Authorization': f'Api-Key {api_key}', 'Content-Type': 'application/json', **extra_h},
-        method='POST',
-    )
-    try:
-        with _ur2.urlopen(gpt_req, timeout=20) as gr:
-            raw = gr.read().decode()
-            gpt_data = _j2.loads(raw)
-    except Exception as e:
-        import urllib.error as _ue
-        if isinstance(e, _ue.HTTPError):
-            body = e.read().decode('utf-8', errors='replace')[:400]
-            print(f'[geo ai_map] GPT HTTP {e.code}: {body}')
-            return _err(f'YandexGPT HTTP {e.code}: {body}', 502)
-        print(f'[geo ai_map] GPT ошибка: {type(e).__name__}: {e}')
-        return _err(f'YandexGPT ошибка: {type(e).__name__}: {e}', 502)
-
-    alts = (gpt_data.get('result') or {}).get('alternatives') or []
-    text = ((alts[0].get('message') or {}).get('text') or '') if alts else ''
-    print(f'[geo ai_map] GPT ответ: {text[:300]}')
-
-    for line in text.strip().split('\n'):
-        m = _re2.search(r'(\d+)\s*(?:->|-|:)\s*(\d+)', line.strip())
-        if not m:
+    for s in streets:
+        street_name = s.get('street', '')
+        if not street_name:
             continue
-        st_idx = int(m.group(1)) - 1
-        di_idx = int(m.group(2)) - 1
-        if st_idx < 0 or st_idx >= len(remaining_streets):
+
+        # DaData нормализует название улицы и возвращает чистое имя
+        result = _dadata_street_coords(street_name, dadata_key, dadata_secret)
+        if not result:
+            skipped.append(street_name)
             continue
-        if di_idx <= -1:  # 0 = не знаю
-            skipped.append(remaining_streets[st_idx]['street'])
+
+        street_clean, house = result
+        # Ищем район через наш справочник по нормализованному имени
+        import re as _re2
+        m = _re2.match(r'(\d+)', str(house))
+        house_num = int(m.group(1)) if m else None
+        district = _find_district(street_clean, house_num, rules)
+
+        if not district:
+            print(f'[geo dadata] "{street_name}" → clean="{street_clean}" h={house} — нет в справочнике')
+            skipped.append(street_name)
             continue
-        if di_idx >= len(districts):
-            skipped.append(remaining_streets[st_idx]['street'])
-            continue
-        st_obj = remaining_streets[st_idx]
-        pattern = _norm_street(st_obj['street'])
-        district = districts[di_idx]
+
+        pattern = _norm_street(street_name)
         try:
             cur.execute(
                 f"INSERT INTO {SCHEMA}.street_district_map (street_pattern, district, note) "
-                f"VALUES (%s, %s, 'overpass+ai') ON CONFLICT DO NOTHING",
+                f"VALUES (%s, %s, 'dadata') ON CONFLICT DO NOTHING",
                 (pattern, district)
             )
-            added.append({'street': st_obj['street'], 'pattern': pattern, 'district': district})
+            added.append({'street': street_name, 'pattern': pattern, 'district': district})
+            print(f'[geo dadata] ✓ "{street_name}" → "{district}"')
         except Exception as ex:
-            skipped.append(f'{st_obj["street"]}: {ex}')
+            skipped.append(f'{street_name}: {ex}')
 
     conn.commit()
-    print(f'[geo ai_map] итого добавлено {len(added)} (fuzzy={len(pre_added)}, ai={len(added)-len(pre_added)}), пропущено {len(skipped)}')
+    print(f'[geo dadata] добавлено={len(added)}, пропущено={len(skipped)}')
 
     return _ok({
         'added_count': len(added),
         'skipped_count': len(skipped),
         'added': added,
-        'skipped': skipped[:10],
-        'gpt_raw': text[:500],
+        'skipped': skipped[:20],
     })
 
 
