@@ -1128,6 +1128,93 @@ GEO_PROVIDERS = ['yandex', 'dadata', 'maps_co', 'nominatim']
 class GeoLimitExceeded(Exception):
     pass
 
+
+def _geo_quota_check_and_inc(cur, conn, provider: str) -> bool:
+    """
+    Проверяет дневной лимит провайдера и инкрементирует счётчик.
+    Если день изменился — сбрасывает счётчик (сброс в 00:01 по UTC).
+    Возвращает True если запрос разрешён, False если лимит исчерпан.
+    """
+    cur.execute(
+        f"SELECT id, requests_used, requests_limit, day_start "
+        f"FROM {SCHEMA}.geo_api_quota WHERE provider = %s FOR UPDATE",
+        (provider,)
+    )
+    row = cur.fetchone()
+    if not row:
+        # Провайдера нет в таблице — создаём с безлимитом
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.geo_api_quota (provider, requests_used, requests_limit, day_start) "
+            f"VALUES (%s, 1, 9999, CURRENT_DATE) ON CONFLICT (provider) DO NOTHING",
+            (provider,)
+        )
+        conn.commit()
+        return True
+
+    row_id = row['id']
+    used = row['requests_used']
+    limit = row['requests_limit']
+    day_start = row['day_start']
+
+    import datetime as _dt
+    today = _dt.date.today()
+    # Сброс счётчика если наступил новый день
+    if day_start < today:
+        cur.execute(
+            f"UPDATE {SCHEMA}.geo_api_quota "
+            f"SET requests_used = 1, day_start = CURRENT_DATE, updated_at = NOW() "
+            f"WHERE id = %s",
+            (row_id,)
+        )
+        conn.commit()
+        print(f'[geo_quota] {provider}: новый день, счётчик сброшен (было {used})')
+        return True
+
+    # Проверяем лимит (9999 = без лимита)
+    if limit < 9999 and used >= limit:
+        print(f'[geo_quota] {provider}: лимит {limit} исчерпан (использовано {used}), пропускаю')
+        return False
+
+    # Инкрементируем
+    cur.execute(
+        f"UPDATE {SCHEMA}.geo_api_quota "
+        f"SET requests_used = requests_used + 1, updated_at = NOW() "
+        f"WHERE id = %s",
+        (row_id,)
+    )
+    conn.commit()
+    return True
+
+
+def _geo_quota_get_all(cur) -> dict:
+    """Возвращает текущие счётчики всех провайдеров."""
+    cur.execute(
+        f"SELECT provider, requests_used, requests_limit, day_start, updated_at "
+        f"FROM {SCHEMA}.geo_api_quota ORDER BY provider"
+    )
+    result = {}
+    import datetime as _dt
+    today = _dt.date.today()
+    for row in cur.fetchall():
+        used = row['requests_used'] if row['day_start'] >= today else 0
+        result[row['provider']] = {
+            'used': used,
+            'limit': row['requests_limit'],
+            'day_start': str(row['day_start']),
+            'remaining': max(0, row['requests_limit'] - used) if row['requests_limit'] < 9999 else None,
+        }
+    return result
+
+
+def _geo_quota_set_limit(cur, conn, provider: str, limit: int):
+    """Устанавливает лимит для провайдера."""
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.geo_api_quota (provider, requests_limit) VALUES (%s, %s) "
+        f"ON CONFLICT (provider) DO UPDATE SET requests_limit = EXCLUDED.requests_limit, updated_at = NOW()",
+        (provider, limit)
+    )
+    conn.commit()
+
 def _geocode_yandex(street: str, api_key: str) -> dict:
     """Яндекс Геокодер HTTP API — бесплатный с ограничениями.
     Яндекс возвращает district-компоненты типа:
@@ -1265,23 +1352,23 @@ def _geocode_dadata(street: str, api_key: str, secret_key: str) -> dict:
     }
 
 
-def _geocode_with_fallback(street: str, providers: list, provider_limits: dict, keys: dict) -> tuple:
+def _geocode_with_fallback(street: str, providers: list, keys: dict, cur, conn) -> tuple:
     """
-    Геокодирует улицу через цепочку провайдеров с авто-переключением при превышении лимита.
+    Геокодирует улицу через цепочку провайдеров с авто-переключением.
+    Проверяет и инкрементирует дневной счётчик в geo_api_quota.
     Возвращает (geo_dict, used_provider).
-    provider_limits = {provider: remaining_count}  — уменьшается при каждом запросе
     """
     for provider in providers:
-        limit_left = provider_limits.get(provider, 9999)
-        if limit_left <= 0:
-            print(f'[geo_okrug] {provider}: лимит исчерпан, переключаюсь...')
+        # Проверяем дневной лимит в БД
+        allowed = _geo_quota_check_and_inc(cur, conn, provider)
+        if not allowed:
+            print(f'[geo_okrug] {provider}: дневной лимит исчерпан, переключаюсь...')
             continue
         try:
             if provider == 'yandex':
                 key = keys.get('yandex', '')
                 if not key:
                     print('[geo_okrug] yandex: нет YANDEX_GEOCODER_KEY, пропускаю')
-                    provider_limits['yandex'] = 0
                     continue
                 geo = _geocode_yandex(street, key)
             elif provider == 'dadata':
@@ -1289,14 +1376,12 @@ def _geocode_with_fallback(street: str, providers: list, provider_limits: dict, 
                 secret = keys.get('dadata_secret', '')
                 if not key or not secret:
                     print('[geo_okrug] dadata: нет DADATA_API_KEY/DADATA_SECRET_KEY, пропускаю')
-                    provider_limits['dadata'] = 0
                     continue
                 geo = _geocode_dadata(street, key, secret)
             elif provider == 'maps_co':
                 key = keys.get('maps_co', '')
                 if not key:
                     print('[geo_okrug] maps_co: нет MAPS_CO_API_KEY, пропускаю')
-                    provider_limits['maps_co'] = 0
                     continue
                 geo = _geocode_maps_co(street, key)
             elif provider == 'nominatim':
@@ -1304,12 +1389,18 @@ def _geocode_with_fallback(street: str, providers: list, provider_limits: dict, 
             else:
                 continue
 
-            provider_limits[provider] = limit_left - 1
             return geo, provider
 
         except GeoLimitExceeded as e:
             print(f'[geo_okrug] {provider}: лимит по API ({e}), переключаюсь...')
-            provider_limits[provider] = 0
+            # Обнуляем оставшийся лимит в БД чтобы больше не пытаться сегодня
+            cur.execute(
+                f"UPDATE {SCHEMA}.geo_api_quota "
+                f"SET requests_used = requests_limit, updated_at = NOW() "
+                f"WHERE provider = %s AND requests_limit < 9999",
+                (provider,)
+            )
+            conn.commit()
             continue
         except Exception as e:
             print(f'[geo_okrug] {provider}: ошибка для "{street}": {e}')
@@ -1344,29 +1435,21 @@ def _match_okrug(geo: dict, okrugs: list):
 def _handle_geo_okrug(body: dict, cur, conn) -> dict:
     """
     action=geo_okrug — определяет округ для улиц через цепочку геокодеров с авто-fallback.
+    Счётчики запросов хранятся в geo_api_quota, сбрасываются ежедневно в 00:01.
 
     mode=preview — только показать что найдено, без записи
     mode=apply   — сохранить okrug_id в street_district_map
     limit=N      — обработать не более N уникальных улиц (по умолчанию 30)
     force=true   — перезаписывать даже те у кого okrug_id уже стоит
-    providers    — список провайдеров в порядке приоритета, напр. ["yandex","maps_co","nominatim"]
-    provider_limits — лимиты запросов: {"yandex": 1000, "maps_co": 500, "nominatim": 9999}
+    providers    — список провайдеров в порядке приоритета
     """
     import time as _time
 
     mode = body.get('mode', 'preview')
     limit = min(int(body.get('limit') or 30), 500)
     force = body.get('force', False)
-
-    # Провайдеры и лимиты из запроса (UI передаёт)
     providers = body.get('providers') or GEO_PROVIDERS
-    raw_limits = body.get('provider_limits') or {}
-    provider_limits = {
-        'yandex':    int(raw_limits.get('yandex', 9999)),
-        'dadata':    int(raw_limits.get('dadata', 9999)),
-        'maps_co':   int(raw_limits.get('maps_co', 9999)),
-        'nominatim': int(raw_limits.get('nominatim', 9999)),
-    }
+
     keys = {
         'yandex':        os.environ.get('YANDEX_GEOCODER_KEY', ''),
         'dadata':        os.environ.get('DADATA_API_KEY', ''),
@@ -1374,7 +1457,6 @@ def _handle_geo_okrug(body: dict, cur, conn) -> dict:
         'maps_co':       os.environ.get('MAPS_CO_API_KEY', ''),
     }
 
-    # Задержки между запросами (сек) по провайдеру
     delays = {'yandex': 0.1, 'dadata': 0.1, 'maps_co': 0.5, 'nominatim': 1.1}
 
     # Загружаем округа
@@ -1397,7 +1479,9 @@ def _handle_geo_okrug(body: dict, cur, conn) -> dict:
         )
     streets = [r['street_pattern'] for r in cur.fetchall()]
 
-    print(f'[geo_okrug] улиц: {len(streets)}, провайдеры: {providers}, лимиты: {provider_limits}')
+    # Актуальные квоты на момент старта (для ответа)
+    quota_before = _geo_quota_get_all(cur)
+    print(f'[geo_okrug] улиц: {len(streets)}, провайдеры: {providers}, квоты: {quota_before}')
 
     results = []
     matched_count = 0
@@ -1405,7 +1489,7 @@ def _handle_geo_okrug(body: dict, cur, conn) -> dict:
     provider_stats = {p: 0 for p in providers}
 
     for street in streets:
-        geo, used_provider = _geocode_with_fallback(street, providers, provider_limits, keys)
+        geo, used_provider = _geocode_with_fallback(street, providers, keys, cur, conn)
         if used_provider is None:
             not_found.append(street)
             results.append({'street': street, 'okrug': None, 'okrug_id': None,
@@ -1446,6 +1530,8 @@ def _handle_geo_okrug(body: dict, cur, conn) -> dict:
         conn.commit()
         print(f'[geo_okrug] сохранено okrug_id для {matched_count} улиц')
 
+    quota_after = _geo_quota_get_all(cur)
+
     return _ok({
         'mode': mode,
         'total_streets': len(streets),
@@ -1455,8 +1541,43 @@ def _handle_geo_okrug(body: dict, cur, conn) -> dict:
         'results': results,
         'not_found': not_found,
         'provider_stats': provider_stats,
-        'provider_limits_remaining': provider_limits,
+        'quota': quota_after,
     })
+
+
+def _handle_geo_quota(body: dict, cur, conn) -> dict:
+    """
+    action=geo_quota — управление дневными лимитами геокодеров.
+    GET (mode=get): возвращает текущие счётчики и лимиты
+    POST (mode=set_limit): устанавливает лимит для провайдера
+    POST (mode=reset): сбрасывает счётчик провайдера вручную
+    """
+    mode = body.get('mode', 'get')
+
+    if mode == 'get':
+        return _ok({'quota': _geo_quota_get_all(cur)})
+
+    if mode == 'set_limit':
+        provider = body.get('provider', '')
+        limit = int(body.get('limit', 9999))
+        if provider not in GEO_PROVIDERS:
+            return _err(f'Неизвестный провайдер: {provider}', 400)
+        _geo_quota_set_limit(cur, conn, provider, limit)
+        return _ok({'quota': _geo_quota_get_all(cur)})
+
+    if mode == 'reset':
+        provider = body.get('provider', '')
+        if provider not in GEO_PROVIDERS:
+            return _err(f'Неизвестный провайдер: {provider}', 400)
+        cur.execute(
+            f"UPDATE {SCHEMA}.geo_api_quota SET requests_used = 0, day_start = CURRENT_DATE, updated_at = NOW() "
+            f"WHERE provider = %s",
+            (provider,)
+        )
+        conn.commit()
+        return _ok({'quota': _geo_quota_get_all(cur)})
+
+    return _err(f'Неизвестный mode: {mode}', 400)
 
 
 # ── Handler ───────────────────────────────────────────────────────────────────
@@ -1497,7 +1618,9 @@ def handler(event: dict, context) -> dict:
                 return _handle_ai_map(body, cur, conn)
             elif action == 'geo_okrug':
                 return _handle_geo_okrug(body, cur, conn)
+            elif action == 'geo_quota':
+                return _handle_geo_quota(body, cur, conn)
             else:
-                return _err(f'Неизвестный action: {action}. Доступные: suggest, fix, normalize, audit, parse_osm, overpass_streets, ai_map_streets, geo_okrug')
+                return _err(f'Неизвестный action: {action}. Доступные: suggest, fix, normalize, audit, parse_osm, overpass_streets, ai_map_streets, geo_okrug, geo_quota')
     finally:
         conn.close()
