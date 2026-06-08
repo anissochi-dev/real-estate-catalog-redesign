@@ -9,6 +9,7 @@ import {
 import { HealthSection, SecuritySection } from './SiteHealthDiagnostics';
 import { PhotoSection, S3Section, XmlSection } from './SiteHealthMedia';
 import SiteHealthClean from './SiteHealthClean';
+import SiteHealthGeo from './SiteHealthGeo';
 
 export default function SiteHealthTab() {
   const [section, setSection] = useState<Section>('health');
@@ -130,6 +131,9 @@ export default function SiteHealthTab() {
       )}
       {section === 'clean' && (
         <SiteHealthClean running={running} actionLog={actionLog} runAction={runAction} />
+      )}
+      {section === 'geo' && (
+        <SiteHealthGeo />
       )}
     </div>
   );

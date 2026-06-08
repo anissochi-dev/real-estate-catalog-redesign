@@ -4,6 +4,7 @@ import Icon from '@/components/ui/icon';
 import DescriptionRenderer from '@/components/property/DescriptionRenderer';
 import PublicPhoneInput from '@/components/PublicPhoneInput';
 import PropertyMapInfrastructure from '@/components/PropertyMapInfrastructure';
+import LocationScoreWidget from '@/components/property/LocationScoreWidget';
 import SimilarListings from '@/components/SimilarListings';
 import {
   CONDITION_LABELS, FINISHING_LABELS, PARKING_LABELS,
@@ -142,6 +143,16 @@ export default function PropertyMainContent({
             address={addressStr}
           />
         </div>
+      )}
+
+      {/* Скоринг локации */}
+      {(!!item.lat && !!item.lng) && (
+        <LocationScoreWidget
+          listingId={item.id}
+          lat={item.lat}
+          lng={item.lng}
+          category={item.type || ''}
+        />
       )}
 
       {/* Форма заявки — только мобильный */}
