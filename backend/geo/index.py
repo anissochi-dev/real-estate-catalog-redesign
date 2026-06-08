@@ -557,6 +557,22 @@ _HW = {'residential','primary','secondary','tertiary','unclassified',
        'service','living_street','trunk','motorway','primary_link','secondary_link'}
 _PL = {'suburb','neighbourhood','quarter','village','hamlet','town'}
 
+# Bbox Краснодара: lat 44.95–45.20, lon 38.85–39.25
+_KRD_LAT_MIN, _KRD_LAT_MAX = 44.95, 45.20
+_KRD_LON_MIN, _KRD_LON_MAX = 38.85, 39.25
+
+# Ключевые слова — если в теге name/is_in/addr:city есть одно из них,
+# объект относится к Краснодару
+_KRD_KEYWORDS = {'краснодар', 'krasnodar'}
+
+def _is_krasnodar_name(tags: dict) -> bool:
+    """Проверяем теги is_in, addr:city, addr:district на принадлежность Краснодару."""
+    for key in ('is_in', 'addr:city', 'addr:district', 'addr:place'):
+        v = (tags.get(key) or '').lower()
+        if any(k in v for k in _KRD_KEYWORDS):
+            return True
+    return False
+
 
 def _vi(d, p):
     r = s = 0
@@ -614,48 +630,91 @@ def _tg(kr, vr, st):
     return {st[i] if i < len(st) else '': st[j] if j < len(st) else '' for i, j in zip(k, v) if i < len(st)}
 
 
-def _blk(raw, streets, places, MS=12000, MP=800):
-    import zlib as _z
+def _blk(raw, streets, places, street_suburb, MS=15000, MP=2000):
+    """
+    Парсит один PrimitiveBlock.
+    streets      — set: названия улиц Краснодара
+    places       — dict: {name: type} районы/посёлки Краснодара
+    street_suburb — dict: {street_name: suburb} маппинг улица→микрорайон из тегов addr:street+addr:suburb
+    """
     pb = _pf(raw)
     s = _st(pb.get(1, [b''])[0]) if pb.get(1) else []
     if not s: return
+
     for pg in pb.get(2, []):
         pgf = _pf(pg)
+
+        # Ways — улицы
         for wd in pgf.get(3, []):
             if len(streets) >= MS: break
             wf = _pf(wd)
-            t = _tg(wf.get(2,[b''])[0] if wf.get(2) else b'', wf.get(3,[b''])[0] if wf.get(3) else b'', s)
-            if t.get('highway') in _HW and t.get('name'): streets.add(t['name'])
+            t = _tg(wf.get(2,[b''])[0] if wf.get(2) else b'',
+                    wf.get(3,[b''])[0] if wf.get(3) else b'', s)
+            nm = t.get('name','')
+            if t.get('highway') in _HW and nm:
+                # Берём только если есть признак Краснодара или пока нет данных города
+                city = (t.get('addr:city','') or t.get('is_in:city','')).lower()
+                if not city or 'краснодар' in city:
+                    streets.add(nm)
+                    # Если есть suburb — сохраняем маппинг
+                    sub = t.get('addr:suburb','') or t.get('addr:neighbourhood','')
+                    if sub and nm not in street_suburb:
+                        street_suburb[nm] = sub
+
+        # Nodes — районы/посёлки
         for nd in pgf.get(1, []):
             if len(places) >= MP: break
             nf = _pf(nd)
-            t = _tg(nf.get(2,[b''])[0] if nf.get(2) else b'', nf.get(3,[b''])[0] if nf.get(3) else b'', s)
-            if t.get('place') in _PL and t.get('name'): places[t['name']] = t['place']
+            t = _tg(nf.get(2,[b''])[0] if nf.get(2) else b'',
+                    nf.get(3,[b''])[0] if nf.get(3) else b'', s)
+            pl = t.get('place',''); nm = t.get('name','')
+            if pl in _PL and nm:
+                isin = (t.get('is_in','') or t.get('is_in:city','')).lower()
+                # Только Краснодар: is_in содержит Краснодар ИЛИ это suburb/neighbourhood (они городские)
+                if pl in ('suburb','neighbourhood','quarter') or 'краснодар' in isin:
+                    places[nm] = pl
+
+        # DenseNodes — узлы с тегами (адреса зданий и т.п.)
         for dd in pgf.get(2, []):
-            if len(places) >= MP: break
             df = _pf(dd); kv = _uvi(df.get(10,[b''])[0] if df.get(10) else b'')
             cur = {}; i = 0
             while i < len(kv):
                 k = kv[i]
                 if k == 0:
-                    if cur.get('place') in _PL and cur.get('name') and len(places) < MP:
-                        places[cur['name']] = cur['place']
+                    pl = cur.get('place',''); nm = cur.get('name','')
+                    if pl in _PL and nm and len(places) < MP:
+                        isin = (cur.get('is_in','') or cur.get('is_in:city','')).lower()
+                        if pl in ('suburb','neighbourhood','quarter') or 'краснодар' in isin:
+                            places[nm] = pl
+                    # Маппинг addr:street → addr:suburb из зданий
+                    st_name = cur.get('addr:street','')
+                    sub = cur.get('addr:suburb','') or cur.get('addr:neighbourhood','')
+                    if st_name and sub and st_name not in street_suburb:
+                        street_suburb[st_name] = sub
                     cur = {}
                 elif i + 1 < len(kv):
-                    ks = s[k] if k < len(s) else ''; vs = s[kv[i+1]] if kv[i+1] < len(s) else ''
+                    ks = s[k] if k < len(s) else ''
+                    vs = s[kv[i+1]] if kv[i+1] < len(s) else ''
                     if ks: cur[ks] = vs; i += 1
                 i += 1
+
+        # Relations — границы микрорайонов
         for rd in pgf.get(4, []):
             if len(places) >= MP: break
             rf = _pf(rd)
-            t = _tg(rf.get(2,[b''])[0] if rf.get(2) else b'', rf.get(3,[b''])[0] if rf.get(3) else b'', s)
-            if t.get('name') and (t.get('place') in _PL or t.get('boundary') == 'administrative'):
-                places[t['name']] = t.get('place') or f"adm:{t.get('admin_level','')}"
+            t = _tg(rf.get(2,[b''])[0] if rf.get(2) else b'',
+                    rf.get(3,[b''])[0] if rf.get(3) else b'', s)
+            nm = t.get('name',''); pl = t.get('place','')
+            bnd = t.get('boundary',''); lvl = t.get('admin_level','')
+            if nm and (pl in _PL or (bnd == 'administrative' and lvl in ('8','9','10'))):
+                isin = (t.get('is_in','') or '').lower()
+                if pl in ('suburb','neighbourhood','quarter') or 'краснодар' in isin or not isin:
+                    places[nm] = pl or f"adm{lvl}"
 
 
 def _parse_pbf(data):
     import struct as _s, zlib as _z
-    streets = set(); places = {}; p = 0; blks = 0
+    streets = set(); places = {}; street_suburb = {}; p = 0; blks = 0
     while p < len(data):
         if p + 4 > len(data): break
         hl = _s.unpack('>I', data[p:p+4])[0]; p += 4
@@ -673,10 +732,10 @@ def _parse_pbf(data):
             except Exception: continue
         elif bf.get(1): raw = bf[1][0]
         else: continue
-        _blk(raw, streets, places)
+        _blk(raw, streets, places, street_suburb)
         blks += 1
-    print(f'[geo parse_osm] блоков={blks} улиц={len(streets)} мест={len(places)}')
-    return streets, places
+    print(f'[geo parse_osm] блоков={blks} улиц={len(streets)} мест={len(places)} маппингов={len(street_suburb)}')
+    return streets, places, street_suburb
 
 
 def _norm_st(s):
@@ -696,37 +755,35 @@ def _handle_parse_osm(body: dict, cur) -> dict:
 
     import struct as _s, zlib as _z
 
-    streets = set(); places = {}
+    streets = set(); places = {}; street_suburb = {}
     blks = 0; total_bytes = 0
     buf = bytearray()
 
+    import struct as _s, zlib as _z
     print(f'[geo parse_osm] потоковое чтение {url}')
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=25) as r:
-            # Читаем кусками по 512 КБ, парсим PBF-блоки на лету
-            CHUNK = 512 * 1024
+        with urllib.request.urlopen(req, timeout=55) as r:
+            CHUNK = 256 * 1024
             while True:
                 chunk = r.read(CHUNK)
-                if not chunk:
-                    break
+                if not chunk: break
                 buf.extend(chunk)
                 total_bytes += len(chunk)
 
-                # Пробуем извлечь полные PBF-блоки из буфера
+                # Извлекаем полные PBF-блоки из буфера
                 pos = 0
                 while pos < len(buf):
                     if pos + 4 > len(buf): break
-                    hl = _s.unpack('>I', buf[pos:pos+4])[0]
-                    if hl > 65536: break
-                    if pos + 4 + hl > len(buf): break
+                    try: hl = _s.unpack('>I', buf[pos:pos+4])[0]
+                    except Exception: break
+                    if hl > 65536 or pos + 4 + hl > len(buf): break
                     hf = _pf(bytes(buf[pos+4:pos+4+hl]))
                     bt = hf.get(1,[b''])[0]
                     if isinstance(bt, bytes): bt = bt.decode('utf-8', errors='replace')
                     bs = hf.get(3,[0])[0]
                     blob_start = pos + 4 + hl
                     if blob_start + bs > len(buf): break
-                    # Полный блок получен
                     bd = bytes(buf[blob_start:blob_start+bs])
                     pos = blob_start + bs
                     if bt == 'OSMData':
@@ -736,18 +793,14 @@ def _handle_parse_osm(body: dict, cur) -> dict:
                             except Exception: continue
                         elif bf.get(1): raw = bf[1][0]
                         else: continue
-                        _blk(raw, streets, places)
+                        _blk(raw, streets, places, street_suburb)
                         blks += 1
-
-                # Оставляем только непрочитанный хвост
                 del buf[:pos]
 
-                # Лимит: достаточно улиц или обработали весь Краснодар
-                if len(streets) >= 12000 and len(places) >= 500:
-                    print('[geo parse_osm] лимит достигнут, прерываем')
-                    break
+                if len(streets) >= 15000 and len(places) >= 500:
+                    print('[geo parse_osm] лимит, прерываем'); break
 
-        print(f'[geo parse_osm] итого: {total_bytes//1024//1024} МБ, блоков={blks}, улиц={len(streets)}, мест={len(places)}')
+        print(f'[geo parse_osm] {total_bytes//1024//1024} МБ, блоков={blks}, улиц={len(streets)}, мест={len(places)}, маппингов={len(street_suburb)}')
     except Exception as e:
         return _err(f'Скачивание/парсинг: {e}', 502)
 
@@ -774,11 +827,17 @@ def _handle_parse_osm(body: dict, cur) -> dict:
             if fz: matched_pl.append({'osm': nm, 'db': fz, 'type': pt, 'fuzzy': True})
             else:   missing_pl.append({'name': nm, 'type': pt})
 
+    # street_suburb: улица → микрорайон из OSM-тегов addr:suburb
+    # Оставляем только те которые есть в нашей БД районов
+    suburb_mapped = {st: sub for st, sub in street_suburb.items()
+                     if sub.lower() in our_dl or any(sub.lower() in k or k in sub.lower() for k in our_dl)}
+
     return _ok({
         'total_mb': round(total_bytes/1024/1024, 1),
         'blocks_parsed': blks,
         'osm_streets': len(streets),
         'osm_places': len(places),
+        'osm_street_suburb_mappings': len(street_suburb),
         'db_streets': len(our_st),
         'db_districts': len(our_di),
         'missing_streets_count': len(missing_st),
@@ -786,6 +845,7 @@ def _handle_parse_osm(body: dict, cur) -> dict:
         'places_matched': matched_pl,
         'places_missing': missing_pl,
         'all_osm_places': sorted(places.keys()),
+        'street_suburb_sample': dict(list(suburb_mapped.items())[:100]),
     })
 
 
