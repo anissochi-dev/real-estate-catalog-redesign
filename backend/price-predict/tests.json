@@ -55,6 +55,55 @@
       "expectedStatus": 200,
       "expectedBody": {"schedule": {}},
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "cost_approach — нет id → 400",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "cost_approach"},
+      "expectedStatus": 400
+    },
+    {
+      "name": "nei — нет id → 400",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "nei"},
+      "expectedStatus": 400
+    },
+    {
+      "name": "legal_risks — нет id → 400",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "legal_risks"},
+      "expectedStatus": 400
+    },
+    {
+      "name": "tech_analysis — нет id → 400",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "tech_analysis"},
+      "expectedStatus": 400
+    },
+    {
+      "name": "sensitivity — нет id → 400",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "sensitivity"},
+      "expectedStatus": 400
+    },
+    {
+      "name": "financial_metrics — нет id → 400",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "financial_metrics"},
+      "expectedStatus": 400
+    },
+    {
+      "name": "full_valuation — нет id → 400",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "full_valuation"},
+      "expectedStatus": 400
     }
   ]
 }

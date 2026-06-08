@@ -19,6 +19,12 @@ from psycopg2.extras import RealDictCursor
 
 from noi_model import handle_noi_request
 from mela_price import handle_mela_price_check
+from cost_approach import handle_cost_approach
+from nei_analysis import handle_nei
+from legal_risks import handle_legal_risks
+from tech_analysis import handle_tech_analysis
+from sensitivity import handle_sensitivity
+from financial_metrics import handle_financial_metrics
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
 
@@ -503,6 +509,70 @@ def handler(event: dict, context) -> dict:
 
             if body_data.get('action') == 'debug_scrape':
                 return _ok(handle_debug_scrape(body_data))
+
+            # ── Система оценки и анализа ──────────────────────────────────────
+            _api_key    = os.environ.get('AISTUDIO_API_KEY', '')
+            _folder_id  = os.environ.get('YANDEX_FOLDER_ID', 'b1g3c3russgao6k4432n')
+
+            action = params_all.get('action') or body_data.get('action') or ''
+
+            if action == 'cost_approach':
+                r = handle_cost_approach(event, cur, conn, _api_key, _folder_id)
+                return {**r, 'headers': {**HEADERS, **(r.get('headers') or {})}}
+
+            if action == 'nei':
+                r = handle_nei(event, cur, conn, _api_key, _folder_id)
+                return {**r, 'headers': {**HEADERS, **(r.get('headers') or {})}}
+
+            if action == 'legal_risks':
+                r = handle_legal_risks(event, cur, conn, _api_key, _folder_id)
+                return {**r, 'headers': {**HEADERS, **(r.get('headers') or {})}}
+
+            if action == 'tech_analysis':
+                r = handle_tech_analysis(event, cur, conn, _api_key, _folder_id)
+                return {**r, 'headers': {**HEADERS, **(r.get('headers') or {})}}
+
+            if action == 'sensitivity':
+                r = handle_sensitivity(event, cur, conn, _api_key, _folder_id)
+                return {**r, 'headers': {**HEADERS, **(r.get('headers') or {})}}
+
+            if action == 'financial_metrics':
+                r = handle_financial_metrics(event, cur, conn, _api_key, _folder_id)
+                return {**r, 'headers': {**HEADERS, **(r.get('headers') or {})}}
+
+            # Сводный отчёт — все модули сразу для одного объекта
+            if action == 'full_valuation':
+                listing_id = int(body_data.get('id') or params_all.get('id') or 0)
+                if not listing_id:
+                    return _err(400, 'id обязателен')
+                import json as _j
+                def _body(r):
+                    return _j.loads(r.get('body', '{}'))
+                cost   = _body(handle_cost_approach(event, cur, conn, _api_key, _folder_id))
+                nei    = _body(handle_nei(event, cur, conn, _api_key, _folder_id))
+                legal  = _body(handle_legal_risks(event, cur, conn, _api_key, _folder_id))
+                tech   = _body(handle_tech_analysis(event, cur, conn, _api_key, _folder_id))
+                fin    = _body(handle_financial_metrics(event, cur, conn, _api_key, _folder_id))
+                # Сохраняем сводный отчёт
+                cur.execute(
+                    f"INSERT INTO {SCHEMA}.valuation_reports (listing_id, report_type, result) "
+                    f"VALUES (%s, 'full', %s)",
+                    (listing_id, json.dumps({
+                        'cost_approach': cost, 'nei': nei,
+                        'legal_risks': legal, 'tech_analysis': tech,
+                        'financial_metrics': fin,
+                    }, ensure_ascii=False))
+                )
+                conn.commit()
+                return _ok({
+                    'listing_id': listing_id,
+                    'cost_approach': cost,
+                    'nei': nei,
+                    'legal_risks': legal,
+                    'tech_analysis': tech,
+                    'financial_metrics': fin,
+                })
+            # ─────────────────────────────────────────────────────────────────
 
             # Авто-обновление рыночных снапшотов по всем категориям
             if params_all.get('action') == 'ping_cron' or body_data.get('action') == 'price_market_refresh':
