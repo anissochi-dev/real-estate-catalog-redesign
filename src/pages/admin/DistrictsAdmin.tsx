@@ -53,6 +53,7 @@ export default function DistrictsAdmin() {
   const [osmAdding, setOsmAdding] = useState(false);
   const [osmRunAll, setOsmRunAll] = useState(false);
   const [osmAddedTotal, setOsmAddedTotal] = useState(0);
+  const [osmSkippedTotal, setOsmSkippedTotal] = useState(0);
   const [osmProgress, setOsmProgress] = useState({ done: 0, total: 0 });
   const stopRef = useRef(false);
   const OSM_BATCH = 20;
@@ -78,6 +79,7 @@ export default function DistrictsAdmin() {
       setOsmQueue(data.missing || []);
       setOsmCurrentBatch((data.missing || []).slice(0, OSM_BATCH));
       setOsmAddedTotal(0);
+      setOsmSkippedTotal(0);
       setOsmProgress({ done: 0, total: data.missing_count });
       setOsmOpen(true);
     } catch (e) {
@@ -100,9 +102,11 @@ export default function DistrictsAdmin() {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       const added = data.added_count || 0;
+      const skipped = data.skipped_count || 0;
       const newTotal = osmAddedTotal + added;
       setOsmAddedTotal(newTotal);
-      toast.success(`Добавлено ${added} улиц`);
+      setOsmSkippedTotal(v => v + skipped);
+      toast.success(`Добавлено ${added} улиц${skipped > 0 ? `, пропущено ${skipped}` : ''}`);
       // Сдвигаем очередь
       const remaining = osmQueue.slice(OSM_BATCH);
       setOsmQueue(remaining);
@@ -119,6 +123,7 @@ export default function DistrictsAdmin() {
     setOsmRunAll(true);
     let queue = [...osmQueue];
     let totalAdded = osmAddedTotal;
+    let totalSkipped = osmSkippedTotal;
     const grandTotal = osmMeta?.missing_count ?? queue.length;
 
     try {
@@ -132,13 +137,15 @@ export default function DistrictsAdmin() {
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         totalAdded += data.added_count || 0;
+        totalSkipped += data.skipped_count || 0;
         queue = queue.slice(OSM_BATCH);
         setOsmQueue(queue);
         setOsmCurrentBatch(queue.slice(0, OSM_BATCH));
         setOsmAddedTotal(totalAdded);
+        setOsmSkippedTotal(totalSkipped);
         setOsmProgress({ done: grandTotal - queue.length, total: grandTotal });
       }
-      if (!stopRef.current) toast.success(`Готово! Добавлено улиц: ${totalAdded}`);
+      if (!stopRef.current) toast.success(`Готово! Добавлено: ${totalAdded}, не определён район: ${totalSkipped}`);
     } catch (e) { toast.error(e instanceof Error ? e.message : 'Ошибка в процессе'); }
     finally { setOsmRunAll(false); stopRef.current = false; }
   };
@@ -496,7 +503,8 @@ export default function DistrictsAdmin() {
                 Всего в OSM: <b>{osmMeta.osm_total}</b> &nbsp;·&nbsp;
                 Уже в справочнике: <b>{osmMeta.in_map + osmAddedTotal}</b> &nbsp;·&nbsp;
                 Осталось добавить: <b>{Math.max(0, osmMeta.missing_count - osmAddedTotal)}</b>
-                {osmAddedTotal > 0 && <> &nbsp;·&nbsp; Добавлено сейчас: <b className="text-emerald-700">{osmAddedTotal}</b></>}
+                {osmAddedTotal > 0 && <> &nbsp;·&nbsp; Добавлено: <b className="text-emerald-700">{osmAddedTotal}</b></>}
+                {osmSkippedTotal > 0 && <> &nbsp;·&nbsp; Без района: <b className="text-amber-600">{osmSkippedTotal}</b></>}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -580,9 +588,20 @@ export default function DistrictsAdmin() {
               </div>
             </>
           ) : (
-            <div className="flex items-center gap-2 text-sm text-emerald-700 py-1">
-              <Icon name="CheckCircle2" size={16} className="text-emerald-500" />
-              Все улицы из OSM добавлены в справочник!
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm text-emerald-700 py-1">
+                <Icon name="CheckCircle2" size={16} className="text-emerald-500" />
+                Очередь обработана. Добавлено: <b>{osmAddedTotal}</b>
+                {osmSkippedTotal > 0 && (
+                  <span className="text-amber-600 ml-1">· не определён район: <b>{osmSkippedTotal}</b></span>
+                )}
+              </div>
+              {osmSkippedTotal > 0 && (
+                <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  Для пропущенных улиц DaData не вернул район. Это нормально для частных секторов и новых улиц.
+                  Нажмите <b>↺</b> чтобы загрузить обновлённый список и повторить.
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -1014,38 +1014,40 @@ def _dadata_street_full(street_name: str, api_key: str, secret_key: str):
     return None
 
 
-# Маппинг district_with_type из DaData → канонические названия районов Краснодара
-_DADATA_DISTRICT_MAP = {
-    'центральный': 'Центральный (ЦМР)',
-    'прикубанский': 'Прикубанский',
-    'карасунский': 'Карасунский',
-    'западный': 'Западный',
-    'восточный': 'Восточный',
-    'фестивальный': 'Фестивальный (ФМР)',
-    'фмр': 'Фестивальный (ФМР)',
-    'цмр': 'Центральный (ЦМР)',
-    'прикуб': 'Прикубанский',
-    'карас': 'Карасунский',
-}
-
-
-def _map_dadata_district(city_district: str) -> str:
-    """Приводит city_district из DaData к каноническому названию района."""
-    if not city_district:
+def _match_district_fuzzy(raw: str, known_districts: list) -> str:
+    """
+    Нечёткое сопоставление raw-строки района из DaData с известными районами из districts.
+    1. Точное совпадение (без учёта регистра)
+    2. raw входит в known или known входит в raw
+    3. Первое слово совпадает
+    Возвращает canonical name или ''.
+    """
+    if not raw:
         return ''
-    dl = city_district.lower()
-    for key, canon in _DADATA_DISTRICT_MAP.items():
-        if key in dl:
-            return canon
-    # Возвращаем как есть — лучше неточное значение чем ничего
-    return city_district.strip()
+    raw_l = raw.lower().strip()
+    # Точное совпадение
+    for d in known_districts:
+        if d.lower() == raw_l:
+            return d
+    # raw входит в название района или наоборот
+    for d in known_districts:
+        dl = d.lower()
+        if raw_l in dl or dl in raw_l:
+            return d
+    # Первое слово raw совпадает с первым словом района
+    raw_word = raw_l.split()[0] if raw_l.split() else ''
+    if len(raw_word) >= 4:
+        for d in known_districts:
+            if d.lower().split()[0] == raw_word:
+                return d
+    return ''
 
 
 def _handle_ai_map(body: dict, cur, conn) -> dict:
     """
     action=ai_map_streets — принимает список улиц [{street, base}, ...],
     геокодирует каждую через DaData и сохраняет в street_district_map.
-    Определяет район из city_district DaData — НЕ из нашего справочника.
+    Определяет район из city_district DaData, сопоставляет с таблицей districts.
     streets=[...] — список объектов {street, base} (макс 20)
     """
     streets = body.get('streets', [])
@@ -1058,6 +1060,10 @@ def _handle_ai_map(body: dict, cur, conn) -> dict:
     dadata_secret = os.environ.get('DADATA_SECRET_KEY', '')
     if not dadata_key:
         return _err('Нет DADATA_API_KEY')
+
+    # Загружаем список известных районов из таблицы districts
+    cur.execute(f"SELECT name FROM {SCHEMA}.districts WHERE is_active = TRUE")
+    known_districts = [r['name'] for r in cur.fetchall()]
 
     # Загружаем существующие паттерны чтобы не дублировать
     cur.execute(f"SELECT DISTINCT street_pattern FROM {SCHEMA}.street_district_map")
@@ -1076,17 +1082,19 @@ def _handle_ai_map(body: dict, cur, conn) -> dict:
             skipped.append(f'{street_name} (уже есть)')
             continue
 
-        # DaData геокодирует и возвращает city_district напрямую
+        # DaData геокодирует улицу
         result = _dadata_street_full(street_name, dadata_key, dadata_secret)
         if not result:
             skipped.append(street_name)
             continue
 
-        # Берём район из DaData city_district — не зависим от нашего справочника
-        district = _map_dadata_district(result['city_district'])
+        # DaData возвращает несколько полей района — берём все и пробуем сопоставить
+        raw_district = result['city_district'] or ''
+        district = _match_district_fuzzy(raw_district, known_districts)
+
         if not district:
-            print(f'[geo dadata] "{street_name}" → нет city_district в ответе DaData')
-            skipped.append(street_name)
+            print(f'[geo dadata] "{street_name}" → raw_district="{raw_district}" — не сопоставлен')
+            skipped.append(f'{street_name} (район не определён: {raw_district!r})')
             continue
 
         try:
@@ -1097,7 +1105,7 @@ def _handle_ai_map(body: dict, cur, conn) -> dict:
             )
             added.append({'street': street_name, 'pattern': pattern, 'district': district})
             existing.add(pattern.lower())
-            print(f'[geo dadata] ✓ "{street_name}" → "{district}"')
+            print(f'[geo dadata] ✓ "{street_name}" → "{district}" (raw: {raw_district!r})')
         except Exception as ex:
             skipped.append(f'{street_name}: {ex}')
 
