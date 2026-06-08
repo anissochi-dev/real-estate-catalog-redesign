@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import Icon from '@/components/ui/icon';
 
 const VERIFY_URL = 'https://functions.poehali.dev/f18a8295-a9d1-474d-9c3a-211d8092ef47';
@@ -29,10 +29,12 @@ export default function VerificationTab({ siteUrl }: Props) {
 
   const [newFile, setNewFile] = useState<VerifFile>({ filename: '', content: '', comment: '' });
   const [adding, setAdding] = useState(false);
+  const [addMode, setAddMode] = useState<'file' | 'manual'>('file');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [copied, setCopied] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Загружаем список при открытии вкладки
   const loadFiles = async () => {
@@ -97,6 +99,23 @@ export default function VerificationTab({ siteUrl }: Props) {
     } finally {
       setDeleting(null);
     }
+  };
+
+  // Читаем файл с диска и заполняем поля
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const content = (ev.target?.result as string) || '';
+      setNewFile(prev => ({
+        ...prev,
+        filename: file.name,
+        content,
+        comment: prev.comment || '',
+      }));
+    };
+    reader.readAsText(file);
   };
 
   const copyUrl = (url: string, key: string) => {
@@ -199,52 +218,121 @@ export default function VerificationTab({ siteUrl }: Props) {
         <div className="border border-brand-blue/30 rounded-xl p-4 bg-brand-blue/5 space-y-4">
           <p className="text-sm font-semibold text-foreground/70">Новый файл верификации</p>
 
-          <div>
-            <p className="text-xs text-foreground/50 mb-2">Выберите сервис для автозаполнения:</p>
-            <div className="flex flex-wrap gap-2">
-              {SERVICE_PRESETS.map(p => (
-                <button
-                  key={p.label}
-                  type="button"
-                  onClick={() => setNewFile({ filename: p.fileHint, content: p.contentHint, comment: p.comment })}
-                  className="text-xs px-3 py-1.5 rounded-lg border border-brand-blue/30 text-brand-blue hover:bg-brand-blue/10 transition font-medium"
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
+          {/* Переключатель режима */}
+          <div className="flex gap-1 bg-white border border-border rounded-lg p-1 w-fit">
+            <button
+              type="button"
+              onClick={() => { setAddMode('file'); setNewFile({ filename: '', content: '', comment: '' }); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition ${addMode === 'file' ? 'bg-brand-blue text-white' : 'text-foreground/60 hover:bg-muted'}`}
+            >
+              <Icon name="FileUp" size={13} />
+              Загрузить файл
+            </button>
+            <button
+              type="button"
+              onClick={() => { setAddMode('manual'); setNewFile({ filename: '', content: '', comment: '' }); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition ${addMode === 'manual' ? 'bg-brand-blue text-white' : 'text-foreground/60 hover:bg-muted'}`}
+            >
+              <Icon name="PenLine" size={13} />
+              Ввести вручную
+            </button>
           </div>
 
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs text-foreground/50 mb-1 block">Имя файла (точно как указано в сервисе)</label>
+          {/* Режим: загрузка файла */}
+          {addMode === 'file' && (
+            <div className="space-y-3">
               <input
-                className="w-full border border-border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-                placeholder="yandex_1234abcd.html"
-                value={newFile.filename}
-                onChange={e => setNewFile(p => ({ ...p, filename: e.target.value }))}
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={handleFileSelect}
               />
+              {!newFile.filename ? (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-brand-blue/30 rounded-xl py-8 text-brand-blue hover:bg-brand-blue/5 transition"
+                >
+                  <Icon name="Upload" size={28} className="opacity-60" />
+                  <span className="text-sm font-semibold">Нажмите, чтобы выбрать файл</span>
+                  <span className="text-xs text-foreground/40">html, xml, txt и любые другие</span>
+                </button>
+              ) : (
+                <div className="flex items-center gap-3 border border-emerald-200 bg-emerald-50 rounded-xl px-4 py-3">
+                  <Icon name="FileCheck" size={20} className="text-emerald-600 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-emerald-800 truncate">{newFile.filename}</p>
+                    <p className="text-xs text-emerald-600 mt-0.5 font-mono truncate">{newFile.content.slice(0, 60)}{newFile.content.length > 60 ? '…' : ''}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setNewFile({ filename: '', content: '', comment: '' }); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                    className="p-1 rounded hover:bg-emerald-100 text-emerald-600"
+                  >
+                    <Icon name="X" size={14} />
+                  </button>
+                </div>
+              )}
+              <div>
+                <label className="text-xs text-foreground/50 mb-1 block">Комментарий (необязательно)</label>
+                <input
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                  placeholder="Яндекс.Вебмастер"
+                  value={newFile.comment || ''}
+                  onChange={e => setNewFile(p => ({ ...p, comment: e.target.value }))}
+                />
+              </div>
             </div>
-            <div>
-              <label className="text-xs text-foreground/50 mb-1 block">Содержимое файла</label>
-              <textarea
-                className="w-full border border-border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-blue/30 resize-none"
-                rows={4}
-                placeholder="yandex-verification: 7099028f3e2220eb"
-                value={newFile.content}
-                onChange={e => setNewFile(p => ({ ...p, content: e.target.value }))}
-              />
+          )}
+
+          {/* Режим: ввод вручную */}
+          {addMode === 'manual' && (
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs text-foreground/50 mb-2">Быстрое заполнение по сервису:</p>
+                <div className="flex flex-wrap gap-2">
+                  {SERVICE_PRESETS.map(p => (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => setNewFile({ filename: p.fileHint, content: p.contentHint, comment: p.comment })}
+                      className="text-xs px-3 py-1.5 rounded-lg border border-brand-blue/30 text-brand-blue hover:bg-brand-blue/10 transition font-medium"
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-foreground/50 mb-1 block">Имя файла (точно как указано в сервисе)</label>
+                <input
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm font-mono bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                  placeholder="yandex_1234abcd.html"
+                  value={newFile.filename}
+                  onChange={e => setNewFile(p => ({ ...p, filename: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-foreground/50 mb-1 block">Содержимое файла</label>
+                <textarea
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm font-mono bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/30 resize-none"
+                  rows={4}
+                  placeholder="yandex-verification: 7099028f3e2220eb"
+                  value={newFile.content}
+                  onChange={e => setNewFile(p => ({ ...p, content: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-foreground/50 mb-1 block">Комментарий (необязательно)</label>
+                <input
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                  placeholder="Яндекс.Вебмастер"
+                  value={newFile.comment || ''}
+                  onChange={e => setNewFile(p => ({ ...p, comment: e.target.value }))}
+                />
+              </div>
             </div>
-            <div>
-              <label className="text-xs text-foreground/50 mb-1 block">Комментарий (необязательно)</label>
-              <input
-                className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-                placeholder="Яндекс.Вебмастер"
-                value={newFile.comment}
-                onChange={e => setNewFile(p => ({ ...p, comment: e.target.value }))}
-              />
-            </div>
-          </div>
+          )}
 
           {uploadError && (
             <div className="text-sm text-red-600 flex items-center gap-2">
@@ -263,7 +351,7 @@ export default function VerificationTab({ siteUrl }: Props) {
               {uploading ? 'Публикуем…' : 'Опубликовать файл'}
             </button>
             <button
-              onClick={() => { setAdding(false); setNewFile({ filename: '', content: '', comment: '' }); setUploadError(''); }}
+              onClick={() => { setAdding(false); setNewFile({ filename: '', content: '', comment: '' }); setUploadError(''); setAddMode('file'); if (fileInputRef.current) fileInputRef.current.value = ''; }}
               className="px-4 py-2 rounded-lg text-sm text-foreground/60 hover:bg-muted transition"
             >
               Отмена
@@ -286,12 +374,12 @@ export default function VerificationTab({ siteUrl }: Props) {
       <div className="bg-muted/60 rounded-xl p-4 text-sm space-y-2 text-foreground/60">
         <p className="font-semibold text-foreground/80">Как использовать:</p>
         <ol className="list-decimal list-inside space-y-1">
-          <li>Нажмите «Добавить файл», выберите сервис или введите данные вручную</li>
-          <li>Нажмите «Опубликовать файл» — файл сразу становится доступен</li>
-          <li>Скопируйте URL и вставьте в поле верификации сервиса</li>
+          <li>Нажмите «Добавить файл» и выберите способ: загрузить готовый файл с компьютера или ввести данные вручную</li>
+          <li>Нажмите «Опубликовать файл» — файл сразу доступен по URL сайта</li>
+          <li>Скопируйте URL и вставьте в поле верификации в сервисе</li>
         </ol>
         <p className="text-xs text-foreground/40 pt-1">
-          Файл публикуется мгновенно — без ожидания билда. Поддерживаются: Яндекс, Google, Mail.ru / VK, Bing, Rambler и любые другие.
+          Поддерживаются: Яндекс, Google, Mail.ru / VK, Bing, Rambler и любые другие сервисы.
         </p>
       </div>
     </div>

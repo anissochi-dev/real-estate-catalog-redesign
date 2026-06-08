@@ -6,6 +6,7 @@ POST {action:'upload', filename, content, comment?}
                                 — загрузить файл в S3, сохранить в БД, вернуть cdn_url
 POST {action:'delete', filename} — удалить файл из S3 и БД
 GET  ?action=list               — список всех файлов (cdn_url, filename, comment)
+v2: GET отдаёт контент inline, не редиректит на CDN (фикс скачивания файла).
 """
 
 import json
@@ -113,18 +114,24 @@ def handler(event: dict, context) -> dict:
 
         for vf in files:
             if vf.get('filename') == filename:
-                # Если файл в S3 — 302 на CDN (браузер/бот получит файл напрямую)
-                cdn_url = vf.get('cdn_url', '')
-                if cdn_url:
-                    return {'statusCode': 302, 'headers': {**CORS, 'Location': cdn_url}, 'body': ''}
-                # Иначе отдаём содержимое из БД
+                # Всегда отдаём содержимое напрямую из БД — не редиректим на CDN.
+                # CDN отдаёт файл как attachment (скачивание), а нам нужен inline-текст.
                 content = vf.get('content', '')
                 ct = 'text/plain; charset=utf-8'
                 if filename.endswith('.xml'):
                     ct = 'application/xml; charset=utf-8'
                 elif filename.endswith('.html'):
                     ct = 'text/html; charset=utf-8'
-                return {'statusCode': 200, 'headers': {**CORS, 'Content-Type': ct}, 'body': content}
+                return {
+                    'statusCode': 200,
+                    'headers': {
+                        **CORS,
+                        'Content-Type': ct,
+                        'Content-Disposition': 'inline',
+                        'Cache-Control': 'public, max-age=3600',
+                    },
+                    'body': content,
+                }
 
         return {'statusCode': 404, 'headers': CORS, 'body': f'Not found: {filename}'}
 
