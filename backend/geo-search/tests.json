@@ -1,0 +1,61 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Неизвестный action → 400",
+      "method": "GET",
+      "path": "/?action=unknown",
+      "expectedStatus": 400
+    },
+    {
+      "name": "infra_stats — статистика инфраструктуры",
+      "method": "GET",
+      "path": "/?action=infra_stats",
+      "expectedStatus": 200,
+      "expectedBody": {"total": 0},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "location_score — нет координат → 400",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "location_score"},
+      "expectedStatus": 400
+    },
+    {
+      "name": "radius_search — нет координат → 400",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "radius_search"},
+      "expectedStatus": 400
+    },
+    {
+      "name": "similar_location — нет id → 400",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "similar_location"},
+      "expectedStatus": 400
+    },
+    {
+      "name": "radius_search — по координатам",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "radius_search", "lat": 45.04, "lng": 38.97, "radius_m": 500},
+      "expectedStatus": 200,
+      "expectedBody": {"center": {}},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "location_score — по координатам",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "location_score", "lat": 45.04, "lng": 38.97, "category": "office"},
+      "expectedStatus": 200
+    }
+  ]
+}
