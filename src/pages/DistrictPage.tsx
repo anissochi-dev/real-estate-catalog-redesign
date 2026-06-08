@@ -7,6 +7,7 @@ import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
 import SchemaOrg, { makeItemListSchema, makeBreadcrumbSchema } from '@/components/SchemaOrg';
 import { fetchDistricts, District } from '@/lib/api';
+import { getSiteUrl } from '@/lib/siteUrl';
 
 const DISTRICT_SEO_URL = 'https://functions.poehali.dev/935f6aa4-e24d-49ac-bc65-6b55db9d2ae3';
 const PAGE_SIZE = 12;
@@ -88,7 +89,7 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
 
   const displayName = districtData?.name || districtName;
 
-  const siteUrl = settings.site_url || 'https://bmn.su';
+  const siteUrl = getSiteUrl(settings.site_url);
 
   const breadcrumbSchema = makeBreadcrumbSchema([
     { name: 'Главная', url: siteUrl },

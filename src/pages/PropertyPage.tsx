@@ -6,6 +6,7 @@ import SmartCaptcha, { CaptchaResult } from '@/components/SmartCaptcha';
 import { recordView } from '@/components/RecentlyViewed';
 import { extractIdFromSlug } from '@/lib/slug';
 import { useSettings } from '@/contexts/SettingsContext';
+import { getSiteUrl } from '@/lib/siteUrl';
 import Icon from '@/components/ui/icon';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import PropertyMediaGallery from '@/components/property/PropertyMediaGallery';
@@ -190,7 +191,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
     }
   };
 
-  const siteUrl = settings.site_url || 'https://bmn.su';
+  const siteUrl = getSiteUrl(settings.site_url);
   const pageUrl = typeof window !== 'undefined' ? window.location.href : `${siteUrl}/object/${slug}`;
 
   const productSchema = makeRealEstateSchema({

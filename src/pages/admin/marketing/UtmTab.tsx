@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
+import { useSettings } from '@/contexts/SettingsContext';
 
 // ── Вкладка: UTM-конструктор ───────────────────────────────────────────────────
 
@@ -9,7 +10,8 @@ const UTM_MEDIUMS = ['cpc', 'organic', 'social', 'email', 'referral', 'banner'];
 const UTM_CAMPAIGNS_PRESET = ['spring_2025', 'office_rent', 'building_sale', 'hot_objects', 'promo'];
 
 export default function UtmTab() {
-  const [base, setBase] = useState('https://bmn.su/');
+  const { settings } = useSettings();
+  const [base, setBase] = useState(() => settings.site_url?.replace(/\/$/, '') + '/' || 'https://bmn.su/');
   const [source, setSource] = useState('avito');
   const [medium, setMedium] = useState('cpc');
   const [campaign, setCampaign] = useState('');

@@ -4,6 +4,7 @@ import { NEWS_URL } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
 import SchemaOrg, { makeNewsArticleSchema, makeItemListSchema, makeBreadcrumbSchema } from '@/components/SchemaOrg';
+import { getSiteUrl } from '@/lib/siteUrl';
 
 interface NewsItem {
   id: number;
@@ -49,7 +50,7 @@ export function NewsListPage() {
     document.title = `Новости коммерческой недвижимости | ${settings.company_name || 'BIZNEST'}`;
   }, [settings.company_name]);
 
-  const siteUrl = settings.site_url || 'https://bmn.su';
+  const siteUrl = getSiteUrl(settings.site_url);
 
   const newsListSchema = news.length > 0
     ? makeItemListSchema(

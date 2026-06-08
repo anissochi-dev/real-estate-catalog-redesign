@@ -11,7 +11,6 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
-SITE_URL = 'https://bmn.su'
 SITE_NAME = 'Бизнес. Маркетинг. Недвижимость.'
 DEFAULT_IMAGE = 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/og-image-1779575751349.png'
 
@@ -59,21 +58,35 @@ def handler(event: dict, context) -> dict:
     params = event.get('queryStringParameters') or {}
     listing_id = params.get('id')
 
+    # Загружаем site_url из настроек
+    site_url = 'https://bmn.su'
+    try:
+        conn0 = psycopg2.connect(os.environ['DATABASE_URL'])
+        cur0 = conn0.cursor(cursor_factory=RealDictCursor)
+        cur0.execute(f"SELECT site_url, company_name FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
+        s = cur0.fetchone() or {}
+        cur0.close()
+        conn0.close()
+        if s.get('site_url'):
+            site_url = str(s['site_url']).rstrip('/')
+        if s.get('company_name'):
+            SITE_NAME = str(s['company_name'])
+    except Exception:
+        pass
+
     if not listing_id:
-        return {'statusCode': 302, 'headers': {'Location': SITE_URL, **cors}, 'body': ''}
+        return {'statusCode': 302, 'headers': {'Location': site_url, **cors}, 'body': ''}
 
     try:
         listing_id = int(listing_id)
     except (ValueError, TypeError):
-        return {'statusCode': 302, 'headers': {'Location': SITE_URL, **cors}, 'body': ''}
-
-    page_url = f'{SITE_URL}/property/{listing_id}'
+        return {'statusCode': 302, 'headers': {'Location': site_url, **cors}, 'body': ''}
 
     try:
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor(cursor_factory=RealDictCursor)
         cur.execute(
-            f"SELECT title, description, seo_title, seo_description, image, images, city "
+            f"SELECT title, description, seo_title, seo_description, image, images, city, slug "
             f"FROM {SCHEMA}.listings "
             f"WHERE id = {listing_id} AND status = 'active' AND (is_visible IS NULL OR is_visible = TRUE)"
         )
@@ -84,9 +97,12 @@ def handler(event: dict, context) -> dict:
         row = None
 
     if not row:
-        return {'statusCode': 302, 'headers': {'Location': SITE_URL, **cors}, 'body': ''}
+        return {'statusCode': 302, 'headers': {'Location': site_url, **cors}, 'body': ''}
 
+    # Строим корректный URL: /object/{slug} или /object/{id}
     d = dict(row)
+    slug = d.get('slug') or str(listing_id)
+    page_url = f'{site_url}/object/{slug}'
 
     og_title = d.get('seo_title') or d.get('title') or SITE_NAME
     city = d.get('city') or 'Краснодар'

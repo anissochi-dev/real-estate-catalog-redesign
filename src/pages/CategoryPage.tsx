@@ -7,6 +7,7 @@ import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
 import AIMatchModal from '@/components/AIMatchModal';
 import SchemaOrg, { makeItemListSchema, makeBreadcrumbSchema } from '@/components/SchemaOrg';
+import { getSiteUrl } from '@/lib/siteUrl';
 
 const CATEGORY_SEO_URL = 'https://functions.poehali.dev/8dee3c78-5067-465a-905c-2193471100ce';
 
@@ -250,7 +251,7 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
     );
   }
 
-  const siteUrl = settings.site_url || 'https://bmn.su';
+  const siteUrl = getSiteUrl(settings.site_url);
 
   const itemListSchema = makeItemListSchema(
     items.slice(0, 20).map(p => ({

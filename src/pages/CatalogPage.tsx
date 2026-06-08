@@ -9,6 +9,7 @@ import AIMatchModal from '@/components/AIMatchModal';
 import { useSettings } from '@/contexts/SettingsContext';
 import SchemaOrg, { makeBreadcrumbSchema } from '@/components/SchemaOrg';
 import { fetchDistricts, District } from '@/lib/api';
+import { getSiteUrl } from '@/lib/siteUrl';
 import YandexMap from '@/components/YandexMap';
 import { formatPrice } from '@/components/PropertyCard';
 import { listingSlug } from '@/lib/slug';
@@ -186,7 +187,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
   const hasMore = visibleCount < filtered.length;
 
 
-  const siteUrl = settings.site_url || 'https://bmn.su';
+  const siteUrl = getSiteUrl(settings.site_url);
   const catalogBreadcrumbs = [
     { name: 'Главная', url: siteUrl },
     ...(typeFilter !== 'all' || dealFilter !== 'all'

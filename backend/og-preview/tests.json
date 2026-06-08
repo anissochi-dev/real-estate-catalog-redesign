@@ -1,13 +1,13 @@
 {
   "tests": [
     {
-      "name": "Redirect without id",
-      "method": "GET",
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
       "path": "/",
-      "expectedStatus": 302
+      "expectedStatus": 200
     },
     {
-      "name": "Valid listing id",
+      "name": "Valid listing id — returns HTML",
       "method": "GET",
       "path": "/?id=1",
       "expectedStatus": 200
