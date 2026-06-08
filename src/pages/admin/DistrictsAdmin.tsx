@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { loadGeoConfig } from './settings/geoConfig';
 import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
@@ -50,15 +51,13 @@ export default function DistrictsAdmin() {
   const [geoOkrugBatch, setGeoOkrugBatch] = useState(30);
   const GEO_OKRUG_BATCHES = [30, 50, 70, 90, 110, 150, 200];
 
-  // Геокодеры: список провайдеров с лимитами
   const ALL_PROVIDERS = [
-    { id: 'yandex',   label: 'Яндекс',     color: 'yellow' },
-    { id: 'maps_co',  label: 'maps.co',    color: 'orange' },
-    { id: 'nominatim',label: 'Nominatim',  color: 'sky' },
+    { id: 'yandex',    label: 'Яндекс' },
+    { id: 'maps_co',   label: 'maps.co' },
+    { id: 'nominatim', label: 'Nominatim' },
   ];
-  const [geoProviders, setGeoProviders] = useState(['yandex', 'maps_co', 'nominatim']);
-  const [geoLimits, setGeoLimits] = useState<Record<string, number>>({ yandex: 9999, maps_co: 9999, nominatim: 9999 });
-  const [showGeoSettings, setShowGeoSettings] = useState(false);
+
+
 
   // Исправление районов
   const [geoFixLoading, setGeoFixLoading] = useState(false);
@@ -175,11 +174,10 @@ export default function DistrictsAdmin() {
     finally { setOsmRunAll(false); stopRef.current = false; }
   };
 
-  const geoOkrugPayload = (mode: string) => ({
-    action: 'geo_okrug', mode, limit: geoOkrugBatch,
-    providers: geoProviders,
-    provider_limits: geoLimits,
-  });
+  const geoOkrugPayload = (mode: string) => {
+    const cfg = loadGeoConfig();
+    return { action: 'geo_okrug', mode, limit: geoOkrugBatch, providers: cfg.providers, provider_limits: cfg.limits };
+  };
 
   const handleGeoOkrugPreview = async () => {
     setGeoOkrugLoading(true); setGeoOkrugResult(null);
@@ -453,12 +451,7 @@ export default function DistrictsAdmin() {
             >
               {GEO_OKRUG_BATCHES.map(n => <option key={n} value={n}>{n}</option>)}
             </select>
-            <div className="w-px h-5 bg-orange-200" />
-            <button type="button" onClick={() => setShowGeoSettings(v => !v)}
-              className={`px-2 py-2 transition ${showGeoSettings ? 'bg-orange-200 text-orange-800' : 'text-orange-500 hover:bg-orange-100'}`}
-              title="Настройки геокодеров">
-              <Icon name="Settings2" size={14} />
-            </button>
+
           </div>
           <button type="button" onClick={handleGeoFixPreview} disabled={geoFixLoading}
             className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition disabled:opacity-50">
@@ -500,64 +493,6 @@ export default function DistrictsAdmin() {
           token={refreshToken()}
           onSaved={load}
         />
-      )}
-
-      {/* Панель настроек геокодеров */}
-      {showGeoSettings && (
-        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-5 space-y-4">
-          <div className="font-semibold text-orange-800 flex items-center gap-2 text-sm">
-            <Icon name="Settings2" size={15} /> Геокодеры — порядок и лимиты запросов
-          </div>
-          <p className="text-xs text-orange-600">Перетащите провайдеры мышкой или меняйте порядок кнопками. При исчерпании лимита система автоматически переключится на следующий.</p>
-          <div className="space-y-2">
-            {geoProviders.map((pid, idx) => {
-              const info = ALL_PROVIDERS.find(p => p.id === pid)!;
-              return (
-                <div key={pid} className="flex items-center gap-3 bg-white border border-orange-200 rounded-xl px-3 py-2">
-                  <span className="text-orange-400 text-xs font-bold w-4">{idx + 1}</span>
-                  <span className="font-medium text-sm text-orange-800 w-24">{info.label}</span>
-                  <div className="flex items-center gap-1.5 flex-1">
-                    <span className="text-xs text-orange-500">Лимит:</span>
-                    <input
-                      type="number"
-                      min={0}
-                      max={99999}
-                      value={geoLimits[pid] === 9999 ? '' : geoLimits[pid]}
-                      placeholder="∞"
-                      onChange={e => setGeoLimits(prev => ({ ...prev, [pid]: e.target.value === '' ? 9999 : Math.max(0, Number(e.target.value)) }))}
-                      className="w-24 text-sm px-2 py-1 border border-orange-200 rounded-lg outline-none focus:border-orange-400 bg-orange-50"
-                    />
-                    <span className="text-xs text-orange-400">запросов (пусто = без лимита)</span>
-                  </div>
-                  <div className="flex gap-1">
-                    <button disabled={idx === 0} onClick={() => setGeoProviders(prev => { const a = [...prev]; [a[idx-1], a[idx]] = [a[idx], a[idx-1]]; return a; })}
-                      className="p-1 rounded hover:bg-orange-100 disabled:opacity-30 transition">
-                      <Icon name="ChevronUp" size={14} className="text-orange-600" />
-                    </button>
-                    <button disabled={idx === geoProviders.length - 1} onClick={() => setGeoProviders(prev => { const a = [...prev]; [a[idx], a[idx+1]] = [a[idx+1], a[idx]]; return a; })}
-                      className="p-1 rounded hover:bg-orange-100 disabled:opacity-30 transition">
-                      <Icon name="ChevronDown" size={14} className="text-orange-600" />
-                    </button>
-                    <button onClick={() => setGeoProviders(prev => prev.filter(p => p !== pid))}
-                      className="p-1 rounded hover:bg-red-100 transition">
-                      <Icon name="X" size={14} className="text-red-400" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {geoProviders.length < ALL_PROVIDERS.length && (
-            <div className="flex gap-2 flex-wrap">
-              {ALL_PROVIDERS.filter(p => !geoProviders.includes(p.id)).map(p => (
-                <button key={p.id} onClick={() => setGeoProviders(prev => [...prev, p.id])}
-                  className="text-xs px-3 py-1.5 rounded-lg border border-orange-200 bg-white text-orange-700 hover:bg-orange-100 transition flex items-center gap-1">
-                  <Icon name="Plus" size={12} /> {p.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
       )}
 
       {/* Панель результатов geo-okrug */}

@@ -1,5 +1,6 @@
 import { S, PingState } from './types';
 import IntegrationsAiSection from './IntegrationsAiSection';
+import IntegrationsGeoSection from './IntegrationsGeoSection';
 import IntegrationsMapsPaySection from './IntegrationsMapsPaySection';
 import IntegrationsSecuritySection from './IntegrationsSecuritySection';
 import IntegrationsWebmasterSection from './IntegrationsWebmasterSection';
@@ -40,6 +41,7 @@ export default function IntegrationsTab({
         showKey={showKey} setShowKey={setShowKey}
         pingState={pingState} testConnection={testConnection}
       />
+      <IntegrationsGeoSection />
       <IntegrationsMapsPaySection
         s={s} setS={setS}
         showMapsKey={showMapsKey} setShowMapsKey={setShowMapsKey}
