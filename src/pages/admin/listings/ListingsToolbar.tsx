@@ -16,8 +16,7 @@ interface ImportedListing {
 
 interface Props {
   statusFilter: StatusFilter;
-  setStatusFilter: (v: StatusFilter) => void;
-  setSelected: (s: Set<number>) => void;
+  switchTab: (v: StatusFilter) => void;
   search: string;
   setSearch: (v: string) => void;
   catFilter: string;
@@ -26,17 +25,14 @@ interface Props {
   setHasDraft: (v: boolean) => void;
   onAdd: () => void;
   onImport: (data: ImportedListing) => void;
-  activeCount: number;
-  archivedCount: number;
-  totalCount: number;
-  filteredCount: number;
+  counts: { active: number; archived: number; hidden: number };
 }
 
 export default function ListingsToolbar({
-  statusFilter, setStatusFilter, setSelected,
+  statusFilter, switchTab,
   search, setSearch, catFilter, setCatFilter,
   hasDraft, setHasDraft, onAdd, onImport,
-  activeCount, archivedCount, totalCount, filteredCount,
+  counts,
 }: Props) {
   const [importOpen, setImportOpen] = useState(false);
 
@@ -45,11 +41,12 @@ export default function ListingsToolbar({
       {/* Фильтры статуса */}
       <div className="flex items-center gap-2 flex-wrap">
         {([
-          ['active', `Активные (${activeCount})`, 'CheckCircle'],
-          ['archived', `Архив (${archivedCount})`, 'Archive'],
-          ['all', `Все (${totalCount})`, 'List'],
+          ['active',   `Активные (${counts.active})`,   'CheckCircle'],
+          ['hidden',   `Скрытые (${counts.hidden})`,    'EyeOff'],
+          ['archived', `Архив (${counts.archived})`,    'Archive'],
+          ['all',      'Все',                           'List'],
         ] as [StatusFilter, string, string][]).map(([v, l, ic]) => (
-          <button key={v} onClick={() => { setStatusFilter(v); setSelected(new Set()); }}
+          <button key={v} onClick={() => switchTab(v)}
             className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${statusFilter === v ? 'bg-brand-blue text-white' : 'border border-border hover:bg-muted'}`}>
             <Icon name={ic} size={14} />
             {l}
@@ -101,10 +98,6 @@ export default function ListingsToolbar({
           <option value="">Все категории</option>
           {CATS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
-      </div>
-
-      <div className="text-xs text-muted-foreground">
-        Показано: {filteredCount} из {totalCount}
       </div>
 
       {importOpen && (

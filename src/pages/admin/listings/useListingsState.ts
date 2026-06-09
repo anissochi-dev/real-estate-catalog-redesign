@@ -19,7 +19,7 @@ export function clearDraft() {
   try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
 }
 
-export type StatusFilter = 'active' | 'archived' | 'all';
+export type StatusFilter = 'active' | 'archived' | 'hidden' | 'all';
 
 export function useListingsState() {
   const { user } = useAuth();
@@ -29,6 +29,7 @@ export function useListingsState() {
 
   const [items, setItems] = useState<Listing[]>([]);
   const [total, setTotal] = useState(0);
+  const [counts, setCounts] = useState({ active: 0, archived: 0, hidden: 0 });
   const [cities, setCities] = useState<City[]>([]);
   const [purposes, setPurposes] = useState<Purpose[]>([]);
   const [landVri, setLandVri] = useState<LandVri[]>([]);
@@ -50,14 +51,16 @@ export function useListingsState() {
   const [hasDraft, setHasDraft] = useState(() => !!loadDraft());
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const load = (reset = true) => {
+  const load = (reset = true, tab?: StatusFilter) => {
     setLoading(true);
+    const currentTab = tab ?? statusFilter;
     const offset = reset ? 0 : items.length;
-    Promise.all([adminApi.listListings(offset, 25), adminApi.listCities(), adminApi.listPurposes(), adminApi.listLandVri()])
+    Promise.all([adminApi.listListings(offset, 25, currentTab), adminApi.listCities(), adminApi.listPurposes(), adminApi.listLandVri()])
       .then(([l, c, p, v]) => {
         const newItems = l.listings || [];
         setItems(prev => reset ? newItems : [...prev, ...newItems]);
         setTotal(l.total || 0);
+        if (l.counts) setCounts(l.counts);
         setCities((c.cities || []).filter((x: City) => x.is_active));
         setPurposes(p.purposes || []);
         setLandVri((v.land_vri || []).filter((x: LandVri) => x.is_active !== false));
@@ -69,16 +72,17 @@ export function useListingsState() {
   const loadMore = () => {
     if (loading || items.length >= total) return;
     setLoading(true);
-    adminApi.listListings(items.length, 25)
+    adminApi.listListings(items.length, 25, statusFilter)
       .then(l => {
         setItems(prev => [...prev, ...(l.listings || [])]);
         setTotal(l.total || 0);
+        if (l.counts) setCounts(l.counts);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => load(true), []);
+  useEffect(() => load(true, 'active'), []);
 
   useEffect(() => {
     if (!editing || editing.id) return;
@@ -90,9 +94,14 @@ export function useListingsState() {
     return () => { if (draftTimerRef.current) clearTimeout(draftTimerRef.current); };
   }, [editing, photos]);
 
+  const switchTab = (tab: StatusFilter) => {
+    setStatusFilter(tab);
+    setSelected(new Set());
+    load(true, tab);
+  };
+
   const filtered = items
     .filter(it => {
-      if (statusFilter !== 'all' && it.status !== statusFilter) return false;
       if (catFilter && it.category !== catFilter) return false;
       if (search) {
         const q = search.toLowerCase().replace(/^#/, '');
@@ -362,7 +371,7 @@ export function useListingsState() {
 
   return {
     // data
-    items, filtered, cities, purposes, landVri, loading, total,
+    items, filtered, cities, purposes, landVri, loading, total, counts,
     // edit state
     editing, setEditing, photos, setPhotos,
     // modals
@@ -379,7 +388,7 @@ export function useListingsState() {
     // meta
     isAdmin, SITE_URL,
     // actions
-    load, loadMore, openEdit, save, archive, runBulk, bulkDelete, toggleSelect,
+    load, loadMore, switchTab, openEdit, save, archive, runBulk, bulkDelete, toggleSelect,
     aiDescribe, aiTitle, generateTags, generateSeo, generateAll,
   };
 }

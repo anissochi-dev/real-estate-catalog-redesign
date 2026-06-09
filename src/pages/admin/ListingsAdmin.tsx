@@ -25,16 +25,13 @@ export default function ListingsAdmin() {
 
   if (s.loading && s.items.length === 0) return <div>Загрузка...</div>;
 
-  const activeCount = s.items.filter(i => i.status === 'active').length;
-  const archivedCount = s.items.filter(i => i.status === 'archived').length;
   const hasMore = s.items.length < s.total;
 
   return (
     <div className="space-y-4">
       <ListingsToolbar
         statusFilter={s.statusFilter}
-        setStatusFilter={s.setStatusFilter}
-        setSelected={s.setSelected}
+        switchTab={s.switchTab}
         search={s.search}
         setSearch={s.setSearch}
         catFilter={s.catFilter}
@@ -42,6 +39,7 @@ export default function ListingsAdmin() {
         hasDraft={s.hasDraft}
         setHasDraft={s.setHasDraft}
         onAdd={() => s.openEdit()}
+        counts={s.counts}
         onImport={data => {
           const imagesStr = data.images.join('|');
           s.openEdit({
@@ -66,10 +64,6 @@ export default function ListingsAdmin() {
           });
           if (data.images.length > 0) s.setPhotos(data.images);
         }}
-        activeCount={activeCount}
-        archivedCount={archivedCount}
-        totalCount={s.items.length}
-        filteredCount={s.filtered.length}
       />
 
       <ListingsBulkBar

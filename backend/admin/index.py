@@ -2127,6 +2127,23 @@ def _listings(cur, conn, method, rid, event, user):
         qp = event.get('queryStringParameters') or {}
         limit = max(1, min(200, int(qp.get('limit') or 25)))
         offset = max(0, int(qp.get('offset') or 0))
+        tab = qp.get('tab') or 'active'
+        if tab == 'active':
+            tab_where = "l.status = 'active' AND l.is_visible = TRUE"
+        elif tab == 'archived':
+            tab_where = "l.status = 'archived'"
+        elif tab == 'hidden':
+            tab_where = "l.status = 'active' AND l.is_visible = FALSE"
+        else:
+            tab_where = "TRUE"
+        cur.execute(
+            f"SELECT "
+            f"  COUNT(*) FILTER (WHERE status = 'active' AND is_visible = TRUE) AS cnt_active, "
+            f"  COUNT(*) FILTER (WHERE status = 'archived') AS cnt_archived, "
+            f"  COUNT(*) FILTER (WHERE status = 'active' AND is_visible = FALSE) AS cnt_hidden "
+            f"FROM {SCHEMA}.listings"
+        )
+        cnt = dict(cur.fetchone())
         list_cols = (
             "l.id, l.title, l.category, l.deal, l.price, l.price_per_m2, l.area, "
             "l.payback, l.profit, l.floor, l.total_floors, l.address, l.district, l.city, "
@@ -2167,6 +2184,7 @@ def _listings(cur, conn, method, rid, event, user):
             f"  SELECT listing_id, COUNT(*) AS leads FROM {SCHEMA}.leads "
             f"  WHERE listing_id IS NOT NULL GROUP BY listing_id"
             f") sl ON sl.listing_id = l.id "
+            f"WHERE {tab_where} "
             f"ORDER BY l.created_at DESC "
             f"LIMIT {limit} OFFSET {offset}"
         )
@@ -2182,7 +2200,10 @@ def _listings(cur, conn, method, rid, event, user):
             d.pop('owner_name_final', None)
             d.pop('owner_phone_final', None)
             rows.append(_ser(d))
-        return _ok({'listings': rows, 'total': total, 'limit': limit, 'offset': offset})
+        return _ok({
+            'listings': rows, 'total': total, 'limit': limit, 'offset': offset,
+            'counts': {'active': cnt['cnt_active'], 'archived': cnt['cnt_archived'], 'hidden': cnt['cnt_hidden']},
+        })
 
     body = json.loads(event.get('body') or '{}')
 
