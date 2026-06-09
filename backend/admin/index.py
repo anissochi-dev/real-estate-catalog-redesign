@@ -2124,35 +2124,57 @@ def _listings(cur, conn, method, rid, event, user):
                       'pc_owner_notes', 'pc2_owner_name', 'pc2_owner_phone'):
                 row_dict.pop(k, None)
             return _ok({'listing': _ser(row_dict)})
+        qp = event.get('queryStringParameters') or {}
+        limit = max(1, min(200, int(qp.get('limit') or 25)))
+        offset = max(0, int(qp.get('offset') or 0))
+        list_cols = (
+            "l.id, l.title, l.category, l.deal, l.price, l.price_per_m2, l.area, "
+            "l.payback, l.profit, l.floor, l.total_floors, l.address, l.district, l.city, "
+            "l.image, l.images, l.tags, l.is_hot, l.is_new, l.is_exclusive, l.is_urgent, "
+            "l.status, l.owner_name, l.owner_phone, l.owner_phone2, l.price_unit, "
+            "l.purpose, l.condition, l.parking, l.entrance, "
+            "l.export_yandex, l.export_avito, l.export_cian, "
+            "l.tenant_name, l.monthly_rent, l.yearly_rent, "
+            "l.finishing, l.ceiling_height, l.electricity_kw, l.utilities, l.road_line, "
+            "l.author_id, l.broker_id, l.is_visible, l.rooms, l.broker_commission, "
+            "l.building_class, l.building_year, l.property_rights, l.min_area, "
+            "l.land_area, l.land_status, l.land_vri, l.is_apartments, "
+            "l.has_furniture, l.has_equipment, l.owner_phone_contact_id, "
+            "l.slug, l.public_code, l.lat, l.lng, "
+            "l.created_at, l.updated_at, l.last_edited_at, l.last_edited_by, "
+            "l.use_watermark, l.video_url, l.video_type"
+        )
         cur.execute(
-            f"SELECT l.*, u.name AS broker_name, "
+            f"SELECT {list_cols}, "
+            f"  u.name AS broker_name, "
             f"  COALESCE(NULLIF(pc.name, ''), l.owner_name) AS owner_name_final, "
             f"  COALESCE(pc.phone, l.owner_phone) AS owner_phone_final, "
             f"  pc.photo_url AS owner_photo_url, "
-            f"  COALESCE(sv.views, 0) AS stats_views, "
-            f"  COALESCE(sc.calls, 0) AS stats_calls, "
-            f"  COALESCE(sl.leads, 0) AS stats_leads "
+            f"  COALESCE(st.views, 0) AS stats_views, "
+            f"  COALESCE(st.calls, 0) AS stats_calls, "
+            f"  COALESCE(sl.leads, 0) AS stats_leads, "
+            f"  COUNT(*) OVER() AS _total "
             f"FROM {SCHEMA}.listings l "
             f"LEFT JOIN {SCHEMA}.users u ON u.id = COALESCE(l.broker_id, l.author_id) "
             f"LEFT JOIN {SCHEMA}.phone_contacts pc ON pc.id = l.owner_phone_contact_id "
             f"LEFT JOIN ("
-            f"  SELECT listing_id, SUM(count) AS views FROM {SCHEMA}.listing_stats "
-            f"  WHERE event_type IN ('view','site_view','open','view_site') GROUP BY listing_id"
-            f") sv ON sv.listing_id = l.id "
-            f"LEFT JOIN ("
-            f"  SELECT listing_id, SUM(count) AS calls FROM {SCHEMA}.listing_stats "
-            f"  WHERE event_type IN ('call','phone_call','phone_click') GROUP BY listing_id"
-            f") sc ON sc.listing_id = l.id "
+            f"  SELECT listing_id, "
+            f"    SUM(CASE WHEN event_type IN ('view','site_view','open','view_site') THEN count ELSE 0 END) AS views, "
+            f"    SUM(CASE WHEN event_type IN ('call','phone_call','phone_click') THEN count ELSE 0 END) AS calls "
+            f"  FROM {SCHEMA}.listing_stats GROUP BY listing_id"
+            f") st ON st.listing_id = l.id "
             f"LEFT JOIN ("
             f"  SELECT listing_id, COUNT(*) AS leads FROM {SCHEMA}.leads "
             f"  WHERE listing_id IS NOT NULL GROUP BY listing_id"
             f") sl ON sl.listing_id = l.id "
-            f"ORDER BY l.created_at DESC"
+            f"ORDER BY l.created_at DESC "
+            f"LIMIT {limit} OFFSET {offset}"
         )
+        total = 0
         rows = []
         for r in cur.fetchall():
             d = dict(r)
-            # Подменяем owner_name/owner_phone значениями из телефонной базы (если связь есть)
+            total = d.pop('_total', 0)
             if d.get('owner_name_final'):
                 d['owner_name'] = d['owner_name_final']
             if d.get('owner_phone_final'):
@@ -2160,7 +2182,7 @@ def _listings(cur, conn, method, rid, event, user):
             d.pop('owner_name_final', None)
             d.pop('owner_phone_final', None)
             rows.append(_ser(d))
-        return _ok({'listings': rows})
+        return _ok({'listings': rows, 'total': total, 'limit': limit, 'offset': offset})
 
     body = json.loads(event.get('body') or '{}')
 

@@ -28,6 +28,7 @@ export function useListingsState() {
   const isAdmin = user?.role === 'admin';
 
   const [items, setItems] = useState<Listing[]>([]);
+  const [total, setTotal] = useState(0);
   const [cities, setCities] = useState<City[]>([]);
   const [purposes, setPurposes] = useState<Purpose[]>([]);
   const [landVri, setLandVri] = useState<LandVri[]>([]);
@@ -49,20 +50,35 @@ export function useListingsState() {
   const [hasDraft, setHasDraft] = useState(() => !!loadDraft());
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const load = () => {
+  const load = (reset = true) => {
     setLoading(true);
-    Promise.all([adminApi.listListings(), adminApi.listCities(), adminApi.listPurposes(), adminApi.listLandVri()])
+    const offset = reset ? 0 : items.length;
+    Promise.all([adminApi.listListings(offset, 25), adminApi.listCities(), adminApi.listPurposes(), adminApi.listLandVri()])
       .then(([l, c, p, v]) => {
-        setItems(l.listings || []);
+        const newItems = l.listings || [];
+        setItems(prev => reset ? newItems : [...prev, ...newItems]);
+        setTotal(l.total || 0);
         setCities((c.cities || []).filter((x: City) => x.is_active));
         setPurposes(p.purposes || []);
         setLandVri((v.land_vri || []).filter((x: LandVri) => x.is_active !== false));
       })
-      .catch(() => {/* не сбрасываем страницу при ошибке */})
+      .catch(() => {})
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, []);
+  const loadMore = () => {
+    if (loading || items.length >= total) return;
+    setLoading(true);
+    adminApi.listListings(items.length, 25)
+      .then(l => {
+        setItems(prev => [...prev, ...(l.listings || [])]);
+        setTotal(l.total || 0);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => load(true), []);
 
   useEffect(() => {
     if (!editing || editing.id) return;
@@ -146,7 +162,7 @@ export function useListingsState() {
       setEditing(null);
       setPhotos([]);
       if (isNew) setStatusFilter('active');
-      load();
+      load(true);
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Ошибка');
     }
@@ -163,7 +179,7 @@ export function useListingsState() {
       await adminApi.archiveListing(id);
       await adminApi.addListingHistory(id, 'archived', {});
     }
-    load();
+    load(true);
   };
 
   const runBulk = async (op: string, value?: unknown) => {
@@ -173,7 +189,7 @@ export function useListingsState() {
     try {
       await adminApi.bulkListings(ids, op, value);
       setSelected(new Set());
-      load();
+      load(true);
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Ошибка');
     } finally {
@@ -189,7 +205,7 @@ export function useListingsState() {
     try {
       await adminApi.bulkListings(ids, 'delete');
       setSelected(new Set());
-      load();
+      load(true);
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Ошибка');
     } finally {
@@ -346,7 +362,7 @@ export function useListingsState() {
 
   return {
     // data
-    items, filtered, cities, purposes, landVri, loading,
+    items, filtered, cities, purposes, landVri, loading, total,
     // edit state
     editing, setEditing, photos, setPhotos,
     // modals
@@ -363,7 +379,7 @@ export function useListingsState() {
     // meta
     isAdmin, SITE_URL,
     // actions
-    load, openEdit, save, archive, runBulk, bulkDelete, toggleSelect,
+    load, loadMore, openEdit, save, archive, runBulk, bulkDelete, toggleSelect,
     aiDescribe, aiTitle, generateTags, generateSeo, generateAll,
   };
 }
