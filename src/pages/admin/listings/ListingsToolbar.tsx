@@ -74,7 +74,7 @@ export default function ListingsToolbar({
         </button>
         {hasDraft && (
           <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold leading-tight">
-            <Icon name="FileEdit" size={12} className="shrink-0" />
+            <Icon name="Pencil" size={12} className="shrink-0 text-orange-500" />
             <span>Черновик<br/>сохранён</span>
             <button onClick={() => { clearDraft(); setHasDraft(false); }} className="hover:text-red-600 transition-colors ml-0.5 shrink-0" title="Удалить">
               <Icon name="X" size={12} />
