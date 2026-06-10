@@ -338,6 +338,13 @@ def _process_source(cur, src: str, api_key: str, folder_id: str):
     if src not in source_configs:
         return 0, 0, f'Неизвестный источник: {src}'
 
+    # biweekly_history: генерируем факты программно, без GPT (данные числовые — GPT не нужен)
+    if src == 'biweekly_history':
+        facts, count_input = _generate_biweekly_facts(cur)
+        saved = _save_facts(cur, facts, 'biweekly_')
+        print(f'[retrain:biweekly_history] generated={len(facts)} saved={saved}')
+        return saved, count_input, None
+
     cfg = source_configs[src]
     user_text, count_input = _fetch_db_source(cur, src)
     if not user_text:
@@ -502,6 +509,84 @@ def _html_to_text(html: str) -> str:
     text = re.sub(r'\n{3,}', '\n\n', text)
     text = re.sub(r'[ \t]{2,}', ' ', text)
     return text.strip()
+
+
+def _generate_biweekly_facts(cur) -> tuple:
+    """Генерирует факты о динамике цен программно — без GPT."""
+    cat_ru = {
+        'retail': 'Торговая недвижимость', 'office': 'Офисная недвижимость',
+        'warehouse': 'Складская недвижимость', 'industrial': 'Производственные помещения',
+        'catering': 'Помещения общепита', 'free_purpose': 'Помещения свободного назначения (ПСН)',
+        'standalone': 'Отдельно стоящие здания',
+    }
+    cur.execute(
+        f"SELECT EXTRACT(YEAR FROM date_recorded)::int AS yr, category, deal_type, "
+        f"ROUND(AVG(price_per_m2)::numeric, 0) AS avg_price "
+        f"FROM {SCHEMA}.price_history_biweekly "
+        f"GROUP BY yr, category, deal_type ORDER BY category, deal_type, yr"
+    )
+    rows = cur.fetchall() or []
+
+    # Группируем: {(category, deal_type): {year: avg_price}}
+    from collections import defaultdict
+    data = defaultdict(dict)
+    for r in rows:
+        data[(r['category'], r['deal_type'])][int(r['yr'])] = int(r['avg_price'] or 0)
+
+    facts = []
+
+    for (cat, dt), yearly in data.items():
+        cat_label = cat_ru.get(cat, cat)
+        dt_label = 'продажа' if dt == 'sale' else 'аренда/мес'
+        years = sorted(yearly.keys())
+        if not years:
+            continue
+
+        # Факт: динамика за весь период
+        p_first = yearly[years[0]]
+        p_last = yearly[years[-1]]
+        if p_first > 0:
+            pct = round((p_last - p_first) / p_first * 100)
+            sign = '+' if pct >= 0 else ''
+            facts.append({
+                'key': f'biweekly_{cat}_{dt}_trend',
+                'value': f'{cat_label} ({dt_label}): цена выросла с {p_first:,} руб/м² в {years[0]} до {p_last:,} руб/м² в {years[-1]} ({sign}{pct}% за {years[-1]-years[0]} лет)'
+            })
+
+        # Факты: цена каждого года
+        for yr in years:
+            facts.append({
+                'key': f'biweekly_{cat}_{dt}_{yr}',
+                'value': f'{cat_label} ({dt_label}) в {yr}: средняя цена {yearly[yr]:,} руб/м²'
+            })
+
+        # Факт: пик и минимум
+        max_yr = max(yearly, key=yearly.get)
+        min_yr = min(yearly, key=yearly.get)
+        facts.append({
+            'key': f'biweekly_{cat}_{dt}_peak',
+            'value': f'{cat_label} ({dt_label}): пик цены в {max_yr} году — {yearly[max_yr]:,} руб/м²'
+        })
+        if min_yr != max_yr:
+            facts.append({
+                'key': f'biweekly_{cat}_{dt}_min',
+                'value': f'{cat_label} ({dt_label}): минимальная цена в {min_yr} году — {yearly[min_yr]:,} руб/м²'
+            })
+
+        # Факты: год-к-году изменения > 15%
+        for i in range(1, len(years)):
+            y_prev, y_cur = years[i-1], years[i]
+            p_prev, p_cur = yearly[y_prev], yearly[y_cur]
+            if p_prev > 0:
+                chg = round((p_cur - p_prev) / p_prev * 100)
+                if abs(chg) >= 15:
+                    direction = 'вырос' if chg > 0 else 'упал'
+                    facts.append({
+                        'key': f'biweekly_{cat}_{dt}_{y_prev}_{y_cur}_yoy',
+                        'value': f'{cat_label} ({dt_label}): цена {direction} на {abs(chg)}% с {y_prev} по {y_cur} год ({p_prev:,} → {p_cur:,} руб/м²)'
+                    })
+
+    return facts, len(rows)
 
 
 def _fetch_db_source(cur, src: str):
