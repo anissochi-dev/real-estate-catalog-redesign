@@ -23,9 +23,10 @@ export default function VBKnowledgeAdmin() {
   const [saving, setSaving] = useState(false);
   const [trainingNews, setTrainingNews] = useState(false);
   const [trainOpen, setTrainOpen] = useState(false);
-  const [selectedSources, setSelectedSources] = useState<string[]>(['news']);
+  const ALL_SOURCE_IDS = TRAINING_SOURCES.map(s => s.id);
+  const [selectedSources, setSelectedSources] = useState<string[]>(ALL_SOURCE_IDS);
   const [schedule, setSchedule] = useState<RetrainSchedule>({
-    enabled: false, hour: 3, minute: 0, sources: ['news', 'listings', 'invest', 'demand', 'terms', 'market_prices'],
+    enabled: false, hour: 3, minute: 0, sources: ALL_SOURCE_IDS,
     last_at: null, last_status: null, last_saved: null,
   });
   const [scheduleLoading, setScheduleLoading] = useState(false);
@@ -97,7 +98,14 @@ export default function VBKnowledgeAdmin() {
   const loadSchedule = () => {
     setScheduleLoading(true);
     adminApi.getRetrainSchedule()
-      .then(d => setSchedule({ ...d, hour: (d.hour + 3) % 24 })) // UTC → МСК для отображения
+      .then(d => {
+        // Мержим с полным списком: новые источники всегда включены по умолчанию
+        const savedSources: string[] = Array.isArray(d.sources) ? d.sources : [];
+        const finalSources = savedSources.length
+          ? [...new Set([...savedSources, ...ALL_SOURCE_IDS.filter(id => !savedSources.includes(id))])]
+          : ALL_SOURCE_IDS;
+        setSchedule({ ...d, hour: (d.hour + 3) % 24, sources: finalSources });
+      })
       .catch(() => {})
       .finally(() => setScheduleLoading(false));
   };
