@@ -415,7 +415,7 @@ def _ai_memory(cur, conn, method, rid, event, user):
         def _call_gpt(system_prompt: str, user_text: str) -> str:
             payload = {
                 'modelUri': f'gpt://{folder_id}/yandexgpt/rc',
-                'completionOptions': {'stream': False, 'temperature': 0.3, 'maxTokens': '1500'},
+                'completionOptions': {'stream': False, 'temperature': 0.6, 'maxTokens': 8000},
                 'messages': [
                     {'role': 'system', 'text': system_prompt},
                     {'role': 'user', 'text': user_text},
@@ -757,9 +757,13 @@ def _ai_memory(cur, conn, method, rid, event, user):
                     per_source.append({'source': src, 'saved': 0, 'input_count': 0, 'skipped': 'нет данных'})
                     continue
 
+                print(f'[retrain:{src}] text_len={len(user_text)} count_input={count_input}')
                 raw = _call_gpt(cfg['system'], user_text)
+                print(f'[retrain:{src}] raw_len={len(raw)} raw_preview={repr(raw[:600])}')
                 facts = _parse_facts(raw)
+                print(f'[retrain:{src}] facts_parsed={len(facts)}')
                 saved_count = _save_facts(facts, cfg['prefix'])
+                print(f'[retrain:{src}] saved={saved_count}')
                 per_source.append({'source': src, 'saved': saved_count, 'input_count': count_input})
                 total_saved += saved_count
 
