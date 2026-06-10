@@ -148,13 +148,20 @@ def _cron_check(cur, conn) -> dict:
 
     src = remaining[0]
 
-    # Загружаем ключи GPT
+    # Загружаем ключи GPT (нужны только для текстовых источников)
+    PROGRAMMATIC_SOURCES = {'biweekly_history', 'invest', 'demand', 'market_history'}
     cur.execute(f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings ORDER BY id LIMIT 1")
     keys = cur.fetchone() or {}
     api_key = keys.get('yandex_api_key') or os.environ.get('YANDEX_API_KEY', '')
     folder_id = keys.get('yandex_folder_id') or os.environ.get('YANDEX_FOLDER_ID', '')
-    if not api_key or not folder_id:
-        return _ok({'skipped': True, 'reason': 'YandexGPT not configured'})
+    if (not api_key or not folder_id) and src not in PROGRAMMATIC_SOURCES:
+        # GPT не настроен — пропускаем текстовый источник, продолжаем
+        done_sources.append(src)
+        new_remaining_check = [x for x in sources_raw if x not in done_sources]
+        new_progress_skip = {'in_progress': len(new_remaining_check) > 0, 'done_sources': done_sources, 'total_saved': total_saved_so_far, 'last_source': src, 'last_saved': 0, 'last_error': 'YandexGPT not configured'}
+        cur.execute(f"UPDATE {SCHEMA}.settings SET vb_retrain_last_status = '{_esc(json.dumps(new_progress_skip, ensure_ascii=False))}' WHERE id = (SELECT id FROM {SCHEMA}.settings ORDER BY id LIMIT 1)")
+        conn.commit()
+        return _ok({'auto': True, 'source': src, 'skipped': True, 'reason': 'YandexGPT not configured', 'remaining': new_remaining_check})
 
     # Обрабатываем один источник
     try:
