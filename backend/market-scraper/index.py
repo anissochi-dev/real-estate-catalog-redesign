@@ -351,14 +351,17 @@ def _parse_arrpro_page(html: str, deal_type: str) -> list[dict]:
 
 def scrape_arrpro(max_pages: int = 5) -> list[dict]:
     """
-    Парсим arrpro по категориям отдельно — так точнее определяется category и deal_type.
-    Продажа: все категории отдельно. Аренда: общий каталог (меньше объявлений).
+    Быстрый режим: парсит несколько страниц за один вызов.
+    Используется при ручном запуске с sources=['arrpro'].
     """
     results = []
-    # Продажа по категориям
     sale_cats = [
         'svobodnogo-naznacheniya', 'ofis', 'sklad', 'torgovoe',
         'proizvodstvo', 'obshchepit', 'zdanie', 'zemelniy-uchastok',
+    ]
+    rent_cats = [
+        'svobodnogo-naznacheniya', 'ofis', 'sklad', 'torgovoe',
+        'obshchepit', 'zdanie',
     ]
     for cat_slug in sale_cats:
         for page in range(1, max_pages + 1):
@@ -372,26 +375,127 @@ def scrape_arrpro(max_pages: int = 5) -> list[dict]:
             if not items:
                 break
             results.extend(items)
-    # Аренда — общий каталог
-    for page in range(1, max_pages + 1):
-        url = 'https://krasnodar.arrpro.ru/katalog/arenda/' if page == 1 else f'https://krasnodar.arrpro.ru/katalog/arenda/page/{page}/'
-        html = _fetch(url)
-        if not html or len(html) < 5000:
-            break
-        items = _parse_arrpro_page(html, 'rent')
-        print(f'[arrpro] rent page={page} items={len(items)}')
-        if not items:
-            break
-        results.extend(items)
-    # Дедупликация по ext_id
+    for cat_slug in rent_cats:
+        for page in range(1, max_pages + 1):
+            base = f'https://krasnodar.arrpro.ru/katalog/arenda/{cat_slug}/'
+            url = base if page == 1 else f'{base}page/{page}/'
+            html = _fetch(url)
+            if not html or len(html) < 5000:
+                break
+            items = _parse_arrpro_page(html, 'rent')
+            print(f'[arrpro] rent/{cat_slug} page={page} items={len(items)}')
+            if not items:
+                break
+            results.extend(items)
     seen = set()
-    unique = []
-    for r in results:
-        eid = r.get('external_id')
-        if eid and eid not in seen:
-            seen.add(eid)
-            unique.append(r)
-    return unique
+    return [r for r in results if r.get('external_id') and not seen.add(r['external_id'])]
+
+
+def scrape_arrpro_step(cur) -> dict:
+    """
+    Пошаговый режим для cron: парсит ОДНУ категорию/страницу за вызов.
+    Прогресс хранится в market_scraper_progress.
+    Возвращает {'items': [...], 'done': bool, 'progress': str}.
+    """
+    ALL_QUEUES = [
+        # (cat_slug, deal_type, base_url)
+        ('svobodnogo-naznacheniya', 'sale', 'https://krasnodar.arrpro.ru/katalog/prodam/svobodnogo-naznacheniya/'),
+        ('torgovoe',               'sale', 'https://krasnodar.arrpro.ru/katalog/prodam/torgovoe/'),
+        ('ofis',                   'sale', 'https://krasnodar.arrpro.ru/katalog/prodam/ofis/'),
+        ('sklad',                  'sale', 'https://krasnodar.arrpro.ru/katalog/prodam/sklad/'),
+        ('zdanie',                 'sale', 'https://krasnodar.arrpro.ru/katalog/prodam/zdanie/'),
+        ('obshchepit',             'sale', 'https://krasnodar.arrpro.ru/katalog/prodam/obshchepit/'),
+        ('proizvodstvo',           'sale', 'https://krasnodar.arrpro.ru/katalog/prodam/proizvodstvo/'),
+        ('zemelniy-uchastok',      'sale', 'https://krasnodar.arrpro.ru/katalog/prodam/zemelniy-uchastok/'),
+        ('svobodnogo-naznacheniya','rent', 'https://krasnodar.arrpro.ru/katalog/arenda/svobodnogo-naznacheniya/'),
+        ('torgovoe',               'rent', 'https://krasnodar.arrpro.ru/katalog/arenda/torgovoe/'),
+        ('ofis',                   'rent', 'https://krasnodar.arrpro.ru/katalog/arenda/ofis/'),
+        ('sklad',                  'rent', 'https://krasnodar.arrpro.ru/katalog/arenda/sklad/'),
+        ('obshchepit',             'rent', 'https://krasnodar.arrpro.ru/katalog/arenda/obshchepit/'),
+        ('zdanie',                 'rent', 'https://krasnodar.arrpro.ru/katalog/arenda/zdanie/'),
+    ]
+
+    # Инициализируем прогресс для новых записей
+    for cat_slug, deal_type, _ in ALL_QUEUES:
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.market_scraper_progress (source, category_slug, deal_type, last_page, is_done) "
+            f"VALUES ('arrpro', %s, %s, 0, FALSE) ON CONFLICT (source, category_slug, deal_type) DO NOTHING",
+            (cat_slug, deal_type)
+        )
+
+    # Берём первую незавершённую задачу
+    cur.execute(
+        f"SELECT category_slug, deal_type, last_page, total_scraped "
+        f"FROM {SCHEMA}.market_scraper_progress "
+        f"WHERE source='arrpro' AND is_done=FALSE "
+        f"ORDER BY id ASC LIMIT 1"
+    )
+    row = cur.fetchone()
+    if not row:
+        return {'items': [], 'done': True, 'progress': 'Все категории обработаны'}
+
+    cat_slug = row['category_slug']
+    deal_type = row['deal_type']
+    next_page = int(row['last_page'] or 0) + 1
+    scraped_so_far = int(row['total_scraped'] or 0)
+
+    # Находим base_url для этой задачи
+    base_url = next(
+        (bu for cs, dt, bu in ALL_QUEUES if cs == cat_slug and dt == deal_type),
+        f'https://krasnodar.arrpro.ru/katalog/{"prodam" if deal_type == "sale" else "arenda"}/{cat_slug}/'
+    )
+    url = base_url if next_page == 1 else f'{base_url}page/{next_page}/'
+
+    html = _fetch(url, timeout=20)
+    items = []
+    is_last = False
+
+    if not html or len(html) < 5000:
+        is_last = True
+        print(f'[arrpro_step] {deal_type}/{cat_slug} page={next_page}: empty/failed → done')
+    else:
+        items = _parse_arrpro_page(html, deal_type)
+        print(f'[arrpro_step] {deal_type}/{cat_slug} page={next_page}: {len(items)} items')
+        if not items:
+            is_last = True
+        else:
+            # Определяем есть ли следующая страница по нескольким признакам
+            # 1. Явная ссылка на следующую страницу
+            has_next = bool(re.search(rf'page/{next_page + 1}/', html))
+            # 2. Ссылка через PAGEN параметр
+            if not has_next:
+                has_next = bool(re.search(rf'PAGEN_\d+={next_page + 1}', html))
+            # 3. Кол-во объявлений из title: если total > уже собрано+на этой странице
+            if not has_next:
+                total_m = re.search(r'(\d+)\s*предложен', html)
+                if total_m:
+                    total_count = int(total_m.group(1))
+                    per_page = len(items)
+                    collected = new_scraped + per_page
+                    has_next = total_count > (next_page * per_page)
+                    print(f'[arrpro_step] total={total_count} per_page={per_page} page={next_page} has_next={has_next}')
+            if not has_next:
+                is_last = True
+
+    new_scraped = scraped_so_far + len(items)
+    cur.execute(
+        f"UPDATE {SCHEMA}.market_scraper_progress "
+        f"SET last_page=%s, total_scraped=%s, is_done=%s, updated_at=NOW() "
+        f"WHERE source='arrpro' AND category_slug=%s AND deal_type=%s",
+        (next_page, new_scraped, is_last, cat_slug, deal_type)
+    )
+
+    # Сколько всего осталось задач
+    cur.execute(
+        f"SELECT COUNT(*) as total, SUM(CASE WHEN is_done THEN 1 ELSE 0 END) as done "
+        f"FROM {SCHEMA}.market_scraper_progress WHERE source='arrpro'"
+    )
+    stat = cur.fetchone()
+    total_tasks = int(stat['total'] or 0)
+    done_tasks = int(stat['done'] or 0)
+
+    progress_str = f'{deal_type}/{cat_slug} стр.{next_page} ({len(items)} объявлений) — задач: {done_tasks+int(is_last)}/{total_tasks}'
+    return {'items': items, 'done': False, 'is_last_page': is_last, 'progress': progress_str, 'cat': cat_slug, 'deal': deal_type}
 
 
 # ── ПАРСЕР AYAX.RU ──────────────────────────────────────────────────────────
@@ -931,31 +1035,94 @@ def handler(event: dict, context) -> dict:
             }, ensure_ascii=False),
         }
 
-    # Авторизация (cron не нужна, ручной запуск — нужна)
-    is_cron = params.get('action') == 'cron'
-    if not is_cron:
-        headers = event.get('headers') or {}
-        headers_lc = {k.lower(): v for k, v in headers.items()}
-        token = headers_lc.get('x-auth-token') or headers_lc.get('x-authorization', '').replace('Bearer ', '')
-        if not token:
-            return {'statusCode': 401, 'headers': CORS, 'body': json.dumps({'error': 'Нет токена'})}
+    action = body.get('action') or params.get('action') or ''
 
+    # Cron: пошаговый парсинг arrpro (1 страница за вызов, не требует токена)
+    if action == 'cron':
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute(
-            f"SELECT u.id, u.role FROM {SCHEMA}.users u "
-            f"JOIN {SCHEMA}.sessions s ON s.user_id = u.id "
-            f"WHERE s.token = %s AND s.expires_at > NOW() LIMIT 1", (token,)
-        )
-        user = cur.fetchone()
-        cur.close()
-        conn.close()
-        if not user or user['role'] not in ('admin', 'director'):
-            return {'statusCode': 403, 'headers': CORS, 'body': json.dumps({'error': 'Нет доступа'})}
+        try:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            step = scrape_arrpro_step(cur)
+            items = step.get('items') or []
+            save_result = _save_listings(cur, items) if items else {'inserted': 0, 'updated': 0}
+            # Если всё собрано — обновляем факты
+            facts_saved = 0
+            if step.get('done') or (step.get('is_last_page') and not items):
+                cur.execute(
+                    f"SELECT COUNT(*) as total FROM {SCHEMA}.market_scraper_progress "
+                    f"WHERE source='arrpro' AND is_done=FALSE"
+                )
+                remaining = cur.fetchone()
+                if not remaining or int(remaining.get('total') or 0) == 0:
+                    facts_saved = _generate_market_facts(cur)
+            conn.commit()
+            return {
+                'statusCode': 200,
+                'headers': {**CORS, 'Content-Type': 'application/json'},
+                'body': json.dumps({
+                    'success': True,
+                    'scraped': len(items),
+                    'inserted': save_result['inserted'],
+                    'updated': save_result['updated'],
+                    'facts_saved': facts_saved,
+                    'progress': step.get('progress'),
+                    'done': step.get('done', False),
+                }, ensure_ascii=False),
+            }
+        finally:
+            conn.close()
+
+    # Авторизация для ручного запуска
+    headers_ev = event.get('headers') or {}
+    headers_lc = {k.lower(): v for k, v in headers_ev.items()}
+    token = headers_lc.get('x-auth-token') or headers_lc.get('x-authorization', '').replace('Bearer ', '')
+    if not token:
+        return {'statusCode': 401, 'headers': CORS, 'body': json.dumps({'error': 'Нет токена'})}
+
+    conn_auth = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur_auth = conn_auth.cursor(cursor_factory=RealDictCursor)
+    cur_auth.execute(
+        f"SELECT u.id, u.role FROM {SCHEMA}.users u "
+        f"JOIN {SCHEMA}.sessions s ON s.user_id = u.id "
+        f"WHERE s.token = %s AND s.expires_at > NOW() LIMIT 1", (token,)
+    )
+    user = cur_auth.fetchone()
+    cur_auth.close()
+    conn_auth.close()
+    if not user or user['role'] not in ('admin', 'director'):
+        return {'statusCode': 403, 'headers': CORS, 'body': json.dumps({'error': 'Нет доступа'})}
 
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     try:
         cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Запуск полного сбора — сбрасываем прогресс и начинаем заново
+        if action == 'full_scan':
+            cur.execute(
+                f"DELETE FROM {SCHEMA}.market_scraper_progress WHERE source='arrpro'"
+            )
+            conn.commit()
+            return {
+                'statusCode': 200,
+                'headers': {**CORS, 'Content-Type': 'application/json'},
+                'body': json.dumps({'success': True, 'message': 'Прогресс сброшен. Cron начнёт полный сбор при следующем вызове.'}, ensure_ascii=False),
+            }
+
+        # Статус прогресса
+        if action == 'progress':
+            cur.execute(
+                f"SELECT category_slug, deal_type, last_page, total_scraped, is_done, updated_at "
+                f"FROM {SCHEMA}.market_scraper_progress WHERE source='arrpro' ORDER BY id"
+            )
+            rows = [dict(r) for r in cur.fetchall()]
+            cur.execute(f"SELECT COUNT(*) as cnt FROM {SCHEMA}.market_listings WHERE source='arrpro' AND scraped_at > NOW() - INTERVAL '7 days'")
+            total = cur.fetchone()
+            return {
+                'statusCode': 200,
+                'headers': {**CORS, 'Content-Type': 'application/json'},
+                'body': json.dumps({'tasks': rows, 'total_in_db': int(total['cnt'] or 0)}, ensure_ascii=False, default=str),
+            }
+
         all_items = []
         per_source = {}
 
