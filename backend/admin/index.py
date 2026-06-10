@@ -530,6 +530,17 @@ def _ai_memory(cur, conn, method, rid, event, user):
                     'key начинается с term_.'
                 ),
             },
+            'market_history': {
+                'prefix': 'market_hist_',
+                'system': (
+                    'Ты — аналитик рынка коммерческой недвижимости Краснодара. '
+                    'На входе — исторические данные цен по годам, районам и категориям, а также макроэкономические показатели (ставка ЦБ, инвестиции). '
+                    'Извлеки 10-20 аналитических фактов: динамику цен по годам, сравнение районов, инвестиционные выводы, тренды. '
+                    'Формат: JSON-массив без markdown: '
+                    '[{"key": "market_hist_slug", "value": "факт с цифрами и годами"}, ...]\n'
+                    'key начинается с market_hist_, латиница нижний регистр через _.'
+                ),
+            },
         }
 
         total_saved = 0
@@ -635,6 +646,47 @@ def _ai_memory(cur, conn, method, rid, event, user):
                     count_input = len(rows)
                     parts = [(r.get('description') or '')[:600] for r in rows]
                     user_text = '\n\n---\n\n'.join(parts)[:9000]
+
+                elif src == 'market_history':
+                    cur.execute(
+                        f"SELECT year, district_name, category, deal_type, "
+                        f"avg_price_per_m2, avg_rent_per_m2_year, avg_cap_rate, vacancy_rate, notes "
+                        f"FROM {SCHEMA}.price_history ORDER BY year, district_name, category"
+                    )
+                    ph_rows = cur.fetchall() or []
+                    cur.execute(
+                        f"SELECT date_recorded, key_rate, inflation_rate, investment_volume_rf, notes "
+                        f"FROM {SCHEMA}.macro_indicators ORDER BY date_recorded"
+                    )
+                    macro_rows = cur.fetchall() or []
+                    count_input = len(ph_rows) + len(macro_rows)
+                    parts = []
+                    if macro_rows:
+                        parts.append('=== Макроэкономика по годам ===')
+                        for r in macro_rows:
+                            yr = str(r.get('date_recorded') or '')[:4]
+                            kr = r.get('key_rate') or ''
+                            inf = r.get('inflation_rate') or ''
+                            inv = r.get('investment_volume_rf') or ''
+                            nt = (r.get('notes') or '')[:200]
+                            parts.append(f"{yr}: ставка ЦБ {kr}%, инфляция {inf}%, инвестиции {inv} млрд руб. {nt}")
+                    if ph_rows:
+                        parts.append('=== Цены по годам, районам и категориям ===')
+                        for r in ph_rows:
+                            p2 = int(r.get('avg_price_per_m2') or 0)
+                            r2 = int(r.get('avg_rent_per_m2_year') or 0)
+                            cap = r.get('avg_cap_rate') or ''
+                            vac = r.get('vacancy_rate') or ''
+                            nt = (r.get('notes') or '')[:150]
+                            line = (f"{r.get('year')} | {r.get('district_name')} | "
+                                    f"{r.get('category')}/{r.get('deal_type')}: ")
+                            if p2: line += f"цена {p2:,} руб/м², "
+                            if r2: line += f"аренда {r2:,} руб/м²/год, "
+                            if cap: line += f"cap rate {cap}%, "
+                            if vac: line += f"вакансия {vac}%, "
+                            if nt: line += nt
+                            parts.append(line.replace(',', ' '))
+                    user_text = '\n'.join(parts)[:9000]
 
                 if not user_text.strip() or count_input == 0:
                     per_source.append({'source': src, 'saved': 0, 'input_count': 0, 'skipped': 'нет данных'})
