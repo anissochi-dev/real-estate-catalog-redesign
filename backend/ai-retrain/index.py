@@ -91,17 +91,19 @@ def _cron_check(cur, conn) -> dict:
     target_minute = int(s.get('vb_retrain_minute') or 0)
     last_at = s.get('vb_retrain_last_at')
 
-    # Читаем прогресс из last_status (может прийти как dict из JSONB или как строка)
+    # Читаем прогресс из last_status — ожидаем dict с полем in_progress (только от cron)
     status_raw = s.get('vb_retrain_last_status') or {}
     if isinstance(status_raw, str):
         try:
             status_raw = json.loads(status_raw)
         except Exception:
             status_raw = {}
+    # Если last_status — список (от ручного запуска), игнорируем его как прогресс cron
     progress = status_raw if isinstance(status_raw, dict) else {}
+    is_cron_progress = isinstance(progress, dict) and 'in_progress' in progress
 
-    # Проверяем: либо сейчас время старта, либо уже идёт обработка (in_progress)
-    in_progress = bool(progress.get('in_progress'))
+    # Проверяем: либо уже идёт обработка (in_progress от cron), либо пора запускать
+    in_progress = is_cron_progress and bool(progress.get('in_progress'))
 
     if not in_progress:
         # Не начато — проверяем что пора запускать
@@ -109,15 +111,14 @@ def _cron_check(cur, conn) -> dict:
             return _ok({'skipped': True, 'reason': f'not time, target={target_hour:02d}:{target_minute:02d}, now={now.hour:02d}:{now.minute:02d}'})
         if abs(now.minute - target_minute) > 30:  # широкое окно — 30 минут
             return _ok({'skipped': True, 'reason': f'minute out of window, target={target_minute}, now={now.minute}'})
-        if last_at:
+        if last_at and is_cron_progress and progress.get('done'):
+            # Считаем "уже сделано сегодня" только если последний cron-цикл был завершён сегодня
             try:
-                # last_at может быть datetime с timezone — приводим к date
                 last_date = last_at.date() if hasattr(last_at, 'date') else None
-                now_date = now.date()
-                if last_date and last_date >= now_date:
+                if last_date and last_date >= now.date():
                     return _ok({'skipped': True, 'reason': 'already done today'})
             except Exception:
-                pass  # при ошибке сравнения — не блокируем запуск
+                pass
 
     # Определяем список источников
     sources_raw = s.get('vb_retrain_sources') or []
@@ -125,9 +126,9 @@ def _cron_check(cur, conn) -> dict:
         try:
             sources_raw = json.loads(sources_raw)
         except Exception:
-            sources_raw = ['news', 'listings', 'invest', 'demand', 'terms', 'market_prices']
+            sources_raw = ['news', 'listings', 'invest', 'demand', 'terms', 'market_prices', 'biweekly_history', 'market_history']
     if not sources_raw:
-        sources_raw = ['news', 'listings', 'invest', 'demand', 'terms', 'market_prices']
+        sources_raw = ['news', 'listings', 'invest', 'demand', 'terms', 'market_prices', 'biweekly_history', 'market_history']
 
     done_sources = progress.get('done_sources') or []
     total_saved_so_far = int(progress.get('total_saved') or 0)
