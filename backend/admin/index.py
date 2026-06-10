@@ -557,7 +557,7 @@ def _ai_memory(cur, conn, method, rid, event, user):
                 if src == 'news':
                     cur.execute(
                         f"SELECT id, title, summary, content FROM {SCHEMA}.news "
-                        f"WHERE published = TRUE "
+                        f"WHERE is_published = TRUE "
                         f"ORDER BY COALESCE(published_at, created_at) DESC LIMIT 15"
                     )
                     rows = cur.fetchall() or []
