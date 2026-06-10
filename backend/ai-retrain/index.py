@@ -318,11 +318,19 @@ def _process_source(cur, src: str, api_key: str, folder_id: str):
             'prefix': 'biweekly_',
             'system': (
                 'Ты — аналитик рынка коммерческой недвижимости Краснодара. '
-                'На входе — двухнедельные срезы цен продажи и аренды по категориям с 2019 по 2026 год. '
-                'Извлеки 50-100 конкретных фактов: пиковые значения, минимумы, динамику роста по категориям, '
-                'сравнение продажа/аренда, долгосрочные тренды, аномальные скачки. '
-                'Формат: JSON-массив без markdown: [{"key": "biweekly_slug", "value": "факт с цифрами, датами и % изменением"}, ...]\n'
-                'key начинается с biweekly_, латиница нижний регистр через _. Чем больше фактов — тем лучше.'
+                'На входе — среднегодовые цены продажи и аренды по 7 категориям с 2019 по 2026 год.\n\n'
+                'ОБЯЗАТЕЛЬНО создай отдельный факт для каждой из следующих позиций:\n'
+                '1. Для каждой категории (7 штук) — факт о динамике цены продажи за 7 лет с % роста от 2019 к 2026\n'
+                '2. Для каждой категории аренды (6 штук) — факт о динамике арендной ставки\n'
+                '3. Для каждого года (2019-2026, 8 штук) — факт о рынке в целом в этот год\n'
+                '4. Топ-3 категории по росту цены за весь период\n'
+                '5. Топ-3 категории по стабильности\n'
+                '6. Аномальные скачки (резкий рост или падение более 20% за год) — по одному факту на каждый\n'
+                '7. Сравнение 2019 vs 2026 для каждой категории\n\n'
+                'Итого должно быть НЕ МЕНЕЕ 40 фактов. Каждый факт — конкретная цифра и вывод.\n'
+                'Формат ответа — ТОЛЬКО JSON-массив, без текста вокруг:\n'
+                '[{"key": "biweekly_retail_sale_trend", "value": "Торговая недвижимость (продажа): рост с 90917 руб/м2 в 2019 до 184077 руб/м2 в 2026, +102% за 7 лет"}, ...]\n'
+                'key: латиница, нижний регистр, через _, начинается с biweekly_'
             ),
         },
     }
@@ -335,8 +343,11 @@ def _process_source(cur, src: str, api_key: str, folder_id: str):
     if not user_text:
         return 0, 0, 'Нет данных'
 
+    print(f'[retrain:{src}] count_input={count_input} text_len={len(user_text)} text_preview={repr(user_text[:300])}')
     raw = _call_gpt(api_key, folder_id, cfg['system'], user_text)
+    print(f'[retrain:{src}] gpt_raw_len={len(raw)} gpt_preview={repr(raw[:500])}')
     facts = _parse_facts(raw)
+    print(f'[retrain:{src}] facts_count={len(facts)}')
     saved = _save_facts(cur, facts, cfg['prefix'])
     return saved, count_input, None
 
@@ -671,7 +682,7 @@ def _fetch_db_source(cur, src: str):
 def _call_gpt(api_key: str, folder_id: str, system_prompt: str, user_text: str) -> str:
     payload = {
         'modelUri': f'gpt://{folder_id}/yandexgpt/rc',
-        'completionOptions': {'stream': False, 'temperature': 0.3, 'maxTokens': '8000'},
+        'completionOptions': {'stream': False, 'temperature': 0.6, 'maxTokens': 8000},
         'messages': [
             {'role': 'system', 'text': system_prompt},
             {'role': 'user', 'text': user_text},
