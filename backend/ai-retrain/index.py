@@ -314,6 +314,17 @@ def _process_source(cur, src: str, api_key: str, folder_id: str):
                 'key начинается с market_hist_, латиница нижний регистр через _. Чем больше фактов — тем лучше.'
             ),
         },
+        'biweekly_history': {
+            'prefix': 'biweekly_',
+            'system': (
+                'Ты — аналитик рынка коммерческой недвижимости Краснодара. '
+                'На входе — двухнедельные срезы цен продажи и аренды по категориям с 2019 по 2026 год. '
+                'Извлеки 50-100 конкретных фактов: пиковые значения, минимумы, динамику роста по категориям, '
+                'сравнение продажа/аренда, долгосрочные тренды, аномальные скачки. '
+                'Формат: JSON-массив без markdown: [{"key": "biweekly_slug", "value": "факт с цифрами, датами и % изменением"}, ...]\n'
+                'key начинается с biweekly_, латиница нижний регистр через _. Чем больше фактов — тем лучше.'
+            ),
+        },
     }
 
     if src not in source_configs:
@@ -597,6 +608,56 @@ def _fetch_db_source(cur, src: str):
                 if vac: line += f"вакансия {vac}%, "
                 if nt: line += nt
                 parts.append(line.replace(',', ' '))
+        return '\n'.join(parts)[:9000], count_input
+
+    if src == 'biweekly_history':
+        cur.execute(
+            f"SELECT category, deal_type, "
+            f"MIN(date_recorded) AS date_from, MAX(date_recorded) AS date_to, "
+            f"MIN(price_per_m2) AS price_min, MAX(price_per_m2) AS price_max, "
+            f"AVG(price_per_m2) AS price_avg, COUNT(*) AS cnt "
+            f"FROM {SCHEMA}.price_history_biweekly "
+            f"GROUP BY category, deal_type ORDER BY category, deal_type"
+        )
+        summary_rows = cur.fetchall() or []
+        cur.execute(
+            f"SELECT date_recorded, category, deal_type, price_per_m2, change_pct "
+            f"FROM {SCHEMA}.price_history_biweekly "
+            f"WHERE date_recorded >= '2021-01-01' "
+            f"ORDER BY category, deal_type, date_recorded"
+        )
+        detail_rows = cur.fetchall() or []
+        count_input = len(detail_rows)
+        parts = ['=== Сводка по категориям (2019-2026) ===']
+        cat_ru = {
+            'retail': 'Торговая', 'office': 'Офисная', 'warehouse': 'Складская',
+            'industrial': 'Производственная', 'catering': 'Общепит',
+            'free_purpose': 'ПСН', 'standalone': 'Отдельно стоящие здания',
+        }
+        for r in summary_rows:
+            cat = cat_ru.get(r.get('category') or '', r.get('category') or '')
+            dt = 'продажа' if r.get('deal_type') == 'sale' else 'аренда'
+            pmin = int(r.get('price_min') or 0)
+            pmax = int(r.get('price_max') or 0)
+            pavg = int(r.get('price_avg') or 0)
+            parts.append(
+                f"{cat} ({dt}): мин {pmin:,} руб/м², макс {pmax:,} руб/м², "
+                f"среднее {pavg:,} руб/м², период {r.get('date_from')}–{r.get('date_to')}"
+                .replace(',', ' ')
+            )
+        parts.append('=== Динамика цен 2021-2026 (двухнедельные срезы) ===')
+        cur_cat = None
+        for r in detail_rows:
+            cat_key = f"{r.get('category')}/{r.get('deal_type')}"
+            if cat_key != cur_cat:
+                cur_cat = cat_key
+                cat = cat_ru.get(r.get('category') or '', r.get('category') or '')
+                dt = 'продажа' if r.get('deal_type') == 'sale' else 'аренда'
+                parts.append(f'--- {cat} ({dt}) ---')
+            price = int(r.get('price_per_m2') or 0)
+            chg = r.get('change_pct')
+            chg_str = f" ({'+' if chg and chg > 0 else ''}{chg}%)" if chg else ''
+            parts.append(f"  {r.get('date_recorded')}: {price:,} руб/м²{chg_str}".replace(',', ' '))
         return '\n'.join(parts)[:9000], count_input
 
     return '', 0
