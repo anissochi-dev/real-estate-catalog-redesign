@@ -856,10 +856,11 @@ def _detect_topic(user_prompt: str) -> str:
     return 'mixed'
 
 
-def _build_memory_context(memory: dict, topic: str = 'mixed') -> str:
+def _build_memory_context(memory: dict, topic: str = 'mixed', public: bool = False) -> str:
     """Формирует структурированный блок памяти ВБ для system prompt.
     Группирует факты по категориям и фильтрует по теме запроса.
     topic: 'broker' | 'it' | 'platform' | 'mixed'.
+    public=True: только рыночные факты, без внутренних ролей и правил (для клиентского чата).
     """
     persona = memory.get('persona', '')
     personality = memory.get('personality', '')
@@ -871,6 +872,7 @@ def _build_memory_context(memory: dict, topic: str = 'mixed') -> str:
         'rule': [], 'platform': [], 'poehali': [], 'scenario': [],
         'glossary': [], 'faq': [], 'contact': [], 'process': [], 'creator': [],
         'demand_summary': [], 'listing_summary': [], 'invest': [], 'market': [],
+        'biweekly': [], 'market_hist': [], 'demand': [], 'news': [], 'listing': [],
     }
     for key, value in memory.items():
         v = (value or '').strip()
@@ -900,10 +902,20 @@ def _build_memory_context(memory: dict, topic: str = 'mixed') -> str:
             groups['process'].append(v)
         elif key.startswith('creator_'):
             groups['creator'].append(v)
+        elif key.startswith('biweekly_'):
+            groups['biweekly'].append(v)
+        elif key.startswith('market_hist_'):
+            groups['market_hist'].append(v)
         elif key.startswith('invest_'):
             groups['invest'].append(v)
         elif key.startswith('market_'):
             groups['market'].append(v)
+        elif key.startswith('demand_'):
+            groups['demand'].append(v)
+        elif key.startswith('news_'):
+            groups['news'].append(v)
+        elif key.startswith('listing_'):
+            groups['listing'].append(v)
 
     # Свежие факты и решения из разговоров
     try:
@@ -915,14 +927,15 @@ def _build_memory_context(memory: dict, topic: str = 'mixed') -> str:
     except Exception:
         decisions = []
 
-    lines = ['[ПАМЯТЬ ВИРТУАЛЬНОГО БРОКЕРА]']
-    lines.append(f'Я работаю на этом сайте уже {count} раз(а). Каждый разговор делает меня умнее.')
-    if persona:
-        lines.append(f'Кто я: {persona}')
-    if personality:
-        lines.append(f'Мой характер: {personality}')
+    lines = ['[ДАННЫЕ О РЫНКЕ КРАСНОДАРА]' if public else '[ПАМЯТЬ ВИРТУАЛЬНОГО БРОКЕРА]']
+    if not public:
+        lines.append(f'Я работаю на этом сайте уже {count} раз(а). Каждый разговор делает меня умнее.')
+        if persona:
+            lines.append(f'Кто я: {persona}')
+        if personality:
+            lines.append(f'Мой характер: {personality}')
 
-    if groups['creator']:
+    if not public and groups['creator']:
         lines.append('\n[О создателе]')
         for v in groups['creator'][:3]:
             lines.append(f'• {v}')
@@ -930,76 +943,104 @@ def _build_memory_context(memory: dict, topic: str = 'mixed') -> str:
     # Лимиты фактов по теме — это сужает контекст и помогает модели сфокусироваться
     if topic == 'broker':
         lim_broker, lim_it, lim_platform, lim_gloss, lim_market = 12, 0, 4, 15, 8
+        lim_biweekly, lim_market_hist, lim_demand, lim_news, lim_listing = 20, 15, 5, 5, 10
     elif topic == 'it':
         lim_broker, lim_it, lim_platform, lim_gloss, lim_market = 0, 15, 8, 0, 0
+        lim_biweekly, lim_market_hist, lim_demand, lim_news, lim_listing = 0, 0, 0, 0, 0
     elif topic == 'platform':
         lim_broker, lim_it, lim_platform, lim_gloss, lim_market = 0, 8, 20, 0, 0
+        lim_biweekly, lim_market_hist, lim_demand, lim_news, lim_listing = 0, 0, 0, 0, 0
     else:  # mixed
         lim_broker, lim_it, lim_platform, lim_gloss, lim_market = 6, 8, 10, 5, 3
+        lim_biweekly, lim_market_hist, lim_demand, lim_news, lim_listing = 10, 8, 3, 3, 5
 
-    # Правила переключения нужны только при mixed — иначе модель уже определилась
-    if groups['role_switch'] and topic == 'mixed':
-        lines.append('\n[Переключение ролей — как определять]')
-        for v in groups['role_switch'][:6]:
-            lines.append(f'• {v}')
+    if not public:
+        # Правила переключения нужны только при mixed — иначе модель уже определилась
+        if groups['role_switch'] and topic == 'mixed':
+            lines.append('\n[Переключение ролей — как определять]')
+            for v in groups['role_switch'][:6]:
+                lines.append(f'• {v}')
 
-    if groups['role_broker'] and lim_broker > 0:
-        lines.append('\n[РОЛЬ 1: Брокер коммерческой недвижимости]')
-        for v in groups['role_broker'][:lim_broker]:
-            lines.append(f'• {v}')
+        if groups['role_broker'] and lim_broker > 0:
+            lines.append('\n[РОЛЬ 1: Брокер коммерческой недвижимости]')
+            for v in groups['role_broker'][:lim_broker]:
+                lines.append(f'• {v}')
 
-    if groups['role_it'] and lim_it > 0:
-        lines.append('\n[РОЛЬ 2: ИТ-эксперт (мульти-роль)]')
-        for v in groups['role_it'][:lim_it]:
-            lines.append(f'• {v}')
+        if groups['role_it'] and lim_it > 0:
+            lines.append('\n[РОЛЬ 2: ИТ-эксперт (мульти-роль)]')
+            for v in groups['role_it'][:lim_it]:
+                lines.append(f'• {v}')
 
-    if groups['rule']:
-        lines.append('\n[Правила работы — обязательно соблюдать]')
-        for v in groups['rule'][:15]:
-            lines.append(f'• {v}')
+        if groups['rule']:
+            lines.append('\n[Правила работы — обязательно соблюдать]')
+            for v in groups['rule'][:15]:
+                lines.append(f'• {v}')
 
-    if groups['platform'] and lim_platform > 0:
-        lines.append('\n[Как устроена платформа BIZNEST]')
-        for v in groups['platform'][:lim_platform]:
-            lines.append(f'• {v}')
+        if groups['platform'] and lim_platform > 0:
+            lines.append('\n[Как устроена платформа BIZNEST]')
+            for v in groups['platform'][:lim_platform]:
+                lines.append(f'• {v}')
 
-    # poehali.dev — техническая база для IT/platform тем
-    if groups['poehali'] and topic in ('it', 'platform', 'mixed'):
-        lim_poehali = 15 if topic in ('it', 'platform') else 6
-        lines.append('\n[Платформа poehali.dev — как работает движок]')
-        for v in groups['poehali'][:lim_poehali]:
-            lines.append(f'• {v}')
+        if groups['poehali'] and topic in ('it', 'platform', 'mixed'):
+            lim_poehali = 15 if topic in ('it', 'platform') else 6
+            lines.append('\n[Платформа poehali.dev — как работает движок]')
+            for v in groups['poehali'][:lim_poehali]:
+                lines.append(f'• {v}')
 
-    # Сценарии-скрипты — готовые ответы на частые ситуации
-    if groups['scenario']:
-        lim_scen = 12 if topic in ('it', 'platform', 'mixed') else 6
-        lines.append('\n[Сценарии — готовые маршруты ответов]')
-        for v in groups['scenario'][:lim_scen]:
-            lines.append(f'• {v}')
+        if groups['scenario']:
+            lim_scen = 12 if topic in ('it', 'platform', 'mixed') else 6
+            lines.append('\n[Сценарии — готовые маршруты ответов]')
+            for v in groups['scenario'][:lim_scen]:
+                lines.append(f'• {v}')
 
-    if groups['process']:
-        lines.append('\n[Бизнес-процессы]')
-        for v in groups['process'][:10]:
-            lines.append(f'• {v}')
+        if groups['process']:
+            lines.append('\n[Бизнес-процессы]')
+            for v in groups['process'][:10]:
+                lines.append(f'• {v}')
 
-    if groups['contact']:
-        lines.append('\n[Контакты и компания]')
-        for v in groups['contact'][:5]:
-            lines.append(f'• {v}')
+        if groups['contact']:
+            lines.append('\n[Контакты и компания]')
+            for v in groups['contact'][:5]:
+                lines.append(f'• {v}')
 
-    if groups['faq']:
-        lines.append('\n[Частые вопросы]')
-        for v in groups['faq'][:10]:
-            lines.append(f'• {v}')
+        if groups['faq']:
+            lines.append('\n[Частые вопросы]')
+            for v in groups['faq'][:10]:
+                lines.append(f'• {v}')
 
-    if groups['glossary'] and lim_gloss > 0:
-        lines.append('\n[Термины и определения]')
-        for v in groups['glossary'][:lim_gloss]:
-            lines.append(f'• {v}')
+        if groups['glossary'] and lim_gloss > 0:
+            lines.append('\n[Термины и определения]')
+            for v in groups['glossary'][:lim_gloss]:
+                lines.append(f'• {v}')
 
     if (groups['market'] or groups['invest']) and lim_market > 0:
         lines.append('\n[Рынок и инвестиции]')
         for v in (groups['market'] + groups['invest'])[:lim_market]:
+            lines.append(f'• {v}')
+
+    if groups['biweekly'] and lim_biweekly > 0:
+        lines.append('\n[Динамика цен 2019–2026 (продажа и аренда по категориям)]')
+        for v in groups['biweekly'][:lim_biweekly]:
+            lines.append(f'• {v}')
+
+    if groups['market_hist'] and lim_market_hist > 0:
+        lines.append('\n[История рынка по годам и районам]')
+        for v in groups['market_hist'][:lim_market_hist]:
+            lines.append(f'• {v}')
+
+    if groups['demand'] and lim_demand > 0:
+        lines.append('\n[Спрос клиентов]')
+        for v in groups['demand'][:lim_demand]:
+            lines.append(f'• {v}')
+
+    if groups['news'] and lim_news > 0:
+        lines.append('\n[Новости рынка]')
+        for v in groups['news'][:lim_news]:
+            lines.append(f'• {v}')
+
+    if groups['listing'] and lim_listing > 0:
+        lines.append('\n[Объекты каталога]')
+        for v in groups['listing'][:lim_listing]:
             lines.append(f'• {v}')
 
     if facts:
@@ -4443,8 +4484,17 @@ def handler(event, context):
                     sys_prompt = sys_prompt + '\n\n' + pulse_ctx + '\n\n' + memory_ctx
                     _increment_interaction(cur, conn)
                 else:
-                    # Для агента пульс идёт в system prompt как справка
-                    sys_prompt = sys_prompt + '\n\n' + pulse_ctx
+                    # Для агента: пульс + база знаний (только рыночные факты, без внутренних ролей)
+                    current_topic = _detect_topic(user_text)
+                    memory_ctx = _build_memory_context(memory, topic=current_topic, public=True)
+                    sys_prompt = sys_prompt + '\n\n' + pulse_ctx + '\n\n' + memory_ctx
+
+            # Для публичного подбора match: добавляем рыночные данные из базы знаний
+            if action == 'match':
+                memory = _load_ai_memory(cur)
+                market_ctx = _build_memory_context(memory, topic='broker', public=True)
+                if market_ctx.strip():
+                    sys_prompt = sys_prompt + '\n\n' + market_ctx
 
             # Стоп-слова добавляем во все диалоговые режимы
             if action in ('admin', 'admin_ops', 'describe', 'title', 'reply_lead', 'seo', 'seo_listing'):
