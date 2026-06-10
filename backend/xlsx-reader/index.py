@@ -45,6 +45,37 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': {'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400'}, 'body': ''}
 
     body = json.loads(event.get('body') or '{}')
+
+    if body.get('action') == 'cleanup_biweekly':
+        conn = psycopg2.connect(os.environ['DATABASE_URL'])
+        cur = conn.cursor()
+        keep_suffixes = ('_trend', '_peak', '_min',
+                         '_2019', '_2020', '_2021', '_2022', '_2023', '_2024', '_2025', '_2026',
+                         '_2019_2020_yoy', '_2020_2021_yoy', '_2021_2022_yoy',
+                         '_2022_2023_yoy', '_2023_2024_yoy', '_2024_2025_yoy', '_2025_2026_yoy')
+        cats = ('catering', 'free_purpose', 'industrial', 'office', 'retail', 'standalone', 'warehouse')
+        dts = ('sale', 'rent')
+        keep_keys = set()
+        for cat in cats:
+            for dt in dts:
+                for sfx in keep_suffixes:
+                    keep_keys.add(f'biweekly_{cat}_{dt}{sfx}')
+        cur.execute(f"SELECT key FROM {SCHEMA}.ai_memory WHERE key LIKE 'biweekly_%'")
+        all_keys = [r[0] for r in cur.fetchall()]
+        to_delete = [k for k in all_keys if k not in keep_keys]
+        deleted = 0
+        for k in to_delete:
+            cur.execute(f"DELETE FROM {SCHEMA}.ai_memory WHERE key = %s", (k,))
+            deleted += cur.rowcount
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {
+            'statusCode': 200,
+            'headers': {'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json'},
+            'body': json.dumps({'deleted': deleted, 'kept': len(keep_keys), 'checked': len(all_keys)}, ensure_ascii=False),
+        }
+
     urls = body.get('urls', [])
     preview_only = body.get('preview_only', False)
 
