@@ -602,51 +602,74 @@ def _ai_memory(cur, conn, method, rid, event, user):
                     user_text = '\n\n---\n\n'.join(parts)[:9000]
 
                 elif src == 'invest':
+                    # Программная генерация — числовые агрегаты
                     cur.execute(
-                        f"SELECT category, deal, "
-                        f"AVG(price) AS avg_price, AVG(price_per_m2) AS avg_ppm2, "
-                        f"AVG(payback) AS avg_payback, AVG(monthly_rent) AS avg_rent, "
-                        f"COUNT(*) AS cnt "
+                        f"SELECT category, deal, COUNT(*) AS cnt, "
+                        f"ROUND(AVG(price)::numeric,0) AS avg_price, ROUND(MIN(price)::numeric,0) AS min_price, ROUND(MAX(price)::numeric,0) AS max_price, "
+                        f"ROUND(AVG(price_per_m2)::numeric,0) AS avg_p2, ROUND(AVG(area)::numeric,1) AS avg_area, "
+                        f"ROUND(AVG(payback)::numeric,1) AS avg_payback, ROUND(AVG(monthly_rent)::numeric,0) AS avg_rent "
                         f"FROM {SCHEMA}.listings WHERE status='active' "
-                        f"GROUP BY category, deal HAVING COUNT(*) > 0 "
-                        f"ORDER BY cnt DESC LIMIT 30"
+                        f"GROUP BY category, deal HAVING COUNT(*) > 0 ORDER BY cnt DESC"
                     )
                     rows = cur.fetchall() or []
                     count_input = len(rows)
-                    parts = []
+                    _cat_ru = {'retail':'Торговая','office':'Офисная','warehouse':'Складская','industrial':'Производственная','catering':'Общепит','free_purpose':'ПСН','standalone':'Отдельно стоящие здания'}
+                    _deal_ru = {'sale':'продажа','rent':'аренда'}
+                    _facts_inv = []
                     for r in rows:
-                        try:
-                            ap = int(r.get('avg_price') or 0)
-                            app = int(r.get('avg_ppm2') or 0)
-                            apb = int(r.get('avg_payback') or 0)
-                            arn = int(r.get('avg_rent') or 0)
-                            parts.append(
-                                f"{r.get('category')}/{r.get('deal')}: "
-                                f"средняя цена {ap:,} ₽, цена/м² {app:,}, "
-                                f"окупаемость ~{apb} мес, средняя аренда {arn:,} ₽. "
-                                f"Всего объектов: {r.get('cnt')}".replace(',', ' ')
-                            )
-                        except Exception:
-                            continue
-                    user_text = '\n'.join(parts)[:8000]
+                        cat = _cat_ru.get(r.get('category') or '', r.get('category') or '')
+                        dl = _deal_ru.get(r.get('deal') or '', r.get('deal') or '')
+                        slug = f"{r.get('category')}_{r.get('deal')}"
+                        cnt = int(r.get('cnt') or 0)
+                        avg_p = int(r.get('avg_price') or 0)
+                        min_p = int(r.get('min_price') or 0)
+                        max_p = int(r.get('max_price') or 0)
+                        p2 = int(r.get('avg_p2') or 0)
+                        area = float(r.get('avg_area') or 0)
+                        payback = float(r.get('avg_payback') or 0)
+                        rent = int(r.get('avg_rent') or 0)
+                        _facts_inv.append({'key': f'invest_{slug}_count', 'value': f'{cat} ({dl}): {cnt} активных объектов в каталоге'})
+                        if avg_p: _facts_inv.append({'key': f'invest_{slug}_price', 'value': f'{cat} ({dl}): средняя цена {avg_p:,} ₽, диапазон {min_p:,}–{max_p:,} ₽'})
+                        if p2: _facts_inv.append({'key': f'invest_{slug}_price_m2', 'value': f'{cat} ({dl}): средняя цена за м² — {p2:,} руб/м²'})
+                        if area: _facts_inv.append({'key': f'invest_{slug}_area', 'value': f'{cat} ({dl}): средняя площадь — {area} м²'})
+                        if payback and r.get('deal') == 'sale': _facts_inv.append({'key': f'invest_{slug}_payback', 'value': f'{cat} (продажа): средний срок окупаемости — {payback:.0f} мес'})
+                        if rent and r.get('deal') == 'sale': _facts_inv.append({'key': f'invest_{slug}_rent', 'value': f'{cat} (продажа): потенциальная арендная ставка — {rent:,} ₽/мес'})
+                    saved_count = _save_facts(_facts_inv, cfg['prefix'])
+                    per_source.append({'source': src, 'saved': saved_count, 'input_count': count_input})
+                    total_saved += saved_count
+                    continue
 
                 elif src == 'demand':
+                    # Программная генерация — агрегаты по лидам
                     cur.execute(
-                        f"SELECT message, budget, request_category, lead_type "
-                        f"FROM {SCHEMA}.leads "
-                        f"WHERE LENGTH(COALESCE(message,'')) > 20 "
-                        f"ORDER BY created_at DESC LIMIT 60"
+                        f"SELECT request_category, lead_type, COUNT(*) AS cnt, "
+                        f"ROUND(AVG(budget)::numeric,0) AS avg_budget, ROUND(MIN(budget)::numeric,0) AS min_budget, ROUND(MAX(budget)::numeric,0) AS max_budget "
+                        f"FROM {SCHEMA}.leads WHERE created_at > NOW() - INTERVAL '90 days' "
+                        f"GROUP BY request_category, lead_type HAVING COUNT(*) > 0 ORDER BY cnt DESC LIMIT 30"
                     )
                     rows = cur.fetchall() or []
+                    cur.execute(f"SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days') AS last_30d, COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS last_7d FROM {SCHEMA}.leads")
+                    st = cur.fetchone() or {}
                     count_input = len(rows)
-                    parts = []
+                    _facts_dem = []
+                    total_l = int(st.get('total') or 0)
+                    last_30 = int(st.get('last_30d') or 0)
+                    last_7 = int(st.get('last_7d') or 0)
+                    if total_l: _facts_dem.append({'key': 'demand_total_leads', 'value': f'Всего заявок: {total_l}, за 30 дней: {last_30}, за 7 дней: {last_7}'})
                     for r in rows:
-                        m = (r.get('message') or '')[:300]
-                        b = r.get('budget') or ''
-                        rc = r.get('request_category') or ''
-                        lt = r.get('lead_type') or ''
-                        parts.append(f"[{lt} · {rc} · бюджет {b}] {m}")
-                    user_text = '\n\n'.join(parts)[:8000]
+                        cat = r.get('request_category') or 'не указана'
+                        lt = r.get('lead_type') or 'не указан'
+                        cnt = int(r.get('cnt') or 0)
+                        avg_b = int(r.get('avg_budget') or 0)
+                        min_b = int(r.get('min_budget') or 0)
+                        max_b = int(r.get('max_budget') or 0)
+                        slug = f"{(r.get('request_category') or 'other').lower().replace(' ','_')[:20]}_{(r.get('lead_type') or 'other').lower()[:10]}"
+                        _facts_dem.append({'key': f'demand_{slug}_count', 'value': f'Спрос «{cat}» ({lt}): {cnt} заявок за 90 дней'})
+                        if avg_b: _facts_dem.append({'key': f'demand_{slug}_budget', 'value': f'Бюджет «{cat}» ({lt}): средний {avg_b:,} ₽, диапазон {min_b:,}–{max_b:,} ₽'})
+                    saved_count = _save_facts(_facts_dem, cfg['prefix'])
+                    per_source.append({'source': src, 'saved': saved_count, 'input_count': count_input})
+                    total_saved += saved_count
+                    continue
 
                 elif src == 'terms':
                     cur.execute(
@@ -660,45 +683,39 @@ def _ai_memory(cur, conn, method, rid, event, user):
                     user_text = '\n\n---\n\n'.join(parts)[:9000]
 
                 elif src == 'market_history':
-                    cur.execute(
-                        f"SELECT year, district_name, category, deal_type, "
-                        f"avg_price_per_m2, avg_rent_per_m2_year, avg_cap_rate, vacancy_rate, notes "
-                        f"FROM {SCHEMA}.price_history ORDER BY year, district_name, category"
-                    )
+                    # Программная генерация — числовые данные price_history + macro
+                    cur.execute(f"SELECT year, district_name, category, deal_type, avg_price_per_m2, avg_rent_per_m2_year, avg_cap_rate, vacancy_rate, notes FROM {SCHEMA}.price_history ORDER BY year, district_name, category")
                     ph_rows = cur.fetchall() or []
-                    cur.execute(
-                        f"SELECT date_recorded, key_rate, inflation_rate, investment_volume_rf, notes "
-                        f"FROM {SCHEMA}.macro_indicators ORDER BY date_recorded"
-                    )
+                    cur.execute(f"SELECT date_recorded, key_rate, inflation_rate, investment_volume_rf, notes FROM {SCHEMA}.macro_indicators ORDER BY date_recorded")
                     macro_rows = cur.fetchall() or []
                     count_input = len(ph_rows) + len(macro_rows)
-                    parts = []
-                    if macro_rows:
-                        parts.append('=== Макроэкономика по годам ===')
-                        for r in macro_rows:
-                            yr = str(r.get('date_recorded') or '')[:4]
-                            kr = r.get('key_rate') or ''
-                            inf = r.get('inflation_rate') or ''
-                            inv = r.get('investment_volume_rf') or ''
-                            nt = (r.get('notes') or '')[:200]
-                            parts.append(f"{yr}: ставка ЦБ {kr}%, инфляция {inf}%, инвестиции {inv} млрд руб. {nt}")
-                    if ph_rows:
-                        parts.append('=== Цены по годам, районам и категориям ===')
-                        for r in ph_rows:
-                            p2 = int(r.get('avg_price_per_m2') or 0)
-                            r2 = int(r.get('avg_rent_per_m2_year') or 0)
-                            cap = r.get('avg_cap_rate') or ''
-                            vac = r.get('vacancy_rate') or ''
-                            nt = (r.get('notes') or '')[:150]
-                            line = (f"{r.get('year')} | {r.get('district_name')} | "
-                                    f"{r.get('category')}/{r.get('deal_type')}: ")
-                            if p2: line += f"цена {p2:,} руб/м², "
-                            if r2: line += f"аренда {r2:,} руб/м²/год, "
-                            if cap: line += f"cap rate {cap}%, "
-                            if vac: line += f"вакансия {vac}%, "
-                            if nt: line += nt
-                            parts.append(line.replace(',', ' '))
-                    user_text = '\n'.join(parts)[:9000]
+                    _cat_ru = {'retail':'Торговая','office':'Офисная','warehouse':'Складская','industrial':'Производственная','catering':'Общепит','free_purpose':'ПСН','standalone':'Отдельно стоящие здания'}
+                    _facts_mh = []
+                    for r in macro_rows:
+                        yr = str(r.get('date_recorded') or '')[:4]
+                        p = []
+                        if r.get('key_rate'): p.append(f"ставка ЦБ {r['key_rate']}%")
+                        if r.get('inflation_rate'): p.append(f"инфляция {r['inflation_rate']}%")
+                        if r.get('investment_volume_rf'): p.append(f"инвестиции {r['investment_volume_rf']} млрд руб")
+                        if r.get('notes'): p.append((r['notes'] or '')[:200])
+                        if p: _facts_mh.append({'key': f'market_hist_macro_{yr}', 'value': f'Макроэкономика {yr}: ' + ', '.join(p)})
+                    for r in ph_rows:
+                        yr = r.get('year')
+                        dn = r.get('district_name') or 'Краснодар'
+                        cat = _cat_ru.get(r.get('category') or '', r.get('category') or '')
+                        dt = 'продажа' if r.get('deal_type') == 'sale' else 'аренда'
+                        slug = f"{yr}_{(r.get('district_name') or 'krd').lower().replace(' ','_')[:15]}_{r.get('category')}_{r.get('deal_type')}"
+                        p = []
+                        if r.get('avg_price_per_m2'): p.append(f"цена {int(r['avg_price_per_m2']):,} руб/м²")
+                        if r.get('avg_rent_per_m2_year'): p.append(f"аренда {int(r['avg_rent_per_m2_year']):,} руб/м²/год")
+                        if r.get('avg_cap_rate'): p.append(f"cap rate {r['avg_cap_rate']}%")
+                        if r.get('vacancy_rate'): p.append(f"вакансия {r['vacancy_rate']}%")
+                        if r.get('notes'): p.append((r['notes'] or '')[:150])
+                        if p: _facts_mh.append({'key': f'market_hist_{slug}', 'value': f'{yr} | {dn} | {cat} ({dt}): ' + ', '.join(p)})
+                    saved_count = _save_facts(_facts_mh, cfg['prefix'])
+                    per_source.append({'source': src, 'saved': saved_count, 'input_count': count_input})
+                    total_saved += saved_count
+                    continue
 
                 elif src == 'biweekly_history':
                     # Генерируем факты программно — без GPT, мгновенно

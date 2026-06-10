@@ -338,21 +338,40 @@ def _process_source(cur, src: str, api_key: str, folder_id: str):
     if src not in source_configs:
         return 0, 0, f'Неизвестный источник: {src}'
 
-    # biweekly_history: генерируем факты программно, без GPT (данные числовые — GPT не нужен)
+    # Источники с числовыми данными — генерируем факты программно без GPT
     if src == 'biweekly_history':
         facts, count_input = _generate_biweekly_facts(cur)
         saved = _save_facts(cur, facts, 'biweekly_')
         print(f'[retrain:biweekly_history] generated={len(facts)} saved={saved}')
         return saved, count_input, None
 
+    if src == 'invest':
+        facts, count_input = _generate_invest_facts(cur)
+        saved = _save_facts(cur, facts, 'invest_')
+        print(f'[retrain:invest] generated={len(facts)} saved={saved}')
+        return saved, count_input, None
+
+    if src == 'demand':
+        facts, count_input = _generate_demand_facts(cur)
+        saved = _save_facts(cur, facts, 'demand_')
+        print(f'[retrain:demand] generated={len(facts)} saved={saved}')
+        return saved, count_input, None
+
+    if src == 'market_history':
+        facts, count_input = _generate_market_history_facts(cur)
+        saved = _save_facts(cur, facts, 'market_hist_')
+        print(f'[retrain:market_history] generated={len(facts)} saved={saved}')
+        return saved, count_input, None
+
+    # Текстовые источники — GPT интерпретирует
     cfg = source_configs[src]
     user_text, count_input = _fetch_db_source(cur, src)
     if not user_text:
         return 0, 0, 'Нет данных'
 
-    print(f'[retrain:{src}] count_input={count_input} text_len={len(user_text)} text_preview={repr(user_text[:300])}')
+    print(f'[retrain:{src}] count_input={count_input} text_len={len(user_text)}')
     raw = _call_gpt(api_key, folder_id, cfg['system'], user_text)
-    print(f'[retrain:{src}] gpt_raw_len={len(raw)} gpt_preview={repr(raw[:500])}')
+    print(f'[retrain:{src}] gpt_raw_len={len(raw)} gpt_preview={repr(raw[:300])}')
     facts = _parse_facts(raw)
     print(f'[retrain:{src}] facts_count={len(facts)}')
     saved = _save_facts(cur, facts, cfg['prefix'])
@@ -509,6 +528,162 @@ def _html_to_text(html: str) -> str:
     text = re.sub(r'\n{3,}', '\n\n', text)
     text = re.sub(r'[ \t]{2,}', ' ', text)
     return text.strip()
+
+
+def _generate_invest_facts(cur) -> tuple:
+    """Программно генерирует инвест-факты из агрегатов по объявлениям."""
+    cur.execute(
+        f"SELECT category, deal, "
+        f"COUNT(*) AS cnt, "
+        f"ROUND(AVG(price)::numeric, 0) AS avg_price, "
+        f"ROUND(MIN(price)::numeric, 0) AS min_price, "
+        f"ROUND(MAX(price)::numeric, 0) AS max_price, "
+        f"ROUND(AVG(price_per_m2)::numeric, 0) AS avg_p2, "
+        f"ROUND(AVG(area)::numeric, 1) AS avg_area, "
+        f"ROUND(AVG(payback)::numeric, 1) AS avg_payback, "
+        f"ROUND(AVG(monthly_rent)::numeric, 0) AS avg_rent "
+        f"FROM {SCHEMA}.listings WHERE status='active' "
+        f"GROUP BY category, deal HAVING COUNT(*) > 0 ORDER BY cnt DESC"
+    )
+    rows = cur.fetchall() or []
+    cat_ru = {
+        'retail': 'Торговая', 'office': 'Офисная', 'warehouse': 'Складская',
+        'industrial': 'Производственная', 'catering': 'Общепит',
+        'free_purpose': 'ПСН', 'standalone': 'Отдельно стоящие здания',
+    }
+    deal_ru = {'sale': 'продажа', 'rent': 'аренда'}
+    facts = []
+    for r in rows:
+        cat = cat_ru.get(r.get('category') or '', r.get('category') or '')
+        dl = deal_ru.get(r.get('deal') or '', r.get('deal') or '')
+        cnt = int(r.get('cnt') or 0)
+        avg_p = int(r.get('avg_price') or 0)
+        min_p = int(r.get('min_price') or 0)
+        max_p = int(r.get('max_price') or 0)
+        p2 = int(r.get('avg_p2') or 0)
+        area = float(r.get('avg_area') or 0)
+        payback = float(r.get('avg_payback') or 0)
+        rent = int(r.get('avg_rent') or 0)
+        slug = f"{r.get('category')}_{r.get('deal')}"
+
+        facts.append({'key': f'invest_{slug}_count',
+            'value': f'{cat} ({dl}): в каталоге {cnt} активных объектов'})
+        if avg_p:
+            facts.append({'key': f'invest_{slug}_price',
+                'value': f'{cat} ({dl}): средняя цена {avg_p:,} ₽, диапазон {min_p:,}–{max_p:,} ₽'})
+        if p2:
+            facts.append({'key': f'invest_{slug}_price_m2',
+                'value': f'{cat} ({dl}): средняя цена за м² — {p2:,} руб/м²'})
+        if area:
+            facts.append({'key': f'invest_{slug}_area',
+                'value': f'{cat} ({dl}): средняя площадь объекта — {area} м²'})
+        if payback and r.get('deal') == 'sale':
+            facts.append({'key': f'invest_{slug}_payback',
+                'value': f'{cat} (продажа): средний срок окупаемости — {payback:.0f} месяцев'})
+        if rent and r.get('deal') == 'sale':
+            facts.append({'key': f'invest_{slug}_rent',
+                'value': f'{cat} (продажа): потенциальная арендная ставка — {rent:,} ₽/мес'})
+    return facts, len(rows)
+
+
+def _generate_demand_facts(cur) -> tuple:
+    """Программно генерирует факты о спросе из лидов."""
+    cur.execute(
+        f"SELECT request_category, lead_type, COUNT(*) AS cnt, "
+        f"ROUND(AVG(budget)::numeric, 0) AS avg_budget, "
+        f"ROUND(MIN(budget)::numeric, 0) AS min_budget, "
+        f"ROUND(MAX(budget)::numeric, 0) AS max_budget "
+        f"FROM {SCHEMA}.leads "
+        f"WHERE created_at > NOW() - INTERVAL '90 days' "
+        f"GROUP BY request_category, lead_type HAVING COUNT(*) > 0 "
+        f"ORDER BY cnt DESC LIMIT 30"
+    )
+    rows = cur.fetchall() or []
+    # Общая статистика
+    cur.execute(
+        f"SELECT COUNT(*) AS total, "
+        f"COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days') AS last_30d, "
+        f"COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS last_7d "
+        f"FROM {SCHEMA}.leads"
+    )
+    stats = cur.fetchone() or {}
+    facts = []
+    total = int(stats.get('total') or 0)
+    last_30 = int(stats.get('last_30d') or 0)
+    last_7 = int(stats.get('last_7d') or 0)
+    if total:
+        facts.append({'key': 'demand_total_leads',
+            'value': f'Всего заявок в системе: {total}, за последние 30 дней: {last_30}, за 7 дней: {last_7}'})
+    for r in rows:
+        cat = r.get('request_category') or 'не указана'
+        lt = r.get('lead_type') or 'не указан'
+        cnt = int(r.get('cnt') or 0)
+        avg_b = int(r.get('avg_budget') or 0)
+        min_b = int(r.get('min_budget') or 0)
+        max_b = int(r.get('max_budget') or 0)
+        slug = f"{(r.get('request_category') or 'other').lower().replace(' ','_')}_{(r.get('lead_type') or 'other').lower()}"
+        facts.append({'key': f'demand_{slug}_count',
+            'value': f'Спрос: категория «{cat}», тип «{lt}» — {cnt} заявок за 90 дней'})
+        if avg_b:
+            facts.append({'key': f'demand_{slug}_budget',
+                'value': f'Бюджет по заявкам «{cat}» ({lt}): средний {avg_b:,} ₽, диапазон {min_b:,}–{max_b:,} ₽'})
+    return facts, len(rows)
+
+
+def _generate_market_history_facts(cur) -> tuple:
+    """Программно генерирует факты из price_history и macro_indicators."""
+    cur.execute(
+        f"SELECT year, district_name, category, deal_type, "
+        f"avg_price_per_m2, avg_rent_per_m2_year, avg_cap_rate, vacancy_rate, notes "
+        f"FROM {SCHEMA}.price_history ORDER BY year, district_name, category"
+    )
+    ph_rows = cur.fetchall() or []
+    cur.execute(
+        f"SELECT date_recorded, key_rate, inflation_rate, investment_volume_rf, notes "
+        f"FROM {SCHEMA}.macro_indicators ORDER BY date_recorded"
+    )
+    macro_rows = cur.fetchall() or []
+    cat_ru = {
+        'retail': 'Торговая', 'office': 'Офисная', 'warehouse': 'Складская',
+        'industrial': 'Производственная', 'catering': 'Общепит',
+        'free_purpose': 'ПСН', 'standalone': 'Отдельно стоящие здания',
+    }
+    facts = []
+    for r in macro_rows:
+        yr = str(r.get('date_recorded') or '')[:4]
+        kr = r.get('key_rate')
+        inf = r.get('inflation_rate')
+        inv = r.get('investment_volume_rf')
+        nt = (r.get('notes') or '')[:200]
+        parts = []
+        if kr: parts.append(f'ставка ЦБ {kr}%')
+        if inf: parts.append(f'инфляция {inf}%')
+        if inv: parts.append(f'инвестиции в РФ {inv} млрд руб')
+        if nt: parts.append(nt)
+        if parts:
+            facts.append({'key': f'market_hist_macro_{yr}',
+                'value': f'Макроэкономика {yr}: ' + ', '.join(parts)})
+    for r in ph_rows:
+        yr = r.get('year')
+        dn = r.get('district_name') or 'Краснодар'
+        cat = cat_ru.get(r.get('category') or '', r.get('category') or '')
+        dt = 'продажа' if r.get('deal_type') == 'sale' else 'аренда'
+        p2 = int(r.get('avg_price_per_m2') or 0)
+        r2 = int(r.get('avg_rent_per_m2_year') or 0)
+        cap = r.get('avg_cap_rate')
+        vac = r.get('vacancy_rate')
+        nt = (r.get('notes') or '')[:150]
+        slug = f"{yr}_{(r.get('district_name') or 'krd').lower().replace(' ','_')[:20]}_{r.get('category')}_{r.get('deal_type')}"
+        parts = []
+        if p2: parts.append(f'цена {p2:,} руб/м²')
+        if r2: parts.append(f'аренда {r2:,} руб/м²/год')
+        if cap: parts.append(f'cap rate {cap}%')
+        if vac: parts.append(f'вакансия {vac}%')
+        if nt: parts.append(nt)
+        if parts:
+            facts.append({'key': f'market_hist_{slug}',
+                'value': f'{yr} | {dn} | {cat} ({dt}): ' + ', '.join(parts)})
+    return facts, len(ph_rows) + len(macro_rows)
 
 
 def _generate_biweekly_facts(cur) -> tuple:
