@@ -46,6 +46,7 @@ export const TRAINING_SOURCES = [
   { id: 'terms', label: 'Термины из описаний', icon: 'Quote', hint: 'Популярные ключевые слова и понятия' },
   { id: 'market_prices', label: 'Цены с агрегаторов', icon: 'Globe', hint: 'Парсинг Аякс, Этажи, ЦИАН — актуальные цены рынка' },
   { id: 'web_sources', label: 'Мои ссылки', icon: 'Link', hint: 'Сайты, добавленные вами для обучения ВБ' },
+  { id: 'market_history', label: 'История рынка 2021–2026', icon: 'BarChart2', hint: 'Цены по годам, округам, категориям + макроэкономика' },
 ];
 
 export function fmtBytes(bytes: number): string {
