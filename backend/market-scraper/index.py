@@ -51,6 +51,50 @@ def _detect_category(text: str) -> str:
     return 'other'
 
 
+# Улицы/ориентиры → район Краснодара
+STREET_DISTRICT_MAP = {
+    # ФМР (Фестивальный микрорайон)
+    'фестивальн': 'ФМР', 'фмр': 'ФМР', 'чистяковск': 'ФМР',
+    'героя пешков': 'ФМР', 'московск': 'ФМР', 'дзержинск': 'ФМР',
+    'шевцов': 'ФМР', 'прокофьев': 'ФМР', 'бабушкин': 'ФМР',
+    'ставропольск': 'ФМР', 'гагарин': 'ФМР',
+    # ЦМР (Центральный микрорайон)
+    'цмр': 'ЦМР', 'красн': 'ЦМР', 'октябрьск': 'ЦМР',
+    'им. Ленина': 'ЦМР', 'ленин': 'ЦМР', 'мира': 'ЦМР',
+    'пушкин': 'ЦМР', 'суворов': 'ЦМР', 'кубанонабережн': 'ЦМР',
+    # ЮМР (Юбилейный микрорайон)
+    'юмр': 'ЮМР', 'юбилейн': 'ЮМР', 'симферопольск': 'ЮМР',
+    'уральск': 'ЮМР', 'адмирала трибуца': 'ЮМР', 'восточно-кругликовск': 'ЮМР',
+    # Гидрострой
+    'гидростроит': 'Гидрострой', 'новороссийск': 'Гидрострой',
+    'колосист': 'Гидрострой', 'звездн': 'Гидрострой',
+    # Музыкальный
+    'музыкальн': 'Музыкальный', 'им. Петра Метальникова': 'Музыкальный',
+    # Черёмушки / Прикубанский
+    'черёмушк': 'Прикубанский', 'черемушк': 'Прикубанский',
+    'прикубанск': 'Прикубанский', 'домбайск': 'Прикубанский',
+    'ангарск': 'Прикубанский', 'осокин': 'Прикубанский',
+    'индустриальн': 'Прикубанский',
+    # Карасунский / РИП
+    'карасунск': 'Карасунский', 'ростовское шоссе': 'Карасунский',
+    'шоссе нефтяников': 'Карасунский', 'ярославск': 'Карасунский',
+    'садовое кольцо': 'Карасунский',
+    # Западный
+    'западн': 'Западный', 'тургенев': 'Западный',
+    # Новознаменский / Краснодар-3
+    'новознаменск': 'Новознаменский',
+}
+
+def _detect_district(address: str) -> str | None:
+    if not address:
+        return None
+    a = address.lower()
+    for kw, dist in STREET_DISTRICT_MAP.items():
+        if kw.lower() in a:
+            return dist
+    return None
+
+
 def _clean_price(s: str) -> int | None:
     if not s:
         return None
@@ -134,18 +178,21 @@ def _text_of(node: dict) -> str:
 
 def _parse_arrpro_page(html: str, deal_type: str) -> list[dict]:
     """
-    arrpro.ru структура карточки:
-      <a class="props__address" href="/katalog/prodam/sklad/...-131335.php?...">Адрес</a>
+    arrpro.ru — парсинг страницы каталога.
+    Структура карточки:
+      <a class="props__address" href="/katalog/prodam/sklad/prodayu-...-131335.php">Краснодарская ул, д.2</a>
       <p class="props__price">43 920 000 руб.</p>
       <p class="props__priceForM">90 000 руб./м²</p>
-      <div class="option"><span>Код объекта:</span> 131335.</div>
-    Категория берётся из URL-сегмента (/sklad/, /ofis/, /torgovlya/ и т.д.)
+      <div class="option"><span>Площадь:</span> 488 кв.м.</div>
+      <div class="option"><span>Этаж:</span> 1 из 1</div>
+      <div class="option"><span>Линия:</span> 1 линия / первая линия</div>
+      <div class="option"><span>Состояние:</span> Хорошее</div>
+      <div class="option"><span>Код объекта:</span> 131335</div>
     """
     results = []
     seen_ids = set()
 
-    # URL категорий arrpro → наши категории (из реальных URL)
-    url_cat_map = {
+    URL_CAT_MAP = {
         'sklad': 'warehouse',
         'ofis': 'office',
         'torgovoe': 'retail', 'torgovlya': 'retail', 'magazin': 'retail',
@@ -154,91 +201,130 @@ def _parse_arrpro_page(html: str, deal_type: str) -> list[dict]:
         'svobodnogo-naznacheniya': 'free_purpose', 'psn': 'free_purpose',
         'zdanie': 'standalone', 'otdelnoe': 'standalone',
         'zemelniy-uchastok': 'land', 'zemlya': 'land',
-        'gostinica': 'other', 'avtoservis': 'other',
+        'gostinica': 'other', 'avtoservis': 'other', 'garazh': 'other',
     }
+    CAT_RU = {
+        'office': 'Офис', 'retail': 'Торговое помещение', 'warehouse': 'Склад',
+        'industrial': 'Производство', 'catering': 'Общепит', 'free_purpose': 'ПСН',
+        'standalone': 'Отдельно стоящее здание', 'land': 'Земельный участок', 'other': 'Коммерческая недвижимость',
+    }
+    DEAL_RU = {'sale': 'Продажа', 'rent': 'Аренда'}
 
-    # Разбиваем HTML на блоки карточек по якорю props__address
-    # Каждая карточка содержит: props__address → props__price → props__priceForM → option(Код объекта)
-    card_pattern = re.compile(
-        r'href=["\'](/katalog/[^"\']+\.php[^"\']*)["\'][^>]*class=["\']props__address["\']'
-        r'|class=["\']props__address["\'][^>]*href=["\']([^"\']+)["\']',
-        re.IGNORECASE
-    )
-    price_pattern = re.compile(r'class=["\']props__price["\'][^>]*>\s*([\d\s]+)\s*руб')
-    p2_pattern = re.compile(r'class=["\']props__priceForM["\'][^>]*>\s*([\d\s]+)\s*руб')
-    code_pattern = re.compile(r'Код объекта[:\s]+(\d+)')
-    # Адрес: внутри <a class="props__address"> после SVG идёт текст адреса
-    addr_text_pattern = re.compile(r'class=["\']props__address["\'][^>]*>.*?</svg>\s*([^\n<]{5,120})\s*</a>', re.DOTALL)
-
-    # Находим все URL карточек с их позициями
-    # Пример: <a target="_blank" title="Открыть" href="/katalog/prodam/sklad/...-131335.php?#pills-map" class="props__address">
+    # Находим все карточки по URL в href класса props__address
     url_matches = list(re.finditer(
-        r'href=["\'](/katalog/[^"\']+\.php[^"\']*)["\'][^>]*class=["\'][^"\']*props__address',
+        r'href=["\'](/katalog/[^"\']+\.php)[^"\']*["\'][^>]*class=["\'][^"\']*props__address',
         html, re.IGNORECASE
     ))
-
-    positions = [(m.start(), m.group(1) or m.group(2)) for m in url_matches]
+    positions = [(m.start(), m.group(1)) for m in url_matches]
 
     for idx, (pos, raw_url) in enumerate(positions):
-        # Вырезаем блок от текущей карточки до следующей
-        next_pos = positions[idx + 1][0] if idx + 1 < len(positions) else pos + 3000
-        block = html[max(0, pos - 100): next_pos + 500]
+        next_pos = positions[idx + 1][0] if idx + 1 < len(positions) else pos + 4000
+        block = html[max(0, pos - 200): next_pos + 200]
 
-        # URL и ext_id
-        obj_url = raw_url.split('?')[0]  # убираем query string
-        if not obj_url.startswith('http'):
-            obj_url = 'https://krasnodar.arrpro.ru' + obj_url
-
+        # URL и ID
+        obj_url = 'https://krasnodar.arrpro.ru' + raw_url
         id_m = re.search(r'-(\d+)\.php', obj_url)
-        ext_id = id_m.group(1) if id_m else None
-        if not ext_id:
-            code_m = code_pattern.search(block)
-            ext_id = code_m.group(1) if code_m else f"arr_{deal_type}_{idx}"
-
+        ext_id = id_m.group(1) if id_m else f"arr_{idx}"
         if ext_id in seen_ids:
             continue
         seen_ids.add(ext_id)
 
-        # deal_type из URL объявления
-        if '/prodam/' in obj_url or '/prodayu-' in obj_url or '/prodam-' in obj_url:
+        # deal_type строго из URL объявления
+        if any(x in obj_url for x in ('/prodam/', '/prodayu-', '/prodam-')):
             actual_deal = 'sale'
-        elif '/snimu/' in obj_url or '/sdam-' in obj_url or '/arenda-' in obj_url:
+        elif any(x in obj_url for x in ('/arenda/', '/sdam-', '/snimu-', '/sdam/')):
             actual_deal = 'rent'
         else:
             actual_deal = deal_type
 
-        # Цена
-        pm = price_pattern.search(block)
+        # Цена (props__price) — общая стоимость
+        pm = re.search(r'class=["\']props__price["\'][^>]*>\s*([\d\s]+)\s*руб', block)
         price = _clean_price(pm.group(1)) if pm else None
-        if not price or price < 10000:
+        if not price or price < 10_000:
             continue
 
-        # Цена за м²
-        p2m = p2_pattern.search(block)
-        price_per_m2 = float(_clean_price(p2m.group(1))) if p2m else None
+        # Цена за м² (props__priceForM)
+        p2m = re.search(r'class=["\']props__priceForM["\'][^>]*>\s*([\d\s]+)\s*руб', block)
+        price_per_m2 = float(_clean_price(p2m.group(1))) if p2m and _clean_price(p2m.group(1)) else None
 
-        # Площадь из цена/цена_за_м²
+        # Площадь — из option "Площадь: 488 кв.м." или рассчитываем из цены/м²
         area = None
-        if price and price_per_m2 and price_per_m2 > 0:
+        area_opt_m = re.search(r'Площадь[:\s]+\s*([\d\s,\.]+)\s*(?:кв\.?\s*м|м²)', block, re.IGNORECASE)
+        if area_opt_m:
+            area = _clean_area(area_opt_m.group(1))
+        elif price and price_per_m2 and price_per_m2 > 0:
             area = round(price / price_per_m2, 1)
 
-        # Адрес (текст внутри тега props__address)
-        addr_m = addr_text_pattern.search(block)
-        address = addr_m.group(1).strip() if addr_m else None
+        # Адрес — текст внутри тега props__address после SVG
+        addr_m = re.search(
+            r'class=["\']props__address["\'][^>]*>.*?</(?:svg|use)>\s*</svg>\s*([^\n<]{5,150})\s*</a>',
+            block, re.DOTALL
+        )
+        if not addr_m:
+            # Запасной вариант — текст после последнего > перед </a>
+            addr_m2 = re.search(r'props__address[^>]*>(?:[^<]*<[^>]+>)*\s*([А-Яа-яёЁ][^\n<]{4,120})\s*</a>', block, re.DOTALL)
+            address = addr_m2.group(1).strip() if addr_m2 else None
+        else:
+            address = addr_m.group(1).strip()
 
-        # Категория из URL
-        cat_from_url = None
-        for url_seg, cat in url_cat_map.items():
-            if url_seg in obj_url:
-                cat_from_url = cat
+        # Этаж — из option "Этаж: 1 из 5" (реалистичный диапазон 1-50)
+        floor = None
+        total_floors = None
+        floor_m = re.search(r'[Ээ]таж[:\s]+(\d{1,2})(?:\s*из\s*(\d{1,2}))?', block)
+        if floor_m:
+            f_val = int(floor_m.group(1))
+            if 1 <= f_val <= 50:
+                floor = f_val
+                if floor_m.group(2):
+                    total_floors = int(floor_m.group(2))
+
+        # Линия — "1 линия", "первая линия", "2 линия"
+        line_map = {'перв': '1 линия', 'втор': '2 линия', 'трет': '3 линия'}
+        road_line = None
+        line_m = re.search(r'[Лл]иния[:\s]+([^\n<,]{3,30})', block)
+        if line_m:
+            lt = line_m.group(1).strip().lower()
+            for kw, val in line_map.items():
+                if kw in lt:
+                    road_line = val
+                    break
+            if not road_line:
+                digit_m = re.search(r'(\d)', lt)
+                road_line = f"{digit_m.group(1)} линия" if digit_m else lt[:20]
+        else:
+            # Линия может быть в заголовке title страницы: "1 линия"
+            title_line_m = re.search(r'(\d)\s*лини', block, re.IGNORECASE)
+            if title_line_m:
+                road_line = f"{title_line_m.group(1)} линия"
+
+        # Состояние
+        condition = None
+        cond_m = re.search(r'[Сс]остояние[:\s]+([^\n<,]{3,40})', block)
+        if cond_m:
+            condition = cond_m.group(1).strip()
+
+        # Район — из явного поля или из словаря улиц Краснодара
+        district = None
+        dist_m = re.search(r'[Рр]айон[:\s]+([А-Яа-яёЁ\s\-]{3,40}?)(?:\.|,|<)', block)
+        if dist_m:
+            district = dist_m.group(1).strip()
+        if not district and address:
+            district = _detect_district(address)
+
+        # Категория из URL-сегмента
+        category = 'other'
+        for seg, cat in URL_CAT_MAP.items():
+            if seg in obj_url:
+                category = cat
                 break
-        category = cat_from_url or _detect_category(address or '')
+        if category == 'other' and address:
+            category = _detect_category(address)
 
-        # Заголовок — строим из категории, площади и адреса (title на сайте нет в HTML)
-        cat_ru_t = {'office':'Офис','retail':'Торговое помещение','warehouse':'Склад','industrial':'Производство','catering':'Общепит','free_purpose':'ПСН','standalone':'Здание','land':'Земельный участок','other':'Коммерческая недвижимость'}
-        deal_ru_t = {'sale': 'Продажа', 'rent': 'Аренда'}
-        title_parts = [deal_ru_t.get(actual_deal, ''), cat_ru_t.get(category, 'Объект')]
+        # Заголовок
+        title_parts = [DEAL_RU.get(actual_deal, ''), CAT_RU.get(category, 'Объект')]
         if area: title_parts.append(f'{area} м²')
+        if floor: title_parts.append(f'{floor} эт.')
+        if road_line: title_parts.append(road_line)
         if address: title_parts.append(address[:60])
         title = ', '.join(p for p in title_parts if p)
 
@@ -253,88 +339,157 @@ def _parse_arrpro_page(html: str, deal_type: str) -> list[dict]:
             'price_per_m2': price_per_m2,
             'area': area,
             'address': address,
-            'district': None,
+            'district': district,
+            'floor': floor,
+            'total_floors': total_floors,
+            'condition': condition,
+            'road_line': road_line,
         })
 
     return results
 
 
 def scrape_arrpro(max_pages: int = 5) -> list[dict]:
+    """
+    Парсим arrpro по категориям отдельно — так точнее определяется category и deal_type.
+    Продажа: все категории отдельно. Аренда: общий каталог (меньше объявлений).
+    """
     results = []
-    sources = [
-        ('https://krasnodar.arrpro.ru/katalog/prodam/', 'sale'),
-        ('https://krasnodar.arrpro.ru/katalog/arenda/', 'rent'),
+    # Продажа по категориям
+    sale_cats = [
+        'svobodnogo-naznacheniya', 'ofis', 'sklad', 'torgovoe',
+        'proizvodstvo', 'obshchepit', 'zdanie', 'zemelniy-uchastok',
     ]
-    for base_url, deal_type in sources:
+    for cat_slug in sale_cats:
         for page in range(1, max_pages + 1):
-            url = base_url if page == 1 else f"{base_url}page/{page}/"
+            base = f'https://krasnodar.arrpro.ru/katalog/prodam/{cat_slug}/'
+            url = base if page == 1 else f'{base}page/{page}/'
             html = _fetch(url)
             if not html or len(html) < 5000:
                 break
-            items = _parse_arrpro_page(html, deal_type)
-            print(f'[arrpro] {deal_type} page={page} items={len(items)}')
+            items = _parse_arrpro_page(html, 'sale')
+            print(f'[arrpro] sale/{cat_slug} page={page} items={len(items)}')
             if not items:
                 break
             results.extend(items)
-    return results
+    # Аренда — общий каталог
+    for page in range(1, max_pages + 1):
+        url = 'https://krasnodar.arrpro.ru/katalog/arenda/' if page == 1 else f'https://krasnodar.arrpro.ru/katalog/arenda/page/{page}/'
+        html = _fetch(url)
+        if not html or len(html) < 5000:
+            break
+        items = _parse_arrpro_page(html, 'rent')
+        print(f'[arrpro] rent page={page} items={len(items)}')
+        if not items:
+            break
+        results.extend(items)
+    # Дедупликация по ext_id
+    seen = set()
+    unique = []
+    for r in results:
+        eid = r.get('external_id')
+        if eid and eid not in seen:
+            seen.add(eid)
+            unique.append(r)
+    return unique
 
 
 # ── ПАРСЕР AYAX.RU ──────────────────────────────────────────────────────────
 
 def _parse_ayax_object_page(html: str, obj_id: str, deal_type: str) -> dict | None:
     """
-    Парсит страницу одного объявления ayax.ru.
-    Данные берём из:
-      <title>Продажа офисного помещения 80 м²: Краснодар, район, ул. Xxx</title>
-      <meta name="description" content="...Цена продажи: 81 600 ₽...">
+    ayax.ru — парсинг страницы одного объявления.
+    title: "Продажа офисного помещения 80 м²: Краснодар, ФМР, ул. Xxx, д.1"
+    title (arrpro-style): "Продаю 1 этаж 1 линия, 78 м² в Краснодаре по цене 200 000 руб./м²"
+    description: "Краснодар: продаю ... по стоимости 15 600 000 руб."
     """
-    # Title: "Продажа|Аренда TYPE AREA м²: CITY, DISTRICT, ADDRESS"
     title_m = re.search(r'<title>([^<]{10,300})</title>', html)
     if not title_m:
         return None
     title_raw = title_m.group(1)
 
-    # Описание с ценой
     desc_m = re.search(r'<meta[^>]*name=["\']description["\'][^>]*content=["\']([^"\']{20,500})["\']', html)
     desc = desc_m.group(1) if desc_m else ''
 
-    # Площадь из title: "80 м²"
-    area_m = re.search(r'([\d,\.]+)\s*м²', title_raw)
+    # Площадь из title
+    area_m = re.search(r'([\d\s,\.]+)\s*м²', title_raw)
     area = _clean_area(area_m.group(1)) if area_m else None
 
-    # Цена из description: "Цена продажи: 81 600 ₽" или "Цена аренды: 50 000 ₽/мес"
-    price_m = re.search(r'[Цц]ена[^:]*:\s*([\d\s]+)\s*[₽р]', desc)
-    price_raw = _clean_price(price_m.group(1)) if price_m else None
+    # Цена — несколько форматов
+    price_raw = None
+    # "по цене 200 000 руб./м²" → цена за м²
+    ppm2_title = re.search(r'по цене\s*([\d\s]+)\s*руб[./].*?м', title_raw, re.IGNORECASE)
+    # "по стоимости 15 600 000 руб" → общая цена
+    total_desc = re.search(r'(?:стоимост[ьи]|цена\s*продажи|цена\s*аренды)[^:]*:\s*([\d\s]+)\s*руб', desc, re.IGNORECASE)
+    if not total_desc:
+        total_desc = re.search(r'[Цц]ена[^:]*:\s*([\d\s]+)\s*[₽р]', desc)
 
-    # Определяем — цена за м² или общая (если < 500k и площадь > 10м² — скорее всего за м²)
     price = None
     price_per_m2 = None
-    if price_raw and area and area > 0:
-        if price_raw < 500_000 and area > 10:
-            # Цена за м²
-            price_per_m2 = float(price_raw)
-            price = int(price_raw * area)
-        else:
-            price = price_raw
-            price_per_m2 = round(price / area, 2) if area > 0 else None
+
+    if ppm2_title:
+        p2_val = _clean_price(ppm2_title.group(1))
+        if p2_val and area and area > 0:
+            price_per_m2 = float(p2_val)
+            price = int(p2_val * area)
+    elif total_desc:
+        price_raw = _clean_price(total_desc.group(1))
+        if price_raw and area and area > 0:
+            if price_raw < 500_000 and area > 10:
+                price_per_m2 = float(price_raw)
+                price = int(price_raw * area)
+            else:
+                price = price_raw
+                price_per_m2 = round(price / area, 2)
 
     if not price and not price_per_m2:
         return None
 
-    # Адрес и район из title
-    addr_m = re.search(r'Краснодар[,\s]+([^—\n<]{5,150})', title_raw)
-    address = addr_m.group(1).strip().rstrip(' ,') if addr_m else None
-
-    # Тип объекта из title
-    type_m = re.search(r'(?:Продажа|Аренда)\s+([^0-9]{3,60}?)\s+[\d,\.]+\s*м', title_raw, re.IGNORECASE)
+    # Тип объекта из title → категория
+    type_m = re.search(r'(?:Продажа|Аренда|Продаю|Сдаю)\s+([^0-9:,]{3,60}?)\s+[\d,\.]+\s*м', title_raw, re.IGNORECASE)
     obj_type = type_m.group(1).strip() if type_m else ''
     category = _detect_category(obj_type or title_raw)
 
-    # Район
+    # Адрес — после "Краснодар," в title
+    address = None
+    addr_m = re.search(r'[Кк]раснодар[еа]?[,:\s]+([^—\|<\n]{5,150})', title_raw)
+    if addr_m:
+        address = addr_m.group(1).strip().rstrip(' ,.')
+        # Убираем хвост " на АРР" / "| ЦИАН" и т.п.
+        address = re.sub(r'\s*(?:на\s+АРР|на\s+Аякс|\|.*|по цене.*)$', '', address, flags=re.IGNORECASE).strip()
+
+    # Район — из title или по словарю улиц
     district = None
-    dist_m = re.search(r'(?:округ|район)[,\s]+([А-Яа-яёЁ\s\-]{3,40}?)(?:,|мкр|ул\.)', title_raw, re.IGNORECASE)
+    dist_m = re.search(r'(?:округ|район)[,\s]+([А-Яа-яёЁ\s\-]{3,40}?)(?:,|мкр|ул\.|\s*$)', title_raw, re.IGNORECASE)
     if dist_m:
         district = dist_m.group(1).strip()
+    if not district:
+        district = _detect_district(address or title_raw)
+
+    # Этаж из title: "1 этаж", "2 эт."
+    floor = None
+    total_floors = None
+    floor_m = re.search(r'(\d+)\s*этаж', title_raw, re.IGNORECASE)
+    if floor_m:
+        floor = int(floor_m.group(1))
+    floor2_m = re.search(r'этаж\s*(\d+)(?:\s*из\s*(\d+))?', title_raw, re.IGNORECASE)
+    if floor2_m:
+        floor = int(floor2_m.group(1))
+        if floor2_m.group(2):
+            total_floors = int(floor2_m.group(2))
+
+    # Линия из title: "1 линия", "первая линия"
+    road_line = None
+    line_m = re.search(r'(\d+|перв\w*|втор\w*|трет\w*)\s*лини', title_raw, re.IGNORECASE)
+    if line_m:
+        lt = line_m.group(1).lower()
+        lmap = {'перв': '1 линия', 'втор': '2 линия', 'трет': '3 линия'}
+        for kw, val in lmap.items():
+            if kw in lt:
+                road_line = val
+                break
+        if not road_line and lt.isdigit():
+            road_line = f'{lt} линия'
 
     return {
         'source': 'ayax',
@@ -348,6 +503,10 @@ def _parse_ayax_object_page(html: str, obj_id: str, deal_type: str) -> dict | No
         'area': area,
         'address': address,
         'district': district,
+        'floor': floor,
+        'total_floors': total_floors,
+        'road_line': road_line,
+        'condition': None,
     }
 
 
@@ -488,10 +647,11 @@ def _save_listings(cur, items: list[dict]) -> dict:
         cur.execute(
             f"INSERT INTO {SCHEMA}.market_listings "
             f"(source, external_id, url, title, category, deal_type, price, price_per_m2, "
-            f"area, address, district, floor, total_floors, condition, description, scraped_at) "
-            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW()) "
+            f"area, address, district, floor, total_floors, condition, description, road_line, scraped_at) "
+            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW()) "
             f"ON CONFLICT (source, external_id) DO UPDATE SET "
             f"price=%s, price_per_m2=%s, area=%s, address=%s, district=%s, "
+            f"floor=%s, total_floors=%s, condition=%s, road_line=%s, "
             f"title=%s, category=%s, scraped_at=NOW()",
             (
                 item.get('source'), ext_id,
@@ -505,9 +665,13 @@ def _save_listings(cur, items: list[dict]) -> dict:
                 item.get('floor'), item.get('total_floors'),
                 (item.get('condition') or '')[:100],
                 (item.get('description') or '')[:1000],
+                (item.get('road_line') or '')[:50] or None,
                 # ON CONFLICT UPDATE
                 item.get('price'), item.get('price_per_m2'), item.get('area'),
                 (item.get('address') or '')[:300], (item.get('district') or '')[:200],
+                item.get('floor'), item.get('total_floors'),
+                (item.get('condition') or '')[:100],
+                (item.get('road_line') or '')[:50] or None,
                 (item.get('title') or '')[:500], item.get('category'),
             )
         )
@@ -609,18 +773,19 @@ def _generate_market_facts(cur) -> int:
                 'value': f'{cat_label} ({dt_label}), {src_label}: средняя площадь объявлений {avg_area} м²'
             })
 
-    # Сводные факты по всем источникам (объединённые)
+    # Сводные факты по всем источникам (объединённые) — цена/м² по категории
     cur.execute(
         f"SELECT category, deal_type, "
         f"COUNT(*) AS cnt, "
         f"ROUND(AVG(price_per_m2)::numeric, 0) AS avg_p2, "
         f"ROUND(MIN(price_per_m2)::numeric, 0) AS min_p2, "
-        f"ROUND(MAX(price_per_m2)::numeric, 0) AS max_p2 "
+        f"ROUND(MAX(price_per_m2)::numeric, 0) AS max_p2, "
+        f"ROUND(AVG(area)::numeric, 0) AS avg_area "
         f"FROM {SCHEMA}.market_listings "
         f"WHERE scraped_at > NOW() - INTERVAL '7 days' "
         f"AND price_per_m2 > 0 "
         f"GROUP BY category, deal_type "
-        f"HAVING COUNT(*) >= 3 "
+        f"HAVING COUNT(*) >= 2 "
         f"ORDER BY cnt DESC"
     )
     combined = cur.fetchall() or []
@@ -631,13 +796,71 @@ def _generate_market_facts(cur) -> int:
         avg_p2 = int(r.get('avg_p2') or 0)
         min_p2 = int(r.get('min_p2') or 0)
         max_p2 = int(r.get('max_p2') or 0)
+        avg_area = int(r.get('avg_area') or 0)
         if not avg_p2:
             continue
         cat_label = cat_ru.get(cat, cat)
         dt_label = deal_ru.get(dt, dt)
+        suffix = '/мес' if dt == 'rent' else ''
         facts.append({
             'key': f'market_ext_combined_{cat}_{dt}_p2',
-            'value': f'Рынок Краснодара — {cat_label} ({dt_label}): рыночная цена {avg_p2:,} руб/м² (мин {min_p2:,}, макс {max_p2:,}), по {cnt} объявлениям из всех источников'
+            'value': f'Рынок Краснодара — {cat_label} ({dt_label}): {avg_p2:,} руб/м²{suffix} (мин {min_p2:,}, макс {max_p2:,}), {cnt} объявлений, средняя площадь {avg_area} м²'
+        })
+
+    # Аналитика по линии (1/2/3 линия) — влияет на цену
+    cur.execute(
+        f"SELECT road_line, deal_type, category, "
+        f"COUNT(*) AS cnt, "
+        f"ROUND(AVG(price_per_m2)::numeric, 0) AS avg_p2 "
+        f"FROM {SCHEMA}.market_listings "
+        f"WHERE scraped_at > NOW() - INTERVAL '7 days' "
+        f"AND road_line IS NOT NULL AND price_per_m2 > 0 "
+        f"GROUP BY road_line, deal_type, category "
+        f"HAVING COUNT(*) >= 2 ORDER BY avg_p2 DESC LIMIT 20"
+    )
+    line_rows = cur.fetchall() or []
+    for r in line_rows:
+        rl = r.get('road_line') or ''
+        dt = r.get('deal_type') or 'sale'
+        cat = r.get('category') or 'other'
+        avg_p2 = int(r.get('avg_p2') or 0)
+        cnt = int(r.get('cnt') or 0)
+        if not avg_p2:
+            continue
+        cat_label = cat_ru.get(cat, cat)
+        dt_label = deal_ru.get(dt, dt)
+        suffix = '/мес' if dt == 'rent' else ''
+        facts.append({
+            'key': f'market_ext_line_{rl.replace(" ", "_")}_{cat}_{dt}',
+            'value': f'{cat_label} ({dt_label}), {rl}: средняя цена {avg_p2:,} руб/м²{suffix} ({cnt} объявлений)'
+        })
+
+    # Аналитика по этажам — 1й этаж vs выше
+    cur.execute(
+        f"SELECT CASE WHEN floor = 1 THEN '1 этаж' ELSE '2+ этаж' END AS floor_group, "
+        f"deal_type, category, "
+        f"COUNT(*) AS cnt, ROUND(AVG(price_per_m2)::numeric, 0) AS avg_p2 "
+        f"FROM {SCHEMA}.market_listings "
+        f"WHERE scraped_at > NOW() - INTERVAL '7 days' "
+        f"AND floor IS NOT NULL AND price_per_m2 > 0 "
+        f"GROUP BY floor_group, deal_type, category "
+        f"HAVING COUNT(*) >= 2 ORDER BY category, deal_type, avg_p2 DESC LIMIT 30"
+    )
+    floor_rows = cur.fetchall() or []
+    for r in floor_rows:
+        fg = r.get('floor_group') or ''
+        dt = r.get('deal_type') or 'sale'
+        cat = r.get('category') or 'other'
+        avg_p2 = int(r.get('avg_p2') or 0)
+        cnt = int(r.get('cnt') or 0)
+        if not avg_p2:
+            continue
+        cat_label = cat_ru.get(cat, cat)
+        dt_label = deal_ru.get(dt, dt)
+        suffix = '/мес' if dt == 'rent' else ''
+        facts.append({
+            'key': f'market_ext_floor_{fg.replace(" ", "_")}_{cat}_{dt}',
+            'value': f'{cat_label} ({dt_label}), {fg}: средняя цена {avg_p2:,} руб/м²{suffix} ({cnt} объявлений)'
         })
 
     # Сохраняем факты в ai_memory
@@ -684,15 +907,26 @@ def handler(event: dict, context) -> dict:
         area_hits = [(m.start(), m.group(0)) for m in re.finditer(r'.{0,100}(?:м²|кв\.?\s*м|м2).{0,100}', html)][:5]
         # Классы div
         classes = list(set(re.findall(r'class=["\']([^"\']{5,60})["\']', html)))[:30]
+        # Вырезаем первую карточку props__item для анализа структуры
+        first_card = ''
+        card_m = re.search(r'class=["\']props__item[^"\']*["\']', html)
+        if card_m:
+            start = card_m.start()
+            # Берём блок 4000 символов от начала карточки
+            first_card = html[start:start+4000]
+        # Все option-блоки с характеристиками
+        options = re.findall(r'<div class=["\']option["\'][^>]*>(.*?)</div>', html, re.DOTALL)[:10]
+        # Все ссылки на категории каталога
+        cat_links = list(set(re.findall(r'href=["\'](/katalog/[^"\'?#]+)["\']', html)))[:30]
         return {
             'statusCode': 200,
             'headers': {**CORS, 'Content-Type': 'application/json'},
             'body': json.dumps({
                 'html_len': len(html),
                 'html_start': html[:500],
-                'html_mid': html[len(html)//2:len(html)//2+1000],
-                'price_hits': [h[1][:200] for h in price_hits],
-                'area_hits': [h[1][:200] for h in area_hits],
+                'first_card': first_card,
+                'options_sample': [re.sub(r'<[^>]+>', ' ', o).strip() for o in options],
+                'cat_links': sorted(cat_links),
                 'classes_sample': classes,
             }, ensure_ascii=False),
         }
