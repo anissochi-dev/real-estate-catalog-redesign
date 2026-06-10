@@ -558,51 +558,112 @@ def save_cache(cur, conn, listing_id: int, benchmarks: dict):
 
 def load_market_comparables(cur, category: str, district: str) -> dict:
     """
-    Загружает рыночные данные аналогов из price_market_snapshots.
-    Источники: база системы + АЯХ (ayax.ru) + АРРпро (arrpro.ru) + Этажи (etagi.com) + МореонИнвест.
-    Возвращает данные по аренде (rent) для расчёта рыночной ставки
-    и данные по продаже (sale) для сравнения цены объекта с рынком.
+    Загружает рыночные аналоги из market_listings (свежие данные с arrpro, ayax и др.).
+    Аренда и продажа строго разделены по deal_type.
+    Для аренды возвращает price_per_m2 = ₽/м²/мес.
+    Для продажи возвращает price_per_m2 = ₽/м².
+    Дополнительно — fallback на price_market_snapshots если в market_listings мало данных.
     """
+    import statistics as _stat
+
     result = {'rent': None, 'sale': None, 'sources': [], 'snapshot_date': None}
+
+    # Маппинг категорий: наши типы → категории market_listings
+    CAT_ALIAS = {
+        'hotel': ['hotel', 'other', 'standalone'],
+        'restaurant': ['catering', 'other'],
+        'office': ['office'],
+        'retail': ['retail', 'free_purpose'],
+        'warehouse': ['warehouse'],
+        'free_purpose': ['free_purpose', 'retail'],
+        'production': ['industrial', 'warehouse'],
+        'building': ['standalone', 'other'],
+        'gab': ['free_purpose', 'retail', 'office'],
+        'business': ['free_purpose', 'retail', 'office'],
+        'car_service': ['other'],
+        'land': ['land'],
+    }
+    cats = CAT_ALIAS.get(category, [category])
+    cats_sql = ','.join(f"'{c}'" for c in cats)
+
     try:
-        # 1. Ищем по точному району
-        for deal in ('rent', 'sale'):
-            dist_safe = district.replace("'", "''") if district else ''
-            cat_safe = category.replace("'", "''")
-            # Сначала пробуем точный район, затем без района
-            for dist_filter in ([dist_safe, ''] if dist_safe else ['']):
+        for deal in ('sale', 'rent'):
+            # Сначала пробуем с районом, затем без
+            dist_filters = []
+            if district:
+                # Берём первое слово района для нечёткого поиска (ФМР, ЦМР и т.д.)
+                dist_kw = district.split('(')[-1].replace(')', '').strip() if '(' in district else district.split()[0]
+                dist_filters.append(dist_kw)
+            dist_filters.append(None)  # fallback без района
+
+            for dist_kw in dist_filters:
+                dist_clause = f"AND district ILIKE '%{dist_kw.replace(chr(39), chr(39)*2)}%'" if dist_kw else ''
                 cur.execute(f"""
-                    SELECT price_per_m2_median, price_median, price_min, price_max,
-                           analogs_count, sources, snapshot_date
-                    FROM {SCHEMA}.price_market_snapshots
-                    WHERE category = '{cat_safe}'
-                      AND deal = '{deal}'
-                      AND district = '{dist_filter}'
-                    ORDER BY snapshot_date DESC
-                    LIMIT 1
+                    SELECT price_per_m2, price, area, address, district, source
+                    FROM {SCHEMA}.market_listings
+                    WHERE deal_type = '{deal}'
+                      AND category IN ({cats_sql})
+                      AND price_per_m2 > 0
+                      AND scraped_at > NOW() - INTERVAL '14 days'
+                      {dist_clause}
+                    ORDER BY scraped_at DESC
+                    LIMIT 50
                 """)
-                row = cur.fetchone()
-                if row and row['analogs_count'] and row['analogs_count'] >= 3:
-                    snap = {
-                        'price_per_m2': float(row['price_per_m2_median'] or 0),
-                        'price_median': float(row['price_median'] or 0) if row['price_median'] else None,
-                        'price_min': float(row['price_min'] or 0) if row['price_min'] else None,
-                        'price_max': float(row['price_max'] or 0) if row['price_max'] else None,
-                        'analogs_count': row['analogs_count'],
-                        'district': dist_filter or 'Краснодар (все районы)',
-                        'snapshot_date': str(row['snapshot_date']) if row['snapshot_date'] else None,
-                    }
-                    result[deal] = snap
-                    # Собираем источники
-                    srcs = row['sources'] if isinstance(row['sources'], list) else []
-                    for s in srcs:
-                        if s and s not in result['sources']:
-                            result['sources'].append(s)
-                    if not result['snapshot_date'] and snap['snapshot_date']:
-                        result['snapshot_date'] = snap['snapshot_date']
-                    break  # нашли подходящий снапшот — не ищем без района
+                rows = cur.fetchall() or []
+                if len(rows) < 2:
+                    continue
+
+                prices = [float(r['price_per_m2']) for r in rows if r.get('price_per_m2')]
+                if not prices:
+                    continue
+
+                # Отсекаем выбросы (10%-90% перцентиль)
+                srt = sorted(prices)
+                lo = srt[max(0, int(len(srt) * 0.1))]
+                hi = srt[min(len(srt)-1, int(len(srt) * 0.9))]
+                filtered = [p for p in srt if lo <= p <= hi] or srt
+
+                median_p2 = round(_stat.median(filtered))
+                all_prices = [float(r['price']) for r in rows if r.get('price') and r['price'] > 0]
+                srcs = list({r.get('source', '') for r in rows if r.get('source')})
+
+                result[deal] = {
+                    'price_per_m2': median_p2,
+                    'price_median': round(_stat.median(all_prices)) if all_prices else None,
+                    'price_min': round(min(filtered)),
+                    'price_max': round(max(filtered)),
+                    'analogs_count': len(rows),
+                    'district': dist_kw or 'Краснодар',
+                    'snapshot_date': None,
+                    'sources': srcs,
+                }
+                for s in srcs:
+                    if s and s not in result['sources']:
+                        result['sources'].append(s)
+                break  # нашли — не идём дальше
+
+        # Fallback: если нет данных в market_listings — берём из снапшотов (только продажа)
+        if result['sale'] is None:
+            cat_safe = category.replace("'", "''")
+            cur.execute(f"""
+                SELECT price_per_m2_median, analogs_count, sources, snapshot_date
+                FROM {SCHEMA}.price_market_snapshots
+                WHERE category = '{cat_safe}' AND deal = 'sale'
+                ORDER BY snapshot_date DESC LIMIT 1
+            """)
+            row = cur.fetchone()
+            if row and row.get('analogs_count', 0) >= 2:
+                result['sale'] = {
+                    'price_per_m2': float(row['price_per_m2_median'] or 0),
+                    'analogs_count': row['analogs_count'],
+                    'district': 'Краснодар',
+                    'snapshot_date': str(row['snapshot_date']) if row['snapshot_date'] else None,
+                    'sources': row['sources'] if isinstance(row['sources'], list) else [],
+                }
+
     except Exception as e:
         print(f'[noi_model] load_market_comparables error: {e}')
+
     return result
 
 
@@ -661,11 +722,10 @@ def handle_noi_request(cur, conn, qs: dict) -> dict:
     district = listing.get('district') or ''
     comparables = load_market_comparables(cur, category, district)
 
-    # Если есть рыночная ставка аренды из снапшотов — используем для обогащения бенчмарков
+    # Рыночная ставка аренды из market_listings — уже в ₽/м²/мес, делить не нужно
     market_rent_snap = comparables.get('rent')
     if market_rent_snap and market_rent_snap.get('price_per_m2', 0) > 0:
-        # Ставка аренды в снапшотах — это цена за м²/мес (для объектов в аренде)
-        snap_rent_rate = round(market_rent_snap['price_per_m2'] / 12, 1)
+        snap_rent_rate = round(market_rent_snap['price_per_m2'], 1)
         bench['market_rent_rate_snap'] = snap_rent_rate
         bench['comparables_count_rent'] = market_rent_snap['analogs_count']
 
