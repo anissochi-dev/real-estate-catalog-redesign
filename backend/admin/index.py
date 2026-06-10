@@ -454,7 +454,7 @@ def _ai_memory(cur, conn, method, rid, event, user):
 
         def _save_facts(facts: list, prefix: str) -> int:
             count = 0
-            for f in facts[:20]:
+            for f in facts[:100]:
                 if not isinstance(f, dict):
                     continue
                 k = _safe(str(f.get('key') or '').strip(), 100)
