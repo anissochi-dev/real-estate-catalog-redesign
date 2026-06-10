@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Без токена — 401",
+      "method": "POST",
+      "path": "/",
+      "body": {"sources": ["arrpro"], "max_pages": 1},
+      "expectedStatus": 401
+    }
+  ]
+}
