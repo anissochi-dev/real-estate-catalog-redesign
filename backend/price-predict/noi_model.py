@@ -269,20 +269,50 @@ def _gpt_comment_only(listing: dict, bench: dict, api_key: str, folder_id: str) 
         return ''
 
 
-def _get_benchmarks(listing: dict, api_key: str, folder_id: str) -> dict:
+def _get_benchmarks(listing: dict, api_key: str, folder_id: str, cur=None) -> dict:
     """
     Возвращает бенчмарки для объекта. Все числа — из детерминированного кода.
-    YandexGPT добавляет только текстовый комментарий.
+    Приоритет источников (от высшего к низшему):
+      1. Реальные данные арендатора (monthly_rent / yearly_rent) — для ГАБ
+      2. price_history — cap_rate и vacancy по категории и району (актуальная аналитика)
+      3. price_history_biweekly — реальная индексация (CAGR за 5+ лет)
+      4. DEFAULT_BENCHMARKS + атрибутные поправки (детерминированные коэффициенты)
+    YandexGPT добавляет только текстовый комментарий — не влияет на цифры.
     """
     # Если есть реальная аренда — используем факт, GPT не нужен
     if listing.get('monthly_rent') or listing.get('yearly_rent'):
         return _real_rent_benchmarks(listing)
 
-    # Все числовые параметры — из таблицы DEFAULT_BENCHMARKS
+    type_key = (listing.get('type') or listing.get('category') or '').lower()
+    district = listing.get('district') or ''
+
+    # База: DEFAULT_BENCHMARKS по типу объекта
     bench = _fallback_benchmarks(listing)
 
-    # Точечные поправки по атрибутам объекта (детерминированные правила)
-    type_key = (listing.get('type') or listing.get('category') or '').lower()
+    # ── Слой 1: price_history — cap_rate и vacancy по категории+район ──────────
+    if cur:
+        db_bench = load_district_benchmarks(cur, type_key, district)
+        if db_bench:
+            if db_bench.get('cap_rate'):
+                bench['market_cap_rate_pct'] = round(db_bench['cap_rate'], 2)
+                bench['cap_rate_source'] = f"price_history ({db_bench.get('district_found', 'Краснодар')})"
+            if db_bench.get('vacancy'):
+                bench['vacancy_pct'] = round(db_bench['vacancy'], 1)
+                bench['vacancy_source'] = f"price_history ({db_bench.get('district_found', 'Краснодар')})"
+            if db_bench.get('rent_per_m2_year') and db_bench['rent_per_m2_year'] > 0:
+                # Переводим ₽/м²/год → ₽/м²/мес
+                bench['rent_rate'] = round(db_bench['rent_per_m2_year'] / 12, 0)
+                bench['rent_source'] = f"price_history ({db_bench.get('district_found', 'Краснодар')})"
+            print(f'[noi_model] district_bench {type_key}/{district}: {db_bench}')
+
+    # ── Слой 2: price_history_biweekly — реальная индексация (CAGR) ────────────
+    if cur:
+        real_idx = load_real_indexation(cur, type_key)
+        if real_idx is not None:
+            bench['avg_indexation_pct'] = real_idx
+            bench['indexation_source'] = 'price_history_biweekly (CAGR 5+ лет)'
+
+    # ── Слой 3: атрибутные поправки (детерминированные правила) ────────────────
     condition = (listing.get('condition') or '').lower()
     road_line = str(listing.get('road_line') or '')
     building_class = (listing.get('building_class') or '').upper()
@@ -296,7 +326,7 @@ def _get_benchmarks(listing: dict, api_key: str, folder_id: str) -> dict:
     rent_mult = CONDITION_RENT_DELTA.get(condition, 1.0)
     bench['rent_rate'] = round(bench['rent_rate'] * rent_mult, 0)
 
-    # Поправка на класс здания → влияет на аренду и cap rate
+    # Поправка на класс здания → аренда и cap rate
     CLASS_ADJUSTMENTS = {
         'A':  {'rent_mult': 1.25, 'cap_rate_delta': -1.0},
         'B+': {'rent_mult': 1.10, 'cap_rate_delta': -0.5},
@@ -309,20 +339,20 @@ def _get_benchmarks(listing: dict, api_key: str, folder_id: str) -> dict:
         bench['rent_rate'] = round(bench['rent_rate'] * adj['rent_mult'], 0)
         bench['market_cap_rate_pct'] = round(bench['market_cap_rate_pct'] + adj['cap_rate_delta'], 2)
 
-    # Поправка на линию улицы → влияет на аренду ритейла
+    # Поправка на линию улицы → ритейл/ресторан/ПСН
     if type_key in ('retail', 'restaurant', 'free_purpose') and road_line:
         ROAD_LINE_RENT = {'1': 1.20, '2': 1.0, '3': 0.85, 'yard': 0.75}
         bench['rent_rate'] = round(bench['rent_rate'] * ROAD_LINE_RENT.get(road_line, 1.0), 0)
 
-    # Поправка на этаж → выше 2-го этажа ритейл теряет
+    # Поправка на этаж → ритейл/ресторан выше 2-го этажа теряет
     if type_key in ('retail', 'restaurant') and floor > 2:
         bench['rent_rate'] = round(bench['rent_rate'] * 0.85, 0)
         bench['vacancy_pct'] = min(bench['vacancy_pct'] + 5, 40)
 
     # GPT добавляет только текстовый комментарий
     bench['comment'] = _gpt_comment_only(listing, bench, api_key, folder_id) \
-                       or f"Бенчмарки рассчитаны по рыночным данным Краснодара 2025 для сегмента {type_key}."
-    bench['source'] = 'deterministic'
+                       or f"Бенчмарки по рыночным данным Краснодара для сегмента {type_key}, район {district or 'не указан'}."
+    bench['source'] = 'deterministic+db'
     return bench
 
 
@@ -507,14 +537,17 @@ def compute_model(listing: dict, bench: dict, params: dict) -> dict:
     }
 
 
-def build_scenarios(listing: dict, bench: dict) -> dict:
+def build_scenarios(listing: dict, bench: dict, cb_rate: float | None = None) -> dict:
     """5 предзаготовленных сценариев Что-если для сравнения с базовым."""
-    base = compute_model(listing, bench, {})
-    cb_high  = compute_model(listing, bench, {'cb_rate_pct': 25})
-    cb_low   = compute_model(listing, bench, {'cb_rate_pct': 15})
-    metro    = compute_model(listing, bench, {'infra_rent_uplift_pct': 15, 'infra_year': 3})
-    leverage = compute_model(listing, bench, {'ltv_pct': 50, 'loan_rate_pct': 22, 'loan_years': 10})
-    growth   = compute_model(listing, bench, {'avg_indexation_pct': bench['avg_indexation_pct'] + 3})
+    # Базовая ставка ЦБ: из macro_indicators если есть, иначе 21%
+    base_cb = cb_rate if cb_rate is not None else 21.0
+    base_params = {'cb_rate_pct': base_cb}
+    base    = compute_model(listing, bench, base_params)
+    cb_high = compute_model(listing, bench, {'cb_rate_pct': base_cb + 4})
+    cb_low  = compute_model(listing, bench, {'cb_rate_pct': max(base_cb - 6, 5)})
+    metro   = compute_model(listing, bench, {**base_params, 'infra_rent_uplift_pct': 15, 'infra_year': 3})
+    leverage= compute_model(listing, bench, {**base_params, 'ltv_pct': 50, 'loan_rate_pct': base_cb + 1, 'loan_years': 10})
+    growth  = compute_model(listing, bench, {**base_params, 'avg_indexation_pct': bench['avg_indexation_pct'] + 3})
     return {
         'base': base,
         'cb_up_4pct':   cb_high,
@@ -667,6 +700,140 @@ def load_market_comparables(cur, category: str, district: str) -> dict:
     return result
 
 
+def load_district_benchmarks(cur, category: str, district: str) -> dict:
+    """
+    Загружает cap_rate, vacancy_rate и аренду из price_history по категории и району.
+    Ищет сначала по точному совпадению района, затем по ключевому слову, затем по всему Краснодару.
+    Возвращает dict с полями: cap_rate, vacancy, rent_per_m2_year (или None если нет данных).
+    """
+    result = {}
+    if not category:
+        return result
+
+    # Маппинг категорий: наши типы → категории price_history
+    CAT_ALIAS = {
+        'hotel': 'hotel', 'restaurant': 'restaurant', 'office': 'office',
+        'retail': 'retail', 'warehouse': 'warehouse', 'free_purpose': 'retail',
+        'production': 'warehouse', 'building': 'office', 'gab': 'retail',
+        'business': 'retail', 'car_service': 'warehouse', 'land': 'land',
+    }
+    ph_cat = CAT_ALIAS.get(category, category)
+    cat_safe = ph_cat.replace("'", "''")
+
+    # Ключевое слово района для нечёткого поиска
+    dist_kw = ''
+    if district:
+        dist_kw = district.split('(')[-1].replace(')', '').strip() if '(' in district else district.split()[0]
+
+    try:
+        # Пробуем: точный район, ключевое слово, без района (весь Краснодар)
+        for dist_filter in ([dist_kw, ''] if dist_kw else ['']):
+            dist_clause = f"AND district_name ILIKE '%{dist_filter.replace(chr(39), chr(39)*2)}%'" if dist_filter else ''
+            cur.execute(f"""
+                SELECT avg_price_per_m2, avg_rent_per_m2_year, avg_cap_rate, vacancy_rate
+                FROM {SCHEMA}.price_history
+                WHERE category = '{cat_safe}'
+                  AND year = (SELECT MAX(year) FROM {SCHEMA}.price_history WHERE category = '{cat_safe}')
+                  {dist_clause}
+                ORDER BY year DESC, district_name ASC
+                LIMIT 1
+            """)
+            row = cur.fetchone()
+            if row:
+                if row.get('avg_cap_rate'):
+                    result['cap_rate'] = float(row['avg_cap_rate'])
+                if row.get('vacancy_rate'):
+                    result['vacancy'] = float(row['vacancy_rate'])
+                if row.get('avg_rent_per_m2_year'):
+                    result['rent_per_m2_year'] = float(row['avg_rent_per_m2_year'])
+                if row.get('avg_price_per_m2'):
+                    result['price_per_m2'] = float(row['avg_price_per_m2'])
+                if result:
+                    result['district_found'] = dist_filter or 'Краснодар'
+                    break
+    except Exception as e:
+        print(f'[noi_model] load_district_benchmarks error: {e}')
+    return result
+
+
+def load_real_indexation(cur, category: str) -> float | None:
+    """
+    Считает реальную среднегодовую индексацию из price_history_biweekly.
+    Берёт первую и последнюю точку за последние 5 лет и вычисляет CAGR.
+    """
+    CAT_ALIAS = {
+        'hotel': 'standalone', 'restaurant': 'catering', 'office': 'office',
+        'retail': 'retail', 'warehouse': 'warehouse', 'free_purpose': 'free_purpose',
+        'production': 'industrial', 'building': 'standalone', 'gab': 'retail',
+        'business': 'free_purpose', 'car_service': 'industrial', 'land': None,
+    }
+    bw_cat = CAT_ALIAS.get(category, category)
+    if not bw_cat:
+        return None
+    cat_safe = bw_cat.replace("'", "''")
+    try:
+        # Используем аренду — CAGR ставки аренды = реальная индексация для инвестора
+        # Если аренды нет в biweekly — берём продажу как прокси (более консервативная оценка)
+        for deal_t in ('rent', 'sale'):
+            cur.execute(f"""
+                SELECT date_recorded, price_per_m2
+                FROM {SCHEMA}.price_history_biweekly
+                WHERE category = '{cat_safe}' AND deal_type = '{deal_t}' AND price_per_m2 > 0
+                  AND date_recorded >= NOW() - INTERVAL '6 years'
+                ORDER BY date_recorded ASC LIMIT 1
+            """)
+            first = cur.fetchone()
+            cur.execute(f"""
+                SELECT date_recorded, price_per_m2
+                FROM {SCHEMA}.price_history_biweekly
+                WHERE category = '{cat_safe}' AND deal_type = '{deal_t}' AND price_per_m2 > 0
+                ORDER BY date_recorded DESC LIMIT 1
+            """)
+            last = cur.fetchone()
+            if first and last:
+                break
+        if not first or not last:
+            return None
+        p0 = float(first['price_per_m2'])
+        p1 = float(last['price_per_m2'])
+        if p0 <= 0 or p1 <= 0:
+            return None
+        # Количество лет между точками
+        days = (last['date_recorded'] - first['date_recorded']).days
+        years = days / 365.25
+        if years < 1:
+            return None
+        cagr = ((p1 / p0) ** (1 / years) - 1) * 100
+        # Если использовали продажу как прокси — ставки аренды исторически растут ~60% от роста цен
+        if deal_t == 'sale':
+            cagr = cagr * 0.6
+        # Ограничиваем реалистичным диапазоном для индексации арендной ставки: 3–12%
+        cagr = max(3.0, min(12.0, round(cagr, 1)))
+        print(f'[noi_model] indexation {bw_cat}/{deal_t}: p0={p0:.0f} p1={p1:.0f} years={years:.1f} CAGR={cagr}%')
+        return cagr
+    except Exception as e:
+        print(f'[noi_model] load_real_indexation error: {e}')
+        return None
+
+
+def load_macro_cb_rate(cur) -> float | None:
+    """Возвращает актуальную ставку ЦБ из macro_indicators."""
+    try:
+        cur.execute(f"""
+            SELECT key_rate FROM {SCHEMA}.macro_indicators
+            WHERE key_rate IS NOT NULL
+            ORDER BY date_recorded DESC LIMIT 1
+        """)
+        row = cur.fetchone()
+        if row and row.get('key_rate'):
+            rate = float(row['key_rate'])
+            if 0 < rate < 50:
+                return rate
+    except Exception as e:
+        print(f'[noi_model] load_macro_cb_rate error: {e}')
+    return None
+
+
 def load_listing(cur, listing_id: int):
     cur.execute(
         f"SELECT id, title, address, area, price, deal, category, floor, total_floors, rooms, "
@@ -706,13 +873,18 @@ def handle_noi_request(cur, conn, qs: dict) -> dict:
     bench = None if refresh else load_cached(cur, listing_id)
     if bench is None:
         api_key, folder_id = _load_keys(cur)
-        bench = _get_benchmarks(listing, api_key, folder_id)
+        bench = _get_benchmarks(listing, api_key, folder_id, cur=cur)
         try:
             save_cache(cur, conn, listing_id, bench)
         except Exception:
             pass
 
-    scenarios = build_scenarios(listing, bench)
+    # Ставка ЦБ из macro_indicators — используется как базовая ставка дисконтирования
+    cb_rate = load_macro_cb_rate(cur)
+    if cb_rate is not None:
+        bench['cb_rate_from_db'] = cb_rate
+
+    scenarios = build_scenarios(listing, bench, cb_rate=cb_rate)
 
     has_real_rent = bool(listing.get('monthly_rent') or listing.get('yearly_rent'))
     has_tenant = bool(listing.get('tenant_name') or has_real_rent)
