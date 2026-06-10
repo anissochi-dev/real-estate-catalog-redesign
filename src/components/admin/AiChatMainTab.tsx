@@ -50,22 +50,7 @@ export default function AiChatMainTab({
   onCloseMemory,
   wide = false,
 }: Props) {
-  const quickBar = (
-    <div className={`px-3 py-2 border-b border-border overflow-x-auto bg-muted/30 shrink-0 ${wide ? 'border-r' : ''}`}>
-      <div className={`flex gap-2 ${wide ? 'flex-wrap' : ''}`}>
-        {QUICK_CMDS.map(q => (
-          <button
-            key={q.id}
-            onClick={() => onRunQuick(q)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs whitespace-nowrap transition shrink-0 bg-white hover:bg-brand-blue hover:text-white border border-border"
-          >
-            <Icon name={q.icon} size={14} />
-            {q.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+
 
   const memoryPanel = showMemory && (
     <div className={`shrink-0 bg-white border border-brand-blue/20 rounded-xl overflow-hidden ${wide ? 'mx-0 mt-0 rounded-none border-0 border-b border-brand-blue/20' : 'mx-3 mt-2'}`}>
@@ -109,21 +94,31 @@ export default function AiChatMainTab({
     </div>
   );
 
+  const HINTS = [
+    { text: 'Что сейчас срочного на сайте?', id: 'what_to_do' },
+    { text: 'Покажи аналитику по лидам и объектам', id: 'analytics_full' },
+    { text: 'Найди объекты без описания и улучши их', id: 'edit_site' },
+    { text: 'Проверь безопасность и SEO', id: 'security' },
+  ];
+
   const emptyState = (
     <div className="text-center text-muted-foreground text-sm py-8">
       <div className="text-4xl mx-auto mb-3">🏠</div>
       <div className="font-semibold mb-1 text-foreground">Привет! Я Виртуальный брокер.</div>
-      <div className="text-xs text-muted-foreground mb-4">Живу на этом сайте, знаю его как свой дом. Могу анализировать, редактировать и улучшать.</div>
-      <div className="space-y-1.5 text-xs text-left max-w-xs mx-auto">
-        <button onClick={() => onRunQuick(QUICK_CMDS[0])} className="w-full px-3 py-2 bg-brand-blue/5 hover:bg-brand-blue/10 border border-brand-blue/20 rounded-xl text-left transition">
-          Что сейчас нужно сделать на сайте?
-        </button>
-        <button onClick={() => onRunQuick(QUICK_CMDS[1])} className="w-full px-3 py-2 bg-muted/50 hover:bg-muted rounded-xl text-left transition">
-          Найди и улучши объекты без описания
-        </button>
-        <button onClick={() => onRunQuick(QUICK_CMDS[2])} className="w-full px-3 py-2 bg-muted/50 hover:bg-muted rounded-xl text-left transition">
-          Полная аналитика сайта
-        </button>
+      <div className="text-xs text-muted-foreground mb-5">Знаю весь сайт — каталог, заявки, цены, SEO. Спрашивай что угодно или дай задачу.</div>
+      <div className="space-y-1.5 text-xs text-left max-w-sm mx-auto">
+        {HINTS.map((h, i) => {
+          const cmd = QUICK_CMDS.find(q => q.id === h.id);
+          return (
+            <button
+              key={h.id}
+              onClick={() => cmd && onRunQuick(cmd)}
+              className={`w-full px-3.5 py-2.5 rounded-xl text-left transition text-foreground/80 hover:text-foreground ${i === 0 ? 'bg-brand-blue/5 hover:bg-brand-blue/10 border border-brand-blue/20' : 'bg-muted/40 hover:bg-muted/70 border border-border'}`}
+            >
+              {h.text}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -157,36 +152,12 @@ export default function AiChatMainTab({
     </>
   );
 
-  // ── Расширенный режим: левая колонка — команды, правая — чат ──────────
+  // ── Расширенный режим ──────────────────────────────────────────────────
   if (wide) {
     return (
       <div className="flex flex-1 min-h-0">
-        {/* Левая панель: быстрые команды + база знаний */}
-        <div className="w-72 xl:w-80 shrink-0 border-r border-border flex flex-col bg-muted/20 overflow-y-auto">
-          <div className="px-4 py-3 border-b border-border">
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Быстрые команды</div>
-            <div className="flex flex-col gap-1.5">
-              {QUICK_CMDS.map(q => (
-                <button
-                  key={q.id}
-                  onClick={() => onRunQuick(q)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-left transition bg-white hover:bg-brand-blue hover:text-white border border-border"
-                >
-                  <Icon name={q.icon} size={14} className="shrink-0" />
-                  <span>{q.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-          {showMemory && (
-            <div className="flex-1 overflow-y-auto">
-              {memoryPanel}
-            </div>
-          )}
-        </div>
-
-        {/* Правая панель: история + ввод */}
         <div className="flex flex-col flex-1 min-w-0">
+          {memoryPanel}
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4 max-w-4xl mx-auto w-full">
             {messageList}
           </div>
@@ -201,7 +172,6 @@ export default function AiChatMainTab({
   // ── Обычный режим ──────────────────────────────────────────────────────
   return (
     <>
-      {quickBar}
       {memoryPanel}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
         {messageList}
