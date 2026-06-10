@@ -705,25 +705,27 @@ def _ai_memory(cur, conn, method, rid, event, user):
                         f"SELECT category, deal_type, "
                         f"MIN(date_recorded) AS date_from, MAX(date_recorded) AS date_to, "
                         f"MIN(price_per_m2) AS price_min, MAX(price_per_m2) AS price_max, "
-                        f"AVG(price_per_m2) AS price_avg "
+                        f"ROUND(AVG(price_per_m2)::numeric, 0) AS price_avg, COUNT(*) AS cnt "
                         f"FROM {SCHEMA}.price_history_biweekly "
-                        f"GROUP BY category, deal_type ORDER BY category, deal_type"
+                        f"GROUP BY category, deal_type ORDER BY deal_type, category"
                     )
                     summary_rows = cur.fetchall() or []
                     cur.execute(
-                        f"SELECT date_recorded, category, deal_type, price_per_m2, change_pct "
+                        f"SELECT EXTRACT(YEAR FROM date_recorded)::int AS yr, category, deal_type, "
+                        f"ROUND(AVG(price_per_m2)::numeric, 0) AS avg_price, "
+                        f"ROUND(MIN(price_per_m2)::numeric, 0) AS min_price, "
+                        f"ROUND(MAX(price_per_m2)::numeric, 0) AS max_price "
                         f"FROM {SCHEMA}.price_history_biweekly "
-                        f"WHERE date_recorded >= '2021-01-01' "
-                        f"ORDER BY category, deal_type, date_recorded"
+                        f"GROUP BY yr, category, deal_type ORDER BY category, deal_type, yr"
                     )
-                    detail_rows = cur.fetchall() or []
-                    count_input = len(detail_rows)
+                    yearly_rows = cur.fetchall() or []
+                    count_input = len(summary_rows) + len(yearly_rows)
                     cat_ru = {
                         'retail': 'Торговая', 'office': 'Офисная', 'warehouse': 'Складская',
                         'industrial': 'Производственная', 'catering': 'Общепит',
                         'free_purpose': 'ПСН', 'standalone': 'Отдельно стоящие здания',
                     }
-                    parts = ['=== Сводка по категориям (2019-2026) ===']
+                    parts = ['=== Сводка по категориям (весь период 2019-2026) ===']
                     for r in summary_rows:
                         cat = cat_ru.get(r.get('category') or '', r.get('category') or '')
                         dt = 'продажа' if r.get('deal_type') == 'sale' else 'аренда'
@@ -731,23 +733,24 @@ def _ai_memory(cur, conn, method, rid, event, user):
                         pmax = int(r.get('price_max') or 0)
                         pavg = int(r.get('price_avg') or 0)
                         parts.append(
-                            f"{cat} ({dt}): мин {pmin:,} руб/м², макс {pmax:,} руб/м², "
-                            f"среднее {pavg:,} руб/м², период {r.get('date_from')}–{r.get('date_to')}"
-                            .replace(',', ' ')
+                            f"{cat} ({dt}): мин {pmin:,} руб/м2  макс {pmax:,} руб/м2  среднее {pavg:,} руб/м2"
+                            f"  период {r.get('date_from')}–{r.get('date_to')}  наблюдений {r.get('cnt')}"
                         )
-                    parts.append('=== Динамика цен 2021-2026 ===')
+                    parts.append('')
+                    parts.append('=== Среднегодовые цены по категориям ===')
                     cur_cat = None
-                    for r in detail_rows:
+                    for r in yearly_rows:
                         cat_key = f"{r.get('category')}/{r.get('deal_type')}"
                         if cat_key != cur_cat:
                             cur_cat = cat_key
                             cat = cat_ru.get(r.get('category') or '', r.get('category') or '')
                             dt = 'продажа' if r.get('deal_type') == 'sale' else 'аренда'
                             parts.append(f'--- {cat} ({dt}) ---')
-                        price = int(r.get('price_per_m2') or 0)
-                        chg = r.get('change_pct')
-                        chg_str = f" ({'+' if chg and chg > 0 else ''}{chg}%)" if chg else ''
-                        parts.append(f"  {r.get('date_recorded')}: {price:,} руб/м²{chg_str}".replace(',', ' '))
+                        yr = r.get('yr')
+                        avg = int(r.get('avg_price') or 0)
+                        lo = int(r.get('min_price') or 0)
+                        hi = int(r.get('max_price') or 0)
+                        parts.append(f"  {yr}: среднее {avg:,}  диапазон {lo:,}–{hi:,} руб/м2")
                     user_text = '\n'.join(parts)[:9000]
 
                 if not user_text.strip() or count_input == 0:
