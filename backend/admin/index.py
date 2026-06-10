@@ -702,15 +702,6 @@ def _ai_memory(cur, conn, method, rid, event, user):
 
                 elif src == 'biweekly_history':
                     cur.execute(
-                        f"SELECT category, deal_type, "
-                        f"MIN(date_recorded) AS date_from, MAX(date_recorded) AS date_to, "
-                        f"MIN(price_per_m2) AS price_min, MAX(price_per_m2) AS price_max, "
-                        f"ROUND(AVG(price_per_m2)::numeric, 0) AS price_avg, COUNT(*) AS cnt "
-                        f"FROM {SCHEMA}.price_history_biweekly "
-                        f"GROUP BY category, deal_type ORDER BY deal_type, category"
-                    )
-                    summary_rows = cur.fetchall() or []
-                    cur.execute(
                         f"SELECT EXTRACT(YEAR FROM date_recorded)::int AS yr, category, deal_type, "
                         f"ROUND(AVG(price_per_m2)::numeric, 0) AS avg_price, "
                         f"ROUND(MIN(price_per_m2)::numeric, 0) AS min_price, "
@@ -719,39 +710,40 @@ def _ai_memory(cur, conn, method, rid, event, user):
                         f"GROUP BY yr, category, deal_type ORDER BY category, deal_type, yr"
                     )
                     yearly_rows = cur.fetchall() or []
-                    count_input = len(summary_rows) + len(yearly_rows)
+                    count_input = len(yearly_rows)
                     cat_ru = {
                         'retail': 'Торговая', 'office': 'Офисная', 'warehouse': 'Складская',
                         'industrial': 'Производственная', 'catering': 'Общепит',
                         'free_purpose': 'ПСН', 'standalone': 'Отдельно стоящие здания',
                     }
-                    parts = ['=== Сводка по категориям (весь период 2019-2026) ===']
-                    for r in summary_rows:
-                        cat = cat_ru.get(r.get('category') or '', r.get('category') or '')
-                        dt = 'продажа' if r.get('deal_type') == 'sale' else 'аренда'
-                        pmin = int(r.get('price_min') or 0)
-                        pmax = int(r.get('price_max') or 0)
-                        pavg = int(r.get('price_avg') or 0)
-                        parts.append(
-                            f"{cat} ({dt}): мин {pmin:,} руб/м2  макс {pmax:,} руб/м2  среднее {pavg:,} руб/м2"
-                            f"  период {r.get('date_from')}–{r.get('date_to')}  наблюдений {r.get('cnt')}"
-                        )
-                    parts.append('')
-                    parts.append('=== Среднегодовые цены по категориям ===')
-                    cur_cat = None
+                    # Группируем по (category, deal_type)
+                    from collections import defaultdict
+                    cat_groups = defaultdict(list)
                     for r in yearly_rows:
-                        cat_key = f"{r.get('category')}/{r.get('deal_type')}"
-                        if cat_key != cur_cat:
-                            cur_cat = cat_key
-                            cat = cat_ru.get(r.get('category') or '', r.get('category') or '')
-                            dt = 'продажа' if r.get('deal_type') == 'sale' else 'аренда'
-                            parts.append(f'--- {cat} ({dt}) ---')
-                        yr = r.get('yr')
-                        avg = int(r.get('avg_price') or 0)
-                        lo = int(r.get('min_price') or 0)
-                        hi = int(r.get('max_price') or 0)
-                        parts.append(f"  {yr}: среднее {avg:,}  диапазон {lo:,}–{hi:,} руб/м2")
-                    user_text = '\n'.join(parts)[:9000]
+                        key = (r.get('category'), r.get('deal_type'))
+                        cat_groups[key].append(r)
+
+                    all_biweekly_facts = []
+                    bw_system = cfg['system']
+                    for (cat_key, dt_key), rows in cat_groups.items():
+                        cat_label = cat_ru.get(cat_key or '', cat_key or '')
+                        dt_label = 'продажа' if dt_key == 'sale' else 'аренда'
+                        lines = [f'Категория: {cat_label} ({dt_label}), данные по годам:']
+                        for r in rows:
+                            avg = int(r.get('avg_price') or 0)
+                            lo = int(r.get('min_price') or 0)
+                            hi = int(r.get('max_price') or 0)
+                            lines.append(f"  {r.get('yr')}: среднее {avg}  диапазон {lo}–{hi} руб/м2")
+                        chunk_text = '\n'.join(lines)
+                        chunk_raw = _call_gpt(bw_system, chunk_text)
+                        chunk_facts = _parse_facts(chunk_raw)
+                        print(f'[retrain:biweekly] {cat_key}/{dt_key}: raw_len={len(chunk_raw)} facts={len(chunk_facts)}')
+                        all_biweekly_facts.extend(chunk_facts)
+
+                    saved_count = _save_facts(all_biweekly_facts, cfg['prefix'])
+                    per_source.append({'source': src, 'saved': saved_count, 'input_count': count_input})
+                    total_saved += saved_count
+                    continue
 
                 if not user_text.strip() or count_input == 0:
                     per_source.append({'source': src, 'saved': 0, 'input_count': 0, 'skipped': 'нет данных'})
