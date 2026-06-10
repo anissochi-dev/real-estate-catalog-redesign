@@ -725,32 +725,70 @@ def load_district_benchmarks(cur, category: str, district: str) -> dict:
     if district:
         dist_kw = district.split('(')[-1].replace(')', '').strip() if '(' in district else district.split()[0]
 
+    # Маппинг синонимов районов: как записано в listings → что ищем в price_history
+    DISTRICT_ALIASES = {
+        'фмр': 'ФМР', 'фестивальн': 'ФМР',
+        'цмр': 'ЦМР', 'центральн': 'ЦМР',
+        'юмр': 'ЮМР', 'юбилейн': 'ЮМР',
+        'гмр': 'ГМР', 'гидростроит': 'ГМР',
+        'пмр': 'Пашковский', 'пашковск': 'Пашковский',
+        'черёмушк': 'Черемушки', 'черемушк': 'Черемушки',
+        'кмр': 'Черемушки',  # нет точного соответствия — берём ближний
+    }
+
+    # Нормализуем ключевое слово района
+    dist_search = dist_kw
+    if dist_kw:
+        dl = dist_kw.lower()
+        for alias_key, alias_val in DISTRICT_ALIASES.items():
+            if alias_key in dl:
+                dist_search = alias_val
+                break
+
     try:
-        # Пробуем: точный район, ключевое слово, без района (весь Краснодар)
-        for dist_filter in ([dist_kw, ''] if dist_kw else ['']):
-            dist_clause = f"AND district_name ILIKE '%{dist_filter.replace(chr(39), chr(39)*2)}%'" if dist_filter else ''
+        max_year_q = f"SELECT MAX(year) FROM {SCHEMA}.price_history WHERE category = '{cat_safe}'"
+
+        # Шаг 1: точный район
+        if dist_search:
+            dist_s = dist_search.replace("'", "''")
             cur.execute(f"""
                 SELECT avg_price_per_m2, avg_rent_per_m2_year, avg_cap_rate, vacancy_rate
                 FROM {SCHEMA}.price_history
                 WHERE category = '{cat_safe}'
-                  AND year = (SELECT MAX(year) FROM {SCHEMA}.price_history WHERE category = '{cat_safe}')
-                  {dist_clause}
-                ORDER BY year DESC, district_name ASC
-                LIMIT 1
+                  AND year = ({max_year_q})
+                  AND district_name ILIKE '%{dist_s}%'
+                ORDER BY year DESC LIMIT 1
             """)
             row = cur.fetchone()
-            if row:
-                if row.get('avg_cap_rate'):
-                    result['cap_rate'] = float(row['avg_cap_rate'])
-                if row.get('vacancy_rate'):
-                    result['vacancy'] = float(row['vacancy_rate'])
-                if row.get('avg_rent_per_m2_year'):
-                    result['rent_per_m2_year'] = float(row['avg_rent_per_m2_year'])
-                if row.get('avg_price_per_m2'):
-                    result['price_per_m2'] = float(row['avg_price_per_m2'])
-                if result:
-                    result['district_found'] = dist_filter or 'Краснодар'
-                    break
+            if row and any(row.get(f) for f in ('avg_cap_rate', 'vacancy_rate', 'avg_rent_per_m2_year')):
+                if row.get('avg_cap_rate'): result['cap_rate'] = float(row['avg_cap_rate'])
+                if row.get('vacancy_rate'): result['vacancy'] = float(row['vacancy_rate'])
+                if row.get('avg_rent_per_m2_year'): result['rent_per_m2_year'] = float(row['avg_rent_per_m2_year'])
+                if row.get('avg_price_per_m2'): result['price_per_m2'] = float(row['avg_price_per_m2'])
+                result['district_found'] = dist_search
+
+        # Шаг 2: fallback — среднее по всем районам для этой категории (не первая строка!)
+        if not result:
+            cur.execute(f"""
+                SELECT
+                  ROUND(AVG(avg_cap_rate)::numeric, 2) as avg_cap_rate,
+                  ROUND(AVG(vacancy_rate)::numeric, 1) as vacancy_rate,
+                  ROUND(AVG(avg_rent_per_m2_year)::numeric, 0) as avg_rent_per_m2_year,
+                  ROUND(AVG(avg_price_per_m2)::numeric, 0) as avg_price_per_m2
+                FROM {SCHEMA}.price_history
+                WHERE category = '{cat_safe}'
+                  AND year = ({max_year_q})
+                  AND avg_rent_per_m2_year IS NOT NULL
+            """)
+            row = cur.fetchone()
+            if row and any(row.get(f) for f in ('avg_cap_rate', 'vacancy_rate', 'avg_rent_per_m2_year')):
+                if row.get('avg_cap_rate'): result['cap_rate'] = float(row['avg_cap_rate'])
+                if row.get('vacancy_rate'): result['vacancy'] = float(row['vacancy_rate'])
+                if row.get('avg_rent_per_m2_year'): result['rent_per_m2_year'] = float(row['avg_rent_per_m2_year'])
+                if row.get('avg_price_per_m2'): result['price_per_m2'] = float(row['avg_price_per_m2'])
+                result['district_found'] = f'Краснодар (среднее, район не найден: {dist_kw or "не указан"})'
+                print(f'[noi_model] district_bench fallback avg for {ph_cat}: rent={result.get("rent_per_m2_year")} vac={result.get("vacancy")}')
+
     except Exception as e:
         print(f'[noi_model] load_district_benchmarks error: {e}')
     return result
