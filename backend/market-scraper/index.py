@@ -167,7 +167,8 @@ def _parse_arrpro_page(html: str, deal_type: str) -> list[dict]:
     price_pattern = re.compile(r'class=["\']props__price["\'][^>]*>\s*([\d\s]+)\s*руб')
     p2_pattern = re.compile(r'class=["\']props__priceForM["\'][^>]*>\s*([\d\s]+)\s*руб')
     code_pattern = re.compile(r'Код объекта[:\s]+(\d+)')
-    addr_text_pattern = re.compile(r'props__address[^>]*>(?:<[^>]+>)*\s*([А-Яа-яёЁ\w][^<\n]{5,80})\s*<')
+    # Адрес: внутри <a class="props__address"> после SVG идёт текст адреса
+    addr_text_pattern = re.compile(r'class=["\']props__address["\'][^>]*>.*?</svg>\s*([^\n<]{5,120})\s*</a>', re.DOTALL)
 
     # Находим все URL карточек с их позициями
     # Пример: <a target="_blank" title="Открыть" href="/katalog/prodam/sklad/...-131335.php?#pills-map" class="props__address">
@@ -233,9 +234,13 @@ def _parse_arrpro_page(html: str, deal_type: str) -> list[dict]:
                 break
         category = cat_from_url or _detect_category(address or '')
 
-        # Заголовок
-        title_m = re.search(r'class=["\'][^"\']*props__name[^"\']*["\'][^>]*>([^<]{5,200})<', block, re.IGNORECASE)
-        title = title_m.group(1).strip() if title_m else f"{category} {area or ''}м² {address or ''}"
+        # Заголовок — строим из категории, площади и адреса (title на сайте нет в HTML)
+        cat_ru_t = {'office':'Офис','retail':'Торговое помещение','warehouse':'Склад','industrial':'Производство','catering':'Общепит','free_purpose':'ПСН','standalone':'Здание','land':'Земельный участок','other':'Коммерческая недвижимость'}
+        deal_ru_t = {'sale': 'Продажа', 'rent': 'Аренда'}
+        title_parts = [deal_ru_t.get(actual_deal, ''), cat_ru_t.get(category, 'Объект')]
+        if area: title_parts.append(f'{area} м²')
+        if address: title_parts.append(address[:60])
+        title = ', '.join(p for p in title_parts if p)
 
         results.append({
             'source': 'arrpro',
