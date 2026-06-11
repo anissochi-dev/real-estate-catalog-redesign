@@ -516,6 +516,11 @@ def handler(event: dict, context) -> dict:
 
             action = params_all.get('action') or body_data.get('action') or ''
 
+            if action == 'analyze_csv':
+                csv_url = params_all.get('url') or body_data.get('url', '')
+                result = handle_analyze_csv(csv_url)
+                return _ok(result)
+
             if action == 'cost_approach':
                 r = handle_cost_approach(event, cur, conn, _api_key, _folder_id)
                 return {**r, 'headers': {**HEADERS, **(r.get('headers') or {})}}
@@ -658,3 +663,239 @@ def handler(event: dict, context) -> dict:
             return _err(405, 'Method not allowed')
     finally:
         conn.close()
+
+
+def handle_analyze_csv(csv_url: str) -> dict:
+    """Анализирует CSV-файл выгрузки с ЦИАН/Авито для оценки пригодности данных."""
+    import urllib.request
+    import csv
+    import io
+    import statistics as _stat
+    import re
+
+    if not csv_url:
+        return {'error': 'Не указан url'}
+
+    # Скачиваем файл
+    req = urllib.request.Request(csv_url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        raw = resp.read().decode('utf-8-sig', errors='replace')
+
+    reader = csv.DictReader(io.StringIO(raw), delimiter=';')
+    rows = list(reader)
+    total = len(rows)
+
+    # Счётчики
+    sources = {}
+    deal_types = {}
+    districts = {}
+    obj_types = {}
+    prices_sale, prices_rent = [], []
+    areas = []
+    ppm2_sale, ppm2_rent = [], []
+    coords_missing, coords_invalid = 0, 0
+    no_price, no_area, no_coords = 0, 0, 0
+    phones = {}
+    addresses = {}
+    dates = []
+    problems = []
+
+    # Маппинг "Вид объекта" → наша категория
+    TYPE_MAP = {
+        'офис': 'office', 'офисное': 'office',
+        'торговое': 'retail', 'торговый': 'retail', 'магазин': 'retail',
+        'свободного назначения': 'free_purpose', 'свободное': 'free_purpose',
+        'склад': 'warehouse', 'складской': 'warehouse',
+        'производственное': 'production', 'производство': 'production',
+        'здание': 'building', 'отдельно стоящее': 'building',
+        'общепит': 'restaurant', 'кафе': 'restaurant', 'ресторан': 'restaurant',
+        'гостиниц': 'hotel', 'гостевой': 'hotel',
+        'земельн': 'land',
+        'автосервис': 'car_service', 'автомойк': 'car_service',
+        'готовый арендный': 'gab',
+    }
+
+    for i, row in enumerate(rows, 1):
+        raw_price = (row.get('Цена') or '').strip().replace(' ', '')
+        raw_deal = (row.get('Тип объявления') or '').strip()
+        source = (row.get('Источник') or '').strip()
+        district = (row.get('Метро/Район') or '').strip()
+        address = (row.get('Адрес') or '').strip()
+        phone = (row.get('Телефон') or '').strip()
+        date_str = (row.get('Дата') or '').strip()
+        extra = (row.get('Доп.параметры') or '')
+        lat_s = (row.get('lat') or '').strip()
+        lng_s = (row.get('lng') or '').strip()
+
+        # Источник
+        sources[source] = sources.get(source, 0) + 1
+
+        # Тип сделки
+        deal_key = 'sale' if 'продам' in raw_deal.lower() or 'продаж' in raw_deal.lower() else 'rent'
+        deal_types[deal_key] = deal_types.get(deal_key, 0) + 1
+
+        # Район
+        if district:
+            districts[district] = districts.get(district, 0) + 1
+
+        # Цена
+        try:
+            price = float(raw_price) if raw_price else 0
+        except Exception:
+            price = 0
+        if price <= 0:
+            no_price += 1
+            problems.append({'row': i, 'issue': 'нет цены', 'title': row.get('Название', '')[:60]})
+
+        # Площадь из Доп.параметры
+        area = 0
+        area_m = re.search(r'Общая площадь=([0-9.,]+)', extra)
+        if area_m:
+            try:
+                area = float(area_m.group(1).replace(',', '.'))
+            except Exception:
+                area = 0
+        if area <= 0:
+            # попробуем из названия: "(125 м²)"
+            nm = re.search(r'\((\d+[\.,]?\d*)\s*м', row.get('Название', ''))
+            if nm:
+                try:
+                    area = float(nm.group(1).replace(',', '.'))
+                except Exception:
+                    area = 0
+        if area > 0:
+            areas.append(area)
+        else:
+            no_area += 1
+            problems.append({'row': i, 'issue': 'нет площади', 'title': row.get('Название', '')[:60]})
+
+        # Тип объекта
+        obj_type = ''
+        ot_m = re.search(r'Вид объекта=([^|]+)', extra)
+        if ot_m:
+            obj_type = ot_m.group(1).strip()
+        if obj_type:
+            obj_types[obj_type] = obj_types.get(obj_type, 0) + 1
+
+        # Цена за м²
+        if price > 0 and area > 0:
+            ppm2 = price / area
+            if deal_key == 'sale':
+                prices_sale.append(price)
+                ppm2_sale.append(ppm2)
+            else:
+                prices_rent.append(price)
+                ppm2_rent.append(ppm2)
+
+        # Координаты
+        try:
+            lat = float(lat_s) if lat_s else 0
+            lng = float(lng_s) if lng_s else 0
+            if lat == 0 or lng == 0:
+                coords_missing += 1
+                no_coords += 1
+            elif not (44.0 < lat < 45.7 and 38.5 < lng < 39.5):
+                coords_invalid += 1
+                problems.append({'row': i, 'issue': f'координаты вне Краснодара ({lat},{lng})', 'title': row.get('Название', '')[:60]})
+        except Exception:
+            coords_missing += 1
+            no_coords += 1
+
+        # Телефоны
+        if phone:
+            phones[phone] = phones.get(phone, 0) + 1
+
+        # Адреса
+        if address:
+            addresses[address] = addresses.get(address, 0) + 1
+
+        # Даты
+        if date_str:
+            dates.append(date_str[:10])
+
+    # Считаем метрики
+    def safe_median(lst): return round(_stat.median(lst)) if lst else None
+    def safe_min(lst): return round(min(lst)) if lst else None
+    def safe_max(lst): return round(max(lst)) if lst else None
+
+    dup_phones = {p: c for p, c in phones.items() if c > 1}
+    dup_addresses = {a: c for a, c in addresses.items() if c > 1}
+
+    area_buckets = {
+        'до_100м2': sum(1 for a in areas if a < 100),
+        '100_300м2': sum(1 for a in areas if 100 <= a < 300),
+        '300_1000м2': sum(1 for a in areas if 300 <= a < 1000),
+        'свыше_1000м2': sum(1 for a in areas if a >= 1000),
+    }
+
+    top_districts = sorted(districts.items(), key=lambda x: -x[1])[:10]
+    top_obj_types = sorted(obj_types.items(), key=lambda x: -x[1])[:10]
+
+    # Оценка пригодности для NOI
+    has_price_pct = round((total - no_price) / total * 100, 1) if total else 0
+    has_area_pct = round((total - no_area) / total * 100, 1) if total else 0
+    has_coords_pct = round((total - no_coords) / total * 100, 1) if total else 0
+
+    noi_score = round((has_price_pct + has_area_pct + has_coords_pct) / 3, 1)
+
+    return {
+        'total_rows': total,
+        'sources': sources,
+        'deal_types': deal_types,
+        'top_obj_types': top_obj_types,
+        'top_districts': top_districts,
+        'prices': {
+            'sale': {
+                'count': len(prices_sale),
+                'min': safe_min(prices_sale),
+                'median': safe_median(prices_sale),
+                'max': safe_max(prices_sale),
+            },
+            'rent': {
+                'count': len(prices_rent),
+                'min': safe_min(prices_rent),
+                'median': safe_median(prices_rent),
+                'max': safe_max(prices_rent),
+            },
+        },
+        'price_per_m2': {
+            'sale': {
+                'min': safe_min(ppm2_sale),
+                'median': safe_median(ppm2_sale),
+                'max': safe_max(ppm2_sale),
+            },
+            'rent': {
+                'min': safe_min(ppm2_rent),
+                'median': safe_median(ppm2_rent),
+                'max': safe_max(ppm2_rent),
+            },
+        },
+        'areas': {
+            'min': safe_min(areas),
+            'median': safe_median(areas),
+            'max': safe_max(areas),
+            'buckets': area_buckets,
+            'no_area_rows': no_area,
+        },
+        'data_quality': {
+            'no_price': no_price,
+            'no_area': no_area,
+            'no_coords': no_coords,
+            'coords_invalid': coords_invalid,
+            'has_price_pct': has_price_pct,
+            'has_area_pct': has_area_pct,
+            'has_coords_pct': has_coords_pct,
+            'noi_readiness_score': noi_score,
+        },
+        'duplicates': {
+            'phones': len(dup_phones),
+            'phone_details': dict(list(dup_phones.items())[:10]),
+            'addresses': len(dup_addresses),
+            'address_details': dict(list(dup_addresses.items())[:10]),
+        },
+        'dates': {
+            'min': min(dates) if dates else None,
+            'max': max(dates) if dates else None,
+        },
+        'problems': problems[:30],
+    }
