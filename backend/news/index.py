@@ -98,34 +98,37 @@ def _is_valid_article(article: dict) -> bool:
     return True
 
 
-SYSTEM_PROMPT_TEMPLATE = """Ты — профессиональный копирайтер специализированного издания о коммерческой недвижимости Краснодара и Краснодарского края.
+SYSTEM_PROMPT_TEMPLATE = """Ты — редактор новостного издания о коммерческой недвижимости Краснодара и Краснодарского края.
 
-СЕГОДНЯШНЯЯ ДАТА: {today}. Пиши статью актуальную именно на эту дату.
-
+СЕГОДНЯШНЯЯ ДАТА: {today}.
 {key_rate_block}
 
-Правила написания статьи:
-1. Заголовок: конкретный, до 100 символов, с указанием периода {month_year}
-2. Краткое описание (summary): 2-3 предложения, суть материала, 150-250 символов
-3. Текст: 4-6 абзацев, факты и цифры, профессиональный тон, 600-900 слов
+ГЛАВНОЕ ПРАВИЛО — НИКАКИХ ВЫДУМОК:
+- Пиши ТОЛЬКО на основе предоставленных новостей из источников
+- Если новость не содержит конкретную цифру — НЕ придумывай её
+- Если факт не указан в источниках — НЕ добавляй его
+- Запрещено писать "по данным экспертов", "аналитики отмечают" без ссылки на реальный источник из новостей
+- Запрещено придумывать проценты роста, суммы сделок, количество объектов и любые другие цифры
+
+ФОРМАТ СТАТЬИ:
+1. Заголовок: точно отражает содержание новостей, до 100 символов, период {month_year}
+2. Краткое описание (summary): 2-3 предложения о том, что реально произошло, 150-250 символов
+3. Текст: 4-6 абзацев, только факты из источников, профессиональный тон, 500-800 слов
 4. Если упоминается ключевая ставка — {key_rate_rule}
-5. Завершай выводом или рекомендацией для инвесторов/арендаторов
+5. Завершай кратким выводом о том, что это значит для рынка Краснодара — без придуманных прогнозов
 6. Без markdown-разметки, только текст с переносами строк
 
-АНТИПЛАГИАТ — ОБЯЗАТЕЛЬНО:
-- Если получаешь новости из источников — НЕ копируй дословно ни одного предложения
-- Все факты переформулируй своими словами, сохраняя смысл
-- Добавляй собственный экспертный анализ: что это значит для рынка Краснодара, какие последствия
-- Статья должна быть уникальной авторской работой, а не пересказом новостей
+ОБЯЗАТЕЛЬНО:
+- Все факты и цифры — только из предоставленных новостей
+- Переформулируй своими словами, НЕ копируй дословно
+- Указывай временные рамки только если они есть в источниках
 
 Формат ответа (строго JSON):
 {{
   "title": "Заголовок статьи",
   "summary": "Краткое описание",
   "content": "Полный текст статьи"
-}}
-
-ВАЖНО: статья должна отражать реалии именно {today}."""
+}}"""
 
 
 def _fetch_cbr_key_rate() -> float | None:
@@ -392,14 +395,21 @@ def _gpt(api_key, folder_id, topic, key_rate: float | None = None, news_snippets
         key_rate_block=key_rate_block,
         key_rate_rule=key_rate_rule,
     )
-    # Добавляем живые новости в контекст если переданы
-    news_block = _build_news_context(news_snippets or [])
-    user_text = f'Напиши статью на тему: {topic}. Дата: {today_str}.'
-    if news_block:
-        user_text += f'\n\n{news_block}\n\nНапиши УНИКАЛЬНУЮ авторскую статью, используя эти новости как фактуру и источник данных. Переформулируй все факты своими словами, добавь экспертный анализ и выводы для рынка коммерческой недвижимости Краснодара.'
+    # Если нет новостей — отказываемся генерировать (запрещено выдумывать)
+    news_snippets = news_snippets or []
+    if not news_snippets:
+        return None, 'Нет свежих новостей по теме — генерация отменена (запрещено писать без источников)'
+    news_block = _build_news_context(news_snippets)
+    user_text = (
+        f'Тема: {topic}\n'
+        f'Дата публикации: {today_str}\n\n'
+        f'{news_block}\n\n'
+        f'Напиши статью, пересказав эти новости своими словами. '
+        f'Используй только факты из источников выше. Не придумывай цифры и данные которых нет в новостях.'
+    )
     payload = {
         'modelUri': f'gpt://{folder_id}/{YANDEX_MODEL}',
-        'completionOptions': {'stream': False, 'temperature': 0.7, 'maxTokens': '3000'},
+        'completionOptions': {'stream': False, 'temperature': 0.3, 'maxTokens': '3000'},
         'messages': [
             {'role': 'system', 'text': system_prompt},
             {'role': 'user', 'text': user_text},
@@ -564,8 +574,7 @@ def _save_article(cur, conn, article, is_auto, user_id=None, auto_publish=False,
     title = _safe(article.get('title', ''), 299)
     summary = _safe(article.get('summary', ''), 999)
     content = _safe(article.get('content', ''), 49999)
-    # Генерируем картинку
-    image_url = _generate_image(article.get('title', ''), logo_url)
+    image_url = article.get('image_url', '')
     img_val = f"'{_safe(image_url, 499)}'" if image_url else 'NULL'
     pub_val = 'TRUE' if auto_publish else 'FALSE'
     pub_at_val = f"'{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')}'" if auto_publish else 'NULL'
@@ -669,7 +678,6 @@ def handler(event: dict, context) -> dict:
                     )
                     if time_ok and not already_ran:
                         api_key, folder_id = _load_gpt_keys(cur)
-                        logo_url = _load_logo_url(cur)
                         key_rate = _fetch_cbr_key_rate()
                         import random
                         count = int(sch.get('articles_per_run', 3))
@@ -698,10 +706,12 @@ def handler(event: dict, context) -> dict:
                                 news_snippets=combined[:8],
                             )
                             if article and _is_valid_article(article):
-                                _save_article(cur, conn, article, True, auto_publish=True, logo_url=logo_url, key_rate=key_rate)
+                                _save_article(cur, conn, article, True, auto_publish=True, key_rate=key_rate)
                                 news_generated += 1
                             elif article:
                                 print(f'[news] Отклонена статья (отказ модели): {article.get("title", "")[:80]}')
+                            else:
+                                print(f'[news] Пропущена тема (нет новостей): {topic[:80]}')
                         ts = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')
                         cur.execute(
                             f"UPDATE {SCHEMA}.news_schedule SET last_run_at = '{ts}', "
@@ -897,38 +907,45 @@ def handler(event: dict, context) -> dict:
                 conn.commit()
                 return _ok({'ok': True})
 
-            # ── ГЕНЕРАЦИЯ СТАТЬИ с картинкой ─────────────────────────────
+            # ── ГЕНЕРАЦИЯ СТАТЬИ ──────────────────────────────────────────
             if action == 'generate':
                 topic = body.get('topic', '').strip()
                 if not topic:
                     import random
                     topic = random.choice(AUTO_TOPICS)
                 api_key, folder_id = _load_gpt_keys(cur)
-                logo_url = _load_logo_url(cur)
                 auto_pub = bool(body.get('auto_publish', False))
                 key_rate = _fetch_cbr_key_rate()
-                article, err = _gpt(api_key, folder_id, topic, key_rate=key_rate)
+                # Ищем свежие новости — без них генерация запрещена
+                news_snippets, src = _fetch_news_snippets(f'{topic} Краснодар', limit=8)
+                if not news_snippets:
+                    news_snippets, src = _fetch_news_snippets('коммерческая недвижимость Краснодар', limit=8)
+                article, err = _gpt(api_key, folder_id, topic, key_rate=key_rate, news_snippets=news_snippets)
                 if err:
                     return _err(f'Ошибка генерации: {err}')
                 if not _is_valid_article(article):
                     return _err(f'Модель отказалась писать статью на тему: {topic}')
-                nid, slug = _save_article(cur, conn, article, True, user['id'], auto_publish=auto_pub, logo_url=logo_url, key_rate=key_rate)
-                return _ok({'id': nid, 'slug': slug, 'title': article.get('title'), 'topic': topic, 'cb_key_rate': key_rate})
+                nid, slug = _save_article(cur, conn, article, True, user['id'], auto_publish=auto_pub, key_rate=key_rate)
+                return _ok({'id': nid, 'slug': slug, 'title': article.get('title'), 'topic': topic, 'cb_key_rate': key_rate, 'news_source': src, 'news_count': len(news_snippets)})
 
-            # ── АВТОЗАПУСК ВРУЧНУЮ с картинками ──────────────────────────
+            # ── АВТОЗАПУСК ВРУЧНУЮ ────────────────────────────────────────
             if action == 'run_auto':
                 api_key, folder_id = _load_gpt_keys(cur)
-                logo_url = _load_logo_url(cur)
                 key_rate = _fetch_cbr_key_rate()
                 count = min(int(body.get('count', 3)), 10)
                 auto_pub = bool(body.get('auto_publish', True))
                 import random
                 topics = random.sample(AUTO_TOPICS, min(count, len(AUTO_TOPICS)))
+                # Общий дайджест новостей на случай если по теме ничего нет
+                daily_news, _ = _fetch_news_snippets('коммерческая недвижимость Краснодар новости', limit=10)
                 results = []
                 for topic in topics:
-                    article, err = _gpt(api_key, folder_id, topic, key_rate=key_rate)
+                    topic_news, src = _fetch_news_snippets(f'{topic} Краснодар', limit=5)
+                    seen = {s['url'] for s in topic_news}
+                    combined = topic_news + [s for s in daily_news if s['url'] not in seen]
+                    article, err = _gpt(api_key, folder_id, topic, key_rate=key_rate, news_snippets=combined[:8])
                     if article and _is_valid_article(article):
-                        nid, slug = _save_article(cur, conn, article, True, user['id'], auto_publish=auto_pub, logo_url=logo_url, key_rate=key_rate)
+                        nid, slug = _save_article(cur, conn, article, True, user['id'], auto_publish=auto_pub, key_rate=key_rate)
                         results.append({'id': nid, 'slug': slug, 'title': article.get('title'), 'topic': topic, 'cb_key_rate': key_rate})
                     else:
                         results.append({'error': err or 'Модель отказалась писать статью', 'topic': topic})
