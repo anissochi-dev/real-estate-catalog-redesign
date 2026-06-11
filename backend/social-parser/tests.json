@@ -29,6 +29,22 @@
       "body": { "action": "test_post", "text": "Сдам офис 50м² ул. Ленина 100000 руб/мес" },
       "expectedStatus": 401,
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "queue_stats — без токена 401",
+      "method": "POST",
+      "path": "/",
+      "body": { "action": "queue_stats" },
+      "expectedStatus": 401,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "criteria_list — без токена 401",
+      "method": "POST",
+      "path": "/",
+      "body": { "action": "criteria_list" },
+      "expectedStatus": 401,
+      "bodyMatcher": "partial"
     }
   ]
 }

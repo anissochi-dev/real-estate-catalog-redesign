@@ -1,34 +1,35 @@
 """
 adapter_ok.py — парсер публичных групп Одноклассников (ok.ru).
 
-Метод: HTML-парсинг публичных страниц ok.ru/group/{id}/topics
-Без API ключей — работает через куки техаккаунта (хранятся в social_sessions).
-Публичные группы — без авторизации (ограниченно).
-Закрытые — через куки аккаунта-члена группы.
+Метод: HTML-парсинг ok.ru/group/{id}/topics
+Без API — через куки техаккаунта (social_sessions).
+Результат сохраняется в social_posts (очередь модерации).
 
-Антибан: паузы 3-6 сек, лимит 150 req/h, 800 req/day, только 09-23 МСК.
+Антибан: паузы 3-6 сек, лимит 150 req/h, 800 req/day, 09-23 МСК.
 """
 
 import re
+import hashlib
+
 from core import (
     safe_fetch, parse_post_text, is_realestate_post,
-    get_session, get_sources, update_source, save_to_market, log_run,
+    get_session, get_sources, update_source, save_post, log_run,
+    matches_criteria, post_meets_requirements,
 )
 
 
-# ─── Парсинг страницы группы ──────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# ПАРСИНГ HTML ГРУППЫ
+# ═══════════════════════════════════════════════════════════════════════════════
 
-def _parse_ok_group_html(html: str, group_id: str) -> list[dict]:
-    """
-    Парсит HTML страницы ok.ru/group/{id}/topics.
-    Извлекает посты из div.media-text_cnt или похожих блоков.
-    """
+def _parse_ok_group(html: str, group_id: str) -> list[dict]:
+    """Парсит HTML страницы ok.ru/group/{id}/topics."""
     posts = []
-    seen = set()
+    seen  = set()
 
-    # Метод 1: ищем data-id постов
-    post_ids = re.finditer(r'data-id=["\'](\d+)["\']', html)
-    positions = [(m.start(), m.group(1)) for m in post_ids]
+    # Ищем блоки постов по data-id
+    positions = [(m.start(), m.group(1))
+                 for m in re.finditer(r'data-id=["\'](\d+)["\']', html)]
 
     for i, (pos, post_id) in enumerate(positions):
         if post_id in seen:
@@ -38,168 +39,221 @@ def _parse_ok_group_html(html: str, group_id: str) -> list[dict]:
         next_pos = positions[i + 1][0] if i + 1 < len(positions) else pos + 4000
         block = html[pos:next_pos]
 
-        text = _extract_ok_text(block)
-        if not text or len(text) < 30:
+        text   = _extract_text(block)
+        photos = _extract_photos(block)
+        author = _extract_author(block)
+        date   = _extract_date(block)
+
+        if not text or len(text) < 20:
             continue
 
-        url = f'https://ok.ru/group/{group_id}/topic/{post_id}'
-        posts.append({'post_id': post_id, 'text': text, 'url': url})
+        posts.append({
+            'post_id':    post_id,
+            'post_url':   f'https://ok.ru/group/{group_id}/topic/{post_id}',
+            'post_date':  date,
+            'raw_text':   text,
+            'photos':     photos,
+            'author_name': author.get('name'),
+            'author_url':  author.get('url'),
+        })
 
-    # Метод 2: если data-id не нашли — ищем по классам текста
+    # Запасной метод — если data-id не нашли
     if not posts:
-        text_blocks = re.finditer(
-            r'class=["\'][^"\']*(?:media-text|post-content|group-feed)[^"\']*["\'][^>]*>(.*?)</div>',
+        for i, m in enumerate(re.finditer(
+            r'class=["\'][^"\']*(?:media-text|post-content)[^"\']*["\'][^>]*>(.*?)</div>',
             html, re.S | re.I
-        )
-        for i, m in enumerate(text_blocks):
+        )):
             text = _clean_html(m.group(1))
             if text and len(text) >= 30:
-                post_id = f'ok_{group_id}_{i}'
-                if post_id not in seen:
-                    seen.add(post_id)
-                    posts.append({
-                        'post_id': post_id,
-                        'text': text,
-                        'url': f'https://ok.ru/group/{group_id}',
-                    })
+                pid = f'ok_{group_id}_{i}'
+                posts.append({
+                    'post_id':    pid,
+                    'post_url':   f'https://ok.ru/group/{group_id}',
+                    'post_date':  None,
+                    'raw_text':   text,
+                    'photos':     [],
+                    'author_name': None,
+                    'author_url':  None,
+                })
 
     return posts
 
 
-def _extract_ok_text(block: str) -> str:
-    """Извлекает текст из блока HTML поста ОК."""
-    # Метод 1: media-text_cnt
-    m = re.search(
+def _extract_text(block: str) -> str:
+    for pattern in [
         r'class=["\'][^"\']*media-text[^"\']*["\'][^>]*>(.*?)</(?:div|article)>',
-        block, re.S | re.I
-    )
-    if m:
-        return _clean_html(m.group(1))
-
-    # Метод 2: post-content-container
-    m = re.search(
         r'class=["\'][^"\']*post-content[^"\']*["\'][^>]*>(.*?)</div>',
-        block, re.S | re.I
+    ]:
+        m = re.search(pattern, block, re.S | re.I)
+        if m:
+            return _clean_html(m.group(1))
+    m = re.search(r'data-text=["\']([^"\']{20,})["\']', block)
+    return m.group(1) if m else ''
+
+
+def _extract_photos(block: str) -> list[str]:
+    photos = []
+    seen_p = set()
+    for pattern in [
+        r'<img[^>]+src=["\']([^"\']+\.(?:jpg|jpeg|png|webp))["\'][^>]*class=["\'][^"\']*photo',
+        r'data-original=["\']([^"\']+\.(?:jpg|jpeg|png))["\']',
+        r'background-image:\s*url\(["\']?([^"\')\s]+\.(?:jpg|jpeg|png))["\']?\)',
+    ]:
+        for pm in re.finditer(pattern, block, re.I | re.S):
+            url = pm.group(1)
+            if url and url.startswith('http') and url not in seen_p:
+                seen_p.add(url)
+                photos.append(url)
+    return photos[:20]
+
+
+def _extract_author(block: str) -> dict:
+    m = re.search(
+        r'class=["\'][^"\']*(?:author|owner)[^"\']*["\'][^>]*href=["\']([^"\']+)["\'][^>]*>([^<]{2,80})',
+        block, re.I
     )
     if m:
-        return _clean_html(m.group(1))
+        href = m.group(1)
+        url  = href if href.startswith('http') else f'https://ok.ru{href}'
+        return {'name': _clean_html(m.group(2)), 'url': url}
+    return {'name': None, 'url': None}
 
-    # Метод 3: data-text атрибут
-    m = re.search(r'data-text=["\']([^"\']{20,})["\']', block)
+
+def _extract_date(block: str) -> str | None:
+    m = re.search(r'<(?:time|abbr)[^>]+datetime=["\']([^"\']+)["\']', block, re.I)
     if m:
         return m.group(1)
-
-    return ''
+    m = re.search(r'data-date=["\'](\d+)["\']', block)
+    return m.group(1) if m else None
 
 
 def _clean_html(html: str) -> str:
-    """Убирает HTML-теги, нормализует пробелы."""
     text = re.sub(r'<br\s*/?>', '\n', html, flags=re.I)
     text = re.sub(r'<[^>]+>', ' ', text)
-    text = re.sub(r'&amp;', '&', text)
-    text = re.sub(r'&lt;', '<', text)
-    text = re.sub(r'&gt;', '>', text)
-    text = re.sub(r'&nbsp;', ' ', text)
+    for ent, rep in [('&amp;','&'),('&lt;','<'),('&gt;','>'),('&nbsp;',' ')]:
+        text = text.replace(ent, rep)
     text = re.sub(r'\s{3,}', '\n\n', text)
     return text.strip()
 
 
 def _get_group_url(source_id: str) -> str:
-    """Строит URL страницы группы."""
-    # source_id может быть числовым id или slug
-    if source_id.isdigit():
-        return f'https://ok.ru/group/{source_id}/topics'
-    # slug вида ok.ru/something
     slug = source_id.replace('https://ok.ru/', '').strip('/')
+    if slug.isdigit():
+        return f'https://ok.ru/group/{slug}/topics'
     return f'https://ok.ru/{slug}/topics'
 
 
-# ─── Главная функция парсинга ─────────────────────────────────────────────────
+def _content_hash(platform: str, post_id: str) -> str:
+    return hashlib.md5(f'{platform}:{post_id}'.encode()).hexdigest()
 
-def scrape_ok(conn, source: dict, session: dict, max_posts: int = 50) -> dict:
-    """
-    Парсит одну группу Одноклассников.
-    source — запись из social_parser_sources.
-    session — запись из social_sessions.
-    """
+
+def _calc_confidence(parsed: dict) -> float:
+    score = 0.0
+    if parsed.get('price'):    score += 0.3
+    if parsed.get('area'):     score += 0.2
+    if parsed.get('phone'):    score += 0.2
+    if parsed.get('address'):  score += 0.15
+    if parsed.get('district'): score += 0.1
+    if parsed.get('category') != 'other': score += 0.05
+    return round(min(score, 1.0), 2)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ГЛАВНЫЕ ФУНКЦИИ
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def scrape_ok_source(conn, source: dict, session: dict,
+                     criteria: dict = None, max_posts: int = 50) -> dict:
+    """Парсит одну OK-группу. Сохраняет в social_posts."""
     group_id = source['source_id']
-    url = _get_group_url(group_id)
-
-    print(f'[ok] парсим группу {group_id}: {url}')
-
-    html = safe_fetch(url, 'ok', conn, session, timeout=20)
+    html = safe_fetch(_get_group_url(group_id), 'ok', conn, session, timeout=20)
     if not html:
-        return {'posts_found': 0, 'posts_saved': 0, 'skipped': 0, 'error': 'Не удалось загрузить страницу'}
+        return {'posts_found': 0, 'posts_saved': 0, 'skipped': 0,
+                'error': 'Не удалось загрузить страницу'}
 
-    posts = _parse_ok_group_html(html, group_id)
-    print(f'[ok] найдено постов в HTML: {len(posts)}')
+    raw_posts = _parse_ok_group(html, group_id)
+    print(f'[ok] {group_id}: найдено постов={len(raw_posts)}')
 
-    records = []
-    skipped = 0
+    saved = skipped = 0
+    route_to = (criteria or {}).get('route_to', 'moderation')
 
-    for post in posts[:max_posts]:
-        text = post['text']
+    for raw in raw_posts[:max_posts]:
+        text = raw.get('raw_text') or ''
+
+        if criteria and not matches_criteria(text, criteria):
+            skipped += 1; continue
         if not is_realestate_post(text):
-            skipped += 1
-            continue
+            skipped += 1; continue
 
-        rec = parse_post_text(
-            text=text,
-            source='ok',
-            post_id=post['post_id'],
-            url=post['url'],
-        )
-        if rec:
-            records.append(rec)
+        parsed = parse_post_text(text, 'ok', raw['post_id'], raw.get('post_url', ''))
+        if not parsed:
+            skipped += 1; continue
+
+        post_record = {
+            'criteria_id':       (criteria or {}).get('id'),
+            'platform':          'ok',
+            'source_id':         group_id,
+            'post_id':           raw['post_id'],
+            'post_url':          raw.get('post_url'),
+            'post_date':         raw.get('post_date'),
+            'author_name':       raw.get('author_name'),
+            'author_url':        raw.get('author_url'),
+            'raw_text':          text[:5000],
+            'photos':            raw.get('photos') or [],
+            'detected_deal':     parsed.get('deal_type'),
+            'detected_category': parsed.get('category'),
+            'detected_price':    parsed.get('price'),
+            'detected_area':     parsed.get('area'),
+            'detected_address':  parsed.get('address'),
+            'detected_district': parsed.get('district'),
+            'detected_phone':    parsed.get('phone'),
+            'confidence':        _calc_confidence(parsed),
+            'route_to':          route_to,
+            'content_hash':      _content_hash('ok', raw['post_id']),
+        }
+
+        if criteria and not post_meets_requirements(post_record, criteria):
+            skipped += 1; continue
+
+        if save_post(conn, post_record):
+            saved += 1
         else:
             skipped += 1
 
-    inserted, updated = save_to_market(conn, records)
-
-    print(f'[ok] {group_id}: постов={len(posts)}, объявлений={len(records)}, '
-          f'добавлено={inserted}, обновлено={updated}, пропущено={skipped}')
-
-    return {
-        'posts_found': len(posts),
-        'posts_saved': inserted + updated,
-        'skipped': skipped,
-        'error': None,
-    }
+    print(f'[ok] {group_id}: сохранено={saved}, пропущено={skipped}')
+    return {'posts_found': len(raw_posts), 'posts_saved': saved,
+            'skipped': skipped, 'error': None}
 
 
-def run_ok(conn, max_posts_per_source: int = 50) -> dict:
+def run_ok(conn, criteria: dict = None, max_posts_per_source: int = 50) -> dict:
     """Запускает парсинг всех активных OK-источников."""
     session = get_session(conn, 'ok')
     if not session:
-        return {'error': 'Нет активной OK-сессии. Добавьте куки в настройках.', 'total_saved': 0}
+        return {'error': 'Нет активной OK-сессии', 'total_saved': 0}
 
-    sources = get_sources(conn, 'ok')
+    if criteria and criteria.get('source_ids'):
+        all_src = get_sources(conn, 'ok')
+        sources = [s for s in all_src if s['source_id'] in criteria['source_ids']]
+    else:
+        sources = get_sources(conn, 'ok')
+
     if not sources:
-        return {'error': 'Нет активных OK-источников. Добавьте группы в настройках.', 'total_saved': 0}
+        return {'error': 'Нет активных OK-источников', 'total_saved': 0}
 
     total_found = total_saved = 0
     results = []
 
     for src in sources:
-        result = scrape_ok(conn, src, session, max_posts=max_posts_per_source)
-        total_found += result['posts_found']
-        total_saved += result['posts_saved']
-        results.append({'source_id': src['source_id'], **result})
-
-        update_source(conn, src['id'], result['posts_found'])
+        res = scrape_ok_source(conn, src, session, criteria, max_posts_per_source)
+        total_found += res['posts_found']
+        total_saved += res['posts_saved']
+        results.append({'source_id': src['source_id'], **res})
+        update_source(conn, src['id'], res['posts_found'])
         log_run(conn, 'ok', src['source_id'],
-                'done' if not result['error'] else 'error',
-                result['posts_found'], result['posts_saved'],
-                result.get('error') or '')
-
+                'done' if not res['error'] else 'error',
+                res['posts_found'], res['posts_saved'], res.get('error') or '')
         if session.get('is_blocked'):
-            print('[ok] сессия заблокирована, останавливаемся')
             break
 
-    return {
-        'platform': 'ok',
-        'sources_processed': len(results),
-        'total_found': total_found,
-        'total_saved': total_saved,
-        'details': results,
-    }
+    return {'platform': 'ok', 'sources_processed': len(results),
+            'total_found': total_found, 'total_saved': total_saved, 'details': results}

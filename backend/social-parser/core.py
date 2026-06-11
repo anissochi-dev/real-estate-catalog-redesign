@@ -222,6 +222,167 @@ def log_run(conn, platform: str, source_id: str, status: str,
     return row['id'] if row else 0
 
 
+def save_post(conn, post: dict) -> int | None:
+    """
+    Сохраняет найденный пост в social_posts (очередь модерации).
+    Возвращает id или None если дубликат.
+    Дедупликация по (platform, post_id).
+    """
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.social_posts "
+            f"(criteria_id, platform, source_id, post_id, post_url, post_date, "
+            f"author_name, author_url, raw_text, photos, "
+            f"detected_deal, detected_category, detected_price, detected_area, "
+            f"detected_address, detected_district, detected_phone, confidence, "
+            f"status, route_to, content_hash) "
+            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'pending',%s,%s) "
+            f"ON CONFLICT (platform, post_id) DO NOTHING "
+            f"RETURNING id",
+            (
+                post.get('criteria_id'),
+                post.get('platform', ''),
+                post.get('source_id', ''),
+                post.get('post_id', ''),
+                (post.get('post_url') or '')[:500] or None,
+                post.get('post_date'),
+                (post.get('author_name') or '')[:200] or None,
+                (post.get('author_url') or '')[:500] or None,
+                post.get('raw_text') or None,
+                post.get('photos') or [],
+                post.get('detected_deal'),
+                post.get('detected_category'),
+                post.get('detected_price'),
+                post.get('detected_area'),
+                (post.get('detected_address') or '')[:500] or None,
+                (post.get('detected_district') or '')[:100] or None,
+                (post.get('detected_phone') or '')[:30] or None,
+                post.get('confidence'),
+                post.get('route_to'),
+                post.get('content_hash'),
+            )
+        )
+        row = cur.fetchone()
+        conn.commit()
+        return row[0] if row else None
+    except Exception as e:
+        print(f'[save_post] ошибка: {e}')
+        conn.rollback()
+        return None
+    finally:
+        cur.close()
+
+
+def get_active_criteria(conn, platform: str = '') -> list[dict]:
+    """Возвращает активные критерии поиска у которых подошло время запуска."""
+    cur = conn.cursor()
+    if platform:
+        cur.execute(
+            f"SELECT * FROM {SCHEMA}.social_search_criteria "
+            f"WHERE is_active=TRUE AND %s=ANY(platforms) "
+            f"AND (next_run_at IS NULL OR next_run_at <= NOW()) "
+            f"ORDER BY last_run_at ASC NULLS FIRST",
+            (platform,)
+        )
+    else:
+        cur.execute(
+            f"SELECT * FROM {SCHEMA}.social_search_criteria "
+            f"WHERE is_active=TRUE "
+            f"AND (next_run_at IS NULL OR next_run_at <= NOW()) "
+            f"ORDER BY last_run_at ASC NULLS FIRST"
+        )
+    rows = [dict(r) for r in cur.fetchall()]
+    cur.close()
+    return rows
+
+
+def update_criteria_run_time(conn, criteria_id: int):
+    """Обновляет время последнего и следующего запуска критерия."""
+    cur = conn.cursor()
+    cur.execute(
+        f"UPDATE {SCHEMA}.social_search_criteria "
+        f"SET last_run_at=NOW(), "
+        f"next_run_at=NOW() + (run_interval_hours * INTERVAL '1 hour'), "
+        f"updated_at=NOW() "
+        f"WHERE id=%s",
+        (criteria_id,)
+    )
+    conn.commit()
+    cur.close()
+
+
+def matches_criteria(text: str, criteria: dict) -> bool:
+    """
+    Проверяет соответствует ли текст поста критериям поиска.
+    Проверяет: ключевые слова, тип сделки, категорию, цену, площадь, район.
+    """
+    t = text.lower()
+
+    # Обязательные слова — хотя бы одно должно присутствовать
+    includes = criteria.get('keywords_include') or []
+    if includes and not any(kw.lower() in t for kw in includes):
+        return False
+
+    # Исключающие слова — ни одно не должно присутствовать
+    excludes = criteria.get('keywords_exclude') or []
+    if any(kw.lower() in t for kw in excludes):
+        return False
+
+    return True
+
+
+def post_meets_requirements(post: dict, criteria: dict) -> bool:
+    """
+    Проверяет выполнение обязательных требований к посту.
+    require_price, require_area, require_phone, require_photo, require_address
+    """
+    if criteria.get('require_price') and not post.get('detected_price'):
+        return False
+    if criteria.get('require_area') and not post.get('detected_area'):
+        return False
+    if criteria.get('require_phone') and not post.get('detected_phone'):
+        return False
+    if criteria.get('require_photo') and not post.get('photos'):
+        return False
+    if criteria.get('require_address') and not post.get('detected_address'):
+        return False
+
+    # Фильтр по типу сделки
+    deal_types = criteria.get('deal_types') or []
+    if deal_types and post.get('detected_deal') not in deal_types:
+        return False
+
+    # Фильтр по категории
+    categories = criteria.get('categories') or []
+    if categories and post.get('detected_category') not in categories:
+        return False
+
+    # Фильтр по цене
+    price = post.get('detected_price')
+    if price:
+        if criteria.get('price_min') and price < criteria['price_min']:
+            return False
+        if criteria.get('price_max') and price > criteria['price_max']:
+            return False
+
+    # Фильтр по площади
+    area = post.get('detected_area')
+    if area:
+        if criteria.get('area_min') and area < float(criteria['area_min']):
+            return False
+        if criteria.get('area_max') and area > float(criteria['area_max']):
+            return False
+
+    # Фильтр по районам
+    districts = criteria.get('districts') or []
+    if districts and post.get('detected_district'):
+        if post['detected_district'] not in districts:
+            return False
+
+    return True
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # HTTP С АНТИБАН-ЗАЩИТОЙ
 # ═══════════════════════════════════════════════════════════════════════════════
