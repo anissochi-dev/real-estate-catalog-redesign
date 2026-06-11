@@ -62,6 +62,42 @@ AUTO_TOPICS = [
     'Гостиницы и хостелы Краснодара: туристический поток и спрос на площади',
 ]
 
+# Стоп-фразы из ответов GPT-моделей при отказе отвечать
+_REFUSAL_PHRASES = [
+    'не могу обсуждать',
+    'не могу помочь',
+    'не могу отвечать',
+    'давайте поговорим',
+    'предлагаю поговорить',
+    'не буду обсуждать',
+    'не в состоянии',
+    'не способен',
+    'не имею возможности',
+    'обратитесь к специалисту',
+    'это вне моей компетенции',
+    'я языковая модель',
+    'я искусственный интеллект',
+    'cannot discuss',
+    'let\'s talk about something',
+]
+
+def _is_valid_article(article: dict) -> bool:
+    """Проверяет что GPT вернул реальную статью, а не отказ/отписку."""
+    if not article:
+        return False
+    title = (article.get('title') or '').lower()
+    content = (article.get('content') or '').lower()
+    # Проверяем стоп-фразы в заголовке и начале контента
+    combined = title + ' ' + content[:500]
+    for phrase in _REFUSAL_PHRASES:
+        if phrase.lower() in combined:
+            return False
+    # Статья должна быть достаточно длинной
+    if len(content) < 300:
+        return False
+    return True
+
+
 SYSTEM_PROMPT_TEMPLATE = """Ты — профессиональный копирайтер специализированного издания о коммерческой недвижимости Краснодара и Краснодарского края.
 
 СЕГОДНЯШНЯЯ ДАТА: {today}. Пиши статью актуальную именно на эту дату.
@@ -661,9 +697,11 @@ def handler(event: dict, context) -> dict:
                                 key_rate=key_rate,
                                 news_snippets=combined[:8],
                             )
-                            if article:
+                            if article and _is_valid_article(article):
                                 _save_article(cur, conn, article, True, auto_publish=True, logo_url=logo_url, key_rate=key_rate)
                                 news_generated += 1
+                            elif article:
+                                print(f'[news] Отклонена статья (отказ модели): {article.get("title", "")[:80]}')
                         ts = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')
                         cur.execute(
                             f"UPDATE {SCHEMA}.news_schedule SET last_run_at = '{ts}', "
@@ -872,6 +910,8 @@ def handler(event: dict, context) -> dict:
                 article, err = _gpt(api_key, folder_id, topic, key_rate=key_rate)
                 if err:
                     return _err(f'Ошибка генерации: {err}')
+                if not _is_valid_article(article):
+                    return _err(f'Модель отказалась писать статью на тему: {topic}')
                 nid, slug = _save_article(cur, conn, article, True, user['id'], auto_publish=auto_pub, logo_url=logo_url, key_rate=key_rate)
                 return _ok({'id': nid, 'slug': slug, 'title': article.get('title'), 'topic': topic, 'cb_key_rate': key_rate})
 
@@ -887,11 +927,11 @@ def handler(event: dict, context) -> dict:
                 results = []
                 for topic in topics:
                     article, err = _gpt(api_key, folder_id, topic, key_rate=key_rate)
-                    if article:
+                    if article and _is_valid_article(article):
                         nid, slug = _save_article(cur, conn, article, True, user['id'], auto_publish=auto_pub, logo_url=logo_url, key_rate=key_rate)
                         results.append({'id': nid, 'slug': slug, 'title': article.get('title'), 'topic': topic, 'cb_key_rate': key_rate})
                     else:
-                        results.append({'error': err, 'topic': topic})
+                        results.append({'error': err or 'Модель отказалась писать статью', 'topic': topic})
                 return _ok({'results': results, 'generated': len([r for r in results if 'id' in r]), 'cb_key_rate': key_rate})
 
             # ── ОБНОВИТЬ СТАВКИ В СУЩЕСТВУЮЩИХ СТАТЬЯХ ───────────────────
