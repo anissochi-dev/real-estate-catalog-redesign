@@ -1,0 +1,60 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Неизвестный action → ошибка",
+      "method": "POST",
+      "path": "/",
+      "body": { "action": "unknown_action" },
+      "expectedStatus": 400,
+      "expectedBody": { "error": "Неизвестный action: unknown_action" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "xlsx_start без file_url → ошибка",
+      "method": "POST",
+      "path": "/",
+      "body": { "action": "xlsx_start" },
+      "expectedStatus": 400,
+      "expectedBody": { "error": "Укажите file_url" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "xlsx_list — история импортов",
+      "method": "POST",
+      "path": "/",
+      "body": { "action": "xlsx_list" },
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "csv_stats — статистика",
+      "method": "POST",
+      "path": "/",
+      "body": { "action": "csv_stats" },
+      "expectedStatus": 200
+    },
+    {
+      "name": "url_parse без url → ошибка",
+      "method": "POST",
+      "path": "/",
+      "body": { "action": "url_parse" },
+      "expectedStatus": 400,
+      "expectedBody": { "error": "Укажите url" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "import_market_list — обратная совместимость",
+      "method": "POST",
+      "path": "/",
+      "body": { "action": "import_market_list" },
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    }
+  ]
+}
