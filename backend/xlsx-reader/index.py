@@ -106,24 +106,27 @@ def _import_market_xlsx(file_url: str, source: str, preview: bool, replace: bool
         return -1
 
     col_price   = find_col('цена', 'price', 'стоимость')
-    col_area    = find_col('площадь', 'area', 'кв.м', 'кв м', 'площ')
+    col_area    = find_col('площадь', 'area', 'кв.м', 'кв м', 'площ', 'square')
     col_deal    = find_col('тип сделки', 'тип объявления', 'deal', 'сделка', 'операция')
-    col_cat     = find_col('категория', 'тип объекта', 'вид объекта', 'category', 'тип недвижимости', 'назначение')
+    col_cat     = find_col('категория1', 'категория2', 'категория', 'тип объекта', 'вид объекта', 'category', 'тип недвижимости', 'назначение')
+    col_cat2    = find_col('категория2') if find_col('категория1') >= 0 else -1
     col_addr    = find_col('адрес', 'address', 'местоположение')
-    col_dist    = find_col('район', 'district', 'округ')
+    col_dist    = find_col('метро/район', 'район', 'district', 'округ', 'метро')
     col_title   = find_col('название', 'заголовок', 'title', 'наименование')
     col_floor   = find_col('этаж', 'floor')
     col_tfloors = find_col('этажность', 'этажей', 'total_floor', 'кол-во этажей')
-    col_url     = find_col('url', 'ссылка', 'link', 'объявление')
-    col_ext_id  = find_col('id объявления', 'внешний id', 'id', 'номер объявления')
+    col_url     = find_col('url', 'ссылка', 'link', 'объявление', 'источник')
+    col_ext_id  = find_col('id на сайте', 'id объявления', 'внешний id', 'id', 'номер объявления')
     col_desc    = find_col('описание', 'description', 'комментарий')
     col_ppm2    = find_col('цена за м', 'price_per_m', 'цена/м', 'руб/м')
+    col_lat     = find_col('lat', 'latitude', 'широта')
+    col_lng     = find_col('lng', 'lon', 'longitude', 'долгота')
 
-    if col_price < 0 or col_area < 0:
+    if col_price < 0:
         return {
             'statusCode': 400, 'headers': CORS,
             'body': json.dumps({
-                'error': 'Не найдены обязательные колонки "Цена" и "Площадь"',
+                'error': 'Не найдена обязательная колонка "Цена"',
                 'header_found': header[:30],
             }, ensure_ascii=False)
         }
@@ -141,12 +144,25 @@ def _import_market_xlsx(file_url: str, source: str, preview: bool, replace: bool
             return row[idx]
 
         price = _parse_float_m(cell(col_price))
-        area  = _parse_float_m(cell(col_area))
+        title_val = str(cell(col_title) or '').strip() if col_title >= 0 else ''
+
+        # Площадь: из колонки или из названия (напр. "Офис 45 м²")
+        area = _parse_float_m(cell(col_area)) if col_area >= 0 else 0.0
+        if area <= 0 and title_val:
+            m = re.search(r'(\d+[\.,]?\d*)\s*м', title_val)
+            if m:
+                area = _parse_float_m(m.group(1))
+
         deal_raw = str(cell(col_deal) or 'продажа')
         deal = _map_deal_m(deal_raw)
-        title_val = str(cell(col_title) or '').strip() if col_title >= 0 else ''
+
+        # Категория: объединяем категория1 + категория2 для Авито
         cat_raw = str(cell(col_cat) or '').strip()
+        if col_cat2 >= 0:
+            cat2_raw = str(cell(col_cat2) or '').strip()
+            cat_raw = f"{cat_raw} {cat2_raw}".strip()
         category = _map_obj_type_m(cat_raw, title_val)
+
         address = str(cell(col_addr) or '').strip()
         district = str(cell(col_dist) or '').strip()[:200]
         floor_v = int(_parse_float_m(cell(col_floor))) or None
@@ -156,6 +172,8 @@ def _import_market_xlsx(file_url: str, source: str, preview: bool, replace: bool
         desc = str(cell(col_desc) or '').strip()[:1000] or None
         ppm2_raw = _parse_float_m(cell(col_ppm2)) if col_ppm2 >= 0 else None
         ppm2 = ppm2_raw if ppm2_raw else _ppm2_m(price, area)
+        lat_v = _parse_float_m(cell(col_lat)) if col_lat >= 0 else None
+        lng_v = _parse_float_m(cell(col_lng)) if col_lng >= 0 else None
 
         if deal == 'sale' and not (MIN_PRICE_SALE <= price <= MAX_PRICE_SALE):
             if price > 0:
@@ -165,7 +183,8 @@ def _import_market_xlsx(file_url: str, source: str, preview: bool, replace: bool
             if price > 0:
                 warnings.append(f'row {i}: цена аренды вне диапазона ({price:,.0f})')
             continue
-        if not (MIN_AREA <= area <= MAX_AREA):
+        # Площадь необязательна — пропускаем только явно неверные
+        if area > 0 and not (MIN_AREA <= area <= MAX_AREA):
             if area > 0:
                 warnings.append(f'row {i}: площадь вне диапазона ({area})')
             continue
@@ -344,22 +363,25 @@ def _run_import_job(job_id: int):
             return -1
 
         col_price   = find_col('цена', 'price', 'стоимость')
-        col_area    = find_col('площадь', 'area', 'кв.м', 'кв м', 'площ')
+        col_area    = find_col('площадь', 'area', 'кв.м', 'кв м', 'площ', 'square')
         col_deal    = find_col('тип сделки', 'тип объявления', 'deal', 'сделка', 'операция')
-        col_cat     = find_col('категория', 'тип объекта', 'вид объекта', 'category', 'тип недвижимости', 'назначение')
+        col_cat     = find_col('категория1', 'категория2', 'категория', 'тип объекта', 'вид объекта', 'category', 'тип недвижимости', 'назначение')
         col_addr    = find_col('адрес', 'address', 'местоположение')
-        col_dist    = find_col('район', 'district', 'округ')
+        col_dist    = find_col('метро/район', 'район', 'district', 'округ', 'метро')
         col_title   = find_col('название', 'заголовок', 'title', 'наименование')
         col_floor   = find_col('этаж', 'floor')
         col_tfloors = find_col('этажность', 'этажей', 'total_floor')
-        col_url     = find_col('url', 'ссылка', 'link', 'объявление')
-        col_ext_id  = find_col('id объявления', 'внешний id', 'id', 'номер объявления')
+        col_url     = find_col('url', 'ссылка', 'link', 'объявление', 'источник')
+        col_ext_id  = find_col('id на сайте', 'id объявления', 'внешний id', 'id', 'номер объявления')
         col_desc    = find_col('описание', 'description', 'комментарий')
         col_ppm2    = find_col('цена за м', 'price_per_m', 'цена/м', 'руб/м')
+        col_cat2    = find_col('категория2') if find_col('категория1') >= 0 else -1
+        col_lat     = find_col('lat', 'latitude', 'широта')
+        col_lng     = find_col('lng', 'lon', 'longitude', 'долгота')
 
-        if col_price < 0 or col_area < 0:
+        if col_price < 0:
             _job_update(conn, job_id, status='error',
-                        error_msg=f'Не найдены колонки Цена/Площадь. Заголовок: {header[:20]}')
+                        error_msg=f'Не найдена колонка "Цена". Заголовок: {header[:20]}')
             wb.close()
             return
 
@@ -420,11 +442,24 @@ def _run_import_job(job_id: int):
                 return row[idx]
 
             price = _parse_float_m(cell(col_price))
-            area  = _parse_float_m(cell(col_area))
-            deal  = _map_deal_m(str(cell(col_deal) or 'продажа'))
             title_v = str(cell(col_title) or '').strip() if col_title >= 0 else ''
+
+            # Площадь: из колонки или из названия
+            area = _parse_float_m(cell(col_area)) if col_area >= 0 else 0.0
+            if area <= 0 and title_v:
+                m_area = re.search(r'(\d+[\.,]?\d*)\s*м', title_v)
+                if m_area:
+                    area = _parse_float_m(m_area.group(1))
+
+            deal  = _map_deal_m(str(cell(col_deal) or 'продажа'))
+
+            # Категория: категория1 + категория2 для Авито
             cat_raw = str(cell(col_cat) or '').strip()
+            if col_cat2 >= 0:
+                cat2_raw = str(cell(col_cat2) or '').strip()
+                cat_raw = f"{cat_raw} {cat2_raw}".strip()
             category = _map_obj_type_m(cat_raw, title_v)
+
             address  = str(cell(col_addr) or '').strip()
             district = str(cell(col_dist) or '').strip()[:200]
             floor_v  = int(_parse_float_m(cell(col_floor))) or None
@@ -442,7 +477,7 @@ def _run_import_job(job_id: int):
             if deal == 'rent' and not (MIN_PRICE_RENT <= price <= MAX_PRICE_RENT):
                 skipped += 1
                 continue
-            if not (MIN_AREA <= area <= MAX_AREA):
+            if area > 0 and not (MIN_AREA <= area <= MAX_AREA):
                 skipped += 1
                 continue
 
