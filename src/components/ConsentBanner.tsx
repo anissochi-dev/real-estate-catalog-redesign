@@ -266,6 +266,13 @@ export default function ConsentBanner({ onAccept }: Props) {
             )}
           </div>
 
+          {/* Правовое уведомление */}
+          <p className="mt-3 text-[10px] text-muted-foreground/70 text-center leading-relaxed px-1">
+            Все материалы сайта принадлежат: Бизнес. Маркетинг. Недвижимость. (Б.М.Н.). При перепечатке ссылка на данный сайт обязательна.
+            Вся информация, опубликованная на сайте, носит исключительно информационный характер и не является публичной офертой,
+            определяемой положениями ст.&nbsp;437 ГК РФ.
+          </p>
+
           {/* Actions — только одна кнопка, без блокировки сайта */}
           <div className="px-4 sm:px-5 pb-4 sm:pb-5 pt-2 border-t border-border">
             <button
