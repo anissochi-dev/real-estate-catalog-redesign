@@ -40,6 +40,7 @@ CAT_MAP = {
     'здани': 'standalone', 'отдельно': 'standalone',
     'земл': 'land',
     'гараж': 'garage', 'автосерв': 'garage',
+    'готовый арендн': 'gab', 'арендн бизнес': 'gab', 'габ': 'gab',
 }
 
 
@@ -201,7 +202,8 @@ def _parse_arrpro_page(html: str, deal_type: str) -> list[dict]:
         'svobodnogo-naznacheniya': 'free_purpose', 'psn': 'free_purpose',
         'zdanie': 'standalone', 'otdelnoe': 'standalone',
         'zemelniy-uchastok': 'land', 'zemlya': 'land',
-        'gostinica': 'other', 'avtoservis': 'other', 'garazh': 'other',
+        'gab': 'gab', 'gotoviy-biznes': 'gab', 'arendnyy-biznes': 'gab',
+        'gostinica': 'hotel', 'avtoservis': 'car_service', 'garazh': 'garage',
     }
     CAT_RU = {
         'office': 'Офис', 'retail': 'Торговое помещение', 'warehouse': 'Склад',
@@ -407,6 +409,7 @@ def scrape_arrpro_step(cur) -> dict:
         ('obshchepit',             'sale', 'https://krasnodar.arrpro.ru/katalog/prodam/obshchepit/'),
         ('proizvodstvo',           'sale', 'https://krasnodar.arrpro.ru/katalog/prodam/proizvodstvo/'),
         ('zemelniy-uchastok',      'sale', 'https://krasnodar.arrpro.ru/katalog/prodam/zemelniy-uchastok/'),
+        ('gab',                    'sale', 'https://krasnodar.arrpro.ru/katalog/prodam/gab/'),
         ('svobodnogo-naznacheniya','rent', 'https://krasnodar.arrpro.ru/katalog/arenda/svobodnogo-naznacheniya/'),
         ('torgovoe',               'rent', 'https://krasnodar.arrpro.ru/katalog/arenda/torgovoe/'),
         ('ofis',                   'rent', 'https://krasnodar.arrpro.ru/katalog/arenda/ofis/'),
@@ -655,6 +658,110 @@ def scrape_ayax(max_pages: int = 5) -> list[dict]:
 
 # ── ПАРСЕР CIAN.RU (замена moreon, который полностью JS) ─────────────────────
 
+def scrape_cian_gab(max_items: int = 30) -> list[dict]:
+    """
+    ЦИАН ГАБ Краснодар — парсим объявления о продаже готового арендного бизнеса.
+    URL: https://krasnodar.cian.ru/cat.php?deal_type=sale&offer_type=offices&office_type[0]=10&ready_business_types[0]=1&region=4820
+    Страница SPA, но title объявлений доступен через прямые URL из sitemap.
+    Стратегия: фильтруем sitemap commercial sale → ищем ГАБ по title/description.
+    """
+    import time
+    results = []
+
+    # Загружаем sitemap и берём sale/commercial URL
+    sitemap_index = _fetch('https://krasnodar.cian.ru/sitemap.xml', timeout=8)
+    if not sitemap_index:
+        return []
+
+    all_sitemaps = re.findall(r'<loc>(https://krasnodar\.cian\.ru/[^<]+)</loc>', sitemap_index)
+    comm_sitemaps = [s for s in all_sitemaps if 'commercial' in s or 'offer' in s][:3]
+
+    obj_urls = []
+    for sm_url in comm_sitemaps:
+        xml = _fetch(sm_url, timeout=8)
+        if not xml:
+            continue
+        urls = re.findall(r'<loc>(https://krasnodar\.cian\.ru/sale/commercial/[^<]+)</loc>', xml)
+        obj_urls.extend(urls)
+        if len(obj_urls) >= 200:
+            break
+
+    GAB_KEYWORDS = [
+        'арендн', 'арендный', 'арендного', 'готовый бизнес', 'готовый арендный',
+        'сданный', 'с арендатором', 'арендатор', 'стрит-ритейл', 'street retail',
+        'доходность', 'окупаемост', 'инвестиционн',
+    ]
+
+    seen = set()
+    for url in obj_urls:
+        if len(results) >= max_items:
+            break
+        id_m = re.search(r'/(\d+)/?$', url)
+        obj_id = id_m.group(1) if id_m else None
+        if not obj_id or obj_id in seen:
+            continue
+        seen.add(obj_id)
+
+        html = _fetch(url, timeout=6)
+        if not html:
+            continue
+
+        title_m = re.search(r'<title>([^<]{10,400})</title>', html)
+        if not title_m:
+            continue
+        title_raw = title_m.group(1)
+
+        desc_m = re.search(r'<meta[^>]*name=["\']description["\'][^>]*content=["\']([^"\']{20,600})["\']', html)
+        desc = desc_m.group(1) if desc_m else ''
+
+        full_text = (title_raw + ' ' + desc).lower()
+
+        # Проверяем что это ГАБ
+        if not any(kw in full_text for kw in GAB_KEYWORDS):
+            continue
+
+        price_m = re.search(r'([\d\s]{4,})\s*[₽р]', title_raw)
+        if not price_m:
+            price_m = re.search(r'([\d\s]{4,})\s*[₽р]', desc)
+        price = _clean_price(price_m.group(1)) if price_m else None
+        if not price or price < 500_000:
+            continue
+
+        area_m = re.search(r'([\d,\.]+)\s*м²', title_raw)
+        area = _clean_area(area_m.group(1)) if area_m else None
+        price_per_m2 = round(price / area, 2) if price and area and area > 0 else None
+
+        addr_m = re.search(r'(?:в\s+)?Краснодар[е,\s]+([^—\|<\n]{5,120})', title_raw)
+        address = addr_m.group(1).strip() if addr_m else None
+        district = _detect_district(address or '') if address else None
+
+        # Ищем арендный доход и окупаемость в описании
+        rent_income_m = re.search(r'(?:доход|аренда|арендная плата)[^\d]*([\d\s]{3,})\s*[₽р]', full_text)
+        rent_income = _clean_price(rent_income_m.group(1)) if rent_income_m else None
+
+        payback_m = re.search(r'(?:окупаемост|срок)[^\d]*(\d+[\.,]?\d*)\s*(?:лет|год|мес)', full_text)
+        payback_raw = payback_m.group(1) if payback_m else None
+
+        results.append({
+            'source': 'cian_gab',
+            'external_id': obj_id,
+            'url': url,
+            'title': title_raw[:400],
+            'category': 'gab',
+            'deal_type': 'sale',
+            'price': price,
+            'price_per_m2': price_per_m2,
+            'area': area,
+            'address': address,
+            'district': district,
+            'description': f'Доход: {rent_income} ₽/мес. Окупаемость: {payback_raw}' if rent_income else desc[:300],
+        })
+        time.sleep(0.05)
+
+    print(f'[cian_gab] scanned={len(seen)} gab_found={len(results)}')
+    return results
+
+
 def scrape_moreon(max_pages: int = 5) -> list[dict]:
     """
     moreon-invest.ru — Bitrix с AJAX, данные не доступны без JS.
@@ -826,9 +933,11 @@ def _generate_market_facts(cur) -> int:
         'warehouse': 'Складская недвижимость', 'industrial': 'Производственные помещения',
         'catering': 'Помещения общепита', 'free_purpose': 'ПСН',
         'standalone': 'Отдельно стоящие здания', 'land': 'Земельные участки',
+        'gab': 'Готовый арендный бизнес (ГАБ)', 'building': 'Здание',
+        'hotel': 'Гостиница', 'car_service': 'Автосервис',
         'other': 'Прочая коммерческая недвижимость',
     }
-    src_ru = {'arrpro': 'АРР Краснодар', 'ayax': 'Аякс', 'moreon': 'Морeon Инвест'}
+    src_ru = {'arrpro': 'АРР Краснодар', 'ayax': 'Аякс', 'moreon': 'Морeon Инвест', 'cian_gab': 'ЦИАН ГАБ'}
     deal_ru = {'sale': 'продажа', 'rent': 'аренда'}
 
     facts = []
@@ -1140,6 +1249,11 @@ def handler(event: dict, context) -> dict:
             items = scrape_moreon(max_pages=max_pages)
             all_items.extend(items)
             per_source['moreon'] = len(items)
+
+        if 'all' in sources or 'cian_gab' in sources:
+            items = scrape_cian_gab(max_items=30)
+            all_items.extend(items)
+            per_source['cian_gab'] = len(items)
 
         save_result = _save_listings(cur, all_items)
         conn.commit()

@@ -84,14 +84,22 @@ def _get_conn():
     )
 
 
-def _map_obj_type(raw: str) -> str:
+def _map_obj_type(raw: str, title: str = '') -> str:
     if not raw:
-        return 'other'
-    s = raw.lower().strip()
-    for key, val in OBJ_TYPE_MAP.items():
-        if key in s:
-            return val
-    return 'other'
+        cat = 'other'
+    else:
+        s = raw.lower().strip()
+        cat = 'other'
+        for key, val in OBJ_TYPE_MAP.items():
+            if key in s:
+                cat = val
+                break
+    # Переопределяем как ГАБ если title явно указывает на готовый арендный бизнес
+    t = (title or '').lower()
+    GAB_TITLE_SIGNALS = ['с арендатором', 'арендный бизнес', 'готовый арендный', 'арендный поток', 'с действующим арендатором']
+    if any(sig in t for sig in GAB_TITLE_SIGNALS):
+        return 'gab'
+    return cat
 
 
 def _map_deal(raw: str) -> str:
@@ -206,7 +214,7 @@ def _parse_csv(raw_bytes: bytes, source: str) -> tuple[list[dict], list[str]]:
         # Тип объекта
         ot_m = re.search(r'Вид объекта=([^|]+)', extra)
         obj_type_raw = ot_m.group(1).strip() if ot_m else ''
-        category = _map_obj_type(obj_type_raw)
+        category = _map_obj_type(obj_type_raw, title=title)
 
         # Этаж
         floor, total_floors = None, None

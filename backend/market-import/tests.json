@@ -12,7 +12,7 @@
       "path": "/",
       "body": { "action": "stats" },
       "expectedStatus": 200,
-      "expectedBody": { "breakdown": [] },
+      "expectedBody": { "total": 1076 },
       "bodyMatcher": "partial"
     },
     {

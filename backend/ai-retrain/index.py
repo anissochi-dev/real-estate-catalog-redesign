@@ -629,6 +629,8 @@ def _generate_district_price_facts(cur) -> tuple:
         'retail': 'Торговая', 'office': 'Офисная', 'warehouse': 'Складская',
         'restaurant': 'Общепит', 'free_purpose': 'ПСН', 'hotel': 'Гостиница',
         'building': 'Здание', 'production': 'Производство',
+        'gab': 'ГАБ', 'catering': 'Общепит', 'car_service': 'Автосервис',
+        'industrial': 'Производство', 'standalone': 'Отдельно стоящее здание',
     }
 
     facts = []
