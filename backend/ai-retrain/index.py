@@ -504,7 +504,7 @@ def _generate_market_import_facts(cur) -> tuple:
         SELECT district, deal_type, COUNT(*) AS cnt,
           ROUND(AVG(price_per_m2)::numeric, 0) AS avg_ppm2
         FROM {SCHEMA}.market_listings
-        WHERE district IS NOT NULL AND price_per_m2 > 0
+        WHERE district IS NOT NULL AND TRIM(district) != '' AND price_per_m2 > 0
         GROUP BY district, deal_type
         HAVING COUNT(*) >= 5
         ORDER BY cnt DESC LIMIT 20
@@ -534,6 +534,8 @@ def _generate_market_import_facts(cur) -> tuple:
         'warehouse': 'Складская', 'building': 'Здание', 'hotel': 'Гостиница',
         'restaurant': 'Общепит', 'production': 'Производство', 'land': 'Земля',
         'car_service': 'Автосервис', 'gab': 'ГАБ', 'other': 'Прочее',
+        'industrial': 'Производство', 'standalone': 'Здание (отдельно стоящее)',
+        'catering': 'Общепит', 'business': 'Бизнес',
     }
 
     facts = []
