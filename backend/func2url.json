@@ -1,7 +1,7 @@
 {
+  "social-parser": "https://functions.poehali.dev/5d1bb364-c893-4d73-a003-e119069371ff",
   "data-router": "https://functions.poehali.dev/b2288019-b9f5-4dd8-848a-e61c18df9c76",
   "market-import": "https://functions.poehali.dev/debf4d7f-d8d8-4317-b617-1d5dbc519978",
-  "market-full": "https://functions.poehali.dev/32ff8022-0049-4426-9e10-f7d548af7542",
   "market-scraper": "https://functions.poehali.dev/ffcf87dc-08f7-4c15-879c-32ec795ce7ad",
   "xlsx-reader": "https://functions.poehali.dev/b498eec3-fbe9-46de-8f00-749fc3012e63",
   "geo-search": "https://functions.poehali.dev/94f11c58-4ec2-4d37-9918-69d86bfb02b8",

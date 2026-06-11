@@ -1,0 +1,34 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Без токена — 401",
+      "method": "POST",
+      "path": "/",
+      "body": { "action": "stats" },
+      "expectedStatus": 401,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "cron — Telegram без авторизации",
+      "method": "POST",
+      "path": "/",
+      "body": { "action": "cron" },
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "test_post — без токена, 401",
+      "method": "POST",
+      "path": "/",
+      "body": { "action": "test_post", "text": "Сдам офис 50м² ул. Ленина 100000 руб/мес" },
+      "expectedStatus": 401,
+      "bodyMatcher": "partial"
+    }
+  ]
+}
