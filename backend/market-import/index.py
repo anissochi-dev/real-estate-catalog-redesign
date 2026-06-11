@@ -372,52 +372,97 @@ def _parse_xlsx(raw_bytes: bytes, source: str) -> tuple[list[dict], list[str]]:
 # ── Вставка в БД ─────────────────────────────────────────────────────────────
 
 def _insert_records(cur, conn, records: list[dict]) -> dict:
+    """
+    Стратегия дедупликации (приоритет):
+    1. external_id + source — найден → UPDATE цену/площадь/дату если изменились
+    2. address + area bucket — найден → UPDATE цену/дату если изменились
+    3. Не найден → INSERT
+    Таким образом повторная загрузка обогащает данные, не плодит дубли.
+    """
     inserted = skipped = updated = 0
+
+    def esc(v): return v.replace("'", "''") if v else ''
+
     for r in records:
-        # Дедупликация по external_id+source или address+area
-        if r.get('external_id') and r.get('source'):
+        price_s = str(r['price'])         if r['price']         is not None else 'NULL'
+        ppm2_s  = str(r['price_per_m2'])  if r['price_per_m2']  is not None else 'NULL'
+        area_s  = str(r['area'])          if r['area']          is not None else 'NULL'
+        floor_s = str(r['floor'])         if r['floor']         is not None else 'NULL'
+        tfl_s   = str(r['total_floors'])  if r['total_floors']  is not None else 'NULL'
+        src     = esc(r['source'])
+        extid   = esc(r['external_id'] or '')
+        url_e   = esc(r['url'] or '')
+        title_e = esc(r['title'] or '')
+        cat     = esc(r['category'])
+        deal    = esc(r['deal_type'])
+        addr    = esc(r['address'] or '')
+        dist    = esc(r['district'] or '')
+        phone_e = esc(r['phone'] or '')
+
+        existing_id = None
+
+        # Шаг 1: ищем по external_id + source
+        if extid and src:
             cur.execute(f"""
-                SELECT id FROM {SCHEMA}.market_listings
-                WHERE source = '{r['source'].replace("'","''")}' AND external_id = '{r['external_id'].replace("'","''")}'
+                SELECT id, price, area FROM {SCHEMA}.market_listings
+                WHERE source = '{src}' AND external_id = '{extid}'
                 LIMIT 1
             """)
-            existing = cur.fetchone()
-            if existing:
-                skipped += 1
-                continue
+            row = cur.fetchone()
+            if row:
+                existing_id = row['id']
 
-        price_s   = str(r['price'])   if r['price']      is not None else 'NULL'
-        ppm2_s    = str(r['price_per_m2']) if r['price_per_m2'] is not None else 'NULL'
-        area_s    = str(r['area'])    if r['area']       is not None else 'NULL'
-        floor_s   = str(r['floor'])   if r['floor']      is not None else 'NULL'
-        tfl_s     = str(r['total_floors']) if r['total_floors'] is not None else 'NULL'
+        # Шаг 2: если нет external_id — ищем по адресу + площадь (bucket ±10%)
+        if existing_id is None and addr and area_s != 'NULL':
+            area_val = float(area_s)
+            area_lo  = round(area_val * 0.9, 2)
+            area_hi  = round(area_val * 1.1, 2)
+            cur.execute(f"""
+                SELECT id, price, area FROM {SCHEMA}.market_listings
+                WHERE source = '{src}'
+                  AND address ILIKE '{addr}'
+                  AND area BETWEEN {area_lo} AND {area_hi}
+                  AND deal_type = '{deal}'
+                LIMIT 1
+            """)
+            row = cur.fetchone()
+            if row:
+                existing_id = row['id']
 
-        def esc(v): return v.replace("'", "''") if v else ''
-        src   = esc(r['source'])
-        extid = esc(r['external_id'] or '')
-        url   = esc(r['url'] or '')
-        title = esc(r['title'] or '')
-        cat   = esc(r['category'])
-        deal  = esc(r['deal_type'])
-        addr  = esc(r['address'] or '')
-        dist  = esc(r['district'] or '')
-        phone = esc(r['phone'] or '')
-        desc  = esc(r['description'] or '')
-
-        cur.execute(f"""
-            INSERT INTO {SCHEMA}.market_listings
-              (source, external_id, url, title, category, deal_type, price, price_per_m2,
-               area, address, district, floor, total_floors, phone, description, scraped_at)
-            VALUES
-              ('{src}', {f"'{extid}'" if extid else 'NULL'}, {f"'{url}'" if url else 'NULL'},
-               {f"'{title}'" if title else 'NULL'}, '{cat}', '{deal}',
-               {price_s}, {ppm2_s}, {area_s},
-               {f"'{addr}'" if addr else 'NULL'}, {f"'{dist}'" if dist else 'NULL'},
-               {floor_s}, {tfl_s},
-               {f"'{phone}'" if phone else 'NULL'}, {f"'{desc}'" if desc else 'NULL'},
-               NOW())
-        """)
-        inserted += cur.rowcount
+        # Шаг 3: UPDATE или INSERT
+        if existing_id is not None:
+            # Обновляем изменившиеся данные (цена, площадь, дата)
+            cur.execute(f"""
+                UPDATE {SCHEMA}.market_listings SET
+                  price        = {price_s},
+                  price_per_m2 = {ppm2_s},
+                  area         = {area_s},
+                  scraped_at   = NOW()
+                  {f", url = '{url_e}'" if url_e else ''}
+                  {f", district = '{dist}'" if dist else ''}
+                  {f", phone = '{phone_e}'" if phone_e else ''}
+                WHERE id = {existing_id}
+            """)
+            updated += 1
+        else:
+            cur.execute(f"""
+                INSERT INTO {SCHEMA}.market_listings
+                  (source, external_id, url, title, category, deal_type, price, price_per_m2,
+                   area, address, district, floor, total_floors, phone, scraped_at)
+                VALUES
+                  ('{src}',
+                   {f"'{extid}'" if extid else 'NULL'},
+                   {f"'{url_e}'" if url_e else 'NULL'},
+                   {f"'{title_e}'" if title_e else 'NULL'},
+                   '{cat}', '{deal}',
+                   {price_s}, {ppm2_s}, {area_s},
+                   {f"'{addr}'" if addr else 'NULL'},
+                   {f"'{dist}'" if dist else 'NULL'},
+                   {floor_s}, {tfl_s},
+                   {f"'{phone_e}'" if phone_e else 'NULL'},
+                   NOW())
+            """)
+            inserted += cur.rowcount
 
     conn.commit()
     return {'inserted': inserted, 'skipped': skipped, 'updated': updated}

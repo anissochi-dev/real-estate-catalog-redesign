@@ -31,6 +31,7 @@ interface ImportResult {
   total_parsed: number;
   inserted: number;
   skipped: number;
+  updated: number;
   deleted_old: number;
   warnings_count: number;
   warnings_sample: string[];
@@ -293,15 +294,16 @@ export default function MarketImportAdmin() {
             <Icon name="CheckCircle2" size={18} />
             Импорт завершён ({importResult.format.toUpperCase()})
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {[
-              { label: 'Разобрано', val: importResult.total_parsed },
-              { label: 'Добавлено', val: importResult.inserted },
-              { label: 'Пропущено', val: importResult.skipped },
-              { label: 'Удалено старых', val: importResult.deleted_old },
-            ].map(({ label, val }) => (
+              { label: 'Разобрано', val: importResult.total_parsed, color: '' },
+              { label: 'Добавлено новых', val: importResult.inserted, color: 'text-green-700' },
+              { label: 'Обновлено (цена/площадь)', val: importResult.updated, color: 'text-blue-700' },
+              { label: 'Пропущено', val: importResult.skipped, color: 'text-muted-foreground' },
+              { label: 'Удалено старых', val: importResult.deleted_old, color: 'text-red-600' },
+            ].map(({ label, val, color }) => (
               <div key={label} className="bg-white rounded-lg p-3 text-center border">
-                <div className="text-xl font-bold">{fmtNum(val)}</div>
+                <div className={`text-xl font-bold ${color}`}>{fmtNum(val)}</div>
                 <div className="text-xs text-muted-foreground">{label}</div>
               </div>
             ))}
