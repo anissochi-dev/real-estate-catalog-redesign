@@ -155,15 +155,6 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
             </div>
           </div>
 
-          {/* Реквизиты компании — показываем только если заполнено в админке */}
-          {settings.footer_legal_info && settings.footer_legal_info.trim() && (
-            <div className="border-t border-white/10 mt-6 pt-5">
-              <div className="text-xs text-white/55 whitespace-pre-line leading-relaxed">
-                {settings.footer_legal_info}
-              </div>
-            </div>
-          )}
-
           {/* Районы города — SEO-ссылки, все 45 */}
           {districts.length > 0 && (
             <div className="border-t border-white/10 mt-6 pt-5">
@@ -220,8 +211,13 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
             </div>
           )}
 
-          {/* Копирайт + правовое уведомление — по центру на всех экранах */}
+          {/* Правовое уведомление + копирайт — по центру на всех экранах */}
           <div className="border-t border-white/10 mt-5 pt-4 pb-[max(4px,env(safe-area-inset-bottom))] text-center space-y-1.5">
+            <p className="text-[11px] sm:text-xs text-white/40 leading-relaxed max-w-2xl mx-auto">
+              Все материалы сайта принадлежат: Бизнес. Маркетинг. Недвижимость. (Б.М.Н.). При перепечатке ссылка на данный сайт обязательна.
+              Вся информация, опубликованная на сайте, носит исключительно информационный характер и не является публичной офертой,
+              определяемой положениями ст.&nbsp;437 ГК РФ.
+            </p>
             <div className="text-[11px] sm:text-xs text-white/40 leading-relaxed inline-flex flex-wrap items-center justify-center gap-x-1">
               <span>© {new Date().getFullYear()} {company}.</span>
               <span className="whitespace-nowrap inline-flex items-center gap-1">
@@ -237,11 +233,6 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
                 </button>
               </span>
             </div>
-            <p className="text-[11px] sm:text-xs text-white/40 leading-relaxed max-w-2xl mx-auto">
-              Все материалы сайта принадлежат: Бизнес. Маркетинг. Недвижимость. (Б.М.Н.). При перепечатке ссылка на данный сайт обязательна.
-              Вся информация, опубликованная на сайте, носит исключительно информационный характер и не является публичной офертой,
-              определяемой положениями ст.&nbsp;437 ГК РФ.
-            </p>
           </div>
         </div>
       </footer>
