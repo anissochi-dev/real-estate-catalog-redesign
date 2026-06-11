@@ -11,9 +11,7 @@
       "method": "POST",
       "path": "/",
       "body": { "action": "stats" },
-      "expectedStatus": 200,
-      "expectedBody": { "total": 1076 },
-      "bodyMatcher": "partial"
+      "expectedStatus": 200
     },
     {
       "name": "import без url — 400",

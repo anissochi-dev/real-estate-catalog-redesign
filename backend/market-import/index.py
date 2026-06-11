@@ -610,6 +610,22 @@ def handler(event: dict, context) -> dict:
         if result['inserted'] > 0:
             retrain_triggered, retrain_error = _trigger_vb_retrain(cur)
 
+        # П.4: Агрегируем market_listings → price_market_snapshots (обновляем графики рынка)
+        aggregate_result = {}
+        if result['inserted'] > 0:
+            try:
+                import sys, os as _os
+                # price-predict лежит рядом — импортируем напрямую
+                _pp_path = _os.path.join(_os.path.dirname(__file__), '..', 'price-predict')
+                if _pp_path not in sys.path:
+                    sys.path.insert(0, _pp_path)
+                from market_snapshots import aggregate_market_listings as _aml
+                aggregate_result = _aml(cur, conn)
+                print(f'[market-import] aggregate done: {aggregate_result}')
+            except Exception as e:
+                aggregate_result = {'error': str(e)}
+                print(f'[market-import] aggregate error: {e}')
+
         return ok({
             'success': True,
             'format': fmt,
@@ -622,6 +638,7 @@ def handler(event: dict, context) -> dict:
             'warnings_sample': warnings[:20],
             'retrain_triggered': retrain_triggered,
             'retrain_error': retrain_error,
+            'snapshots_updated': aggregate_result.get('saved', 0),
         })
 
     finally:

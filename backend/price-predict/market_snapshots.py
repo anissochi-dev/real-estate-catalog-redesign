@@ -349,6 +349,98 @@ def handle_refresh(cur, conn, force=False):
     }
 
 
+# ── Агрегация market_listings → price_market_snapshots ───────────────────────
+
+def aggregate_market_listings(cur, conn, today=None):
+    """Агрегирует сырые объявления из market_listings в price_market_snapshots.
+
+    Вызывается:
+      - после завершения XLSX-импорта (market-import)
+      - вручную через action=aggregate_market_listings
+
+    Логика: группируем по category + deal_type + district, считаем медианы ₽/м².
+    Источник в снапшоте: 'market_listings (импорт)'.
+    """
+    if today is None:
+        today = str(datetime.date.today())
+
+    # Получаем активные районы для нормализации
+    cur.execute(f"SELECT name FROM {SCHEMA}.districts WHERE is_active = TRUE")
+    active_districts = {r['name'].lower(): r['name'] for r in cur.fetchall()}
+
+    # Загружаем все актуальные записи из market_listings (не старше 1 года)
+    cur.execute(f"""
+        SELECT category, deal_type, district, price, area, price_per_m2
+        FROM {SCHEMA}.market_listings
+        WHERE price > 0 AND area > 0
+          AND category IS NOT NULL AND category != 'other'
+          AND deal_type IS NOT NULL
+          AND scraped_at >= NOW() - INTERVAL '365 days'
+        ORDER BY scraped_at DESC
+        LIMIT 100000
+    """)
+    rows = cur.fetchall()
+    print(f'[aggregate_ml] loaded {len(rows)} rows from market_listings')
+
+    if not rows:
+        return {'saved': 0, 'skipped': 'no data in market_listings'}
+
+    # Нормализуем deal_type → deal ('продажа' → 'sale' etc)
+    DEAL_NORM = {
+        'sale': 'sale', 'продажа': 'sale', 'продам': 'sale',
+        'rent': 'rent', 'аренда': 'rent', 'сдам': 'rent',
+    }
+
+    # Группируем по (category, deal, district)
+    groups = {}
+    for r in rows:
+        cat  = (r.get('category') or '').strip()
+        deal_raw = (r.get('deal_type') or 'sale').lower().strip()
+        deal = DEAL_NORM.get(deal_raw, 'sale')
+        dist_raw = (r.get('district') or '').strip()
+        # Нормализуем район
+        dist = active_districts.get(dist_raw.lower(), dist_raw)
+
+        p  = float(r.get('price') or 0)
+        a  = float(r.get('area') or 0)
+        ppm2 = float(r.get('price_per_m2') or 0) or (round(p / a) if a > 0 else 0)
+
+        if p <= 0 or a <= 0 or ppm2 <= 0:
+            continue
+
+        # Ключ без района (все районы) и с районом
+        for key_dist in ['', dist] if dist else ['']:
+            key = f'{cat}|{deal}|{key_dist}'
+            if key not in groups:
+                groups[key] = []
+            groups[key].append({'price': p, 'area': a, 'price_per_m2': ppm2,
+                                 'source': 'market_listings'})
+
+    print(f'[aggregate_ml] {len(groups)} groups to aggregate')
+
+    saved = 0
+    for key, analogs in groups.items():
+        if len(analogs) < 3:  # меньше 3 объявлений — ненадёжно
+            continue
+        parts = key.split('|', 2)
+        if len(parts) != 3:
+            continue
+        category, deal, district = parts
+
+        snap = _calc_snapshot(analogs)
+        if not snap or snap['price_per_m2_median'] <= 0:
+            continue
+
+        # Помечаем источник как market_listings
+        snap['sources'] = ['market_listings (импорт)']
+        _save_snapshot(cur, today, category, deal, district, snap)
+        saved += 1
+
+    conn.commit()
+    print(f'[aggregate_ml] saved={saved} snapshots')
+    return {'saved': saved, 'groups_total': len(groups), 'date': today}
+
+
 # ── handle_stats ──────────────────────────────────────────────────────────────
 
 def handle_stats(cur, params):

@@ -588,6 +588,10 @@ def handler(event: dict, context) -> dict:
                 from market_snapshots import handle_stats as _mss
                 return _ok(_mss(cur, params_all))
 
+            if action == 'aggregate_market_listings':
+                from market_snapshots import aggregate_market_listings as _aml
+                return _ok(_aml(cur, conn))
+
             if method == 'GET':
                 params = params_all
 

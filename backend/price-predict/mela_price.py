@@ -952,40 +952,61 @@ def _save_cache(cur, conn, key: str, result: dict, category: str = ''):
 
 
 def _save_snapshot(cur, conn, listing: dict, analogs: list, verdict: dict, sources: list, used_fallback: bool):
-    """Сохраняет срез рынка в market_snapshots для истории медиан."""
+    """Сохраняет живой срез рынка в price_market_snapshots (единая таблица аналитики).
+    Ключ уникальности: snapshot_date + category + deal + district.
+    Если за сегодня запись уже есть — обновляем (более свежие данные).
+    """
     try:
         if not analogs:
             return
-        cat   = (listing.get('category') or '').replace("'", "''")
-        deal  = (listing.get('deal') or 'sale').replace("'", "''")
-        dist  = (listing.get('district') or '').strip().replace("'", "''")
+        # Только реальные аналоги — GPT не идёт в историю
+        real = [a for a in analogs if a.get('source') != 'gpt_inference']
+        if not real:
+            return
 
-        ppm2_list = sorted([a['price_per_m2'] for a in analogs if a.get('price_per_m2', 0) > 0])
+        cat  = (listing.get('category') or '').replace("'", "''")
+        deal = (listing.get('deal') or 'sale').replace("'", "''")
+        dist = (listing.get('district') or '').strip().replace("'", "''")
+        today = datetime.now().date().isoformat()
+
+        ppm2_list = sorted([a['price_per_m2'] for a in real if a.get('price_per_m2', 0) > 0])
+        prices    = sorted([a['price']        for a in real if a.get('price', 0) > 0])
         if not ppm2_list:
             return
 
-        median = verdict.get('market_median_per_m2') or 0
-        q1 = ppm2_list[0]
-        q3 = ppm2_list[-1]
-        if len(ppm2_list) >= 4:
-            q1 = statistics.quantiles(ppm2_list, n=4)[0]
-            q3 = statistics.quantiles(ppm2_list, n=4)[2]
+        # Фильтруем выбросы 10–90 перцентиль
+        lo = ppm2_list[int(len(ppm2_list) * 0.10)]
+        hi = ppm2_list[min(int(len(ppm2_list) * 0.90), len(ppm2_list) - 1)]
+        filtered = [p for p in ppm2_list if lo <= p <= hi] or ppm2_list
 
-        min_p  = ppm2_list[0]
-        max_p  = ppm2_list[-1]
-        cnt    = len(ppm2_list)
-        src    = json.dumps(sources, ensure_ascii=False).replace("'", "''")
-        gpt    = 'TRUE' if used_fallback else 'FALSE'
+        median_ppm2 = round(statistics.median(filtered), 2)
+        price_med   = round(statistics.median(prices), 2) if prices else 'NULL'
+        price_min   = prices[0]  if prices else 'NULL'
+        price_max   = prices[-1] if prices else 'NULL'
+        cnt         = len(real)
+        src_json    = json.dumps(list(set(a.get('source','') for a in real if a.get('source'))), ensure_ascii=False).replace("'", "''")
+
+        pm_sql   = f'{price_med}'   if price_med  != 'NULL' else 'NULL'
+        pmin_sql = f'{price_min}'   if price_min  != 'NULL' else 'NULL'
+        pmax_sql = f'{price_max}'   if price_max  != 'NULL' else 'NULL'
 
         cur.execute(
-            f"INSERT INTO {SCHEMA}.market_snapshots "
-            f"(category, deal, district, median_per_m2, min_per_m2, max_per_m2, "
-            f"q1_per_m2, q3_per_m2, analogs_count, sources, used_gpt_fallback) "
-            f"VALUES ('{cat}', '{deal}', '{dist}', {int(median)}, {int(min_p)}, {int(max_p)}, "
-            f"{int(q1)}, {int(q3)}, {cnt}, '{src}', {gpt})"
+            f"INSERT INTO {SCHEMA}.price_market_snapshots "
+            f"(snapshot_date, category, deal, district, "
+            f" price_median, price_min, price_max, price_per_m2_median, analogs_count, sources) "
+            f"VALUES ('{today}', '{cat}', '{deal}', '{dist}', "
+            f"{pm_sql}, {pmin_sql}, {pmax_sql}, {median_ppm2}, {cnt}, '{src_json}') "
+            f"ON CONFLICT (snapshot_date, category, deal, district) DO UPDATE SET "
+            f"  price_median        = EXCLUDED.price_median, "
+            f"  price_min           = EXCLUDED.price_min, "
+            f"  price_max           = EXCLUDED.price_max, "
+            f"  price_per_m2_median = EXCLUDED.price_per_m2_median, "
+            f"  analogs_count       = GREATEST({SCHEMA}.price_market_snapshots.analogs_count, EXCLUDED.analogs_count), "
+            f"  sources             = EXCLUDED.sources, "
+            f"  created_at          = NOW()"
         )
         conn.commit()
-        print(f'[mela_price] snapshot saved: cat={cat} deal={deal} dist={dist} median={int(median)} n={cnt}')
+        print(f'[mela_price] pms upsert: cat={cat} deal={deal} dist={dist} median={median_ppm2} n={cnt}')
     except Exception as e:
         print(f'[mela_price] snapshot save error: {e}')
 
