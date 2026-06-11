@@ -26,17 +26,15 @@ export function NewsAdminSchedule({ schedule, schedSaved, headers, onScheduleCha
     onScheduleChange(s => {
       const current = (s.topics ?? '').trim();
       const lines = current ? current.split('\n').map(l => l.trim()).filter(Boolean) : [];
-      if (lines.includes(topic)) {
-        toast('Тема уже добавлена');
-        return s;
-      }
       return { ...s, topics: [...lines, topic].join('\n') };
     });
+    toast.success('Тема добавлена');
   };
 
-  const removeTopic = (topic: string) => {
+  const removeTopic = (idx: number) => {
     onScheduleChange(s => {
-      const lines = (s.topics ?? '').split('\n').map(l => l.trim()).filter(l => l && l !== topic);
+      const lines = (s.topics ?? '').split('\n').map(l => l.trim()).filter(Boolean);
+      lines.splice(idx, 1);
       return { ...s, topics: lines.join('\n') };
     });
   };
@@ -104,10 +102,10 @@ export function NewsAdminSchedule({ schedule, schedSaved, headers, onScheduleCha
         {/* Активные темы — теги */}
         {activeTags.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2">
-            {activeTags.map(t => (
-              <span key={t} className="inline-flex items-center gap-1 text-xs bg-brand-blue/10 text-brand-blue rounded-lg px-2 py-1">
+            {activeTags.map((t, i) => (
+              <span key={i} className="inline-flex items-center gap-1 text-xs bg-brand-blue/10 text-brand-blue rounded-lg px-2 py-1">
                 <span className="line-clamp-1 max-w-[260px]">{t}</span>
-                <button onClick={() => removeTopic(t)} className="shrink-0 hover:text-red-500 transition">
+                <button onClick={() => removeTopic(i)} className="shrink-0 hover:text-red-500 transition">
                   <Icon name="X" size={11} />
                 </button>
               </span>
@@ -153,24 +151,16 @@ export function NewsAdminSchedule({ schedule, schedSaved, headers, onScheduleCha
                   </button>
                   {openGroup === group.label && (
                     <div className="px-3 pb-2 space-y-1">
-                      {group.topics.map(topic => {
-                        const added = activeTags.includes(topic);
-                        return (
+                      {group.topics.map(topic => (
                           <button
                             key={topic}
-                            onClick={() => !added && addTopic(topic)}
-                            disabled={added}
-                            className={`w-full text-left text-xs px-3 py-2 rounded-lg transition flex items-start gap-2 ${
-                              added
-                                ? 'bg-brand-blue/10 text-brand-blue cursor-default'
-                                : 'hover:bg-muted/40 text-foreground/80'
-                            }`}
+                            onClick={() => addTopic(topic)}
+                            className="w-full text-left text-xs px-3 py-2 rounded-lg transition flex items-start gap-2 hover:bg-muted/40 text-foreground/80"
                           >
-                            <Icon name={added ? 'Check' : 'Plus'} size={12} className="mt-0.5 shrink-0" />
+                            <Icon name="Plus" size={12} className="mt-0.5 shrink-0" />
                             <span>{topic}</span>
                           </button>
-                        );
-                      })}
+                      ))}
                     </div>
                   )}
                 </div>
