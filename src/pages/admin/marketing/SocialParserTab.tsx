@@ -19,6 +19,7 @@ export default function SocialParserTab() {
   const [subTab, setSubTab] = useState<SubTab>('criteria');
   const [stats, setStats] = useState<QueueStats | null>(null);
   const [running, setRunning] = useState(false);
+  const [cookieWarnCount, setCookieWarnCount] = useState(0);
 
   const token = localStorage.getItem('admin_token') || '';
 
@@ -33,7 +34,27 @@ export default function SocialParserTab() {
     } catch { /* ignore */ }
   };
 
-  useEffect(() => { loadStats(); }, []);
+  useEffect(() => {
+    loadStats();
+    // Проверяем свежесть кук при открытии страницы
+    fetch(SOCIAL_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
+      body: JSON.stringify({ action: 'sessions_list' }),
+    })
+      .then(r => r.json())
+      .then(r => {
+        if (!r.error) {
+          const list: { platform: string; is_active: boolean; updated_at: string }[] = r.sessions || [];
+          const warn = list.filter(
+            s => s.platform !== 'telegram' && s.is_active &&
+              Math.floor((Date.now() - new Date(s.updated_at).getTime()) / 86_400_000) >= 14
+          ).length;
+          setCookieWarnCount(warn);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleRunAll = async () => {
     setRunning(true);
@@ -52,11 +73,11 @@ export default function SocialParserTab() {
 
   const pendingCount = stats?.total_pending ?? 0;
 
-  const SUBTABS: { id: SubTab; label: string; icon: string; badge?: number }[] = [
+  const SUBTABS: { id: SubTab; label: string; icon: string; badge?: number; badgeColor?: string }[] = [
     { id: 'criteria', label: 'Критерии поиска', icon: 'SlidersHorizontal' },
     { id: 'queue',    label: 'Очередь',         icon: 'ClipboardList', badge: pendingCount },
     { id: 'sources',  label: 'Источники',       icon: 'Database' },
-    { id: 'sessions', label: 'Сессии (куки)',   icon: 'KeyRound' },
+    { id: 'sessions', label: 'Сессии (куки)',   icon: 'KeyRound', badge: cookieWarnCount, badgeColor: 'bg-orange-500' },
   ];
 
   return (
@@ -74,6 +95,15 @@ export default function SocialParserTab() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            {cookieWarnCount > 0 && (
+              <button
+                onClick={() => setSubTab('sessions')}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 border border-orange-200 text-orange-700 rounded-xl text-xs font-semibold"
+              >
+                <Icon name="AlertTriangle" size={13} />
+                {cookieWarnCount === 1 ? 'Куки устарели — обновите' : `${cookieWarnCount} куки устарели`}
+              </button>
+            )}
             {pendingCount > 0 && (
               <button
                 onClick={() => setSubTab('queue')}
@@ -135,7 +165,7 @@ export default function SocialParserTab() {
             {t.label}
             {t.badge !== undefined && t.badge > 0 && (
               <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                subTab === t.id ? 'bg-white/20 text-white' : 'bg-amber-500 text-white'
+                subTab === t.id ? 'bg-white/20 text-white' : (t.badgeColor ?? 'bg-amber-500') + ' text-white'
               }`}>
                 {t.badge}
               </span>
@@ -148,7 +178,7 @@ export default function SocialParserTab() {
       {subTab === 'criteria' && <SocialCriteriaPanel token={token} apiUrl={SOCIAL_URL} onRun={loadStats} />}
       {subTab === 'queue'    && <SocialQueuePanel    token={token} apiUrl={SOCIAL_URL} onUpdate={loadStats} />}
       {subTab === 'sources'  && <SocialSourcesPanel  token={token} apiUrl={SOCIAL_URL} />}
-      {subTab === 'sessions' && <SocialSessionsPanel token={token} apiUrl={SOCIAL_URL} />}
+      {subTab === 'sessions' && <SocialSessionsPanel token={token} apiUrl={SOCIAL_URL} onCookieWarning={setCookieWarnCount} />}
     </div>
   );
 }

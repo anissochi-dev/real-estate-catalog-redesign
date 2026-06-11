@@ -53,9 +53,15 @@ const INSTRUCTIONS: Record<string, { title: string; steps: string[]; cookieKeys:
   },
 };
 
+const COOKIE_WARN_DAYS = 14;
+
+function cookieAgeDays(updatedAt: string): number {
+  return Math.floor((Date.now() - new Date(updatedAt).getTime()) / 86_400_000);
+}
+
 export default function SocialSessionsPanel({
-  token, apiUrl,
-}: { token: string; apiUrl: string }) {
+  token, apiUrl, onCookieWarning,
+}: { token: string; apiUrl: string; onCookieWarning?: (count: number) => void }) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -77,7 +83,14 @@ export default function SocialSessionsPanel({
     setLoading(true);
     try {
       const r = await api({ action: 'sessions_list' });
-      if (!r.error) setSessions(r.sessions || []);
+      if (!r.error) {
+        const list: Session[] = r.sessions || [];
+        setSessions(list);
+        const warnCount = list.filter(
+          s => s.platform !== 'telegram' && s.is_active && cookieAgeDays(s.updated_at) >= COOKIE_WARN_DAYS
+        ).length;
+        onCookieWarning?.(warnCount);
+      }
     } finally { setLoading(false); }
   };
 
@@ -292,8 +305,16 @@ export default function SocialSessionsPanel({
             const dayPct = Math.min(100, Math.round((s.requests_today / lmt.day) * 100));
             const blocked = s.is_blocked && s.blocked_until && new Date(s.blocked_until) > new Date();
             const pColors: Record<string, string> = { vk: 'text-blue-600', ok: 'text-orange-500', telegram: 'text-sky-500' };
+            const ageDays = cookieAgeDays(s.updated_at);
+            const cookieStale = s.platform !== 'telegram' && ageDays >= COOKIE_WARN_DAYS;
             return (
               <div key={s.id} className="p-4">
+                {cookieStale && (
+                  <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-orange-50 border border-orange-200 rounded-xl text-xs text-orange-700">
+                    <Icon name="AlertTriangle" size={13} className="flex-shrink-0" />
+                    <span>Куки обновлялись <strong>{ageDays} дн. назад</strong> — пора заменить (рекомендуется каждые 2 недели)</span>
+                  </div>
+                )}
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
