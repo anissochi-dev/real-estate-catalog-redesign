@@ -104,32 +104,84 @@ def _parse_area(text: str) -> float:
         return 0
 
 
+def _dedupe_analogs(analogs: list) -> list:
+    """
+    Удаляет дубли аналогов: считает дублем если цена И площадь совпадают
+    с точностью до 1% — это одно и то же объявление из разных источников.
+    """
+    seen = []
+    result = []
+    for a in analogs:
+        p = a.get('price', 0)
+        ar = a.get('area', 0)
+        is_dup = False
+        for sp, sa in seen:
+            if sp > 0 and ar > 0 and abs(p - sp) / sp < 0.01 and abs(ar - sa) / sa < 0.01:
+                is_dup = True
+                break
+        if not is_dup:
+            seen.append((p, ar))
+            result.append(a)
+    return result
+
+
 def _db_analogs(cur, listing: dict) -> list:
     """
     Ищет реальные аналоги в базе данных системы.
-    Стратегия: широкий диапазон площадей, та же категория и сделка.
-    При малом количестве — расширяем диапазон площадей.
+    Стратегия поиска (по убыванию релевантности):
+      1. ±30% площади, тот же район, то же состояние
+      2. ±40% площади, тот же район
+      3. ±50% площади, любой район
+      4. ±80% площади, любой район (только если аналогов < 3)
+    Исключает сам объект и точные дубли.
     """
     cat = (listing.get('category') or '').replace("'", "''")
     deal = (listing.get('deal') or 'sale').replace("'", "''")
     area = float(listing.get('area') or 0)
+    price = float(listing.get('price') or 0)
     district = (listing.get('district') or '').lower().strip()
+    condition = (listing.get('condition') or '').lower().strip()
     listing_id = int(listing.get('id') or 0)
 
     if area <= 0:
         return []
 
-    results = []
+    # Всегда исключаем сам объект — и по id, и по точному совпадению цены+площади
+    id_clause = f'AND id != {listing_id}' if listing_id else ''
+    # Исключаем объекты с той же ценой И той же площадью (это сам объект без id)
+    self_exclude = ''
+    if price > 0:
+        p_lo = round(price * 0.99)
+        p_hi = round(price * 1.01)
+        a_lo = round(area * 0.99)
+        a_hi = round(area * 1.01)
+        self_exclude = f'AND NOT (price BETWEEN {p_lo} AND {p_hi} AND area BETWEEN {a_lo} AND {a_hi})'
 
-    # Попытка 1: узкий диапазон площади ±50%, тот же район
-    for area_mult, use_district in [(0.5, True), (0.5, False), (1.5, False)]:
-        area_min = area * (1 - area_mult)
+    safe_district = district.replace("'", "''")
+    safe_condition = condition.replace("'", "''")
+
+    strategies = [
+        # (area_mult, use_district, use_condition, label)
+        (0.30, True,  True,  '±30% район+состояние'),
+        (0.40, True,  False, '±40% район'),
+        (0.50, False, False, '±50% все районы'),
+        (0.80, False, False, '±80% широко'),
+    ]
+
+    all_rows = []
+    seen_ids = set()
+
+    for area_mult, use_district, use_condition, label in strategies:
+        area_min = max(1, area * (1 - area_mult))
         area_max = area * (1 + area_mult)
+
         district_clause = ''
-        if use_district and district:
-            safe_d = district.replace("'", "''")
-            district_clause = f"AND LOWER(district) LIKE '%{safe_d}%'"
-        id_clause = f'AND id != {listing_id}' if listing_id else ''
+        if use_district and safe_district:
+            district_clause = f"AND LOWER(district) LIKE '%{safe_district}%'"
+
+        condition_clause = ''
+        if use_condition and safe_condition:
+            condition_clause = f"AND condition = '{safe_condition}'"
 
         cur.execute(
             f"SELECT id, price, area, price_per_m2, district, condition, status "
@@ -138,17 +190,23 @@ def _db_analogs(cur, listing: dict) -> list:
             f"AND area BETWEEN {area_min} AND {area_max} "
             f"AND price > 0 AND area > 0 "
             f"AND status IN ('active', 'archived') "
-            f"{district_clause} {id_clause} "
-            f"ORDER BY CASE WHEN status='active' THEN 0 ELSE 1 END, updated_at DESC "
-            f"LIMIT 15"
+            f"{district_clause} {condition_clause} {id_clause} {self_exclude} "
+            f"ORDER BY CASE WHEN status='active' THEN 0 ELSE 1 END, "
+            f"ABS(area - {area}) ASC, updated_at DESC "
+            f"LIMIT 20"
         )
         rows = cur.fetchall()
+        new = 0
         for r in rows:
+            rid = r['id']
+            if rid in seen_ids:
+                continue
             p = float(r['price'] or 0)
             a = float(r['area'] or 0)
             if p > 0 and a > 0:
+                seen_ids.add(rid)
                 ppm2 = float(r['price_per_m2'] or 0) or round(p / a)
-                results.append({
+                all_rows.append({
                     'source': 'база системы',
                     'price': p,
                     'area': a,
@@ -156,12 +214,18 @@ def _db_analogs(cur, listing: dict) -> list:
                     'district': str(r.get('district') or ''),
                     'url': '',
                     'status': str(r.get('status') or ''),
+                    '_relevance': label,
                 })
-        if len(results) >= 5:
+                new += 1
+        print(f'[mela_price] DB strategy "{label}": +{new} (total={len(all_rows)})')
+        # Останавливаемся когда набрали ≥5 уникальных аналогов
+        if len(all_rows) >= 5:
             break
 
-    print(f'[mela_price] DB: found {len(results)} analogs (cat={cat}, deal={deal}, area={area})')
-    return results[:10]
+    # Дедупликация по совпадению цены+площади (одно объявление в разных статусах)
+    deduped = _dedupe_analogs(all_rows)
+    print(f'[mela_price] DB: {len(all_rows)} raw → {len(deduped)} deduped')
+    return deduped[:12]
 
 
 # ─── Парсеры сторонних сайтов Краснодара ────────────────────────────────────
@@ -741,31 +805,73 @@ def _gpt_fallback(listing: dict, api_key: str, folder_id: str) -> list:
 
 
 def _verdict(user_price: float, area: float, analogs: list) -> dict:
-    """Сравниваем ₽/м² пользователя с медианой аналогов."""
-    if not analogs or not user_price or not area:
+    """
+    Сравниваем ₽/м² пользователя с медианой аналогов.
+    Минимальные требования к качеству:
+      - Не менее 4 уникальных аналогов (не дублей)
+      - Не менее 3 разных значений цены ₽/м² (иначе данные не репрезентативны)
+      - Источники не только из GPT (gpt_inference не считается реальным рынком)
+    """
+    if not user_price or not area:
         return {
             'label': 'Нет данных',
             'color': 'gray',
             'delta_pct': 0,
-            'comment': 'Недостаточно данных для анализа',
+            'comment': 'Укажите цену и площадь объекта.',
         }
-    user_per_m2 = user_price / area
-    ppm2_list = sorted([a['price_per_m2'] for a in analogs if a.get('price_per_m2', 0) > 0])
-    if not ppm2_list:
-        return {'label': 'Нет данных', 'color': 'gray', 'delta_pct': 0, 'comment': 'Аналоги без цен'}
 
+    # Фильтруем GPT-аналоги — они не являются реальными рыночными данными
+    real_analogs = [a for a in (analogs or []) if a.get('source') != 'gpt_inference']
+    gpt_only = len(real_analogs) == 0 and len(analogs or []) > 0
+
+    ppm2_list = sorted([a['price_per_m2'] for a in real_analogs if a.get('price_per_m2', 0) > 100])
+    unique_prices = len(set(round(v / 1000) for v in ppm2_list))  # уникальные с точностью 1000 ₽
+
+    # Проверяем достаточность данных
+    if gpt_only or len(ppm2_list) < 4 or unique_prices < 3:
+        reason = ''
+        if gpt_only:
+            reason = 'реальные объявления не найдены'
+        elif len(ppm2_list) < 4:
+            reason = f'найдено только {len(ppm2_list)} аналог(а) — нужно минимум 4'
+        elif unique_prices < 3:
+            reason = 'аналоги имеют одинаковую цену — вероятно, это один объект'
+        return {
+            'label': 'Недостаточно данных',
+            'color': 'gray',
+            'delta_pct': 0,
+            'user_price_per_m2': round(user_price / area),
+            'comment': f'Для анализа недостаточно данных: {reason}. Попробуйте обновить вручную или расширить параметры поиска.',
+            'data_quality': 'insufficient',
+        }
+
+    user_per_m2 = user_price / area
     median = statistics.median(ppm2_list)
     delta_pct = round(((user_per_m2 - median) / median) * 100, 1) if median else 0
 
-    if delta_pct > 15:
+    # Оценка разброса — если аналоги слишком разнородны, снижаем уверенность
+    stdev = statistics.stdev(ppm2_list) if len(ppm2_list) >= 3 else 0
+    cv = (stdev / median * 100) if median else 0  # коэффициент вариации
+    data_quality = 'good' if cv < 30 else 'noisy'
+
+    if delta_pct > 20:
         label, color = 'Цена завышена', 'red'
-        comment = f'Дороже рынка на {abs(delta_pct):.0f}%. Снизьте цену для ускорения продажи.'
-    elif delta_pct < -15:
+        comment = f'Дороже рынка на {abs(delta_pct):.0f}%. Рекомендуем снизить цену для ускорения сделки.'
+    elif delta_pct > 10:
+        label, color = 'Чуть выше рынка', 'amber'
+        comment = f'На {abs(delta_pct):.0f}% выше медианы по аналогам. Небольшой торг вероятен.'
+    elif delta_pct < -20:
         label, color = 'Ниже рынка', 'emerald'
-        comment = f'Дешевле рынка на {abs(delta_pct):.0f}%. Можно поднять цену.'
+        comment = f'Дешевле рынка на {abs(delta_pct):.0f}%. Есть потенциал поднять цену.'
+    elif delta_pct < -10:
+        label, color = 'Выгодная цена', 'green'
+        comment = f'На {abs(delta_pct):.0f}% ниже медианы — привлекательно для покупателя.'
     else:
-        label, color = 'Рыночная цена', 'green'
-        comment = f'В пределах ±15% от рынка ({delta_pct:+.0f}%).'
+        label, color = 'Рыночная цена', 'blue'
+        comment = f'В пределах ±10% от рыночной медианы ({delta_pct:+.0f}%).'
+
+    if data_quality == 'noisy':
+        comment += f' Данные разнородны (разброс {cv:.0f}%) — оценка ориентировочная.'
 
     # Диапазон по 25–75 перцентилям
     if len(ppm2_list) >= 4:
@@ -785,6 +891,8 @@ def _verdict(user_price: float, area: float, analogs: list) -> dict:
         'market_max_price': round(q3 * area),
         'suggested_price': round(median * area),
         'comment': comment,
+        'data_quality': data_quality,
+        'analogs_used': len(ppm2_list),
     }
 
 
@@ -967,13 +1075,19 @@ def handle_mela_price_check(cur, conn, body: dict, qs: dict) -> dict:
             sources_used.append('Виртуальный брокер (GPT)')
             used_fallback = True
 
-    # Отфильтровать выбросы (вне 5–95 перцентилей по ₽/м²)
-    if len(analogs) >= 5:
-        ppm2 = sorted([a['price_per_m2'] for a in analogs if a.get('price_per_m2', 0) > 0])
+    # Глобальная дедупликация всех аналогов (из разных источников)
+    analogs = _dedupe_analogs(analogs)
+    print(f'[mela_price] after global dedup: {len(analogs)} analogs')
+
+    # Отфильтровать выбросы (вне 5–95 перцентилей по ₽/м²) — только среди реальных
+    real = [a for a in analogs if a.get('source') != 'gpt_inference']
+    if len(real) >= 6:
+        ppm2 = sorted([a['price_per_m2'] for a in real if a.get('price_per_m2', 0) > 0])
         if ppm2:
-            lo = ppm2[int(len(ppm2) * 0.05)]
-            hi = ppm2[int(len(ppm2) * 0.95)] if int(len(ppm2) * 0.95) < len(ppm2) else ppm2[-1]
-            analogs = [a for a in analogs if lo <= a['price_per_m2'] <= hi]
+            lo = ppm2[max(0, int(len(ppm2) * 0.05))]
+            hi = ppm2[min(len(ppm2) - 1, int(len(ppm2) * 0.95))]
+            analogs = [a for a in analogs if a.get('source') == 'gpt_inference' or lo <= a.get('price_per_m2', 0) <= hi]
+            print(f'[mela_price] after outlier filter: {len(analogs)} analogs (lo={lo}, hi={hi})')
 
     verdict = _verdict(price, area, analogs)
 
