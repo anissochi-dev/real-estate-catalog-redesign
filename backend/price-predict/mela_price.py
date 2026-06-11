@@ -20,7 +20,23 @@ SCHEMA = 't_p71821556_real_estate_catalog_'
 YANDEX_GPT_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
 YANDEX_MODEL_NAME = 'yandexgpt-5-pro/latest'
 YANDEX_SEARCH_URL = 'https://yandex.ru/search/xml'
-CACHE_TTL_DAYS = 3
+
+# TTL кеша по категориям — редкие категории обновляются реже (мало объявлений)
+CACHE_TTL_BY_CAT = {
+    'hotel':       14,  # гостиницы — мало объявлений, медленно меняются
+    'production':  10,  # производство
+    'car_service': 10,  # автосервисы
+    'land':         7,  # земля
+    'building':     7,  # здания
+    'gab':          7,  # ГАБ
+    'restaurant':   5,  # общепит
+    'warehouse':    5,  # склады
+    'office':       3,  # офисы — активный рынок
+    'retail':       3,  # торговые
+    'free_purpose': 3,
+    'business':     5,
+}
+CACHE_TTL_DEFAULT = 3
 
 USER_AGENT = (
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
@@ -801,9 +817,19 @@ def _load_cached(cur, key: str):
         return None
 
 
-def _save_cache(cur, conn, key: str, result: dict):
+def _get_ttl(category: str, has_db_analogs: bool) -> int:
+    """TTL кеша в днях: для редких категорий дольше, если только DB-аналоги — короче."""
+    ttl = CACHE_TTL_BY_CAT.get(category, CACHE_TTL_DEFAULT)
+    if has_db_analogs:
+        ttl = min(ttl, 1)  # данные из системы свежие — не кешируем надолго
+    return ttl
+
+
+def _save_cache(cur, conn, key: str, result: dict, category: str = ''):
     try:
-        expires = (datetime.now() + timedelta(days=CACHE_TTL_DAYS)).isoformat()
+        has_db = result.get('db_analogs_count', 0) > 0
+        ttl = _get_ttl(category, has_db)
+        expires = (datetime.now() + timedelta(days=ttl)).isoformat()
         safe_key = key.replace("'", "''")
         safe_result = json.dumps(result, ensure_ascii=False).replace("'", "''")
         cur.execute(
@@ -815,6 +841,45 @@ def _save_cache(cur, conn, key: str, result: dict):
         conn.commit()
     except Exception:
         pass
+
+
+def _save_snapshot(cur, conn, listing: dict, analogs: list, verdict: dict, sources: list, used_fallback: bool):
+    """Сохраняет срез рынка в market_snapshots для истории медиан."""
+    try:
+        if not analogs:
+            return
+        cat   = (listing.get('category') or '').replace("'", "''")
+        deal  = (listing.get('deal') or 'sale').replace("'", "''")
+        dist  = (listing.get('district') or '').strip().replace("'", "''")
+
+        ppm2_list = sorted([a['price_per_m2'] for a in analogs if a.get('price_per_m2', 0) > 0])
+        if not ppm2_list:
+            return
+
+        median = verdict.get('market_median_per_m2') or 0
+        q1 = ppm2_list[0]
+        q3 = ppm2_list[-1]
+        if len(ppm2_list) >= 4:
+            q1 = statistics.quantiles(ppm2_list, n=4)[0]
+            q3 = statistics.quantiles(ppm2_list, n=4)[2]
+
+        min_p  = ppm2_list[0]
+        max_p  = ppm2_list[-1]
+        cnt    = len(ppm2_list)
+        src    = json.dumps(sources, ensure_ascii=False).replace("'", "''")
+        gpt    = 'TRUE' if used_fallback else 'FALSE'
+
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.market_snapshots "
+            f"(category, deal, district, median_per_m2, min_per_m2, max_per_m2, "
+            f"q1_per_m2, q3_per_m2, analogs_count, sources, used_gpt_fallback) "
+            f"VALUES ('{cat}', '{deal}', '{dist}', {int(median)}, {int(min_p)}, {int(max_p)}, "
+            f"{int(q1)}, {int(q3)}, {cnt}, '{src}', {gpt})"
+        )
+        conn.commit()
+        print(f'[mela_price] snapshot saved: cat={cat} deal={deal} dist={dist} median={int(median)} n={cnt}')
+    except Exception as e:
+        print(f'[mela_price] snapshot save error: {e}')
 
 
 def handle_mela_price_check(cur, conn, body: dict, qs: dict) -> dict:
@@ -913,7 +978,8 @@ def handle_mela_price_check(cur, conn, body: dict, qs: dict) -> dict:
     verdict = _verdict(price, area, analogs)
 
     db_count = sum(1 for a in analogs if a.get('source') == 'база системы')
-    cache_days = 1 if db_count > 0 else CACHE_TTL_DAYS
+    category = listing.get('category', '')
+    ttl = _get_ttl(category, db_count > 0)
 
     result = {
         'verdict': verdict,
@@ -922,7 +988,13 @@ def handle_mela_price_check(cur, conn, body: dict, qs: dict) -> dict:
         'analogs': analogs[:8],
         'sources': sources_used,
         'used_gpt_fallback': used_fallback,
-        'cached_until': (datetime.now() + timedelta(days=cache_days)).isoformat(),
+        'cached_until': (datetime.now() + timedelta(days=ttl)).isoformat(),
+        'cache_ttl_days': ttl,
     }
-    _save_cache(cur, conn, key, result)
+    _save_cache(cur, conn, key, result, category=category)
+
+    # Сохраняем рыночный срез в историю (только если есть реальные аналоги, не только GPT)
+    if analogs and not (used_fallback and db_count == 0):
+        _save_snapshot(cur, conn, listing, analogs, verdict, sources_used, used_fallback)
+
     return result
