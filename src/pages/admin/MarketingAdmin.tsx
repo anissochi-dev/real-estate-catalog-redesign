@@ -7,8 +7,9 @@ import AnalyticsTab from '@/pages/admin/marketing/AnalyticsTab';
 import PricingTab from '@/pages/admin/marketing/PricingTab';
 import UtmTab from '@/pages/admin/marketing/UtmTab';
 import SmartBudgetTab from '@/pages/admin/marketing/SmartBudgetTab';
+import SocialParserTab from '@/pages/admin/marketing/SocialParserTab';
 
-type Tab = 'analytics' | 'pricing' | 'market-prices' | 'seo-audit' | 'seo-tech' | 'utm' | 'smart-budget';
+type Tab = 'analytics' | 'pricing' | 'market-prices' | 'seo-audit' | 'seo-tech' | 'utm' | 'smart-budget' | 'social';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'smart-budget',  label: 'Умный бюджет',      icon: 'Wallet' },
@@ -18,6 +19,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'seo-audit',     label: 'SEO-аудит',          icon: 'ShieldCheck' },
   { id: 'seo-tech',      label: 'Технический SEO',    icon: 'FileCode2' },
   { id: 'utm',           label: 'UTM-ссылки',         icon: 'Link' },
+  { id: 'social',        label: 'Соцсети',            icon: 'Share2' },
 ];
 
 export default function MarketingAdmin() {
@@ -59,6 +61,7 @@ export default function MarketingAdmin() {
       {tab === 'seo-audit'     && <SeoAuditTab />}
       {tab === 'seo-tech'      && <SeoTechnicalTab />}
       {tab === 'utm'           && <UtmTab />}
+      {tab === 'social'        && <SocialParserTab />}
     </div>
   );
 }
