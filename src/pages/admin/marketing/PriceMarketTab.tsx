@@ -46,19 +46,28 @@ const STATUS_LABEL: Record<string, string> = {
   error: 'Ошибка',
 };
 
+const LS_KEY = 'import_job_id';
+const ACTIVE_STATUSES = new Set(['pending', 'downloading', 'parsing', 'running']);
+
+function parseCatBreakdown(val: ImportJob['category_breakdown']): Record<string, number> {
+  if (!val) return {};
+  if (typeof val === 'string') { try { return JSON.parse(val); } catch { return {}; } }
+  return val as unknown as Record<string, number>;
+}
+
 function ImportBlock() {
   const [fileUrl, setFileUrl] = useState('');
   const [source, setSource] = useState('cian');
   const [replace, setReplace] = useState(false);
   const [starting, setStarting] = useState(false);
   const [job, setJob] = useState<ImportJob | null>(null);
+  const [history, setHistory] = useState<ImportJob[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopPoll = () => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
   };
-
-  useEffect(() => () => stopPoll(), []);
 
   const pollStatus = useCallback(async (jobId: number) => {
     try {
@@ -67,17 +76,48 @@ function ImportBlock() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'import_market_status', job_id: jobId }),
       }).then(r => r.json());
-      setJob(prev => ({ ...prev, ...r }));
+      setJob(prev => ({ ...(prev ?? {} as ImportJob), ...r }));
       if (r.status === 'done') {
         stopPoll();
-        toast.success(`Импорт завершён — добавлено ${r.rows_inserted} записей`);
+        localStorage.removeItem(LS_KEY);
+        toast.success(`Импорт завершён — добавлено ${r.rows_inserted.toLocaleString()} записей`);
       }
       if (r.status === 'error') {
         stopPoll();
+        localStorage.removeItem(LS_KEY);
         toast.error(`Ошибка импорта: ${r.error_msg}`);
       }
-    } catch { /* игнорируем сетевые ошибки при поллинге */ }
+    } catch { /* сетевые ошибки поллинга игнорируем */ }
   }, []);
+
+  // При монтировании — восстанавливаем активный job из localStorage
+  useEffect(() => {
+    const savedId = localStorage.getItem(LS_KEY);
+    if (savedId) {
+      const id = parseInt(savedId, 10);
+      pollStatus(id).then(() => {
+        // Запускаем поллинг только если job ещё активен
+        setJob(prev => {
+          if (prev && ACTIVE_STATUSES.has(prev.status)) {
+            pollRef.current = setInterval(() => pollStatus(id), 3000);
+          }
+          return prev;
+        });
+      });
+    }
+    return () => stopPoll();
+  }, [pollStatus]);
+
+  const loadHistory = async () => {
+    try {
+      const r = await fetch(XLSX_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'import_market_list' }),
+      }).then(r => r.json());
+      if (Array.isArray(r)) setHistory(r);
+    } catch { /* ignore */ }
+  };
 
   const handleStart = async () => {
     if (!fileUrl.trim()) { toast.error('Вставьте ссылку на файл'); return; }
@@ -89,23 +129,73 @@ function ImportBlock() {
         body: JSON.stringify({ action: 'import_market_start', file_url: fileUrl.trim(), source, replace }),
       }).then(r => r.json());
       if (r.error) { toast.error(r.error); return; }
-      setJob({ id: r.job_id, status: 'pending', rows_total: null, rows_done: 0, rows_inserted: 0, rows_updated: 0, rows_skipped: 0, error_msg: null, category_breakdown: null, source, created_at: new Date().toISOString() });
+      const newJob: ImportJob = { id: r.job_id, status: 'pending', rows_total: null, rows_done: 0, rows_inserted: 0, rows_updated: 0, rows_skipped: 0, error_msg: null, category_breakdown: null, source, created_at: new Date().toISOString() };
+      setJob(newJob);
+      localStorage.setItem(LS_KEY, String(r.job_id));
+      stopPoll();
       pollRef.current = setInterval(() => pollStatus(r.job_id), 3000);
     } catch { toast.error('Не удалось запустить импорт'); }
     finally { setStarting(false); }
   };
 
-  const pct = job && job.rows_total ? Math.round((job.rows_done / job.rows_total) * 100) : null;
+  const handleReset = () => { setJob(null); setFileUrl(''); localStorage.removeItem(LS_KEY); };
+
+  const isActive = job && ACTIVE_STATUSES.has(job.status);
+  const pct = job?.rows_total ? Math.round((job.rows_done / job.rows_total) * 100) : null;
+  const progressWidth = pct !== null ? `${pct}%`
+    : job?.status === 'downloading' ? '8%'
+    : job?.status === 'parsing' ? '18%'
+    : job?.status === 'running' ? '30%' : '5%';
 
   return (
     <div className="bg-white rounded-2xl border border-border p-5 space-y-4">
-      <div className="flex items-center gap-2 font-semibold text-sm">
-        <Icon name="FileSpreadsheet" size={16} className="text-brand-blue" />
-        Импорт из XLSX (ЦИАН / Авито)
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 font-semibold text-sm">
+          <Icon name="FileSpreadsheet" size={16} className="text-brand-blue" />
+          Импорт из XLSX (ЦИАН / Авито / другой)
+        </div>
+        <button
+          onClick={() => { setShowHistory(v => !v); if (!showHistory) loadHistory(); }}
+          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+        >
+          <Icon name="History" size={13} />
+          История
+        </button>
       </div>
 
-      {/* Форма */}
-      {!job || job.status === 'done' || job.status === 'error' ? (
+      {/* История импортов */}
+      {showHistory && (
+        <div className="space-y-1 border border-border rounded-xl p-3 bg-muted/30">
+          {history.length === 0 && <p className="text-xs text-muted-foreground">Нет истории</p>}
+          {history.map(h => (
+            <div key={h.id} className="flex items-center justify-between text-xs py-1 border-b border-border last:border-0">
+              <span className="font-medium">{h.source}</span>
+              <span className="text-muted-foreground">{new Date(h.created_at).toLocaleString('ru')}</span>
+              <span className={h.status === 'done' ? 'text-green-600' : h.status === 'error' ? 'text-red-500' : 'text-blue-500'}>
+                {STATUS_LABEL[h.status] ?? h.status}
+              </span>
+              <span>{h.rows_inserted.toLocaleString()} добавлено</span>
+              {ACTIVE_STATUSES.has(h.status) && (
+                <button
+                  className="text-brand-blue underline ml-1"
+                  onClick={() => {
+                    setJob(h);
+                    localStorage.setItem(LS_KEY, String(h.id));
+                    stopPoll();
+                    pollRef.current = setInterval(() => pollStatus(h.id), 3000);
+                    setShowHistory(false);
+                  }}
+                >
+                  Подключиться
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Форма запуска */}
+      {!isActive && job?.status !== 'done' && job?.status !== 'error' && (
         <div className="space-y-3">
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Ссылка на файл (CDN)</label>
@@ -116,57 +206,50 @@ function ImportBlock() {
               className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
             />
           </div>
-          <div className="flex gap-3 flex-wrap">
+          <div className="flex gap-3 flex-wrap items-end">
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Источник</label>
-              <select
-                value={source}
-                onChange={e => setSource(e.target.value)}
-                className="border border-border rounded-lg px-3 py-2 text-sm bg-white"
-              >
-                {SOURCE_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
+              <label className="text-xs text-muted-foreground mb-1 block">Источник (по умолчанию)</label>
+              <select value={source} onChange={e => setSource(e.target.value)} className="border border-border rounded-lg px-3 py-2 text-sm bg-white">
+                {SOURCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
-            <div className="flex items-end pb-1">
-              <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
-                <input type="checkbox" checked={replace} onChange={e => setReplace(e.target.checked)} className="rounded" />
-                Заменить старые данные источника
-              </label>
-            </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer select-none pb-1">
+              <input type="checkbox" checked={replace} onChange={e => setReplace(e.target.checked)} className="rounded" />
+              Заменить старые данные
+            </label>
           </div>
           <button
             onClick={handleStart}
             disabled={starting || !fileUrl.trim()}
             className="bg-brand-blue text-white px-5 py-2 rounded-xl text-sm font-semibold disabled:opacity-50 flex items-center gap-2"
           >
-            {starting ? <><Icon name="Loader2" size={14} className="animate-spin" />Запуск…</> : <><Icon name="Upload" size={14} />Запустить импорт</>}
+            {starting
+              ? <><Icon name="Loader2" size={14} className="animate-spin" />Запуск…</>
+              : <><Icon name="Upload" size={14} />Запустить импорт</>}
           </button>
-          {job?.status === 'done' && (
-            <p className="text-xs text-green-600">Последний импорт: добавлено {job.rows_inserted}, обновлено {job.rows_updated}</p>
-          )}
         </div>
-      ) : (
-        /* Прогресс */
+      )}
+
+      {/* Прогресс активного или завершённого job */}
+      {job && (
         <div className="space-y-3">
           <div className="flex items-center justify-between text-sm">
             <span className="flex items-center gap-2">
-              {job.status !== 'done' && job.status !== 'error' && (
-                <Icon name="Loader2" size={14} className="animate-spin text-brand-blue" />
-              )}
+              {isActive && <Icon name="Loader2" size={14} className="animate-spin text-brand-blue" />}
+              {job.status === 'done' && <Icon name="CheckCircle2" size={14} className="text-green-600" />}
+              {job.status === 'error' && <Icon name="XCircle" size={14} className="text-red-500" />}
               <span className="font-medium">{STATUS_LABEL[job.status] ?? job.status}</span>
+              <span className="text-muted-foreground text-xs">· {job.source}</span>
             </span>
             <span className="text-muted-foreground text-xs">
-              {job.rows_total ? `${job.rows_done.toLocaleString()} / ${job.rows_total.toLocaleString()} строк` : `${job.rows_done.toLocaleString()} строк`}
+              {job.rows_done.toLocaleString()} строк обработано
             </span>
           </div>
 
-          {/* Прогресс-бар */}
           <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
             <div
-              className="h-2 bg-brand-blue rounded-full transition-all duration-500"
-              style={{ width: pct !== null ? `${pct}%` : (job.status === 'downloading' ? '10%' : job.status === 'parsing' ? '20%' : '30%') }}
+              className={`h-2 rounded-full transition-all duration-700 ${job.status === 'error' ? 'bg-red-400' : 'bg-brand-blue'}`}
+              style={{ width: job.status === 'done' ? '100%' : progressWidth }}
             />
           </div>
 
@@ -189,23 +272,24 @@ function ImportBlock() {
             <p className="text-xs text-red-600 bg-red-50 rounded-lg p-2">{job.error_msg}</p>
           )}
 
-          {job.status === 'done' && job.category_breakdown && (
-            <div className="text-xs space-y-1">
-              <p className="font-medium text-muted-foreground">По категориям:</p>
-              <div className="flex flex-wrap gap-1">
-                {Object.entries(JSON.parse(typeof job.category_breakdown === 'string' ? job.category_breakdown : JSON.stringify(job.category_breakdown)))
-                  .sort(([,a],[,b]) => (b as number) - (a as number))
-                  .map(([cat, cnt]) => (
-                    <span key={cat} className="bg-muted px-2 py-0.5 rounded-full text-xs">
-                      {CAT_RU[cat] ?? cat}: {(cnt as number).toLocaleString()}
+          {job.status === 'done' && (() => {
+            const bd = parseCatBreakdown(job.category_breakdown);
+            return Object.keys(bd).length > 0 ? (
+              <div className="text-xs space-y-1">
+                <p className="font-medium text-muted-foreground">По категориям:</p>
+                <div className="flex flex-wrap gap-1">
+                  {Object.entries(bd).sort(([,a],[,b]) => b - a).map(([cat, cnt]) => (
+                    <span key={cat} className="bg-muted px-2 py-0.5 rounded-full">
+                      {CAT_RU[cat] ?? cat}: {cnt.toLocaleString()}
                     </span>
                   ))}
+                </div>
               </div>
-            </div>
-          )}
+            ) : null;
+          })()}
 
           {(job.status === 'done' || job.status === 'error') && (
-            <button onClick={() => { setJob(null); setFileUrl(''); }} className="text-xs text-muted-foreground underline">
+            <button onClick={handleReset} className="text-xs text-brand-blue underline">
               Новый импорт
             </button>
           )}

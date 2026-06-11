@@ -13,23 +13,44 @@ SCHEMA = os.environ.get('MAIN_DB_SCHEMA', 't_p71821556_real_estate_catalog_')
 # ── Маппинги для import_market ────────────────────────────────────────────────
 
 OBJ_TYPE_MAP = {
-    'офисное помещение': 'office', 'офис': 'office',
+    # Офис
+    'офисное помещение': 'office', 'офис': 'office', 'office': 'office',
+    # Торговое
     'торговое помещение': 'retail', 'торговый': 'retail', 'магазин': 'retail',
-    'помещение свободного назначения': 'free_purpose', 'свободного назначения': 'free_purpose', 'псн': 'free_purpose',
-    'складское помещение': 'warehouse', 'склад': 'warehouse',
+    'торговля': 'retail', 'торгово': 'retail', 'retail': 'retail',
+    # ПСН
+    'помещение свободного назначения': 'free_purpose', 'свободного назначения': 'free_purpose',
+    'псн': 'free_purpose', 'свободное': 'free_purpose',
+    # Склад
+    'складское помещение': 'warehouse', 'склад': 'warehouse', 'warehouse': 'warehouse',
+    'складск': 'warehouse',
+    # Производство
     'производственное помещение': 'production', 'производство': 'production',
-    'здание': 'building', 'отдельно стоящее здание': 'building',
-    'помещение общепита': 'catering', 'общепит': 'catering', 'кафе': 'catering', 'ресторан': 'catering',
-    'гостиница': 'hotel', 'апартаменты': 'hotel',
-    'коммерческая земля': 'land', 'земля': 'land',
-    'автосервис': 'car_service', 'автомойка': 'car_service',
+    'производственно': 'production', 'цех': 'production',
+    # Здание
+    'здание': 'building', 'отдельно стоящее здание': 'building', 'особняк': 'building',
+    'building': 'building',
+    # Общепит
+    'помещение общепита': 'catering', 'общепит': 'catering', 'кафе': 'catering',
+    'ресторан': 'catering', 'столовая': 'catering', 'питание': 'catering',
+    # Гостиница
+    'гостиница': 'hotel', 'апартаменты': 'hotel', 'отель': 'hotel', 'хостел': 'hotel',
+    # Земля
+    'коммерческая земля': 'land', 'земля': 'land', 'земельный': 'land', 'участок': 'land',
+    # Автосервис
+    'автосервис': 'car_service', 'автомойка': 'car_service', 'автостоянка': 'car_service',
+    'парковка': 'car_service', 'гараж': 'car_service',
+    # ГАБ
     'готовый арендный бизнес': 'gab', 'габ': 'gab',
-    'другое': 'other', 'иное': 'other',
+    # Прочее
+    'другое': 'other', 'иное': 'other', 'прочее': 'other',
 }
 
 DEAL_MAP = {
     'продам': 'sale', 'продажа': 'sale', 'продаётся': 'sale', 'продается': 'sale',
+    'продаю': 'sale', 'купить': 'sale', 'sale': 'sale', 'sell': 'sale',
     'сдам': 'rent', 'аренда': 'rent', 'сдаётся': 'rent', 'сдается': 'rent',
+    'снять': 'rent', 'rent': 'rent', 'lease': 'rent', 'сдаю': 'rent',
 }
 
 GAB_TITLE_SIGNALS = ['с арендатором', 'арендный бизнес', 'готовый арендный', 'арендный поток']
@@ -57,13 +78,53 @@ def _map_deal_m(raw: str) -> str:
 
 
 def _parse_float_m(v) -> float:
+    """Парсит число из любого формата: '1 500 000 руб', '1,500,000', '45.5 м²' и т.д."""
     if v is None:
         return 0.0
-    s = re.sub(r'[^\d.,]', '', str(v)).replace(',', '.')
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).strip()
+    # Убираем всё кроме цифр, точки и запятой
+    s = re.sub(r'[^\d.,]', '', s)
+    if not s:
+        return 0.0
+    # Если несколько точек или запятых — это разделители тысяч, берём последний как десятичный
+    dots = s.count('.')
+    commas = s.count(',')
+    if dots > 1:
+        s = s.replace('.', '')
+    elif commas > 1:
+        s = s.replace(',', '')
+    elif dots == 1 and commas == 1:
+        # Формат 1,500.00 или 1.500,00
+        if s.rfind('.') > s.rfind(','):
+            s = s.replace(',', '')
+        else:
+            s = s.replace('.', '').replace(',', '.')
+    else:
+        s = s.replace(',', '.')
     try:
         return float(s)
     except Exception:
         return 0.0
+
+
+def _parse_area_from_title(title: str) -> float:
+    """Извлекает площадь из названия: 'Офис 45 м²', 'Склад, 1200 кв.м', '250.5м2' и т.д."""
+    if not title:
+        return 0.0
+    patterns = [
+        r'(\d+[\.,]?\d*)\s*м[²2²]',
+        r'(\d+[\.,]?\d*)\s*кв\.?\s*м',
+        r'(\d+[\.,]?\d*)\s*sq\.?\s*m',
+    ]
+    for p in patterns:
+        m = re.search(p, title.lower())
+        if m:
+            v = _parse_float_m(m.group(1))
+            if 1 <= v <= 200_000:
+                return v
+    return 0.0
 
 
 def _ppm2_m(price: float, area: float) -> float | None:
@@ -371,13 +432,14 @@ def _run_import_job(job_id: int):
         col_title   = find_col('название', 'заголовок', 'title', 'наименование')
         col_floor   = find_col('этаж', 'floor')
         col_tfloors = find_col('этажность', 'этажей', 'total_floor')
-        col_url     = find_col('url', 'ссылка', 'link', 'объявление', 'источник')
-        col_ext_id  = find_col('id на сайте', 'id объявления', 'внешний id', 'id', 'номер объявления')
-        col_desc    = find_col('описание', 'description', 'комментарий')
-        col_ppm2    = find_col('цена за м', 'price_per_m', 'цена/м', 'руб/м')
-        col_cat2    = find_col('категория2') if find_col('категория1') >= 0 else -1
-        col_lat     = find_col('lat', 'latitude', 'широта')
-        col_lng     = find_col('lng', 'lon', 'longitude', 'долгота')
+        col_url         = find_col('url', 'ссылка', 'link', 'объявление')
+        col_site_source = find_col('источник')
+        col_ext_id      = find_col('id на сайте', 'id объявления', 'внешний id', 'id', 'номер объявления')
+        col_desc        = find_col('описание', 'description', 'комментарий')
+        col_ppm2        = find_col('цена за м', 'price_per_m', 'цена/м', 'руб/м')
+        col_cat2        = find_col('категория2') if find_col('категория1') >= 0 else -1
+        col_lat         = find_col('lat', 'latitude', 'широта')
+        col_lng         = find_col('lng', 'lon', 'longitude', 'долгота')
 
         if col_price < 0:
             _job_update(conn, job_id, status='error',
@@ -444,12 +506,13 @@ def _run_import_job(job_id: int):
             price = _parse_float_m(cell(col_price))
             title_v = str(cell(col_title) or '').strip() if col_title >= 0 else ''
 
-            # Площадь: из колонки или из названия
+            # Площадь: из колонки → из описания → из названия
             area = _parse_float_m(cell(col_area)) if col_area >= 0 else 0.0
-            if area <= 0 and title_v:
-                m_area = re.search(r'(\d+[\.,]?\d*)\s*м', title_v)
-                if m_area:
-                    area = _parse_float_m(m_area.group(1))
+            if area <= 0:
+                area = _parse_area_from_title(title_v)
+            if area <= 0:
+                desc_v = str(cell(col_desc) or '') if col_desc >= 0 else ''
+                area = _parse_area_from_title(desc_v)
 
             deal  = _map_deal_m(str(cell(col_deal) or 'продажа'))
 
@@ -466,22 +529,48 @@ def _run_import_job(job_id: int):
             tfloors_v = int(_parse_float_m(cell(col_tfloors))) or None
             url_v   = str(cell(col_url) or '').strip() or None
             ext_id  = str(cell(col_ext_id) or '').strip() or None
-            desc    = str(cell(col_desc) or '').strip()[:1000] or None
+            desc_raw = str(cell(col_desc) or '').strip()
+            desc    = desc_raw[:1000] or None
             ppm2_r  = _parse_float_m(cell(col_ppm2)) if col_ppm2 >= 0 else None
             ppm2    = ppm2_r if ppm2_r else _ppm2_m(price, area)
 
-            # Фильтры
-            if deal == 'sale' and not (MIN_PRICE_SALE <= price <= MAX_PRICE_SALE):
+            # Определяем реальный источник из колонки "источник" (avito.ru, cian.ru и т.д.)
+            row_source = source
+            if col_site_source >= 0:
+                src_raw = str(cell(col_site_source) or '').lower()
+                if 'avito' in src_raw:
+                    row_source = 'avito'
+                elif 'cian' in src_raw or 'циан' in src_raw:
+                    row_source = 'cian'
+                elif 'domclick' in src_raw or 'домклик' in src_raw:
+                    row_source = 'domclick'
+                elif 'realty.yandex' in src_raw or 'недвижимость' in src_raw:
+                    row_source = 'yandex'
+                elif 'emls' in src_raw:
+                    row_source = 'emls'
+                elif src_raw.strip():
+                    # Берём домен как источник
+                    m_dom = re.search(r'([\w-]+)\.(ru|com|net)', src_raw)
+                    if m_dom:
+                        row_source = m_dom.group(1)
+
+            # Фильтры цены
+            if deal == 'sale' and price > 0 and not (MIN_PRICE_SALE <= price <= MAX_PRICE_SALE):
                 skipped += 1
                 continue
-            if deal == 'rent' and not (MIN_PRICE_RENT <= price <= MAX_PRICE_RENT):
+            if deal == 'rent' and price > 0 and not (MIN_PRICE_RENT <= price <= MAX_PRICE_RENT):
                 skipped += 1
                 continue
+            # Площадь — фильтруем только явно неверные
             if area > 0 and not (MIN_AREA <= area <= MAX_AREA):
                 skipped += 1
                 continue
+            # Пропускаем строки вообще без цены
+            if not price:
+                skipped += 1
+                continue
 
-            dk = f"{address or ext_id or f'r{rows_done}'}_{int(area)}"
+            dk = f"{row_source}_{ext_id or address or f'r{rows_done}'}_{int(area)}_{int(price)}"
             if dk in seen_keys:
                 skipped += 1
                 continue
@@ -489,7 +578,7 @@ def _run_import_job(job_id: int):
 
             cat_counts[category] = cat_counts.get(category, 0) + 1
             batch.append({
-                'source': source,
+                'source': row_source,
                 'external_id': ext_id,
                 'url': url_v,
                 'title': title_v[:500] or None,
