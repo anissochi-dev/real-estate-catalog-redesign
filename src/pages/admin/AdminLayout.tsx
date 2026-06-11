@@ -39,10 +39,13 @@ const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; gro
   { id: 'crm-payments', label: 'Платежи', icon: 'CreditCard', roles: CRM_ROLES, group: 'crm' },
 ];
 
+const SOCIAL_PARSER_URL = 'https://functions.poehali.dev/5d1bb364-c893-4d73-a003-e119069371ff';
+
 export default function AdminLayout({ section, setSection, onExit, children }: Props) {
   const { user, logout } = useAuth();
   const [aiOpen, setAiOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [socialPending, setSocialPending] = useState(0);
   // Меню пользователя в мобильной шапке (имя + На сайт + Выйти)
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<boolean>(() => {
@@ -64,6 +67,25 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
     adminApi.getRolePermissions()
       .then(d => { if (d.permissions) setRolePerms(d.permissions); })
       .catch(() => {});
+  }, [user]);
+
+  // Загружаем счётчик ожидающих постов из соцсетей раз в 5 минут
+  useEffect(() => {
+    if (!user) return;
+    const token = localStorage.getItem('admin_token') || '';
+    const load = () => {
+      fetch(SOCIAL_PARSER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
+        body: JSON.stringify({ action: 'queue_stats' }),
+      })
+        .then(r => r.json())
+        .then(r => { if (!r.error) setSocialPending(r.total_pending || 0); })
+        .catch(() => {});
+    };
+    load();
+    const interval = setInterval(load, 5 * 60 * 1000);
+    return () => clearInterval(interval);
   }, [user]);
   const logoutTimer = useRef<number | null>(null);
   const warningTimer = useRef<number | null>(null);
@@ -177,21 +199,39 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
         </div>
 
         <nav className={`flex-1 overflow-y-auto space-y-1 ${collapsed ? 'p-2' : 'p-3'}`}>
-          {items.filter(n => !n.group).map(item => (
-            <button
-              key={item.id}
-              title={collapsed ? item.label : undefined}
-              onClick={() => { setSection(item.id); setSidebarOpen(false); }}
-              className={`w-full flex items-center rounded-xl text-sm transition ${
-                collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'
-              } ${
-                section === item.id ? 'bg-brand-blue text-white font-semibold' : 'text-foreground hover:bg-muted'
-              }`}
-            >
-              <Icon name={item.icon} size={18} />
-              {!collapsed && item.label}
-            </button>
-          ))}
+          {items.filter(n => !n.group).map(item => {
+            const badge = item.id === 'marketing' && socialPending > 0 ? socialPending : 0;
+            const isActive = section === item.id;
+            return (
+              <button
+                key={item.id}
+                title={collapsed ? item.label : undefined}
+                onClick={() => { setSection(item.id); setSidebarOpen(false); }}
+                className={`relative w-full flex items-center rounded-xl text-sm transition ${
+                  collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'
+                } ${
+                  isActive ? 'bg-brand-blue text-white font-semibold' : 'text-foreground hover:bg-muted'
+                }`}
+              >
+                <span className="relative flex-shrink-0">
+                  <Icon name={item.icon} size={18} />
+                  {badge > 0 && collapsed && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
+                      {badge > 99 ? '99+' : badge}
+                    </span>
+                  )}
+                </span>
+                {!collapsed && item.label}
+                {badge > 0 && !collapsed && (
+                  <span className={`ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0 ${
+                    isActive ? 'bg-white/20 text-white' : 'bg-amber-500 text-white'
+                  }`}>
+                    {badge > 99 ? '99+' : badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
           {items.some(n => n.group === 'crm') && (
             <>
               {!collapsed ? (
