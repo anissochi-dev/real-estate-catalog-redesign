@@ -581,17 +581,72 @@ def handler(event: dict, context) -> dict:
         # Вставляем
         result = _insert_records(cur, conn, records)
 
+        # П.3: Автопереобучение ВБ после импорта (если добавились новые записи)
+        retrain_triggered = False
+        retrain_error = None
+        if result['inserted'] > 0:
+            retrain_triggered, retrain_error = _trigger_vb_retrain(cur)
+
         return ok({
             'success': True,
             'format': fmt,
             'total_parsed': len(records),
             'inserted': result['inserted'],
+            'updated': result.get('updated', 0),
             'skipped': result['skipped'],
             'deleted_old': deleted_old,
             'warnings_count': len(warnings),
             'warnings_sample': warnings[:20],
+            'retrain_triggered': retrain_triggered,
+            'retrain_error': retrain_error,
         })
 
     finally:
         cur.close()
         conn.close()
+
+
+def _trigger_vb_retrain(cur) -> tuple[bool, str | None]:
+    """П.3: Запускает переобучение ВБ по источникам market_import и district_prices.
+    Вызывается асинхронно через HTTP — не блокирует ответ импортёра.
+    Берёт URL ai-retrain из func2url или переменной окружения.
+    """
+    import threading
+
+    # Получаем токен admin-сессии для авторизации retrain
+    cur.execute(f"""
+        SELECT s.token FROM {SCHEMA}.sessions s
+        JOIN {SCHEMA}.users u ON u.id = s.user_id
+        WHERE u.role = 'admin' AND s.expires_at > NOW()
+        ORDER BY s.created_at DESC LIMIT 1
+    """)
+    row = cur.fetchone()
+    if not row:
+        return False, 'Нет активной admin-сессии для запуска retrain'
+
+    token = row['token']
+    retrain_url = os.environ.get('RETRAIN_URL', '')
+    if not retrain_url:
+        # Пробуем из func2url (если задеплоено вместе)
+        return False, 'RETRAIN_URL не задан'
+
+    def _fire():
+        try:
+            payload = json.dumps({'sources': ['market_import', 'district_prices']}).encode()
+            req = urllib.request.Request(
+                retrain_url,
+                data=payload,
+                headers={
+                    'Content-Type': 'application/json',
+                    'X-Auth-Token': token,
+                },
+                method='POST',
+            )
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                resp.read()
+        except Exception as e:
+            print(f'[market-import] retrain fire error: {e}')
+
+    t = threading.Thread(target=_fire, daemon=True)
+    t.start()
+    return True, None

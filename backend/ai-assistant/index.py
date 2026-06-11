@@ -772,22 +772,65 @@ def _increment_interaction(cur, conn):
             pass
 
 
-def _save_learned_fact(cur, conn, fact: str):
-    """Сохраняет новый факт в память Мелании (до 20 фактов, FIFO)."""
+def _save_learned_fact(cur, conn, fact: str, category: str = 'general'):
+    """П.6: Сохраняет новый факт с категорией (broker/it/general).
+    Ключи: learned_broker (30), learned_it (30), learned_general (20).
+    Архивирует старые (>90 дней) в learned_archive вместо удаления.
+    """
+    from datetime import datetime as _dt
+    KEY_MAP = {'broker': 'learned_broker', 'it': 'learned_it', 'general': 'learned_general'}
+    MAX_MAP = {'broker': 30, 'it': 30, 'general': 20}
+    key = KEY_MAP.get(category, 'learned_general')
+    max_n = MAX_MAP.get(category, 20)
     try:
-        cur.execute(f"SELECT value FROM {SCHEMA}.ai_memory WHERE key = 'learned_facts'")
+        cur.execute(f"SELECT value FROM {SCHEMA}.ai_memory WHERE key = '{key}'")
         row = cur.fetchone()
-        facts = json.loads(row['value']) if row else []
+        facts = json.loads(row['value']) if row and row.get('value') else []
         if not isinstance(facts, list):
             facts = []
-        fact = fact.strip()[:200]
-        if fact and fact not in facts:
-            facts.append(fact)
-            if len(facts) > 20:
-                facts = facts[-20:]
+        now_str = _dt.utcnow().strftime('%Y-%m-%d')
+        entry = {'date': now_str, 'text': fact.strip()[:200]}
+        # Дедупликация по тексту
+        texts = {f.get('text') if isinstance(f, dict) else f for f in facts}
+        if entry['text'] in texts:
+            return
+        facts.append(entry)
+        # Архивируем факты старше 90 дней перед удалением
+        cutoff = _dt.utcnow().replace(tzinfo=None)
+        fresh, archive = [], []
+        for f in facts:
+            if not isinstance(f, dict):
+                fresh.append({'date': now_str, 'text': str(f)[:200]})
+                continue
+            try:
+                age_days = (cutoff - _dt.strptime(f.get('date', now_str), '%Y-%m-%d')).days
+            except Exception:
+                age_days = 0
+            if age_days > 90:
+                archive.append(f)
+            else:
+                fresh.append(f)
+        # Если накопилось больше лимита — архивируем излишек
+        if len(fresh) > max_n:
+            archive.extend(fresh[:-max_n])
+            fresh = fresh[-max_n:]
+        # Сохраняем архив
+        if archive:
+            arch_key = f'learned_archive_{category}'
+            cur.execute(f"SELECT value FROM {SCHEMA}.ai_memory WHERE key = '{arch_key}'")
+            arch_row = cur.fetchone()
+            arch_list = json.loads(arch_row['value']) if arch_row and arch_row.get('value') else []
+            arch_list.extend(archive)
+            arch_list = arch_list[-100:]  # максимум 100 в архиве
+            arch_v = _safe(json.dumps(arch_list, ensure_ascii=False), 10000)
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.ai_memory (key, value, updated_at) VALUES ('{arch_key}', '{arch_v}', NOW()) "
+                f"ON CONFLICT (key) DO UPDATE SET value = '{arch_v}', updated_at = NOW()"
+            )
+        v = _safe(json.dumps(fresh, ensure_ascii=False), 8000)
         cur.execute(
-            f"UPDATE {SCHEMA}.ai_memory SET value = '{_safe(json.dumps(facts, ensure_ascii=False), 5000)}', "
-            f"updated_at = NOW() WHERE key = 'learned_facts'"
+            f"INSERT INTO {SCHEMA}.ai_memory (key, value, updated_at) VALUES ('{key}', '{v}', NOW()) "
+            f"ON CONFLICT (key) DO UPDATE SET value = '{v}', updated_at = NOW()"
         )
         conn.commit()
     except Exception:
@@ -798,25 +841,42 @@ def _save_learned_fact(cur, conn, fact: str):
 
 
 def _save_tech_decision(cur, conn, question: str, answer: str):
-    """Сохраняет принятое техническое решение в отдельную память (до 15 записей, FIFO)."""
+    """П.6: Сохраняет техническое решение только если оно содержательное (>80 символов ответа).
+    Дедупликация по вопросу. Лимит 15 записей, FIFO.
+    """
+    # Фильтр: сохраняем только реально значимые ответы
+    if len(answer.strip()) < 80:
+        return
+    SIGNAL_WORDS = [
+        'исправ', 'решен', 'настро', 'подключ', 'создан', 'добавлен',
+        'удалён', 'обновлён', 'измен', 'миграц', 'деплой', 'установ',
+    ]
+    if not any(w in answer.lower() for w in SIGNAL_WORDS):
+        return
+    from datetime import datetime as _dt
     try:
-        from datetime import datetime as _dt
         cur.execute(f"SELECT value FROM {SCHEMA}.ai_memory WHERE key = 'tech_decisions'")
         row = cur.fetchone()
-        decisions = json.loads(row['value']) if row else []
+        decisions = json.loads(row['value']) if row and row.get('value') else []
         if not isinstance(decisions, list):
             decisions = []
+        q_short = question.strip()[:150]
+        # Дедупликация: пропускаем если похожий вопрос уже есть (последние 5)
+        recent_qs = [d.get('q', '') for d in decisions[-5:] if isinstance(d, dict)]
+        if q_short in recent_qs:
+            return
         entry = {
             'date': _dt.utcnow().strftime('%Y-%m-%d'),
-            'q': question.strip()[:150],
+            'q': q_short,
             'a': answer.strip()[:300],
         }
         decisions.append(entry)
         if len(decisions) > 15:
             decisions = decisions[-15:]
+        v = _safe(json.dumps(decisions, ensure_ascii=False), 8000)
         cur.execute(
-            f"UPDATE {SCHEMA}.ai_memory SET value = '{_safe(json.dumps(decisions, ensure_ascii=False), 8000)}', "
-            f"updated_at = NOW() WHERE key = 'tech_decisions'"
+            f"INSERT INTO {SCHEMA}.ai_memory (key, value, updated_at) VALUES ('tech_decisions', '{v}', NOW()) "
+            f"ON CONFLICT (key) DO UPDATE SET value = '{v}', updated_at = NOW()"
         )
         conn.commit()
     except Exception:
@@ -872,6 +932,7 @@ def _build_memory_context(memory: dict, topic: str = 'mixed', public: bool = Fal
         'rule': [], 'platform': [], 'poehali': [], 'scenario': [],
         'glossary': [], 'faq': [], 'contact': [], 'process': [], 'creator': [],
         'demand_summary': [], 'listing_summary': [], 'invest': [], 'market': [],
+        'cian': [], 'district': [],
         'biweekly': [], 'market_hist': [], 'demand': [], 'news': [], 'listing': [],
     }
     for key, value in memory.items():
@@ -916,14 +977,50 @@ def _build_memory_context(memory: dict, topic: str = 'mixed', public: bool = Fal
             groups['news'].append(v)
         elif key.startswith('listing_'):
             groups['listing'].append(v)
+        elif key.startswith('cian_'):
+            groups['cian'].append(v)
+        elif key.startswith('district_'):
+            groups['district'].append(v)
 
-    # Свежие факты и решения из разговоров
-    try:
-        facts = json.loads(memory.get('learned_facts', '[]'))
-    except Exception:
-        facts = []
+    # П.6: Факты из разговоров — читаем из структурированных ключей
+    def _load_json_list(raw):
+        try:
+            lst = json.loads(raw or '[]')
+            return lst if isinstance(lst, list) else []
+        except Exception:
+            return []
+
+    def _extract_texts(lst):
+        """Нормализует список — возвращает строки (поддерживает и старый формат строк, и новый {date,text})."""
+        out = []
+        for item in lst:
+            if isinstance(item, dict):
+                out.append(item.get('text') or item.get('a') or '')
+            elif isinstance(item, str):
+                out.append(item)
+        return [x for x in out if x]
+
+    # Загружаем по теме: для broker — broker-факты, для it — it-факты, всегда + general
+    broker_facts = _extract_texts(_load_json_list(memory.get('learned_broker', '[]')))
+    it_facts     = _extract_texts(_load_json_list(memory.get('learned_it', '[]')))
+    gen_facts    = _extract_texts(_load_json_list(memory.get('learned_general', '[]')))
+    # Обратная совместимость со старым ключом learned_facts
+    old_facts    = _extract_texts(_load_json_list(memory.get('learned_facts', '[]')))
+
+    if topic == 'broker':
+        facts = broker_facts[-15:] + gen_facts[-5:]
+    elif topic in ('it', 'platform'):
+        facts = it_facts[-15:] + gen_facts[-5:]
+    else:
+        facts = broker_facts[-5:] + it_facts[-5:] + gen_facts[-8:]
+    # Добавляем старые факты если новых мало
+    if len(facts) < 5:
+        facts = old_facts[-10:] + facts
+
     try:
         decisions = json.loads(memory.get('tech_decisions', '[]'))
+        if not isinstance(decisions, list):
+            decisions = []
     except Exception:
         decisions = []
 
@@ -944,15 +1041,19 @@ def _build_memory_context(memory: dict, topic: str = 'mixed', public: bool = Fal
     if topic == 'broker':
         lim_broker, lim_it, lim_platform, lim_gloss, lim_market = 12, 0, 4, 15, 8
         lim_biweekly, lim_market_hist, lim_demand, lim_news, lim_listing = 20, 15, 5, 5, 10
+        lim_cian, lim_district = 12, 12
     elif topic == 'it':
         lim_broker, lim_it, lim_platform, lim_gloss, lim_market = 0, 15, 8, 0, 0
         lim_biweekly, lim_market_hist, lim_demand, lim_news, lim_listing = 0, 0, 0, 0, 0
+        lim_cian, lim_district = 0, 0
     elif topic == 'platform':
         lim_broker, lim_it, lim_platform, lim_gloss, lim_market = 0, 8, 20, 0, 0
         lim_biweekly, lim_market_hist, lim_demand, lim_news, lim_listing = 0, 0, 0, 0, 0
+        lim_cian, lim_district = 0, 0
     else:  # mixed
         lim_broker, lim_it, lim_platform, lim_gloss, lim_market = 6, 8, 10, 5, 3
         lim_biweekly, lim_market_hist, lim_demand, lim_news, lim_listing = 10, 8, 3, 3, 5
+        lim_cian, lim_district = 6, 6
 
     if not public:
         # Правила переключения нужны только при mixed — иначе модель уже определилась
@@ -1041,6 +1142,17 @@ def _build_memory_context(memory: dict, topic: str = 'mixed', public: bool = Fal
     if groups['listing'] and lim_listing > 0:
         lines.append('\n[Объекты каталога]')
         for v in groups['listing'][:lim_listing]:
+            lines.append(f'• {v}')
+
+    # П.1+П.5: данные из market_listings (ЦИАН/Авито) и price_history по районам
+    if groups['cian'] and lim_cian > 0:
+        lines.append('\n[Рынок по данным ЦИАН/Авито/АРРпро]')
+        for v in groups['cian'][:lim_cian]:
+            lines.append(f'• {v}')
+
+    if groups['district'] and lim_district > 0:
+        lines.append('\n[Ставки аренды и доходность по районам]')
+        for v in groups['district'][:lim_district]:
             lines.append(f'• {v}')
 
     if facts:
@@ -4623,7 +4735,10 @@ def handler(event, context):
             )
             conn.commit()
 
-            # Самообучение: запоминаем важные факты из admin-диалога
+            # П.6: Самообучение — категоризируем факты по теме диалога
+            _topic = _detect_topic(user_text or '')
+            _cat = 'broker' if _topic == 'broker' else ('it' if _topic in ('it', 'platform') else 'general')
+
             if action == 'admin' and user_text:
                 fact_triggers = [
                     'зовут', 'называй', 'запомни', 'всегда', 'никогда',
@@ -4631,19 +4746,17 @@ def handler(event, context):
                     'наш сайт', 'наши клиенты', 'наш город', 'наши объекты',
                 ]
                 if any(kw in user_text.lower() for kw in fact_triggers):
-                    _save_learned_fact(cur, conn, user_text[:200])
-                # Если ИИ нашёл проблему и предложил решение — тоже запоминаем
+                    _save_learned_fact(cur, conn, user_text[:200], category=_cat)
                 ai_resp = result.get('text', '')
                 if len(ai_resp) > 100 and any(w in ai_resp.lower() for w in ['проблем', 'исправ', 'рекоменд', 'предлаг']):
                     summary = f"Вопрос: {user_text[:80]} → Ответ: {ai_resp[:120]}"
-                    _save_learned_fact(cur, conn, summary)
+                    _save_learned_fact(cur, conn, summary, category=_cat)
 
-            # Самообучение admin_ops: сохраняем технические решения
             if action == 'admin_ops' and user_text and result.get('text'):
                 ai_answer = result['text']
                 fact_keywords = ['зовут', 'называй', 'запомни', 'подключи', 'настрой', 'домен', 'интеграц']
                 if any(kw in user_text.lower() for kw in fact_keywords):
-                    _save_learned_fact(cur, conn, user_text[:200])
+                    _save_learned_fact(cur, conn, user_text[:200], category='it')
                 _save_tech_decision(cur, conn, user_text, ai_answer)
 
             # role: для фронта — какую роль ВБ применил

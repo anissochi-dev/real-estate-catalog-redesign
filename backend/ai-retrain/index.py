@@ -150,7 +150,7 @@ def _cron_check(cur, conn) -> dict:
     src = remaining[0]
 
     # Загружаем ключи GPT (нужны только для текстовых источников)
-    PROGRAMMATIC_SOURCES = {'biweekly_history', 'invest', 'demand', 'market_history'}
+    PROGRAMMATIC_SOURCES = {'biweekly_history', 'invest', 'demand', 'market_history', 'market_import', 'district_prices'}
     cur.execute(f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings ORDER BY id LIMIT 1")
     keys = cur.fetchone() or {}
     api_key = keys.get('yandex_api_key') or os.environ.get('YANDEX_API_KEY', '')
@@ -254,7 +254,84 @@ def _run_retrain(cur, conn, sources: list) -> dict:
     )
     conn.commit()
 
-    return {'success': True, 'saved': total_saved, 'per_source': per_source}
+    # П.7: Запускаем тест-прогон после переобучения
+    test_result = {}
+    if api_key and folder_id:
+        try:
+            test_result = _run_test_questions(cur, conn, api_key, folder_id, triggered_by='manual_retrain')
+        except Exception as e:
+            test_result = {'error': str(e)}
+
+    return {'success': True, 'saved': total_saved, 'per_source': per_source, 'test': test_result}
+
+
+def _run_test_questions(cur, conn, api_key: str, folder_id: str, triggered_by: str = 'retrain') -> dict:
+    """П.7: Прогоняет тест-вопросы после переобучения, сохраняет результаты в vb_test_runs.
+    Проверяет что ВБ знает ответы на эталонные вопросы (ключевые слова в ответе).
+    """
+    cur.execute(
+        f"SELECT id, question, expected_keywords, category "
+        f"FROM {SCHEMA}.vb_test_questions "
+        f"WHERE is_active = TRUE ORDER BY id"
+    )
+    questions = cur.fetchall() or []
+    if not questions:
+        return {'skipped': True, 'reason': 'no test questions'}
+
+    # Загружаем всю память для контекста
+    cur.execute(f"SELECT key, value FROM {SCHEMA}.ai_memory")
+    memory_rows = cur.fetchall() or []
+    memory = {r['key']: r['value'] for r in memory_rows}
+
+    # Минимальный system prompt для теста
+    system_prompt = (
+        'Ты — виртуальный брокер коммерческой недвижимости Краснодара. '
+        'Отвечай кратко и по существу, используя данные из памяти. '
+        'Если не знаешь точного числа — дай оценочный диапазон.'
+    )
+
+    results = []
+    passed = failed = 0
+
+    for q in questions:
+        question_text = q['question']
+        keywords = q['expected_keywords'] if isinstance(q['expected_keywords'], list) else []
+        try:
+            raw_answer = _call_gpt(api_key, folder_id, system_prompt, question_text)
+            answer_lower = raw_answer.lower()
+            # Проверяем что хотя бы половина ключевых слов присутствует в ответе
+            if keywords:
+                found = sum(1 for kw in keywords if kw.lower() in answer_lower)
+                ok = found >= max(1, len(keywords) // 2)
+            else:
+                ok = len(raw_answer.strip()) > 20
+            if ok:
+                passed += 1
+            else:
+                failed += 1
+            results.append({
+                'question_id': q['id'],
+                'question': question_text,
+                'answer': raw_answer[:300],
+                'expected_keywords': keywords,
+                'found_keywords': [kw for kw in keywords if kw.lower() in answer_lower],
+                'passed': ok,
+            })
+        except Exception as e:
+            failed += 1
+            results.append({'question_id': q['id'], 'question': question_text, 'error': str(e), 'passed': False})
+
+    # Сохраняем результаты прогона
+    import json as _json
+    results_json = _esc(_json.dumps(results, ensure_ascii=False)[:10000])
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.vb_test_runs "
+        f"(triggered_by, finished_at, total_questions, passed, failed, results) "
+        f"VALUES ('{_esc(triggered_by)}', NOW(), {len(questions)}, {passed}, {failed}, '{results_json}')"
+    )
+    conn.commit()
+    print(f'[retrain:test] questions={len(questions)} passed={passed} failed={failed}')
+    return {'total': len(questions), 'passed': passed, 'failed': failed}
 
 
 def _process_source(cur, src: str, api_key: str, folder_id: str):
@@ -265,6 +342,18 @@ def _process_source(cur, src: str, api_key: str, folder_id: str):
 
     if src == 'web_sources':
         return _process_web_sources(cur, api_key, folder_id)
+
+    if src == 'market_import':
+        facts, count_input = _generate_market_import_facts(cur)
+        saved = _save_facts(cur, facts, 'cian_')
+        print(f'[retrain:market_import] generated={len(facts)} saved={saved}')
+        return saved, count_input, None
+
+    if src == 'district_prices':
+        facts, count_input = _generate_district_price_facts(cur)
+        saved = _save_facts(cur, facts, 'district_')
+        print(f'[retrain:district_prices] generated={len(facts)} saved={saved}')
+        return saved, count_input, None
 
     source_configs = {
         'news': {
@@ -384,6 +473,232 @@ def _process_source(cur, src: str, api_key: str, folder_id: str):
     print(f'[retrain:{src}] facts_count={len(facts)}')
     saved = _save_facts(cur, facts, cfg['prefix'])
     return saved, count_input, None
+
+
+def _generate_market_import_facts(cur) -> tuple:
+    """П.1: Агрегирует данные из market_listings (ЦИАН/Авито/АРРпро) в факты cian_*.
+    Формирует: медиану цены/м² по категории+сделка, диапазоны площадей,
+    топ-районы по предложению, сравнение источников, свежесть данных.
+    """
+    # Медиана цены/м², количество, диапазоны площадей — по категории и типу сделки
+    cur.execute(f"""
+        SELECT category, deal_type,
+          COUNT(*) AS cnt,
+          ROUND(AVG(price_per_m2)::numeric, 0) AS avg_ppm2,
+          ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY price_per_m2)::numeric, 0) AS median_ppm2,
+          ROUND(MIN(price_per_m2)::numeric, 0) AS min_ppm2,
+          ROUND(MAX(price_per_m2)::numeric, 0) AS max_ppm2,
+          ROUND(AVG(area)::numeric, 0) AS avg_area,
+          ROUND(MIN(area)::numeric, 0) AS min_area,
+          ROUND(MAX(area)::numeric, 0) AS max_area
+        FROM {SCHEMA}.market_listings
+        WHERE price_per_m2 > 0 AND area > 0
+        GROUP BY category, deal_type
+        HAVING COUNT(*) >= 3
+        ORDER BY deal_type, cnt DESC
+    """)
+    cat_rows = cur.fetchall() or []
+
+    # Топ-10 районов по количеству предложений
+    cur.execute(f"""
+        SELECT district, deal_type, COUNT(*) AS cnt,
+          ROUND(AVG(price_per_m2)::numeric, 0) AS avg_ppm2
+        FROM {SCHEMA}.market_listings
+        WHERE district IS NOT NULL AND price_per_m2 > 0
+        GROUP BY district, deal_type
+        HAVING COUNT(*) >= 5
+        ORDER BY cnt DESC LIMIT 20
+    """)
+    district_rows = cur.fetchall() or []
+
+    # Распределение по источникам
+    cur.execute(f"""
+        SELECT source, deal_type, COUNT(*) AS cnt,
+          MAX(scraped_at) AS last_at
+        FROM {SCHEMA}.market_listings
+        GROUP BY source, deal_type ORDER BY cnt DESC
+    """)
+    source_rows = cur.fetchall() or []
+
+    # Общая статистика
+    cur.execute(f"""
+        SELECT COUNT(*) AS total,
+          COUNT(DISTINCT source) AS sources_cnt,
+          MAX(scraped_at) AS last_updated
+        FROM {SCHEMA}.market_listings
+    """)
+    stats = cur.fetchone() or {}
+
+    cat_ru = {
+        'office': 'Офисная', 'retail': 'Торговая', 'free_purpose': 'ПСН',
+        'warehouse': 'Складская', 'building': 'Здание', 'hotel': 'Гостиница',
+        'restaurant': 'Общепит', 'production': 'Производство', 'land': 'Земля',
+        'car_service': 'Автосервис', 'gab': 'ГАБ', 'other': 'Прочее',
+    }
+
+    facts = []
+    total = int(stats.get('total') or 0)
+    last_upd = str(stats.get('last_updated') or '')[:10]
+
+    if total:
+        facts.append({
+            'key': 'cian_summary',
+            'value': f'База рыночных объявлений (ЦИАН/Авито/АРРпро): {total:,} объявлений, обновлено {last_upd}'
+        })
+
+    # Факты по категориям
+    for r in cat_rows:
+        cat = cat_ru.get(r['category'] or '', r['category'] or '')
+        dt_ru = 'продажа' if r['deal_type'] == 'sale' else 'аренда'
+        dt_key = r['deal_type'] or 'sale'
+        cat_key = (r['category'] or 'other').lower()
+        cnt = int(r['cnt'] or 0)
+        avg_p2 = int(r['avg_ppm2'] or 0)
+        med_p2 = int(r['median_ppm2'] or 0)
+        min_p2 = int(r['min_ppm2'] or 0)
+        max_p2 = int(r['max_ppm2'] or 0)
+        avg_a = int(r['avg_area'] or 0)
+        min_a = int(r['min_area'] or 0)
+        max_a = int(r['max_area'] or 0)
+
+        if med_p2 > 0:
+            facts.append({
+                'key': f'cian_{cat_key}_{dt_key}_price',
+                'value': (
+                    f'{cat} ({dt_ru}), рынок Краснодара: {cnt} объявлений. '
+                    f'Медиана цены {med_p2:,} руб/м², средняя {avg_p2:,} руб/м², '
+                    f'диапазон {min_p2:,}–{max_p2:,} руб/м².'
+                )
+            })
+        if avg_a > 0:
+            facts.append({
+                'key': f'cian_{cat_key}_{dt_key}_area',
+                'value': (
+                    f'{cat} ({dt_ru}): средняя площадь {avg_a} м², '
+                    f'диапазон {min_a}–{max_a} м².'
+                )
+            })
+
+    # Факты по районам
+    for r in district_rows:
+        dist = (r['district'] or '').strip()
+        dt_ru = 'продажа' if r['deal_type'] == 'sale' else 'аренда'
+        dt_key = r['deal_type'] or 'sale'
+        cnt = int(r['cnt'] or 0)
+        avg_p2 = int(r['avg_ppm2'] or 0)
+        dist_key = dist.lower().replace(' ', '_').replace('(', '').replace(')', '')[:30]
+        if avg_p2 > 0:
+            facts.append({
+                'key': f'cian_district_{dist_key}_{dt_key}',
+                'value': (
+                    f'Район {dist} ({dt_ru}): {cnt} объявлений на рынке, '
+                    f'средняя цена {avg_p2:,} руб/м².'
+                )
+            })
+
+    # Факты по источникам
+    for r in source_rows:
+        src_name = (r['source'] or '').strip()
+        dt_ru = 'продажа' if r['deal_type'] == 'sale' else 'аренда'
+        cnt = int(r['cnt'] or 0)
+        last = str(r['last_at'] or '')[:10]
+        facts.append({
+            'key': f'cian_source_{src_name}_{r["deal_type"]}',
+            'value': f'Источник {src_name} ({dt_ru}): {cnt:,} объявлений, последнее обновление {last}.'
+        })
+
+    return facts, len(cat_rows) + len(district_rows)
+
+
+def _generate_district_price_facts(cur) -> tuple:
+    """П.2: Генерирует факты о cap rate, ставках аренды и вакантности по районам
+    из price_history. Факты district_*.
+    """
+    cur.execute(f"""
+        SELECT year, district_name, category, deal_type,
+          avg_price_per_m2, avg_rent_per_m2_year, avg_cap_rate, vacancy_rate
+        FROM {SCHEMA}.price_history
+        WHERE avg_rent_per_m2_year IS NOT NULL OR avg_cap_rate IS NOT NULL
+        ORDER BY year DESC, district_name, category
+    """)
+    rows = cur.fetchall() or []
+
+    cat_ru = {
+        'retail': 'Торговая', 'office': 'Офисная', 'warehouse': 'Складская',
+        'restaurant': 'Общепит', 'free_purpose': 'ПСН', 'hotel': 'Гостиница',
+        'building': 'Здание', 'production': 'Производство',
+    }
+
+    facts = []
+    seen = set()
+
+    for r in rows:
+        yr = int(r['year'] or 0)
+        dist = (r['district_name'] or 'Краснодар').strip()
+        cat = r['category'] or ''
+        dt = r['deal_type'] or ''
+        cat_label = cat_ru.get(cat, cat)
+        p2 = int(r['avg_price_per_m2'] or 0)
+        rent_year = int(r['avg_rent_per_m2_year'] or 0)
+        cap = float(r['avg_cap_rate'] or 0)
+        vac = float(r['vacancy_rate'] or 0)
+        rent_month = round(rent_year / 12) if rent_year else 0
+
+        dist_key = dist.lower().replace(' ', '_').replace('(', '').replace(')', '')[:20]
+        key = f'district_{dist_key}_{cat}_{dt}'
+
+        # Берём самые свежие данные (ORDER BY year DESC)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        parts = []
+        if rent_month:
+            parts.append(f'аренда {rent_month:,} руб/м²/мес ({rent_year:,} руб/м²/год)')
+        if p2:
+            parts.append(f'цена продажи {p2:,} руб/м²')
+        if cap:
+            parts.append(f'cap rate {cap}%')
+        if vac:
+            parts.append(f'вакантность {vac}%')
+
+        if parts:
+            facts.append({
+                'key': key,
+                'value': (
+                    f'{yr} | {dist} | {cat_label} ({dt}): '
+                    + ', '.join(parts) + '.'
+                )
+            })
+
+    # Сводные факты: топ-районы по cap rate
+    cur.execute(f"""
+        SELECT district_name, category,
+          ROUND(AVG(avg_cap_rate)::numeric, 2) AS avg_cap,
+          ROUND(AVG(avg_rent_per_m2_year)::numeric, 0) AS avg_rent
+        FROM {SCHEMA}.price_history
+        WHERE avg_cap_rate IS NOT NULL AND avg_cap_rate > 0
+          AND year = (SELECT MAX(year) FROM {SCHEMA}.price_history WHERE avg_cap_rate IS NOT NULL)
+        GROUP BY district_name, category
+        ORDER BY avg_cap DESC LIMIT 10
+    """)
+    top_cap = cur.fetchall() or []
+    for r in top_cap:
+        dist = (r['district_name'] or '').strip()
+        cat = cat_ru.get(r['category'] or '', r['category'] or '')
+        cap = float(r['avg_cap'] or 0)
+        rent = int(r['avg_rent'] or 0)
+        if cap:
+            dist_key = dist.lower().replace(' ', '_').replace('(', '').replace(')', '')[:20]
+            facts.append({
+                'key': f'district_cap_{dist_key}_{r["category"]}',
+                'value': (
+                    f'Топ по доходности: {dist}, {cat} — cap rate {cap}%'
+                    + (f', аренда {rent:,} руб/м²/год' if rent else '') + '.'
+                )
+            })
+
+    return facts, len(rows)
 
 
 def _process_market_prices(cur, api_key: str, folder_id: str):
@@ -989,22 +1304,30 @@ def _parse_facts(raw_text: str) -> list:
         return []
 
 
-def _save_facts(cur, facts: list, prefix: str) -> int:
+def _save_facts(cur, facts: list, prefix: str, source: str = 'retrain') -> int:
+    """П.8: Сохраняет факты в ai_memory с версионированием (prev_value, updated_count)."""
     count = 0
-    for f in facts[:100]:
+    for f in facts[:200]:
         if not isinstance(f, dict):
             continue
         k = _esc(str(f.get('key') or '').strip()[:100])
         v = _esc(str(f.get('value') or '').strip()[:5000])
+        src = _esc(source[:50])
         if not k or not v:
             continue
         if not k.replace("''", "'").startswith(prefix):
             k = _esc((prefix + k.replace("''", "'"))[:100])
         try:
             cur.execute(
-                f"INSERT INTO {SCHEMA}.ai_memory (key, value, updated_at) "
-                f"VALUES ('{k}', '{v}', NOW()) "
-                f"ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()"
+                f"INSERT INTO {SCHEMA}.ai_memory (key, value, updated_at, source, updated_count) "
+                f"VALUES ('{k}', '{v}', NOW(), '{src}', 1) "
+                f"ON CONFLICT (key) DO UPDATE SET "
+                f"  prev_value = {SCHEMA}.ai_memory.value, "
+                f"  value = EXCLUDED.value, "
+                f"  updated_at = NOW(), "
+                f"  source = '{src}', "
+                f"  updated_count = COALESCE({SCHEMA}.ai_memory.updated_count, 0) + 1 "
+                f"WHERE {SCHEMA}.ai_memory.value IS DISTINCT FROM EXCLUDED.value"
             )
             count += 1
         except Exception:
