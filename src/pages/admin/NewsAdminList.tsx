@@ -20,6 +20,7 @@ export function NewsAdminList({ news, loading, headers, onNewsChange }: Props) {
   const [editForm, setEditForm] = useState({ title: '', summary: '', content: '', source_url: '', source_name: '' });
   const [editSaving, setEditSaving] = useState(false);
   const [loadingFull, setLoadingFull] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const openReport = async (n: NewsItem) => {
     if (report?.id === n.id) { setReport(null); setEditMode(false); return; }
@@ -70,6 +71,19 @@ export function NewsAdminList({ news, loading, headers, onNewsChange }: Props) {
       onNewsChange(prev => prev.map(n => n.id === report.id ? { ...n, title: editForm.title, summary: editForm.summary, source_url: editForm.source_url, source_name: editForm.source_name } : n));
       setEditMode(false);
     } catch { toast.error('Ошибка сети'); } finally { setEditSaving(false); }
+  };
+
+  const remove = async (id: number) => {
+    if (!confirm('Удалить статью? Это действие необратимо.')) return;
+    setDeletingId(id);
+    try {
+      const r = await fetch(NEWS_URL, { method: 'POST', headers, body: JSON.stringify({ action: 'remove', id }) });
+      const d = await r.json();
+      if (d.error) { toast.error(d.error); return; }
+      toast.success('Статья удалена');
+      onNewsChange(prev => prev.filter(n => n.id !== id));
+      if (report?.id === id) { setReport(null); setEditMode(false); }
+    } catch { toast.error('Ошибка сети'); } finally { setDeletingId(null); }
   };
 
   const publish = async (id: number, state: boolean) => {
@@ -126,6 +140,10 @@ export function NewsAdminList({ news, loading, headers, onNewsChange }: Props) {
                         className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
                         <Icon name="ExternalLink" size={14} />
                       </a>
+                      <button onClick={() => remove(n.id)} disabled={deletingId === n.id}
+                        className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition disabled:opacity-50">
+                        {deletingId === n.id ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Trash2" size={14} />}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -182,6 +200,10 @@ export function NewsAdminList({ news, loading, headers, onNewsChange }: Props) {
                           className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-brand-blue transition">
                           <Icon name="ExternalLink" size={14} />
                         </a>
+                        <button onClick={() => remove(n.id)} disabled={deletingId === n.id}
+                          className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition disabled:opacity-50">
+                          {deletingId === n.id ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Trash2" size={14} />}
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -315,6 +337,13 @@ export function NewsAdminList({ news, loading, headers, onNewsChange }: Props) {
                     >
                       <Icon name={report.is_published ? 'EyeOff' : 'Eye'} size={14} />
                       {report.is_published ? 'Снять' : 'Опубликовать'}
+                    </button>
+                    <button
+                      onClick={() => remove(report.id)}
+                      disabled={deletingId === report.id}
+                      className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 text-sm font-medium transition disabled:opacity-50"
+                    >
+                      {deletingId === report.id ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Trash2" size={14} />}
                     </button>
                   </div>
                 </div>
