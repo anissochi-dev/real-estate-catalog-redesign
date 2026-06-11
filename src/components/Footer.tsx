@@ -213,7 +213,7 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
 
           {/* Правовое уведомление + копирайт — по центру на всех экранах */}
           <div className="border-t border-white/10 mt-5 pt-4 pb-[max(4px,env(safe-area-inset-bottom))] text-center space-y-1.5">
-            <p className="text-[11px] sm:text-xs text-white/40 leading-relaxed max-w-2xl mx-auto">
+            <p className="text-[11px] sm:text-xs text-white/40 leading-relaxed max-w-4xl mx-auto">
               Все материалы сайта принадлежат: Бизнес. Маркетинг. Недвижимость. (Б.М.Н.). При перепечатке ссылка на данный сайт обязательна.<br />
               Вся информация, опубликованная на сайте, носит исключительно информационный характер и не является публичной офертой, определяемой положениями ст.&nbsp;437 ГК РФ.
             </p>
