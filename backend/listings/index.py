@@ -613,7 +613,7 @@ def handler(event: dict, context) -> dict:
                 price_min = int(float(price) * 0.6) if price else 0
                 price_max = int(float(price) * 1.5) if price else 0
                 base_where = (
-                    f"status = 'active' AND id <> {sid} "
+                    f"status = 'active' AND is_visible = TRUE AND id <> {sid} "
                     f"AND category = '{cat}' AND deal = '{deal}'"
                 )
                 if price:
@@ -640,7 +640,8 @@ def handler(event: dict, context) -> dict:
                     # добиваем без фильтра по цене
                     cur.execute(
                         f"SELECT {similar_cols} FROM t_p71821556_real_estate_catalog_.listings WHERE "
-                        f"status = 'active' AND id <> {sid} AND category = '{cat}' AND deal = '{deal}' "
+                        f"status = 'active' AND is_visible = TRUE AND id <> {sid} "
+                        f"AND category = '{cat}' AND deal = '{deal}' "
                         f"ORDER BY {order_by} LIMIT 12"
                     )
                     rows = cur.fetchall()
