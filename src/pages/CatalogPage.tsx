@@ -101,21 +101,6 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
   const KRASNODAR_CENTER: [number, number] = [45.0355, 38.9753];
   const isStubCoord = (n: number) => Math.abs(n - Math.round(n)) < 1e-6 && Math.abs(n * 1000 - Math.round(n * 1000)) < 1e-9;
 
-  const mapPoints = useMemo(
-    () => properties
-      .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng) && p.lat !== 0 && p.lng !== 0 && !(isStubCoord(p.lat) && isStubCoord(p.lng)))
-      .map(p => ({
-        id: p.id,
-        lat: p.lat,
-        lng: p.lng,
-        title: p.title,
-        caption: `${formatPrice(p.price, p.deal)} · ${p.area} м²`,
-        type: String(p.type),
-        isHot: p.isHot,
-      })),
-    [properties],
-  );
-
   const handleMapPointClick = useCallback((pt: { id: number }) => {
     setMapSelected(prev => prev?.id === pt.id ? prev : properties.find(x => x.id === pt.id) || null);
   }, [properties]);
@@ -176,6 +161,21 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
 
     return result;
   }, [properties, search, dealFilter, typeFilter, districtFilter, sortBy, minArea, maxPrice]);
+
+  const mapPoints = useMemo(
+    () => filtered
+      .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng) && p.lat !== 0 && p.lng !== 0 && !(isStubCoord(p.lat) && isStubCoord(p.lng)))
+      .map(p => ({
+        id: p.id,
+        lat: p.lat,
+        lng: p.lng,
+        title: p.title,
+        caption: `${formatPrice(p.price, p.deal)} · ${p.area} м²`,
+        type: String(p.type),
+        isHot: p.isHot,
+      })),
+    [filtered],
+  );
 
   const LOAD_STEP = 20;
   const [visibleCount, setVisibleCount] = useState(LOAD_STEP);
