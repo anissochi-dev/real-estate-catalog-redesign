@@ -10,8 +10,17 @@
       "name": "Без токена — 401",
       "method": "POST",
       "path": "/",
-      "body": {"sources": ["arrpro"], "max_pages": 1},
-      "expectedStatus": 401
+      "body": { "action": "stats" },
+      "expectedStatus": 401,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "cron — пошаговый запуск без токена",
+      "method": "POST",
+      "path": "/",
+      "body": { "action": "cron" },
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
     }
   ]
 }
