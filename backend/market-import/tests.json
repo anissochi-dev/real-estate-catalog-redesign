@@ -1,0 +1,35 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "stats — возвращает статистику",
+      "method": "POST",
+      "path": "/",
+      "body": { "action": "stats" },
+      "expectedStatus": 200,
+      "expectedBody": { "total": 123 },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "import без url — 400",
+      "method": "POST",
+      "path": "/",
+      "body": { "action": "import" },
+      "expectedStatus": 400
+    },
+    {
+      "name": "clear несуществующего источника",
+      "method": "POST",
+      "path": "/",
+      "body": { "action": "clear", "source": "test_nonexistent_xyz" },
+      "expectedStatus": 200,
+      "expectedBody": { "deleted": 0 },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
