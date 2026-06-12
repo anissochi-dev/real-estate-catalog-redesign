@@ -546,33 +546,23 @@ def handler(event: dict, context) -> dict:
             conn.commit()
             return ok({'deleted': deleted, 'source': source})
 
-        # ── Импорт ───────────────────────────────────────────────────────────
-        file_url = body.get('file_url') or qs.get('file_url') or ''
-        source   = body.get('source') or 'manual'
-        preview  = body.get('preview', False)
-        replace  = body.get('replace', False)  # удалить старые записи этого источника перед импортом
-
-        if not file_url:
-            return err(400, 'Укажите file_url')
-
-        # Скачиваем файл
-        req = urllib.request.Request(file_url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=45) as resp:
-            raw_bytes = resp.read()
-
-        file_lower = file_url.lower().split('?')[0]
-        if file_lower.endswith('.xlsx') or file_lower.endswith('.xls'):
-            records, warnings = _parse_xlsx(raw_bytes, source)
-            fmt = 'xlsx'
-        else:
-            records, warnings = _parse_csv(raw_bytes, source)
-            fmt = 'csv'
-
-        # Превью — возвращаем без записи
-        if preview:
-            # Статистика по превью
-            by_cat   = {}
-            by_deal  = {}
+        # ── Превью файла (быстро — только парсинг без вставки) ───────────────
+        if action == 'import_preview' or (action == 'import' and body.get('preview')):
+            file_url = body.get('file_url') or qs.get('file_url') or ''
+            source   = body.get('source') or 'manual'
+            if not file_url:
+                return err(400, 'Укажите file_url')
+            req = urllib.request.Request(file_url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=45) as resp:
+                raw_bytes = resp.read()
+            file_lower = file_url.lower().split('?')[0]
+            if file_lower.endswith('.xlsx') or file_lower.endswith('.xls'):
+                records, warnings = _parse_xlsx(raw_bytes, source)
+                fmt = 'xlsx'
+            else:
+                records, warnings = _parse_csv(raw_bytes, source)
+                fmt = 'csv'
+            by_cat = {}; by_deal = {}
             for r in records:
                 by_cat[r['category']]   = by_cat.get(r['category'], 0) + 1
                 by_deal[r['deal_type']] = by_deal.get(r['deal_type'], 0) + 1
@@ -580,54 +570,151 @@ def handler(event: dict, context) -> dict:
             areas  = [float(r['area']) for r in records if r.get('area')]
             import statistics as _st
             return ok({
-                'preview': True,
-                'format': fmt,
+                'preview': True, 'format': fmt,
                 'total_parsed': len(records),
-                'warnings_count': len(warnings),
-                'warnings_sample': warnings[:20],
-                'by_category': by_cat,
-                'by_deal': by_deal,
+                'warnings_count': len(warnings), 'warnings_sample': warnings[:20],
+                'by_category': by_cat, 'by_deal': by_deal,
                 'price_median': round(_st.median(prices)) if prices else None,
                 'area_median': round(_st.median(areas)) if areas else None,
                 'sample': records[:10],
             })
 
-        # Опционально: очищаем старые данные этого источника
-        if replace:
-            src_safe = source.replace("'", "''")
-            cur.execute(f"DELETE FROM {SCHEMA}.market_listings WHERE source = '{src_safe}'")
-            deleted_old = cur.rowcount
+        # ── Старт батчевого импорта ──────────────────────────────────────────
+        if action in ('import_start', 'import'):
+            BATCH = 2000
+            file_url = body.get('file_url') or qs.get('file_url') or ''
+            source   = body.get('source') or 'manual'
+            replace  = body.get('replace', False)
+            if not file_url:
+                return err(400, 'Укажите file_url')
+
+            # Скачиваем и парсим
+            req = urllib.request.Request(file_url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=45) as resp:
+                raw_bytes = resp.read()
+            file_lower = file_url.lower().split('?')[0]
+            if file_lower.endswith('.xlsx') or file_lower.endswith('.xls'):
+                records, warnings = _parse_xlsx(raw_bytes, source)
+                fmt = 'xlsx'
+            else:
+                records, warnings = _parse_csv(raw_bytes, source)
+                fmt = 'csv'
+
+            if not records:
+                return ok({'success': True, 'done': True, 'inserted': 0, 'total_parsed': 0,
+                           'warnings_count': len(warnings), 'warnings_sample': warnings[:10]})
+
+            # Создаём job
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.import_jobs (file_url, source, replace_existing, status, rows_total, checkpoint_row) "
+                f"VALUES (%s, %s, %s, 'running', %s, 0) RETURNING id",
+                (file_url, source, replace, len(records))
+            )
+            job_id = cur.fetchone()['id']
             conn.commit()
-        else:
-            deleted_old = 0
 
-        # Вставляем
-        result = _insert_records(cur, conn, records)
+            # Очищаем старые при первом батче
+            if replace:
+                src_safe = source.replace("'", "''")
+                cur.execute(f"DELETE FROM {SCHEMA}.market_listings WHERE source = '{src_safe}'")
+                conn.commit()
 
-        # П.3: Автопереобучение ВБ после импорта (если добавились новые записи)
-        retrain_triggered = False
-        retrain_error = None
-        if result['inserted'] > 0:
-            retrain_triggered, retrain_error = _trigger_vb_retrain(cur)
+            # Вставляем первый батч
+            batch = records[:BATCH]
+            result = _insert_records(cur, conn, batch)
+            new_checkpoint = min(BATCH, len(records))
+            done = new_checkpoint >= len(records)
 
-        # П.4: Агрегируем market_listings → price_market_snapshots в фоне (не блокируем ответ)
-        if result['inserted'] > 0:
-            _trigger_aggregate()
+            cur.execute(
+                f"UPDATE {SCHEMA}.import_jobs SET checkpoint_row=%s, rows_done=%s, "
+                f"rows_inserted=%s, rows_updated=%s, status=%s WHERE id=%s",
+                (new_checkpoint, new_checkpoint, result['inserted'], result['updated'],
+                 'done' if done else 'running', job_id)
+            )
+            conn.commit()
 
-        return ok({
-            'success': True,
-            'format': fmt,
-            'total_parsed': len(records),
-            'inserted': result['inserted'],
-            'updated': result.get('updated', 0),
-            'skipped': result['skipped'],
-            'deleted_old': deleted_old,
-            'warnings_count': len(warnings),
-            'warnings_sample': warnings[:20],
-            'retrain_triggered': retrain_triggered,
-            'retrain_error': retrain_error,
-            'snapshots_scheduled': result['inserted'] > 0,
-        })
+            if done:
+                if result['inserted'] > 0:
+                    _trigger_vb_retrain(cur)
+                    _trigger_aggregate()
+                return ok({'success': True, 'done': True, 'job_id': job_id,
+                           'format': fmt, 'total_parsed': len(records),
+                           'inserted': result['inserted'], 'updated': result['updated'],
+                           'skipped': result['skipped'], 'warnings_count': len(warnings),
+                           'warnings_sample': warnings[:10]})
+
+            return ok({'success': True, 'done': False, 'job_id': job_id,
+                       'format': fmt, 'total_parsed': len(records),
+                       'rows_done': new_checkpoint, 'rows_total': len(records),
+                       'inserted': result['inserted'], 'updated': result['updated'],
+                       'warnings_count': len(warnings)})
+
+        # ── Продолжение батчевого импорта ────────────────────────────────────
+        if action == 'import_continue':
+            BATCH = 2000
+            job_id = body.get('job_id')
+            if not job_id:
+                return err(400, 'job_id required')
+
+            cur2 = conn.cursor()
+            cur2.execute(f"SELECT * FROM {SCHEMA}.import_jobs WHERE id = %s", (job_id,))
+            job = cur2.fetchone()
+            cur2.close()
+            if not job:
+                return err(404, 'job not found')
+            if job['status'] != 'running':
+                return ok(dict(job))
+
+            file_url   = job['file_url']
+            source     = job['source']
+            checkpoint = job['checkpoint_row'] or 0
+            rows_ins   = job['rows_inserted'] or 0
+            rows_upd   = job['rows_updated'] or 0
+
+            # Перечитываем файл и пропускаем до checkpoint
+            req = urllib.request.Request(file_url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=45) as resp:
+                raw_bytes = resp.read()
+            file_lower = file_url.lower().split('?')[0]
+            if file_lower.endswith('.xlsx') or file_lower.endswith('.xls'):
+                records, _ = _parse_xlsx(raw_bytes, source)
+            else:
+                records, _ = _parse_csv(raw_bytes, source)
+
+            batch = records[checkpoint:checkpoint + BATCH]
+            if not batch:
+                cur.execute(
+                    f"UPDATE {SCHEMA}.import_jobs SET status='done', rows_done=%s WHERE id=%s",
+                    (len(records), job_id)
+                )
+                conn.commit()
+                if rows_ins > 0:
+                    _trigger_aggregate()
+                return ok({'done': True, 'job_id': job_id, 'inserted': rows_ins, 'rows_total': len(records)})
+
+            result = _insert_records(cur, conn, batch)
+            new_checkpoint = checkpoint + len(batch)
+            new_ins = rows_ins + result['inserted']
+            new_upd = rows_upd + result['updated']
+            done = new_checkpoint >= len(records)
+
+            cur.execute(
+                f"UPDATE {SCHEMA}.import_jobs SET checkpoint_row=%s, rows_done=%s, "
+                f"rows_inserted=%s, rows_updated=%s, status=%s WHERE id=%s",
+                (new_checkpoint, new_checkpoint, new_ins, new_upd,
+                 'done' if done else 'running', job_id)
+            )
+            conn.commit()
+
+            if done:
+                if new_ins > 0:
+                    _trigger_vb_retrain(cur)
+                    _trigger_aggregate()
+
+            return ok({'done': done, 'job_id': job_id,
+                       'rows_done': new_checkpoint, 'rows_total': len(records),
+                       'inserted': new_ins, 'updated': new_upd,
+                       'status': 'done' if done else 'running'})
 
     finally:
         cur.close()
