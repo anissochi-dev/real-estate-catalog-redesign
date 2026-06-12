@@ -60,10 +60,10 @@ export default function ImportBlock() {
   const runningRef = useRef(false);
 
   // Цепочка батчей: вызываем import_market_continue пока done не true
+  // Пауза 3 сек между батчами — избегаем rate limit платформы
   const runBatchChain = useCallback(async (jobId: number, startFrom = 0) => {
     if (runningRef.current) return;
     runningRef.current = true;
-    let checkpoint = startFrom;
 
     while (true) {
       try {
@@ -73,16 +73,9 @@ export default function ImportBlock() {
           body: JSON.stringify({ action: 'import_market_continue', job_id: jobId }),
         }).then(r => r.json());
 
-        if (r.error) {
-          toast.error(`Ошибка: ${r.error}`);
-          setJob(prev => prev ? { ...prev, status: 'error', error_msg: r.error } : prev);
-          break;
-        }
-
-        checkpoint = r.rows_done || checkpoint;
         setJob(prev => prev ? {
           ...prev,
-          status: r.status,
+          status: r.status === 'paused' ? 'running' : r.status,
           rows_done: r.rows_done ?? prev.rows_done,
           rows_total: r.rows_total ?? prev.rows_total,
           rows_inserted: r.rows_inserted ?? prev.rows_inserted,
@@ -98,13 +91,17 @@ export default function ImportBlock() {
 
         if (r.status === 'error') {
           localStorage.removeItem(LS_KEY);
-          toast.error(`Ошибка импорта`);
+          toast.error(r.error_msg || 'Ошибка импорта');
           break;
         }
 
+        // rate limit или любая пауза — ждём дольше и продолжаем
+        const delay = r.status === 'paused' ? 8000 : 3000;
+        await new Promise(res => setTimeout(res, delay));
+
       } catch (e) {
-        toast.error('Сетевая ошибка при импорте, повторяю…');
-        await new Promise(res => setTimeout(res, 3000));
+        // Сетевая ошибка — пауза и повтор
+        await new Promise(res => setTimeout(res, 5000));
       }
     }
     runningRef.current = false;
@@ -120,7 +117,7 @@ export default function ImportBlock() {
         body: JSON.stringify({ action: 'import_market_status', job_id: parseInt(savedId) }),
       }).then(r => r.json()).then(r => {
         if (r.id) setJob(r);
-        if (r.status === 'running') {
+        if (r.status === 'running' || r.status === 'paused') {
           runBatchChain(r.id, r.rows_done || 0);
         }
       }).catch((_e) => { /* ignore */ });

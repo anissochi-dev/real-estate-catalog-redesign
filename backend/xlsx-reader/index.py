@@ -712,7 +712,7 @@ def handler(event: dict, context) -> dict:
 
     # ── Продолжение импорта: скачиваем в /tmp, читаем потоково ──────────────
     if body.get('action') == 'import_market_continue':
-        BATCH = 1000  # строк за вызов — баланс скорость/память
+        BATCH = 500  # строк за вызов — меньше = меньше памяти и меньше времени
         job_id = body.get('job_id')
         if not job_id:
             return {'statusCode': 400, 'headers': CORS_H, 'body': json.dumps({'error': 'job_id required'}, ensure_ascii=False)}
@@ -724,10 +724,14 @@ def handler(event: dict, context) -> dict:
         if not job:
             cur.close(); conn.close()
             return {'statusCode': 404, 'headers': CORS_H, 'body': json.dumps({'error': 'job not found'}, ensure_ascii=False)}
-        if job['status'] != 'running':
+        if job['status'] not in ('running', 'paused'):
             result = dict(job)
             cur.close(); conn.close()
             return {'statusCode': 200, 'headers': CORS_H, 'body': json.dumps(result, ensure_ascii=False, default=str)}
+
+        # Восстанавливаем статус running если был paused
+        if job['status'] == 'paused':
+            _job_update(conn, job_id, status='running')
 
         file_url      = job['file_url']
         source        = job['source']
@@ -950,14 +954,28 @@ def handler(event: dict, context) -> dict:
             }, ensure_ascii=False)}
 
         except Exception as e:
-            try: _job_update(conn, job_id, status='error', error_msg=str(e)[:500])
+            err_msg = str(e).strip()
+            # rate limit — ставим paused, не error: можно продолжить
+            is_rate_limit = 'rate limit' in err_msg.lower() or 'too many' in err_msg.lower()
+            new_status = 'paused' if is_rate_limit else 'error'
+            try:
+                _job_update(conn, job_id, status=new_status,
+                            error_msg=f'Превышен лимит запросов, продолжим автоматически…' if is_rate_limit else err_msg[:500])
             except Exception: pass
-            try: os.remove(tmp_path)
-            except Exception: pass
+            if not is_rate_limit:
+                try: os.remove(tmp_path)
+                except Exception: pass
             try: cur.close(); conn.close()
             except Exception: pass
-            print(f'[xlsx-reader] import_continue error: {e}')
-            return {'statusCode': 500, 'headers': CORS_H, 'body': json.dumps({'error': str(e)[:300]}, ensure_ascii=False)}
+            print(f'[xlsx-reader] import_continue {"paused" if is_rate_limit else "error"}: {e}')
+            status_code = 200 if is_rate_limit else 500
+            return {'statusCode': status_code, 'headers': CORS_H, 'body': json.dumps({
+                'status': 'paused' if is_rate_limit else 'error',
+                'error': str(e)[:300],
+                'job_id': job_id,
+                'rows_inserted': rows_inserted,
+                'checkpoint_row': checkpoint,
+            }, ensure_ascii=False)}
 
     # ── Статус job ────────────────────────────────────────────────────────────
     if body.get('action') == 'import_market_status':
