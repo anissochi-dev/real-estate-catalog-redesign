@@ -226,16 +226,22 @@ export function useMarketData(): MarketDataState {
   const trendData = (() => {
     if (!data?.snapshots.length) return [];
     const filtered = data.snapshots.filter(s =>
-      s.deal === filterDeal && s.district === filterDistrict && selectedCats.includes(s.category)
+      s.deal === filterDeal &&
+      s.district === filterDistrict &&
+      selectedCats.includes(s.category) &&
+      s.snapshot_date &&
+      s.price_per_m2_median != null
     );
     const byDate: Record<string, Record<string, number>> = {};
     filtered.forEach(s => {
-      if (!byDate[s.snapshot_date]) byDate[s.snapshot_date] = {};
-      if (s.price_per_m2_median) byDate[s.snapshot_date][s.category] = s.price_per_m2_median;
+      const d = s.snapshot_date || '';
+      if (!d) return;
+      if (!byDate[d]) byDate[d] = {};
+      if (s.price_per_m2_median) byDate[d][s.category] = s.price_per_m2_median;
     });
-    return Object.entries(byDate).sort(([a],[b])=>a.localeCompare(b)).map(([date, vals]) => ({
-      date: fmtDate(date), ...vals,
-    }));
+    return Object.entries(byDate)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, vals]) => ({ date: fmtDate(date), ...vals }));
   })();
 
   // ── Подготовка данных для сравнения районов ───────────────────────────────
@@ -276,18 +282,26 @@ export function useMarketData(): MarketDataState {
     const result: { category: string; change_pct: number; current: number; prev: number; analogs: number }[] = [];
     Object.keys(CAT_LABELS).forEach(cat => {
       const snaps = data.snapshots
-        .filter(s => s.category === cat && s.deal === filterDeal && s.district === filterDistrict && s.price_per_m2_median)
-        .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date));
+        .filter(s =>
+          s.category === cat &&
+          s.deal === filterDeal &&
+          s.district === filterDistrict &&
+          s.price_per_m2_median != null &&
+          s.price_per_m2_median > 0 &&
+          s.snapshot_date
+        )
+        .sort((a, b) => (a.snapshot_date || '').localeCompare(b.snapshot_date || ''));
       if (snaps.length < 2) return;
-      const first = snaps[0].price_per_m2_median!;
-      const last = snaps[snaps.length - 1].price_per_m2_median!;
+      const first = snaps[0].price_per_m2_median ?? 0;
+      const last  = snaps[snaps.length - 1].price_per_m2_median ?? 0;
+      if (!first || !last) return;
       const change_pct = Math.round(((last - first) / first) * 100);
       result.push({
         category: cat,
         change_pct,
         current: last,
         prev: first,
-        analogs: snaps[snaps.length - 1].analogs_count,
+        analogs: snaps[snaps.length - 1].analogs_count ?? 0,
       });
     });
     return result.sort((a, b) => b.change_pct - a.change_pct);
