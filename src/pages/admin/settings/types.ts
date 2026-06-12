@@ -91,6 +91,8 @@ export interface S {
   // МАХ Автоответ
   max_autoreply_enabled: boolean;
   max_autoreply_text: string;
+  // Авто-FAQ
+  auto_faq_enabled: boolean;
   // Файлы верификации
   verification_files: { filename: string; content: string; comment?: string }[];
 }

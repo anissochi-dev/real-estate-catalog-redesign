@@ -93,6 +93,36 @@ export default function IntegrationsAiSection({
         </div>
       </div>
 
+      {/* ── Авто-FAQ ──────────────────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm space-y-3">
+        <div className="font-display font-700 text-lg flex items-center gap-2">
+          <Icon name="MessageSquare" size={18} className="text-brand-blue" />
+          Авто-генерация FAQ
+        </div>
+        <p className="text-sm text-muted-foreground">
+          При добавлении или редактировании объекта ИИ автоматически создаёт раздел «Вопросы и ответы» на странице объекта. Также раз в час дополняет FAQ для объектов, у которых его ещё нет.
+        </p>
+        <label className="flex items-center gap-3 cursor-pointer select-none">
+          <div className="relative">
+            <input
+              type="checkbox"
+              className="sr-only"
+              checked={!!s.auto_faq_enabled}
+              onChange={e => setS({ ...s, auto_faq_enabled: e.target.checked })}
+            />
+            <div className={`w-11 h-6 rounded-full transition-colors ${s.auto_faq_enabled ? 'bg-brand-blue' : 'bg-muted-foreground/30'}`} />
+            <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${s.auto_faq_enabled ? 'translate-x-5' : ''}`} />
+          </div>
+          <span className="text-sm font-medium">{s.auto_faq_enabled ? 'Включено' : 'Выключено'}</span>
+        </label>
+        {!s.yandex_api_key && !s.yandex_folder_id && (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900">
+            <Icon name="AlertTriangle" size={14} className="flex-shrink-0 mt-0.5" />
+            <div>Для авто-FAQ нужно заполнить API-ключ и Folder ID YandexGPT выше.</div>
+          </div>
+        )}
+      </div>
+
       {/* ── Инструкция Yandex Cloud ────────────────────────────────────── */}
       <div className="bg-white rounded-2xl p-6 shadow-sm">
         <div className="font-display font-700 text-base mb-3">Как получить ключи Yandex Cloud</div>

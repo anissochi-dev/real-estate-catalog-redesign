@@ -2218,6 +2218,28 @@ def _auto_district(cur, address: str, city: str = 'Краснодар') -> str:
     return ''
 
 
+_LISTING_FAQ_URL = 'https://functions.poehali.dev/282b9c5f-29fa-41ea-bc42-0793bdf8950d'
+
+
+def _trigger_faq_async(listing_id: int, cur):
+    """Фоновый вызов listing-faq если auto_faq_enabled=True в настройках."""
+    import urllib.request
+    try:
+        cur.execute(f"SELECT auto_faq_enabled, yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
+        row = cur.fetchone()
+        if not row or not row.get('auto_faq_enabled'):
+            return
+        if not row.get('yandex_api_key') or not row.get('yandex_folder_id'):
+            print(f'[auto_faq] пропуск listing {listing_id}: YandexGPT не настроен')
+            return
+        payload = json.dumps({'listing_id': listing_id}).encode()
+        req = urllib.request.Request(_LISTING_FAQ_URL, data=payload, headers={'Content-Type': 'application/json'}, method='POST')
+        urllib.request.urlopen(req, timeout=3)
+        print(f'[auto_faq] запущена генерация FAQ для listing {listing_id}')
+    except Exception as e:
+        print(f'[auto_faq] фоновый запуск для listing {listing_id}: {e}')
+
+
 def _listings(cur, conn, method, rid, event, user):
     if method == 'GET':
         if rid:
@@ -2417,6 +2439,7 @@ def _listings(cur, conn, method, rid, event, user):
             f"UPDATE {SCHEMA}.seo_artifacts SET urls_count = 0 WHERE kind = 'sitemap'"
         )
         conn.commit()
+        _trigger_faq_async(new_id, cur)
         return _ok({'id': new_id, 'success': True, 'slug': new_slug, 'owner_phone_contact_id': owner_pc_id})
 
     if method == 'PUT' and rid:
@@ -2561,6 +2584,9 @@ def _listings(cur, conn, method, rid, event, user):
             pass
 
         conn.commit()
+        # Перегенерируем FAQ если изменилось описание, название, категория или сделка
+        if any(k in body for k in ('title', 'description', 'category', 'deal', 'price', 'area')):
+            _trigger_faq_async(int(rid), cur)
         return _ok({'success': True})
 
     if method == 'DELETE' and rid:
@@ -2880,7 +2906,7 @@ def _settings(cur, conn, method, event, user):
                    'notify_telegram_enabled', 'notify_telegram_on_lead', 'notify_telegram_on_deal',
                    'notify_telegram_on_complaint',
                    'notify_max_enabled', 'notify_max_on_lead', 'notify_max_on_deal', 'notify_max_on_complaint',
-                   'ya_metrika_goals_enabled', 'max_autoreply_enabled'):
+                   'ya_metrika_goals_enabled', 'max_autoreply_enabled', 'auto_faq_enabled'):
             if bf in body:
                 fields.append(f"{bf} = {_bool(body[bf])}")
         if 'role_permissions' in body:
