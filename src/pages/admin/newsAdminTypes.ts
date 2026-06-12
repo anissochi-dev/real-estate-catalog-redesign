@@ -25,7 +25,23 @@ export interface Schedule {
   topics?: string;
   last_run_at?: string;
   last_run_count?: number;
+  price_digest_enabled?: boolean;
+  price_news_enabled?: boolean;
+  price_digest_max_enabled?: boolean;
+  price_digest_day?: number;
+  price_digest_threshold?: number;
+  price_digest_last_at?: string;
 }
+
+export const WEEK_DAYS = [
+  { value: 0, label: 'Понедельник' },
+  { value: 1, label: 'Вторник' },
+  { value: 2, label: 'Среда' },
+  { value: 3, label: 'Четверг' },
+  { value: 4, label: 'Пятница' },
+  { value: 5, label: 'Суббота' },
+  { value: 6, label: 'Воскресенье' },
+];
 
 export const HOURS = Array.from({ length: 24 }, (_, i) => ({
   value: i,

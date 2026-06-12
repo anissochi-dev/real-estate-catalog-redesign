@@ -632,6 +632,191 @@ def _load_logo_url(cur) -> str:
         return ''
 
 
+def _call_gpt_raw(api_key: str, folder_id: str, user_text: str, system_text: str = '') -> str:
+    """Простой вызов YandexGPT, возвращает сырой текст ответа или ''."""
+    if not api_key or not folder_id:
+        return ''
+    if not system_text:
+        system_text = (
+            'Ты — профессиональный аналитик рынка коммерческой недвижимости России. '
+            'Пиши профессиональные аналитические статьи на русском языке. '
+            'Отвечай строго в формате JSON: {"title":"...","summary":"...","content":"..."}'
+        )
+    payload = {
+        'modelUri': f'gpt://{folder_id}/{YANDEX_MODEL}',
+        'completionOptions': {'stream': False, 'temperature': 0.4, 'maxTokens': '3000'},
+        'messages': [
+            {'role': 'system', 'text': system_text},
+            {'role': 'user', 'text': user_text},
+        ],
+    }
+    try:
+        req = urllib.request.Request(
+            YANDEX_GPT_URL,
+            data=json.dumps(payload).encode(),
+            headers={
+                'Authorization': f'Api-Key {api_key}',
+                'Content-Type': 'application/json',
+                'x-folder-id': folder_id,
+            },
+            method='POST',
+        )
+        with urllib.request.urlopen(req, timeout=55) as resp:
+            data = json.loads(resp.read().decode())
+        alts = (data.get('result') or {}).get('alternatives') or []
+        return ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
+    except Exception as e:
+        print(f'[price_digest] _call_gpt_raw error: {e}')
+        return ''
+
+
+def _parse_article_json(text: str) -> dict | None:
+    """Парсит JSON-статью из ответа GPT."""
+    text = text.strip()
+    if text.startswith('```'):
+        text = re.sub(r'^```\w*\n?', '', text)
+        text = re.sub(r'\n?```$', '', text).strip()
+    try:
+        return json.loads(text)
+    except Exception:
+        m = re.search(r'\{.*\}', text, re.DOTALL)
+        if m:
+            try:
+                return json.loads(m.group(0))
+            except Exception:
+                pass
+    return None
+
+
+CAT_LABELS_RU = {
+    'office': 'Офисы', 'retail': 'Торговые помещения', 'warehouse': 'Склады',
+    'standalone': 'Отдельные здания', 'industrial': 'Производство/промышленность',
+    'free_purpose': 'Свободное назначение', 'catering': 'Общепит',
+    'car_service': 'Автосервисы', 'hotel': 'Гостиницы', 'land': 'Земля',
+}
+DEAL_LABELS_RU = {'sale': 'продажа', 'rent': 'аренда'}
+
+
+def _analyze_price_changes(cur, threshold_pct: float = 3.0) -> list:
+    """Сравнивает два последних среза price_history_biweekly, возвращает значимые изменения."""
+    try:
+        cur.execute(
+            f"SELECT DISTINCT date_recorded FROM {SCHEMA}.price_history_biweekly "
+            f"ORDER BY date_recorded DESC LIMIT 2"
+        )
+        dates = [r['date_recorded'] for r in cur.fetchall()]
+        if len(dates) < 2:
+            return []
+        date_new, date_old = dates[0], dates[1]
+
+        cur.execute(
+            f"SELECT category, deal_type, price_per_m2, change_pct "
+            f"FROM {SCHEMA}.price_history_biweekly "
+            f"WHERE date_recorded = '{date_new}' ORDER BY ABS(change_pct) DESC"
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+
+        significant = []
+        for r in rows:
+            chg = float(r.get('change_pct') or 0)
+            if abs(chg) >= threshold_pct:
+                cat = r.get('category') or ''
+                deal = r.get('deal_type') or ''
+                price = float(r.get('price_per_m2') or 0)
+                significant.append({
+                    'category': cat,
+                    'deal_type': deal,
+                    'cat_label': CAT_LABELS_RU.get(cat, cat),
+                    'deal_label': DEAL_LABELS_RU.get(deal, deal),
+                    'price_per_m2': price,
+                    'change_pct': chg,
+                    'arrow': '↑' if chg > 0 else '↓',
+                    'sign': '+' if chg > 0 else '',
+                    'date_new': str(date_new),
+                    'date_old': str(date_old),
+                })
+        return significant
+    except Exception as e:
+        print(f'[price_digest] ошибка анализа: {e}')
+        return []
+
+
+def _build_price_digest_text(changes: list, date_str: str) -> str:
+    """Формирует краткий текст дайджеста для MAX."""
+    lines = [f'📊 Обзор рынка коммерческой недвижимости — {date_str}', '']
+    if not changes:
+        lines.append('Значимых изменений цен не выявлено.')
+        return '\n'.join(lines)
+    for c in changes:
+        arrow = c['arrow']
+        sign = c['sign']
+        lines.append(
+            f"{arrow} {c['cat_label']} ({c['deal_label']}): "
+            f"{sign}{c['change_pct']:.1f}% → {int(c['price_per_m2']):,} ₽/м²".replace(',', ' ')
+        )
+    lines += ['', '📈 Данные по рынку Краснодара']
+    return '\n'.join(lines)
+
+
+def _send_max_digest(bot_token: str, roles_str: str, cur, text: str):
+    """Рассылает ценовой дайджест через MAX всем менеджерам."""
+    try:
+        enabled_roles = [r.strip() for r in (roles_str or 'broker,admin,director').split(',') if r.strip()]
+        roles_sql = ', '.join(f"'{r}'" for r in enabled_roles)
+        cur.execute(
+            f"SELECT name, max_user_id FROM {SCHEMA}.users "
+            f"WHERE is_active = TRUE AND max_user_id IS NOT NULL AND max_user_id != '' "
+            f"AND role IN ({roles_sql})"
+        )
+        recipients = [(r['name'], r['max_user_id']) for r in cur.fetchall()]
+        base_url = 'https://botapi.max.ru'
+        sent = 0
+        for _, uid in recipients:
+            try:
+                payload = json.dumps({'text': text}, ensure_ascii=False).encode('utf-8')
+                req = urllib.request.Request(
+                    f'{base_url}/messages?user_id={uid}',
+                    data=payload,
+                    headers={'Authorization': bot_token, 'Content-Type': 'application/json'},
+                    method='POST',
+                )
+                urllib.request.urlopen(req, timeout=8)
+                sent += 1
+            except Exception as e:
+                print(f'[price_digest] MAX send error to {uid}: {e}')
+        return sent
+    except Exception as e:
+        print(f'[price_digest] _send_max_digest error: {e}')
+        return 0
+
+
+def _build_price_news_prompt(changes: list, date_str: str, key_rate: float | None) -> str:
+    """Строит prompt для GPT для генерации обзорной новостной статьи."""
+    now = datetime.now(timezone.utc)
+    MONTHS_RU = ['января','февраля','марта','апреля','мая','июня',
+                 'июля','августа','сентября','октября','ноября','декабря']
+    month_year = f'{MONTHS_RU[now.month-1]} {now.year}'
+
+    table_lines = []
+    for c in changes:
+        table_lines.append(
+            f"- {c['cat_label']} ({c['deal_label']}): {c['sign']}{c['change_pct']:.1f}%, "
+            f"цена {int(c['price_per_m2']):,} ₽/м²".replace(',', ' ')
+        )
+    table = '\n'.join(table_lines) if table_lines else 'Существенных изменений не зафиксировано.'
+
+    rate_str = f'{key_rate:.2f}%' if key_rate else 'актуальное значение уточняйте на сайте ЦБ РФ'
+
+    return (
+        f'Напиши профессиональную аналитическую статью «Обзор рынка коммерческой недвижимости Краснодара — {month_year}».\n\n'
+        f'Данные по изменению цен:\n{table}\n\n'
+        f'Ключевая ставка ЦБ РФ: {rate_str}.\n\n'
+        f'Требования: 4-5 абзацев, 400-600 слов, профессиональный деловой стиль, '
+        f'анализ причин изменений, прогноз на ближайший квартал. '
+        f'Отвечай строго в JSON: {{"title":"...","summary":"...","content":"..."}}'
+    )
+
+
 def _save_article(cur, conn, article, is_auto, user_id=None, auto_publish=False, logo_url='', key_rate: float | None = None):
     title = _safe(article.get('title', ''), 299)
     summary = _safe(article.get('summary', ''), 999)
@@ -835,6 +1020,92 @@ def handler(event: dict, context) -> dict:
                 except Exception as _pr_e:
                     price_refresh_result = {'error': str(_pr_e)[:100]}
                 result['price_refresh'] = price_refresh_result
+
+                # ── Ценовой дайджест (еженедельно по расписанию) ──────────
+                price_digest_result = None
+                try:
+                    cur.execute(f"SELECT * FROM {SCHEMA}.news_schedule ORDER BY id LIMIT 1")
+                    sch_d = cur.fetchone()
+                    if sch_d:
+                        pd_enabled = sch_d.get('price_digest_enabled') or False
+                        pn_enabled = sch_d.get('price_news_enabled') or False
+                        pm_enabled = sch_d.get('price_digest_max_enabled') or False
+                        pd_day = int(sch_d.get('price_digest_day') or 0)
+                        pd_threshold = float(sch_d.get('price_digest_threshold') or 3.0)
+                        pd_last = sch_d.get('price_digest_last_at')
+
+                        # Воскресенье = 6, понедельник = 0 (weekday())
+                        today_weekday = now_utc.weekday()
+                        # pd_day: 0=пн..6=вс
+                        is_digest_day = (today_weekday == pd_day)
+                        already_ran_week = (
+                            pd_last and hasattr(pd_last, 'date')
+                            and (now_utc.date() - pd_last.date()).days < 6
+                        )
+
+                        if (pd_enabled or pn_enabled) and is_digest_day and not already_ran_week:
+                            changes = _analyze_price_changes(cur, pd_threshold)
+                            now_d = now_utc
+                            MONTHS_RU = ['января','февраля','марта','апреля','мая','июня',
+                                         'июля','августа','сентября','октября','ноября','декабря']
+                            date_str = f'{now_d.day} {MONTHS_RU[now_d.month-1]} {now_d.year}'
+                            sent_max = 0
+                            news_id = None
+
+                            # MAX-дайджест менеджерам
+                            if pm_enabled and changes:
+                                try:
+                                    cur.execute(
+                                        f"SELECT notify_max_bot_token, notify_max_roles "
+                                        f"FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
+                                    )
+                                    s_row = cur.fetchone()
+                                    if s_row and s_row.get('notify_max_bot_token'):
+                                        digest_text = _build_price_digest_text(changes, date_str)
+                                        sent_max = _send_max_digest(
+                                            s_row['notify_max_bot_token'],
+                                            s_row.get('notify_max_roles') or 'broker,admin,director',
+                                            cur, digest_text
+                                        )
+                                except Exception as e:
+                                    print(f'[price_digest] MAX error: {e}')
+
+                            # Авто-новость на сайт
+                            if pn_enabled:
+                                try:
+                                    api_key, folder_id = _load_gpt_keys(cur)
+                                    if api_key and folder_id:
+                                        key_rate_d = _fetch_cbr_key_rate()
+                                        prompt_text = _build_price_news_prompt(changes, date_str, key_rate_d)
+                                        gpt_result = _call_gpt_raw(api_key, folder_id, prompt_text)
+                                        if gpt_result:
+                                            article = _parse_article_json(gpt_result)
+                                            if article and _is_valid_article(article):
+                                                news_id, _ = _save_article(
+                                                    cur, conn, article, True,
+                                                    auto_publish=True, key_rate=key_rate_d
+                                                )
+                                except Exception as e:
+                                    print(f'[price_digest] news error: {e}')
+
+                            # Обновляем last_at
+                            ts_pd = now_utc.strftime('%Y-%m-%d %H:%M:%S+00')
+                            cur.execute(
+                                f"UPDATE {SCHEMA}.news_schedule SET price_digest_last_at = '{ts_pd}' "
+                                f"WHERE id = {sch_d['id']}"
+                            )
+                            conn.commit()
+                            price_digest_result = {
+                                'changes_found': len(changes),
+                                'sent_max': sent_max,
+                                'news_id': news_id,
+                                'date': date_str,
+                            }
+                            print(f'[price_digest] done: changes={len(changes)}, max_sent={sent_max}, news={news_id}')
+                except Exception as pd_e:
+                    price_digest_result = {'error': str(pd_e)[:200]}
+                    print(f'[price_digest] cron error: {pd_e}')
+                result['price_digest'] = price_digest_result
 
                 return _ok(result)
 
@@ -1043,18 +1314,34 @@ def handler(event: dict, context) -> dict:
                 run_minute = max(0, min(59, int(body.get('run_minute', 0))))
                 per_run = max(1, min(10, int(body.get('articles_per_run', 3))))
                 topics_raw = (body.get('topics') or '').strip().replace("'", "''")
+                price_digest_enabled = bool(body.get('price_digest_enabled', False))
+                price_news_enabled = bool(body.get('price_news_enabled', False))
+                price_digest_max_enabled = bool(body.get('price_digest_max_enabled', False))
+                price_digest_day = max(0, min(6, int(body.get('price_digest_day', 0))))
+                price_digest_threshold = max(0.5, min(20.0, float(body.get('price_digest_threshold', 3.0))))
                 ts = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')
                 if row:
                     cur.execute(
                         f"UPDATE {SCHEMA}.news_schedule SET is_enabled = {is_enabled}, "
                         f"run_hour = {run_hour}, run_minute = {run_minute}, articles_per_run = {per_run}, "
-                        f"topics = '{topics_raw}', updated_at = '{ts}' "
+                        f"topics = '{topics_raw}', "
+                        f"price_digest_enabled = {price_digest_enabled}, "
+                        f"price_news_enabled = {price_news_enabled}, "
+                        f"price_digest_max_enabled = {price_digest_max_enabled}, "
+                        f"price_digest_day = {price_digest_day}, "
+                        f"price_digest_threshold = {price_digest_threshold}, "
+                        f"updated_at = '{ts}' "
                         f"WHERE id = {row['id']}"
                     )
                 else:
                     cur.execute(
-                        f"INSERT INTO {SCHEMA}.news_schedule (is_enabled, run_hour, run_minute, articles_per_run, topics) "
-                        f"VALUES ({is_enabled}, {run_hour}, {run_minute}, {per_run}, '{topics_raw}')"
+                        f"INSERT INTO {SCHEMA}.news_schedule "
+                        f"(is_enabled, run_hour, run_minute, articles_per_run, topics, "
+                        f"price_digest_enabled, price_news_enabled, price_digest_max_enabled, "
+                        f"price_digest_day, price_digest_threshold) "
+                        f"VALUES ({is_enabled}, {run_hour}, {run_minute}, {per_run}, '{topics_raw}', "
+                        f"{price_digest_enabled}, {price_news_enabled}, {price_digest_max_enabled}, "
+                        f"{price_digest_day}, {price_digest_threshold})"
                     )
                 conn.commit()
                 return _ok({'ok': True})

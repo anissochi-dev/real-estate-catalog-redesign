@@ -743,6 +743,34 @@ def handler(event: dict, context) -> dict:
                 from market_snapshots import handle_stats as _mss
                 return _ok(_mss(cur, params_all))
 
+            if action == 'price_biweekly_stats' or params_all.get('action') == 'price_biweekly_stats':
+                # Возвращает последние 2 среза price_history_biweekly с изменениями
+                cur.execute(
+                    f"SELECT DISTINCT date_recorded FROM {SCHEMA}.price_history_biweekly "
+                    f"ORDER BY date_recorded DESC LIMIT 2"
+                )
+                dates = [str(r['date_recorded']) for r in cur.fetchall()]
+                rows_out = []
+                if dates:
+                    date_latest = dates[0].replace("'", "''")
+                    cur.execute(
+                        f"SELECT category, deal_type, price_per_m2, change_pct, date_recorded "
+                        f"FROM {SCHEMA}.price_history_biweekly "
+                        f"WHERE date_recorded = '{date_latest}' "
+                        f"ORDER BY ABS(change_pct) DESC"
+                    )
+                    rows_out = [
+                        {
+                            'category': r['category'],
+                            'deal_type': r['deal_type'],
+                            'price_per_m2': float(r['price_per_m2'] or 0),
+                            'change_pct': float(r['change_pct'] or 0),
+                            'date_recorded': str(r['date_recorded']),
+                        }
+                        for r in cur.fetchall()
+                    ]
+                return _ok({'rows': rows_out, 'dates': dates})
+
             if action == 'aggregate_market_listings':
                 from market_snapshots import aggregate_market_listings as _aml
                 return _ok(_aml(cur, conn))

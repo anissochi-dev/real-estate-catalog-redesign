@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NEWS_URL } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
-import { Schedule, HOURS, MINUTES, AUTO_TOPICS_GROUPS, fmtDate } from './newsAdminTypes';
+import { Schedule, HOURS, MINUTES, AUTO_TOPICS_GROUPS, WEEK_DAYS, fmtDate } from './newsAdminTypes';
 
 interface Props {
   schedule: Schedule;
@@ -175,6 +175,97 @@ export function NewsAdminSchedule({ schedule, schedSaved, headers, onScheduleCha
           Последний запуск: {fmtDate(schedule.last_run_at)} · Создано статей: {schedule.last_run_count ?? 0}
         </div>
       )}
+
+      {/* ── Ценовые оповещения ───────────────────────────────────── */}
+      <div className="border-t border-border pt-5 space-y-4">
+        <div className="font-display font-700 flex items-center gap-2 text-base">
+          <Icon name="TrendingUp" size={17} className="text-brand-blue" />
+          Ценовые оповещения
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Раз в неделю система сравнивает изменения цен по категориям недвижимости и при значимых движениях рынка — публикует обзорную статью и/или отправляет дайджест менеджерам в MAX.
+        </p>
+
+        {/* День недели */}
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">День недели запуска</label>
+          <select
+            value={schedule.price_digest_day ?? 0}
+            onChange={e => onScheduleChange(s => ({ ...s, price_digest_day: +e.target.value }))}
+            className="w-full px-3 py-2 border rounded-lg text-sm"
+          >
+            {WEEK_DAYS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+          </select>
+        </div>
+
+        {/* Порог */}
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">
+            Порог значимого изменения (%)
+          </label>
+          <input
+            type="number" min={0.5} max={20} step={0.5}
+            value={schedule.price_digest_threshold ?? 3}
+            onChange={e => onScheduleChange(s => ({ ...s, price_digest_threshold: +e.target.value }))}
+            className="w-full px-3 py-2 border rounded-lg text-sm"
+          />
+          <div className="text-xs text-muted-foreground mt-1">
+            Изменения ниже порога считаются несущественными и не включаются в дайджест.
+          </div>
+        </div>
+
+        {/* Тогглы */}
+        <div className="space-y-2.5">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <div className="relative flex-shrink-0">
+              <input type="checkbox" className="sr-only"
+                checked={!!schedule.price_news_enabled}
+                onChange={e => onScheduleChange(s => ({ ...s, price_news_enabled: e.target.checked }))} />
+              <div className={`w-10 h-5 rounded-full transition-colors ${schedule.price_news_enabled ? 'bg-brand-blue' : 'bg-muted-foreground/30'}`} />
+              <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${schedule.price_news_enabled ? 'translate-x-5' : ''}`} />
+            </div>
+            <div>
+              <div className="text-sm font-medium">Авто-новость на сайт</div>
+              <div className="text-xs text-muted-foreground">GPT генерирует обзорную статью «Рынок за [месяц]»</div>
+            </div>
+          </label>
+
+          <label className="flex items-center gap-3 cursor-pointer">
+            <div className="relative flex-shrink-0">
+              <input type="checkbox" className="sr-only"
+                checked={!!schedule.price_digest_max_enabled}
+                onChange={e => onScheduleChange(s => ({ ...s, price_digest_max_enabled: e.target.checked }))} />
+              <div className={`w-10 h-5 rounded-full transition-colors ${schedule.price_digest_max_enabled ? 'bg-brand-blue' : 'bg-muted-foreground/30'}`} />
+              <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${schedule.price_digest_max_enabled ? 'translate-x-5' : ''}`} />
+            </div>
+            <div>
+              <div className="text-sm font-medium">Дайджест в MAX менеджерам</div>
+              <div className="text-xs text-muted-foreground">Краткая сводка с цифрами и стрелками ↑↓ всем брокерам</div>
+            </div>
+          </label>
+
+          <label className="flex items-center gap-3 cursor-pointer">
+            <div className="relative flex-shrink-0">
+              <input type="checkbox" className="sr-only"
+                checked={!!schedule.price_digest_enabled}
+                onChange={e => onScheduleChange(s => ({ ...s, price_digest_enabled: e.target.checked }))} />
+              <div className={`w-10 h-5 rounded-full transition-colors ${schedule.price_digest_enabled ? 'bg-brand-blue' : 'bg-muted-foreground/30'}`} />
+              <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${schedule.price_digest_enabled ? 'translate-x-5' : ''}`} />
+            </div>
+            <div>
+              <div className="text-sm font-medium">Включить ценовые оповещения</div>
+              <div className="text-xs text-muted-foreground">Мастер-переключатель всей системы оповещений</div>
+            </div>
+          </label>
+        </div>
+
+        {schedule.price_digest_last_at && (
+          <div className="text-xs text-muted-foreground bg-muted/40 rounded-xl px-4 py-3 flex items-center gap-2">
+            <Icon name="CheckCircle2" size={13} className="text-emerald-500" />
+            Последний ценовой дайджест: {fmtDate(schedule.price_digest_last_at)}
+          </div>
+        )}
+      </div>
 
       <button onClick={saveSchedule}
         className="btn-blue text-white px-6 py-2.5 rounded-xl text-sm font-semibold w-full">

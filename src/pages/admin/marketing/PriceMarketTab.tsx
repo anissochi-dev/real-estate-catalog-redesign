@@ -2,6 +2,7 @@ import MarketHeader from './price-market/MarketHeader';
 import RefreshProgress from './price-market/RefreshProgress';
 import ImportBlock from './price-market/ImportBlock';
 import MarketCharts from './price-market/MarketCharts';
+import PriceSignalsWidget from './price-market/PriceSignalsWidget';
 import { useMarketData } from './price-market/useMarketData';
 
 export default function PriceMarketTab() {
@@ -61,6 +62,9 @@ export default function PriceMarketTab() {
           onStart={() => runBatchChain(true)}
         />
       )}
+
+      {/* Ценовые сигналы (двухнедельные изменения) */}
+      <PriceSignalsWidget />
 
       {/* Импорт XLSX */}
       <ImportBlock />
