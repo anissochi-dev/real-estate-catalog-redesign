@@ -35,6 +35,7 @@ def _page(title, status_note='', is_404=False):
     if not is_404:
         canonical = '<link rel="canonical" href="/" />'
     prerender_meta = '<meta name="prerender-status-code" content="404" />' if is_404 else ''
+    robots_meta = '<meta name="robots" content="noindex, nofollow">' if is_404 else ''
     links = (
         '<nav>'
         '<a href="/">На главную</a> | '
@@ -44,7 +45,7 @@ def _page(title, status_note='', is_404=False):
     return (
         '<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">'
         f'<title>{title}</title>'
-        '<meta name="robots" content="noindex, nofollow">'
+        f'{robots_meta}'
         f'{prerender_meta}{canonical}'
         '</head><body>'
         f'<h1>{title}</h1>{status_note}{links}'
