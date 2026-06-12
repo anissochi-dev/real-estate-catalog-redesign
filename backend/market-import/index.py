@@ -7,26 +7,27 @@
            Источник, lat, lng, Доп.параметры (Этаж=N|Этажность=N|Вид объекта=X|Общая площадь=N)
 
 Формат XLSX: произвольные колонки, обязательные: Цена, Площадь, Тип сделки.
-  Дополнительные: Район, Адрес, Телефон, Этаж, Этажность, URL
 
-Action: POST { action: 'import', file_url: '...', source: 'cian|avito|manual', preview: true/false }
-        POST { action: 'stats' }
-        POST { action: 'clear', source: 'avito' }
+Архитектура (батчевая, без 504):
+  import_start    → создаёт job, возвращает job_id (~100 мс)
+  import_continue → скачивает файл потоково, пропускает checkpoint строк,
+                    парсит и вставляет BATCH строк, возвращает новый checkpoint
+                    Фронтенд вызывает в цикле до done=true.
 """
 
 import csv
 import io
 import json
-import math
 import os
 import re
 import urllib.request
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 
 import psycopg2
 import psycopg2.extras
 
 SCHEMA = os.environ.get('MAIN_DB_SCHEMA', 't_p71821556_real_estate_catalog_')
+BATCH = 1500  # строк за один вызов import_continue
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -34,7 +35,7 @@ CORS = {
     'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token, X-Authorization',
 }
 
-# ── Маппинг типов объектов ────────────────────────────────────────────────────
+# ── Маппинги ──────────────────────────────────────────────────────────────────
 
 OBJ_TYPE_MAP = {
     'офисное помещение': 'office', 'офис': 'office',
@@ -43,7 +44,8 @@ OBJ_TYPE_MAP = {
     'складское помещение': 'warehouse', 'склад': 'warehouse',
     'производственное помещение': 'production', 'производство': 'production',
     'здание': 'building', 'отдельно стоящее здание': 'building',
-    'помещение общепита': 'restaurant', 'общепит': 'restaurant', 'кафе': 'restaurant', 'ресторан': 'restaurant',
+    'помещение общепита': 'restaurant', 'общепит': 'restaurant',
+    'кафе': 'restaurant', 'ресторан': 'restaurant',
     'гостиница': 'hotel', 'апартаменты': 'hotel',
     'коммерческая земля': 'land', 'земля': 'land',
     'автосервис': 'car_service', 'автомойка': 'car_service',
@@ -56,7 +58,6 @@ DEAL_MAP = {
     'сдам': 'rent', 'аренда': 'rent', 'сдаётся': 'rent', 'сдается': 'rent',
 }
 
-# Нормализация районов: дубли из ЦИАН/Авито → единый вид
 DISTRICT_NORM = {
     'р-н прикубанский': 'Прикубанский', 'прикубанский': 'Прикубанский',
     'р-н карасунский': 'Карасунский', 'карасунский': 'Карасунский',
@@ -65,63 +66,43 @@ DISTRICT_NORM = {
     'р-н прикубанский округ': 'Прикубанский',
 }
 
-# Фильтры качества
-MIN_PRICE_SALE = 100_000       # 100 тыс — минимальная цена продажи (реальный минимум для КНД)
-MAX_PRICE_SALE = 5_000_000_000 # 5 млрд — максимум
-MIN_PRICE_RENT = 3_000         # 3 тыс/мес — минимальная аренда
-MAX_PRICE_RENT = 10_000_000    # 10 млн/мес — максимум аренды
-MIN_AREA = 4                   # 4 м² — реальный минимум (кладовки, боксы)
+MIN_PRICE_SALE = 100_000
+MAX_PRICE_SALE = 5_000_000_000
+MIN_PRICE_RENT = 3_000
+MAX_PRICE_RENT = 10_000_000
+MIN_AREA = 4
 MAX_AREA = 100_000
-FRESH_DAYS = 365               # принимаем объявления не старше 1 года
+FRESH_DAYS = 365
+
+GAB_SIGNALS = ['с арендатором', 'арендный бизнес', 'готовый арендный', 'арендный поток']
 
 
 # ── Утилиты ───────────────────────────────────────────────────────────────────
 
 def _get_conn():
-    return psycopg2.connect(
-        os.environ['DATABASE_URL'],
-        cursor_factory=psycopg2.extras.RealDictCursor,
-    )
+    return psycopg2.connect(os.environ['DATABASE_URL'], cursor_factory=psycopg2.extras.RealDictCursor)
 
 
 def _map_obj_type(raw: str, title: str = '') -> str:
-    if not raw:
-        cat = 'other'
-    else:
-        s = raw.lower().strip()
-        cat = 'other'
-        for key, val in OBJ_TYPE_MAP.items():
-            if key in s:
-                cat = val
-                break
-    # Переопределяем как ГАБ если title явно указывает на готовый арендный бизнес
-    t = (title or '').lower()
-    GAB_TITLE_SIGNALS = ['с арендатором', 'арендный бизнес', 'готовый арендный', 'арендный поток', 'с действующим арендатором']
-    if any(sig in t for sig in GAB_TITLE_SIGNALS):
+    s = (raw or '').lower().strip()
+    cat = next((v for k, v in OBJ_TYPE_MAP.items() if k in s), 'other')
+    if any(sig in (title or '').lower() for sig in GAB_SIGNALS):
         return 'gab'
     return cat
 
 
 def _map_deal(raw: str) -> str:
-    if not raw:
-        return 'sale'
-    s = raw.lower().strip()
-    for key, val in DEAL_MAP.items():
-        if key in s:
-            return val
-    return 'sale'
+    s = (raw or '').lower().strip()
+    return next((v for k, v in DEAL_MAP.items() if k in s), 'sale')
 
 
 def _norm_district(raw: str) -> str:
     if not raw:
         return ''
-    s = raw.lower().strip()
-    return DISTRICT_NORM.get(s, raw.strip())
+    return DISTRICT_NORM.get(raw.lower().strip(), raw.strip())
 
 
 def _parse_float(s) -> float:
-    if s is None:
-        return 0.0
     try:
         return float(str(s).replace(' ', '').replace(',', '.').replace('\xa0', ''))
     except Exception:
@@ -129,372 +110,330 @@ def _parse_float(s) -> float:
 
 
 def _valid_date(date_str: str) -> bool:
-    """Проверяет что дата не старше FRESH_DAYS."""
     try:
-        d = datetime.fromisoformat(date_str[:10])
-        return (datetime.now() - d).days <= FRESH_DAYS
+        return (datetime.now() - datetime.fromisoformat(date_str[:10])).days <= FRESH_DAYS
     except Exception:
-        return True  # если нет даты — принимаем
+        return True
 
 
-def _ppm2(price: float, area: float) -> float:
-    if area > 0 and price > 0:
-        return round(price / area, 2)
-    return 0.0
+def _job_upsert(conn, job_id, **kwargs):
+    sets = ', '.join(f"{k}=%s" for k in kwargs)
+    vals = list(kwargs.values()) + [job_id]
+    cur = conn.cursor()
+    cur.execute(f"UPDATE {SCHEMA}.import_jobs SET {sets}, updated_at=NOW() WHERE id=%s", vals)
+    conn.commit()
+    cur.close()
 
 
-def _dedup_key(address: str, area: float) -> str:
-    """Ключ для дедупликации: адрес + площадь ±10%."""
-    bucket = round(area / 10) * 10 if area > 0 else 0
-    return f"{address.lower().strip()}|{bucket}"
+# ── Парсинг одной строки CSV → запись ─────────────────────────────────────────
+
+def _parse_csv_row(row: dict, source: str, row_num: int) -> tuple[dict | None, str | None]:
+    """Парсит одну строку CSV. Возвращает (запись, предупреждение) или (None, причина_пропуска)."""
+    title     = (row.get('Название') or '').strip()
+    raw_price = (row.get('Цена') or '').strip().replace(' ', '').replace('\xa0', '')
+    date_str  = (row.get('Дата') or '')[:19]
+    phone     = (row.get('Телефон') or '').strip()
+    district  = _norm_district(row.get('Метро/Район') or '')
+    address   = (row.get('Адрес') or '').strip()
+    deal_raw  = (row.get('Тип объявления') or '')
+    src       = (row.get('Источник') or source or 'csv').strip()
+    ext_id    = str(row.get('ID на сайте') or '').strip()
+    url       = (row.get('URL') or '').strip()
+    extra     = (row.get('Доп.параметры') or '')
+
+    if date_str and not _valid_date(date_str):
+        return None, f'row {row_num}: устаревшее'
+
+    try:
+        price = float(raw_price) if raw_price else 0.0
+    except Exception:
+        price = 0.0
+
+    deal = _map_deal(deal_raw)
+
+    if deal == 'sale' and not (MIN_PRICE_SALE <= price <= MAX_PRICE_SALE):
+        return None, None
+    if deal == 'rent' and not (MIN_PRICE_RENT <= price <= MAX_PRICE_RENT):
+        return None, None
+
+    area = 0.0
+    m = re.search(r'Общая площадь=([0-9.,]+)', extra)
+    if m:
+        area = _parse_float(m.group(1))
+    if area <= 0:
+        m2 = re.search(r'\((\d+[\.,]?\d*)\s*м', title)
+        if m2:
+            area = _parse_float(m2.group(1))
+
+    if not (MIN_AREA <= area <= MAX_AREA):
+        return None, None
+
+    ot_m = re.search(r'Вид объекта=([^|]+)', extra)
+    obj_type_raw = ot_m.group(1).strip() if ot_m else ''
+    category = _map_obj_type(obj_type_raw, title=title)
+
+    floor, total_floors = None, None
+    fl_m = re.search(r'Этаж=(\d+)', extra)
+    tf_m = re.search(r'Этажность здания=(\d+)', extra)
+    if fl_m:
+        floor = int(fl_m.group(1))
+    if tf_m:
+        total_floors = int(tf_m.group(1))
+
+    lat_s = (row.get('lat') or '').strip()
+    lng_s = (row.get('lng') or '').strip()
+    lat = _parse_float(lat_s)
+    lng = _parse_float(lng_s)
+    if not (44.0 < lat < 45.7 and 38.5 < lng < 39.5):
+        lat, lng = 0.0, 0.0
+
+    road_line = None
+    rl_m = re.search(r'Линия улицы=([^|]+)', extra)
+    if rl_m:
+        road_line = rl_m.group(1).strip()[:50]
+
+    return {
+        'source': src[:50],
+        'external_id': ext_id or None,
+        'url': url or None,
+        'title': title[:500] or None,
+        'category': category,
+        'deal_type': deal,
+        'price': int(price) if price else None,
+        'price_per_m2': round(price / area, 2) if price and area > 0 else None,
+        'area': area or None,
+        'address': address[:500] or None,
+        'district': district[:200] or None,
+        'floor': floor,
+        'total_floors': total_floors,
+        'phone': phone[:50] or None,
+        'lat': lat or None,
+        'lng': lng or None,
+        'road_line': road_line,
+    }, None
 
 
-# ── Парсер CSV (формат ЦИАН/Авито-парсера) ───────────────────────────────────
+# ── Парсинг одной строки XLSX → запись ────────────────────────────────────────
 
-def _parse_csv(raw_bytes: bytes, source: str) -> tuple[list[dict], list[str]]:
-    """Парсит CSV-файл, возвращает (записи, предупреждения)."""
-    text = raw_bytes.decode('utf-8-sig', errors='replace')
-    reader = csv.DictReader(io.StringIO(text), delimiter=';')
-    records, warnings = [], []
-    seen_keys = set()
+def _parse_xlsx_row(row: tuple, header_idx: dict, source: str) -> dict | None:
+    """Парсит одну строку XLSX. Возвращает запись или None."""
+    def cell(name):
+        idx = header_idx.get(name, -1)
+        if idx < 0 or idx >= len(row):
+            return None
+        return row[idx]
 
-    for i, row in enumerate(reader, 1):
-        title    = (row.get('Название') or '').strip()
-        raw_price = (row.get('Цена') or '').strip().replace(' ', '').replace('\xa0', '')
-        date_str  = (row.get('Дата') or '')[:19]
-        phone     = (row.get('Телефон') or '').strip()
-        district  = _norm_district(row.get('Метро/Район') or '')
-        address   = (row.get('Адрес') or '').strip()
-        deal_raw  = (row.get('Тип объявления') or '')
-        src       = (row.get('Источник') or source or 'csv').strip()
-        ext_id    = str(row.get('ID на сайте') or '').strip()
-        url       = (row.get('URL') or '').strip()
-        extra     = (row.get('Доп.параметры') or '')
-        lat_s     = (row.get('lat') or '').strip()
-        lng_s     = (row.get('lng') or '').strip()
-
-        # Дата
-        if date_str and not _valid_date(date_str):
-            warnings.append(f'row {i}: устаревшее объявление ({date_str[:10]}), пропущено')
-            continue
-
-        # Цена
-        try:
-            price = float(raw_price) if raw_price else 0.0
-        except Exception:
-            price = 0.0
-
-        deal = _map_deal(deal_raw)
-
-        # Фильтр цены
-        if deal == 'sale' and not (MIN_PRICE_SALE <= price <= MAX_PRICE_SALE):
-            if price > 0:
-                warnings.append(f'row {i}: цена вне диапазона ({price:,.0f}), пропущено')
-            continue
-        if deal == 'rent' and not (MIN_PRICE_RENT <= price <= MAX_PRICE_RENT):
-            if price > 0:
-                warnings.append(f'row {i}: цена аренды вне диапазона ({price:,.0f}), пропущено')
-            continue
-
-        # Площадь из Доп.параметры или из названия
-        area = 0.0
-        m = re.search(r'Общая площадь=([0-9.,]+)', extra)
+    price = _parse_float(cell('price'))
+    area  = _parse_float(cell('area'))
+    if area <= 0:
+        title_v = str(cell('title') or '')
+        m = re.search(r'(\d+[\.,]?\d*)\s*м', title_v)
         if m:
             area = _parse_float(m.group(1))
-        if area <= 0:
-            m2 = re.search(r'\((\d+[\.,]?\d*)\s*м', title)
-            if m2:
-                area = _parse_float(m2.group(1))
 
-        if not (MIN_AREA <= area <= MAX_AREA):
-            if area > 0:
-                warnings.append(f'row {i}: площадь вне диапазона ({area}), пропущено')
-            continue
+    deal_raw = str(cell('deal') or 'продажа')
+    deal = _map_deal(deal_raw)
 
-        # Тип объекта
-        ot_m = re.search(r'Вид объекта=([^|]+)', extra)
-        obj_type_raw = ot_m.group(1).strip() if ot_m else ''
-        category = _map_obj_type(obj_type_raw, title=title)
+    if deal == 'sale' and not (MIN_PRICE_SALE <= price <= MAX_PRICE_SALE):
+        return None
+    if deal == 'rent' and not (MIN_PRICE_RENT <= price <= MAX_PRICE_RENT):
+        return None
+    if not (MIN_AREA <= area <= MAX_AREA):
+        return None
 
-        # Этаж
-        floor, total_floors = None, None
-        fl_m = re.search(r'Этаж=(\d+)', extra)
-        tf_m = re.search(r'Этажность здания=(\d+)', extra)
-        if fl_m:
-            floor = int(fl_m.group(1))
-        if tf_m:
-            total_floors = int(tf_m.group(1))
+    cat_raw  = str(cell('cat') or '')
+    title_v  = str(cell('title') or '').strip()
+    category = _map_obj_type(cat_raw, title=title_v)
+    address  = str(cell('addr') or '').strip()
+    district = _norm_district(str(cell('dist') or ''))
 
-        # Координаты
-        lat = _parse_float(lat_s)
-        lng = _parse_float(lng_s)
-        if lat != 0 and lng != 0 and not (44.0 < lat < 45.7 and 38.5 < lng < 39.5):
-            warnings.append(f'row {i}: координаты вне Краснодара ({lat},{lng}), сброшены')
-            lat, lng = 0.0, 0.0
+    floor_v   = int(_parse_float(cell('floor'))) or None
+    tfloors_v = int(_parse_float(cell('tfloors'))) or None
+    url_v     = str(cell('url') or '').strip() or None
+    ext_id    = str(cell('ext_id') or '').strip() or None
+    ppm2_v    = _parse_float(cell('ppm2'))
+    if not ppm2_v and area > 0 and price > 0:
+        ppm2_v = round(price / area, 2)
 
-        ppm2 = _ppm2(price, area)
-
-        # Дедупликация
-        dk = _dedup_key(address or title, area)
-        if dk in seen_keys:
-            continue
-        seen_keys.add(dk)
-
-        records.append({
-            'source': src[:50],
-            'external_id': ext_id[:200] if ext_id else None,
-            'url': url or None,
-            'title': title[:500] if title else None,
-            'category': category,
-            'deal_type': deal,
-            'price': int(price) if price else None,
-            'price_per_m2': ppm2 if ppm2 else None,
-            'area': area if area else None,
-            'address': address[:500] if address else None,
-            'district': district[:200] if district else None,
-            'floor': floor,
-            'total_floors': total_floors,
-            'phone': phone[:50] if phone else None,
-            'description': None,
-            'lat': lat if lat else None,
-            'lng': lng if lng else None,
-        })
-
-    return records, warnings
+    return {
+        'source': source[:50],
+        'external_id': ext_id,
+        'url': url_v,
+        'title': title_v[:500] or None,
+        'category': category,
+        'deal_type': deal,
+        'price': int(price) if price else None,
+        'price_per_m2': ppm2_v or None,
+        'area': area or None,
+        'address': address[:500] or None,
+        'district': district[:200] or None,
+        'floor': floor_v,
+        'total_floors': tfloors_v,
+        'phone': None,
+        'lat': None,
+        'lng': None,
+        'road_line': None,
+    }
 
 
-# ── Парсер XLSX (ручная выгрузка) ────────────────────────────────────────────
+def _build_xlsx_header_idx(header_row: tuple) -> dict:
+    """Сопоставляет колонки XLSX → внутренние имена."""
+    header = [str(c).strip().lower() if c else '' for c in header_row]
 
-def _parse_xlsx(raw_bytes: bytes, source: str) -> tuple[list[dict], list[str]]:
-    """Парсит XLSX с произвольными колонками."""
-    import openpyxl
-    wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), read_only=True, data_only=True)
-    ws = wb.active
-    all_rows = list(ws.iter_rows(values_only=True))
-    wb.close()
-
-    if not all_rows:
-        return [], ['Файл пустой']
-
-    header = [str(c).strip().lower() if c else '' for c in all_rows[0]]
-
-    # Поиск нужных колонок (нечёткий)
-    def find_col(*candidates) -> int:
+    def find(*candidates):
         for cand in candidates:
             for i, h in enumerate(header):
                 if cand in h:
                     return i
         return -1
 
-    col_price   = find_col('цена', 'price')
-    col_area    = find_col('площадь', 'area', 'кв.м', 'кв м')
-    col_deal    = find_col('тип сделки', 'тип объявления', 'deal', 'сделка')
-    col_cat     = find_col('категория', 'тип объекта', 'вид объекта', 'category')
-    col_addr    = find_col('адрес', 'address')
-    col_dist    = find_col('район', 'district', 'метро')
-    col_phone   = find_col('телефон', 'phone')
-    col_floor   = find_col('этаж', 'floor')
-    col_tfloors = find_col('этажность', 'этажей', 'total_floor')
-    col_url     = find_col('url', 'ссылка', 'link')
-    col_ext_id  = find_col('id', 'внешний')
-    col_date    = find_col('дата', 'date')
-
-    if col_price < 0 or col_area < 0:
-        return [], ['Не найдены обязательные колонки "Цена" и "Площадь"']
-
-    records, warnings = [], []
-    seen_keys = set()
-
-    for i, row in enumerate(all_rows[1:], 2):
-        def cell(idx):
-            if idx < 0 or idx >= len(row):
-                return None
-            return row[idx]
-
-        # Дата
-        date_val = cell(col_date)
-        if date_val:
-            date_str = str(date_val)[:10]
-            if not _valid_date(date_str):
-                warnings.append(f'row {i}: устаревшее объявление, пропущено')
-                continue
-
-        price = _parse_float(cell(col_price))
-        area  = _parse_float(cell(col_area))
-        deal_raw = str(cell(col_deal) or 'продам')
-        deal = _map_deal(deal_raw)
-
-        # Фильтры
-        if deal == 'sale' and not (MIN_PRICE_SALE <= price <= MAX_PRICE_SALE):
-            if price > 0:
-                warnings.append(f'row {i}: цена продажи вне диапазона ({price:,.0f})')
-            continue
-        if deal == 'rent' and not (MIN_PRICE_RENT <= price <= MAX_PRICE_RENT):
-            if price > 0:
-                warnings.append(f'row {i}: цена аренды вне диапазона ({price:,.0f})')
-            continue
-        if not (MIN_AREA <= area <= MAX_AREA):
-            if area > 0:
-                warnings.append(f'row {i}: площадь вне диапазона ({area})')
-            continue
-
-        category = _map_obj_type(str(cell(col_cat) or ''))
-        address  = str(cell(col_addr) or '').strip()
-        district = _norm_district(str(cell(col_dist) or ''))
-        phone    = str(cell(col_phone) or '').strip()
-        floor    = int(_parse_float(cell(col_floor))) or None
-        tfloors  = int(_parse_float(cell(col_tfloors))) or None
-        url      = str(cell(col_url) or '').strip() or None
-        ext_id   = str(cell(col_ext_id) or '').strip() or None
-
-        ppm2 = _ppm2(price, area)
-
-        dk = _dedup_key(address or f'row_{i}', area)
-        if dk in seen_keys:
-            continue
-        seen_keys.add(dk)
-
-        records.append({
-            'source': source[:50],
-            'external_id': ext_id,
-            'url': url,
-            'title': None,
-            'category': category,
-            'deal_type': deal,
-            'price': int(price) if price else None,
-            'price_per_m2': ppm2 if ppm2 else None,
-            'area': area if area else None,
-            'address': address[:500] if address else None,
-            'district': district[:200] if district else None,
-            'floor': floor,
-            'total_floors': tfloors,
-            'phone': phone[:50] if phone else None,
-            'description': None,
-            'lat': None,
-            'lng': None,
-        })
-
-    return records, warnings
+    return {
+        'price':   find('цена', 'price', 'стоимость'),
+        'area':    find('площадь', 'area', 'кв.м', 'кв м', 'площ', 'square'),
+        'deal':    find('тип сделки', 'тип объявления', 'deal', 'сделка', 'операция'),
+        'cat':     find('категория1', 'категория', 'тип объекта', 'вид объекта', 'category', 'назначение'),
+        'addr':    find('адрес', 'address', 'местоположение'),
+        'dist':    find('метро/район', 'район', 'district', 'округ'),
+        'title':   find('название', 'заголовок', 'title', 'наименование'),
+        'floor':   find('этаж', 'floor'),
+        'tfloors': find('этажность', 'этажей', 'total_floor'),
+        'url':     find('url', 'ссылка', 'link'),
+        'ext_id':  find('id на сайте', 'id объявления', 'внешний id'),
+        'ppm2':    find('цена за м', 'price_per_m', 'цена/м', 'руб/м'),
+    }
 
 
-# ── Вставка в БД ─────────────────────────────────────────────────────────────
+# ── Вставка батча в БД ────────────────────────────────────────────────────────
 
-def _insert_records(cur, conn, records: list[dict]) -> dict:
-    """
-    Батчевая вставка для высокой производительности.
-    Стратегия дедупликации:
-    1. Загружаем все existing external_id одним запросом (O(1) вместо O(N))
-    2. Новые → INSERT через executemany батчами по 200 строк
-    3. Существующие → UPDATE батчем
-    """
-    inserted = skipped = updated = 0
+def _insert_batch(cur, conn, records: list[dict]) -> tuple[int, int, int]:
+    """Вставляет записи батчами, возвращает (inserted, updated, skipped)."""
     if not records:
-        return {'inserted': 0, 'skipped': 0, 'updated': 0}
+        return 0, 0, 0
 
-    def esc(v): return str(v).replace("'", "''") if v else ''
+    inserted = updated = skipped = 0
+    esc = lambda v: str(v).replace("'", "''") if v else ''
 
-    # Собираем все external_id которые есть в этом импорте
-    sources_in_batch = list({r['source'] for r in records if r.get('source')})
-    extids_in_batch  = [r['external_id'] for r in records if r.get('external_id')]
+    # Дедупликация внутри батча по external_id
+    sources = list({r['source'] for r in records if r.get('source')})
+    extids  = [r['external_id'] for r in records if r.get('external_id')]
 
-    # Один запрос — получаем все уже существующие external_id
-    existing_extids: set = set()
-    if extids_in_batch and sources_in_batch:
-        src_list  = ','.join(f"'{esc(s)}'" for s in sources_in_batch)
-        eid_list  = ','.join(f"'{esc(e)}'" for e in extids_in_batch[:5000])
+    existing = set()
+    if extids and sources:
+        src_list = ','.join(f"'{esc(s)}'" for s in sources)
+        eid_list = ','.join(f"'{esc(e)}'" for e in extids[:5000])
         cur.execute(f"""
             SELECT external_id FROM {SCHEMA}.market_listings
-            WHERE source IN ({src_list})
-              AND external_id IN ({eid_list})
+            WHERE source IN ({src_list}) AND external_id IN ({eid_list})
         """)
-        existing_extids = {row['external_id'] for row in cur.fetchall()}
+        existing = {row['external_id'] for row in cur.fetchall()}
 
-    to_insert = []
-    to_update = []  # (external_id, source, price, ppm2, area)
-
+    to_insert, to_update = [], []
     for r in records:
-        extid = r.get('external_id') or ''
-        src   = r.get('source') or 'manual'
-
-        if extid and extid in existing_extids:
-            # Обновляем цену/площадь
-            to_update.append((
-                r.get('price'), r.get('price_per_m2'), r.get('area'),
-                r.get('url') or '', r.get('district') or '', r.get('phone') or '',
-                extid, src,
-            ))
+        eid = r.get('external_id') or ''
+        if eid and eid in existing:
+            to_update.append(r)
         else:
             to_insert.append(r)
 
-    # Батчевый UPDATE — по 50 строк
-    for i in range(0, len(to_update), 50):
-        batch = to_update[i:i+50]
-        for (price, ppm2, area, url_v, dist_v, phone_v, extid, src) in batch:
-            ps = str(price) if price is not None else 'NULL'
-            pp = str(ppm2)  if ppm2  is not None else 'NULL'
-            ar = str(area)  if area  is not None else 'NULL'
-            cur.execute(f"""
-                UPDATE {SCHEMA}.market_listings SET
-                  price = {ps}, price_per_m2 = {pp}, area = {ar}, scraped_at = NOW()
-                  {f", url = '{esc(url_v)}'" if url_v else ''}
-                  {f", district = '{esc(dist_v)}'" if dist_v else ''}
-                  {f", phone = '{esc(phone_v)}'" if phone_v else ''}
-                WHERE source = '{esc(src)}' AND external_id = '{esc(extid)}'
-            """)
-            updated += 1
-
-    # Батчевый INSERT — по 100 строк
-    BATCH = 100
-    for i in range(0, len(to_insert), BATCH):
-        batch = to_insert[i:i+BATCH]
-        values_parts = []
+    # Батчевый INSERT по 200 строк
+    for i in range(0, len(to_insert), 200):
+        batch = to_insert[i:i+200]
+        vals = []
         for r in batch:
-            src     = esc(r.get('source') or 'manual')
-            extid   = esc(r.get('external_id') or '')
-            url_v   = esc(r.get('url') or '')
-            title_v = esc(r.get('title') or '')
-            cat     = esc(r.get('category') or 'other')
-            deal    = esc(r.get('deal_type') or 'sale')
-            price_s = str(r['price'])        if r.get('price')        is not None else 'NULL'
-            ppm2_s  = str(r['price_per_m2']) if r.get('price_per_m2') is not None else 'NULL'
-            area_s  = str(r['area'])         if r.get('area')         is not None else 'NULL'
-            addr    = esc(r.get('address') or '')
-            dist    = esc(r.get('district') or '')
-            floor_s = str(r['floor'])        if r.get('floor')        is not None else 'NULL'
-            tfl_s   = str(r['total_floors']) if r.get('total_floors') is not None else 'NULL'
-            phone_v = esc(r.get('phone') or '')
-
-            q_extid  = f"'{extid}'"  if extid  else 'NULL'
-            q_url    = f"'{url_v}'"   if url_v  else 'NULL'
-            q_title  = f"'{title_v}'" if title_v else 'NULL'
-            q_addr   = f"'{addr}'"    if addr   else 'NULL'
-            q_dist   = f"'{dist}'"    if dist   else 'NULL'
-            q_phone  = f"'{phone_v}'" if phone_v else 'NULL'
-            values_parts.append(
-                f"('{src}', {q_extid}, {q_url}, {q_title}, "
-                f"'{cat}', '{deal}', {price_s}, {ppm2_s}, {area_s}, "
-                f"{q_addr}, {q_dist}, {floor_s}, {tfl_s}, {q_phone}, NOW())"
+            def s(v): return f"'{esc(str(v))}'" if v is not None else 'NULL'
+            def n(v): return str(v) if v is not None else 'NULL'
+            vals.append(
+                f"({s(r['source'])},{s(r.get('external_id'))},{s(r.get('url'))},"
+                f"{s(r.get('title'))},{s(r['category'])},{s(r['deal_type'])},"
+                f"{n(r.get('price'))},{n(r.get('price_per_m2'))},{n(r.get('area'))},"
+                f"{s(r.get('address'))},{s(r.get('district'))},{n(r.get('floor'))},"
+                f"{n(r.get('total_floors'))},{s(r.get('phone'))},NOW())"
             )
-
-        if values_parts:
-            cur.execute(f"""
-                INSERT INTO {SCHEMA}.market_listings
-                  (source, external_id, url, title, category, deal_type, price, price_per_m2,
-                   area, address, district, floor, total_floors, phone, scraped_at)
-                VALUES {','.join(values_parts)}
-                ON CONFLICT DO NOTHING
-            """)
+        if vals:
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.market_listings "
+                f"(source,external_id,url,title,category,deal_type,price,price_per_m2,"
+                f"area,address,district,floor,total_floors,phone,scraped_at) "
+                f"VALUES {','.join(vals)} ON CONFLICT DO NOTHING"
+            )
             inserted += cur.rowcount
 
-        conn.commit()  # коммит после каждого батча — не теряем прогресс
+    # Батчевый UPDATE
+    for r in to_update:
+        eid = esc(r.get('external_id') or '')
+        src = esc(r.get('source') or '')
+        ps  = str(r['price'])       if r.get('price')       is not None else 'NULL'
+        pp  = str(r['price_per_m2'])if r.get('price_per_m2')is not None else 'NULL'
+        ar  = str(r['area'])        if r.get('area')         is not None else 'NULL'
+        cur.execute(
+            f"UPDATE {SCHEMA}.market_listings SET price={ps},price_per_m2={pp},"
+            f"area={ar},scraped_at=NOW() "
+            f"WHERE source='{src}' AND external_id='{eid}'"
+        )
+        if cur.rowcount:
+            updated += 1
+        else:
+            skipped += 1
 
-    return {'inserted': inserted, 'skipped': skipped, 'updated': updated}
+    conn.commit()
+    return inserted, updated, skipped
+
+
+# ── Фоновые триггеры ──────────────────────────────────────────────────────────
+
+def _trigger_aggregate():
+    import threading, sys as _sys
+    def _run():
+        try:
+            _pp = os.path.join(os.path.dirname(__file__), '..', 'price-predict')
+            if _pp not in _sys.path:
+                _sys.path.insert(0, _pp)
+            from market_snapshots import aggregate_market_listings as _aml
+            import psycopg2 as _pg2, psycopg2.extras as _ext
+            _c = _pg2.connect(os.environ['DATABASE_URL'], cursor_factory=_ext.RealDictCursor)
+            try:
+                r = _aml(_c.cursor(), _c)
+                print(f'[market-import] bg aggregate: {r}')
+            finally:
+                _c.close()
+        except Exception as e:
+            print(f'[market-import] bg aggregate error: {e}')
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def _trigger_vb_retrain(cur):
+    import threading
+    cur.execute(f"""
+        SELECT s.token FROM {SCHEMA}.sessions s
+        JOIN {SCHEMA}.users u ON u.id = s.user_id
+        WHERE u.role='admin' AND s.expires_at > NOW()
+        ORDER BY s.created_at DESC LIMIT 1
+    """)
+    row = cur.fetchone()
+    if not row:
+        return False, 'no admin session'
+    token = row['token']
+    retrain_url = os.environ.get('RETRAIN_URL', '')
+    if not retrain_url:
+        return False, 'RETRAIN_URL not set'
+    def _fire():
+        try:
+            payload = json.dumps({'sources': ['market_import']}).encode()
+            req = urllib.request.Request(retrain_url, data=payload,
+                headers={'Content-Type': 'application/json', 'X-Auth-Token': token},
+                method='POST')
+            with urllib.request.urlopen(req, timeout=60) as r:
+                r.read()
+        except Exception as e:
+            print(f'[market-import] retrain error: {e}')
+    threading.Thread(target=_fire, daemon=True).start()
+    return True, None
 
 
 # ── Handler ───────────────────────────────────────────────────────────────────
 
 def handler(event: dict, context) -> dict:
-    """Импорт рыночных данных из CSV или XLSX в market_listings."""
+    """Батчевый импорт рыночных данных из CSV или XLSX в market_listings."""
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
 
@@ -512,11 +451,11 @@ def handler(event: dict, context) -> dict:
             body = json.loads(event['body'])
         except Exception:
             pass
-    qs = event.get('queryStringParameters') or {}
+    qs     = event.get('queryStringParameters') or {}
     action = body.get('action') or qs.get('action') or 'import'
 
     conn = _get_conn()
-    cur = conn.cursor()
+    cur  = conn.cursor()
 
     try:
         # ── Статистика ────────────────────────────────────────────────────────
@@ -541,125 +480,99 @@ def handler(event: dict, context) -> dict:
             if not source:
                 return err(400, 'Укажите source')
             src_safe = source.replace("'", "''")
-            cur.execute(f"DELETE FROM {SCHEMA}.market_listings WHERE source = '{src_safe}'")
+            cur.execute(f"DELETE FROM {SCHEMA}.market_listings WHERE source='{src_safe}'")
             deleted = max(0, cur.rowcount)
             conn.commit()
             return ok({'deleted': deleted, 'source': source})
 
-        # ── Превью файла (быстро — только парсинг без вставки) ───────────────
-        if action == 'import_preview' or (action == 'import' and body.get('preview')):
+        # ── Предпросмотр — скачать+парсить первые 200 строк (~5 сек) ─────────
+        if action in ('import_preview', 'import') and body.get('preview'):
             file_url = body.get('file_url') or qs.get('file_url') or ''
             source   = body.get('source') or 'manual'
             if not file_url:
                 return err(400, 'Укажите file_url')
             req = urllib.request.Request(file_url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=45) as resp:
-                raw_bytes = resp.read()
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                raw = resp.read(5_000_000)  # читаем только первые 5 МБ для превью
             file_lower = file_url.lower().split('?')[0]
-            if file_lower.endswith('.xlsx') or file_lower.endswith('.xls'):
-                records, warnings = _parse_xlsx(raw_bytes, source)
-                fmt = 'xlsx'
+            is_xlsx = file_lower.endswith('.xlsx') or file_lower.endswith('.xls')
+            records = []
+            if is_xlsx:
+                import openpyxl
+                wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+                ws = wb.active
+                rows_iter = ws.iter_rows(values_only=True)
+                header_row = next(rows_iter, None)
+                if header_row:
+                    hidx = _build_xlsx_header_idx(header_row)
+                    for row in rows_iter:
+                        rec = _parse_xlsx_row(row, hidx, source)
+                        if rec:
+                            records.append(rec)
+                        if len(records) >= 200:
+                            break
+                wb.close()
             else:
-                records, warnings = _parse_csv(raw_bytes, source)
-                fmt = 'csv'
+                text = raw.decode('utf-8-sig', errors='replace')
+                reader = csv.DictReader(io.StringIO(text), delimiter=';')
+                for i, row in enumerate(reader, 1):
+                    rec, _ = _parse_csv_row(row, source, i)
+                    if rec:
+                        records.append(rec)
+                    if len(records) >= 200:
+                        break
             by_cat = {}; by_deal = {}
             for r in records:
-                by_cat[r['category']]   = by_cat.get(r['category'], 0) + 1
+                by_cat[r['category']] = by_cat.get(r['category'], 0) + 1
                 by_deal[r['deal_type']] = by_deal.get(r['deal_type'], 0) + 1
             prices = [r['price'] for r in records if r.get('price')]
             areas  = [float(r['area']) for r in records if r.get('area')]
             import statistics as _st
             return ok({
-                'preview': True, 'format': fmt,
+                'preview': True,
+                'format': 'xlsx' if is_xlsx else 'csv',
                 'total_parsed': len(records),
-                'warnings_count': len(warnings), 'warnings_sample': warnings[:20],
-                'by_category': by_cat, 'by_deal': by_deal,
+                'warnings_count': 0,
+                'warnings_sample': [],
+                'by_category': by_cat,
+                'by_deal': by_deal,
                 'price_median': round(_st.median(prices)) if prices else None,
                 'area_median': round(_st.median(areas)) if areas else None,
                 'sample': records[:10],
             })
 
-        # ── Старт батчевого импорта ──────────────────────────────────────────
+        # ── Старт импорта — только создаём job (~50 мс) ───────────────────────
         if action in ('import_start', 'import'):
-            BATCH = 2000
             file_url = body.get('file_url') or qs.get('file_url') or ''
             source   = body.get('source') or 'manual'
-            replace  = body.get('replace', False)
+            replace  = bool(body.get('replace', False))
             if not file_url:
                 return err(400, 'Укажите file_url')
 
-            # Скачиваем и парсим
-            req = urllib.request.Request(file_url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=45) as resp:
-                raw_bytes = resp.read()
-            file_lower = file_url.lower().split('?')[0]
-            if file_lower.endswith('.xlsx') or file_lower.endswith('.xls'):
-                records, warnings = _parse_xlsx(raw_bytes, source)
-                fmt = 'xlsx'
-            else:
-                records, warnings = _parse_csv(raw_bytes, source)
-                fmt = 'csv'
+            # Очищаем старые данные если нужно
+            if replace:
+                src_safe = source.replace("'", "''")
+                cur.execute(f"DELETE FROM {SCHEMA}.market_listings WHERE source='{src_safe}'")
+                conn.commit()
 
-            if not records:
-                return ok({'success': True, 'done': True, 'inserted': 0, 'total_parsed': 0,
-                           'warnings_count': len(warnings), 'warnings_sample': warnings[:10]})
-
-            # Создаём job
             cur.execute(
-                f"INSERT INTO {SCHEMA}.import_jobs (file_url, source, replace_existing, status, rows_total, checkpoint_row) "
-                f"VALUES (%s, %s, %s, 'running', %s, 0) RETURNING id",
-                (file_url, source, replace, len(records))
+                f"INSERT INTO {SCHEMA}.import_jobs "
+                f"(file_url, source, replace_existing, status, checkpoint_row) "
+                f"VALUES (%s, %s, %s, 'running', 0) RETURNING id",
+                (file_url, source, replace)
             )
             job_id = cur.fetchone()['id']
             conn.commit()
+            return ok({'job_id': job_id, 'status': 'running', 'done': False})
 
-            # Очищаем старые при первом батче
-            if replace:
-                src_safe = source.replace("'", "''")
-                cur.execute(f"DELETE FROM {SCHEMA}.market_listings WHERE source = '{src_safe}'")
-                conn.commit()
-
-            # Вставляем первый батч
-            batch = records[:BATCH]
-            result = _insert_records(cur, conn, batch)
-            new_checkpoint = min(BATCH, len(records))
-            done = new_checkpoint >= len(records)
-
-            cur.execute(
-                f"UPDATE {SCHEMA}.import_jobs SET checkpoint_row=%s, rows_done=%s, "
-                f"rows_inserted=%s, rows_updated=%s, status=%s WHERE id=%s",
-                (new_checkpoint, new_checkpoint, result['inserted'], result['updated'],
-                 'done' if done else 'running', job_id)
-            )
-            conn.commit()
-
-            if done:
-                if result['inserted'] > 0:
-                    _trigger_vb_retrain(cur)
-                    _trigger_aggregate()
-                return ok({'success': True, 'done': True, 'job_id': job_id,
-                           'format': fmt, 'total_parsed': len(records),
-                           'inserted': result['inserted'], 'updated': result['updated'],
-                           'skipped': result['skipped'], 'warnings_count': len(warnings),
-                           'warnings_sample': warnings[:10]})
-
-            return ok({'success': True, 'done': False, 'job_id': job_id,
-                       'format': fmt, 'total_parsed': len(records),
-                       'rows_done': new_checkpoint, 'rows_total': len(records),
-                       'inserted': result['inserted'], 'updated': result['updated'],
-                       'warnings_count': len(warnings)})
-
-        # ── Продолжение батчевого импорта ────────────────────────────────────
+        # ── Продолжение — скачать, пропустить до checkpoint, вставить BATCH строк
         if action == 'import_continue':
-            BATCH = 2000
             job_id = body.get('job_id')
             if not job_id:
                 return err(400, 'job_id required')
 
-            cur2 = conn.cursor()
-            cur2.execute(f"SELECT * FROM {SCHEMA}.import_jobs WHERE id = %s", (job_id,))
-            job = cur2.fetchone()
-            cur2.close()
+            cur.execute(f"SELECT * FROM {SCHEMA}.import_jobs WHERE id=%s", (job_id,))
+            job = cur.fetchone()
             if not job:
                 return err(404, 'job not found')
             if job['status'] != 'running':
@@ -670,127 +583,114 @@ def handler(event: dict, context) -> dict:
             checkpoint = job['checkpoint_row'] or 0
             rows_ins   = job['rows_inserted'] or 0
             rows_upd   = job['rows_updated'] or 0
+            rows_skip  = job['rows_skipped'] or 0
+            cat_counts = dict(job.get('category_breakdown') or {})
 
-            # Перечитываем файл и пропускаем до checkpoint
-            req = urllib.request.Request(file_url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=45) as resp:
-                raw_bytes = resp.read()
             file_lower = file_url.lower().split('?')[0]
-            if file_lower.endswith('.xlsx') or file_lower.endswith('.xls'):
-                records, _ = _parse_xlsx(raw_bytes, source)
+            is_xlsx = file_lower.endswith('.xlsx') or file_lower.endswith('.xls')
+
+            # Скачиваем файл (каждый раз — CDN отдаёт быстро из кеша)
+            req = urllib.request.Request(file_url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                raw = resp.read()
+
+            # Собираем записи: пропускаем до checkpoint, берём следующие BATCH
+            batch_records = []
+            total_rows = 0
+            warnings = []
+            reached_end = False
+
+            if is_xlsx:
+                import openpyxl
+                wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+                ws = wb.active
+                rows_iter = ws.iter_rows(values_only=True)
+                header_row = next(rows_iter, None)
+                if not header_row:
+                    wb.close()
+                    _job_upsert(conn, job_id, status='error', error_msg='Файл пустой')
+                    return err(400, 'Файл пустой')
+                hidx = _build_xlsx_header_idx(header_row)
+                seen = set()
+                for row in rows_iter:
+                    total_rows += 1
+                    if total_rows <= checkpoint:
+                        continue
+                    rec = _parse_xlsx_row(row, hidx, source)
+                    if rec:
+                        dk = f"{(rec.get('address') or '')}|{int(rec.get('area') or 0)}"
+                        if dk not in seen:
+                            seen.add(dk)
+                            batch_records.append(rec)
+                    if len(batch_records) >= BATCH:
+                        break
+                else:
+                    reached_end = True
+                if not reached_end and total_rows < checkpoint + BATCH:
+                    reached_end = True
+                wb.close()
             else:
-                records, _ = _parse_csv(raw_bytes, source)
+                text = raw.decode('utf-8-sig', errors='replace')
+                reader = csv.DictReader(io.StringIO(text), delimiter=';')
+                seen = set()
+                for i, row in enumerate(reader, 1):
+                    total_rows = i
+                    if i <= checkpoint:
+                        continue
+                    rec, warn = _parse_csv_row(row, source, i)
+                    if warn:
+                        warnings.append(warn)
+                    if rec:
+                        dk = f"{(rec.get('address') or '')}|{int(rec.get('area') or 0)}"
+                        if dk not in seen:
+                            seen.add(dk)
+                            batch_records.append(rec)
+                    if len(batch_records) >= BATCH:
+                        break
+                else:
+                    reached_end = True
 
-            batch = records[checkpoint:checkpoint + BATCH]
-            if not batch:
-                cur.execute(
-                    f"UPDATE {SCHEMA}.import_jobs SET status='done', rows_done=%s WHERE id=%s",
-                    (len(records), job_id)
-                )
-                conn.commit()
-                if rows_ins > 0:
-                    _trigger_aggregate()
-                return ok({'done': True, 'job_id': job_id, 'inserted': rows_ins, 'rows_total': len(records)})
+            # Вставляем батч
+            ins, upd, skp = _insert_batch(cur, conn, batch_records)
+            new_checkpoint = checkpoint + (total_rows - checkpoint)
+            new_ins  = rows_ins + ins
+            new_upd  = rows_upd + upd
+            new_skip = rows_skip + skp
 
-            result = _insert_records(cur, conn, batch)
-            new_checkpoint = checkpoint + len(batch)
-            new_ins = rows_ins + result['inserted']
-            new_upd = rows_upd + result['updated']
-            done = new_checkpoint >= len(records)
+            for r in batch_records:
+                cat = r.get('category', 'other')
+                cat_counts[cat] = cat_counts.get(cat, 0) + 1
 
-            cur.execute(
-                f"UPDATE {SCHEMA}.import_jobs SET checkpoint_row=%s, rows_done=%s, "
-                f"rows_inserted=%s, rows_updated=%s, status=%s WHERE id=%s",
-                (new_checkpoint, new_checkpoint, new_ins, new_upd,
-                 'done' if done else 'running', job_id)
-            )
-            conn.commit()
+            done = reached_end and len(batch_records) < BATCH
 
-            if done:
-                if new_ins > 0:
-                    _trigger_vb_retrain(cur)
-                    _trigger_aggregate()
+            _job_upsert(conn, job_id,
+                status='done' if done else 'running',
+                rows_done=new_checkpoint,
+                rows_inserted=new_ins,
+                rows_updated=new_upd,
+                rows_skipped=new_skip,
+                checkpoint_row=new_checkpoint,
+                category_breakdown=json.dumps(cat_counts, ensure_ascii=False))
 
-            return ok({'done': done, 'job_id': job_id,
-                       'rows_done': new_checkpoint, 'rows_total': len(records),
-                       'inserted': new_ins, 'updated': new_upd,
-                       'status': 'done' if done else 'running'})
+            if done and new_ins > 0:
+                _trigger_vb_retrain(cur)
+                _trigger_aggregate()
+
+            return ok({
+                'done': done,
+                'job_id': job_id,
+                'rows_done': new_checkpoint,
+                'rows_total': total_rows,
+                'rows_inserted': new_ins,
+                'rows_updated': new_upd,
+                'inserted': new_ins,
+                'updated': new_upd,
+                'status': 'done' if done else 'running',
+                'category_breakdown': cat_counts,
+            })
+
+        return err(400, f'Неизвестный action: {action}')
 
     finally:
         cur.close()
         conn.close()
-
-
-def _trigger_vb_retrain(cur) -> tuple[bool, str | None]:
-    """П.3: Запускает переобучение ВБ по источникам market_import и district_prices.
-    Вызывается асинхронно через HTTP — не блокирует ответ импортёра.
-    Берёт URL ai-retrain из func2url или переменной окружения.
-    """
-    import threading
-
-    # Получаем токен admin-сессии для авторизации retrain
-    cur.execute(f"""
-        SELECT s.token FROM {SCHEMA}.sessions s
-        JOIN {SCHEMA}.users u ON u.id = s.user_id
-        WHERE u.role = 'admin' AND s.expires_at > NOW()
-        ORDER BY s.created_at DESC LIMIT 1
-    """)
-    row = cur.fetchone()
-    if not row:
-        return False, 'Нет активной admin-сессии для запуска retrain'
-
-    token = row['token']
-    retrain_url = os.environ.get('RETRAIN_URL', '')
-    if not retrain_url:
-        # Пробуем из func2url (если задеплоено вместе)
-        return False, 'RETRAIN_URL не задан'
-
-    def _fire():
-        try:
-            payload = json.dumps({'sources': ['market_import', 'district_prices']}).encode()
-            req = urllib.request.Request(
-                retrain_url,
-                data=payload,
-                headers={
-                    'Content-Type': 'application/json',
-                    'X-Auth-Token': token,
-                },
-                method='POST',
-            )
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                resp.read()
-        except Exception as e:
-            print(f'[market-import] retrain fire error: {e}')
-
-    t = threading.Thread(target=_fire, daemon=True)
-    t.start()
-    return True, None
-
-
-def _trigger_aggregate():
-    """П.4: Агрегирует market_listings → price_market_snapshots в фоновом потоке.
-    Не блокирует ответ — запускает отдельное соединение с БД.
-    """
-    import threading
-    import sys as _sys
-
-    def _run():
-        try:
-            _pp_path = os.path.join(os.path.dirname(__file__), '..', 'price-predict')
-            if _pp_path not in _sys.path:
-                _sys.path.insert(0, _pp_path)
-            from market_snapshots import aggregate_market_listings as _aml
-            bg_conn = psycopg2.connect(os.environ['DATABASE_URL'],
-                                       cursor_factory=psycopg2.extras.RealDictCursor)
-            try:
-                bg_cur = bg_conn.cursor()
-                result = _aml(bg_cur, bg_conn)
-                bg_cur.close()
-                print(f'[market-import] bg aggregate done: {result}')
-            finally:
-                bg_conn.close()
-        except Exception as e:
-            print(f'[market-import] bg aggregate error: {e}')
-
-    t = threading.Thread(target=_run, daemon=True)
-    t.start()
