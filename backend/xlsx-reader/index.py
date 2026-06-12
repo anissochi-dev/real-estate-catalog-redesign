@@ -618,20 +618,25 @@ def _run_import_job(job_id: int):
                     rows_skipped=skipped,
                     category_breakdown=json.dumps(cat_counts, ensure_ascii=False))
 
-        # Агрегируем market_listings → price_market_snapshots (обновляем графики рынка)
+        # Агрегируем market_listings → price_market_snapshots в фоне (не блокируем таймаут)
         if inserted > 0:
-            try:
-                import sys as _sys
-                _pp_path = os.path.join(os.path.dirname(__file__), '..', 'price-predict')
-                if _pp_path not in _sys.path:
-                    _sys.path.insert(0, _pp_path)
-                from market_snapshots import aggregate_market_listings as _aml
-                cur_agg = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-                agg = _aml(cur_agg, conn)
-                cur_agg.close()
-                print(f'[xlsx-reader] aggregate done: {agg}')
-            except Exception as _e:
-                print(f'[xlsx-reader] aggregate error: {_e}')
+            import threading as _thr, sys as _sys
+            def _bg_agg():
+                try:
+                    _pp_path = os.path.join(os.path.dirname(__file__), '..', 'price-predict')
+                    if _pp_path not in _sys.path:
+                        _sys.path.insert(0, _pp_path)
+                    from market_snapshots import aggregate_market_listings as _aml
+                    import psycopg2 as _pg2, psycopg2.extras as _ext
+                    _c = _pg2.connect(os.environ['DATABASE_URL'], cursor_factory=_ext.RealDictCursor)
+                    try:
+                        _r = _aml(_c.cursor(), _c)
+                        print(f'[xlsx-reader] bg aggregate done: {_r}')
+                    finally:
+                        _c.close()
+                except Exception as _e:
+                    print(f'[xlsx-reader] bg aggregate error: {_e}')
+            _thr.Thread(target=_bg_agg, daemon=True).start()
 
     except Exception as e:
         try:
