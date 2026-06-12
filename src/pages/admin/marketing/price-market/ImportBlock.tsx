@@ -59,35 +59,6 @@ export default function ImportBlock() {
   const [showHistory, setShowHistory] = useState(false);
   const runningRef = useRef(false);
 
-  // Восстанавливаем активный job из localStorage при монтировании
-  useEffect(() => {
-    const savedId = localStorage.getItem(LS_KEY);
-    if (savedId) {
-      fetch(XLSX_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'import_market_status', job_id: parseInt(savedId) }),
-      }).then(r => r.json()).then(r => {
-        if (r.id) setJob(r);
-        // Если job был активен — продолжаем батчи
-        if (r.status === 'running') {
-          runBatchChain(r.id, r.rows_done || 0);
-        }
-      }).catch((_e) => { /* ignore */ });
-    }
-  }, [runBatchChain]);
-
-  const loadHistory = async () => {
-    try {
-      const r = await fetch(XLSX_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'import_market_list' }),
-      }).then(r => r.json());
-      if (Array.isArray(r)) setHistory(r);
-    } catch (_e) { /* ignore */ }
-  };
-
   // Цепочка батчей: вызываем import_market_continue пока done не true
   const runBatchChain = useCallback(async (jobId: number, startFrom = 0) => {
     if (runningRef.current) return;
@@ -138,6 +109,34 @@ export default function ImportBlock() {
     }
     runningRef.current = false;
   }, []);
+
+  // Восстанавливаем активный job из localStorage при монтировании
+  useEffect(() => {
+    const savedId = localStorage.getItem(LS_KEY);
+    if (savedId) {
+      fetch(XLSX_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'import_market_status', job_id: parseInt(savedId) }),
+      }).then(r => r.json()).then(r => {
+        if (r.id) setJob(r);
+        if (r.status === 'running') {
+          runBatchChain(r.id, r.rows_done || 0);
+        }
+      }).catch((_e) => { /* ignore */ });
+    }
+  }, [runBatchChain]);
+
+  const loadHistory = async () => {
+    try {
+      const r = await fetch(XLSX_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'import_market_list' }),
+      }).then(r => r.json());
+      if (Array.isArray(r)) setHistory(r);
+    } catch (_e) { /* ignore */ }
+  };
 
   const handleStart = async () => {
     if (!fileUrl.trim()) { toast.error('Вставьте ссылку на файл'); return; }
