@@ -151,10 +151,11 @@ def handler(event: dict, context) -> dict:
             # Список всех активных объектов с пометкой has_faq для управления FAQ
             cur.execute(f"""
                 SELECT id, title,
-                    (seo_faq IS NOT NULL AND seo_faq::text != '[]' AND seo_faq::text != 'null') AS has_faq
+                    (seo_faq IS NOT NULL AND seo_faq::text != '[]' AND seo_faq::text != 'null') AS has_faq,
+                    faq_updated_at
                 FROM {S}.listings
                 WHERE status = 'active'
-                ORDER BY id DESC
+                ORDER BY COALESCE(faq_updated_at, '1970-01-01') ASC, id DESC
             """)
             all_listings = [dict(r) for r in cur.fetchall()]
 

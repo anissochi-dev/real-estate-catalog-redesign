@@ -266,7 +266,7 @@ def handler(event: dict, context) -> dict:
                 try:
                     safe_faq = json.dumps(faq, ensure_ascii=False).replace("'", "''")
                     cur.execute(
-                        f"UPDATE {SCHEMA}.listings SET seo_faq = '{safe_faq}' WHERE id = {int(listing_id)}"
+                        f"UPDATE {SCHEMA}.listings SET seo_faq = '{safe_faq}', faq_updated_at = NOW() WHERE id = {int(listing_id)}"
                     )
                     conn.commit()
                 except Exception:
@@ -340,7 +340,7 @@ def _batch_generate(auth_token: str, event: dict) -> dict:
                     if faq:
                         safe_faq = json.dumps(faq, ensure_ascii=False).replace("'", "''")
                         cur.execute(
-                            f"UPDATE {SCHEMA}.listings SET seo_faq = '{safe_faq}' WHERE id = {int(listing['id'])}"
+                            f"UPDATE {SCHEMA}.listings SET seo_faq = '{safe_faq}', faq_updated_at = NOW() WHERE id = {int(listing['id'])}"
                         )
                         conn.commit()
                         processed += 1

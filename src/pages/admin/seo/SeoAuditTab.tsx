@@ -21,7 +21,7 @@ interface AuditData {
   stats: Record<string, number>;
   issues: { key: string; message: string; fill_pct: number; severity: string }[];
   top_problems: { id: number; title: string; category: string; no_seo_title: boolean; no_seo_desc: boolean; short_desc: boolean; no_image: boolean; no_faq: boolean }[];
-  all_listings: { id: number; title: string; has_faq: boolean }[];
+  all_listings: { id: number; title: string; has_faq: boolean; faq_updated_at?: string | null }[];
 }
 
 interface FixResult {
@@ -44,6 +44,7 @@ export default function SeoAuditTab() {
   const [fixedIds, setFixedIds] = useState<Set<number>>(new Set());
   const [fixingFaqId, setFixingFaqId] = useState<number | null>(null);
   const [fixedFaqIds, setFixedFaqIds] = useState<Set<number>>(new Set());
+  const [faqUpdatedAt, setFaqUpdatedAt] = useState<Record<number, string>>({});
   const [faqSearch, setFaqSearch] = useState('');
   const [faqFilter, setFaqFilter] = useState<'all' | 'has' | 'missing'>('all');
   const [regeneratingAll, setRegeneratingAll] = useState(false);
@@ -142,6 +143,7 @@ export default function SeoAuditTab() {
       const d = await r.json();
       if (!r.ok || d.error) { setFixErr(d.error || `Ошибка ${r.status}`); return; }
       setFixedFaqIds(prev => new Set(prev).add(id));
+      setFaqUpdatedAt(prev => ({ ...prev, [id]: new Date().toISOString() }));
     } catch (e) {
       setFixErr(e instanceof Error ? e.message : 'Ошибка соединения');
     } finally {
@@ -179,12 +181,21 @@ export default function SeoAuditTab() {
 
   const filteredFaqListings = useMemo(() => {
     if (!data?.all_listings) return [];
-    return data.all_listings.filter(l => {
-      const matchSearch = !faqSearch || l.title.toLowerCase().includes(faqSearch.toLowerCase()) || String(l.id).includes(faqSearch);
-      const matchFilter = faqFilter === 'all' || (faqFilter === 'has' ? (l.has_faq || fixedFaqIds.has(l.id)) : (!l.has_faq && !fixedFaqIds.has(l.id)));
-      return matchSearch && matchFilter;
-    });
-  }, [data?.all_listings, faqSearch, faqFilter, fixedFaqIds]);
+    return data.all_listings
+      .filter(l => {
+        const matchSearch = !faqSearch || l.title.toLowerCase().includes(faqSearch.toLowerCase()) || String(l.id).includes(faqSearch);
+        const matchFilter = faqFilter === 'all' || (faqFilter === 'has' ? (l.has_faq || fixedFaqIds.has(l.id)) : (!l.has_faq && !fixedFaqIds.has(l.id)));
+        return matchSearch && matchFilter;
+      })
+      .sort((a, b) => {
+        const aUpdated = faqUpdatedAt[a.id];
+        const bUpdated = faqUpdatedAt[b.id];
+        if (aUpdated && !bUpdated) return 1;
+        if (!aUpdated && bUpdated) return -1;
+        if (aUpdated && bUpdated) return aUpdated.localeCompare(bUpdated);
+        return 0;
+      });
+  }, [data?.all_listings, faqSearch, faqFilter, fixedFaqIds, faqUpdatedAt]);
 
   const scoreColor = !data ? '' : data.score >= 80 ? 'text-emerald-600' : data.score >= 50 ? 'text-amber-600' : 'text-red-600';
   const scoreBg   = !data ? '' : data.score >= 80 ? 'bg-emerald-50 border-emerald-200' : data.score >= 50 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200';
@@ -459,11 +470,22 @@ export default function SeoAuditTab() {
                 {filteredFaqListings.map(l => {
                   const hasFaq = l.has_faq || fixedFaqIds.has(l.id);
                   const isGenerating = fixingFaqId === l.id;
+                  const updatedNow = faqUpdatedAt[l.id];
+                  const updatedFrom = updatedNow ?? l.faq_updated_at;
+                  const updatedLabel = updatedFrom
+                    ? new Date(updatedFrom).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+                    : null;
                   return (
-                    <div key={l.id} className="flex items-center gap-3 px-3 py-2 rounded-xl border border-border hover:bg-muted/30 transition-colors">
+                    <div key={l.id} className={`flex items-center gap-3 px-3 py-2 rounded-xl border transition-colors ${updatedNow ? 'border-blue-200 bg-blue-50/40' : 'border-border hover:bg-muted/30'}`}>
                       <span className="text-[11px] font-mono text-muted-foreground w-10 shrink-0">#{l.id}</span>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm truncate">{l.title}</div>
+                        {updatedLabel && (
+                          <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
+                            <Icon name="Clock" size={9} />
+                            {updatedNow ? 'Обновлено' : 'Последнее обновление'}: {updatedLabel}
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {hasFaq
