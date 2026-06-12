@@ -549,8 +549,13 @@ def handle_stats(cur, params):
     cur.execute(f"SELECT name FROM {SCHEMA}.districts WHERE is_active = TRUE ORDER BY sort_order ASC, name ASC")
     available_districts = [r['name'] for r in cur.fetchall()]
 
+    cur.execute(f"SELECT market_listings_agg_last_at FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
+    agg_row = cur.fetchone()
+    agg_last_at = str(agg_row['market_listings_agg_last_at']) if agg_row and agg_row.get('market_listings_agg_last_at') else None
+
     return {
         'snapshots': rows, 'latest': latest, 'schedule': schedule,
         'available_combos': available_combos,
         'available_districts': available_districts,
+        'agg_last_at': agg_last_at,
     }

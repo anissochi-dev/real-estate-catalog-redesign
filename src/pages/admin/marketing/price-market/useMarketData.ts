@@ -19,6 +19,7 @@ export interface MarketDataState {
   refreshState: RefreshState;
   assigningDistricts: boolean;
   assignProgress: { processed: number; updated: number; remaining: number } | null;
+  aggregating: boolean;
   trendData: Record<string, string | number>[];
   compareData: Record<string, string | number>[];
   heatmapData: {
@@ -35,6 +36,7 @@ export interface MarketDataState {
   toggleCat: (cat: string) => void;
   runBatchChain: (force?: boolean) => Promise<void>;
   runAutoAssign: () => Promise<void>;
+  runAggregate: () => Promise<void>;
   load: () => Promise<void>;
 }
 
@@ -52,6 +54,7 @@ export function useMarketData(): MarketDataState {
 
   const [assigningDistricts, setAssigningDistricts] = useState(false);
   const [assignProgress, setAssignProgress] = useState<{ processed: number; updated: number; remaining: number } | null>(null);
+  const [aggregating, setAggregating] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -160,6 +163,25 @@ export function useMarketData(): MarketDataState {
         setRefreshState(prev => ({ ...prev, running: false }));
         return;
       }
+    }
+  }, [load]);
+
+  // ── Агрегация market_listings → price_market_snapshots ────────────────────
+  const runAggregate = useCallback(async () => {
+    setAggregating(true);
+    try {
+      const r = await fetch(PREDICT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'aggregate_market_listings' }),
+      }).then(r => r.json());
+      if (r.error) { toast.error(r.error); return; }
+      toast.success(`Агрегация завершена — обновлено ${r.saved} снапшотов`);
+      load();
+    } catch {
+      toast.error('Ошибка агрегации');
+    } finally {
+      setAggregating(false);
     }
   }, [load]);
 
@@ -285,6 +307,7 @@ export function useMarketData(): MarketDataState {
     refreshState,
     assigningDistricts,
     assignProgress,
+    aggregating,
     trendData,
     compareData,
     heatmapData,
@@ -297,6 +320,7 @@ export function useMarketData(): MarketDataState {
     toggleCat,
     runBatchChain,
     runAutoAssign,
+    runAggregate,
     load,
   };
 }

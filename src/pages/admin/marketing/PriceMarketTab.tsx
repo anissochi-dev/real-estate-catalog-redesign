@@ -16,6 +16,7 @@ export default function PriceMarketTab() {
     refreshState,
     assigningDistricts,
     assignProgress,
+    aggregating,
     trendData,
     compareData,
     heatmapData,
@@ -28,6 +29,7 @@ export default function PriceMarketTab() {
     toggleCat,
     runBatchChain,
     runAutoAssign,
+    runAggregate,
   } = useMarketData();
 
   return (
@@ -39,12 +41,14 @@ export default function PriceMarketTab() {
         refreshing={refreshState.running}
         assigningDistricts={assigningDistricts}
         assignProgress={assignProgress}
+        aggregating={aggregating}
         filterDeal={filterDeal}
         filterDistrict={filterDistrict}
         filterDays={filterDays}
         dynamicDistricts={dynamicDistricts}
         onRefresh={() => runBatchChain(true)}
         onAutoAssign={runAutoAssign}
+        onAggregate={runAggregate}
         onDealChange={setFilterDeal}
         onDistrictChange={setFilterDistrict}
         onDaysChange={setFilterDays}

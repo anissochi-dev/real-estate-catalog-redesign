@@ -28,6 +28,7 @@ export interface MarketStats {
   schedule: { enabled: boolean; last_at: string | null; schedule?: string; next_run?: string; in_progress?: boolean; next_source?: string | null };
   available_districts: string[];
   available_combos: { category: string; deal: string }[];
+  agg_last_at: string | null;
 }
 
 // ── Справочники ───────────────────────────────────────────────────────────────

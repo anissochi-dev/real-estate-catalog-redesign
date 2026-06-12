@@ -13,12 +13,14 @@ interface MarketHeaderProps {
   refreshing: boolean;
   assigningDistricts: boolean;
   assignProgress: AssignProgress | null;
+  aggregating: boolean;
   filterDeal: 'sale' | 'rent';
   filterDistrict: string;
   filterDays: number;
   dynamicDistricts: string[];
   onRefresh: (force?: boolean) => void;
   onAutoAssign: () => void;
+  onAggregate: () => void;
   onDealChange: (deal: 'sale' | 'rent') => void;
   onDistrictChange: (district: string) => void;
   onDaysChange: (days: number) => void;
@@ -27,11 +29,13 @@ interface MarketHeaderProps {
 export default function MarketHeader({
   data, loading, refreshing,
   assigningDistricts, assignProgress,
+  aggregating,
   filterDeal, filterDistrict, filterDays, dynamicDistricts,
-  onRefresh, onAutoAssign, onDealChange, onDistrictChange, onDaysChange,
+  onRefresh, onAutoAssign, onAggregate, onDealChange, onDistrictChange, onDaysChange,
 }: MarketHeaderProps) {
   const sched = data?.schedule;
   const lastDays = daysSince(sched?.last_at || null);
+  const aggDays = daysSince(data?.agg_last_at || null);
 
   return (
     <div className="bg-white rounded-2xl border border-border p-4">
@@ -44,7 +48,17 @@ export default function MarketHeader({
           <p className="text-xs text-muted-foreground mt-0.5">
             {sched?.schedule ?? '1-е число каждого месяца'}
             {sched?.next_run && <span> · следующий: {new Date(sched.next_run).toLocaleDateString('ru', { day: 'numeric', month: 'long' })}</span>}
-            {sched?.last_at && <span> · последнее: {lastDays === 0 ? 'сегодня' : `${lastDays}д назад`}</span>}
+            {sched?.last_at && <span> · парсинг: {lastDays === 0 ? 'сегодня' : `${lastDays}д назад`}</span>}
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+            <Icon name="Database" size={11} className="text-emerald-500" />
+            Агрегация из базы:&nbsp;
+            {aggDays === null
+              ? <span className="text-amber-600">не выполнялась</span>
+              : aggDays === 0
+                ? <span className="text-emerald-600">сегодня</span>
+                : <span>{aggDays}д назад</span>}
+            <span className="text-muted-foreground/60">· автоматически каждые 7 дней</span>
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -58,14 +72,23 @@ export default function MarketHeader({
           )}
           <button
             onClick={onAutoAssign}
-            disabled={assigningDistricts || refreshing}
+            disabled={assigningDistricts || refreshing || aggregating}
             title="Определить район по адресу для всех объявлений без района (AI)"
             className="flex items-center gap-1.5 text-xs bg-violet-600 text-white px-3 py-1.5 rounded-xl font-semibold disabled:opacity-60"
           >
             <Icon name={assigningDistricts ? 'Loader2' : 'MapPin'} size={13} className={assigningDistricts ? 'animate-spin' : ''} />
             {assigningDistricts ? 'Привязка районов…' : 'Привязать районы'}
           </button>
-          <button onClick={() => onRefresh(true)} disabled={refreshing || assigningDistricts}
+          <button
+            onClick={onAggregate}
+            disabled={aggregating || refreshing || assigningDistricts}
+            title="Пересчитать медианы из импортированных объявлений (market_listings)"
+            className="flex items-center gap-1.5 text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-xl font-semibold disabled:opacity-60"
+          >
+            <Icon name={aggregating ? 'Loader2' : 'Database'} size={13} className={aggregating ? 'animate-spin' : ''} />
+            {aggregating ? 'Агрегация…' : 'Пересчитать из базы'}
+          </button>
+          <button onClick={() => onRefresh(true)} disabled={refreshing || assigningDistricts || aggregating}
             className="flex items-center gap-1.5 text-xs bg-brand-blue text-white px-3 py-1.5 rounded-xl font-semibold disabled:opacity-60">
             <Icon name={refreshing ? 'Loader2' : 'RefreshCw'} size={13} className={refreshing ? 'animate-spin' : ''} />
             {refreshing ? 'Сбор данных…' : 'Обновить сейчас'}
