@@ -159,39 +159,162 @@ def _demand_index(comparables_count: int, category: str, deal: str) -> dict:
         return {'score': 2, 'label': 'Насыщенный рынок', 'color': 'red'}
 
 
+def _get_okrug_for_district(cur, district_name: str) -> str:
+    """Возвращает название административного округа для микрорайона через таблицу districts."""
+    if not district_name:
+        return ''
+    safe = district_name.replace("'", "''")
+    cur.execute(f"""
+        SELECT p.name
+        FROM {SCHEMA}.districts d
+        JOIN {SCHEMA}.districts p ON p.id = d.parent_id
+        WHERE d.is_active = TRUE AND p.is_okrug = TRUE
+          AND LOWER(d.name) = LOWER('{safe}')
+        LIMIT 1
+    """)
+    row = cur.fetchone()
+    if row:
+        return row['name']
+    # Fallback: если сам является округом
+    cur.execute(f"""
+        SELECT name FROM {SCHEMA}.districts
+        WHERE is_okrug = TRUE AND is_active = TRUE
+          AND LOWER(name) LIKE LOWER('%{safe}%')
+        LIMIT 1
+    """)
+    row = cur.fetchone()
+    return row['name'] if row else ''
+
+
+def _extract_street(address: str) -> str:
+    """Извлекает название улицы из адреса для поиска аналогов."""
+    if not address:
+        return ''
+    import re
+    # Убираем дом/корпус: "ул. Красная, 15к2" → "Красная"
+    addr = re.sub(r',?\s*\d+[а-яА-Яa-zA-Z]*\s*$', '', address).strip()
+    # Убираем префиксы ул./пр./бул./пер. и т.д.
+    addr = re.sub(r'^(ул\.?\s*|улица\s*|проспект\s*|пр\.?\s*|бул\.?\s*|пер\.?\s*|переулок\s*|шоссе\s*|ш\.?\s*)', '', addr, flags=re.IGNORECASE).strip()
+    return addr[:60] if len(addr) > 3 else ''
+
+
+def _fetch_analogs(cur, cat_safe, deal_safe, area_min, area_max, id_excl, where_extra='', limit=30):
+    """Вспомогательный запрос аналогов из listings."""
+    cur.execute(
+        f"SELECT id, price, area, price_per_m2, district, address, payback, profit, monthly_rent, yearly_rent, created_at "
+        f"FROM {SCHEMA}.listings "
+        f"WHERE category = '{cat_safe}' AND deal = '{deal_safe}' "
+        f"AND area BETWEEN {area_min} AND {area_max} "
+        f"AND status IN ('active', 'archived') "
+        f"AND price > 0 AND area > 0 "
+        f"{id_excl} {where_extra} "
+        f"ORDER BY CASE WHEN status='active' THEN 0 ELSE 1 END, "
+        f"ABS(area - {(area_min + area_max) / 2}) ASC LIMIT {limit}"
+    )
+    return cur.fetchall()
+
+
+def _fetch_market_analogs(cur, cat_safe, deal_safe, area_min, area_max, district_filter='', limit=30):
+    """Аналоги из market_listings (импортированные данные рынка)."""
+    dist_clause = f"AND LOWER(district) LIKE LOWER('%{district_filter.replace(chr(39), chr(39)*2)}%')" if district_filter else ''
+    cur.execute(
+        f"SELECT price, area, price_per_m2, district "
+        f"FROM {SCHEMA}.market_listings "
+        f"WHERE category = '{cat_safe}' AND deal_type = '{deal_safe}' "
+        f"AND area BETWEEN {area_min} AND {area_max} "
+        f"AND price > 0 AND area > 0 "
+        f"AND category NOT IN ('residential_skip', 'other') "
+        f"{dist_clause} "
+        f"ORDER BY ABS(area - {(area_min + area_max) / 2}) ASC LIMIT {limit}"
+    )
+    return cur.fetchall()
+
+
+def _rows_to_ppm2(rows):
+    result = []
+    for r in rows:
+        ppm2 = float(r.get('price_per_m2') or 0)
+        if ppm2 <= 0 and r.get('price') and r.get('area') and float(r['area']) > 0:
+            ppm2 = float(r['price']) / float(r['area'])
+        if ppm2 > 0:
+            result.append(ppm2)
+    return result
+
+
 def _predict(cur, category: str, deal: str, area: float, price: float,
              district: str = '', city: str = 'Краснодар', listing_id: int = 0,
-             condition: str = '') -> dict:
+             condition: str = '', address: str = '') -> dict:
 
     area = float(area or 0)
     price = float(price or 0)
     area_min = area * 0.4
     area_max = area * 2.5
 
-    cat_safe = category.replace("'", "''")
+    cat_safe  = category.replace("'", "''")
     deal_safe = deal.replace("'", "''")
-    city_safe = city.replace("'", "''")
+    id_excl   = f"AND id != {listing_id}" if listing_id else ''
 
-    # 1. Похожие объекты (та же категория + тип сделки + площадь в диапазоне)
-    cur.execute(
-        f"SELECT id, price, area, price_per_m2, district, payback, profit, monthly_rent, yearly_rent, created_at "
-        f"FROM {SCHEMA}.listings "
-        f"WHERE category = '{cat_safe}' AND deal = '{deal_safe}' "
-        f"AND area BETWEEN {area_min} AND {area_max} "
-        f"AND status = 'active' "
-        f"AND price > 0 AND area > 0 "
-        + (f"AND id != {listing_id} " if listing_id else "")
-    )
-    rows = cur.fetchall()
+    # ── Каскадный поиск аналогов ──────────────────────────────────────────────
+    # Приоритет: 1) микрорайон  2) улица  3) административный округ  4) весь город
+    # На каждом уровне проверяем listings + market_listings (рыночный импорт)
+    # Достаточно MIN_ANALOGS надёжных аналогов — останавливаемся
+    MIN_ANALOGS = 5
 
-    prices = [float(r['price']) for r in rows if r['price']]
-    areas = [float(r['area']) for r in rows if r['area']]
-    ppm2_list = []
-    for r in rows:
-        if r['price_per_m2'] and r['price_per_m2'] > 0:
-            ppm2_list.append(float(r['price_per_m2']))
-        elif r['price'] and r['area'] and r['area'] > 0:
-            ppm2_list.append(float(r['price']) / float(r['area']))
+    ppm2_list        = []
+    rows             = []
+    search_level     = 'город'   # для логирования источника данных
+
+    okrug = _get_okrug_for_district(cur, district) if district else ''
+    street = _extract_street(address) if address else ''
+
+    # ── Уровень 1: микрорайон ─────────────────────────────────────────────────
+    if district:
+        r = _fetch_analogs(cur, cat_safe, deal_safe, area_min, area_max, id_excl,
+                           f"AND LOWER(district) LIKE LOWER('%{district.replace(chr(39), chr(39)*2)}%')")
+        p = _rows_to_ppm2(r)
+        if len(p) >= MIN_ANALOGS:
+            rows, ppm2_list, search_level = r, p, f'микрорайон ({district})'
+        # Дополняем market_listings по тому же микрорайону
+        if len(ppm2_list) < MIN_ANALOGS:
+            mr = _fetch_market_analogs(cur, cat_safe, deal_safe, area_min, area_max, district)
+            mp = _rows_to_ppm2(mr)
+            combined = p + mp
+            if len(combined) >= MIN_ANALOGS:
+                rows, ppm2_list, search_level = list(r) + list(mr), combined, f'микрорайон ({district})'
+
+    # ── Уровень 2: улица (если нет района или мало аналогов) ─────────────────
+    if len(ppm2_list) < MIN_ANALOGS and street:
+        r = _fetch_analogs(cur, cat_safe, deal_safe, area_min, area_max, id_excl,
+                           f"AND LOWER(address) LIKE LOWER('%{street.replace(chr(39), chr(39)*2)}%')")
+        p = _rows_to_ppm2(r)
+        mr = _fetch_market_analogs(cur, cat_safe, deal_safe, area_min, area_max, street)
+        mp = _rows_to_ppm2(mr)
+        combined = p + mp
+        if len(combined) > len(ppm2_list):
+            rows, ppm2_list, search_level = list(r) + list(mr), combined, f'улица ({street})'
+
+    # ── Уровень 3: административный округ ────────────────────────────────────
+    if len(ppm2_list) < MIN_ANALOGS and okrug:
+        # Округ в market_listings хранится как "Западный", "Карасунский" и т.д.
+        okrug_short = okrug.replace(' округ', '').strip()
+        r = _fetch_analogs(cur, cat_safe, deal_safe, area_min, area_max, id_excl,
+                           f"AND LOWER(district) LIKE LOWER('%{okrug_short.replace(chr(39), chr(39)*2)}%')")
+        p = _rows_to_ppm2(r)
+        mr = _fetch_market_analogs(cur, cat_safe, deal_safe, area_min, area_max, okrug_short)
+        mp = _rows_to_ppm2(mr)
+        combined = p + mp
+        if len(combined) > len(ppm2_list):
+            rows, ppm2_list, search_level = list(r) + list(mr), combined, f'округ ({okrug})'
+
+    # ── Уровень 4: весь город ─────────────────────────────────────────────────
+    if len(ppm2_list) < MIN_ANALOGS:
+        r = _fetch_analogs(cur, cat_safe, deal_safe, area_min, area_max, id_excl, limit=50)
+        p = _rows_to_ppm2(r)
+        mr = _fetch_market_analogs(cur, cat_safe, deal_safe, area_min, area_max, limit=50)
+        mp = _rows_to_ppm2(mr)
+        combined = p + mp
+        if len(combined) > len(ppm2_list):
+            rows, ppm2_list, search_level = list(r) + list(mr), combined, 'город'
 
     comparables_count = len(rows)
 
@@ -202,9 +325,7 @@ def _predict(cur, category: str, deal: str, area: float, price: float,
         ppm2_p75 = _percentile(ppm2_list, 75)
     else:
         # Нет аналогов — используем нормативные ставки
-        yields = YIELD_RATES.get(category, YIELD_RATES['office'])
-        d_coeff = _district_coeff(district)
-        # Базовая цена за м² для Краснодара (приблизительные нормативы 2024)
+        d_coeff = _district_coeff(district or okrug)
         BASE_PPM2 = {
             'office': 80_000, 'retail': 100_000, 'warehouse': 45_000,
             'restaurant': 90_000, 'business': 120_000, 'production': 40_000,
@@ -215,12 +336,11 @@ def _predict(cur, category: str, deal: str, area: float, price: float,
         market_ppm2 = base
         ppm2_p25 = base * 0.75
         ppm2_p75 = base * 1.30
+        search_level = 'нормативы'
 
-    # Поправка на район и состояние
-    d_coeff = _district_coeff(district)
+    # Поправка на состояние (район уже учтён через каскад)
     c_coeff = _condition_coeff(condition)
-    # Если аналогов мало — корректируем по району; если много — район уже зашит в данные.
-    # Состояние учитываем всегда (различает квартиры с ремонтом и без)
+    d_coeff = _district_coeff(district or okrug)
     if comparables_count < 3:
         market_ppm2_adj = market_ppm2 * d_coeff * c_coeff
         ppm2_p25 = ppm2_p25 * d_coeff * c_coeff
@@ -311,15 +431,19 @@ def _predict(cur, category: str, deal: str, area: float, price: float,
     # 7. Индекс спроса
     demand = _demand_index(comparables_count, category, deal)
 
-    # 8. Похожие объекты (топ-3 для показа)
+    # 8. Похожие объекты (топ-3 для показа, только из listings с id)
     similar = []
-    for r in sorted(rows, key=lambda x: abs(float(x['area'] or 0) - area))[:3]:
+    for r in sorted(rows, key=lambda x: abs(float(x.get('area') or 0) - area))[:5]:
+        if not r.get('id'):
+            continue
         similar.append({
             'id': r['id'],
             'price': float(r['price']),
             'area': float(r['area']),
             'district': r.get('district') or '',
         })
+        if len(similar) >= 3:
+            break
 
     # 9. Текстовое предложение по цене (учитывает категорию, сделку, состояние, площадь)
     cat_labels = {
@@ -378,6 +502,8 @@ def _predict(cur, category: str, deal: str, area: float, price: float,
         'comparables_count': comparables_count,
         'similar': similar,
         'data_source': 'db_comparables' if comparables_count >= 3 else 'market_norms',
+        'search_level': search_level,
+        'okrug': okrug,
     }
 
 
@@ -633,7 +759,7 @@ def handler(event: dict, context) -> dict:
                     ids_list = [int(x) for x in raw_ids[:20]]  # лимит 20
                     ids_sql = ','.join(str(i) for i in ids_list)
                     cur.execute(
-                        f"SELECT id, category, deal, area, price, district, city, payback, profit, monthly_rent, condition "
+                        f"SELECT id, category, deal, area, price, district, city, address, payback, profit, monthly_rent, condition "
                         f"FROM {SCHEMA}.listings WHERE id IN ({ids_sql}) AND status = 'active'"
                     )
                     rows_batch = cur.fetchall()
@@ -650,6 +776,7 @@ def handler(event: dict, context) -> dict:
                             city=row.get('city') or 'Краснодар',
                             listing_id=rid,
                             condition=row.get('condition') or '',
+                            address=row.get('address') or '',
                         )
                     return _ok(batch_result)
 
@@ -659,7 +786,7 @@ def handler(event: dict, context) -> dict:
                     return _err(400, 'Не передан id объекта')
                 listing_id = int(listing_id_str)
                 cur.execute(
-                    f"SELECT id, category, deal, area, price, district, city, payback, profit, monthly_rent, condition "
+                    f"SELECT id, category, deal, area, price, district, city, address, payback, profit, monthly_rent, condition "
                     f"FROM {SCHEMA}.listings WHERE id = {listing_id} AND status = 'active'"
                 )
                 row = cur.fetchone()
@@ -675,6 +802,7 @@ def handler(event: dict, context) -> dict:
                     city=row.get('city') or 'Краснодар',
                     listing_id=listing_id,
                     condition=row.get('condition') or '',
+                    address=row.get('address') or '',
                 )
                 return _ok(result)
 
@@ -687,10 +815,11 @@ def handler(event: dict, context) -> dict:
                 district = str(body.get('district') or '')
                 city = str(body.get('city') or 'Краснодар')
                 condition = str(body.get('condition') or '')
+                address = str(body.get('address') or '')
                 if area <= 0:
                     return _err(400, 'Не передана площадь объекта')
                 result = _predict(cur, category, deal, area, price, district, city,
-                                  condition=condition)
+                                  condition=condition, address=address)
                 return _ok(result)
 
             return _err(405, 'Method not allowed')

@@ -160,28 +160,57 @@ def _db_analogs(cur, listing: dict) -> list:
     safe_district = district.replace("'", "''")
     safe_condition = condition.replace("'", "''")
 
-    strategies = [
-        # (area_mult, use_district, use_condition, label)
-        (0.30, True,  True,  '±30% район+состояние'),
-        (0.40, True,  False, '±40% район'),
-        (0.50, False, False, '±50% все районы'),
-        (0.80, False, False, '±80% широко'),
+    # Определяем округ микрорайона через таблицу districts
+    okrug = ''
+    if safe_district:
+        try:
+            cur.execute(f"""
+                SELECT p.name FROM {SCHEMA}.districts d
+                JOIN {SCHEMA}.districts p ON p.id = d.parent_id
+                WHERE d.is_active = TRUE AND p.is_okrug = TRUE
+                  AND LOWER(d.name) = LOWER('{safe_district}')
+                LIMIT 1
+            """)
+            row_okrug = cur.fetchone()
+            if row_okrug:
+                okrug = row_okrug['name'].replace(' округ', '').strip()
+        except Exception:
+            pass
+
+    # Извлекаем улицу из адреса
+    street = ''
+    addr_raw = (listing.get('address') or '').strip()
+    if addr_raw:
+        import re as _re
+        s = _re.sub(r',?\s*\d+[а-яА-Яa-zA-Z/\-]*\s*$', '', addr_raw).strip()
+        s = _re.sub(r'^(ул\.?\s*|улица\s*|проспект\s*|пр\.?\s*|бул\.?\s*|пер\.?\s*|переулок\s*|шоссе\s*|ш\.?\s*)', '', s, flags=_re.IGNORECASE).strip()
+        if len(s) > 3:
+            street = s[:60].replace("'", "''")
+
+    # Каскадные стратегии: район → улица → округ → весь город
+    # (area_mult, where_extra, label)
+    strategies_cascade = [
+        (0.40, f"AND LOWER(district) LIKE '%{safe_district}%'" if safe_district else None,
+               f'микрорайон ({district})' if district else None),
+        (0.50, f"AND LOWER(address) LIKE '%{street}%'" if street else None,
+               f'улица ({street})' if street else None),
+        (0.60, f"AND LOWER(district) LIKE '%{okrug.lower()}%'" if okrug else None,
+               f'округ ({okrug})' if okrug else None),
+        (0.80, '', 'город'),
     ]
 
     all_rows = []
     seen_ids = set()
+    search_level = 'город'
 
-    for area_mult, use_district, use_condition, label in strategies:
+    for area_mult, where_extra, label in strategies_cascade:
+        if where_extra is None or label is None:
+            continue
+
         area_min = max(1, area * (1 - area_mult))
         area_max = area * (1 + area_mult)
 
-        district_clause = ''
-        if use_district and safe_district:
-            district_clause = f"AND LOWER(district) LIKE '%{safe_district}%'"
-
-        condition_clause = ''
-        if use_condition and safe_condition:
-            condition_clause = f"AND condition = '{safe_condition}'"
+        condition_clause = f"AND condition = '{safe_condition}'" if safe_condition and area_mult <= 0.40 else ''
 
         cur.execute(
             f"SELECT id, price, area, price_per_m2, district, condition, status "
@@ -190,7 +219,7 @@ def _db_analogs(cur, listing: dict) -> list:
             f"AND area BETWEEN {area_min} AND {area_max} "
             f"AND price > 0 AND area > 0 "
             f"AND status IN ('active', 'archived') "
-            f"{district_clause} {condition_clause} {id_clause} {self_exclude} "
+            f"{where_extra} {condition_clause} {id_clause} {self_exclude} "
             f"ORDER BY CASE WHEN status='active' THEN 0 ELSE 1 END, "
             f"ABS(area - {area}) ASC, updated_at DESC "
             f"LIMIT 20"
@@ -218,13 +247,18 @@ def _db_analogs(cur, listing: dict) -> list:
                 })
                 new += 1
         print(f'[mela_price] DB strategy "{label}": +{new} (total={len(all_rows)})')
+        if new > 0 and search_level == 'город':
+            search_level = label
         # Останавливаемся когда набрали ≥5 уникальных аналогов
         if len(all_rows) >= 5:
             break
 
     # Дедупликация по совпадению цены+площади (одно объявление в разных статусах)
     deduped = _dedupe_analogs(all_rows)
-    print(f'[mela_price] DB: {len(all_rows)} raw → {len(deduped)} deduped')
+    print(f'[mela_price] DB: {len(all_rows)} raw → {len(deduped)} deduped, level={search_level}')
+    # Прокидываем search_level через метаданные первого аналога
+    if deduped:
+        deduped[0]['_search_level'] = search_level
     return deduped[:12]
 
 
@@ -1050,13 +1084,16 @@ def handle_mela_price_check(cur, conn, body: dict, qs: dict) -> dict:
     sources_used = []
     used_fallback = False
 
+    search_level = ''
+
     # 1) Аналоги из собственной базы данных системы
     try:
         db_analogs = _db_analogs(cur, listing)
         if db_analogs:
             analogs.extend(db_analogs)
             sources_used.append('база системы')
-        print(f'[mela_price] DB analogs: {len(db_analogs)}')
+            search_level = db_analogs[0].pop('_search_level', '') if db_analogs else ''
+        print(f'[mela_price] DB analogs: {len(db_analogs)}, level={search_level}')
     except Exception as e:
         print(f'[mela_price] DB analogs error: {e}')
 
@@ -1125,6 +1162,7 @@ def handle_mela_price_check(cur, conn, body: dict, qs: dict) -> dict:
         'used_gpt_fallback': used_fallback,
         'cached_until': (datetime.now() + timedelta(days=ttl)).isoformat(),
         'cache_ttl_days': ttl,
+        'search_level': search_level,
     }
     _save_cache(cur, conn, key, result, category=category)
 

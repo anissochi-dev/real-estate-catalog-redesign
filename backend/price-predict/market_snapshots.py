@@ -422,9 +422,38 @@ def aggregate_market_listings(cur, conn, today=None):
     if today is None:
         today = str(datetime.date.today())
 
-    # Получаем активные районы для нормализации
-    cur.execute(f"SELECT name FROM {SCHEMA}.districts WHERE is_active = TRUE")
-    active_districts = {r['name'].lower(): r['name'] for r in cur.fetchall()}
+    # Строим маппинг для нормализации районов из market_listings:
+    # 1) микрорайон → название административного округа (через parent_id)
+    # 2) частичное совпадение с округом (Западный → Западный округ)
+    cur.execute(f"""
+        SELECT d.name as micro, p.name as okrug
+        FROM {SCHEMA}.districts d
+        JOIN {SCHEMA}.districts p ON p.id = d.parent_id
+        WHERE d.is_active = TRUE AND p.is_okrug = TRUE
+    """)
+    micro_to_okrug = {r['micro'].lower(): r['okrug'] for r in cur.fetchall()}
+
+    cur.execute(f"SELECT name FROM {SCHEMA}.districts WHERE is_active = TRUE AND is_okrug = TRUE")
+    okrug_names = [r['name'] for r in cur.fetchall()]
+    # «Западный» → «Западный округ»
+    okrug_short_map = {o.replace(' округ', '').lower(): o for o in okrug_names}
+    okrug_short_map.update({o.lower(): o for o in okrug_names})
+
+    def _norm_district(raw: str) -> str:
+        if not raw:
+            return ''
+        lo = raw.lower().strip()
+        # Точное совпадение с округом
+        if lo in okrug_short_map:
+            return okrug_short_map[lo]
+        # Микрорайон → округ
+        if lo in micro_to_okrug:
+            return micro_to_okrug[lo]
+        # Частичное совпадение с округом
+        for short, full in okrug_short_map.items():
+            if short in lo or lo in short:
+                return full
+        return raw  # оставляем как есть
 
     # Загружаем все актуальные записи из market_listings (не старше 1 года)
     cur.execute(f"""
@@ -457,8 +486,8 @@ def aggregate_market_listings(cur, conn, today=None):
         deal_raw = (r.get('deal_type') or 'sale').lower().strip()
         deal = DEAL_NORM.get(deal_raw, 'sale')
         dist_raw = (r.get('district') or '').strip()
-        # Нормализуем район
-        dist = active_districts.get(dist_raw.lower(), dist_raw)
+        # Нормализуем: микрорайон или сырое название → административный округ
+        dist = _norm_district(dist_raw)
 
         p  = float(r.get('price') or 0)
         a  = float(r.get('area') or 0)

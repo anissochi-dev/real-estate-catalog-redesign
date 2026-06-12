@@ -31,6 +31,7 @@ interface MelaResult {
   analogs: Analog[];
   sources: string[];
   used_gpt_fallback: boolean;
+  search_level?: string;
 }
 
 const COLOR_BADGE: Record<string, string> = {
@@ -217,16 +218,19 @@ export default function MelaPriceCheck({ editing, onApplySuggested }: Props) {
             </button>
           )}
 
-          {/* Источники */}
-          {result.sources.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-muted-foreground">Источники:</span>
-              {result.sources.map(s => (
-                <span key={s} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">{s}</span>
-              ))}
-              <span className="text-muted-foreground ml-auto">{result.analogs_count} аналогов</span>
-            </div>
-          )}
+          {/* Уровень поиска + источники */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {result.search_level && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100 flex items-center gap-1">
+                <Icon name="MapPin" size={9} />
+                {result.search_level}
+              </span>
+            )}
+            {result.sources.map(s => (
+              <span key={s} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">{s}</span>
+            ))}
+            <span className="text-muted-foreground ml-auto">{result.analogs_count} аналогов</span>
+          </div>
 
           {/* Аналоги */}
           {result.analogs.length > 0 && (
