@@ -251,7 +251,7 @@ export function useMarketData(): MarketDataState {
     return dynamicDistricts.map(district => {
       const row: Record<string, string | number> = { district };
       selectedCats.forEach(cat => {
-        const entry = data.latest.find(l => l.category === cat && l.deal === filterDeal && l.district === district);
+        const entry = data.latest.find(l => l.category === cat && l.deal === filterDeal && l.district === district && (l.analogs_count ?? 0) >= 5);
         if (entry?.price_per_m2_median) row[cat] = entry.price_per_m2_median;
       });
       return row;
@@ -262,13 +262,13 @@ export function useMarketData(): MarketDataState {
 
   const heatmapData = (() => {
     if (!data?.latest.length) return { cats: [] as string[], districts: [] as string[], matrix: {} as Record<string,Record<string,number|null>> };
-    const cats = Object.keys(CAT_LABELS).filter(c => data.latest.some(l => l.category === c && l.deal === filterDeal));
+    const cats = Object.keys(CAT_LABELS).filter(c => data.latest.some(l => l.category === c && l.deal === filterDeal && (l.analogs_count ?? 0) >= 5));
     const districtList = ['', ...dynamicDistricts];
     const matrix: Record<string, Record<string, number | null>> = {};
     cats.forEach(cat => {
       matrix[cat] = {};
       districtList.forEach(d => {
-        const e = data.latest.find(l => l.category === cat && l.deal === filterDeal && l.district === d);
+        const e = data.latest.find(l => l.category === cat && l.deal === filterDeal && l.district === d && (l.analogs_count ?? 0) >= 5);
         matrix[cat][d || 'Все районы'] = e?.price_per_m2_median || null;
       });
     });
@@ -288,7 +288,8 @@ export function useMarketData(): MarketDataState {
           s.district === filterDistrict &&
           s.price_per_m2_median != null &&
           s.price_per_m2_median > 0 &&
-          s.snapshot_date
+          s.snapshot_date &&
+          (s.analogs_count ?? 0) >= 5
         )
         .sort((a, b) => (a.snapshot_date || '').localeCompare(b.snapshot_date || ''));
       if (snaps.length < 2) return;

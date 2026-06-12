@@ -37,6 +37,8 @@ export const CAT_LABELS: Record<string, string> = {
   office: 'Офис', retail: 'Торговое', warehouse: 'Склад',
   building: 'Здание', free_purpose: 'Своб. назн.', production: 'Производство',
   business: 'Готовый бизнес', hotel: 'Гостиница', land: 'Земля',
+  car_service: 'Автосервис', restaurant: 'Общепит', catering: 'Общепит',
+  gab: 'ГАБ', industrial: 'Промышленное', standalone: 'Отд. здание',
 };
 
 export const DEAL_LABELS: Record<string, string> = { sale: 'Продажа', rent: 'Аренда' };

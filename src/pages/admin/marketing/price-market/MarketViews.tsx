@@ -217,7 +217,7 @@ export function IndexView({ heatIndexData, data, filterDeal, filterDistrict }: I
           <h4 className="font-semibold text-sm mb-3">Актуальные медианы ₽/м²</h4>
           <div className="grid gap-1.5">
             {data.latest
-              .filter(l => l.deal === filterDeal && l.district === filterDistrict)
+              .filter(l => l.deal === filterDeal && l.district === filterDistrict && (l.analogs_count ?? 0) >= 5)
               .sort((a,b) => (b.price_per_m2_median||0) - (a.price_per_m2_median||0))
               .map((l, i) => (
                 <div key={i} className="flex items-center gap-3 py-1.5 border-b border-border/30 last:border-0 text-sm">

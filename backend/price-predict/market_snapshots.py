@@ -223,22 +223,80 @@ def _batch_site(scraper_fn, site_name):
 
 
 def _merge_site_analogs(pool, site_analogs):
-    """Добавляем аналоги сайта ко всем ключам пула (обогащаем каждую комбинацию)."""
+    """Добавляем аналоги сайта только к совпадающим ключам пула по category+deal.
+    Аналог с сайта добавляется к ключу только если category и deal совпадают
+    (или аналог не имеет категории — тогда к ключам с той же deal).
+    """
     if not site_analogs:
         return pool
+
+    # Группируем аналоги сайта по (category, deal)
+    by_cat_deal: dict = {}
+    for a in site_analogs:
+        cat  = (a.get('category') or '').lower().strip()
+        deal = (a.get('deal') or '').lower().strip()
+        for k in [(cat, deal), ('', deal), (cat, ''), ('', '')]:
+            by_cat_deal.setdefault(k, []).append(a)
+
     for key in list(pool.keys()):
-        pool[key] = pool[key] + site_analogs
+        parts = key.split('|', 2)
+        if len(parts) != 3:
+            continue
+        p_cat, p_deal, _ = parts
+        # Берём только аналоги с совпадающей категорией+deal
+        matched = by_cat_deal.get((p_cat.lower(), p_deal.lower()), [])
+        if matched:
+            pool[key] = pool[key] + matched
     return pool
 
 
+# Санитарные диапазоны ₽/м² для финализации (те же что в aggregate_market_listings)
+_PPM2_RANGES = {
+    ('office',       'sale'): (30_000,  500_000),
+    ('office',       'rent'): (300,      10_000),
+    ('retail',       'sale'): (30_000,  600_000),
+    ('retail',       'rent'): (300,      15_000),
+    ('warehouse',    'sale'): (10_000,  300_000),
+    ('warehouse',    'rent'): (100,       5_000),
+    ('building',     'sale'): (20_000,  500_000),
+    ('building',     'rent'): (200,      10_000),
+    ('free_purpose', 'sale'): (20_000,  500_000),
+    ('free_purpose', 'rent'): (200,      10_000),
+    ('production',   'sale'): (5_000,   200_000),
+    ('production',   'rent'): (50,        3_000),
+    ('car_service',  'sale'): (20_000,  300_000),
+    ('car_service',  'rent'): (200,       8_000),
+    ('restaurant',   'sale'): (30_000,  500_000),
+    ('restaurant',   'rent'): (300,      15_000),
+    ('catering',     'sale'): (30_000,  500_000),
+    ('catering',     'rent'): (300,      15_000),
+    ('hotel',        'sale'): (20_000,  500_000),
+    ('hotel',        'rent'): (200,      10_000),
+    ('gab',          'sale'): (30_000,  600_000),
+    ('land',         'sale'): (1_000,   150_000),
+    ('business',     'sale'): (5_000,   500_000),
+    ('industrial',   'sale'): (5_000,   200_000),
+    ('standalone',   'sale'): (20_000,  500_000),
+}
+
+
 def _batch_finalize(cur, conn, pool, today):
-    """Батч 5: сохраняем снапшоты из накопленного пула."""
+    """Батч 5: сохраняем снапшоты из накопленного пула с санитарной фильтрацией."""
     saved = 0
     for key, analogs in pool.items():
         parts = key.split('|', 2)
         if len(parts) != 3:
             continue
         category, deal, district = parts
+
+        # Санитарный фильтр ₽/м² — убираем нереалистичные значения
+        ppm2_range = _PPM2_RANGES.get((category, deal))
+        if ppm2_range:
+            analogs = [
+                a for a in analogs
+                if ppm2_range[0] <= (a.get('price_per_m2') or 0) <= ppm2_range[1]
+            ]
+
         snap = _calc_snapshot(analogs)
         if snap and snap['price_per_m2_median'] > 0:
             _save_snapshot(cur, today, category, deal, district, snap)
@@ -417,8 +475,40 @@ def aggregate_market_listings(cur, conn, today=None):
         if p <= 0 or a <= 0 or ppm2 <= 0:
             continue
 
-        # Для земли дополнительный санитарный фильтр — убираем явные выбросы
-        # (реальный диапазон ₽/м² для земли в Краснодаре: 1 000 – 150 000 ₽/м²)
+        # Санитарный фильтр ₽/м² по категории + тип сделки
+        # Убираем нереалистичные значения (гаражи в car_service, нежильё с ценами квартир и т.д.)
+        PPM2_RANGES = {
+            # (min, max) ₽/м²
+            ('office',       'sale'): (30_000,  500_000),
+            ('office',       'rent'): (300,      10_000),
+            ('retail',       'sale'): (30_000,  600_000),
+            ('retail',       'rent'): (300,      15_000),
+            ('warehouse',    'sale'): (10_000,  300_000),
+            ('warehouse',    'rent'): (100,       5_000),
+            ('building',     'sale'): (20_000,  500_000),
+            ('building',     'rent'): (200,      10_000),
+            ('free_purpose', 'sale'): (20_000,  500_000),
+            ('free_purpose', 'rent'): (200,      10_000),
+            ('production',   'sale'): (5_000,   200_000),
+            ('production',   'rent'): (50,        3_000),
+            ('car_service',  'sale'): (20_000,  300_000),
+            ('car_service',  'rent'): (200,       8_000),
+            ('restaurant',   'sale'): (30_000,  500_000),
+            ('restaurant',   'rent'): (300,      15_000),
+            ('catering',     'sale'): (30_000,  500_000),
+            ('catering',     'rent'): (300,      15_000),
+            ('hotel',        'sale'): (20_000,  500_000),
+            ('hotel',        'rent'): (200,      10_000),
+            ('gab',          'sale'): (30_000,  600_000),
+            ('land',         'sale'): (1_000,   150_000),
+            ('business',     'sale'): (5_000,   500_000),
+            ('industrial',   'sale'): (5_000,   200_000),
+            ('standalone',   'sale'): (20_000,  500_000),
+        }
+        ppm2_range = PPM2_RANGES.get((cat, deal))
+        if ppm2_range and not (ppm2_range[0] <= ppm2 <= ppm2_range[1]):
+            continue
+        # Для земли дополнительный санитарный фильтр (уже покрыт выше, но оставим для совместимости)
         if cat == 'land' and not (1_000 <= ppm2 <= 150_000):
             continue
 
