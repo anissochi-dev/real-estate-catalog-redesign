@@ -41,7 +41,7 @@ PLATFORM_LABELS = {
 }
 
 # Платформы с прямым API-публикацией
-API_PLATFORMS = {'vk', 'telegram'}
+API_PLATFORMS = {'vk', 'telegram', 'pinterest'}
 
 
 def _ok(body, status=200):
@@ -249,6 +249,52 @@ def _post_telegram(token_info: dict, text: str, image_url: str = '') -> dict:
             return {'error': f"TG: {result.get('description', 'Ошибка')}"}
         post_id = str((result.get('result') or {}).get('message_id', ''))
         return {'ok': True, 'post_id': post_id}
+    except Exception as e:
+        return {'error': str(e)[:200]}
+
+
+def _post_pinterest(token_info: dict, text: str, image_url: str = '', link_url: str = '') -> dict:
+    """Публикует пин в Pinterest через API v5."""
+    access_token = (token_info.get('access_token') or '').strip()
+    board_id = (token_info.get('token_extra') or '').strip()
+    if not access_token:
+        return {'error': 'Не указан токен Pinterest'}
+    if not board_id:
+        return {'error': 'Не указан ID доски Pinterest (Board ID)'}
+
+    # Pinterest API v5 — создание пина
+    pin_data = {
+        'board_id': board_id,
+        'title': text[:100],
+        'description': text[:500],
+        'link': link_url or '',
+    }
+    if image_url:
+        pin_data['media_source'] = {'source_type': 'image_url', 'url': image_url}
+    else:
+        # Pinterest требует медиа — если нет изображения публикация невозможна
+        return {'error': 'Pinterest требует изображение для публикации пина'}
+
+    payload = json.dumps(pin_data, ensure_ascii=False).encode()
+    req = urllib.request.Request(
+        'https://api.pinterest.com/v5/pins',
+        data=payload,
+        headers={
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json',
+        },
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            data = json.loads(r.read().decode())
+        pin_id = data.get('id', '')
+        if not pin_id:
+            return {'error': f'Pinterest API: {json.dumps(data)[:200]}'}
+        return {'ok': True, 'post_id': pin_id, 'url': f'https://pinterest.com/pin/{pin_id}/'}
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()[:300]
+        return {'error': f'Pinterest HTTP {e.code}: {body}'}
     except Exception as e:
         return {'error': str(e)[:200]}
 
@@ -469,6 +515,9 @@ def handler(event: dict, context) -> dict:
                         result = _post_vk(ps, text, image_url)
                     elif platform == 'telegram':
                         result = _post_telegram(ps, text, image_url)
+                    elif platform == 'pinterest':
+                        link_url = f"{site_url}/object/{entity.get('slug', '')}" if entity_type == 'listing' and entity.get('slug') else site_url
+                        result = _post_pinterest(ps, text, image_url, link_url)
                     else:
                         result = _prepare_manual_post(platform, text, image_url)
 

@@ -21,6 +21,56 @@ CORS_HEADERS = {
 
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
+_CRM_CHECKS_URL = 'https://functions.poehali.dev/be6cb907-b50e-48fa-b9e2-092dd541a82a'
+
+
+def _auto_check_owner(owner_id: int, deal_id: int, user_token: str):
+    """Фоновая DaData-проверка собственника при создании сделки."""
+    import urllib.request
+    import threading
+
+    def _run():
+        try:
+            dsn = os.environ.get('DATABASE_URL', '')
+            if not dsn:
+                return
+            conn2 = psycopg2.connect(dsn)
+            try:
+                with conn2.cursor() as cur2:
+                    cur2.execute(
+                        f"SELECT inn, name FROM {SCHEMA}.crm_owners WHERE id = %s",
+                        (owner_id,)
+                    )
+                    row = cur2.fetchone()
+                    if not row:
+                        return
+                    inn = (row[0] or '').strip()
+                    if not inn:
+                        print(f'[crm_check] owner {owner_id} — ИНН не указан, пропускаем')
+                        return
+            finally:
+                conn2.close()
+
+            payload = json.dumps({
+                'check_type': 'company',
+                'query': inn,
+                'sources': ['dadata'],
+            }, ensure_ascii=False).encode()
+            req = urllib.request.Request(
+                _CRM_CHECKS_URL,
+                data=payload,
+                headers={
+                    'Content-Type': 'application/json',
+                    'X-Auth-Token': user_token,
+                },
+                method='POST',
+            )
+            urllib.request.urlopen(req, timeout=15)
+            print(f'[crm_check] DaData-проверка запущена: owner={owner_id} inn={inn} deal={deal_id}')
+        except Exception as e:
+            print(f'[crm_check] ошибка авто-проверки owner {owner_id}: {e}')
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 def get_conn():
@@ -622,6 +672,12 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
                 (new_id, user['id'], f'Сделка создана пользователем {user["name"]}')
             )
             award_points(conn, user['id'], 10, 'Создана сделка', new_id, unique=True)
+            # Авто-проверка собственника по ИНН через DaData (фоновый поток)
+            if body.get('owner_id'):
+                raw_headers = event.get('headers') or {}
+                headers_lc = {k.lower(): v for k, v in raw_headers.items()}
+                user_token = headers_lc.get('x-auth-token') or headers_lc.get('x-authorization') or ''
+                _auto_check_owner(int(body['owner_id']), new_id, user_token)
             return ok({'id': new_id}, 201)
 
         if method == 'PUT' and resource_id:

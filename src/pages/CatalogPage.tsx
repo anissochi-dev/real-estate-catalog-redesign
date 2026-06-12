@@ -4,6 +4,7 @@ import { Property } from '@/App';
 import PropertyCard from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
 import Breadcrumbs from '@/components/Breadcrumbs';
+import MaxSubscribeWidget from '@/components/MaxSubscribeWidget';
 import { useSeoH1 } from '@/components/SeoHead';
 import AIMatchModal from '@/components/AIMatchModal';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -489,6 +490,12 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
           </>
         )}
       </section>
+
+      <MaxSubscribeWidget
+        initialCategories={typeFilter !== 'all' ? [typeFilter] : []}
+        initialDealType={dealFilter !== 'all' ? dealFilter : 'all'}
+        city={settings.main_city || 'Краснодар'}
+      />
     </div>
   );
 }

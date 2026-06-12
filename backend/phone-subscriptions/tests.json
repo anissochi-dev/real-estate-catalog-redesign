@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "name": "subscribe — нет номера",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "subscribe", "phone": ""},
+      "expectedStatus": 400,
+      "expectedBody": {"error": "Укажите корректный номер телефона"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "subscribe — невалидный номер",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "subscribe", "phone": "abc"},
+      "expectedStatus": 400,
+      "expectedBody": {"error": "Укажите корректный номер телефона"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

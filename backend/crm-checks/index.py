@@ -1,6 +1,6 @@
 """
 Проверка недвижимости, собственников и компаний через внешние API.
-Источники: bezopasno.org, newdb.net, zachestnyibiznesapi.ru
+Источники: bezopasno.org, newdb.net, zachestnyibiznesapi.ru, DaData (ИНН/ОГРН).
 Кэширование на 30 дней, учёт квот запросов.
 """
 import json
@@ -33,6 +33,7 @@ def _load_check_keys(conn):
         'zachestny': os.environ.get('ZACHESTNY_API_KEY', ''),
         'newdb': os.environ.get('NEWDB_API_KEY', ''),
         'bezopasno': os.environ.get('BEZOPASNO_API_KEY', ''),
+        'dadata': os.environ.get('DADATA_API_KEY', ''),
     }
     try:
         cur = conn.cursor()
@@ -50,6 +51,9 @@ def _load_check_keys(conn):
                 keys['bezopasno'] = row[2].strip()
     except Exception:
         pass
+    # DaData — всегда из env (секрет платформы)
+    if not keys['dadata']:
+        keys['dadata'] = os.environ.get('DADATA_API_KEY', '')
     return keys
 
 
@@ -195,6 +199,78 @@ def fetch_bezopasno(query, api_key):
         return {'error': str(e)}
 
 
+def fetch_dadata(inn: str, api_key: str, secret_key: str = '') -> dict:
+    """Проверка компании или ИП по ИНН через DaData API (party endpoint)."""
+    inn_clean = ''.join(filter(str.isdigit, str(inn)))
+    if not inn_clean:
+        return {'error': 'ИНН не указан или некорректен'}
+    if not api_key:
+        return {'error': 'DaData API-ключ не настроен'}
+
+    url = 'https://suggestions.dadata.ru/suggestions/api/4_1/rs/findById/party'
+    payload = json.dumps({'query': inn_clean, 'count': 1}, ensure_ascii=False).encode()
+    headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': f'Token {api_key}',
+    }
+    if secret_key:
+        headers['X-Secret'] = secret_key
+
+    try:
+        req = urllib.request.Request(url, data=payload, headers=headers, method='POST')
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            raw = json.loads(resp.read().decode())
+
+        suggestions = raw.get('suggestions') or []
+        if not suggestions:
+            return {'error': 'Компания не найдена в реестре DaData', '_raw': raw}
+
+        s = suggestions[0]
+        data = s.get('data') or {}
+        state = data.get('state') or {}
+        name_obj = data.get('name') or {}
+        addr = data.get('address') or {}
+        mgmt = data.get('management') or {}
+        opf = data.get('opf') or {}
+
+        status_map = {'ACTIVE': 'Действует', 'LIQUIDATING': 'В процессе ликвидации', 'LIQUIDATED': 'Ликвидирована', 'BANKRUPT': 'Банкрот', 'REORGANIZING': 'Реорганизация'}
+        status_code = state.get('status') or ''
+
+        card = {
+            '_type': 'ip' if data.get('type') == 'INDIVIDUAL' else 'ul',
+            '_source': 'dadata',
+            'inn': data.get('inn') or inn_clean,
+            'ogrn': data.get('ogrn') or '',
+            'kpp': data.get('kpp') or '',
+            'name': name_obj.get('short_with_opf') or name_obj.get('full_with_opf') or s.get('value') or '',
+            'name_full': name_obj.get('full_with_opf') or '',
+            'opf': opf.get('short') or '',
+            'status': status_map.get(status_code, status_code),
+            'status_code': status_code,
+            'address': (addr.get('value') or '').strip(),
+            'reg_date': state.get('registration_date') or '',
+            'liquidation_date': state.get('liquidation_date') or '',
+            'okved': data.get('okved') or '',
+            'okved_name': (data.get('okved_type') or {}).get('name') if isinstance(data.get('okved_type'), dict) else '',
+            'employees': data.get('employee_count') or '',
+            'capital': (data.get('finance') or {}).get('tax_system') or '',
+            'director': mgmt.get('name') or '',
+            'director_post': mgmt.get('post') or '',
+            'phones': [p.get('value') for p in (data.get('phones') or []) if p.get('value')],
+            'emails': [e.get('value') for e in (data.get('emails') or []) if e.get('value')],
+            'is_liquidated': status_code in ('LIQUIDATED', 'BANKRUPT'),
+            'is_active': status_code == 'ACTIVE',
+            '_raw': data,
+        }
+        return card
+    except urllib.error.HTTPError as e:
+        body_err = e.read().decode()[:200]
+        return {'error': f'DaData HTTP {e.code}: {body_err}'}
+    except Exception as e:
+        return {'error': str(e)[:200]}
+
+
 def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
@@ -328,6 +404,9 @@ def run_check(conn, user, method, qs, body, check_keys=None):
             data = fetch_newdb(query, api_key)
         elif source == 'bezopasno':
             data = fetch_bezopasno(query, api_key)
+        elif source == 'dadata':
+            secret = os.environ.get('DADATA_SECRET_KEY', '')
+            data = fetch_dadata(query, api_key, secret)
         else:
             data = {'error': 'Неизвестный источник'}
 

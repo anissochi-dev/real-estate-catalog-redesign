@@ -2219,6 +2219,60 @@ def _auto_district(cur, address: str, city: str = 'Краснодар') -> str:
 
 
 _LISTING_FAQ_URL = 'https://functions.poehali.dev/282b9c5f-29fa-41ea-bc42-0793bdf8950d'
+_PHONE_SUB_URL = 'https://functions.poehali.dev/6dfb5518-6954-4ea5-972b-c20e8d06a8ab'
+
+
+def _notify_phone_subscribers(listing_id: int, body: dict, cur):
+    """Рассылка MAX-уведомлений подписчикам при публикации нового объекта."""
+    import urllib.request
+    try:
+        status = body.get('status') or 'active'
+        if status != 'active':
+            return
+        # Берём auth_token первого активного admin-пользователя для авторизации notify
+        cur.execute(
+            f"SELECT s.token FROM {SCHEMA}.sessions s "
+            f"JOIN {SCHEMA}.users u ON u.id = s.user_id "
+            f"WHERE u.role IN ('admin', 'editor') AND u.is_active = TRUE AND s.expires_at > NOW() "
+            f"ORDER BY s.created_at DESC LIMIT 1"
+        )
+        session = cur.fetchone()
+        if not session:
+            return
+        token = session.get('token') or ''
+
+        cur.execute(f"SELECT slug FROM {SCHEMA}.listings WHERE id = {int(listing_id)}")
+        slug_row = cur.fetchone()
+        slug = (slug_row.get('slug') or '') if slug_row else ''
+
+        cur.execute(
+            f"SELECT site_url FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
+        )
+        settings_row = cur.fetchone()
+        site_url = (settings_row.get('site_url') or '').rstrip('/') if settings_row else ''
+        listing_url = f'{site_url}/object/{slug}' if slug and site_url else ''
+
+        payload = json.dumps({
+            'action': 'notify',
+            'listing_id': listing_id,
+            'category': body.get('category') or '',
+            'deal_type': body.get('deal') or '',
+            'title': body.get('title') or '',
+            'price': body.get('price'),
+            'area': body.get('area'),
+            'city': body.get('city') or 'Краснодар',
+            'url': listing_url,
+        }, ensure_ascii=False).encode()
+        req = urllib.request.Request(
+            _PHONE_SUB_URL,
+            data=payload,
+            headers={'Content-Type': 'application/json', 'X-Auth-Token': token},
+            method='POST',
+        )
+        urllib.request.urlopen(req, timeout=4)
+        print(f'[phone_sub] notify triggered for listing {listing_id}')
+    except Exception as e:
+        print(f'[phone_sub] notify error for listing {listing_id}: {e}')
 
 
 def _trigger_faq_async(listing_id: int, cur):
@@ -2440,6 +2494,7 @@ def _listings(cur, conn, method, rid, event, user):
         )
         conn.commit()
         _trigger_faq_async(new_id, cur)
+        _notify_phone_subscribers(new_id, body, cur)
         return _ok({'id': new_id, 'success': True, 'slug': new_slug, 'owner_phone_contact_id': owner_pc_id})
 
     if method == 'PUT' and rid:

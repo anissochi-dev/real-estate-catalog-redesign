@@ -3,6 +3,14 @@ import { SOCIAL_POST_URL, getToken } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
 
+const MANUAL_PUBLISH_URLS: Record<string, string> = {
+  linkedin: 'https://www.linkedin.com/feed/',
+  yandex_zen: 'https://dzen.ru/profile/editor',
+  tenchat: 'https://tenchat.ru/',
+  max: 'https://max.ru/',
+  dvizhenie: 'https://dvizhenie.ru/',
+};
+
 interface PlatformSetting {
   id: number;
   platform: string;
@@ -18,7 +26,7 @@ interface PlatformSetting {
 const PLATFORM_META: Record<string, { label: string; icon: string; color: string; has_api: boolean; hint_token: string; hint_extra: string }> = {
   vk:         { label: 'ВКонтакте',     icon: 'MessageSquare', color: 'text-blue-600',   has_api: true,  hint_token: 'Токен доступа группы (access_token из настроек группы → API)',  hint_extra: 'ID группы со знаком минус (например -123456789)' },
   telegram:   { label: 'Telegram',      icon: 'Send',          color: 'text-sky-500',    has_api: true,  hint_token: 'Токен бота (получить у @BotFather)',                            hint_extra: 'ID канала (например -1001234567890 или @username)' },
-  pinterest:  { label: 'Pinterest',     icon: 'Image',         color: 'text-red-500',    has_api: false, hint_token: '',                                                             hint_extra: '' },
+  pinterest:  { label: 'Pinterest',     icon: 'Image',         color: 'text-red-500',    has_api: true,  hint_token: 'Access Token Pinterest (OAuth 2.0 → User Authentication)',     hint_extra: 'Board ID — ID доски (из URL доски: pinterest.com/user/board-name)' },
   linkedin:   { label: 'LinkedIn',      icon: 'Linkedin',      color: 'text-blue-700',   has_api: false, hint_token: '',                                                             hint_extra: '' },
   yandex_zen: { label: 'Яндекс Дзен',  icon: 'BookOpen',      color: 'text-yellow-600', has_api: false, hint_token: '',                                                             hint_extra: '' },
   tenchat:    { label: 'TenChat',       icon: 'Users',         color: 'text-emerald-600',has_api: false, hint_token: '',                                                             hint_extra: '' },
@@ -46,6 +54,8 @@ export default function AutoPostingTab() {
   const [saving, setSaving] = useState<string | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; message: string }>>({});
+  const [manualTexts, setManualTexts] = useState<Record<string, { text: string; image_url: string; publish_url: string }>>({});
+  const [copied, setCopied] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -92,10 +102,25 @@ export default function AutoPostingTab() {
         body: JSON.stringify({ action: 'test', platform }),
       });
       const d = await r.json();
-      setTestResults(prev => ({ ...prev, [platform]: { ok: !d.error, message: d.message || d.error || 'Ошибка' } }));
+      if (d.manual && d.text) {
+        setManualTexts(prev => ({ ...prev, [platform]: { text: d.text, image_url: d.image_url || '', publish_url: d.publish_url || MANUAL_PUBLISH_URLS[platform] || '' } }));
+        setTestResults(prev => ({ ...prev, [platform]: { ok: true, message: 'Текст готов — скопируйте и опубликуйте вручную' } }));
+      } else {
+        setTestResults(prev => ({ ...prev, [platform]: { ok: !d.error, message: d.message || d.error || 'Ошибка' } }));
+      }
     } finally {
       setTesting(null);
     }
+  };
+
+  const copyText = (platform: string) => {
+    const mt = manualTexts[platform];
+    if (!mt) return;
+    navigator.clipboard.writeText(mt.text).then(() => {
+      setCopied(platform);
+      toast.success('Текст скопирован в буфер обмена');
+      setTimeout(() => setCopied(null), 2000);
+    });
   };
 
   const startEdit = (ps: PlatformSetting) => {
@@ -125,8 +150,8 @@ export default function AutoPostingTab() {
           Как работает автопостинг
         </div>
         <div>Объявления и заявки автоматически публикуются в выбранные соцсети при добавлении на сайте.</div>
-        <div><b>С прямым API</b> (публикуется автоматически): ВКонтакте, Telegram.</div>
-        <div><b>Подготовка текста</b> (копируете и публикуете вручную): Pinterest, LinkedIn, Яндекс Дзен, TenChat, МАК, dvizhenie.ru.</div>
+        <div><b>С прямым API</b> (публикуется автоматически): ВКонтакте, Telegram, Pinterest.</div>
+        <div><b>Подготовка текста</b> (кнопка «Копировать» → публикуете вручную): LinkedIn, Яндекс Дзен, TenChat, МАК, dvizhenie.ru.</div>
         <div className="text-xs font-mono bg-amber-100 rounded px-3 py-1.5 mt-2">
           Переменные шаблона: {'{title}'} {'{price}'} {'{area}'} {'{address}'} {'{description}'} {'{url}'} {'{city}'}
         </div>
@@ -214,6 +239,37 @@ export default function AutoPostingTab() {
               <div className={`mx-5 mb-2 px-3 py-2 rounded-lg text-xs flex items-start gap-2 ${tr.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'}`}>
                 <Icon name={tr.ok ? 'CheckCircle2' : 'AlertCircle'} size={13} className="mt-0.5 shrink-0" />
                 <span>{tr.message}</span>
+              </div>
+            )}
+
+            {/* Блок с готовым текстом для ручной публикации */}
+            {manualTexts[ps.platform] && (
+              <div className="mx-5 mb-3 rounded-xl border border-border bg-muted/30 overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-white">
+                  <span className="text-xs font-semibold text-foreground">Готовый текст для публикации</span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => copyText(ps.platform)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-brand-blue text-white hover:bg-brand-blue/90 transition-colors"
+                    >
+                      <Icon name={copied === ps.platform ? 'Check' : 'Copy'} size={12} />
+                      {copied === ps.platform ? 'Скопировано!' : 'Копировать'}
+                    </button>
+                    {manualTexts[ps.platform].publish_url && (
+                      <a
+                        href={manualTexts[ps.platform].publish_url}
+                        target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border border-border hover:bg-muted transition-colors"
+                      >
+                        <Icon name="ExternalLink" size={12} />
+                        Открыть {meta.label}
+                      </a>
+                    )}
+                  </div>
+                </div>
+                <pre className="px-3 py-2.5 text-xs text-foreground whitespace-pre-wrap font-sans leading-relaxed max-h-40 overflow-y-auto">
+                  {manualTexts[ps.platform].text}
+                </pre>
               </div>
             )}
 
