@@ -373,7 +373,8 @@ def aggregate_market_listings(cur, conn, today=None):
         SELECT category, deal_type, district, price, area, price_per_m2
         FROM {SCHEMA}.market_listings
         WHERE price > 0 AND area > 0
-          AND category IS NOT NULL AND category != 'other'
+          AND category IS NOT NULL
+          AND category NOT IN ('other', 'residential_skip')
           AND deal_type IS NOT NULL
           AND scraped_at >= NOW() - INTERVAL '365 days'
         ORDER BY scraped_at DESC
