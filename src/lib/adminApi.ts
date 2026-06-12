@@ -148,6 +148,7 @@ async function req(url: string, init?: RequestInit) {
     // в админке это сделает компонент, заметив отсутствие user.
     if (res.status === 401) {
       clearToken();
+      window.dispatchEvent(new CustomEvent('auth:expired'));
       const { showError } = await import('./errorTranslator');
       showError('Сессия истекла — войдите заново');
       throw new Error('Сессия истекла — войдите заново');

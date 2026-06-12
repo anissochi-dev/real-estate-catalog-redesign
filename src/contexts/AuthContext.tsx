@@ -37,6 +37,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, []);
 
+  // Сбрасываем user когда adminApi получил 401 и очистил токен извне
+  useEffect(() => {
+    const handler = () => {
+      setUser(null);
+      setTokenState('');
+    };
+    window.addEventListener('auth:expired', handler);
+    return () => window.removeEventListener('auth:expired', handler);
+  }, []);
+
   const login = async (email: string, password: string) => {
     const d = await authApi.login(email, password);
     setToken(d.token);
