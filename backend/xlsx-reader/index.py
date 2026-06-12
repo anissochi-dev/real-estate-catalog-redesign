@@ -685,29 +685,243 @@ def handler(event: dict, context) -> dict:
 
     CORS_H = {'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json'}
 
-    # ── Старт фонового импорта: создаём job, запускаем через threading ──────
+    # ── Старт импорта: создаём job, скачиваем файл, считаем строки ──────────
     if body.get('action') == 'import_market_start':
         file_url = body.get('file_url', '').strip()
         source   = body.get('source', 'xlsx')[:50]
         replace  = bool(body.get('replace', False))
         if not file_url:
             return {'statusCode': 400, 'headers': CORS_H, 'body': json.dumps({'error': 'Укажите file_url'}, ensure_ascii=False)}
+
+        # Скачиваем файл и считаем общее число строк (без вставки)
+        try:
+            req = urllib.request.Request(file_url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=60) as r:
+                raw_bytes = r.read()
+        except Exception as e:
+            return {'statusCode': 400, 'headers': CORS_H, 'body': json.dumps({'error': f'Не удалось скачать файл: {e}'}, ensure_ascii=False)}
+
+        try:
+            wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), read_only=True, data_only=True)
+            ws = wb.active
+            rows_total = ws.max_row - 1 if ws.max_row else 0
+            wb.close()
+        except Exception as e:
+            return {'statusCode': 400, 'headers': CORS_H, 'body': json.dumps({'error': f'Не удалось открыть XLSX: {e}'}, ensure_ascii=False)}
+
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
         cur.execute(
-            f"INSERT INTO {SCHEMA}.import_jobs (file_url, source, replace_existing, status) "
-            f"VALUES (%s, %s, %s, 'pending') RETURNING id",
-            (file_url, source, replace)
+            f"INSERT INTO {SCHEMA}.import_jobs (file_url, source, replace_existing, status, rows_total, checkpoint_row) "
+            f"VALUES (%s, %s, %s, 'running', %s, 0) RETURNING id",
+            (file_url, source, replace, rows_total)
         )
         job_id = cur.fetchone()[0]
         conn.commit()
         cur.close()
         conn.close()
-        # Запускаем фоновый поток
-        import threading
-        t = threading.Thread(target=_run_import_job, args=(job_id,), daemon=True)
-        t.start()
-        return {'statusCode': 200, 'headers': CORS_H, 'body': json.dumps({'job_id': job_id, 'status': 'pending'}, ensure_ascii=False)}
+        return {'statusCode': 200, 'headers': CORS_H, 'body': json.dumps({
+            'job_id': job_id, 'status': 'running', 'rows_total': rows_total
+        }, ensure_ascii=False)}
+
+    # ── Продолжение батчевого импорта: вставляем BATCH строк за вызов ────────
+    if body.get('action') == 'import_market_continue':
+        BATCH = 2000
+        job_id = body.get('job_id')
+        if not job_id:
+            return {'statusCode': 400, 'headers': CORS_H, 'body': json.dumps({'error': 'job_id required'}, ensure_ascii=False)}
+
+        conn = psycopg2.connect(os.environ['DATABASE_URL'])
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute(f"SELECT * FROM {SCHEMA}.import_jobs WHERE id = %s", (job_id,))
+        job = cur.fetchone()
+        if not job:
+            cur.close(); conn.close()
+            return {'statusCode': 404, 'headers': CORS_H, 'body': json.dumps({'error': 'job not found'}, ensure_ascii=False)}
+        if job['status'] not in ('running',):
+            cur.close(); conn.close()
+            return {'statusCode': 200, 'headers': CORS_H, 'body': json.dumps(dict(job), ensure_ascii=False, default=str)}
+
+        file_url      = job['file_url']
+        source        = job['source']
+        replace       = job['replace_existing']
+        checkpoint    = job['checkpoint_row'] or 0
+        rows_inserted = job['rows_inserted'] or 0
+        rows_updated  = job['rows_updated'] or 0
+        rows_skipped  = job['rows_skipped'] or 0
+        cat_counts    = dict(job['category_breakdown'] or {})
+
+        MIN_PRICE_SALE, MAX_PRICE_SALE = 500_000, 5_000_000_000
+        MIN_PRICE_RENT, MAX_PRICE_RENT = 5_000, 10_000_000
+        MIN_AREA, MAX_AREA = 1, 200_000
+
+        try:
+            req = urllib.request.Request(file_url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=60) as r:
+                raw_bytes = r.read()
+
+            wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), read_only=True, data_only=True)
+            ws = wb.active
+            rows_iter = ws.iter_rows(values_only=True)
+            header_row = next(rows_iter, None)
+            if not header_row:
+                wb.close(); cur.close(); conn.close()
+                return {'statusCode': 200, 'headers': CORS_H, 'body': json.dumps({'error': 'Файл пустой'}, ensure_ascii=False)}
+
+            header = [str(c).strip().lower() if c else '' for c in header_row]
+            def find_col(*candidates):
+                for cand in candidates:
+                    for i, h in enumerate(header):
+                        if cand in h: return i
+                return -1
+
+            col_price   = find_col('цена', 'price', 'стоимость')
+            col_area    = find_col('площадь', 'area', 'кв.м', 'кв м', 'площ', 'square')
+            col_deal    = find_col('тип сделки', 'тип объявления', 'deal', 'сделка', 'операция')
+            col_cat     = find_col('категория1', 'категория2', 'категория', 'тип объекта', 'вид объекта', 'category', 'тип недвижимости', 'назначение')
+            col_addr    = find_col('адрес', 'address', 'местоположение')
+            col_dist    = find_col('метро/район', 'район', 'district', 'округ', 'метро')
+            col_title   = find_col('название', 'заголовок', 'title', 'наименование')
+            col_floor   = find_col('этаж', 'floor')
+            col_tfloors = find_col('этажность', 'этажей', 'total_floor')
+            col_url     = find_col('url', 'ссылка', 'link', 'объявление')
+            col_ext_id  = find_col('id на сайте', 'id объявления', 'внешний id', 'id', 'номер объявления')
+            col_desc    = find_col('описание', 'description', 'комментарий')
+            col_ppm2    = find_col('цена за м', 'price_per_m', 'цена/м', 'руб/м')
+
+            if col_price < 0:
+                wb.close(); cur.close(); conn.close()
+                _job_update(conn, job_id, status='error',
+                            error_msg=f'Не найдена колонка "Цена". Заголовок: {header[:15]}')
+                return {'statusCode': 200, 'headers': CORS_H,
+                        'body': json.dumps({'error': f'Не найдена колонка Цена. Заголовок: {header[:15]}'}, ensure_ascii=False)}
+
+            # Удаляем старые данные только при первом батче
+            if checkpoint == 0 and replace:
+                cur2 = conn.cursor()
+                cur2.execute(f"DELETE FROM {SCHEMA}.market_listings WHERE source = %s", (source,))
+                conn.commit()
+                cur2.close()
+
+            # Пропускаем строки до checkpoint
+            seen_keys = set()
+            row_num = 0
+            batch = []
+            inserted_batch = updated_batch = 0
+
+            for row in rows_iter:
+                row_num += 1
+                if row_num <= checkpoint:
+                    continue
+                if row_num > checkpoint + BATCH:
+                    break
+
+                def cell(idx):
+                    if idx < 0 or idx >= len(row): return None
+                    return row[idx]
+
+                price    = _parse_float_m(cell(col_price))
+                title_v  = str(cell(col_title) or '').strip() if col_title >= 0 else ''
+                area     = _parse_float_m(cell(col_area)) if col_area >= 0 else 0.0
+                if area <= 0: area = _parse_area_from_title(title_v)
+                deal     = _map_deal_m(str(cell(col_deal) or 'продажа'))
+
+                if deal == 'sale' and not (MIN_PRICE_SALE <= price <= MAX_PRICE_SALE): continue
+                if deal == 'rent' and not (MIN_PRICE_RENT <= price <= MAX_PRICE_RENT): continue
+                if not (MIN_AREA <= area <= MAX_AREA): continue
+
+                cat_raw  = str(cell(col_cat) or '') if col_cat >= 0 else ''
+                category = _map_obj_type_m(cat_raw, title_v)
+                address  = str(cell(col_addr) or '').strip() if col_addr >= 0 else ''
+                district = str(cell(col_dist) or '').strip() if col_dist >= 0 else ''
+                floor_v  = int(_parse_float_m(cell(col_floor))) or None if col_floor >= 0 else None
+                tfloors_v= int(_parse_float_m(cell(col_tfloors))) or None if col_tfloors >= 0 else None
+                url_v    = str(cell(col_url) or '').strip() if col_url >= 0 else ''
+                ext_id   = str(cell(col_ext_id) or '').strip() if col_ext_id >= 0 else ''
+                desc     = str(cell(col_desc) or '').strip()[:1000] if col_desc >= 0 else ''
+                ppm2     = _parse_float_m(cell(col_ppm2)) if col_ppm2 >= 0 else 0.0
+                if not ppm2 and area > 0 and price > 0: ppm2 = round(price / area, 2)
+                row_source = source
+
+                dk = f"{row_source}_{ext_id or address or f'r{row_num}'}_{int(area)}_{int(price)}"
+                if dk in seen_keys: continue
+                seen_keys.add(dk)
+
+                cat_counts[category] = cat_counts.get(category, 0) + 1
+                ext_id_final = ext_id or f"xlsx_{row_source}_{address[:40]}_{int(area)}"
+
+                cur3 = conn.cursor()
+                cur3.execute(
+                    f"INSERT INTO {SCHEMA}.market_listings "
+                    f"(source, external_id, url, title, category, deal_type, price, price_per_m2, "
+                    f"area, address, district, floor, total_floors, description, scraped_at) "
+                    f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW()) "
+                    f"ON CONFLICT (source, external_id) DO UPDATE SET "
+                    f"price=%s, price_per_m2=%s, area=%s, category=%s, deal_type=%s, "
+                    f"address=%s, district=%s, title=%s, scraped_at=NOW()",
+                    (row_source, ext_id_final, url_v or None, title_v[:500] or None,
+                     category, deal, int(price) if price else None, ppm2 or None,
+                     area or None, address[:500] or None, district or None,
+                     floor_v, tfloors_v, desc or None,
+                     int(price) if price else None, ppm2 or None, area or None,
+                     category, deal, address[:500] or None, district or None, title_v[:500] or None)
+                )
+                if cur3.rowcount == 1: inserted_batch += 1
+                else: updated_batch += 1
+                cur3.close()
+
+            wb.close()
+            conn.commit()
+
+            new_checkpoint = checkpoint + BATCH
+            new_inserted = rows_inserted + inserted_batch
+            new_updated  = rows_updated  + updated_batch
+            rows_total   = job.get('rows_total') or 0
+            done = new_checkpoint >= rows_total
+
+            _job_update(conn, job_id,
+                status='done' if done else 'running',
+                rows_done=new_checkpoint,
+                rows_inserted=new_inserted,
+                rows_updated=new_updated,
+                rows_skipped=rows_skipped,
+                checkpoint_row=new_checkpoint,
+                category_breakdown=json.dumps(cat_counts, ensure_ascii=False))
+
+            # Фоновая агрегация только по завершении
+            if done and new_inserted > 0:
+                import threading as _thr, sys as _sys
+                def _bg_agg():
+                    try:
+                        _pp_path = os.path.join(os.path.dirname(__file__), '..', 'price-predict')
+                        if _pp_path not in _sys.path: _sys.path.insert(0, _pp_path)
+                        from market_snapshots import aggregate_market_listings as _aml
+                        import psycopg2 as _pg2, psycopg2.extras as _ext
+                        _c = _pg2.connect(os.environ['DATABASE_URL'], cursor_factory=_ext.RealDictCursor)
+                        try: _r = _aml(_c.cursor(), _c); print(f'[xlsx-reader] bg agg done: {_r}')
+                        finally: _c.close()
+                    except Exception as _e: print(f'[xlsx-reader] bg agg error: {_e}')
+                _thr.Thread(target=_bg_agg, daemon=True).start()
+
+            cur.close(); conn.close()
+            return {'statusCode': 200, 'headers': CORS_H, 'body': json.dumps({
+                'job_id': job_id,
+                'status': 'done' if done else 'running',
+                'done': done,
+                'rows_done': new_checkpoint,
+                'rows_total': rows_total,
+                'rows_inserted': new_inserted,
+                'rows_updated': new_updated,
+                'checkpoint_row': new_checkpoint,
+                'category_breakdown': cat_counts,
+            }, ensure_ascii=False)}
+
+        except Exception as e:
+            try: _job_update(conn, job_id, status='error', error_msg=str(e)[:500])
+            except Exception: pass
+            try: cur.close(); conn.close()
+            except Exception: pass
+            return {'statusCode': 500, 'headers': CORS_H, 'body': json.dumps({'error': str(e)[:300]}, ensure_ascii=False)}
 
     # ── Статус job ────────────────────────────────────────────────────────────
     if body.get('action') == 'import_market_status':

@@ -42,7 +42,6 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const LS_KEY = 'import_job_id';
-const ACTIVE_STATUSES = new Set(['pending', 'downloading', 'parsing', 'running']);
 
 function parseCatBreakdown(val: ImportJob['category_breakdown']): Record<string, number> {
   if (!val) return {};
@@ -58,50 +57,25 @@ export default function ImportBlock() {
   const [job, setJob] = useState<ImportJob | null>(null);
   const [history, setHistory] = useState<ImportJob[]>([]);
   const [showHistory, setShowHistory] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const runningRef = useRef(false);
 
-  const stopPoll = () => {
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-  };
-
-  const pollStatus = useCallback(async (jobId: number) => {
-    try {
-      const r = await fetch(XLSX_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'import_market_status', job_id: jobId }),
-      }).then(r => r.json());
-      setJob(prev => ({ ...(prev ?? {} as ImportJob), ...r }));
-      if (r.status === 'done') {
-        stopPoll();
-        localStorage.removeItem(LS_KEY);
-        toast.success(`Импорт завершён — добавлено ${r.rows_inserted.toLocaleString()} записей`);
-      }
-      if (r.status === 'error') {
-        stopPoll();
-        localStorage.removeItem(LS_KEY);
-        toast.error(`Ошибка импорта: ${r.error_msg}`);
-      }
-    } catch { /* сетевые ошибки поллинга игнорируем */ }
-  }, []);
-
-  // При монтировании — восстанавливаем активный job из localStorage
+  // Восстанавливаем активный job из localStorage при монтировании
   useEffect(() => {
     const savedId = localStorage.getItem(LS_KEY);
     if (savedId) {
-      const id = parseInt(savedId, 10);
-      pollStatus(id).then(() => {
-        // Запускаем поллинг только если job ещё активен
-        setJob(prev => {
-          if (prev && ACTIVE_STATUSES.has(prev.status)) {
-            pollRef.current = setInterval(() => pollStatus(id), 3000);
-          }
-          return prev;
-        });
-      });
+      fetch(XLSX_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'import_market_status', job_id: parseInt(savedId) }),
+      }).then(r => r.json()).then(r => {
+        if (r.id) setJob(r);
+        // Если job был активен — продолжаем батчи
+        if (r.status === 'running') {
+          runBatchChain(r.id, r.rows_done || 0);
+        }
+      }).catch((_e) => { /* ignore */ });
     }
-    return () => stopPoll();
-  }, [pollStatus]);
+  }, [runBatchChain]);
 
   const loadHistory = async () => {
     try {
@@ -111,8 +85,59 @@ export default function ImportBlock() {
         body: JSON.stringify({ action: 'import_market_list' }),
       }).then(r => r.json());
       if (Array.isArray(r)) setHistory(r);
-    } catch { /* ignore */ }
+    } catch (_e) { /* ignore */ }
   };
+
+  // Цепочка батчей: вызываем import_market_continue пока done не true
+  const runBatchChain = useCallback(async (jobId: number, startFrom = 0) => {
+    if (runningRef.current) return;
+    runningRef.current = true;
+    let checkpoint = startFrom;
+
+    while (true) {
+      try {
+        const r = await fetch(XLSX_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'import_market_continue', job_id: jobId }),
+        }).then(r => r.json());
+
+        if (r.error) {
+          toast.error(`Ошибка: ${r.error}`);
+          setJob(prev => prev ? { ...prev, status: 'error', error_msg: r.error } : prev);
+          break;
+        }
+
+        checkpoint = r.rows_done || checkpoint;
+        setJob(prev => prev ? {
+          ...prev,
+          status: r.status,
+          rows_done: r.rows_done ?? prev.rows_done,
+          rows_total: r.rows_total ?? prev.rows_total,
+          rows_inserted: r.rows_inserted ?? prev.rows_inserted,
+          rows_updated: r.rows_updated ?? prev.rows_updated,
+          category_breakdown: r.category_breakdown ?? prev.category_breakdown,
+        } : prev);
+
+        if (r.done || r.status === 'done') {
+          localStorage.removeItem(LS_KEY);
+          toast.success(`Импорт завершён — добавлено ${r.rows_inserted?.toLocaleString()} записей`);
+          break;
+        }
+
+        if (r.status === 'error') {
+          localStorage.removeItem(LS_KEY);
+          toast.error(`Ошибка импорта`);
+          break;
+        }
+
+      } catch (e) {
+        toast.error('Сетевая ошибка при импорте, повторяю…');
+        await new Promise(res => setTimeout(res, 3000));
+      }
+    }
+    runningRef.current = false;
+  }, []);
 
   const handleStart = async () => {
     if (!fileUrl.trim()) { toast.error('Вставьте ссылку на файл'); return; }
@@ -123,24 +148,46 @@ export default function ImportBlock() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'import_market_start', file_url: fileUrl.trim(), source, replace }),
       }).then(r => r.json());
+
       if (r.error) { toast.error(r.error); return; }
-      const newJob: ImportJob = { id: r.job_id, status: 'pending', rows_total: null, rows_done: 0, rows_inserted: 0, rows_updated: 0, rows_skipped: 0, error_msg: null, category_breakdown: null, source, created_at: new Date().toISOString() };
+
+      const newJob: ImportJob = {
+        id: r.job_id,
+        status: 'running',
+        rows_total: r.rows_total ?? null,
+        rows_done: 0,
+        rows_inserted: 0,
+        rows_updated: 0,
+        rows_skipped: 0,
+        error_msg: null,
+        category_breakdown: null,
+        source,
+        created_at: new Date().toISOString(),
+      };
       setJob(newJob);
       localStorage.setItem(LS_KEY, String(r.job_id));
-      stopPoll();
-      pollRef.current = setInterval(() => pollStatus(r.job_id), 3000);
-    } catch { toast.error('Не удалось запустить импорт'); }
-    finally { setStarting(false); }
+
+      // Запускаем цепочку батчей
+      runBatchChain(r.job_id, 0);
+    } catch {
+      toast.error('Не удалось запустить импорт');
+    } finally {
+      setStarting(false);
+    }
   };
 
-  const handleReset = () => { setJob(null); setFileUrl(''); localStorage.removeItem(LS_KEY); };
+  const handleReset = () => {
+    runningRef.current = false;
+    setJob(null);
+    setFileUrl('');
+    localStorage.removeItem(LS_KEY);
+  };
 
-  const isActive = job && ACTIVE_STATUSES.has(job.status);
-  const pct = job?.rows_total ? Math.round((job.rows_done / job.rows_total) * 100) : null;
-  const progressWidth = pct !== null ? `${pct}%`
-    : job?.status === 'downloading' ? '8%'
-    : job?.status === 'parsing' ? '18%'
-    : job?.status === 'running' ? '30%' : '5%';
+  const isActive = job && job.status === 'running';
+  const pct = (job?.rows_total && job.rows_done)
+    ? Math.min(99, Math.round((job.rows_done / job.rows_total) * 100))
+    : null;
+  const progressWidth = pct !== null ? `${pct}%` : isActive ? '15%' : '5%';
 
   return (
     <div className="bg-white rounded-2xl border border-border p-5 space-y-4">
@@ -163,27 +210,13 @@ export default function ImportBlock() {
         <div className="space-y-1 border border-border rounded-xl p-3 bg-muted/30">
           {history.length === 0 && <p className="text-xs text-muted-foreground">Нет истории</p>}
           {history.map(h => (
-            <div key={h.id} className="flex items-center justify-between text-xs py-1 border-b border-border last:border-0">
+            <div key={h.id} className="flex items-center justify-between text-xs py-1 border-b border-border last:border-0 gap-2">
               <span className="font-medium">{h.source}</span>
               <span className="text-muted-foreground">{new Date(h.created_at).toLocaleString('ru')}</span>
               <span className={h.status === 'done' ? 'text-green-600' : h.status === 'error' ? 'text-red-500' : 'text-blue-500'}>
                 {STATUS_LABEL[h.status] ?? h.status}
               </span>
               <span>{h.rows_inserted.toLocaleString()} добавлено</span>
-              {ACTIVE_STATUSES.has(h.status) && (
-                <button
-                  className="text-brand-blue underline ml-1"
-                  onClick={() => {
-                    setJob(h);
-                    localStorage.setItem(LS_KEY, String(h.id));
-                    stopPoll();
-                    pollRef.current = setInterval(() => pollStatus(h.id), 3000);
-                    setShowHistory(false);
-                  }}
-                >
-                  Подключиться
-                </button>
-              )}
             </div>
           ))}
         </div>
@@ -233,61 +266,65 @@ export default function ImportBlock() {
               {isActive && <Icon name="Loader2" size={14} className="animate-spin text-brand-blue" />}
               {job.status === 'done' && <Icon name="CheckCircle2" size={14} className="text-green-600" />}
               {job.status === 'error' && <Icon name="XCircle" size={14} className="text-red-500" />}
-              <span className="font-medium">{STATUS_LABEL[job.status] ?? job.status}</span>
-              <span className="text-muted-foreground text-xs">· {job.source}</span>
+              <span className={job.status === 'error' ? 'text-red-500' : job.status === 'done' ? 'text-green-700 font-medium' : 'text-foreground'}>
+                {STATUS_LABEL[job.status] ?? job.status}
+              </span>
             </span>
-            <span className="text-muted-foreground text-xs">
-              {job.rows_done.toLocaleString()} строк обработано
+            <span className="text-xs text-muted-foreground">
+              {job.rows_done > 0 && `${job.rows_done.toLocaleString()} / ${job.rows_total?.toLocaleString() ?? '?'} строк`}
             </span>
           </div>
 
-          <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-            <div
-              className={`h-2 rounded-full transition-all duration-700 ${job.status === 'error' ? 'bg-red-400' : 'bg-brand-blue'}`}
-              style={{ width: job.status === 'done' ? '100%' : progressWidth }}
-            />
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 text-xs text-center">
-            <div className="bg-green-50 rounded-lg p-2">
-              <div className="font-bold text-green-700">{job.rows_inserted.toLocaleString()}</div>
-              <div className="text-muted-foreground">добавлено</div>
+          {/* Прогресс-бар */}
+          {(isActive || job.status === 'done') && (
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
+              <div
+                className={`h-2 rounded-full transition-all duration-500 ${job.status === 'done' ? 'bg-green-500' : 'bg-brand-blue'}`}
+                style={{ width: job.status === 'done' ? '100%' : progressWidth }}
+              />
             </div>
-            <div className="bg-blue-50 rounded-lg p-2">
-              <div className="font-bold text-blue-700">{job.rows_updated.toLocaleString()}</div>
-              <div className="text-muted-foreground">обновлено</div>
-            </div>
-            <div className="bg-muted rounded-lg p-2">
-              <div className="font-bold">{job.rows_skipped.toLocaleString()}</div>
-              <div className="text-muted-foreground">пропущено</div>
-            </div>
-          </div>
-
-          {job.status === 'error' && (
-            <p className="text-xs text-red-600 bg-red-50 rounded-lg p-2">{job.error_msg}</p>
           )}
 
+          {/* Статистика */}
+          {(job.rows_inserted > 0 || job.status === 'done') && (
+            <div className="flex gap-4 text-xs text-muted-foreground">
+              <span className="text-green-600 font-medium">+{job.rows_inserted.toLocaleString()} добавлено</span>
+              {job.rows_updated > 0 && <span>~{job.rows_updated.toLocaleString()} обновлено</span>}
+              {job.rows_skipped > 0 && <span>{job.rows_skipped.toLocaleString()} пропущено</span>}
+            </div>
+          )}
+
+          {/* Ошибка */}
+          {job.status === 'error' && job.error_msg && (
+            <div className="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {job.error_msg}
+            </div>
+          )}
+
+          {/* Категории */}
           {job.status === 'done' && (() => {
-            const bd = parseCatBreakdown(job.category_breakdown);
-            return Object.keys(bd).length > 0 ? (
-              <div className="text-xs space-y-1">
-                <p className="font-medium text-muted-foreground">По категориям:</p>
-                <div className="flex flex-wrap gap-1">
-                  {Object.entries(bd).sort(([,a],[,b]) => b - a).map(([cat, cnt]) => (
-                    <span key={cat} className="bg-muted px-2 py-0.5 rounded-full">
-                      {CAT_RU[cat] ?? cat}: {cnt.toLocaleString()}
-                    </span>
-                  ))}
-                </div>
+            const cats = parseCatBreakdown(job.category_breakdown);
+            const entries = Object.entries(cats).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+            if (!entries.length) return null;
+            return (
+              <div className="flex flex-wrap gap-1.5">
+                {entries.map(([cat, cnt]) => (
+                  <span key={cat} className="text-xs bg-muted px-2 py-0.5 rounded-full">
+                    {CAT_RU[cat] ?? cat}: {cnt.toLocaleString()}
+                  </span>
+                ))}
               </div>
-            ) : null;
+            );
           })()}
 
-          {(job.status === 'done' || job.status === 'error') && (
-            <button onClick={handleReset} className="text-xs text-brand-blue underline">
-              Новый импорт
-            </button>
-          )}
+          <div className="flex gap-2">
+            {(job.status === 'done' || job.status === 'error') && (
+              <button onClick={handleReset} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+                <Icon name="RotateCcw" size={12} />
+                Новый импорт
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
