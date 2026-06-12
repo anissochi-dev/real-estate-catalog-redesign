@@ -848,6 +848,21 @@ def handler(event: dict, context) -> dict:
                 if col_cat2 >= 0:
                     cat_raw = f"{cat_raw} {str(cell(col_cat2) or '')}".strip()
                 category = _map_obj_type_m(cat_raw, title_v)
+
+                # Фильтр: только коммерческая недвижимость
+                # Пропускаем жильё и нераспознанные объекты
+                RESIDENTIAL_SIGNALS = (
+                    'квартира', 'квартир', '-к кв', 'комнат', 'студия',
+                    'апартамент', 'таунхаус', 'коттедж', 'дача', 'дом,',
+                    'жилой', 'жилая', 'жилое', 'комната', 'пентхаус',
+                )
+                title_low = title_v.lower()
+                cat_low   = cat_raw.lower()
+                is_residential = any(sig in title_low or sig in cat_low for sig in RESIDENTIAL_SIGNALS)
+                if category == 'other' or is_residential:
+                    rows_skipped += 1
+                    continue
+
                 address  = str(cell(col_addr) or '').strip()[:500] if col_addr >= 0 else ''
                 district = str(cell(col_dist) or '').strip()[:200] if col_dist >= 0 else ''
                 floor_v  = (int(_parse_float_m(cell(col_floor))) or None) if col_floor >= 0 else None
