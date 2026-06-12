@@ -904,13 +904,13 @@ def handler(event: dict, context) -> dict:
                 conn.commit()
                 cur3.close()
 
-            new_checkpoint = checkpoint + row_num - checkpoint  # сколько реально прошли
-            new_checkpoint = checkpoint + BATCH if not reached_end else checkpoint + row_num
+            # row_num = абсолютный номер последней просмотренной строки
+            new_checkpoint = row_num  # всегда абсолютная позиция
             new_ins  = rows_inserted + inserted_batch
             new_upd  = rows_updated  + updated_batch
 
-            # done = файл исчерпан или обработали меньше BATCH строк
-            done = reached_end or (row_num - checkpoint) < BATCH
+            # done = итератор исчерпан (файл закончился)
+            done = reached_end
 
             _job_update(conn, job_id,
                 status='done' if done else 'running',
