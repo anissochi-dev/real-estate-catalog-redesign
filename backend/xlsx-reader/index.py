@@ -692,6 +692,8 @@ def handler(event: dict, context) -> dict:
         replace  = bool(body.get('replace', False))
         if not file_url:
             return {'statusCode': 400, 'headers': CORS_H, 'body': json.dumps({'error': 'Укажите file_url'}, ensure_ascii=False)}
+        if not file_url.startswith('http://') and not file_url.startswith('https://'):
+            return {'statusCode': 400, 'headers': CORS_H, 'body': json.dumps({'error': f'Некорректная ссылка: {file_url[:80]}'}, ensure_ascii=False)}
 
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()

@@ -139,7 +139,12 @@ export default function ImportBlock() {
   };
 
   const handleStart = async () => {
-    if (!fileUrl.trim()) { toast.error('Вставьте ссылку на файл'); return; }
+    const url = fileUrl.trim();
+    if (!url) { toast.error('Вставьте ссылку на файл'); return; }
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      toast.error('Ссылка должна начинаться с https://');
+      return;
+    }
     setStarting(true);
     try {
       const r = await fetch(XLSX_URL, {
