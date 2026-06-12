@@ -740,6 +740,8 @@ def handler(event: dict, context) -> dict:
                     )
                     if time_ok and not already_ran:
                         api_key, folder_id = _load_gpt_keys(cur)
+                        if not api_key or not folder_id:
+                            print('[news] CRON: YandexGPT не настроен — пропускаем генерацию (нет api_key или folder_id)')
                         key_rate = _fetch_cbr_key_rate()
                         import random
                         count = int(sch.get('articles_per_run', 3))
@@ -1040,17 +1042,19 @@ def handler(event: dict, context) -> dict:
                 run_hour = max(0, min(23, int(body.get('run_hour', 9))))
                 run_minute = max(0, min(59, int(body.get('run_minute', 0))))
                 per_run = max(1, min(10, int(body.get('articles_per_run', 3))))
+                topics_raw = (body.get('topics') or '').strip().replace("'", "''")
                 ts = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')
                 if row:
                     cur.execute(
                         f"UPDATE {SCHEMA}.news_schedule SET is_enabled = {is_enabled}, "
-                        f"run_hour = {run_hour}, run_minute = {run_minute}, articles_per_run = {per_run}, updated_at = '{ts}' "
+                        f"run_hour = {run_hour}, run_minute = {run_minute}, articles_per_run = {per_run}, "
+                        f"topics = '{topics_raw}', updated_at = '{ts}' "
                         f"WHERE id = {row['id']}"
                     )
                 else:
                     cur.execute(
-                        f"INSERT INTO {SCHEMA}.news_schedule (is_enabled, run_hour, run_minute, articles_per_run) "
-                        f"VALUES ({is_enabled}, {run_hour}, {run_minute}, {per_run})"
+                        f"INSERT INTO {SCHEMA}.news_schedule (is_enabled, run_hour, run_minute, articles_per_run, topics) "
+                        f"VALUES ({is_enabled}, {run_hour}, {run_minute}, {per_run}, '{topics_raw}')"
                     )
                 conn.commit()
                 return _ok({'ok': True})
