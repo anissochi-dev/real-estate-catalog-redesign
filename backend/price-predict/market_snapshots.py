@@ -403,9 +403,22 @@ def aggregate_market_listings(cur, conn, today=None):
 
         p  = float(r.get('price') or 0)
         a  = float(r.get('area') or 0)
-        ppm2 = float(r.get('price_per_m2') or 0) or (round(p / a) if a > 0 else 0)
+
+        # Земля: ЦИАН хранит площадь в сотках (обычно 1–500), arrpro — в м² (обычно >500).
+        # Если area < 500 и категория land — считаем сотки, конвертируем в м² (×100).
+        if cat == 'land' and 0 < a < 500:
+            a = a * 100  # сотки → м²
+
+        ppm2 = float(r.get('price_per_m2') or 0)
+        # Пересчитываем ppm2 по нормализованной площади
+        ppm2 = round(p / a) if a > 0 and p > 0 else 0
 
         if p <= 0 or a <= 0 or ppm2 <= 0:
+            continue
+
+        # Для земли дополнительный санитарный фильтр — убираем явные выбросы
+        # (реальный диапазон ₽/м² для земли в Краснодаре: 1 000 – 150 000 ₽/м²)
+        if cat == 'land' and not (1_000 <= ppm2 <= 150_000):
             continue
 
         # Ключ без района (все районы) и с районом
@@ -417,6 +430,15 @@ def aggregate_market_listings(cur, conn, today=None):
                                  'source': 'market_listings'})
 
     print(f'[aggregate_ml] {len(groups)} groups to aggregate')
+
+    # Удаляем старые снапшоты из market_listings за сегодня — перепишем свежими
+    cur.execute(f"""
+        DELETE FROM {SCHEMA}.price_market_snapshots
+        WHERE snapshot_date = '{today}'
+          AND sources::text LIKE '%market_listings%'
+    """)
+    deleted = cur.rowcount
+    print(f'[aggregate_ml] deleted {deleted} stale snapshots for {today}')
 
     saved = 0
     for key, analogs in groups.items():
@@ -438,7 +460,7 @@ def aggregate_market_listings(cur, conn, today=None):
 
     conn.commit()
     print(f'[aggregate_ml] saved={saved} snapshots')
-    return {'saved': saved, 'groups_total': len(groups), 'date': today}
+    return {'saved': saved, 'groups_total': len(groups), 'deleted_stale': deleted, 'date': today}
 
 
 # ── handle_stats ──────────────────────────────────────────────────────────────
