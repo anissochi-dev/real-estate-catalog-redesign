@@ -103,6 +103,8 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     status?: string;
     purpose?: string;
     category?: string;
+    lat?: number | null;
+    lon?: number | null;
     found: boolean;
   }
   const [cadastreInfo, setCadastreInfo] = useState<CadastreInfo | null>(
@@ -176,7 +178,7 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
   const GEO_SUGGEST_URL = 'https://functions.poehali.dev/9b2f9622-9d12-4809-a614-023af6958251';
   const GEO_URL = 'https://functions.poehali.dev/9b2f9622-9d12-4809-a614-023af6958251';
 
-  /* Загрузить кадастр по адресу (авто, после выбора подсказки) */
+  /* Загрузить кадастр по адресу — автозапрос после выбора подсказки (через бэкенд PKK) */
   const fetchCadastreByAddress = async (fullAddress: string) => {
     if (!fullAddress.trim()) return;
     setCadastreLoading(true);
@@ -187,44 +189,80 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
         setCadastreInfo(d);
         setCadastreInput(d.cadastral_number);
         setEditing({ ...editingRef.current, cadastral_number: d.cadastral_number });
-      } else {
-        setCadastreInfo(null);
       }
-    } catch { setCadastreInfo(null); }
+      // Не сбрасываем пустым — PKK по адресу менее надёжен
+    } catch { /* тихо */ }
     finally { setCadastreLoading(false); }
   };
 
-  /* Поиск по кадастровому номеру (ручной ввод) */
+  /* Поиск по кадастровому номеру через Яндекс.Карты geocode (поддерживает кадастровые номера напрямую) */
   const searchByCadastre = async (query: string) => {
     const q = query.trim();
     if (!q) return;
     setCadastreSearchLoading(true);
     try {
-      const r = await fetch(`${GEO_URL}?action=by_cadastre&query=${encodeURIComponent(q)}`);
-      const d = await r.json();
-      if (d.found) {
-        setCadastreInfo(d);
-        setCadastreInput(q);
-        setEditing({
-          ...editingRef.current,
-          cadastral_number: q,
-          ...(d.address ? { address: d.address } : {}),
-          ...(d.lat ? { lat: d.lat, lng: d.lon } : {}),
-          ...(d.district ? { district: d.district } : {}),
-        });
-        if (d.lat && d.lon) {
-          const coords: [number, number] = [d.lat, d.lon];
-          markerRef.current?.geometry.setCoordinates(coords);
-          ymapInstance.current?.setCenter(coords, 16, { duration: 400 });
-          if (d.address) setStreetInput(d.address);
-          onCoordsManualChange?.(true);
-        }
-      } else {
+      // Яндекс.Карты умеют геокодировать кадастровые номера
+      if (!window.ymaps || typeof window.ymaps.geocode !== 'function') {
         setCadastreInfo({ found: false, cadastral_number: q });
         setEditing({ ...editingRef.current, cadastral_number: q });
+        return;
       }
-    } catch { setCadastreInfo(null); }
-    finally { setCadastreSearchLoading(false); }
+      // kind не указываем — кадастровые номера не являются 'house'
+      const res = await window.ymaps.geocode(q, { results: 1 });
+      const obj = res?.geoObjects?.get(0);
+      if (!obj) {
+        setCadastreInfo({ found: false, cadastral_number: q });
+        setEditing({ ...editingRef.current, cadastral_number: q });
+        return;
+      }
+      const coordsRaw = obj.geometry?.getCoordinates?.();
+      if (!coordsRaw || coordsRaw.length !== 2) {
+        setCadastreInfo({ found: false, cadastral_number: q });
+        setEditing({ ...editingRef.current, cadastral_number: q });
+        return;
+      }
+      const lat = coordsRaw[0] as number;
+      const lon = coordsRaw[1] as number;
+
+      // Адрес из геокодера
+      const street = obj.getThoroughfare?.() || '';
+      const house = obj.getPremiseNumber?.() || '';
+      const addressLine = [street, house].filter(Boolean).join(', ') || obj.getAddressLine?.() || '';
+
+      // Район
+      let district = '';
+      try {
+        const meta = obj.properties?.get?.('metaDataProperty')?.GeocoderMetaData;
+        const comps: { kind: string; name: string }[] = meta?.Address?.Components || [];
+        const dists = comps.filter(p => p.kind === 'district').map(p => p.name);
+        district = dists.find(n => /микрорайон|мкр|квартал|жилмассив/i.test(n)) || (dists.length ? dists[dists.length - 1] : '');
+      } catch { /* ignore */ }
+
+      const info: CadastreInfo = { found: true, cadastral_number: q, address: addressLine, lat, lon };
+      setCadastreInfo(info);
+      setCadastreInput(q);
+
+      const coords: [number, number] = [lat, lon];
+      markerRef.current?.geometry.setCoordinates(coords);
+      ymapInstance.current?.setCenter(coords, 17, { duration: 400 });
+      if (addressLine) setStreetInput(addressLine);
+      onCoordsManualChange?.(true);
+
+      setEditing({
+        ...editingRef.current,
+        cadastral_number: q,
+        address: addressLine || editingRef.current.address,
+        lat,
+        lng: lon,
+        ...(district ? { district } : {}),
+      });
+    } catch (e) {
+      console.error('[cadastre search]', e);
+      setCadastreInfo({ found: false, cadastral_number: q });
+      setEditing({ ...editingRef.current, cadastral_number: q });
+    } finally {
+      setCadastreSearchLoading(false);
+    }
   };
 
   interface DadataSuggestion { value: string; full: string; lat: number | null; lon: number | null; district?: string; }
@@ -621,9 +659,18 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
         </div>
       )}
       {cadastreInfo && !cadastreInfo.found && cadastreInfo.cadastral_number && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800 flex items-center gap-2">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800 flex flex-wrap items-center gap-2">
           <Icon name="AlertTriangle" size={13} className="flex-shrink-0" />
-          Объект с кадастровым номером <span className="font-mono font-semibold mx-1">{cadastreInfo.cadastral_number}</span> не найден в базе DaData.
+          <span>Объект <span className="font-mono font-semibold">{cadastreInfo.cadastral_number}</span> не найден через геокодер.</span>
+          <a
+            href={`https://pkk.rosreestr.ru/#/?text=${encodeURIComponent(cadastreInfo.cadastral_number)}&type=1`}
+            target="_blank" rel="noopener noreferrer"
+            className="text-amber-700 underline hover:text-amber-900 flex items-center gap-1"
+          >
+            <Icon name="ExternalLink" size={11} />
+            Проверить на PKK Росреестра
+          </a>
+          <span className="text-amber-600">— номер будет сохранён</span>
         </div>
       )}
 

@@ -1580,207 +1580,395 @@ def _handle_geo_quota(body: dict, cur, conn) -> dict:
     return _err(f'Неизвестный mode: {mode}', 400)
 
 
-# ── action=cadastre_by_address ────────────────────────────────────────────────
+# ── Росреестр PKK helpers ─────────────────────────────────────────────────────
 
-def _handle_cadastre_by_address(event: dict) -> dict:
+_PKK_TYPES = {
+    1: 'Земельный участок',
+    2: 'Здание',
+    3: 'Сооружение',
+    4: 'Объект незавершённого строительства',
+    5: 'Помещение',
+    6: 'Машиноместо',
+    9: 'Единый недвижимый комплекс',
+    10: 'Предприятие как имущественный комплекс',
+}
+
+_PKK_STATUS = {
+    '01': 'Учтён', '06': 'Ранее учтён', '07': 'Временный',
+    '08': 'Архивный', '09': 'Аннулированный',
+}
+
+_PKK_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': 'application/json, text/plain, */*',
+    'Referer': 'https://pkk.rosreestr.ru/',
+    'Origin': 'https://pkk.rosreestr.ru',
+}
+
+
+def _pkk_ssl_ctx():
+    """SSL-контекст без верификации для pkk.rosreestr.ru (самоподписанный сертификат)."""
+    import ssl
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
+
+
+def _pkk_search_by_cn(cn: str) -> dict:
+    """Поиск объекта по кадастровому номеру через публичный PKK API Росреестра.
+    Endpoint: /api/features/?text=<cn>&tolerance=2&types=[1,2,5,3,6]
     """
-    Получает информацию о кадастровом объекте по адресу через DaData findById/address.
-    GET ?query=<полный адрес>
-    → { cadastral_number, area_sqm, floors, year_built, object_type, ownership_form, address }
-    """
-    params = event.get('queryStringParameters') or {}
-    query = (params.get('query') or '').strip()
-    if not query:
-        return _err('query обязателен', 400)
-
-    api_key = os.environ.get('DADATA_API_KEY', '')
-    secret_key = os.environ.get('DADATA_SECRET_KEY', '')
-    if not api_key:
-        return _err('DADATA_API_KEY не настроен', 503)
-
-    payload = json.dumps({'query': query, 'count': 1}).encode('utf-8')
-    req = urllib.request.Request(
-        'https://suggestions.dadata.ru/suggestions/api/4_1/rs/findById/address',
-        data=payload,
-        headers={
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': f'Token {api_key}',
-            'X-Secret': secret_key,
-        },
-        method='POST',
+    import urllib.parse as _up
+    ctx = _pkk_ssl_ctx()
+    # Единый endpoint с перечислением типов
+    url = (
+        f'https://pkk.rosreestr.ru/api/features/'
+        f'?text={_up.quote(cn)}&limit=1&tolerance=4'
+        f'&types=%5B1%2C2%2C5%2C3%2C6%5D'
     )
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        req = urllib.request.Request(url, headers=_PKK_HEADERS)
+        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
             data = json.loads(resp.read().decode('utf-8'))
+        print(f'[pkk] search cn={cn} response keys={list(data.keys())}')
+        # Ответ может быть features[] или results[]
+        features = data.get('features') or data.get('results') or []
+        if features:
+            f = features[0]
+            obj_type = f.get('type') or 2
+            return {'feature': f, 'obj_type': obj_type}
     except Exception as e:
-        return _err(f'DaData ошибка: {e}', 502)
+        print(f'[pkk] search error cn={cn}: {e}')
 
-    suggestions = data.get('suggestions', [])
-    if not suggestions:
-        return _ok({'found': False})
-
-    d = suggestions[0].get('data', {})
-    cadastral = d.get('cadastral_number') or d.get('metro') or ''
-
-    # Тип объекта по коду fias_level
-    fias_level = d.get('fias_level', '')
-    level_labels = {
-        '8': 'Здание', '9': 'Помещение', '7': 'Земельный участок',
-        '65': 'Территория', '6': 'Строение',
-    }
-    object_type = level_labels.get(str(fias_level), '')
-
-    result = {
-        'found': True,
-        'cadastral_number': cadastral,
-        'address': suggestions[0].get('unrestricted_value') or suggestions[0].get('value') or '',
-        'object_type': object_type,
-        'fias_id': d.get('fias_id') or '',
-        'fias_level': fias_level,
-        'lat': float(d['geo_lat']) if d.get('geo_lat') else None,
-        'lon': float(d['geo_lon']) if d.get('geo_lon') else None,
-        'area_sqm': None,
-        'floors': None,
-        'year_built': None,
-        'ownership_form': '',
-        'okrug': d.get('city_district_with_type') or d.get('city_district') or '',
-    }
-    return _ok(result)
+    # Fallback: перебираем типы по одному
+    for obj_type in [1, 2, 5, 3, 6]:
+        try:
+            url2 = (
+                f'https://pkk.rosreestr.ru/api/features/{obj_type}'
+                f'?text={_up.quote(cn)}&limit=1&tolerance=4'
+            )
+            req2 = urllib.request.Request(url2, headers=_PKK_HEADERS)
+            with urllib.request.urlopen(req2, timeout=12, context=ctx) as resp2:
+                data2 = json.loads(resp2.read().decode('utf-8'))
+            features2 = data2.get('features') or data2.get('results') or []
+            if features2:
+                print(f'[pkk] found type={obj_type} cn={cn}')
+                return {'feature': features2[0], 'obj_type': obj_type}
+        except Exception as e2:
+            print(f'[pkk] type={obj_type} cn={cn} error: {e2}')
+    return {}
 
 
-# ── action=by_cadastre ────────────────────────────────────────────────────────
-
-def _handle_by_cadastre(event: dict) -> dict:
-    """
-    Поиск объекта по кадастровому номеру через DaData findById/cadastre.
-    GET ?query=<кадастровый_номер>
-    → { address, lat, lon, district, cadastral_number, area_sqm, category, floors, year_built }
-    """
-    params = event.get('queryStringParameters') or {}
-    query = (params.get('query') or '').strip()
-    if not query:
-        return _err('query обязателен', 400)
-
-    api_key = os.environ.get('DADATA_API_KEY', '')
-    secret_key = os.environ.get('DADATA_SECRET_KEY', '')
-    if not api_key:
-        return _err('DADATA_API_KEY не настроен', 503)
-
-    payload = json.dumps({'query': query, 'count': 1}).encode('utf-8')
-    req = urllib.request.Request(
-        'https://suggestions.dadata.ru/suggestions/api/4_1/rs/findById/cadastre',
-        data=payload,
-        headers={
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': f'Token {api_key}',
-            'X-Secret': secret_key,
-        },
-        method='POST',
-    )
+def _pkk_get_detail(obj_type: int, cn: str) -> dict:
+    """Получает детальную карточку объекта из PKK."""
+    import urllib.parse as _up
+    ctx = _pkk_ssl_ctx()
     try:
-        with urllib.request.urlopen(req, timeout=12) as resp:
+        url = f'https://pkk.rosreestr.ru/api/features/{obj_type}/{_up.quote(cn)}'
+        req = urllib.request.Request(url, headers=_PKK_HEADERS)
+        with urllib.request.urlopen(req, timeout=12, context=ctx) as resp:
             data = json.loads(resp.read().decode('utf-8'))
+        return data.get('feature') or {}
     except Exception as e:
-        return _err(f'DaData ошибка: {e}', 502)
+        print(f'[pkk] detail error cn={cn}: {e}')
+        return {}
 
-    suggestions = data.get('suggestions', [])
-    if not suggestions:
-        return _ok({'found': False, 'cadastral_number': query})
 
-    s = suggestions[0]
-    d = s.get('data', {})
-    address_data = d.get('address', {}) or {}
-    addr_data = address_data.get('data', {}) if isinstance(address_data, dict) else {}
+def _pkk_parse_feature(feature: dict, obj_type: int, cn: str) -> dict:
+    """Разбирает feature из PKK API в унифицированный формат."""
+    attrs = feature.get('attrs') or {}
+    center = feature.get('center') or {}
 
-    # Координаты — из address.data или напрямую
-    lat = None
-    lon = None
-    if addr_data.get('geo_lat'):
-        lat = float(addr_data['geo_lat'])
-        lon = float(addr_data['geo_lon'])
-    elif d.get('geo_lat'):
-        lat = float(d['geo_lat'])
-        lon = float(d['geo_lon'])
-
-    # Адрес
-    address_str = (
-        address_data.get('unrestricted_value')
-        or address_data.get('value')
-        or s.get('unrestricted_value')
-        or s.get('value')
-        or ''
-    )
-    # Очищаем от Россия/край
-    for prefix in ['Россия, ', 'Краснодарский край, ']:
-        if address_str.startswith(prefix):
-            address_str = address_str[len(prefix):]
-
-    # Тип объекта по назначению
-    cn_type = d.get('cn_type', '')
-    type_labels = {
-        'FLAT': 'Квартира', 'ROOM': 'Комната', 'HOUSE': 'Дом',
-        'LAND': 'Земельный участок', 'BUILDING': 'Здание',
-        'CONSTRUCTION': 'Сооружение', 'CAR_PLACE': 'Машиноместо',
-        'ANOTHER': 'Иное помещение', 'OFFICE': 'Нежилое помещение',
-    }
-    object_type = type_labels.get(cn_type, cn_type or '')
+    # Координаты (PKK возвращает в EPSG:3857, нужно конвертировать в WGS84)
+    lat, lon = None, None
+    cx = center.get('x')
+    cy = center.get('y')
+    if cx and cy:
+        import math
+        lon = cx / 20037508.34 * 180
+        lat_rad = math.atan(math.exp(cy / 20037508.34 * math.pi)) * 2 - math.pi / 2
+        lat = math.degrees(lat_rad)
+        lat = round(lat, 7)
+        lon = round(lon, 7)
 
     # Площадь
     area_sqm = None
-    if d.get('area_value'):
+    area_raw = attrs.get('area_value') or attrs.get('area') or attrs.get('sq') or ''
+    if area_raw:
         try:
-            area_sqm = float(d['area_value'])
-        except (TypeError, ValueError):
-            pass
-
-    # Этажность
-    floors = None
-    if d.get('floors'):
-        try:
-            floors = int(d['floors'])
-        except (TypeError, ValueError):
-            pass
-
-    # Год постройки
-    year_built = None
-    if d.get('year_built'):
-        try:
-            year_built = int(d['year_built'])
+            area_sqm = float(str(area_raw).replace(',', '.'))
         except (TypeError, ValueError):
             pass
 
     # Статус
-    status_code = d.get('state', {}).get('status') if isinstance(d.get('state'), dict) else ''
-    status_labels = {
-        'Учтённый': 'Учтён', 'Ранее учтённый': 'Ранее учтён',
-        'Временный': 'Временный', 'Архивный': 'Архивный',
-    }
+    status_code = str(attrs.get('statecd') or '')
+    status = _PKK_STATUS.get(status_code, '')
 
-    # Категория (для земли)
-    category = d.get('category_type') or ''
+    # Тип объекта
+    type_label = _PKK_TYPES.get(obj_type, '')
+    purpose = attrs.get('purpose') or attrs.get('util_by_doc') or ''
+    category = attrs.get('category_type') or attrs.get('category') or ''
 
-    # Район из адреса
-    district = addr_data.get('city_district') or addr_data.get('settlement') or ''
+    # Этажи / год
+    floors = None
+    year_built = None
+    try:
+        floors_raw = attrs.get('floors') or attrs.get('floors_count')
+        if floors_raw:
+            floors = int(str(floors_raw))
+    except (TypeError, ValueError):
+        pass
+    try:
+        yr = attrs.get('year_built') or attrs.get('year_created')
+        if yr:
+            year_built = int(str(yr))
+    except (TypeError, ValueError):
+        pass
 
-    return _ok({
+    # Адрес из PKK
+    address_str = attrs.get('address') or attrs.get('readable_address') or ''
+
+    return {
         'found': True,
-        'cadastral_number': query,
+        'cadastral_number': cn,
         'address': address_str,
         'lat': lat,
         'lon': lon,
-        'district': district,
-        'object_type': object_type,
-        'cn_type': cn_type,
+        'district': '',
+        'object_type': type_label,
         'area_sqm': area_sqm,
         'floors': floors,
         'year_built': year_built,
+        'status': status,
+        'purpose': purpose,
         'category': category,
-        'status': status_labels.get(status_code or '', status_code or ''),
-        'okrug': addr_data.get('city_district_with_type') or addr_data.get('city_district') or '',
-        'purpose': d.get('purpose_name') or '',
-    })
+        'source': 'rosreestr_pkk',
+    }
+
+
+# ── action=cadastre_by_address ────────────────────────────────────────────────
+
+def _handle_cadastre_by_address(event: dict) -> dict:
+    """
+    Получает кадастровый номер по адресу: геокодируем через DaData suggest → берём
+    первый результат → ищем ближайший объект в PKK по координатам.
+    GET ?query=<полный адрес>
+    """
+    params = event.get('queryStringParameters') or {}
+    query = (params.get('query') or '').strip()
+    if not query:
+        return _err('query обязателен', 400)
+
+    api_key = os.environ.get('DADATA_API_KEY', '')
+    secret_key = os.environ.get('DADATA_SECRET_KEY', '')
+
+    # 1. Геокодируем адрес → координаты через DaData suggest
+    lat, lon = None, None
+    try:
+        payload = json.dumps({'query': query, 'count': 1}).encode('utf-8')
+        req = urllib.request.Request(
+            'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address',
+            data=payload,
+            headers={'Content-Type': 'application/json', 'Accept': 'application/json',
+                     'Authorization': f'Token {api_key}', 'X-Secret': secret_key},
+            method='POST',
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+        sugg = data.get('suggestions', [])
+        if sugg:
+            d = sugg[0].get('data', {})
+            if d.get('geo_lat'):
+                lat = float(d['geo_lat'])
+                lon = float(d['geo_lon'])
+    except Exception as e:
+        print(f'[cadastre_by_address] DaData error: {e}')
+
+    if not lat or not lon:
+        return _ok({'found': False})
+
+    # 2. Ищем объект PKK по координатам (обратный кадастровый поиск)
+    import urllib.parse as _up
+    import math
+    # Конвертируем WGS84 → EPSG:3857 для PKK
+    x = lon * 20037508.34 / 180
+    y = math.log(math.tan((90 + lat) * math.pi / 360)) / (math.pi / 180)
+    y = y * 20037508.34 / 180
+    x, y = round(x, 2), round(y, 2)
+
+    ctx = _pkk_ssl_ctx()
+    for obj_type in [2, 5, 1, 3]:  # Здание, Помещение, Земля, Сооружение
+        try:
+            url = (
+                f'https://pkk.rosreestr.ru/api/features/{obj_type}'
+                f'?text=&limit=1&tolerance=8&sq=%7B%22type%22%3A%22Point%22%2C%22coordinates%22%3A[{x}%2C{y}]%7D'
+            )
+            req = urllib.request.Request(url, headers=_PKK_HEADERS)
+            with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+            features = data.get('features') or []
+            if features:
+                f = features[0]
+                attrs = f.get('attrs') or {}
+                cn = attrs.get('cn') or attrs.get('id') or ''
+                if cn:
+                    result = _pkk_parse_feature(f, obj_type, cn)
+                    result['lat'] = lat
+                    result['lon'] = lon
+                    return _ok(result)
+        except Exception as e:
+            print(f'[cadastre_by_address] PKK type={obj_type} error: {e}')
+            continue
+
+    return _ok({'found': False})
+
+
+# ── action=by_cadastre ────────────────────────────────────────────────────────
+
+def _yandex_geocode_cadastre(cn: str, api_key: str) -> dict:
+    """
+    Геокодирование кадастрового номера через Яндекс HTTP Geocoder API.
+    Яндекс поддерживает кадастровые номера как поисковый запрос.
+    Возвращает { lat, lon, address, district } или {}.
+    """
+    import urllib.parse as _up
+    if not api_key:
+        return {}
+    try:
+        url = (
+            f'https://geocode-maps.yandex.ru/1.x/'
+            f'?apikey={api_key}'
+            f'&geocode={_up.quote(cn)}'
+            f'&format=json&results=1&lang=ru_RU'
+        )
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+
+        members = (
+            data.get('response', {})
+                .get('GeoObjectCollection', {})
+                .get('featureMember', [])
+        )
+        if not members:
+            return {}
+
+        geo = members[0].get('GeoObject', {})
+        pos = geo.get('Point', {}).get('pos', '')
+        if not pos:
+            return {}
+
+        lon_str, lat_str = pos.split()
+        lat = float(lat_str)
+        lon = float(lon_str)
+
+        # Адрес
+        meta = geo.get('metaDataProperty', {}).get('GeocoderMetaData', {})
+        address_str = meta.get('text') or geo.get('name') or geo.get('description') or ''
+        for prefix in ['Россия, ', 'Краснодарский край, ']:
+            if address_str.startswith(prefix):
+                address_str = address_str[len(prefix):]
+
+        # Район из компонентов
+        district = ''
+        comps = meta.get('Address', {}).get('Components', [])
+        dists = [c['name'] for c in comps if c.get('kind') == 'district']
+        district = (
+            next((n for n in dists if re.search(r'микрорайон|мкр|квартал|жилмассив', n, re.I)), None)
+            or (dists[-1] if dists else '')
+        )
+
+        return {
+            'lat': round(lat, 7),
+            'lon': round(lon, 7),
+            'address': address_str,
+            'district': district,
+        }
+    except Exception as e:
+        print(f'[yandex_geocode_cadastre] error cn={cn}: {e}')
+        return {}
+
+
+def _handle_by_cadastre(event: dict) -> dict:
+    """
+    Поиск объекта по кадастровому номеру.
+    Стратегия:
+      1. Яндекс HTTP Geocoder (с ключом) — поддерживает кадастровые номера напрямую
+      2. PKK Росреестра как fallback (если Яндекс не нашёл)
+    GET ?query=<кадастровый_номер>
+    → { address, lat, lon, district, cadastral_number, object_type, status, ... }
+    """
+    params = event.get('queryStringParameters') or {}
+    query = (params.get('query') or '').strip()
+    if not query:
+        return _err('query обязателен', 400)
+
+    # 1. Яндекс Геокодер
+    ya_key = os.environ.get('YANDEX_GEOCODER_KEY', '')
+    ya_result = _yandex_geocode_cadastre(query, ya_key)
+
+    if ya_result.get('lat'):
+        print(f'[by_cadastre] Яндекс нашёл cn={query}: lat={ya_result["lat"]}')
+        return _ok({
+            'found': True,
+            'cadastral_number': query,
+            'address': ya_result.get('address', ''),
+            'lat': ya_result['lat'],
+            'lon': ya_result['lon'],
+            'district': ya_result.get('district', ''),
+            'object_type': '',
+            'area_sqm': None,
+            'floors': None,
+            'year_built': None,
+            'status': '',
+            'source': 'yandex_geocoder',
+        })
+
+    print(f'[by_cadastre] Яндекс не нашёл cn={query}, пробуем PKK')
+
+    # 2. Fallback: PKK Росреестра
+    hit = _pkk_search_by_cn(query)
+    if not hit:
+        return _ok({'found': False, 'cadastral_number': query})
+
+    feature = hit['feature']
+    obj_type = hit['obj_type']
+    detail = _pkk_get_detail(obj_type, query)
+    if detail:
+        feature = detail
+
+    result = _pkk_parse_feature(feature, obj_type, query)
+
+    # Обогащаем адресом через DaData если PKK дал координаты но нет адреса
+    if not result.get('address') and result.get('lat'):
+        try:
+            api_key = os.environ.get('DADATA_API_KEY', '')
+            secret_key = os.environ.get('DADATA_SECRET_KEY', '')
+            payload = json.dumps({'query': query, 'count': 1}).encode('utf-8')
+            req = urllib.request.Request(
+                'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address',
+                data=payload,
+                headers={'Content-Type': 'application/json', 'Accept': 'application/json',
+                         'Authorization': f'Token {api_key}', 'X-Secret': secret_key},
+                method='POST',
+            )
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                d = json.loads(resp.read().decode('utf-8'))
+            sugg = d.get('suggestions', [])
+            if sugg:
+                addr = sugg[0].get('value') or ''
+                for prefix in ['Россия, ', 'Краснодарский край, ']:
+                    if addr.startswith(prefix):
+                        addr = addr[len(prefix):]
+                if addr:
+                    result['address'] = addr
+                dd = sugg[0].get('data', {})
+                result['district'] = dd.get('city_district') or dd.get('settlement') or ''
+        except Exception as e:
+            print(f'[by_cadastre] DaData fallback error: {e}')
+
+    return _ok(result)
 
 
 # ── Handler ───────────────────────────────────────────────────────────────────
