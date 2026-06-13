@@ -17,6 +17,7 @@ interface BiweeklyData {
 
 const DEAL_LABELS: Record<string, string> = { sale: 'продажа', rent: 'аренда' };
 const THRESHOLD = 3.0;
+const ANOMALY_MAX = 50.0;
 
 function Arrow({ pct }: { pct: number }) {
   if (Math.abs(pct) < 0.1) return <span className="text-muted-foreground">→</span>;
@@ -67,7 +68,10 @@ export default function PriceSignalsWidget() {
 
   if (!data || !data.rows.length) return null;
 
-  const rows = data.rows.filter(r => dealFilter === 'all' || r.deal_type === dealFilter);
+  const allRows = data.rows.filter(r => dealFilter === 'all' || r.deal_type === dealFilter);
+  // Аномалии >50% — выбросы из единичных сделок, показываем отдельно
+  const anomalies = allRows.filter(r => Math.abs(r.change_pct) > ANOMALY_MAX);
+  const rows = allRows.filter(r => Math.abs(r.change_pct) <= ANOMALY_MAX);
   const significant = rows.filter(r => Math.abs(r.change_pct) >= THRESHOLD);
   const shown = showAll ? rows : rows.slice(0, 12);
 
@@ -153,6 +157,23 @@ export default function PriceSignalsWidget() {
                         : `${Math.round(r.price_per_m2)} ₽/м²`}
                     </span>
                   </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Аномальные выбросы */}
+          {anomalies.length > 0 && (
+            <div className="px-5 py-2.5 border-b border-border bg-muted/30">
+              <div className="text-xs text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 items-center">
+                <span className="flex items-center gap-1 font-medium text-foreground/60">
+                  <Icon name="AlertOctagon" size={12} className="text-muted-foreground" />
+                  Возможные выбросы (&gt;{ANOMALY_MAX}%):
+                </span>
+                {anomalies.map((r, i) => (
+                  <span key={i} className="text-muted-foreground">
+                    {CAT_LABELS[r.category] || r.category} ({DEAL_LABELS[r.deal_type]}): {r.change_pct > 0 ? '+' : ''}{r.change_pct.toFixed(1)}%
+                  </span>
                 ))}
               </div>
             </div>

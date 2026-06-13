@@ -719,7 +719,8 @@ def _analyze_price_changes(cur, threshold_pct: float = 3.0) -> list:
         significant = []
         for r in rows:
             chg = float(r.get('change_pct') or 0)
-            if abs(chg) >= threshold_pct:
+            # Фильтруем аномальные выбросы (>50%) — скорее всего единичные сделки
+            if abs(chg) >= threshold_pct and abs(chg) <= 50.0:
                 cat = r.get('category') or ''
                 deal = r.get('deal_type') or ''
                 price = float(r.get('price_per_m2') or 0)
