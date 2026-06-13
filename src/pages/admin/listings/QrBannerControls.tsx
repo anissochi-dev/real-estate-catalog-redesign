@@ -288,7 +288,9 @@ export function DownloadPanel({ downloadFormat, setDownloadFormat, downloading, 
       <button onClick={onDownloadQr} disabled={!qrDataUrl}
         className="flex items-center gap-1.5 text-sm text-brand-blue hover:underline disabled:opacity-40"
       >
-        <Icon name="QrCode" size={14} />Скачать QR-код отдельно (PNG)
+        <Icon name="QrCode" size={14} />
+        Скачать QR-код отдельно (PNG)
+        <span className="text-xs text-muted-foreground font-normal ml-1">· 3м × 2м, 150 DPI</span>
       </button>
     </div>
   );

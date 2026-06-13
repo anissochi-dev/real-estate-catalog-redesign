@@ -304,9 +304,52 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
     } catch { alert('Ошибка при скачивании'); } finally { setDownloading(false); }
   };
 
-  const downloadQr = () => {
+  const downloadQr = async () => {
     if (!qrDataUrl) return;
-    const a = document.createElement('a'); a.href = qrDataUrl; a.download = `qr-${listing.id}.png`; a.click();
+    // 3м × 2м при 150 DPI = 1772 × 1181 px — стандарт для крупной печати
+    const PX_W = 1772;
+    const PX_H = 1181;
+    const url = publicUrl || `${window.location.origin}/object/${listing.id}`;
+    try {
+      // Генерируем QR в нужном разрешении
+      const hiResQr = await QRCode.toDataURL(url, {
+        width: Math.min(PX_W, PX_H) - 80,
+        margin: 2,
+        color: { dark: textColor, light: '#ffffff' },
+        errorCorrectionLevel: 'H',
+      });
+      const cv = document.createElement('canvas');
+      cv.width = PX_W;
+      cv.height = PX_H;
+      const ctx = cv.getContext('2d')!;
+      // Фон белый
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, PX_W, PX_H);
+      // QR по центру
+      const qrImg = new window.Image();
+      await new Promise<void>(res => { qrImg.onload = () => res(); qrImg.src = hiResQr; });
+      const qrSize = Math.min(PX_W, PX_H) - 80;
+      const qrX = Math.round((PX_W - qrSize) / 2);
+      const qrY = Math.round((PX_H - qrSize) / 2);
+      ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+      // Подпись размера
+      ctx.fillStyle = '#999999';
+      ctx.font = `500 28px Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('3м × 2м · 150 DPI · для крупной печати', PX_W / 2, PX_H - 20);
+      cv.toBlob(blob => {
+        if (!blob) return;
+        const objUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objUrl;
+        a.download = `qr-3x2m-${listing.id}.png`;
+        a.click();
+        URL.revokeObjectURL(objUrl);
+      }, 'image/png', 1);
+    } catch {
+      // fallback на оригинальный QR
+      const a = document.createElement('a'); a.href = qrDataUrl; a.download = `qr-${listing.id}.png`; a.click();
+    }
   };
 
   // ── сборка ────────────────────────────────────────────────────────────────
