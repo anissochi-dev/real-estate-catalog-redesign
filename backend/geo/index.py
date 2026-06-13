@@ -1580,6 +1580,209 @@ def _handle_geo_quota(body: dict, cur, conn) -> dict:
     return _err(f'Неизвестный mode: {mode}', 400)
 
 
+# ── action=cadastre_by_address ────────────────────────────────────────────────
+
+def _handle_cadastre_by_address(event: dict) -> dict:
+    """
+    Получает информацию о кадастровом объекте по адресу через DaData findById/address.
+    GET ?query=<полный адрес>
+    → { cadastral_number, area_sqm, floors, year_built, object_type, ownership_form, address }
+    """
+    params = event.get('queryStringParameters') or {}
+    query = (params.get('query') or '').strip()
+    if not query:
+        return _err('query обязателен', 400)
+
+    api_key = os.environ.get('DADATA_API_KEY', '')
+    secret_key = os.environ.get('DADATA_SECRET_KEY', '')
+    if not api_key:
+        return _err('DADATA_API_KEY не настроен', 503)
+
+    payload = json.dumps({'query': query, 'count': 1}).encode('utf-8')
+    req = urllib.request.Request(
+        'https://suggestions.dadata.ru/suggestions/api/4_1/rs/findById/address',
+        data=payload,
+        headers={
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': f'Token {api_key}',
+            'X-Secret': secret_key,
+        },
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+    except Exception as e:
+        return _err(f'DaData ошибка: {e}', 502)
+
+    suggestions = data.get('suggestions', [])
+    if not suggestions:
+        return _ok({'found': False})
+
+    d = suggestions[0].get('data', {})
+    cadastral = d.get('cadastral_number') or d.get('metro') or ''
+
+    # Тип объекта по коду fias_level
+    fias_level = d.get('fias_level', '')
+    level_labels = {
+        '8': 'Здание', '9': 'Помещение', '7': 'Земельный участок',
+        '65': 'Территория', '6': 'Строение',
+    }
+    object_type = level_labels.get(str(fias_level), '')
+
+    result = {
+        'found': True,
+        'cadastral_number': cadastral,
+        'address': suggestions[0].get('unrestricted_value') or suggestions[0].get('value') or '',
+        'object_type': object_type,
+        'fias_id': d.get('fias_id') or '',
+        'fias_level': fias_level,
+        'lat': float(d['geo_lat']) if d.get('geo_lat') else None,
+        'lon': float(d['geo_lon']) if d.get('geo_lon') else None,
+        'area_sqm': None,
+        'floors': None,
+        'year_built': None,
+        'ownership_form': '',
+        'okrug': d.get('city_district_with_type') or d.get('city_district') or '',
+    }
+    return _ok(result)
+
+
+# ── action=by_cadastre ────────────────────────────────────────────────────────
+
+def _handle_by_cadastre(event: dict) -> dict:
+    """
+    Поиск объекта по кадастровому номеру через DaData findById/cadastre.
+    GET ?query=<кадастровый_номер>
+    → { address, lat, lon, district, cadastral_number, area_sqm, category, floors, year_built }
+    """
+    params = event.get('queryStringParameters') or {}
+    query = (params.get('query') or '').strip()
+    if not query:
+        return _err('query обязателен', 400)
+
+    api_key = os.environ.get('DADATA_API_KEY', '')
+    secret_key = os.environ.get('DADATA_SECRET_KEY', '')
+    if not api_key:
+        return _err('DADATA_API_KEY не настроен', 503)
+
+    payload = json.dumps({'query': query, 'count': 1}).encode('utf-8')
+    req = urllib.request.Request(
+        'https://suggestions.dadata.ru/suggestions/api/4_1/rs/findById/cadastre',
+        data=payload,
+        headers={
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': f'Token {api_key}',
+            'X-Secret': secret_key,
+        },
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+    except Exception as e:
+        return _err(f'DaData ошибка: {e}', 502)
+
+    suggestions = data.get('suggestions', [])
+    if not suggestions:
+        return _ok({'found': False, 'cadastral_number': query})
+
+    s = suggestions[0]
+    d = s.get('data', {})
+    address_data = d.get('address', {}) or {}
+    addr_data = address_data.get('data', {}) if isinstance(address_data, dict) else {}
+
+    # Координаты — из address.data или напрямую
+    lat = None
+    lon = None
+    if addr_data.get('geo_lat'):
+        lat = float(addr_data['geo_lat'])
+        lon = float(addr_data['geo_lon'])
+    elif d.get('geo_lat'):
+        lat = float(d['geo_lat'])
+        lon = float(d['geo_lon'])
+
+    # Адрес
+    address_str = (
+        address_data.get('unrestricted_value')
+        or address_data.get('value')
+        or s.get('unrestricted_value')
+        or s.get('value')
+        or ''
+    )
+    # Очищаем от Россия/край
+    for prefix in ['Россия, ', 'Краснодарский край, ']:
+        if address_str.startswith(prefix):
+            address_str = address_str[len(prefix):]
+
+    # Тип объекта по назначению
+    cn_type = d.get('cn_type', '')
+    type_labels = {
+        'FLAT': 'Квартира', 'ROOM': 'Комната', 'HOUSE': 'Дом',
+        'LAND': 'Земельный участок', 'BUILDING': 'Здание',
+        'CONSTRUCTION': 'Сооружение', 'CAR_PLACE': 'Машиноместо',
+        'ANOTHER': 'Иное помещение', 'OFFICE': 'Нежилое помещение',
+    }
+    object_type = type_labels.get(cn_type, cn_type or '')
+
+    # Площадь
+    area_sqm = None
+    if d.get('area_value'):
+        try:
+            area_sqm = float(d['area_value'])
+        except (TypeError, ValueError):
+            pass
+
+    # Этажность
+    floors = None
+    if d.get('floors'):
+        try:
+            floors = int(d['floors'])
+        except (TypeError, ValueError):
+            pass
+
+    # Год постройки
+    year_built = None
+    if d.get('year_built'):
+        try:
+            year_built = int(d['year_built'])
+        except (TypeError, ValueError):
+            pass
+
+    # Статус
+    status_code = d.get('state', {}).get('status') if isinstance(d.get('state'), dict) else ''
+    status_labels = {
+        'Учтённый': 'Учтён', 'Ранее учтённый': 'Ранее учтён',
+        'Временный': 'Временный', 'Архивный': 'Архивный',
+    }
+
+    # Категория (для земли)
+    category = d.get('category_type') or ''
+
+    # Район из адреса
+    district = addr_data.get('city_district') or addr_data.get('settlement') or ''
+
+    return _ok({
+        'found': True,
+        'cadastral_number': query,
+        'address': address_str,
+        'lat': lat,
+        'lon': lon,
+        'district': district,
+        'object_type': object_type,
+        'cn_type': cn_type,
+        'area_sqm': area_sqm,
+        'floors': floors,
+        'year_built': year_built,
+        'category': category,
+        'status': status_labels.get(status_code or '', status_code or ''),
+        'okrug': addr_data.get('city_district_with_type') or addr_data.get('city_district') or '',
+        'purpose': d.get('purpose_name') or '',
+    })
+
+
 # ── Handler ───────────────────────────────────────────────────────────────────
 
 def handler(event: dict, context) -> dict:
@@ -1620,7 +1823,11 @@ def handler(event: dict, context) -> dict:
                 return _handle_geo_okrug(body, cur, conn)
             elif action == 'geo_quota':
                 return _handle_geo_quota(body, cur, conn)
+            elif action == 'cadastre_by_address':
+                return _handle_cadastre_by_address(event)
+            elif action == 'by_cadastre':
+                return _handle_by_cadastre(event)
             else:
-                return _err(f'Неизвестный action: {action}. Доступные: suggest, fix, normalize, audit, parse_osm, overpass_streets, ai_map_streets, geo_okrug, geo_quota')
+                return _err(f'Неизвестный action: {action}. Доступные: suggest, fix, normalize, audit, parse_osm, overpass_streets, ai_map_streets, geo_okrug, geo_quota, cadastre_by_address, by_cadastre')
     finally:
         conn.close()

@@ -89,6 +89,26 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
   const [districts, setDistricts] = useState<District[]>([]);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Кадастр
+  const [cadastreInput, setCadastreInput] = useState(editing.cadastral_number || '');
+  const [cadastreLoading, setCadastreLoading] = useState(false);
+  const [cadastreSearchLoading, setCadastreSearchLoading] = useState(false);
+  interface CadastreInfo {
+    cadastral_number: string;
+    address?: string;
+    object_type?: string;
+    area_sqm?: number | null;
+    floors?: number | null;
+    year_built?: number | null;
+    status?: string;
+    purpose?: string;
+    category?: string;
+    found: boolean;
+  }
+  const [cadastreInfo, setCadastreInfo] = useState<CadastreInfo | null>(
+    editing.cadastral_number ? { cadastral_number: editing.cadastral_number, found: true } : null
+  );
+
   useEffect(() => { fetchDistricts().then(setDistricts); }, []);
 
   const currentCity = editing.city || 'Краснодар';
@@ -154,6 +174,58 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
   }, [apiKey]);
 
   const GEO_SUGGEST_URL = 'https://functions.poehali.dev/9b2f9622-9d12-4809-a614-023af6958251';
+  const GEO_URL = 'https://functions.poehali.dev/9b2f9622-9d12-4809-a614-023af6958251';
+
+  /* Загрузить кадастр по адресу (авто, после выбора подсказки) */
+  const fetchCadastreByAddress = async (fullAddress: string) => {
+    if (!fullAddress.trim()) return;
+    setCadastreLoading(true);
+    try {
+      const r = await fetch(`${GEO_URL}?action=cadastre_by_address&query=${encodeURIComponent(fullAddress)}`);
+      const d = await r.json();
+      if (d.found && d.cadastral_number) {
+        setCadastreInfo(d);
+        setCadastreInput(d.cadastral_number);
+        setEditing({ ...editingRef.current, cadastral_number: d.cadastral_number });
+      } else {
+        setCadastreInfo(null);
+      }
+    } catch { setCadastreInfo(null); }
+    finally { setCadastreLoading(false); }
+  };
+
+  /* Поиск по кадастровому номеру (ручной ввод) */
+  const searchByCadastre = async (query: string) => {
+    const q = query.trim();
+    if (!q) return;
+    setCadastreSearchLoading(true);
+    try {
+      const r = await fetch(`${GEO_URL}?action=by_cadastre&query=${encodeURIComponent(q)}`);
+      const d = await r.json();
+      if (d.found) {
+        setCadastreInfo(d);
+        setCadastreInput(q);
+        setEditing({
+          ...editingRef.current,
+          cadastral_number: q,
+          ...(d.address ? { address: d.address } : {}),
+          ...(d.lat ? { lat: d.lat, lng: d.lon } : {}),
+          ...(d.district ? { district: d.district } : {}),
+        });
+        if (d.lat && d.lon) {
+          const coords: [number, number] = [d.lat, d.lon];
+          markerRef.current?.geometry.setCoordinates(coords);
+          ymapInstance.current?.setCenter(coords, 16, { duration: 400 });
+          if (d.address) setStreetInput(d.address);
+          onCoordsManualChange?.(true);
+        }
+      } else {
+        setCadastreInfo({ found: false, cadastral_number: q });
+        setEditing({ ...editingRef.current, cadastral_number: q });
+      }
+    } catch { setCadastreInfo(null); }
+    finally { setCadastreSearchLoading(false); }
+  };
 
   interface DadataSuggestion { value: string; full: string; lat: number | null; lon: number | null; district?: string; }
 
@@ -286,6 +358,8 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     } else {
       geocodeAddress(`${currentCity}, ${s.value}`, s.value);
     }
+    // Запрашиваем кадастровый номер по выбранному адресу
+    fetchCadastreByAddress(`${currentCity}, ${s.value}`);
   };
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -447,6 +521,113 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
         </select>
       </div>
 
+      {/* ── Кадастровый поиск ─────────────────────────────────────────────── */}
+      <div className="space-y-2">
+        <label className="text-xs text-muted-foreground block">Кадастровый номер</label>
+        <div className="flex gap-2">
+          <input
+            value={cadastreInput}
+            onChange={e => setCadastreInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); searchByCadastre(cadastreInput); } }}
+            placeholder="напр. 23:43:0401001:1234"
+            className="flex-1 px-3 py-2 border border-border rounded-lg text-sm font-mono outline-none focus:ring-2 focus:ring-brand-blue/30"
+          />
+          <button
+            type="button"
+            onClick={() => searchByCadastre(cadastreInput)}
+            disabled={cadastreSearchLoading || !cadastreInput.trim()}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-brand-blue text-white text-sm font-semibold hover:bg-brand-blue/90 disabled:opacity-50 transition-colors"
+          >
+            {cadastreSearchLoading
+              ? <Icon name="Loader2" size={14} className="animate-spin" />
+              : <Icon name="Search" size={14} />}
+            Найти
+          </button>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          Введите кадастровый номер для поиска объекта на карте и заполнения координат.
+          {cadastreLoading && (
+            <span className="ml-2 inline-flex items-center gap-1 text-brand-blue">
+              <Icon name="Loader2" size={11} className="animate-spin" />
+              Запрашиваем кадастр…
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* ── InfoCard кадастра ──────────────────────────────────────────────── */}
+      {cadastreInfo && cadastreInfo.found && (
+        <div className="rounded-xl border border-brand-blue/20 bg-brand-blue/5 px-4 py-3 space-y-1.5">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Icon name="Building2" size={15} className="text-brand-blue flex-shrink-0" />
+              <span className="font-mono text-sm font-semibold text-foreground tracking-wide">
+                {cadastreInfo.cadastral_number}
+              </span>
+              {cadastreInfo.status && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 border border-emerald-200">
+                  {cadastreInfo.status}
+                </span>
+              )}
+            </div>
+            <a
+              href={`https://pkk.rosreestr.ru/#/?text=${encodeURIComponent(cadastreInfo.cadastral_number)}&type=1`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-brand-blue hover:underline flex items-center gap-1 flex-shrink-0"
+            >
+              <Icon name="ExternalLink" size={12} />
+              Публичная кадастровая карта
+            </a>
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            {cadastreInfo.object_type && (
+              <span className="flex items-center gap-1">
+                <Icon name="Tag" size={11} />
+                {cadastreInfo.object_type}
+              </span>
+            )}
+            {cadastreInfo.area_sqm && (
+              <span className="flex items-center gap-1">
+                <Icon name="Maximize2" size={11} />
+                {cadastreInfo.area_sqm.toLocaleString('ru')} м²
+              </span>
+            )}
+            {cadastreInfo.floors && (
+              <span className="flex items-center gap-1">
+                <Icon name="Layers" size={11} />
+                {cadastreInfo.floors} эт.
+              </span>
+            )}
+            {cadastreInfo.year_built && (
+              <span className="flex items-center gap-1">
+                <Icon name="Calendar" size={11} />
+                {cadastreInfo.year_built} г.
+              </span>
+            )}
+            {cadastreInfo.purpose && (
+              <span className="flex items-center gap-1">
+                <Icon name="Info" size={11} />
+                {cadastreInfo.purpose}
+              </span>
+            )}
+          </div>
+          {cadastreInfo.address && cadastreInfo.address !== editing.address && (
+            <div className="text-xs text-muted-foreground flex items-center gap-1">
+              <Icon name="MapPin" size={11} className="flex-shrink-0" />
+              {cadastreInfo.address}
+            </div>
+          )}
+        </div>
+      )}
+      {cadastreInfo && !cadastreInfo.found && cadastreInfo.cadastral_number && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800 flex items-center gap-2">
+          <Icon name="AlertTriangle" size={13} className="flex-shrink-0" />
+          Объект с кадастровым номером <span className="font-mono font-semibold mx-1">{cadastreInfo.cadastral_number}</span> не найден в базе DaData.
+        </div>
+      )}
+
+      {/* ── Карта ─────────────────────────────────────────────────────────── */}
       <div className="relative rounded-xl overflow-hidden border border-border" style={{ height: 280 }}>
         <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
         {!mapReady && !mapError && (

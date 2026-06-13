@@ -77,6 +77,7 @@ export interface Listing {
   min_area?: number | null;
   building_year?: number | null;
   is_apartments?: boolean;
+  cadastral_number?: string | null;
   // Сводная статистика — приходит вместе со списком объектов
   stats_views?: number | null;
   stats_calls?: number | null;
