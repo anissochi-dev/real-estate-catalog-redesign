@@ -1,4 +1,5 @@
-export { Spinner, translate, TabOverview } from './TabOverview';
+export { Spinner, TabOverview } from './TabOverview';
+export { translate } from './internalCardTypes';
 export { TabPriceHistory } from './TabPriceHistory';
 export { TabStats } from './TabStats';
 export { TabLeads, TabComments } from './TabLeadsComments';

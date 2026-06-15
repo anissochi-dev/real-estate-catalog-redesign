@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import { Listing, CONDITIONS, PARKING, ENTRANCE, FINISHING, ROAD_LINES, LAND_STATUSES, PROPERTY_RIGHTS, EgrnStoredObject } from './types';
-import { StatData, fmt } from './internalCardTypes';
+import { StatData, fmt, translate } from './internalCardTypes';
 
 export function Spinner() {
   return (
@@ -10,12 +10,6 @@ export function Spinner() {
       <Icon name="Loader2" size={24} className="animate-spin text-brand-blue" />
     </div>
   );
-}
-
-export function translate(value: string | null | undefined, map: readonly (readonly string[])[]): string {
-  if (!value) return '—';
-  const found = map.find(([key]) => key === value);
-  return found ? found[1] : value;
 }
 
 function OverviewStatsHeader({ listingId }: { listingId: number }) {

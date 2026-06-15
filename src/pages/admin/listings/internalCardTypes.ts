@@ -72,3 +72,9 @@ export const TABS: { id: TabId; label: string; icon: string }[] = [
 ];
 
 export function fmt(n: number) { return n.toLocaleString('ru'); }
+
+export const translate = (value: string | null | undefined, map: readonly (readonly string[])[]): string => {
+  if (!value) return '—';
+  const found = map.find(([key]) => key === value);
+  return found ? found[1] : value;
+};
