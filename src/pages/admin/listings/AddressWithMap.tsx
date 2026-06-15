@@ -759,7 +759,7 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
       )}
 
       {/* ── Блок ЕГРН ────────────────────────────────────────────────────── */}
-      {cadastreInfo && cadastreInfo.found && cadastreInfo.cadastral_number && (
+      {(egrnLoading || egrnData || egrnError) && (editing.cadastral_number || cadastreInput) && (
         <div className="rounded-xl border border-border bg-muted/30 overflow-hidden">
           {/* Заголовок-кнопка */}
           <div className="flex items-center justify-between px-4 py-2.5">
@@ -799,8 +799,14 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
           </div>
 
           {/* Результат */}
-          {egrnOpen && (
+          {(egrnOpen || egrnLoading) && (
             <div className="border-t border-border px-4 py-3 space-y-3">
+              {egrnLoading && (
+                <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Icon name="Loader2" size={13} className="animate-spin" />
+                  Запрашиваем данные ЕГРН...
+                </div>
+              )}
               {egrnError && (
                 <div className="text-xs text-red-600 flex items-center gap-1.5">
                   <Icon name="AlertCircle" size={13} />
