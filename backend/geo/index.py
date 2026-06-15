@@ -1816,6 +1816,20 @@ def _handle_cadastre_by_address(event: dict) -> dict:
     short = re.sub(r',?\s*(помещ|помещение|кв|квартира|оф|офис|пом|ком|комната)\.?\s*\S+.*$', '', query, flags=re.IGNORECASE).strip()
     has_room = short and short != query
 
+    # Извлекаем город из запроса для фильтрации записей ЕГРН из других городов
+    def _extract_city(q: str) -> str:
+        """Возвращает название города из запроса (после г/г./город)."""
+        m = re.search(r'(?:^|,)\s*г\.?\s+([А-ЯЁа-яё\-]+)', q)
+        return m.group(1).lower() if m else ''
+
+    def _city_matches(rec_addr: str, city: str) -> bool:
+        """True если адрес из ЕГРН содержит нужный город, или город не определён."""
+        if not city:
+            return True
+        return city in rec_addr.lower()
+
+    query_city = _extract_city(query)
+
     def _make_result(objects_list: list, main_cn: str, main_addr: str):
         """Собирает итоговый ответ с массивом объектов и координатами."""
         res_lat, res_lon = lat, lon
@@ -1854,8 +1868,11 @@ def _handle_cadastre_by_address(event: dict) -> dict:
             except Exception as e:
                 print(f'[cadastre_by_address] EGRN try="{addr_try}" error: {e}')
 
-    # Запрашиваем по адресу здания
-    addr_to_search = short if has_room else query
+    # Запрашиваем по адресу здания (с нормализацией корпуса к → /к)
+    def _normalize_korpus(addr: str) -> str:
+        return re.sub(r'\bд\.?\s*(\d+[\w]*)\s+к\.?\s*(\d+)', r'д. \1/\2', addr, flags=re.IGNORECASE)
+
+    addr_to_search = _normalize_korpus(short if has_room else query)
     try:
         egrn_data = _egrn_search(addr_to_search)
         records = egrn_data.get('records', []) if egrn_data.get('success') == 1 else []
@@ -1864,24 +1881,33 @@ def _handle_cadastre_by_address(event: dict) -> dict:
         if records:
             # Если есть номер помещения — ищем конкретное помещение
             if room_num:
+                # Два прохода: сначала с фильтром по городу, потом без (fallback)
+                for strict_city in ([True, False] if query_city else [False]):
+                    for rec in records:
+                        rec_addr = rec.get('address', '')
+                        if strict_city and not _city_matches(rec_addr, query_city):
+                            continue
+                        if re.search(r'(?:кв|пом|помещ|оф)\.?\s*' + room_num + r'\b', rec_addr, re.IGNORECASE):
+                            cn = (rec.get('cad_number') or '').strip()
+                            if cn:
+                                return _return_found(cn, rec_addr)
+                        if re.search(r',\s*' + room_num + r'\s*$', rec_addr):
+                            cn = (rec.get('cad_number') or '').strip()
+                            if cn:
+                                return _return_found(cn, rec_addr)
+                # Помещение не найдено — берём первое здание из правильного города
                 for rec in records:
-                    rec_addr = rec.get('address', '')
-                    if re.search(r'(?:кв|пом|помещ|оф)\.?\s*' + room_num + r'\b', rec_addr, re.IGNORECASE):
+                    if _city_matches(rec.get('address', ''), query_city):
                         cn = (rec.get('cad_number') or '').strip()
                         if cn:
-                            return _return_found(cn, rec_addr)
-                    if re.search(r',\s*' + room_num + r'\s*$', rec_addr):
-                        cn = (rec.get('cad_number') or '').strip()
-                        if cn:
-                            return _return_found(cn, rec_addr)
-                # Помещение не найдено — берём здание
+                            return _return_found(cn, rec.get('address', address))
                 matched = records[0]
                 cn = (matched.get('cad_number') or '').strip()
                 if cn:
                     return _return_found(cn, matched.get('address', address))
             else:
                 # Нет помещения — определяем типы объектов через details_by_number
-                # Пропускаем дубли и помещения по адресу, берём первые 8 уникальных
+                # Сначала фильтруем по городу, потом пропускаем дубли и помещения
                 seen_cn = set()
                 candidates = []
                 for rec in records[:15]:
@@ -1889,12 +1915,27 @@ def _handle_cadastre_by_address(event: dict) -> dict:
                     addr_r = rec.get('address', '')
                     if not cn_r or cn_r in seen_cn:
                         continue
+                    if not _city_matches(addr_r, query_city):
+                        continue
                     if re.search(r'(?:кв|пом|помещ)\.?\s*\d+', addr_r, re.IGNORECASE):
                         continue
                     seen_cn.add(cn_r)
                     candidates.append({'cadastral_number': cn_r, 'address': addr_r})
                     if len(candidates) >= 8:
                         break
+                # Если с фильтром по городу ничего — берём без фильтра
+                if not candidates:
+                    for rec in records[:15]:
+                        cn_r = (rec.get('cad_number') or '').strip()
+                        addr_r = rec.get('address', '')
+                        if not cn_r or cn_r in seen_cn:
+                            continue
+                        if re.search(r'(?:кв|пом|помещ)\.?\s*\d+', addr_r, re.IGNORECASE):
+                            continue
+                        seen_cn.add(cn_r)
+                        candidates.append({'cadastral_number': cn_r, 'address': addr_r})
+                        if len(candidates) >= 8:
+                            break
 
                 # Запрашиваем типы для каждого кандидата
                 ALLOWED_TYPES = {'Здание', 'Земельный участок', 'Сооружение', 'Помещение', 'Объект незавершённого строительства'}
