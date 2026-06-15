@@ -1812,8 +1812,25 @@ def _handle_cadastre_by_address(event: dict) -> dict:
     short = re.sub(r',?\s*(помещ|помещение|кв|квартира|оф|офис|пом|ком|комната)\.?\s*\S+.*$', '', query, flags=re.IGNORECASE).strip()
     has_room = short and short != query
 
-    # Если есть номер помещения — пробуем разные варианты написания
-    # ЕГРН хранит: "пом. N", "кв. N" — пробуем оба
+    def _return_found(cn: str, found_address: str):
+        """Возвращает найденный объект, добирая координаты если нет."""
+        res_lat, res_lon = lat, lon
+        # Если координат нет — геокодируем через Яндекс по кадастровому номеру
+        if not res_lat or not res_lon:
+            yandex_key = os.environ.get('YANDEX_GEOCODER_KEY', '')
+            geo = _yandex_geocode_cadastre(cn, yandex_key)
+            if geo.get('lat'):
+                res_lat, res_lon = geo['lat'], geo['lon']
+        return _ok({
+            'found': True,
+            'cadastral_number': cn,
+            'address': found_address,
+            'lat': res_lat,
+            'lon': res_lon,
+            'source': 'egrn_api',
+        })
+
+    # Если есть номер помещения — пробуем варианты написания: "пом. N" и "кв. N"
     if has_room and room_num:
         for suffix in [f'пом. {room_num}', f'кв. {room_num}']:
             addr_try = f'{short}, {suffix}'
@@ -1822,20 +1839,13 @@ def _handle_cadastre_by_address(event: dict) -> dict:
                 records = egrn_data.get('records', []) if egrn_data.get('success') == 1 else []
                 print(f'[cadastre_by_address] EGRN try="{addr_try}" records={len(records)}')
                 if records:
-                    # Берём первую запись с точным совпадением адреса здания
+                    house_part = short.split(',')[-1].strip().lower()
                     for rec in records:
                         rec_addr = rec.get('address', '')
-                        # Проверяем что адрес относится к нашему дому (не соседнему)
-                        house_part = re.sub(r',?\s*(помещ|помещение|кв|квартира|оф|пом|ком)\.?\s*\S+.*$', '', short, flags=re.IGNORECASE).strip().split(',')[-1].strip()
-                        if house_part.lower() in rec_addr.lower():
+                        if house_part in rec_addr.lower():
                             cn = (rec.get('cad_number') or '').strip()
                             if cn:
-                                return _ok({
-                                    'found': True,
-                                    'cadastral_number': cn,
-                                    'address': rec.get('address', address),
-                                    'lat': lat, 'lon': lon, 'source': 'egrn_api',
-                                })
+                                return _return_found(cn, rec_addr)
             except Exception as e:
                 print(f'[cadastre_by_address] EGRN try="{addr_try}" error: {e}')
 
@@ -1869,14 +1879,7 @@ def _handle_cadastre_by_address(event: dict) -> dict:
 
             cn = (matched.get('cad_number') or '').strip()
             if cn:
-                return _ok({
-                    'found': True,
-                    'cadastral_number': cn,
-                    'address': matched.get('address', address),
-                    'lat': lat,
-                    'lon': lon,
-                    'source': 'egrn_api',
-                })
+                return _return_found(cn, matched.get('address', address))
     except Exception as e:
         print(f'[cadastre_by_address] EGRN API error: {e}')
 
@@ -2055,19 +2058,29 @@ def _handle_by_cadastre(event: dict) -> dict:
     except Exception as e:
         print(f'[by_cadastre] DaData error: {e}')
 
-    # Стратегия 2: PKK Росреестра
-    hit = _pkk_search_by_cn(query)
-    if not hit:
-        return _ok({'found': False, 'cadastral_number': query})
+    # Стратегия 2: Яндекс HTTP Geocoder (кадастровый номер как запрос)
+    yandex_key = os.environ.get('YANDEX_GEOCODER_KEY', '')
+    geo = _yandex_geocode_cadastre(query, yandex_key)
+    if geo.get('lat') and geo.get('lon'):
+        return _ok({
+            'found': True,
+            'cadastral_number': query,
+            'address': geo.get('address', ''),
+            'lat': geo['lat'],
+            'lon': geo['lon'],
+            'district': geo.get('district', ''),
+            'object_type': '',
+            'area_sqm': None,
+            'floor': None,
+            'flat_count': None,
+            'sqm_price': None,
+            'floors': None,
+            'year_built': None,
+            'status': '',
+            'source': 'yandex_geocoder',
+        })
 
-    feature = hit['feature']
-    obj_type = hit['obj_type']
-    detail = _pkk_get_detail(obj_type, query)
-    if detail:
-        feature = detail
-
-    result = _pkk_parse_feature(feature, obj_type, query)
-    return _ok(result)
+    return _ok({'found': False, 'cadastral_number': query})
 
 
 # ── Handler ───────────────────────────────────────────────────────────────────
