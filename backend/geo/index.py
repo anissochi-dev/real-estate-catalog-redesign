@@ -1798,29 +1798,38 @@ def _handle_cadastre_by_address(event: dict) -> dict:
         print(f'[cadastre_by_address] no EGRN_API_KEY, giving up for: {query}')
         return _ok({'found': False})
 
-    try:
-        egrn_url = f'https://service.api-assist.com/parser/egrn_api/search_by_address?key={egrn_key}&address={urllib.parse.quote(query)}'
+    def _egrn_search(addr: str):
+        egrn_url = f'https://service.api-assist.com/parser/egrn_api/search_by_address?key={egrn_key}&address={urllib.parse.quote(addr)}'
         req2 = urllib.request.Request(egrn_url, headers={'Accept': 'application/json'})
         with urllib.request.urlopen(req2, timeout=15) as resp2:
-            egrn_data = json.loads(resp2.read().decode('utf-8'))
+            return json.loads(resp2.read().decode('utf-8'))
 
-        print(f'[cadastre_by_address] EGRN response success={egrn_data.get("success")} records={len(egrn_data.get("records", []))}')
+    # Пробуем полный адрес, потом — без помещения (только до дома)
+    queries_to_try = [query]
+    # Обрезаем суффиксы помещения: ", помещ ...", ", кв ...", ", оф ...", ", пом ..."
+    short = re.sub(r',?\s*(помещ|помещение|кв|квартира|оф|офис|пом|ком|комната)\.?\s*[\w/\-]+\s*$', '', query, flags=re.IGNORECASE).strip()
+    if short and short != query:
+        queries_to_try.append(short)
 
-        if egrn_data.get('success') == 1:
-            records = egrn_data.get('records', [])
-            if records:
-                cn = (records[0].get('cad_number') or '').strip()
-                if cn:
-                    return _ok({
-                        'found': True,
-                        'cadastral_number': cn,
-                        'address': records[0].get('address', address),
-                        'lat': lat,
-                        'lon': lon,
-                        'source': 'egrn_api',
-                    })
-    except Exception as e:
-        print(f'[cadastre_by_address] EGRN API error: {e}')
+    for addr_try in queries_to_try:
+        try:
+            egrn_data = _egrn_search(addr_try)
+            print(f'[cadastre_by_address] EGRN addr="{addr_try}" success={egrn_data.get("success")} records={len(egrn_data.get("records", []))}')
+            if egrn_data.get('success') == 1:
+                records = egrn_data.get('records', [])
+                if records:
+                    cn = (records[0].get('cad_number') or '').strip()
+                    if cn:
+                        return _ok({
+                            'found': True,
+                            'cadastral_number': cn,
+                            'address': records[0].get('address', address),
+                            'lat': lat,
+                            'lon': lon,
+                            'source': 'egrn_api',
+                        })
+        except Exception as e:
+            print(f'[cadastre_by_address] EGRN API error for "{addr_try}": {e}')
 
     print(f'[cadastre_by_address] not found for: {query}')
     return _ok({'found': False})
