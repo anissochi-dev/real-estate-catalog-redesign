@@ -1751,8 +1751,8 @@ def _pkk_parse_feature(feature: dict, obj_type: int, cn: str) -> dict:
 
 def _handle_cadastre_by_address(event: dict) -> dict:
     """
-    Получает кадастровый номер по адресу: геокодируем через DaData suggest → берём
-    первый результат → ищем ближайший объект в PKK по координатам.
+    Получает кадастровый номер по адресу через DaData suggest.
+    DaData возвращает cadastral_number прямо в data объекта — PKK не нужен.
     GET ?query=<полный адрес>
     """
     params = event.get('queryStringParameters') or {}
@@ -1763,8 +1763,6 @@ def _handle_cadastre_by_address(event: dict) -> dict:
     api_key = os.environ.get('DADATA_API_KEY', '')
     secret_key = os.environ.get('DADATA_SECRET_KEY', '')
 
-    # 1. Геокодируем адрес → координаты через DaData suggest
-    lat, lon = None, None
     try:
         payload = json.dumps({'query': query, 'count': 1}).encode('utf-8')
         req = urllib.request.Request(
@@ -1776,52 +1774,32 @@ def _handle_cadastre_by_address(event: dict) -> dict:
         )
         with urllib.request.urlopen(req, timeout=8) as resp:
             data = json.loads(resp.read().decode('utf-8'))
-        sugg = data.get('suggestions', [])
-        if sugg:
-            d = sugg[0].get('data', {})
-            if d.get('geo_lat'):
-                lat = float(d['geo_lat'])
-                lon = float(d['geo_lon'])
     except Exception as e:
         print(f'[cadastre_by_address] DaData error: {e}')
-
-    if not lat or not lon:
         return _ok({'found': False})
 
-    # 2. Ищем объект PKK по координатам (обратный кадастровый поиск)
-    import urllib.parse as _up
-    import math
-    # Конвертируем WGS84 → EPSG:3857 для PKK
-    x = lon * 20037508.34 / 180
-    y = math.log(math.tan((90 + lat) * math.pi / 360)) / (math.pi / 180)
-    y = y * 20037508.34 / 180
-    x, y = round(x, 2), round(y, 2)
+    sugg = data.get('suggestions', [])
+    if not sugg:
+        return _ok({'found': False})
 
-    ctx = _pkk_ssl_ctx()
-    for obj_type in [2, 5, 1, 3]:  # Здание, Помещение, Земля, Сооружение
-        try:
-            url = (
-                f'https://pkk.rosreestr.ru/api/features/{obj_type}'
-                f'?text=&limit=1&tolerance=8&sq=%7B%22type%22%3A%22Point%22%2C%22coordinates%22%3A[{x}%2C{y}]%7D'
-            )
-            req = urllib.request.Request(url, headers=_PKK_HEADERS)
-            with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
-            features = data.get('features') or []
-            if features:
-                f = features[0]
-                attrs = f.get('attrs') or {}
-                cn = attrs.get('cn') or attrs.get('id') or ''
-                if cn:
-                    result = _pkk_parse_feature(f, obj_type, cn)
-                    result['lat'] = lat
-                    result['lon'] = lon
-                    return _ok(result)
-        except Exception as e:
-            print(f'[cadastre_by_address] PKK type={obj_type} error: {e}')
-            continue
+    d = sugg[0].get('data', {})
+    cn = (d.get('cadastral_number') or '').strip()
+    lat = float(d['geo_lat']) if d.get('geo_lat') else None
+    lon = float(d['geo_lon']) if d.get('geo_lon') else None
+    address = sugg[0].get('value', '')
 
-    return _ok({'found': False})
+    if not cn:
+        print(f'[cadastre_by_address] DaData no cadastral_number for: {query}')
+        return _ok({'found': False})
+
+    return _ok({
+        'found': True,
+        'cadastral_number': cn,
+        'address': address,
+        'lat': lat,
+        'lon': lon,
+        'source': 'dadata',
+    })
 
 
 # ── action=by_cadastre ────────────────────────────────────────────────────────
