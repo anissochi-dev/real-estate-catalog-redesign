@@ -7,6 +7,7 @@ import {
   AddressProps,
   Suggestion,
   CadastreInfo,
+  CadastreObject,
   EgrnData,
   EgrnStat,
 } from './cadastreTypes';
@@ -24,7 +25,6 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
   const { settings } = useSettings();
   const apiKey = settings.yandex_maps_api_key || '';
 
-  // Refs пробрасываем в YandexMap и используем здесь для управления маркером из cadastre
   const mapRef = useRef<HTMLDivElement>(null);
   const ymapInstance = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -49,25 +49,25 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     editing.cadastral_number ? { cadastral_number: editing.cadastral_number, found: true } : null
   );
 
-  // ЕГРН
-  const [egrnData, setEgrnData] = useState<EgrnData | null>(null);
+  // ЕГРН — храним данные по каждому кадастровому номеру отдельно
+  const [egrnDataMap, setEgrnDataMap] = useState<Record<string, EgrnData>>({});
+  const [egrnLoadingSet, setEgrnLoadingSet] = useState<Set<string>>(new Set());
   const [egrnStat, setEgrnStat] = useState<EgrnStat | null>(null);
-  const [egrnLoading, setEgrnLoading] = useState(false);
   const [egrnError, setEgrnError] = useState<string | null>(null);
   const [egrnOpen, setEgrnOpen] = useState(false);
+  // Объекты для отображения в блоке ЕГРН (может быть несколько)
+  const [egrnObjects, setEgrnObjects] = useState<CadastreObject[]>([]);
 
   const currentCity = editing.city || 'Краснодар';
 
   useEffect(() => { fetchDistricts().then(setDistricts); }, []);
 
-  // Синхронизация значения поля при изменении адреса извне (например клик по карте)
   useEffect(() => {
     if (document.activeElement !== inputRef.current) {
       setStreetInput(editing.address || '');
     }
   }, [editing.address]);
 
-  // Закрытие dropdown при клике вне
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (!dropdownRef.current?.contains(e.target as Node) && e.target !== inputRef.current) {
@@ -78,21 +78,22 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  async function fetchEgrn(cadNumber: string) {
-    setEgrnLoading(true);
-    setEgrnError(null);
-    setEgrnData(null);
-    setEgrnOpen(true);
+  /* Загрузить выписку ЕГРН для одного кадастрового номера */
+  async function fetchEgrnOne(cadNumber: string, withStat: boolean) {
+    setEgrnLoadingSet(prev => new Set(prev).add(cadNumber));
     try {
-      const [detRes, statRes] = await Promise.all([
+      const requests: Promise<Response>[] = [
         fetch(`${EGRN_URL}?action=details&cadNumber=${encodeURIComponent(cadNumber)}`),
-        fetch(`${EGRN_URL}?action=stat`),
-      ]);
-      const det: EgrnData = await detRes.json();
-      const stat: EgrnStat = await statRes.json();
-      setEgrnData(det);
-      setEgrnStat(stat);
-      // Автозаполнение площади из ЕГРН — только если поле ещё не заполнено
+      ];
+      if (withStat) requests.push(fetch(`${EGRN_URL}?action=stat`));
+      const results = await Promise.all(requests);
+      const det: EgrnData = await results[0].json();
+      if (withStat && results[1]) {
+        const stat: EgrnStat = await results[1].json();
+        setEgrnStat(stat);
+      }
+      setEgrnDataMap(prev => ({ ...prev, [cadNumber]: det }));
+      // Автозаполнение площади — только если поле ещё не заполнено
       if (det.success === 1 && det.area) {
         const areaParsed = parseFloat(det.area);
         if (!isNaN(areaParsed) && areaParsed > 0 && !editingRef.current.area) {
@@ -102,8 +103,19 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     } catch {
       setEgrnError('Ошибка при запросе к ЕГРН');
     } finally {
-      setEgrnLoading(false);
+      setEgrnLoadingSet(prev => { const s = new Set(prev); s.delete(cadNumber); return s; });
     }
+  }
+
+  /* Загрузить выписки для всех объектов из списка */
+  async function fetchEgrnForObjects(objects: CadastreObject[]) {
+    if (!objects.length) return;
+    setEgrnError(null);
+    setEgrnOpen(true);
+    setEgrnObjects(objects);
+    setEgrnDataMap({});
+    // Первый объект грузим с обновлением статистики, остальные — параллельно без
+    objects.forEach((obj, i) => fetchEgrnOne(obj.cadastral_number, i === 0));
   }
 
   /* Загрузить кадастр по адресу — автозапрос после выбора подсказки */
@@ -117,9 +129,12 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
         setCadastreInfo(d);
         setCadastreInput(d.cadastral_number);
         setEditing({ ...editingRef.current, cadastral_number: d.cadastral_number });
-        fetchEgrn(d.cadastral_number);
+        // Если есть несколько объектов — грузим все; иначе только основной
+        const objects: CadastreObject[] = d.objects?.length
+          ? d.objects
+          : [{ cadastral_number: d.cadastral_number, address: d.address }];
+        fetchEgrnForObjects(objects);
       }
-      // Не сбрасываем пустым — PKK по адресу менее надёжен
     } catch { /* тихо */ }
     finally { setCadastreLoading(false); }
   };
@@ -135,7 +150,10 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
       if (d.found && d.lat) {
         setCadastreInfo(d);
         setCadastreInput(q);
-        fetchEgrn(q);
+        const objects: CadastreObject[] = d.objects?.length
+          ? d.objects
+          : [{ cadastral_number: q, address: d.address }];
+        fetchEgrnForObjects(objects);
         const coords: [number, number] = [d.lat, d.lon];
         markerRef.current?.geometry.setCoordinates(coords);
         ymapInstance.current?.setCenter(coords, 17, { duration: 400 });
@@ -161,18 +179,12 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     }
   };
 
-  /* Подсказки адресов через DaData (бэкенд). */
   const fetchSuggestions = (query: string) => {
     if (suggestTimer.current) clearTimeout(suggestTimer.current);
     const q = query.trim();
-    if (!q) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
+    if (!q) { setSuggestions([]); setShowSuggestions(false); return; }
     suggestTimer.current = setTimeout(() => {
-      const url = `${GEO_URL}?query=${encodeURIComponent(q)}&city=${encodeURIComponent(currentCity)}`;
-      fetch(url)
+      fetch(`${GEO_URL}?query=${encodeURIComponent(q)}&city=${encodeURIComponent(currentCity)}`)
         .then(r => r.json())
         .then((items: DadataSuggestion[]) => {
           const list: Suggestion[] = (items || [])
@@ -186,7 +198,6 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     }, 250);
   };
 
-  /* Геокодинг по адресной строке через ymaps.geocode */
   function geocodeAddress(fullAddr: string, streetOnly?: string) {
     if (!window.ymaps || typeof window.ymaps.geocode !== 'function') return;
     window.ymaps.geocode(fullAddr, { results: 1 })
@@ -203,7 +214,6 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
       .catch(() => undefined);
   }
 
-  /** Парсер geoObject из ymaps.geocode. Микрорайон всегда берём из нового адреса. */
   function parseYmapsGeoObject(obj: any, coords: [number, number], streetOverride?: string) {
     let microdistrict = '';
     try {
@@ -224,13 +234,7 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     const builtAddress = [street, house].filter(Boolean).join(', ');
     const finalAddress = streetOverride || builtAddress || obj.getAddressLine?.() || '';
     const cur = editingRef.current;
-    setEditing({
-      ...cur,
-      district: microdistrict || '',
-      address: finalAddress,
-      lat: coords[0],
-      lng: coords[1],
-    });
+    setEditing({ ...cur, district: microdistrict || '', address: finalAddress, lat: coords[0], lng: coords[1] });
     setStreetInput(finalAddress);
   }
 
@@ -241,19 +245,14 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
       const coords: [number, number] = [s.lat, s.lon];
       markerRef.current?.geometry.setCoordinates(coords);
       ymapInstance.current?.setCenter(coords, 16, { duration: 400 });
-      setEditing({
-        ...editingRef.current,
-        address: s.value,
-        lat: s.lat,
-        lng: s.lon,
-        ...(s.district ? { district: s.district } : {}),
-      });
+      setEditing({ ...editingRef.current, address: s.value, lat: s.lat, lng: s.lon, ...(s.district ? { district: s.district } : {}) });
     } else {
       geocodeAddress(`${currentCity}, ${s.value}`, s.value);
     }
-    // Запрашиваем кадастровый номер по выбранному адресу (full — полный адрес с городом)
     fetchCadastreByAddress(s.full || `${currentCity}, ${s.value}`);
   };
+
+  const showEgrnBlock = !!(editing.cadastral_number || cadastreInput);
 
   return (
     <div className="space-y-3 border-t border-border pt-4" data-field-error={hasError ? 'true' : undefined}>
@@ -320,15 +319,16 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
       <CadastreCard cadastreInfo={cadastreInfo} />
 
       {/* ── Блок ЕГРН ────────────────────────────────────────────────────── */}
-      {(editing.cadastral_number || cadastreInput) && (
+      {showEgrnBlock && (
         <EgrnBlock
-          cadastralNumber={editing.cadastral_number || cadastreInput}
-          egrnData={egrnData}
+          objects={egrnObjects}
+          egrnDataMap={egrnDataMap}
+          egrnLoadingSet={egrnLoadingSet}
           egrnStat={egrnStat}
-          egrnLoading={egrnLoading}
           egrnError={egrnError}
           egrnOpen={egrnOpen}
           setEgrnOpen={setEgrnOpen}
+          fallbackCadNumber={editing.cadastral_number || cadastreInput}
         />
       )}
 
@@ -347,7 +347,6 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
         parseYmapsGeoObject={parseYmapsGeoObject}
       />
 
-      {/* Используем mapReady чтобы подавить предупреждение линтера */}
       {mapReady && null}
     </div>
   );
