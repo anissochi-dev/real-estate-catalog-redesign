@@ -125,10 +125,20 @@ export function useListingsState() {
   const openEdit = (it?: Listing | Partial<Listing>) => {
     if (it && (it as Listing).id) {
       const full = it as Listing;
+      // Сразу открываем с данными из списка, потом подгружаем полные данные
+      // (список не содержит description, seo_*, egrn_objects и др. тяжёлых полей)
       setEditing(full);
       const imgs = splitImages(full.images);
       if (!imgs.length && full.image) imgs.push(full.image);
       setPhotos(imgs);
+      adminApi.getListing(full.id).then((res: { listing?: Listing } & Listing) => {
+        const detailed: Listing = res.listing || res;
+        if (!detailed?.id) return;
+        setEditing(detailed);
+        const detailImgs = splitImages(detailed.images);
+        if (!detailImgs.length && detailed.image) detailImgs.push(detailed.image);
+        setPhotos(detailImgs);
+      }).catch(() => {});
     } else if (it) {
       setEditing({ ...empty, ...it });
       const imgs = splitImages((it as Listing).images || '');
