@@ -23,6 +23,7 @@ import json
 import os
 import re
 import urllib.request
+import urllib.parse
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -1751,8 +1752,9 @@ def _pkk_parse_feature(feature: dict, obj_type: int, cn: str) -> dict:
 
 def _handle_cadastre_by_address(event: dict) -> dict:
     """
-    Получает кадастровый номер по адресу через DaData suggest.
-    DaData возвращает cadastral_number прямо в data объекта — PKK не нужен.
+    Получает кадастровый номер по адресу.
+    Шаг 1: DaData suggest — иногда возвращает cadastral_number напрямую.
+    Шаг 2: если нет — ищем через ЕГРН API (api-assist.com/search_by_address).
     GET ?query=<полный адрес>
     """
     params = event.get('queryStringParameters') or {}
@@ -1760,46 +1762,68 @@ def _handle_cadastre_by_address(event: dict) -> dict:
     if not query:
         return _err('query обязателен', 400)
 
-    api_key = os.environ.get('DADATA_API_KEY', '')
-    secret_key = os.environ.get('DADATA_SECRET_KEY', '')
+    dadata_key = os.environ.get('DADATA_API_KEY', '')
+    dadata_secret = os.environ.get('DADATA_SECRET_KEY', '')
+    egrn_key = os.environ.get('EGRN_API_KEY', '')
 
+    lat, lon, address, cn = None, None, '', ''
+
+    # Шаг 1: DaData — координаты + попытка получить кадастровый номер
     try:
         payload = json.dumps({'query': query, 'count': 1}).encode('utf-8')
         req = urllib.request.Request(
             'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address',
             data=payload,
             headers={'Content-Type': 'application/json', 'Accept': 'application/json',
-                     'Authorization': f'Token {api_key}', 'X-Secret': secret_key},
+                     'Authorization': f'Token {dadata_key}', 'X-Secret': dadata_secret},
             method='POST',
         )
         with urllib.request.urlopen(req, timeout=8) as resp:
             data = json.loads(resp.read().decode('utf-8'))
+        sugg = data.get('suggestions', [])
+        if sugg:
+            d = sugg[0].get('data', {})
+            cn = (d.get('cadastral_number') or '').strip()
+            lat = float(d['geo_lat']) if d.get('geo_lat') else None
+            lon = float(d['geo_lon']) if d.get('geo_lon') else None
+            address = sugg[0].get('value', '')
     except Exception as e:
         print(f'[cadastre_by_address] DaData error: {e}')
+
+    if cn:
+        return _ok({'found': True, 'cadastral_number': cn, 'address': address, 'lat': lat, 'lon': lon, 'source': 'dadata'})
+
+    # Шаг 2: ЕГРН API search_by_address
+    if not egrn_key:
+        print(f'[cadastre_by_address] no EGRN_API_KEY, giving up for: {query}')
         return _ok({'found': False})
 
-    sugg = data.get('suggestions', [])
-    if not sugg:
-        return _ok({'found': False})
+    try:
+        egrn_url = f'https://service.api-assist.com/parser/egrn_api/search_by_address?key={egrn_key}&address={urllib.parse.quote(query)}'
+        req2 = urllib.request.Request(egrn_url, headers={'Accept': 'application/json'})
+        with urllib.request.urlopen(req2, timeout=15) as resp2:
+            egrn_data = json.loads(resp2.read().decode('utf-8'))
 
-    d = sugg[0].get('data', {})
-    cn = (d.get('cadastral_number') or '').strip()
-    lat = float(d['geo_lat']) if d.get('geo_lat') else None
-    lon = float(d['geo_lon']) if d.get('geo_lon') else None
-    address = sugg[0].get('value', '')
+        print(f'[cadastre_by_address] EGRN response success={egrn_data.get("success")} records={len(egrn_data.get("records", []))}')
 
-    if not cn:
-        print(f'[cadastre_by_address] DaData no cadastral_number for: {query}')
-        return _ok({'found': False})
+        if egrn_data.get('success') == 1:
+            records = egrn_data.get('records', [])
+            if records:
+                cn = (records[0].get('cad_number') or '').strip()
+                if cn:
+                    return _ok({
+                        'found': True,
+                        'cadastral_number': cn,
+                        'address': records[0].get('address', address),
+                        'lat': lat,
+                        'lon': lon,
+                        'source': 'egrn_api',
+                    })
+    except Exception as e:
+        print(f'[cadastre_by_address] EGRN API error: {e}')
 
-    return _ok({
-        'found': True,
-        'cadastral_number': cn,
-        'address': address,
-        'lat': lat,
-        'lon': lon,
-        'source': 'dadata',
-    })
+    print(f'[cadastre_by_address] not found for: {query}')
+    return _ok({'found': False})
 
 
 # ── action=by_cadastre ────────────────────────────────────────────────────────
