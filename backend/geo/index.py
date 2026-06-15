@@ -1762,11 +1762,15 @@ def _handle_cadastre_by_address(event: dict) -> dict:
     if not query:
         return _err('query обязателен', 400)
 
+    # Координаты можно передать явно (из DaData-подсказки на фронте)
+    hint_lat = float(params['hint_lat']) if params.get('hint_lat') else None
+    hint_lon = float(params['hint_lon']) if params.get('hint_lon') else None
+
     dadata_key = os.environ.get('DADATA_API_KEY', '')
     dadata_secret = os.environ.get('DADATA_SECRET_KEY', '')
     egrn_key = os.environ.get('EGRN_API_KEY', '')
 
-    lat, lon, address, cn = None, None, '', ''
+    lat, lon, address, cn = hint_lat, hint_lon, '', ''
 
     # Шаг 1: DaData — координаты + попытка получить кадастровый номер
     try:
@@ -1937,6 +1941,127 @@ def _handle_cadastre_by_address(event: dict) -> dict:
                     return _make_result(objects_list, main_cn, main_addr)
     except Exception as e:
         print(f'[cadastre_by_address] EGRN API error: {e}')
+
+    # Стратегия 3: подбираем альтернативные типы улиц (ул ↔ пр-д/проезд/пер/пл/ш)
+    # Также нормализуем "д N к M" → "д. N/M" (корпус в ЕГРН часто пишется через слэш)
+    def _normalize_korpus(addr: str) -> str:
+        return re.sub(r'\bд\.?\s*(\d+[\w]*)\s+к\.?\s*(\d+)', r'д. \1/\2', addr, flags=re.IGNORECASE)
+
+    STREET_ALTERNATES = [
+        (r'\bул\.?\s+', ['проезд ', 'пр-д ', 'переулок ', 'пер. ', 'шоссе ', 'площадь ', 'бульвар ']),
+        (r'\bпроезд\s+', ['ул. ', 'переулок ', 'пер. ']),
+        (r'\bпр-д\s+', ['ул. ', 'проезд ', 'переулок ']),
+        (r'\bпереулок\s+', ['ул. ', 'проезд ']),
+        (r'\bпер\.\s+', ['ул. ', 'проезд ']),
+    ]
+    # Пробуем с нормализацией корпуса на исходном запросе сначала
+    norm_query = _normalize_korpus(addr_to_search if 'addr_to_search' in dir() else query)
+    if norm_query != (addr_to_search if 'addr_to_search' in dir() else query):
+        try:
+            egrn_data_norm = _egrn_search(norm_query)
+            records_norm = egrn_data_norm.get('records', []) if egrn_data_norm.get('success') == 1 else []
+            print(f'[cadastre_by_address] norm addr="{norm_query}" records={len(records_norm)}')
+            if records_norm:
+                first = records_norm[0]
+                cn_n = (first.get('cad_number') or '').strip()
+                if cn_n:
+                    return _return_found(cn_n, first.get('address', address))
+        except Exception as e_n:
+            print(f'[cadastre_by_address] norm error: {e_n}')
+
+    addr_for_alt = _normalize_korpus(addr_to_search if 'addr_to_search' in dir() else query)
+    for pattern, replacements in STREET_ALTERNATES:
+        if re.search(pattern, addr_for_alt, re.IGNORECASE):
+            for repl in replacements:
+                alt_addr = _normalize_korpus(re.sub(pattern, repl, addr_for_alt, count=1, flags=re.IGNORECASE))
+                if alt_addr == addr_for_alt:
+                    continue
+                try:
+                    egrn_data2 = _egrn_search(alt_addr)
+                    records2 = egrn_data2.get('records', []) if egrn_data2.get('success') == 1 else []
+                    print(f'[cadastre_by_address] alt addr="{alt_addr}" records={len(records2)}')
+                    if records2:
+                        seen_cn2 = set()
+                        candidates2 = []
+                        for rec in records2[:15]:
+                            cn_r = (rec.get('cad_number') or '').strip()
+                            addr_r = rec.get('address', '')
+                            if not cn_r or cn_r in seen_cn2:
+                                continue
+                            if re.search(r'(?:кв|пом|помещ)\.?\s*\d+', addr_r, re.IGNORECASE):
+                                continue
+                            seen_cn2.add(cn_r)
+                            candidates2.append({'cadastral_number': cn_r, 'address': addr_r})
+                            if len(candidates2) >= 8:
+                                break
+                        if not candidates2:
+                            continue
+                        objects_with_type2 = []
+                        for cand in candidates2:
+                            try:
+                                det_url2 = f'https://service.api-assist.com/parser/egrn_api/details_by_number?key={egrn_key}&cadNumber={urllib.parse.quote(cand["cadastral_number"])}'
+                                req_det2 = urllib.request.Request(det_url2, headers={'Accept': 'application/json'})
+                                with urllib.request.urlopen(req_det2, timeout=10) as resp_det2:
+                                    det_data2 = json.loads(resp_det2.read().decode('utf-8'))
+                                if det_data2.get('success') == 1 and det_data2.get('records'):
+                                    r2 = det_data2['records'][0]
+                                    objects_with_type2.append({
+                                        'cadastral_number': cand['cadastral_number'],
+                                        'address': r2.get('address', cand['address']),
+                                        'type': r2.get('type', ''),
+                                        'area': r2.get('area', ''),
+                                    })
+                            except Exception:
+                                objects_with_type2.append({**cand, 'type': '', 'area': ''})
+                        seen_types2 = set()
+                        objects_list2 = []
+                        main_cn2, main_addr2 = '', address
+                        type_priority2 = ['Здание', 'Земельный участок', 'Сооружение', 'Объект незавершённого строительства', '']
+                        objects_with_type2.sort(key=lambda x: type_priority2.index(x['type']) if x['type'] in type_priority2 else 99)
+                        for obj in objects_with_type2:
+                            t = obj['type']
+                            if t and t in seen_types2:
+                                continue
+                            if t:
+                                seen_types2.add(t)
+                            objects_list2.append(obj)
+                            if not main_cn2:
+                                main_cn2 = obj['cadastral_number']
+                                main_addr2 = obj['address']
+                        if objects_list2:
+                            print(f'[cadastre_by_address] alt returning {len(objects_list2)} objects')
+                            return _make_result(objects_list2, main_cn2, main_addr2)
+                except Exception as e2:
+                    print(f'[cadastre_by_address] alt error for "{alt_addr}": {e2}')
+            break  # пробуем только первый подходящий pattern
+
+    # Стратегия 4: PKK Росреестра по координатам (если есть hint_lat/hint_lon)
+    if hint_lat and hint_lon:
+        try:
+            import ssl
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            pkk_url = f'https://pkk.rosreestr.ru/api/features/1?text={hint_lat}%2C{hint_lon}&tolerance=50&limit=5&srs=4326'
+            req_pkk = urllib.request.Request(pkk_url, headers={
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0',
+                'Referer': 'https://pkk.rosreestr.ru/',
+            })
+            with urllib.request.urlopen(req_pkk, timeout=10, context=ctx) as resp_pkk:
+                pkk_data = json.loads(resp_pkk.read().decode('utf-8'))
+            features = pkk_data.get('features') or []
+            print(f'[cadastre_by_address] PKK by coords features={len(features)}')
+            if features:
+                cn_pkk = features[0].get('attrs', {}).get('cn') or features[0].get('id', '')
+                addr_pkk = features[0].get('attrs', {}).get('address', '')
+                if cn_pkk:
+                    return _make_result(
+                        [{'cadastral_number': cn_pkk, 'address': addr_pkk, 'type': 'Здание', 'area': ''}],
+                        cn_pkk, addr_pkk
+                    )
+        except Exception as e_pkk:
+            print(f'[cadastre_by_address] PKK coords error: {e_pkk}')
 
     print(f'[cadastre_by_address] not found for: {query}')
     return _ok({'found': False})

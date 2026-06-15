@@ -116,11 +116,13 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
   }
 
   /* Загрузить кадастр по адресу — автозапрос после выбора подсказки */
-  const fetchCadastreByAddress = async (fullAddress: string) => {
+  const fetchCadastreByAddress = async (fullAddress: string, hintLat?: number | null, hintLon?: number | null) => {
     if (!fullAddress.trim()) return;
     setCadastreLoading(true);
     try {
-      const r = await fetch(`${GEO_URL}?action=cadastre_by_address&query=${encodeURIComponent(fullAddress)}`);
+      let url = `${GEO_URL}?action=cadastre_by_address&query=${encodeURIComponent(fullAddress)}`;
+      if (hintLat && hintLon) url += `&hint_lat=${hintLat}&hint_lon=${hintLon}`;
+      const r = await fetch(url);
       const d = await r.json();
       if (d.found && d.cadastral_number) {
         setCadastreInfo(d);
@@ -251,7 +253,7 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     } else {
       geocodeAddress(`${currentCity}, ${s.value}`, s.value);
     }
-    fetchCadastreByAddress(s.full || `${currentCity}, ${s.value}`);
+    fetchCadastreByAddress(s.full || `${currentCity}, ${s.value}`, s.lat, s.lon);
   };
 
   const showEgrnBlock = !!(editing.cadastral_number || cadastreInput);
