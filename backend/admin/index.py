@@ -124,6 +124,17 @@ def _bool(v):
     return 'TRUE' if v else 'FALSE'
 
 
+def _jsonb_or_null(v):
+    """Сериализует список/словарь в JSONB-совместимую SQL-строку."""
+    if v is None:
+        return 'NULL'
+    try:
+        s = json.dumps(v, ensure_ascii=False)
+        return f"'{s.replace(chr(39), chr(39)+chr(39))}'::jsonb"
+    except Exception:
+        return 'NULL'
+
+
 _RU_MAP = {
     'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e',
     'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
@@ -2372,7 +2383,8 @@ def _listings(cur, conn, method, rid, event, user):
             "l.has_furniture, l.has_equipment, l.owner_phone_contact_id, "
             "l.slug, l.public_code, l.lat, l.lng, "
             "l.created_at, l.updated_at, l.last_edited_at, l.last_edited_by, "
-            "l.use_watermark, l.video_url, l.video_type"
+            "l.use_watermark, l.video_url, l.video_type, "
+            "l.cadastral_number, l.egrn_objects"
         )
         cur.execute(
             f"SELECT {list_cols}, "
@@ -2439,7 +2451,7 @@ def _listings(cur, conn, method, rid, event, user):
 
         sql = (
             f"INSERT INTO {SCHEMA}.listings "
-            f"(title, description, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, owner_phone_contact_id, owner_phone2_contact_id, cadastral_number) VALUES ("
+            f"(title, description, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, owner_phone_contact_id, owner_phone2_contact_id, cadastral_number, egrn_objects) VALUES ("
             f"{_str_or_null(body.get('title'), 255)}, {_str_or_null(body.get('description'), 5000)}, "
             f"{_str_or_null(body.get('category'), 50)}, {_str_or_null(body.get('deal'), 20)}, "
             f"{_int_or_null(body.get('price'))}, {_int_or_null(body.get('price_per_m2'))}, "
@@ -2475,7 +2487,8 @@ def _listings(cur, conn, method, rid, event, user):
             f"{_bool(body.get('has_furniture'))}, {_bool(body.get('has_equipment'))}, "
             f"{owner_pc_id if owner_pc_id else 'NULL'}, "
             f"{owner_pc2_id if owner_pc2_id else 'NULL'}, "
-            f"{_str_or_null(body.get('cadastral_number'), 50)}) RETURNING id"
+            f"{_str_or_null(body.get('cadastral_number'), 50)}, "
+            f"{_jsonb_or_null(body.get('egrn_objects'))}) RETURNING id"
         )
         cur.execute(sql)
         new_id = cur.fetchone()['id']
@@ -2575,6 +2588,8 @@ def _listings(cur, conn, method, rid, event, user):
                           ('cadastral_number', 50)]:
             if f in body:
                 fields.append(f"{f} = {_str_or_null(body.get(f), length)}")
+        if 'egrn_objects' in body:
+            fields.append(f"egrn_objects = {_jsonb_or_null(body.get('egrn_objects'))}")
         for f in ('price', 'price_per_m2', 'area', 'payback', 'profit', 'floor', 'total_floors',
                   'building_year', 'subway_distance'):
             if f in body:

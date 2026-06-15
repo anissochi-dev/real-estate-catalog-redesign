@@ -47,6 +47,7 @@ export interface AddressProps {
   hasError?: boolean;
   districtError?: boolean;
   onCoordsManualChange?: (manual: boolean) => void;
+  onEgrnChange?: (objects: import('./types').EgrnStoredObject[]) => void;
 }
 
 export interface Suggestion {

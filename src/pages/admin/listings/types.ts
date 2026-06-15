@@ -1,3 +1,19 @@
+export interface EgrnStoredObject {
+  cadastral_number: string;
+  address?: string;
+  type?: string;
+  area?: string;
+  status?: string;
+  ownership?: string;
+  purpose?: string;
+  floor?: string;
+  reg_date?: string;
+  cad_cost?: string;
+  encumbrances?: { type?: string; date?: string }[];
+  rights?: { type?: string; date?: string }[];
+  fetched_at?: string;
+}
+
 export interface Listing {
   id: number;
   title: string;
@@ -78,6 +94,7 @@ export interface Listing {
   building_year?: number | null;
   is_apartments?: boolean;
   cadastral_number?: string | null;
+  egrn_objects?: EgrnStoredObject[] | null;
   // Сводная статистика — приходит вместе со списком объектов
   stats_views?: number | null;
   stats_calls?: number | null;

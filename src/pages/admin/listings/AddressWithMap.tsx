@@ -11,6 +11,7 @@ import {
   EgrnData,
   EgrnStat,
 } from './cadastreTypes';
+import type { EgrnStoredObject } from './types';
 import CadastreCard from './CadastreCard';
 import EgrnBlock from './EgrnBlock';
 import AddressInputRow from './AddressInputRow';
@@ -21,7 +22,7 @@ const EGRN_URL = 'https://functions.poehali.dev/83ef375d-1f72-4f65-8825-10df58a3
 
 interface DadataSuggestion { value: string; full: string; lat: number | null; lon: number | null; district?: string; }
 
-export default function AddressWithMap({ editing, setEditing, cities, hasError, districtError, onCoordsManualChange }: AddressProps) {
+export default function AddressWithMap({ editing, setEditing, cities, hasError, districtError, onCoordsManualChange, onEgrnChange }: AddressProps) {
   const { settings } = useSettings();
   const apiKey = settings.yandex_maps_api_key || '';
 
@@ -51,12 +52,14 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
 
   // ЕГРН — храним данные по каждому кадастровому номеру отдельно
   const [egrnDataMap, setEgrnDataMap] = useState<Record<string, EgrnData>>({});
+  const egrnDataMapRef = useRef<Record<string, EgrnData>>({});
   const [egrnLoadingSet, setEgrnLoadingSet] = useState<Set<string>>(new Set());
   const [egrnStat, setEgrnStat] = useState<EgrnStat | null>(null);
   const [egrnError, setEgrnError] = useState<string | null>(null);
   const [egrnOpen, setEgrnOpen] = useState(false);
   // Объекты для отображения в блоке ЕГРН (может быть несколько)
   const [egrnObjects, setEgrnObjects] = useState<CadastreObject[]>([]);
+  const egrnObjectsRef = useRef<CadastreObject[]>([]);
 
   const currentCity = editing.city || 'Краснодар';
 
@@ -78,6 +81,30 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  /* Собираем EgrnStoredObject[] из текущего dataMap + objects и уведомляем родителя */
+  function _notifyEgrnChange(updatedMap: Record<string, EgrnData>, objects: CadastreObject[]) {
+    if (!onEgrnChange) return;
+    const stored: EgrnStoredObject[] = objects.map(obj => {
+      const det = updatedMap[obj.cadastral_number];
+      return {
+        cadastral_number: obj.cadastral_number,
+        address: obj.address || det?.address,
+        type: obj.type || det?.type,
+        area: obj.area || det?.area,
+        status: det?.status,
+        ownership: det?.ownership,
+        purpose: det?.purpose,
+        floor: det?.floor,
+        reg_date: det?.reg_date,
+        cad_cost: det?.cad_cost,
+        encumbrances: det?.encumbrances?.map(e => ({ type: e.type, date: e.date })),
+        rights: det?.rights?.map(r => ({ type: r.type, date: r.date })),
+        fetched_at: det ? new Date().toISOString() : undefined,
+      };
+    }).filter(o => o.cadastral_number);
+    onEgrnChange(stored);
+  }
+
   /* Загрузить выписку ЕГРН для одного кадастрового номера */
   async function fetchEgrnOne(cadNumber: string, withStat: boolean) {
     setEgrnLoadingSet(prev => new Set(prev).add(cadNumber));
@@ -92,7 +119,11 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
         const stat: EgrnStat = await results[1].json();
         setEgrnStat(stat);
       }
-      setEgrnDataMap(prev => ({ ...prev, [cadNumber]: det }));
+      const updatedMap = { ...egrnDataMapRef.current, [cadNumber]: det };
+      egrnDataMapRef.current = updatedMap;
+      setEgrnDataMap(updatedMap);
+      // Уведомляем родителя о новых данных ЕГРН
+      _notifyEgrnChange(updatedMap, egrnObjectsRef.current);
       // Автозаполнение площади — только если поле ещё не заполнено
       if (det.success === 1 && det.area) {
         const areaParsed = parseFloat(det.area);
@@ -132,6 +163,8 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
         const objects: CadastreObject[] = d.objects?.length
           ? d.objects
           : [{ cadastral_number: d.cadastral_number, address: d.address }];
+        egrnObjectsRef.current = objects;
+        egrnDataMapRef.current = {};
         setEgrnObjects(objects);
         setEgrnDataMap({});
         setEgrnOpen(true);
@@ -155,6 +188,8 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
         const objects: CadastreObject[] = d.objects?.length
           ? d.objects
           : [{ cadastral_number: q, address: d.address }];
+        egrnObjectsRef.current = objects;
+        egrnDataMapRef.current = {};
         setEgrnObjects(objects);
         setEgrnDataMap({});
         setEgrnOpen(true);

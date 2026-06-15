@@ -1,4 +1,4 @@
-import { Listing, City, LandVri } from './types';
+import { Listing, City, LandVri, EgrnStoredObject } from './types';
 import ListingRoomFeatures from './ListingRoomFeatures';
 import AddressWithMap from './AddressWithMap';
 
@@ -14,11 +14,12 @@ interface Props {
   locationOnly?: boolean;
   detailsOnly?: boolean;
   onCoordsManualChange?: (manual: boolean) => void;
+  onEgrnChange?: (objects: EgrnStoredObject[]) => void;
 }
 
-export default function ListingEditorDetailsSection({ editing, setEditing, cities, landVri, errors, setErrors, addressError, districtError, locationOnly, detailsOnly, onCoordsManualChange }: Props) {
+export default function ListingEditorDetailsSection({ editing, setEditing, cities, landVri, errors, setErrors, addressError, districtError, locationOnly, detailsOnly, onCoordsManualChange, onEgrnChange }: Props) {
   if (locationOnly) {
-    return <AddressWithMap editing={editing} setEditing={setEditing} cities={cities} hasError={addressError} districtError={districtError} onCoordsManualChange={onCoordsManualChange} />;
+    return <AddressWithMap editing={editing} setEditing={setEditing} cities={cities} hasError={addressError} districtError={districtError} onCoordsManualChange={onCoordsManualChange} onEgrnChange={onEgrnChange} />;
   }
   if (detailsOnly) {
     return <ListingRoomFeatures editing={editing} setEditing={setEditing} landVri={landVri} errors={errors} setErrors={setErrors} />;
@@ -26,7 +27,7 @@ export default function ListingEditorDetailsSection({ editing, setEditing, citie
   return (
     <>
       <ListingRoomFeatures editing={editing} setEditing={setEditing} landVri={landVri} errors={errors} setErrors={setErrors} />
-      <AddressWithMap editing={editing} setEditing={setEditing} cities={cities} hasError={addressError} districtError={districtError} onCoordsManualChange={onCoordsManualChange} />
+      <AddressWithMap editing={editing} setEditing={setEditing} cities={cities} hasError={addressError} districtError={districtError} onCoordsManualChange={onCoordsManualChange} onEgrnChange={onEgrnChange} />
     </>
   );
 }

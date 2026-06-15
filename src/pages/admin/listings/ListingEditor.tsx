@@ -217,6 +217,7 @@ export default function ListingEditor({
               districtError={!!errors.district}
               locationOnly
               onCoordsManualChange={setCoordsManual}
+              onEgrnChange={(objects) => setEditing({ ...editing, egrn_objects: objects })}
             />
           )}
 
