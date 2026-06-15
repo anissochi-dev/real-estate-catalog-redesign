@@ -167,6 +167,13 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
       const stat: EgrnStat = await statRes.json();
       setEgrnData(det);
       setEgrnStat(stat);
+      // Автозаполнение площади из ЕГРН — только если поле ещё не заполнено
+      if (det.success === 1 && det.area) {
+        const areaParsed = parseFloat(det.area);
+        if (!isNaN(areaParsed) && areaParsed > 0 && !editingRef.current.area) {
+          setEditing({ ...editingRef.current, area: areaParsed });
+        }
+      }
     } catch {
       setEgrnError('Ошибка при запросе к ЕГРН');
     } finally {
