@@ -63,6 +63,7 @@ interface AddressProps {
 
 interface Suggestion {
   value: string;
+  full?: string;
   displayName: string;
   lat?: number | null;
   lon?: number | null;
@@ -319,7 +320,7 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
         .then((items: DadataSuggestion[]) => {
           const list: Suggestion[] = (items || [])
             .map(it => {
-              return { value: it.value, displayName: it.value, lat: it.lat, lon: it.lon, district: it.district || '' };
+              return { value: it.value, full: it.full, displayName: it.value, lat: it.lat, lon: it.lon, district: it.district || '' };
             })
             .filter(s => s.value);
           setSuggestions(list);
@@ -432,8 +433,8 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     } else {
       geocodeAddress(`${currentCity}, ${s.value}`, s.value);
     }
-    // Запрашиваем кадастровый номер по выбранному адресу
-    fetchCadastreByAddress(`${currentCity}, ${s.value}`);
+    // Запрашиваем кадастровый номер по выбранному адресу (full — полный адрес с городом)
+    fetchCadastreByAddress(s.full || `${currentCity}, ${s.value}`);
   };
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
