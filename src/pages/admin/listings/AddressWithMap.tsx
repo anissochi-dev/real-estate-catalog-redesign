@@ -107,15 +107,12 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     }
   }
 
-  /* Загрузить выписки для всех объектов из списка */
-  async function fetchEgrnForObjects(objects: CadastreObject[]) {
-    if (!objects.length) return;
+  /* Загрузить выписки для выбранных кадастровых номеров (вызывается из EgrnBlock по кнопке) */
+  function fetchEgrnForSelected(cadNumbers: string[]) {
+    if (!cadNumbers.length) return;
     setEgrnError(null);
     setEgrnOpen(true);
-    setEgrnObjects(objects);
-    setEgrnDataMap({});
-    // Первый объект грузим с обновлением статистики, остальные — параллельно без
-    objects.forEach((obj, i) => fetchEgrnOne(obj.cadastral_number, i === 0));
+    cadNumbers.forEach((cn, i) => fetchEgrnOne(cn, i === 0));
   }
 
   /* Загрузить кадастр по адресу — автозапрос после выбора подсказки */
@@ -129,11 +126,12 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
         setCadastreInfo(d);
         setCadastreInput(d.cadastral_number);
         setEditing({ ...editingRef.current, cadastral_number: d.cadastral_number });
-        // Если есть несколько объектов — грузим все; иначе только основной
+        // Сохраняем объекты для выбора, но НЕ грузим выписки автоматически
         const objects: CadastreObject[] = d.objects?.length
           ? d.objects
           : [{ cadastral_number: d.cadastral_number, address: d.address }];
-        fetchEgrnForObjects(objects);
+        setEgrnObjects(objects);
+        setEgrnDataMap({});
       }
     } catch { /* тихо */ }
     finally { setCadastreLoading(false); }
@@ -150,10 +148,12 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
       if (d.found && d.lat) {
         setCadastreInfo(d);
         setCadastreInput(q);
+        // Сохраняем объекты, но НЕ грузим выписки автоматически
         const objects: CadastreObject[] = d.objects?.length
           ? d.objects
           : [{ cadastral_number: q, address: d.address }];
-        fetchEgrnForObjects(objects);
+        setEgrnObjects(objects);
+        setEgrnDataMap({});
         const coords: [number, number] = [d.lat, d.lon];
         markerRef.current?.geometry.setCoordinates(coords);
         ymapInstance.current?.setCenter(coords, 17, { duration: 400 });
@@ -329,6 +329,7 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
           egrnOpen={egrnOpen}
           setEgrnOpen={setEgrnOpen}
           fallbackCadNumber={editing.cadastral_number || cadastreInput}
+          onRequestSelected={fetchEgrnForSelected}
         />
       )}
 
