@@ -1791,7 +1791,7 @@ def _handle_cadastre_by_address(event: dict) -> dict:
         print(f'[cadastre_by_address] DaData error: {e}')
 
     if cn:
-        return _ok({'found': True, 'cadastral_number': cn, 'address': address, 'lat': lat, 'lon': lon, 'source': 'dadata'})
+        return _ok({'found': True, 'cadastral_number': cn, 'address': address, 'lat': lat, 'lon': lon, 'source': 'dadata', 'objects': [{'cadastral_number': cn, 'address': address}]})
 
     # Шаг 2: ЕГРН API search_by_address
     if not egrn_key:
@@ -1812,23 +1812,26 @@ def _handle_cadastre_by_address(event: dict) -> dict:
     short = re.sub(r',?\s*(помещ|помещение|кв|квартира|оф|офис|пом|ком|комната)\.?\s*\S+.*$', '', query, flags=re.IGNORECASE).strip()
     has_room = short and short != query
 
-    def _return_found(cn: str, found_address: str):
-        """Возвращает найденный объект, добирая координаты если нет."""
+    def _make_result(objects_list: list, main_cn: str, main_addr: str):
+        """Собирает итоговый ответ с массивом объектов и координатами."""
         res_lat, res_lon = lat, lon
-        # Если координат нет — геокодируем через Яндекс по кадастровому номеру
         if not res_lat or not res_lon:
             yandex_key = os.environ.get('YANDEX_GEOCODER_KEY', '')
-            geo = _yandex_geocode_cadastre(cn, yandex_key)
+            geo = _yandex_geocode_cadastre(main_cn, yandex_key)
             if geo.get('lat'):
                 res_lat, res_lon = geo['lat'], geo['lon']
         return _ok({
             'found': True,
-            'cadastral_number': cn,
-            'address': found_address,
+            'cadastral_number': main_cn,
+            'address': main_addr,
             'lat': res_lat,
             'lon': res_lon,
             'source': 'egrn_api',
+            'objects': objects_list,
         })
+
+    def _return_found(cn: str, found_address: str):
+        return _make_result([{'cadastral_number': cn, 'address': found_address}], cn, found_address)
 
     # Если есть номер помещения — пробуем варианты написания: "пом. N" и "кв. N"
     if has_room and room_num:
@@ -1847,7 +1850,7 @@ def _handle_cadastre_by_address(event: dict) -> dict:
             except Exception as e:
                 print(f'[cadastre_by_address] EGRN try="{addr_try}" error: {e}')
 
-    # Запрашиваем здание (или полный адрес если нет суффикса)
+    # Запрашиваем по адресу здания
     addr_to_search = short if has_room else query
     try:
         egrn_data = _egrn_search(addr_to_search)
@@ -1855,29 +1858,83 @@ def _handle_cadastre_by_address(event: dict) -> dict:
         print(f'[cadastre_by_address] EGRN addr="{addr_to_search}" records={len(records)} room_num={room_num}')
 
         if records:
-            matched = None
-
-            # Если есть номер помещения — ищем точное совпадение в адресах записей
+            # Если есть номер помещения — ищем конкретное помещение
             if room_num:
                 for rec in records:
                     rec_addr = rec.get('address', '')
-                    # "кв. 268", "пом. 268", "помещ. 268", или просто ", 268" в конце
                     if re.search(r'(?:кв|пом|помещ|оф)\.?\s*' + room_num + r'\b', rec_addr, re.IGNORECASE):
-                        matched = rec
-                        break
+                        cn = (rec.get('cad_number') or '').strip()
+                        if cn:
+                            return _return_found(cn, rec_addr)
                     if re.search(r',\s*' + room_num + r'\s*$', rec_addr):
-                        matched = rec
+                        cn = (rec.get('cad_number') or '').strip()
+                        if cn:
+                            return _return_found(cn, rec_addr)
+                # Помещение не найдено — берём здание
+                matched = records[0]
+                cn = (matched.get('cad_number') or '').strip()
+                if cn:
+                    return _return_found(cn, matched.get('address', address))
+            else:
+                # Нет помещения — определяем типы объектов через details_by_number
+                # Пропускаем дубли и помещения по адресу, берём первые 8 уникальных
+                seen_cn = set()
+                candidates = []
+                for rec in records[:15]:
+                    cn_r = (rec.get('cad_number') or '').strip()
+                    addr_r = rec.get('address', '')
+                    if not cn_r or cn_r in seen_cn:
+                        continue
+                    if re.search(r'(?:кв|пом|помещ)\.?\s*\d+', addr_r, re.IGNORECASE):
+                        continue
+                    seen_cn.add(cn_r)
+                    candidates.append({'cadastral_number': cn_r, 'address': addr_r})
+                    if len(candidates) >= 8:
                         break
 
-            # Если номер не нашли среди помещений — берём первую запись (само здание)
-            if matched is None:
-                matched = records[0]
-                if room_num:
-                    print(f'[cadastre_by_address] room {room_num} not found in records, using building')
+                # Запрашиваем типы для каждого кандидата
+                ALLOWED_TYPES = {'Здание', 'Земельный участок', 'Сооружение', 'Помещение', 'Объект незавершённого строительства'}
+                objects_with_type = []
+                for cand in candidates:
+                    try:
+                        det_url = f'https://service.api-assist.com/parser/egrn_api/details_by_number?key={egrn_key}&cadNumber={urllib.parse.quote(cand["cadastral_number"])}'
+                        req_det = urllib.request.Request(det_url, headers={'Accept': 'application/json'})
+                        with urllib.request.urlopen(req_det, timeout=10) as resp_det:
+                            det_data = json.loads(resp_det.read().decode('utf-8'))
+                        if det_data.get('success') == 1 and det_data.get('records'):
+                            r = det_data['records'][0]
+                            obj_type = r.get('type', '')
+                            objects_with_type.append({
+                                'cadastral_number': cand['cadastral_number'],
+                                'address': r.get('address', cand['address']),
+                                'type': obj_type,
+                                'area': r.get('area', ''),
+                            })
+                    except Exception as e:
+                        print(f'[cadastre_by_address] details error for {cand["cadastral_number"]}: {e}')
+                        objects_with_type.append({**cand, 'type': '', 'area': ''})
 
-            cn = (matched.get('cad_number') or '').strip()
-            if cn:
-                return _return_found(cn, matched.get('address', address))
+                # Оставляем уникальные типы (одно здание + один участок + etc.)
+                seen_types = set()
+                objects_list = []
+                main_cn, main_addr = '', address
+                # Приоритет: сначала Здание, потом Земельный участок, потом остальные
+                type_priority = ['Здание', 'Земельный участок', 'Сооружение', 'Объект незавершённого строительства', '']
+                objects_with_type.sort(key=lambda x: type_priority.index(x['type']) if x['type'] in type_priority else 99)
+                for obj in objects_with_type:
+                    t = obj['type']
+                    if t and t in seen_types:
+                        continue
+                    if t:
+                        seen_types.add(t)
+                    objects_list.append(obj)
+                    if not main_cn:
+                        main_cn = obj['cadastral_number']
+                        main_addr = obj['address']
+
+                if objects_list:
+                    print(f'[cadastre_by_address] returning {len(objects_list)} typed objects')
+                    return _make_result(objects_list, main_cn, main_addr)
     except Exception as e:
         print(f'[cadastre_by_address] EGRN API error: {e}')
 

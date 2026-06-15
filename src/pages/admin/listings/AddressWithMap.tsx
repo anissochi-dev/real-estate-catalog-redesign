@@ -94,6 +94,12 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
   const [cadastreInput, setCadastreInput] = useState(editing.cadastral_number || '');
   const [cadastreLoading, setCadastreLoading] = useState(false);
   const [cadastreSearchLoading, setCadastreSearchLoading] = useState(false);
+  interface CadastreObject {
+    cadastral_number: string;
+    address?: string;
+    type?: string;
+    area?: string;
+  }
   interface CadastreInfo {
     found: boolean;
     cadastral_number: string;
@@ -117,6 +123,7 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     flat_cadnum?: string;
     stead_cadnum?: string;
     source?: string;
+    objects?: CadastreObject[];
   }
   const [cadastreInfo, setCadastreInfo] = useState<CadastreInfo | null>(
     editing.cadastral_number ? { cadastral_number: editing.cadastral_number, found: true } : null
@@ -739,6 +746,43 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
               {cadastreInfo.stead_cadnum && (
                 <span>Участок: <span className="font-mono font-medium text-foreground">{cadastreInfo.stead_cadnum}</span></span>
               )}
+            </div>
+          )}
+
+          {/* Строка 5: все объекты по адресу (здание + участок и т.д.) */}
+          {cadastreInfo.objects && cadastreInfo.objects.length > 0 && (
+            <div className="border-t border-brand-blue/10 pt-2 space-y-1.5">
+              <div className="text-[11px] text-muted-foreground font-medium">Объекты по адресу:</div>
+              {cadastreInfo.objects.map((obj, i) => (
+                <div key={i} className="flex items-center justify-between gap-2 flex-wrap bg-brand-blue/5 rounded-lg px-2 py-1.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Icon name={obj.type === 'Земельный участок' ? 'Landmark' : 'Building2'} size={12} className="text-brand-blue flex-shrink-0" />
+                    <span className="font-mono text-xs font-medium text-foreground">{obj.cadastral_number}</span>
+                    {obj.type && (
+                      <span className="text-[10px] px-1 py-0.5 rounded bg-brand-blue/10 text-brand-blue font-medium flex-shrink-0">{obj.type}</span>
+                    )}
+                    {obj.area && (
+                      <span className="text-[10px] text-muted-foreground flex-shrink-0">{obj.area} м²</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={`https://pkk.rosreestr.ru/#/?text=${encodeURIComponent(obj.cadastral_number)}&type=1`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="text-[11px] text-brand-blue hover:underline flex items-center gap-0.5"
+                    >
+                      <Icon name="Map" size={11} />ПКК
+                    </a>
+                    <a
+                      href={`https://rosreestr.gov.ru/eservices/real-estate-objects-online/?search=${encodeURIComponent(obj.cadastral_number)}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="text-[11px] text-brand-blue hover:underline flex items-center gap-0.5"
+                    >
+                      <Icon name="FileText" size={11} />ЕГРН
+                    </a>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
