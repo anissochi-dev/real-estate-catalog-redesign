@@ -1812,6 +1812,26 @@ def _handle_cadastre_by_address(event: dict) -> dict:
     short = re.sub(r',?\s*(помещ|помещение|кв|квартира|оф|офис|пом|ком|комната)\.?\s*\S+.*$', '', query, flags=re.IGNORECASE).strip()
     has_room = short and short != query
 
+    # Если есть номер помещения — запрашиваем сразу с "кв. N" (ЕГРН хранит как "кв.")
+    # и параллельно адрес здания для фильтрации по 100 записям
+    if has_room and room_num:
+        addr_with_kv = f'{short}, кв. {room_num}'
+        try:
+            egrn_data = _egrn_search(addr_with_kv)
+            records = egrn_data.get('records', []) if egrn_data.get('success') == 1 else []
+            print(f'[cadastre_by_address] EGRN kv addr="{addr_with_kv}" records={len(records)}')
+            if records:
+                cn = (records[0].get('cad_number') or '').strip()
+                if cn:
+                    return _ok({
+                        'found': True,
+                        'cadastral_number': cn,
+                        'address': records[0].get('address', address),
+                        'lat': lat, 'lon': lon, 'source': 'egrn_api',
+                    })
+        except Exception as e:
+            print(f'[cadastre_by_address] EGRN kv error: {e}')
+
     # Запрашиваем здание (или полный адрес если нет суффикса)
     addr_to_search = short if has_room else query
     try:
