@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Icon from '@/components/ui/icon';
 import { CadastreObject, EgrnData, EgrnStat } from './cadastreTypes';
 
@@ -138,10 +138,16 @@ export default function EgrnBlock({
     ? objects
     : fallbackCadNumber ? [{ cadastral_number: fallbackCadNumber }] : [];
 
-  // По умолчанию выбран первый объект (основной)
-  const [checked, setChecked] = useState<Set<string>>(
-    () => new Set(displayObjects[0]?.cadastral_number ? [displayObjects[0].cadastral_number] : [])
-  );
+  // По умолчанию выбран первый объект; пересинхронизируем при смене списка объектов
+  const [checked, setChecked] = useState<Set<string>>(new Set<string>());
+  const objectsKey = objects.map(o => o.cadastral_number).join(',');
+
+  useEffect(() => {
+    if (displayObjects.length > 0) {
+      setChecked(new Set([displayObjects[0].cadastral_number]));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [objectsKey]);
 
   if (!fallbackCadNumber) return null;
 

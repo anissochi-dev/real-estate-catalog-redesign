@@ -132,6 +132,7 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
           : [{ cadastral_number: d.cadastral_number, address: d.address }];
         setEgrnObjects(objects);
         setEgrnDataMap({});
+        setEgrnOpen(true);
       }
     } catch { /* тихо */ }
     finally { setCadastreLoading(false); }
@@ -154,6 +155,7 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
           : [{ cadastral_number: q, address: d.address }];
         setEgrnObjects(objects);
         setEgrnDataMap({});
+        setEgrnOpen(true);
         const coords: [number, number] = [d.lat, d.lon];
         markerRef.current?.geometry.setCoordinates(coords);
         ymapInstance.current?.setCenter(coords, 17, { duration: 400 });
