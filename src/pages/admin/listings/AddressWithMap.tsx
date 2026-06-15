@@ -195,69 +195,35 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     finally { setCadastreLoading(false); }
   };
 
-  /* Поиск по кадастровому номеру через Яндекс.Карты geocode (поддерживает кадастровые номера напрямую) */
+  /* Поиск по кадастровому номеру через бэкенд (Яндекс HTTP Geocoder — без ограничений домена) */
   const searchByCadastre = async (query: string) => {
     const q = query.trim();
     if (!q) return;
     setCadastreSearchLoading(true);
     try {
-      // Яндекс.Карты умеют геокодировать кадастровые номера
-      if (!window.ymaps || typeof window.ymaps.geocode !== 'function') {
+      const r = await fetch(`${GEO_URL}?action=by_cadastre&query=${encodeURIComponent(q)}`);
+      const d = await r.json();
+      if (d.found && d.lat) {
+        setCadastreInfo(d);
+        setCadastreInput(q);
+        const coords: [number, number] = [d.lat, d.lon];
+        markerRef.current?.geometry.setCoordinates(coords);
+        ymapInstance.current?.setCenter(coords, 17, { duration: 400 });
+        if (d.address) setStreetInput(d.address);
+        onCoordsManualChange?.(true);
+        setEditing({
+          ...editingRef.current,
+          cadastral_number: q,
+          ...(d.address ? { address: d.address } : {}),
+          lat: d.lat,
+          lng: d.lon,
+          ...(d.district ? { district: d.district } : {}),
+        });
+      } else {
         setCadastreInfo({ found: false, cadastral_number: q });
         setEditing({ ...editingRef.current, cadastral_number: q });
-        return;
       }
-      // kind не указываем — кадастровые номера не являются 'house'
-      const res = await window.ymaps.geocode(q, { results: 1 });
-      const obj = res?.geoObjects?.get(0);
-      if (!obj) {
-        setCadastreInfo({ found: false, cadastral_number: q });
-        setEditing({ ...editingRef.current, cadastral_number: q });
-        return;
-      }
-      const coordsRaw = obj.geometry?.getCoordinates?.();
-      if (!coordsRaw || coordsRaw.length !== 2) {
-        setCadastreInfo({ found: false, cadastral_number: q });
-        setEditing({ ...editingRef.current, cadastral_number: q });
-        return;
-      }
-      const lat = coordsRaw[0] as number;
-      const lon = coordsRaw[1] as number;
-
-      // Адрес из геокодера
-      const street = obj.getThoroughfare?.() || '';
-      const house = obj.getPremiseNumber?.() || '';
-      const addressLine = [street, house].filter(Boolean).join(', ') || obj.getAddressLine?.() || '';
-
-      // Район
-      let district = '';
-      try {
-        const meta = obj.properties?.get?.('metaDataProperty')?.GeocoderMetaData;
-        const comps: { kind: string; name: string }[] = meta?.Address?.Components || [];
-        const dists = comps.filter(p => p.kind === 'district').map(p => p.name);
-        district = dists.find(n => /микрорайон|мкр|квартал|жилмассив/i.test(n)) || (dists.length ? dists[dists.length - 1] : '');
-      } catch { /* ignore */ }
-
-      const info: CadastreInfo = { found: true, cadastral_number: q, address: addressLine, lat, lon };
-      setCadastreInfo(info);
-      setCadastreInput(q);
-
-      const coords: [number, number] = [lat, lon];
-      markerRef.current?.geometry.setCoordinates(coords);
-      ymapInstance.current?.setCenter(coords, 17, { duration: 400 });
-      if (addressLine) setStreetInput(addressLine);
-      onCoordsManualChange?.(true);
-
-      setEditing({
-        ...editingRef.current,
-        cadastral_number: q,
-        address: addressLine || editingRef.current.address,
-        lat,
-        lng: lon,
-        ...(district ? { district } : {}),
-      });
-    } catch (e) {
-      console.error('[cadastre search]', e);
+    } catch {
       setCadastreInfo({ found: false, cadastral_number: q });
       setEditing({ ...editingRef.current, cadastral_number: q });
     } finally {

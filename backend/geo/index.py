@@ -1,4 +1,4 @@
-"""
+"""  # v2
 Геолокация и адреса: подсказки DaData, исправление и нормализация районов.
 
 action=suggest    GET  ?query=Красная&city=Краснодар
@@ -1904,30 +1904,56 @@ def _handle_by_cadastre(event: dict) -> dict:
     if not query:
         return _err('query обязателен', 400)
 
-    # 1. Яндекс Геокодер
-    ya_key = os.environ.get('YANDEX_GEOCODER_KEY', '')
-    ya_result = _yandex_geocode_cadastre(query, ya_key)
+    api_key = os.environ.get('DADATA_API_KEY', '')
+    secret_key = os.environ.get('DADATA_SECRET_KEY', '')
 
-    if ya_result.get('lat'):
-        print(f'[by_cadastre] Яндекс нашёл cn={query}: lat={ya_result["lat"]}')
-        return _ok({
-            'found': True,
-            'cadastral_number': query,
-            'address': ya_result.get('address', ''),
-            'lat': ya_result['lat'],
-            'lon': ya_result['lon'],
-            'district': ya_result.get('district', ''),
-            'object_type': '',
-            'area_sqm': None,
-            'floors': None,
-            'year_built': None,
-            'status': '',
-            'source': 'yandex_geocoder',
-        })
+    # Стратегия 1: DaData suggest — кадастровый номер как поисковый запрос адреса.
+    # DaData возвращает адрес и координаты если номер есть в базе ФИАС/ПКК.
+    try:
+        payload = json.dumps({'query': query, 'count': 1}).encode('utf-8')
+        req = urllib.request.Request(
+            'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address',
+            data=payload,
+            headers={'Content-Type': 'application/json', 'Accept': 'application/json',
+                     'Authorization': f'Token {api_key}', 'X-Secret': secret_key},
+            method='POST',
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            d = json.loads(resp.read().decode('utf-8'))
+        sugg = d.get('suggestions', [])
+        if sugg:
+            s = sugg[0]
+            sd = s.get('data', {}) or {}
+            lat = float(sd['geo_lat']) if sd.get('geo_lat') else None
+            lon = float(sd['geo_lon']) if sd.get('geo_lon') else None
+            addr = s.get('value') or ''
+            for prefix in ['Россия, ', 'Краснодарский край, ']:
+                if addr.startswith(prefix):
+                    addr = addr[len(prefix):]
+            district = sd.get('city_district') or sd.get('settlement') or ''
+            fias_level = sd.get('fias_level', '')
+            level_labels = {'8': 'Здание', '9': 'Помещение', '7': 'Земельный участок', '6': 'Строение'}
+            object_type = level_labels.get(str(fias_level), '')
+            if lat and lon:
+                print(f'[by_cadastre] DaData нашёл lat={lat} addr={addr!r}')
+                return _ok({
+                    'found': True,
+                    'cadastral_number': query,
+                    'address': addr,
+                    'lat': lat,
+                    'lon': lon,
+                    'district': district,
+                    'object_type': object_type,
+                    'area_sqm': None,
+                    'floors': None,
+                    'year_built': None,
+                    'status': '',
+                    'source': 'dadata_suggest',
+                })
+    except Exception as e:
+        print(f'[by_cadastre] DaData error: {e}')
 
-    print(f'[by_cadastre] Яндекс не нашёл cn={query}, пробуем PKK')
-
-    # 2. Fallback: PKK Росреестра
+    # Стратегия 2: PKK Росреестра
     hit = _pkk_search_by_cn(query)
     if not hit:
         return _ok({'found': False, 'cadastral_number': query})
@@ -1939,35 +1965,6 @@ def _handle_by_cadastre(event: dict) -> dict:
         feature = detail
 
     result = _pkk_parse_feature(feature, obj_type, query)
-
-    # Обогащаем адресом через DaData если PKK дал координаты но нет адреса
-    if not result.get('address') and result.get('lat'):
-        try:
-            api_key = os.environ.get('DADATA_API_KEY', '')
-            secret_key = os.environ.get('DADATA_SECRET_KEY', '')
-            payload = json.dumps({'query': query, 'count': 1}).encode('utf-8')
-            req = urllib.request.Request(
-                'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address',
-                data=payload,
-                headers={'Content-Type': 'application/json', 'Accept': 'application/json',
-                         'Authorization': f'Token {api_key}', 'X-Secret': secret_key},
-                method='POST',
-            )
-            with urllib.request.urlopen(req, timeout=8) as resp:
-                d = json.loads(resp.read().decode('utf-8'))
-            sugg = d.get('suggestions', [])
-            if sugg:
-                addr = sugg[0].get('value') or ''
-                for prefix in ['Россия, ', 'Краснодарский край, ']:
-                    if addr.startswith(prefix):
-                        addr = addr[len(prefix):]
-                if addr:
-                    result['address'] = addr
-                dd = sugg[0].get('data', {})
-                result['district'] = dd.get('city_district') or dd.get('settlement') or ''
-        except Exception as e:
-            print(f'[by_cadastre] DaData fallback error: {e}')
-
     return _ok(result)
 
 
@@ -1990,6 +1987,12 @@ def handler(event: dict, context) -> dict:
         'suggest' if event.get('httpMethod') == 'GET' else 'fix'
     )
 
+    # Кадастровые запросы не требуют БД — обрабатываем отдельно
+    if action == 'cadastre_by_address':
+        return _handle_cadastre_by_address(event)
+    if action == 'by_cadastre':
+        return _handle_by_cadastre(event)
+
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -2011,10 +2014,6 @@ def handler(event: dict, context) -> dict:
                 return _handle_geo_okrug(body, cur, conn)
             elif action == 'geo_quota':
                 return _handle_geo_quota(body, cur, conn)
-            elif action == 'cadastre_by_address':
-                return _handle_cadastre_by_address(event)
-            elif action == 'by_cadastre':
-                return _handle_by_cadastre(event)
             else:
                 return _err(f'Неизвестный action: {action}. Доступные: suggest, fix, normalize, audit, parse_osm, overpass_streets, ai_map_streets, geo_okrug, geo_quota, cadastre_by_address, by_cadastre')
     finally:
