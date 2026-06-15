@@ -1839,13 +1839,11 @@ def _handle_cadastre_by_address(event: dict) -> dict:
                 records = egrn_data.get('records', []) if egrn_data.get('success') == 1 else []
                 print(f'[cadastre_by_address] EGRN try="{addr_try}" records={len(records)}')
                 if records:
-                    house_part = short.split(',')[-1].strip().lower()
-                    for rec in records:
-                        rec_addr = rec.get('address', '')
-                        if house_part in rec_addr.lower():
-                            cn = (rec.get('cad_number') or '').strip()
-                            if cn:
-                                return _return_found(cn, rec_addr)
+                    # Берём первую запись — запрос уже специфичный (дом + помещение)
+                    rec = records[0]
+                    cn = (rec.get('cad_number') or '').strip()
+                    if cn:
+                        return _return_found(cn, rec.get('address', address))
             except Exception as e:
                 print(f'[cadastre_by_address] EGRN try="{addr_try}" error: {e}')
 
@@ -2058,27 +2056,60 @@ def _handle_by_cadastre(event: dict) -> dict:
     except Exception as e:
         print(f'[by_cadastre] DaData error: {e}')
 
-    # Стратегия 2: Яндекс HTTP Geocoder (кадастровый номер как запрос)
-    yandex_key = os.environ.get('YANDEX_GEOCODER_KEY', '')
-    geo = _yandex_geocode_cadastre(query, yandex_key)
-    if geo.get('lat') and geo.get('lon'):
-        return _ok({
-            'found': True,
-            'cadastral_number': query,
-            'address': geo.get('address', ''),
-            'lat': geo['lat'],
-            'lon': geo['lon'],
-            'district': geo.get('district', ''),
-            'object_type': '',
-            'area_sqm': None,
-            'floor': None,
-            'flat_count': None,
-            'sqm_price': None,
-            'floors': None,
-            'year_built': None,
-            'status': '',
-            'source': 'yandex_geocoder',
-        })
+    # Стратегия 2: ЕГРН API details_by_number → адрес → геокодируем через DaData
+    egrn_key = os.environ.get('EGRN_API_KEY', '')
+    if egrn_key:
+        try:
+            egrn_url = f'https://service.api-assist.com/parser/egrn_api/details_by_number?key={egrn_key}&cadNumber={urllib.parse.quote(query)}'
+            req3 = urllib.request.Request(egrn_url, headers={'Accept': 'application/json'})
+            with urllib.request.urlopen(req3, timeout=15) as resp3:
+                egrn_det = json.loads(resp3.read().decode('utf-8'))
+            print(f'[by_cadastre] EGRN details success={egrn_det.get("success")}')
+            if egrn_det.get('success') == 1 and egrn_det.get('records'):
+                rec = egrn_det['records'][0]
+                egrn_addr = rec.get('address', '')
+                # Геокодируем адрес через DaData для получения координат
+                geo_lat, geo_lon = None, None
+                if egrn_addr and api_key:
+                    try:
+                        payload2 = json.dumps({'query': egrn_addr, 'count': 1}).encode('utf-8')
+                        req4 = urllib.request.Request(
+                            'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address',
+                            data=payload2,
+                            headers={'Content-Type': 'application/json', 'Accept': 'application/json',
+                                     'Authorization': f'Token {api_key}', 'X-Secret': secret_key},
+                            method='POST',
+                        )
+                        with urllib.request.urlopen(req4, timeout=8) as resp4:
+                            dd = json.loads(resp4.read().decode('utf-8'))
+                        sugg2 = dd.get('suggestions', [])
+                        if sugg2:
+                            sd2 = sugg2[0].get('data', {})
+                            geo_lat = float(sd2['geo_lat']) if sd2.get('geo_lat') else None
+                            geo_lon = float(sd2['geo_lon']) if sd2.get('geo_lon') else None
+                    except Exception as e:
+                        print(f'[by_cadastre] DaData geocode error: {e}')
+
+                area_sqm = None
+                try:
+                    if rec.get('area'): area_sqm = float(rec['area'])
+                except (ValueError, TypeError): pass
+
+                return _ok({
+                    'found': True,
+                    'cadastral_number': query,
+                    'address': egrn_addr,
+                    'lat': geo_lat,
+                    'lon': geo_lon,
+                    'district': '',
+                    'object_type': rec.get('type', ''),
+                    'area_sqm': area_sqm,
+                    'floor': rec.get('floor'),
+                    'status': rec.get('status', ''),
+                    'source': 'egrn_details',
+                })
+        except Exception as e:
+            print(f'[by_cadastre] EGRN details error: {e}')
 
     return _ok({'found': False, 'cadastral_number': query})
 
