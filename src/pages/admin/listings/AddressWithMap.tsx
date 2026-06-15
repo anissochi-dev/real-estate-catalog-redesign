@@ -94,18 +94,28 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
   const [cadastreLoading, setCadastreLoading] = useState(false);
   const [cadastreSearchLoading, setCadastreSearchLoading] = useState(false);
   interface CadastreInfo {
+    found: boolean;
     cadastral_number: string;
     address?: string;
+    lat?: number | null;
+    lon?: number | null;
     object_type?: string;
     area_sqm?: number | null;
+    floor?: number | null;
     floors?: number | null;
+    flat_count?: number | null;
     year_built?: number | null;
+    sqm_price?: number | null;
     status?: string;
     purpose?: string;
     category?: string;
-    lat?: number | null;
-    lon?: number | null;
-    found: boolean;
+    district?: string;
+    city_district?: string;
+    postal_code?: string;
+    house_cadnum?: string;
+    flat_cadnum?: string;
+    stead_cadnum?: string;
+    source?: string;
   }
   const [cadastreInfo, setCadastreInfo] = useState<CadastreInfo | null>(
     editing.cadastral_number ? { cadastral_number: editing.cadastral_number, found: true } : null
@@ -561,65 +571,101 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
 
       {/* ── InfoCard кадастра ──────────────────────────────────────────────── */}
       {cadastreInfo && cadastreInfo.found && (
-        <div className="rounded-xl border border-brand-blue/20 bg-brand-blue/5 px-4 py-3 space-y-1.5">
+        <div className="rounded-xl border border-brand-blue/20 bg-brand-blue/5 px-4 py-3 space-y-2">
+          {/* Строка 1: номер + ссылка на ПКК */}
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <Icon name="Building2" size={15} className="text-brand-blue flex-shrink-0" />
-              <span className="font-mono text-sm font-semibold text-foreground tracking-wide">
+              <span className="font-mono text-sm font-semibold text-foreground tracking-wide truncate">
                 {cadastreInfo.cadastral_number}
               </span>
+              {cadastreInfo.object_type && (
+                <span className="text-[11px] px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue font-medium flex-shrink-0">
+                  {cadastreInfo.object_type}
+                </span>
+              )}
               {cadastreInfo.status && (
-                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 border border-emerald-200">
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 border border-emerald-200 flex-shrink-0">
                   {cadastreInfo.status}
                 </span>
               )}
             </div>
             <a
               href={`https://pkk.rosreestr.ru/#/?text=${encodeURIComponent(cadastreInfo.cadastral_number)}&type=1`}
-              target="_blank"
-              rel="noopener noreferrer"
+              target="_blank" rel="noopener noreferrer"
               className="text-xs text-brand-blue hover:underline flex items-center gap-1 flex-shrink-0"
             >
               <Icon name="ExternalLink" size={12} />
-              Публичная кадастровая карта
+              Открыть на ПКК
             </a>
           </div>
+
+          {/* Строка 2: адрес из кадастра */}
+          {cadastreInfo.address && (
+            <div className="text-xs text-muted-foreground flex items-start gap-1">
+              <Icon name="MapPin" size={11} className="flex-shrink-0 mt-0.5" />
+              <span>{cadastreInfo.address}</span>
+            </div>
+          )}
+
+          {/* Строка 3: характеристики объекта */}
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            {cadastreInfo.object_type && (
-              <span className="flex items-center gap-1">
-                <Icon name="Tag" size={11} />
-                {cadastreInfo.object_type}
-              </span>
-            )}
             {cadastreInfo.area_sqm && (
               <span className="flex items-center gap-1">
                 <Icon name="Maximize2" size={11} />
                 {cadastreInfo.area_sqm.toLocaleString('ru')} м²
               </span>
             )}
-            {cadastreInfo.floors && (
+            {cadastreInfo.floor && (
               <span className="flex items-center gap-1">
                 <Icon name="Layers" size={11} />
-                {cadastreInfo.floors} эт.
+                {cadastreInfo.floor} эт.
+              </span>
+            )}
+            {cadastreInfo.flat_count && (
+              <span className="flex items-center gap-1">
+                <Icon name="Home" size={11} />
+                {cadastreInfo.flat_count} пом.
               </span>
             )}
             {cadastreInfo.year_built && (
               <span className="flex items-center gap-1">
                 <Icon name="Calendar" size={11} />
-                {cadastreInfo.year_built} г.
+                {cadastreInfo.year_built} г.п.
               </span>
             )}
-            {cadastreInfo.purpose && (
+            {cadastreInfo.postal_code && (
               <span className="flex items-center gap-1">
-                <Icon name="Info" size={11} />
-                {cadastreInfo.purpose}
+                <Icon name="Mail" size={11} />
+                {cadastreInfo.postal_code}
+              </span>
+            )}
+            {cadastreInfo.city_district && (
+              <span className="flex items-center gap-1">
+                <Icon name="Map" size={11} />
+                {cadastreInfo.city_district}
+              </span>
+            )}
+            {cadastreInfo.sqm_price && (
+              <span className="flex items-center gap-1">
+                <Icon name="TrendingUp" size={11} />
+                {cadastreInfo.sqm_price.toLocaleString('ru')} ₽/м²
               </span>
             )}
           </div>
-          {cadastreInfo.address && cadastreInfo.address !== editing.address && (
-            <div className="text-xs text-muted-foreground flex items-center gap-1">
-              <Icon name="MapPin" size={11} className="flex-shrink-0" />
-              {cadastreInfo.address}
+
+          {/* Строка 4: связанные кадастровые номера */}
+          {(cadastreInfo.house_cadnum || cadastreInfo.flat_cadnum || cadastreInfo.stead_cadnum) && (
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground border-t border-brand-blue/10 pt-1.5">
+              {cadastreInfo.house_cadnum && (
+                <span>Здание: <span className="font-mono font-medium text-foreground">{cadastreInfo.house_cadnum}</span></span>
+              )}
+              {cadastreInfo.flat_cadnum && (
+                <span>Помещение: <span className="font-mono font-medium text-foreground">{cadastreInfo.flat_cadnum}</span></span>
+              )}
+              {cadastreInfo.stead_cadnum && (
+                <span>Участок: <span className="font-mono font-medium text-foreground">{cadastreInfo.stead_cadnum}</span></span>
+              )}
             </div>
           )}
         </div>
@@ -627,14 +673,14 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
       {cadastreInfo && !cadastreInfo.found && cadastreInfo.cadastral_number && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800 flex flex-wrap items-center gap-2">
           <Icon name="AlertTriangle" size={13} className="flex-shrink-0" />
-          <span>Объект <span className="font-mono font-semibold">{cadastreInfo.cadastral_number}</span> не найден через геокодер.</span>
+          <span>Объект <span className="font-mono font-semibold">{cadastreInfo.cadastral_number}</span> не найден в базе.</span>
           <a
             href={`https://pkk.rosreestr.ru/#/?text=${encodeURIComponent(cadastreInfo.cadastral_number)}&type=1`}
             target="_blank" rel="noopener noreferrer"
             className="text-amber-700 underline hover:text-amber-900 flex items-center gap-1"
           >
             <Icon name="ExternalLink" size={11} />
-            Проверить на PKK Росреестра
+            Проверить на ПКК Росреестра
           </a>
           <span className="text-amber-600">— номер будет сохранён</span>
         </div>

@@ -1934,17 +1934,59 @@ def _handle_by_cadastre(event: dict) -> dict:
             fias_level = sd.get('fias_level', '')
             level_labels = {'8': 'Здание', '9': 'Помещение', '7': 'Земельный участок', '6': 'Строение'}
             object_type = level_labels.get(str(fias_level), '')
+
+            # Кадастровые номера связанных объектов
+            house_cadnum = sd.get('house_cadnum') or ''
+            flat_cadnum  = sd.get('flat_cadnum')  or ''
+            stead_cadnum = sd.get('stead_cadnum') or ''
+
+            # Площадь помещения (flat_area) — есть для квартир/помещений
+            area_sqm = None
+            raw_area = sd.get('flat_area')
+            if raw_area:
+                try: area_sqm = float(str(raw_area).replace(',', '.'))
+                except (ValueError, TypeError): pass
+
+            # Этаж помещения
+            floor = None
+            if sd.get('floor'):
+                try: floor = int(sd['floor'])
+                except (ValueError, TypeError): pass
+
+            # Кол-во квартир/помещений в здании
+            flat_count = None
+            if sd.get('house_flat_count'):
+                try: flat_count = int(sd['house_flat_count'])
+                except (ValueError, TypeError): pass
+
+            # Цена м² по рынку
+            sqm_price = None
+            if sd.get('square_meter_price'):
+                try: sqm_price = int(sd['square_meter_price'])
+                except (ValueError, TypeError): pass
+
+            # Почтовый индекс и округ
+            postal_code = sd.get('postal_code') or ''
+            city_district = sd.get('city_district_with_type') or sd.get('city_district') or ''
+
             if lat and lon:
-                print(f'[by_cadastre] DaData нашёл lat={lat} addr={addr!r}')
                 return _ok({
                     'found': True,
                     'cadastral_number': query,
+                    'house_cadnum': house_cadnum,
+                    'flat_cadnum': flat_cadnum,
+                    'stead_cadnum': stead_cadnum,
                     'address': addr,
                     'lat': lat,
                     'lon': lon,
                     'district': district,
+                    'city_district': city_district,
+                    'postal_code': postal_code,
                     'object_type': object_type,
-                    'area_sqm': None,
+                    'area_sqm': area_sqm,
+                    'floor': floor,
+                    'flat_count': flat_count,
+                    'sqm_price': sqm_price,
                     'floors': None,
                     'year_built': None,
                     'status': '',
