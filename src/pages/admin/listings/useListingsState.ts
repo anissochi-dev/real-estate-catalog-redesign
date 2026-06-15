@@ -34,6 +34,7 @@ export function useListingsState() {
   const [purposes, setPurposes] = useState<Purpose[]>([]);
   const [landVri, setLandVri] = useState<LandVri[]>([]);
   const [editing, setEditing] = useState<Partial<Listing> | null>(null);
+  const egrnObjectsRef = useRef<import('./types').EgrnStoredObject[] | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
   const [historyListing, setHistoryListing] = useState<Listing | null>(null);
   const [photoPickListing, setPhotoPickListing] = useState<Listing | null>(null);
@@ -123,6 +124,7 @@ export function useListingsState() {
     });
 
   const openEdit = (it?: Listing | Partial<Listing>) => {
+    egrnObjectsRef.current = null; // сбрасываем при открытии нового объекта
     if (it && (it as Listing).id) {
       const full = it as Listing;
       // Сразу открываем с данными из списка, потом подгружаем полные данные
@@ -156,6 +158,11 @@ export function useListingsState() {
     }
   };
 
+  const setEgrnObjects = (objects: import('./types').EgrnStoredObject[]) => {
+    egrnObjectsRef.current = objects;
+    setEditing(prev => prev ? { ...prev, egrn_objects: objects } : prev);
+  };
+
   const save = async (override?: Partial<Listing>) => {
     if (!editing) return;
     const isNew = !editing.id;
@@ -163,6 +170,10 @@ export function useListingsState() {
     // в ListingEditor) только что вычислил поля и не может полагаться на
     // обновление React-стейта до отправки запроса.
     const merged = { ...editing, ...(override || {}) };
+    // Подмешиваем egrn_objects из ref — на случай если setEditing(prev=>) ещё не применился
+    if (egrnObjectsRef.current && !merged.egrn_objects?.length) {
+      merged.egrn_objects = egrnObjectsRef.current;
+    }
     const data: Record<string, unknown> = { ...merged };
     if (Array.isArray(data.tags)) data.tags = (data.tags as string[]).join(',');
     data.images = photos.join('|');
@@ -400,5 +411,6 @@ export function useListingsState() {
     // actions
     load, loadMore, switchTab, openEdit, save, archive, runBulk, bulkDelete, toggleSelect,
     aiDescribe, aiTitle, generateTags, generateSeo, generateAll,
+    setEgrnObjects,
   };
 }

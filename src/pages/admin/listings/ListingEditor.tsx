@@ -13,7 +13,7 @@ import { geocodeAddress } from '@/lib/yandexGeocode';
 
 interface Props {
   editing: Partial<Listing>;
-  setEditing: (l: Partial<Listing>) => void;
+  setEditing: (l: Partial<Listing> | ((prev: Partial<Listing>) => Partial<Listing>)) => void;
   photos: string[];
   setPhotos: (p: string[]) => void;
   cities: City[];
@@ -31,12 +31,13 @@ interface Props {
   onGenerateAll: () => void;
   onClose: () => void;
   onSave: (override?: Partial<Listing>) => void;
+  setEgrnObjects?: (objects: import('./types').EgrnStoredObject[]) => void;
 }
 
 export default function ListingEditor({
   editing, setEditing, photos, setPhotos, cities, purposes, landVri,
   aiLoading, aiTitleLoading, aiTagsLoading, aiSeoLoading, aiAllLoading,
-  onDescribe, onGenerateTitle, onGenerateTags, onGenerateSeo, onGenerateAll, onClose, onSave,
+  onDescribe, onGenerateTitle, onGenerateTags, onGenerateSeo, onGenerateAll, onClose, onSave, setEgrnObjects,
 }: Props) {
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [tab, setTab] = useState<EditorTab>('main');
@@ -217,7 +218,7 @@ export default function ListingEditor({
               districtError={!!errors.district}
               locationOnly
               onCoordsManualChange={setCoordsManual}
-              onEgrnChange={(objects) => setEditing({ ...editing, egrn_objects: objects })}
+              onEgrnChange={(objects) => { if (objects.length) setEgrnObjects?.(objects); }}
             />
           )}
 

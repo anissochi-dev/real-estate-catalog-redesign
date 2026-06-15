@@ -84,25 +84,29 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
   /* Собираем EgrnStoredObject[] из текущего dataMap + objects и уведомляем родителя */
   function _notifyEgrnChange(updatedMap: Record<string, EgrnData>, objects: CadastreObject[]) {
     if (!onEgrnChange) return;
-    const stored: EgrnStoredObject[] = objects.map(obj => {
-      const det = updatedMap[obj.cadastral_number];
-      return {
-        cadastral_number: obj.cadastral_number,
-        address: obj.address || det?.address,
-        type: obj.type || det?.type,
-        area: obj.area || det?.area,
-        status: det?.status,
-        ownership: det?.ownership,
-        purpose: det?.purpose,
-        floor: det?.floor,
-        reg_date: det?.reg_date,
-        cad_cost: det?.cad_cost,
-        encumbrances: det?.encumbrances?.map(e => ({ type: e.type, date: e.date })),
-        rights: det?.rights?.map(r => ({ type: r.type, date: r.date })),
-        fetched_at: det ? new Date().toISOString() : undefined,
-      };
-    }).filter(o => o.cadastral_number);
-    onEgrnChange(stored);
+    // Берём только объекты с успешно загруженной выпиской
+    const stored: EgrnStoredObject[] = objects
+      .filter(obj => updatedMap[obj.cadastral_number]?.success === 1 || updatedMap[obj.cadastral_number])
+      .map(obj => {
+        const det = updatedMap[obj.cadastral_number];
+        return {
+          cadastral_number: obj.cadastral_number,
+          address: obj.address || det?.address,
+          type: obj.type || det?.type,
+          area: obj.area || det?.area,
+          status: det?.status,
+          ownership: det?.ownership,
+          purpose: det?.purpose,
+          floor: det?.floor,
+          reg_date: det?.reg_date,
+          cad_cost: det?.cad_cost,
+          encumbrances: det?.encumbrances?.map(e => ({ type: e.type, date: e.date })),
+          rights: det?.rights?.map(r => ({ type: r.type, date: r.date })),
+          fetched_at: det ? new Date().toISOString() : undefined,
+        };
+      })
+      .filter(o => o.cadastral_number);
+    if (stored.length > 0) onEgrnChange(stored);
   }
 
   /* Загрузить выписку ЕГРН для одного кадастрового номера */

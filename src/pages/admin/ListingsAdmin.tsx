@@ -127,6 +127,7 @@ export default function ListingsAdmin() {
           onGenerateAll={s.generateAll}
           onClose={() => { s.setEditing(null); s.setPhotos([]); }}
           onSave={s.save}
+          setEgrnObjects={s.setEgrnObjects}
         />
       )}
 
