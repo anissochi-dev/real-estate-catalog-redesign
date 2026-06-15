@@ -74,10 +74,10 @@ export function NewsAdminList({ news, loading, headers, onNewsChange }: Props) {
   };
 
   const remove = async (id: number) => {
-    if (!confirm('Удалить статью? Это действие необратимо.')) return;
+    if (!confirm('Полностью удалить статью из базы? Это действие необратимо.')) return;
     setDeletingId(id);
     try {
-      const r = await fetch(NEWS_URL, { method: 'POST', headers, body: JSON.stringify({ action: 'remove', id }) });
+      const r = await fetch(NEWS_URL, { method: 'POST', headers, body: JSON.stringify({ action: 'delete', id }) });
       const d = await r.json();
       if (d.error) { toast.error(d.error); return; }
       toast.success('Статья удалена');

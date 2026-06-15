@@ -927,41 +927,38 @@ def handler(event: dict, context) -> dict:
                     if time_ok and not already_ran:
                         api_key, folder_id = _load_gpt_keys(cur)
                         if not api_key or not folder_id:
-                            print('[news] CRON: YandexGPT не настроен — пропускаем генерацию (нет api_key или folder_id)')
-                        key_rate = _fetch_cbr_key_rate()
-                        import random
-                        count = int(sch.get('articles_per_run', 3))
-                        # Берём темы из расписания если заданы, иначе из AUTO_TOPICS
-                        custom_topics_raw = (sch.get('topics') or '').strip()
-                        if custom_topics_raw:
-                            pool = [t.strip() for t in custom_topics_raw.splitlines() if t.strip()]
+                            print('[news] CRON: YandexGPT не настроен — пропускаем генерацию')
                         else:
-                            pool = AUTO_TOPICS
-                        topics = random.sample(pool, min(count, len(pool)))
-                        # Один раз ищем общий дайджест новостей Краснодара за сегодня
-                        daily_news, _ = _fetch_news_snippets(
-                            'коммерческая недвижимость Краснодар новости сегодня', limit=10
-                        )
-                        for topic in topics:
-                            # Ищем новости по конкретной теме + общий дайджест
-                            topic_news, src = _fetch_news_snippets(
-                                f'{topic} Краснодар', limit=5
-                            )
-                            # Объединяем: сначала тематические, потом общие (без дублей)
-                            seen_urls = {s['url'] for s in topic_news}
-                            combined = topic_news + [s for s in daily_news if s['url'] not in seen_urls]
-                            article, err = _gpt(
-                                api_key, folder_id, topic,
-                                key_rate=key_rate,
-                                news_snippets=combined[:8],
-                            )
-                            if article and _is_valid_article(article):
-                                _save_article(cur, conn, article, True, auto_publish=True, key_rate=key_rate)
-                                news_generated += 1
-                            elif article:
-                                print(f'[news] Отклонена статья (отказ модели): {article.get("title", "")[:80]}')
+                            key_rate = _fetch_cbr_key_rate()
+                            import random
+                            count = int(sch.get('articles_per_run', 3))
+                            # Берём темы из расписания если заданы, иначе из AUTO_TOPICS
+                            custom_topics_raw = (sch.get('topics') or '').strip()
+                            if custom_topics_raw:
+                                pool = [t.strip() for t in custom_topics_raw.splitlines() if t.strip()]
                             else:
-                                print(f'[news] Пропущена тема (нет новостей): {topic[:80]}')
+                                pool = AUTO_TOPICS
+                            topics = random.sample(pool, min(count, len(pool)))
+                            # Один раз ищем общий дайджест новостей Краснодара за сегодня
+                            daily_news, _ = _fetch_news_snippets(
+                                'коммерческая недвижимость Краснодар новости сегодня', limit=10
+                            )
+                            for topic in topics:
+                                topic_news, src = _fetch_news_snippets(f'{topic} Краснодар', limit=5)
+                                seen_urls = {s['url'] for s in topic_news}
+                                combined = topic_news + [s for s in daily_news if s['url'] not in seen_urls]
+                                article, err = _gpt(
+                                    api_key, folder_id, topic,
+                                    key_rate=key_rate,
+                                    news_snippets=combined[:8],
+                                )
+                                if article and _is_valid_article(article):
+                                    _save_article(cur, conn, article, True, auto_publish=True, key_rate=key_rate)
+                                    news_generated += 1
+                                elif article:
+                                    print(f'[news] Отклонена статья (отказ модели): {article.get("title", "")[:80]}')
+                                else:
+                                    print(f'[news] Пропущена тема (нет новостей): {topic[:80]}')
                         ts = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')
                         cur.execute(
                             f"UPDATE {SCHEMA}.news_schedule SET last_run_at = '{ts}', "
@@ -1240,6 +1237,18 @@ def handler(event: dict, context) -> dict:
                 cur.execute(
                     f"UPDATE {SCHEMA}.news SET is_published = FALSE, updated_at = NOW() WHERE id = {nid}"
                 )
+                conn.commit()
+                return _ok({'ok': True})
+
+            # ── УДАЛИТЬ ПОЛНОСТЬЮ (hard delete) ───────────────────────────
+            if action == 'delete':
+                nid = int(body.get('id', 0))
+                if not nid:
+                    return _err(400, 'id обязателен')
+                cur.execute(f"DELETE FROM {SCHEMA}.news WHERE id = {nid}")
+                conn.commit()
+                # Инвалидируем sitemap
+                cur.execute(f"UPDATE {SCHEMA}.seo_artifacts SET urls_count = 0 WHERE kind = 'sitemap'")
                 conn.commit()
                 return _ok({'ok': True})
 
