@@ -136,7 +136,17 @@ export function useListingsState() {
       adminApi.getListing(full.id).then((res: { listing?: Listing } & Listing) => {
         const detailed: Listing = res.listing || res;
         if (!detailed?.id) return;
-        setEditing(detailed);
+        setEditing(prev => {
+          const base = { ...detailed };
+          // Не затираем egrn_objects если они уже загружены в этой сессии
+          // (egrnObjectsRef > prev.egrn_objects > detailed.egrn_objects)
+          if (egrnObjectsRef.current && egrnObjectsRef.current.length > 0) {
+            base.egrn_objects = egrnObjectsRef.current;
+          } else if (prev?.egrn_objects && (prev.egrn_objects as unknown[]).length > 0) {
+            base.egrn_objects = prev.egrn_objects;
+          }
+          return base;
+        });
         const detailImgs = splitImages(detailed.images);
         if (!detailImgs.length && detailed.image) detailImgs.push(detailed.image);
         setPhotos(detailImgs);
@@ -166,12 +176,9 @@ export function useListingsState() {
   const save = async (override?: Partial<Listing>) => {
     if (!editing) return;
     const isNew = !editing.id;
-    // override используется, когда вызывающий код (например, авто-геокодинг
-    // в ListingEditor) только что вычислил поля и не может полагаться на
-    // обновление React-стейта до отправки запроса.
     const merged = { ...editing, ...(override || {}) };
-    // Подмешиваем egrn_objects из ref — на случай если setEditing(prev=>) ещё не применился
-    if (egrnObjectsRef.current && !merged.egrn_objects?.length) {
+    // Подмешиваем egrn_objects из ref — страховка на случай гонки состояний
+    if (egrnObjectsRef.current && egrnObjectsRef.current.length > 0) {
       merged.egrn_objects = egrnObjectsRef.current;
     }
     const data: Record<string, unknown> = { ...merged };
