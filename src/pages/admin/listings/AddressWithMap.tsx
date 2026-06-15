@@ -259,7 +259,6 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
         setCadastreInfo(d);
         setCadastreInput(d.cadastral_number);
         setEditing({ ...editingRef.current, cadastral_number: d.cadastral_number });
-        fetchEgrn(d.cadastral_number);
       }
       // Не сбрасываем пустым — PKK по адресу менее надёжен
     } catch { /* тихо */ }
@@ -277,7 +276,6 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
       if (d.found && d.lat) {
         setCadastreInfo(d);
         setCadastreInput(q);
-        fetchEgrn(q);
         const coords: [number, number] = [d.lat, d.lon];
         markerRef.current?.geometry.setCoordinates(coords);
         ymapInstance.current?.setCenter(coords, 17, { duration: 400 });
@@ -759,21 +757,15 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
       )}
 
       {/* ── Блок ЕГРН ────────────────────────────────────────────────────── */}
-      {(egrnLoading || egrnData || egrnError) && (editing.cadastral_number || cadastreInput) && (
+      {(editing.cadastral_number || cadastreInput) && (
         <div className="rounded-xl border border-border bg-muted/30 overflow-hidden">
-          {/* Заголовок-кнопка */}
+          {/* Заголовок */}
           <div className="flex items-center justify-between px-4 py-2.5">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Icon name="FileSearch" size={15} className="text-brand-blue" />
               Выписка ЕГРН
             </div>
             <div className="flex items-center gap-2">
-              {egrnLoading && (
-                <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                  <Icon name="Loader2" size={11} className="animate-spin" />
-                  Загрузка...
-                </span>
-              )}
               {egrnStat && !egrnLoading && (
                 <span className={`text-[11px] px-2 py-0.5 rounded-full border font-medium ${
                   egrnStat.day_used >= egrnStat.day_limit
@@ -785,7 +777,7 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
                   {egrnStat.day_used}/{egrnStat.day_limit} сегодня
                 </span>
               )}
-              {(egrnData || egrnError) && !egrnLoading && (
+              {egrnData && !egrnLoading && (
                 <button
                   type="button"
                   onClick={() => setEgrnOpen(v => !v)}
@@ -795,18 +787,23 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
                   {egrnOpen ? 'Скрыть' : 'Показать'}
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => fetchEgrn(editing.cadastral_number || cadastreInput)}
+                disabled={egrnLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-blue text-white text-xs font-semibold hover:bg-brand-blue/90 disabled:opacity-50 transition-colors"
+              >
+                {egrnLoading
+                  ? <><Icon name="Loader2" size={12} className="animate-spin" />Запрос...</>
+                  : <><Icon name="Download" size={12} />Получить</>
+                }
+              </button>
             </div>
           </div>
 
           {/* Результат */}
-          {(egrnOpen || egrnLoading) && (
+          {egrnOpen && (
             <div className="border-t border-border px-4 py-3 space-y-3">
-              {egrnLoading && (
-                <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <Icon name="Loader2" size={13} className="animate-spin" />
-                  Запрашиваем данные ЕГРН...
-                </div>
-              )}
               {egrnError && (
                 <div className="text-xs text-red-600 flex items-center gap-1.5">
                   <Icon name="AlertCircle" size={13} />
