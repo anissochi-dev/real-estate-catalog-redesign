@@ -1804,30 +1804,57 @@ def _handle_cadastre_by_address(event: dict) -> dict:
         with urllib.request.urlopen(req2, timeout=15) as resp2:
             return json.loads(resp2.read().decode('utf-8'))
 
-    # Пробуем полный адрес, потом — без помещения (только до дома)
-    queries_to_try = [query]
-    # Обрезаем суффиксы помещения: ", помещ ...", ", кв ...", ", оф ...", ", пом ..."
-    short = re.sub(r',?\s*(помещ|помещение|кв|квартира|оф|офис|пом|ком|комната)\.?\s*[\w/\-]+\s*$', '', query, flags=re.IGNORECASE).strip()
-    if short and short != query:
-        queries_to_try.append(short)
+    # Извлекаем номер помещения из запроса для поиска среди записей здания
+    room_match = re.search(r'(?:помещ|помещение|кв|квартира|оф|офис|пом|ком|комната)\.?\s*([\w/\-]+)', query, flags=re.IGNORECASE)
+    room_num = room_match.group(1).strip() if room_match else None
 
-    for addr_try in queries_to_try:
+    # Обрезаем суффикс помещения — получаем адрес здания
+    short = re.sub(r',?\s*(помещ|помещение|кв|квартира|оф|офис|пом|ком|комната)\.?\s*[\w/\-]+\s*$', '', query, flags=re.IGNORECASE).strip()
+
+    # Шаг 2а: пробуем точный запрос
+    # Шаг 2б: запрос по зданию + фильтрация по номеру помещения в records
+    queries_to_try = []
+    if short and short != query:
+        queries_to_try.append((short, room_num))   # адрес здания + ищем номер помещения
+    queries_to_try.append((query, None))            # полный адрес без фильтра
+
+    for addr_try, filter_room in queries_to_try:
         try:
             egrn_data = _egrn_search(addr_try)
-            print(f'[cadastre_by_address] EGRN addr="{addr_try}" success={egrn_data.get("success")} records={len(egrn_data.get("records", []))}')
-            if egrn_data.get('success') == 1:
-                records = egrn_data.get('records', [])
-                if records:
-                    cn = (records[0].get('cad_number') or '').strip()
-                    if cn:
-                        return _ok({
-                            'found': True,
-                            'cadastral_number': cn,
-                            'address': records[0].get('address', address),
-                            'lat': lat,
-                            'lon': lon,
-                            'source': 'egrn_api',
-                        })
+            records = egrn_data.get('records', []) if egrn_data.get('success') == 1 else []
+            print(f'[cadastre_by_address] EGRN addr="{addr_try}" records={len(records)} filter_room={filter_room}')
+            if not records:
+                continue
+
+            # Если есть номер помещения — ищем его в адресах записей
+            matched = None
+            if filter_room:
+                for rec in records:
+                    rec_addr = rec.get('address', '')
+                    # Ищем номер помещения в конце адреса
+                    if re.search(r'(?:,\s*|\s+)' + re.escape(filter_room) + r'\s*$', rec_addr):
+                        matched = rec
+                        break
+                    # Или как "кв. 268", "пом. 268" и т.п.
+                    if re.search(r'(?:кв|пом|помещ|оф)\.?\s*' + re.escape(filter_room) + r'\b', rec_addr, re.IGNORECASE):
+                        matched = rec
+                        break
+
+            # Если не нашли по номеру — берём первую запись (здание)
+            if matched is None and filter_room is None:
+                matched = records[0]
+
+            if matched:
+                cn = (matched.get('cad_number') or '').strip()
+                if cn:
+                    return _ok({
+                        'found': True,
+                        'cadastral_number': cn,
+                        'address': matched.get('address', address),
+                        'lat': lat,
+                        'lon': lon,
+                        'source': 'egrn_api',
+                    })
         except Exception as e:
             print(f'[cadastre_by_address] EGRN API error for "{addr_try}": {e}')
 
