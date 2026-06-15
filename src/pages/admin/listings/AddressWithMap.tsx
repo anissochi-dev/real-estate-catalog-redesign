@@ -590,14 +590,24 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
                 </span>
               )}
             </div>
-            <a
-              href={`https://pkk.rosreestr.ru/#/?text=${encodeURIComponent(cadastreInfo.cadastral_number)}&type=1`}
-              target="_blank" rel="noopener noreferrer"
-              className="text-xs text-brand-blue hover:underline flex items-center gap-1 flex-shrink-0"
-            >
-              <Icon name="ExternalLink" size={12} />
-              Открыть на ПКК
-            </a>
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <a
+                href={`https://pkk.rosreestr.ru/#/?text=${encodeURIComponent(cadastreInfo.cadastral_number)}&type=1`}
+                target="_blank" rel="noopener noreferrer"
+                className="text-xs text-brand-blue hover:underline flex items-center gap-1"
+              >
+                <Icon name="Map" size={12} />
+                ПКК
+              </a>
+              <a
+                href={`https://rosreestr.gov.ru/eservices/real-estate-objects-online/?search=${encodeURIComponent(cadastreInfo.cadastral_number)}`}
+                target="_blank" rel="noopener noreferrer"
+                className="text-xs text-brand-blue hover:underline flex items-center gap-1"
+              >
+                <Icon name="FileText" size={12} />
+                Выписка ЕГРН
+              </a>
+            </div>
           </div>
 
           {/* Строка 2: адрес из кадастра */}
