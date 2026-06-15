@@ -2,73 +2,24 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
-import { Listing, City, ROAD_LINES } from './types';
+import { ROAD_LINES } from './types';
 import { fetchDistricts, District } from '@/lib/api';
+import {
+  loadYmaps,
+  cityCenter,
+  AddressProps,
+  Suggestion,
+  CadastreInfo,
+  EgrnData,
+  EgrnStat,
+} from './cadastreTypes';
+import CadastreCard from './CadastreCard';
+import EgrnBlock from './EgrnBlock';
 
-/* ── Яндекс.Карты типы ── */
-declare global {
-  interface Window {
-    ymaps: any;
-  }
-}
+const GEO_URL = 'https://functions.poehali.dev/9b2f9622-9d12-4809-a614-023af6958251';
+const EGRN_URL = 'https://functions.poehali.dev/83ef375d-1f72-4f65-8825-10df58a37159';
 
-let ymapsLoadPromise: Promise<void> | null = null;
-function loadYmaps(apiKey: string): Promise<void> {
-  if (typeof window === 'undefined') return Promise.reject();
-  if (window.ymaps) return Promise.resolve();
-  if (ymapsLoadPromise) return ymapsLoadPromise;
-  ymapsLoadPromise = new Promise<void>((resolve, reject) => {
-    const s = document.createElement('script');
-    // Грузим полный пакет по умолчанию (без явного load) — карта инициализируется
-    // надёжно даже если у ключа нет доступа к отдельным сервисам (suggest/geocode).
-    s.src = `https://api-maps.yandex.ru/2.1/?lang=ru_RU${apiKey ? `&apikey=${apiKey}` : ''}`;
-    s.async = true;
-    s.onload = () => window.ymaps ? window.ymaps.ready(() => resolve()) : (ymapsLoadPromise = null, reject());
-    s.onerror = () => { ymapsLoadPromise = null; reject(); };
-    document.head.appendChild(s);
-  });
-  return ymapsLoadPromise;
-}
-
-/* Координаты центра города по умолчанию */
-const CITY_CENTERS: Record<string, [number, number]> = {
-  'Краснодар':         [45.0355, 38.9753],
-  'Сочи':              [43.5855, 39.7231],
-  'Анапа':             [44.8943, 37.3164],
-  'Геленджик':         [44.5612, 38.0764],
-  'Новороссийск':      [44.7235, 37.7686],
-  'Армавир':           [44.9892, 41.1304],
-  'Москва':            [55.7558, 37.6173],
-  'Санкт-Петербург':   [59.9343, 30.3351],
-};
-
-function cityCenter(city?: string): [number, number] {
-  if (city && CITY_CENTERS[city]) return CITY_CENTERS[city];
-  return CITY_CENTERS['Краснодар'];
-}
-
-interface AddressProps {
-  editing: Partial<Listing>;
-  setEditing: (l: Partial<Listing>) => void;
-  cities: City[];
-  hasError?: boolean;
-  districtError?: boolean;
-  /**
-   * Колбэк для отметки "координаты выставлены вручную".
-   * Вызывается с true при клике/перетаскивании маркера на карте,
-   * с false — при ручном изменении адресной строки или смене города.
-   */
-  onCoordsManualChange?: (manual: boolean) => void;
-}
-
-interface Suggestion {
-  value: string;
-  full?: string;
-  displayName: string;
-  lat?: number | null;
-  lon?: number | null;
-  district?: string;
-}
+interface DadataSuggestion { value: string; full: string; lat: number | null; lon: number | null; district?: string; }
 
 export default function AddressWithMap({ editing, setEditing, cities, hasError, districtError, onCoordsManualChange }: AddressProps) {
   const { settings } = useSettings();
@@ -94,67 +45,11 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
   const [cadastreInput, setCadastreInput] = useState(editing.cadastral_number || '');
   const [cadastreLoading, setCadastreLoading] = useState(false);
   const [cadastreSearchLoading, setCadastreSearchLoading] = useState(false);
-  interface CadastreObject {
-    cadastral_number: string;
-    address?: string;
-    type?: string;
-    area?: string;
-  }
-  interface CadastreInfo {
-    found: boolean;
-    cadastral_number: string;
-    address?: string;
-    lat?: number | null;
-    lon?: number | null;
-    object_type?: string;
-    area_sqm?: number | null;
-    floor?: number | null;
-    floors?: number | null;
-    flat_count?: number | null;
-    year_built?: number | null;
-    sqm_price?: number | null;
-    status?: string;
-    purpose?: string;
-    category?: string;
-    district?: string;
-    city_district?: string;
-    postal_code?: string;
-    house_cadnum?: string;
-    flat_cadnum?: string;
-    stead_cadnum?: string;
-    source?: string;
-    objects?: CadastreObject[];
-  }
   const [cadastreInfo, setCadastreInfo] = useState<CadastreInfo | null>(
     editing.cadastral_number ? { cadastral_number: editing.cadastral_number, found: true } : null
   );
 
   // ЕГРН
-  const EGRN_URL = 'https://functions.poehali.dev/83ef375d-1f72-4f65-8825-10df58a37159';
-  interface EgrnData {
-    success: number;
-    type?: string;
-    status?: string;
-    ownership?: string;
-    cad_number?: string;
-    area?: string;
-    floor?: string;
-    address?: string;
-    purpose?: string;
-    reg_date?: string;
-    cad_cost?: string;
-    cad_cost_det_date?: string;
-    encumbrances?: { type?: string; reg_number?: string; date?: string }[];
-    rights?: { number?: string; date?: string; type?: string }[];
-    message?: string;
-  }
-  interface EgrnStat {
-    day_used: number;
-    day_limit: number;
-    month_used: number;
-    month_limit: number;
-    paid_till: string;
-  }
   const [egrnData, setEgrnData] = useState<EgrnData | null>(null);
   const [egrnStat, setEgrnStat] = useState<EgrnStat | null>(null);
   const [egrnLoading, setEgrnLoading] = useState(false);
@@ -253,10 +148,7 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey]);
 
-  const GEO_SUGGEST_URL = 'https://functions.poehali.dev/9b2f9622-9d12-4809-a614-023af6958251';
-  const GEO_URL = 'https://functions.poehali.dev/9b2f9622-9d12-4809-a614-023af6958251';
-
-  /* Загрузить кадастр по адресу — автозапрос после выбора подсказки (через бэкенд PKK) */
+  /* Загрузить кадастр по адресу — автозапрос после выбора подсказки */
   const fetchCadastreByAddress = async (fullAddress: string) => {
     if (!fullAddress.trim()) return;
     setCadastreLoading(true);
@@ -274,7 +166,7 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     finally { setCadastreLoading(false); }
   };
 
-  /* Поиск по кадастровому номеру через бэкенд (Яндекс HTTP Geocoder — без ограничений домена) */
+  /* Поиск по кадастровому номеру через бэкенд */
   const searchByCadastre = async (query: string) => {
     const q = query.trim();
     if (!q) return;
@@ -311,8 +203,6 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     }
   };
 
-  interface DadataSuggestion { value: string; full: string; lat: number | null; lon: number | null; district?: string; }
-
   /* Подсказки адресов через DaData (бэкенд). */
   const fetchSuggestions = (query: string) => {
     if (suggestTimer.current) clearTimeout(suggestTimer.current);
@@ -323,7 +213,7 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
       return;
     }
     suggestTimer.current = setTimeout(() => {
-      const url = `${GEO_SUGGEST_URL}?query=${encodeURIComponent(q)}&city=${encodeURIComponent(currentCity)}`;
+      const url = `${GEO_URL}?query=${encodeURIComponent(q)}&city=${encodeURIComponent(currentCity)}`;
       fetch(url)
         .then(r => r.json())
         .then((items: DadataSuggestion[]) => {
@@ -340,7 +230,7 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     }, 250);
   };
 
-  /* Геокодинг по адресной строке через ymaps.geocode (JS API, тот же ключ). */
+  /* Геокодинг по адресной строке через ymaps.geocode */
   function geocodeAddress(fullAddr: string, streetOnly?: string) {
     if (!window.ymaps || typeof window.ymaps.geocode !== 'function') return;
     window.ymaps.geocode(fullAddr, { results: 1 })
@@ -371,18 +261,14 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
 
   /** Парсер geoObject из ymaps.geocode. Микрорайон всегда берём из нового адреса. */
   function parseYmapsGeoObject(obj: any, coords: [number, number], streetOverride?: string) {
-    // Микрорайон: берём самый нижний (последний) компонент уровня district —
-    // в иерархии Яндекса это микрорайон/квартал, а не административный округ.
     let microdistrict = '';
     try {
       const meta = obj.properties?.get?.('metaDataProperty')?.GeocoderMetaData;
       const comps: { kind: string; name: string }[] = meta?.Address?.Components || [];
-      const districts = comps.filter(p => p.kind === 'district').map(p => p.name);
-      // Предпочитаем название, содержащее «микрорайон»/«мкр»/«квартал», иначе — последний district
-      microdistrict = districts.find(n => /микрорайон|мкр|квартал|жилмассив/i.test(n))
-        || (districts.length ? districts[districts.length - 1] : '');
+      const dists = comps.filter(p => p.kind === 'district').map(p => p.name);
+      microdistrict = dists.find(n => /микрорайон|мкр|квартал|жилмассив/i.test(n))
+        || (dists.length ? dists[dists.length - 1] : '');
     } catch { /* ignore */ }
-    // Запасной способ — через getAdministrativeAreas (последний элемент)
     if (!microdistrict) {
       try {
         const adminAreas = obj.getAdministrativeAreas?.() || [];
@@ -396,7 +282,6 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     const cur = editingRef.current;
     setEditing({
       ...cur,
-      // Микрорайон всегда переопределяем новым адресом
       district: microdistrict || '',
       address: finalAddress,
       lat: coords[0],
@@ -427,7 +312,6 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
   const pickSuggestion = (s: Suggestion) => {
     setStreetInput(s.value);
     setShowSuggestions(false);
-    // Если DaData вернула координаты — сразу применяем, не делая лишний запрос геокодера
     if (s.lat && s.lon) {
       const coords: [number, number] = [s.lat, s.lon];
       markerRef.current?.geometry.setCoordinates(coords);
@@ -518,8 +402,6 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
               onChange={e => {
                 setStreetInput(e.target.value);
                 fetchSuggestions(e.target.value);
-                // Адрес поменяли вручную — координаты больше не считаем "ручными",
-                // чтобы при сохранении они пересчитались по новому адресу.
                 onCoordsManualChange?.(false);
               }}
               onFocus={() => {
@@ -528,8 +410,6 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
               onKeyDown={handleInputKeyDown}
               onBlur={e => {
                 const v = e.target.value.trim();
-                // На blur геокодируем только если есть что и адрес ещё не совпадает с сохранённым.
-                // Задержка позволяет клику по подсказке сработать первым.
                 setTimeout(() => {
                   if (!v) return;
                   if (showSuggestions) return;
@@ -640,306 +520,19 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
       </div>
 
       {/* ── InfoCard кадастра ──────────────────────────────────────────────── */}
-      {cadastreInfo && cadastreInfo.found && (
-        <div className="rounded-xl border border-brand-blue/20 bg-brand-blue/5 px-4 py-3 space-y-2">
-          {/* Строка 1: номер + ссылка на ПКК */}
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-2 min-w-0">
-              <Icon name="Building2" size={15} className="text-brand-blue flex-shrink-0" />
-              <span className="font-mono text-sm font-semibold text-foreground tracking-wide truncate">
-                {cadastreInfo.cadastral_number}
-              </span>
-              {cadastreInfo.object_type && (
-                <span className="text-[11px] px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue font-medium flex-shrink-0">
-                  {cadastreInfo.object_type}
-                </span>
-              )}
-              {cadastreInfo.status && (
-                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 border border-emerald-200 flex-shrink-0">
-                  {cadastreInfo.status}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-3 flex-shrink-0">
-              <a
-                href={`https://pkk.rosreestr.ru/#/?text=${encodeURIComponent(cadastreInfo.cadastral_number)}&type=1`}
-                target="_blank" rel="noopener noreferrer"
-                className="text-xs text-brand-blue hover:underline flex items-center gap-1"
-              >
-                <Icon name="Map" size={12} />
-                ПКК
-              </a>
-              <a
-                href={`https://rosreestr.gov.ru/eservices/real-estate-objects-online/?search=${encodeURIComponent(cadastreInfo.cadastral_number)}`}
-                target="_blank" rel="noopener noreferrer"
-                className="text-xs text-brand-blue hover:underline flex items-center gap-1"
-              >
-                <Icon name="FileText" size={12} />
-                Выписка ЕГРН
-              </a>
-            </div>
-          </div>
-
-          {/* Строка 2: адрес из кадастра */}
-          {cadastreInfo.address && (
-            <div className="text-xs text-muted-foreground flex items-start gap-1">
-              <Icon name="MapPin" size={11} className="flex-shrink-0 mt-0.5" />
-              <span>{cadastreInfo.address}</span>
-            </div>
-          )}
-
-          {/* Строка 3: характеристики объекта */}
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            {cadastreInfo.area_sqm && (
-              <span className="flex items-center gap-1">
-                <Icon name="Maximize2" size={11} />
-                {cadastreInfo.area_sqm.toLocaleString('ru')} м²
-              </span>
-            )}
-            {cadastreInfo.floor && (
-              <span className="flex items-center gap-1">
-                <Icon name="Layers" size={11} />
-                {cadastreInfo.floor} эт.
-              </span>
-            )}
-            {cadastreInfo.flat_count && (
-              <span className="flex items-center gap-1">
-                <Icon name="Home" size={11} />
-                {cadastreInfo.flat_count} пом.
-              </span>
-            )}
-            {cadastreInfo.year_built && (
-              <span className="flex items-center gap-1">
-                <Icon name="Calendar" size={11} />
-                {cadastreInfo.year_built} г.п.
-              </span>
-            )}
-            {cadastreInfo.postal_code && (
-              <span className="flex items-center gap-1">
-                <Icon name="Mail" size={11} />
-                {cadastreInfo.postal_code}
-              </span>
-            )}
-            {cadastreInfo.city_district && (
-              <span className="flex items-center gap-1">
-                <Icon name="Map" size={11} />
-                {cadastreInfo.city_district}
-              </span>
-            )}
-            {cadastreInfo.sqm_price && (
-              <span className="flex items-center gap-1">
-                <Icon name="TrendingUp" size={11} />
-                {cadastreInfo.sqm_price.toLocaleString('ru')} ₽/м²
-              </span>
-            )}
-          </div>
-
-          {/* Строка 4: связанные кадастровые номера */}
-          {(cadastreInfo.house_cadnum || cadastreInfo.flat_cadnum || cadastreInfo.stead_cadnum) && (
-            <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground border-t border-brand-blue/10 pt-1.5">
-              {cadastreInfo.house_cadnum && (
-                <span>Здание: <span className="font-mono font-medium text-foreground">{cadastreInfo.house_cadnum}</span></span>
-              )}
-              {cadastreInfo.flat_cadnum && (
-                <span>Помещение: <span className="font-mono font-medium text-foreground">{cadastreInfo.flat_cadnum}</span></span>
-              )}
-              {cadastreInfo.stead_cadnum && (
-                <span>Участок: <span className="font-mono font-medium text-foreground">{cadastreInfo.stead_cadnum}</span></span>
-              )}
-            </div>
-          )}
-
-          {/* Строка 5: все объекты по адресу (здание + участок и т.д.) */}
-          {cadastreInfo.objects && cadastreInfo.objects.length > 0 && (
-            <div className="border-t border-brand-blue/10 pt-2 space-y-1.5">
-              <div className="text-[11px] text-muted-foreground font-medium">Объекты по адресу:</div>
-              {cadastreInfo.objects.map((obj, i) => (
-                <div key={i} className="flex items-center justify-between gap-2 flex-wrap bg-brand-blue/5 rounded-lg px-2 py-1.5">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Icon name={obj.type === 'Земельный участок' ? 'Landmark' : 'Building2'} size={12} className="text-brand-blue flex-shrink-0" />
-                    <span className="font-mono text-xs font-medium text-foreground">{obj.cadastral_number}</span>
-                    {obj.type && (
-                      <span className="text-[10px] px-1 py-0.5 rounded bg-brand-blue/10 text-brand-blue font-medium flex-shrink-0">{obj.type}</span>
-                    )}
-                    {obj.area && (
-                      <span className="text-[10px] text-muted-foreground flex-shrink-0">{obj.area} м²</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <a
-                      href={`https://pkk.rosreestr.ru/#/?text=${encodeURIComponent(obj.cadastral_number)}&type=1`}
-                      target="_blank" rel="noopener noreferrer"
-                      className="text-[11px] text-brand-blue hover:underline flex items-center gap-0.5"
-                    >
-                      <Icon name="Map" size={11} />ПКК
-                    </a>
-                    <a
-                      href={`https://rosreestr.gov.ru/eservices/real-estate-objects-online/?search=${encodeURIComponent(obj.cadastral_number)}`}
-                      target="_blank" rel="noopener noreferrer"
-                      className="text-[11px] text-brand-blue hover:underline flex items-center gap-0.5"
-                    >
-                      <Icon name="FileText" size={11} />ЕГРН
-                    </a>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-      {cadastreInfo && !cadastreInfo.found && cadastreInfo.cadastral_number && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800 flex flex-wrap items-center gap-2">
-          <Icon name="AlertTriangle" size={13} className="flex-shrink-0" />
-          <span>Объект <span className="font-mono font-semibold">{cadastreInfo.cadastral_number}</span> не найден в базе.</span>
-          <a
-            href={`https://pkk.rosreestr.ru/#/?text=${encodeURIComponent(cadastreInfo.cadastral_number)}&type=1`}
-            target="_blank" rel="noopener noreferrer"
-            className="text-amber-700 underline hover:text-amber-900 flex items-center gap-1"
-          >
-            <Icon name="ExternalLink" size={11} />
-            Проверить на ПКК Росреестра
-          </a>
-          <span className="text-amber-600">— номер будет сохранён</span>
-        </div>
-      )}
+      <CadastreCard cadastreInfo={cadastreInfo} />
 
       {/* ── Блок ЕГРН ────────────────────────────────────────────────────── */}
       {(editing.cadastral_number || cadastreInput) && (
-        <div className="rounded-xl border border-border bg-muted/30 overflow-hidden">
-          {/* Заголовок */}
-          <div className="flex items-center justify-between px-4 py-2.5">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Icon name="FileSearch" size={15} className="text-brand-blue" />
-              Выписка ЕГРН
-            </div>
-            <div className="flex items-center gap-2">
-              {egrnLoading && (
-                <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                  <Icon name="Loader2" size={11} className="animate-spin" />
-                  Загрузка...
-                </span>
-              )}
-              {egrnStat && !egrnLoading && (
-                <span className={`text-[11px] px-2 py-0.5 rounded-full border font-medium ${
-                  egrnStat.day_used >= egrnStat.day_limit
-                    ? 'bg-red-50 text-red-600 border-red-200'
-                    : egrnStat.day_used >= egrnStat.day_limit * 0.8
-                    ? 'bg-amber-50 text-amber-600 border-amber-200'
-                    : 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                }`}>
-                  {egrnStat.day_used}/{egrnStat.day_limit} сегодня
-                </span>
-              )}
-              {(egrnData || egrnError) && !egrnLoading && (
-                <button
-                  type="button"
-                  onClick={() => setEgrnOpen(v => !v)}
-                  className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-muted transition-colors"
-                >
-                  <Icon name={egrnOpen ? 'ChevronUp' : 'ChevronDown'} size={12} />
-                  {egrnOpen ? 'Скрыть' : 'Показать'}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Результат */}
-          {egrnOpen && (
-            <div className="border-t border-border px-4 py-3 space-y-3">
-              {egrnError && (
-                <div className="text-xs text-red-600 flex items-center gap-1.5">
-                  <Icon name="AlertCircle" size={13} />
-                  {egrnError}
-                </div>
-              )}
-              {egrnData && egrnData.success === 0 && (
-                <div className="text-xs text-amber-700 flex items-center gap-1.5">
-                  <Icon name="AlertTriangle" size={13} />
-                  {egrnData.message || 'Объект не найден или данные временно недоступны'}
-                </div>
-              )}
-              {egrnData && egrnData.success === 1 && (
-                <div className="space-y-2.5">
-                  {/* Основные данные */}
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-                    {egrnData.type && (
-                      <div><span className="text-muted-foreground">Тип:</span> <span className="font-medium">{egrnData.type}</span></div>
-                    )}
-                    {egrnData.status && (
-                      <div><span className="text-muted-foreground">Статус:</span> <span className={`font-medium ${egrnData.status === 'Актуально' ? 'text-emerald-600' : ''}`}>{egrnData.status}</span></div>
-                    )}
-                    {egrnData.area && (
-                      <div><span className="text-muted-foreground">Площадь:</span> <span className="font-medium">{egrnData.area} м²</span></div>
-                    )}
-                    {egrnData.floor && (
-                      <div><span className="text-muted-foreground">Этаж:</span> <span className="font-medium">{egrnData.floor}</span></div>
-                    )}
-                    {egrnData.purpose && (
-                      <div><span className="text-muted-foreground">Назначение:</span> <span className="font-medium">{egrnData.purpose}</span></div>
-                    )}
-                    {egrnData.ownership && (
-                      <div><span className="text-muted-foreground">Собственность:</span> <span className="font-medium">{egrnData.ownership}</span></div>
-                    )}
-                    {egrnData.reg_date && (
-                      <div><span className="text-muted-foreground">Дата регистрации:</span> <span className="font-medium">{egrnData.reg_date}</span></div>
-                    )}
-                    {egrnData.cad_cost && (
-                      <div><span className="text-muted-foreground">Кад. стоимость:</span> <span className="font-medium">{Number(egrnData.cad_cost).toLocaleString('ru')} ₽</span></div>
-                    )}
-                  </div>
-
-                  {/* Обременения */}
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-                      <Icon name="Lock" size={11} />
-                      Обременения:
-                    </div>
-                    {egrnData.encumbrances && egrnData.encumbrances.length > 0 ? (
-                      <div className="space-y-1">
-                        {egrnData.encumbrances.map((e, i) => (
-                          <div key={i} className="text-xs bg-red-50 border border-red-100 rounded px-2 py-1 text-red-700">
-                            {e.type}{e.date ? ` от ${e.date}` : ''}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-xs text-emerald-600 flex items-center gap-1">
-                        <Icon name="CheckCircle" size={12} />
-                        Не зарегистрированы
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Права */}
-                  {egrnData.rights && egrnData.rights.length > 0 && (
-                    <div>
-                      <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-                        <Icon name="Users" size={11} />
-                        Права ({egrnData.rights.length}):
-                      </div>
-                      <div className="space-y-1">
-                        {egrnData.rights.map((r, i) => (
-                          <div key={i} className="text-xs bg-muted rounded px-2 py-1">
-                            <span className="font-medium">{r.type}</span>
-                            {r.date && <span className="text-muted-foreground"> от {r.date}</span>}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Лимиты */}
-                  {egrnStat && (
-                    <div className="pt-2 border-t border-border/50 flex items-center justify-between text-[11px] text-muted-foreground">
-                      <span>Использовано: {egrnStat.day_used}/{egrnStat.day_limit} сегодня · {egrnStat.month_used}/{egrnStat.month_limit} за месяц</span>
-                      {egrnStat.paid_till && <span>Оплачено до: {egrnStat.paid_till}</span>}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <EgrnBlock
+          cadastralNumber={editing.cadastral_number || cadastreInput}
+          egrnData={egrnData}
+          egrnStat={egrnStat}
+          egrnLoading={egrnLoading}
+          egrnError={egrnError}
+          egrnOpen={egrnOpen}
+          setEgrnOpen={setEgrnOpen}
+        />
       )}
 
       {/* ── Карта ─────────────────────────────────────────────────────────── */}
