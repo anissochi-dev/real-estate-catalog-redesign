@@ -91,54 +91,37 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
                       {maskedPhone(agent.phone)}
                     </button>
                   )}
-                  {/* WhatsApp */}
-                  {agent.phone && (
-                    <a
-                      href={`https://wa.me/${agent.phone.replace(/\D/g, '')}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Написать в WhatsApp"
-                      className="flex-shrink-0 w-8 h-8 rounded-lg overflow-hidden hover:opacity-80 transition-opacity"
-                    >
-                      <img
-                        src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg"
-                        alt="WhatsApp"
-                        className="w-full h-full object-contain"
-                      />
-                    </a>
-                  )}
-                  {/* Telegram */}
-                  {agent.phone && (
-                    <a
-                      href={`https://t.me/+${agent.phone.replace(/\D/g, '')}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Написать в Telegram"
-                      className="flex-shrink-0 w-8 h-8 rounded-lg overflow-hidden hover:opacity-80 transition-opacity"
-                    >
-                      <img
-                        src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg"
-                        alt="Telegram"
-                        className="w-full h-full object-contain"
-                      />
-                    </a>
-                  )}
-                  {/* MAX */}
-                  {maxChatUrl && (
-                    <a
-                      href={maxChatUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Написать в MAX"
-                      className="flex-shrink-0 w-8 h-8 rounded-lg overflow-hidden hover:opacity-80 transition-opacity"
-                    >
-                      <img
-                        src="https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/bucket/dce3958e-1d6b-453c-b9d3-494c86fd2e4d.png"
-                        alt="MAX"
-                        className="w-full h-full object-contain"
-                      />
-                    </a>
-                  )}
+                  {/* Мессенджеры */}
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {[
+                      {
+                        href: `https://wa.me/${agent.phone.replace(/\D/g, '')}`,
+                        title: 'WhatsApp',
+                        src: 'https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg',
+                      },
+                      {
+                        href: `https://t.me/+${agent.phone.replace(/\D/g, '')}`,
+                        title: 'Telegram',
+                        src: 'https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg',
+                      },
+                      ...(maxChatUrl ? [{
+                        href: maxChatUrl,
+                        title: 'MAX',
+                        src: 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/bucket/dce3958e-1d6b-453c-b9d3-494c86fd2e4d.png',
+                      }] : []),
+                    ].map(({ href, title, src }) => (
+                      <a
+                        key={title}
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={title}
+                        className="flex-shrink-0 w-8 h-8 rounded-xl bg-muted flex items-center justify-center hover:opacity-75 transition-opacity p-1"
+                      >
+                        <img src={src} alt={title} className="w-full h-full object-contain" />
+                      </a>
+                    ))}
+                  </div>
                 </div>
                 {/* Написать (ИИ-чат) */}
                 <button
