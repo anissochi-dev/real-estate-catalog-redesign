@@ -46,6 +46,7 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
   const [aiOpen, setAiOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [socialPending, setSocialPending] = useState(0);
+  const [newLeadsCount, setNewLeadsCount] = useState(0);
   // Меню пользователя в мобильной шапке (имя + На сайт + Выйти)
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<boolean>(() => {
@@ -87,6 +88,28 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
     const interval = setInterval(load, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [user]);
+
+  // Polling новых заявок раз в 2 минуты для всех ролей кроме client
+  useEffect(() => {
+    if (!user || user.role === 'client') return;
+    const load = () => {
+      adminApi.listLeads()
+        .then(d => {
+          const cnt = (d.leads || []).filter(
+            (l: { status: string }) => l.status === 'new' || l.status === 'pending'
+          ).length;
+          // Не показываем бейдж если пользователь уже смотрит заявки
+          setNewLeadsCount(prev => {
+            if (section === 'leads') return 0;
+            return cnt;
+          });
+        })
+        .catch(() => {});
+    };
+    load();
+    const interval = setInterval(load, 2 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user, section]);
   const logoutTimer = useRef<number | null>(null);
   const warningTimer = useRef<number | null>(null);
   const countdownTimer = useRef<number | null>(null);
@@ -200,13 +223,22 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
 
         <nav className={`flex-1 overflow-y-auto space-y-1 ${collapsed ? 'p-2' : 'p-3'}`}>
           {items.filter(n => !n.group).map(item => {
-            const badge = item.id === 'marketing' && socialPending > 0 ? socialPending : 0;
+            const badge =
+              item.id === 'marketing' && socialPending > 0 ? socialPending
+              : item.id === 'leads' && newLeadsCount > 0 ? newLeadsCount
+              : 0;
+            const badgeColor = item.id === 'leads' ? 'bg-red-500' : 'bg-amber-500';
             const isActive = section === item.id;
             return (
               <button
                 key={item.id}
                 title={collapsed ? item.label : undefined}
-                onClick={() => { setSection(item.id); setSidebarOpen(false); }}
+                onClick={() => {
+                  setSection(item.id);
+                  setSidebarOpen(false);
+                  // Сбрасываем счётчик при переходе в раздел заявок
+                  if (item.id === 'leads') setNewLeadsCount(0);
+                }}
                 className={`relative w-full flex items-center rounded-xl text-sm transition ${
                   collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'
                 } ${
@@ -216,18 +248,26 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
                 <span className="relative flex-shrink-0">
                   <Icon name={item.icon} size={18} />
                   {badge > 0 && collapsed && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
+                    <span className={`absolute -top-1 -right-1 w-4 h-4 ${badgeColor} text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none`}>
                       {badge > 99 ? '99+' : badge}
                     </span>
+                  )}
+                  {/* Пульсирующий индикатор для заявок в collapsed */}
+                  {item.id === 'leads' && newLeadsCount > 0 && collapsed && (
+                    <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full animate-ping opacity-75" />
                   )}
                 </span>
                 {!collapsed && item.label}
                 {badge > 0 && !collapsed && (
                   <span className={`ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0 ${
-                    isActive ? 'bg-white/20 text-white' : 'bg-amber-500 text-white'
+                    isActive ? 'bg-white/20 text-white' : `${badgeColor} text-white`
                   }`}>
                     {badge > 99 ? '99+' : badge}
                   </span>
+                )}
+                {/* Пульсирующая точка рядом с текстом */}
+                {item.id === 'leads' && newLeadsCount > 0 && !collapsed && badge === 0 && (
+                  <span className="ml-auto w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0" />
                 )}
               </button>
             );
