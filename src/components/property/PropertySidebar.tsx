@@ -32,9 +32,12 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
     return formatted.slice(0, -4) + '••••';
   };
 
-  const maxChatUrl = agent?.phone
-    ? `https://max.ru/chat?phone=${encodeURIComponent(agent.phone.replace(/\D/g, ''))}`
-    : null;
+  // Нормализация номера: всегда начинается с 7 (не 8)
+  const normalizePhone = (phone: string) => {
+    const digits = phone.replace(/\D/g, '');
+    if (digits.startsWith('8') && digits.length === 11) return '7' + digits.slice(1);
+    return digits;
+  };
 
   return (
     <>
@@ -92,39 +95,47 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
                     </button>
                   )}
                   {/* Мессенджеры */}
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {[
-                      {
-                        href: `https://wa.me/${agent.phone.replace(/\D/g, '')}`,
-                        title: 'WhatsApp',
-                        src: 'https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg',
-                        cls: 'w-7 h-7',
-                      },
-                      {
-                        href: `https://t.me/+${agent.phone.replace(/\D/g, '')}`,
-                        title: 'Telegram',
-                        src: 'https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg',
-                        cls: 'w-5 h-5',
-                      },
-                      ...(maxChatUrl ? [{
-                        href: maxChatUrl,
-                        title: 'MAX',
-                        src: 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/bucket/dce3958e-1d6b-453c-b9d3-494c86fd2e4d.png',
-                        cls: 'w-7 h-7',
-                      }] : []),
-                    ].map(({ href, title, src, cls }) => (
-                      <a
-                        key={title}
-                        href={href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title={title}
-                        className="flex-shrink-0 hover:opacity-75 transition-opacity"
-                      >
-                        <img src={src} alt={title} className={`${cls} object-contain`} />
-                      </a>
-                    ))}
-                  </div>
+                  {(() => {
+                    const phone = normalizePhone(agent.phone);
+                    return (
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {[
+                          {
+                            // WhatsApp: wa.me/79181234567
+                            href: `https://wa.me/${phone}`,
+                            title: 'WhatsApp',
+                            src: 'https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg',
+                            cls: 'w-7 h-7',
+                          },
+                          {
+                            // Telegram: t.me/+79181234567
+                            href: `https://t.me/+${phone}`,
+                            title: 'Telegram',
+                            src: 'https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg',
+                            cls: 'w-5 h-5',
+                          },
+                          {
+                            // MAX: max.ru/chat?phone=79181234567
+                            href: `https://max.ru/chat?phone=${phone}`,
+                            title: 'MAX',
+                            src: 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/bucket/dce3958e-1d6b-453c-b9d3-494c86fd2e4d.png',
+                            cls: 'w-7 h-7',
+                          },
+                        ].map(({ href, title, src, cls }) => (
+                          <a
+                            key={title}
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={title}
+                            className="flex-shrink-0 hover:opacity-75 transition-opacity"
+                          >
+                            <img src={src} alt={title} className={`${cls} object-contain`} />
+                          </a>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
                 {/* Написать (ИИ-чат) */}
                 <button
