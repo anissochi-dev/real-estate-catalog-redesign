@@ -87,18 +87,34 @@ export default function ListingsTable({
         const mainImg = imgs[0] || it.image;
         const isSelected = selected.has(it.id);
         const isHidden = it.is_visible === false;
-        const isArchived = it.status === 'archived';
         const isAdminOrDirector = user?.role && ['admin', 'director'].includes(user.role);
         const isBrokerAuthor = user?.role === 'broker' && (it.author_id === user?.id || it.broker_id === user?.id);
         const showPhone = isAdminOrDirector || isBrokerAuthor;
+        const isArchived = it.status === 'archived';
 
         return (
+          <div key={it.id} className="space-y-0">
+
+            {/* ── Полоса действий НАД карточкой (при выборе) ── */}
+            {isSelected && onBulk && onBulkDelete && (
+              <div className="rounded-t-2xl overflow-visible">
+                <ListingInlineActions
+                  listingId={it.id}
+                  onBulk={onBulk}
+                  onBulkDelete={onBulkDelete}
+                  bulkLoading={bulkLoading}
+                  isAdmin={isAdmin}
+                />
+              </div>
+            )}
+
+            {/* ── Сама карточка ── */}
           <div
-            key={it.id}
             className={[
-              'group flex gap-0 bg-white rounded-2xl border overflow-hidden shadow-sm transition-all duration-150',
+              'group flex gap-0 bg-white border overflow-hidden shadow-sm transition-all duration-150',
+              isSelected ? 'rounded-b-2xl rounded-t-none' : 'rounded-2xl',
               'hover:shadow-md hover:border-brand-blue/30',
-              isSelected ? 'border-brand-blue/50 bg-brand-blue/[0.02] shadow-brand-blue/10' : 'border-border',
+              isSelected ? 'border-brand-blue/50 border-t-0' : 'border-border',
               isHidden ? 'opacity-70' : '',
               isArchived ? 'opacity-60' : '',
             ].filter(Boolean).join(' ')}
@@ -130,7 +146,7 @@ export default function ListingsTable({
                 <img
                   src={mainImg}
                   alt={it.title}
-                  className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+                  className="w-full h-full object-cover transition-opacity duration-200 group-hover:opacity-90"
                   style={{ minHeight: 140 }}
                 />
               ) : (
@@ -311,16 +327,7 @@ export default function ListingsTable({
               </div>
             </div>
 
-            {/* ── Инлайн-панель действий при выборе ── */}
-            {isSelected && onBulk && onBulkDelete && (
-              <ListingInlineActions
-                listingId={it.id}
-                onBulk={onBulk}
-                onBulkDelete={onBulkDelete}
-                bulkLoading={bulkLoading}
-                isAdmin={isAdmin}
-              />
-            )}
+          </div>
           </div>
         );
       })}

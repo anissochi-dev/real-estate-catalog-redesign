@@ -111,40 +111,68 @@ export default function ListingInlineActions({ listingId, onBulk, onBulkDelete, 
     </button>
   );
 
-  const Divider = () => <div className="w-px self-stretch bg-border/50 mx-0.5" />;
+  const Divider = () => <div className="w-px self-stretch bg-white/20 mx-0.5" />;
+
+  // Стили кнопок для тёмной полосы
+  const BtnLight = ({ icon, label, cls, onClick: handleClick, disabled }: {
+    icon: string; label: string; cls: string; onClick: () => void; disabled?: boolean
+  }) => (
+    <button
+      onClick={e => { e.stopPropagation(); handleClick(); }}
+      disabled={disabled || bulkLoading}
+      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition disabled:opacity-40 whitespace-nowrap ${cls}`}
+    >
+      <Icon name={icon} size={11} />
+      {label}
+    </button>
+  );
+
+  const DropBtnLight = ({ icon, label, cls, open, onClick: handleClick }: {
+    icon: string; label: string; cls: string; open: boolean; onClick: () => void;
+  }) => (
+    <button
+      onClick={e => { e.stopPropagation(); handleClick(); }}
+      disabled={bulkLoading}
+      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition disabled:opacity-40 whitespace-nowrap ${cls}`}
+    >
+      <Icon name={icon} size={11} />
+      {label}
+      <Icon name={open ? 'ChevronUp' : 'ChevronDown'} size={10} className="ml-0.5" />
+    </button>
+  );
 
   return (
     <div
-      className="flex items-center gap-1 flex-wrap px-3 py-2 bg-brand-blue/[0.04] border-t border-brand-blue/15 rounded-b-2xl"
+      className="flex items-center gap-1.5 flex-wrap px-4 py-2.5 bg-brand-blue rounded-t-2xl"
       onClick={e => e.stopPropagation()}
     >
       {/* Загрузка */}
       {bulkLoading && (
-        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1 text-[11px] text-white/80">
           <Icon name="Loader2" size={11} className="animate-spin" />
           Применяю...
         </span>
       )}
 
       {/* Действия */}
-      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mr-0.5">Действия</span>
-      <Btn icon="CheckCircle" label="Активный" cls="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+      <span className="text-[10px] font-semibold text-white/50 uppercase tracking-wide mr-0.5">Действия</span>
+      <BtnLight icon="CheckCircle" label="Активный" cls="bg-emerald-500 text-white hover:bg-emerald-400"
         onClick={() => { if (confirm('Сделать активным?')) onBulk('activate'); }} />
-      <Btn icon="Archive" label="В архив" cls="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+      <BtnLight icon="Archive" label="В архив" cls="bg-amber-500 text-white hover:bg-amber-400"
         onClick={() => { if (confirm('В архив?')) onBulk('archive'); }} />
       {isAdmin && (
-        <Btn icon="Trash2" label="Удалить" cls="bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
+        <BtnLight icon="Trash2" label="Удалить" cls="bg-red-500 text-white hover:bg-red-400"
           onClick={onBulkDelete} />
       )}
 
       <Divider />
 
       {/* Статусы */}
-      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mr-0.5">Статус</span>
+      <span className="text-[10px] font-semibold text-white/50 uppercase tracking-wide mr-0.5">Статус</span>
 
       {/* Горячее */}
       <div className="relative" ref={hotRef}>
-        <DropBtn icon="Flame" label="Горячее" cls="bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100"
+        <DropBtnLight icon="Flame" label="Горячее" cls="bg-white/15 text-white hover:bg-white/25"
           open={showHot} onClick={() => setShowHot(s => !s)} />
         {showHot && (
           <Menu>
@@ -158,7 +186,7 @@ export default function ListingInlineActions({ listingId, onBulk, onBulkDelete, 
 
       {/* Новинка */}
       <div className="relative" ref={newRef}>
-        <DropBtn icon="Sparkles" label="Новинка" cls="bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100"
+        <DropBtnLight icon="Sparkles" label="Новинка" cls="bg-white/15 text-white hover:bg-white/25"
           open={showNew} onClick={() => setShowNew(s => !s)} />
         {showNew && (
           <Menu>
@@ -172,7 +200,7 @@ export default function ListingInlineActions({ listingId, onBulk, onBulkDelete, 
 
       {/* Видимость */}
       <div className="relative" ref={visibleRef}>
-        <DropBtn icon="Eye" label="Видимость" cls="bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100"
+        <DropBtnLight icon="Eye" label="Видимость" cls="bg-white/15 text-white hover:bg-white/25"
           open={showVisible} onClick={() => setShowVisible(s => !s)} />
         {showVisible && (
           <Menu>
@@ -187,10 +215,10 @@ export default function ListingInlineActions({ listingId, onBulk, onBulkDelete, 
       <Divider />
 
       {/* Экспорт */}
-      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mr-0.5">Экспорт</span>
+      <span className="text-[10px] font-semibold text-white/50 uppercase tracking-wide mr-0.5">Экспорт</span>
 
       <div className="relative" ref={xmlRef}>
-        <DropBtn icon="FileCode2" label="XML" cls="bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100"
+        <DropBtnLight icon="FileCode2" label="XML" cls="bg-white/15 text-white hover:bg-white/25"
           open={showXml} onClick={() => setShowXml(s => !s)} />
         {showXml && (
           <div
@@ -224,7 +252,7 @@ export default function ListingInlineActions({ listingId, onBulk, onBulkDelete, 
       {/* Передать агенту */}
       {canAssignBroker && (
         <div className="relative" ref={brokerRef}>
-          <DropBtn icon="UserCheck" label="Агент" cls="bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100"
+          <DropBtnLight icon="UserCheck" label="Агент" cls="bg-white/15 text-white hover:bg-white/25"
             open={showBrokers} onClick={() => setShowBrokers(s => !s)} />
           {showBrokers && (
             <div
