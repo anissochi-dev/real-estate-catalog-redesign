@@ -55,8 +55,15 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
     setMeta('meta[name="description"]', 'content', desc);
     setMeta('meta[property="og:title"]', 'content', title);
     setMeta('meta[property="og:description"]', 'content', desc);
+    setMeta('meta[property="og:type"]', 'content', 'website');
+    const siteOrigin = (settings.site_url || '').replace(/\/$/, '') || window.location.origin;
+    setMeta('meta[property="og:url"]', 'content', siteOrigin + window.location.pathname);
+    // canonical
+    let canon = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    if (!canon) { canon = document.createElement('link'); canon.rel = 'canonical'; document.head.appendChild(canon); }
+    canon.href = siteOrigin + window.location.pathname;
     return () => { document.title = company; };
-  }, [districtName, city, settings.company_name]);
+  }, [districtName, city, settings.company_name, settings.site_url]);
 
   // Загружаем AI-текст
   useEffect(() => {

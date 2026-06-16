@@ -3,6 +3,7 @@ import { Property, Page } from '@/App';
 import { formatPrice } from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
 import { listingSlug } from '@/lib/slug';
+import SeoHead from '@/components/SeoHead';
 
 interface ComparePageProps {
   properties: Property[];
@@ -102,6 +103,7 @@ export default function ComparePage({ properties, onRemove, onNavigate }: Compar
   if (properties.length === 0) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
+        <SeoHead title="Сравнение объектов" noindex />
         <div className="text-center animate-fade-in">
           <div className="text-7xl mb-6">⚖️</div>
           <h2 className="font-display font-700 text-2xl text-foreground mb-3">Нечего сравнивать</h2>
@@ -121,6 +123,7 @@ export default function ComparePage({ properties, onRemove, onNavigate }: Compar
 
   return (
     <div className="min-h-screen bg-background">
+      <SeoHead title="Сравнение объектов" noindex />
       {/* Header */}
       <div className="bg-white border-b border-border py-5">
         <div className="container mx-auto px-4">

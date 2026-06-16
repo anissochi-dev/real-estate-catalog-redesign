@@ -15,6 +15,7 @@ import PropertySidebar from '@/components/property/PropertySidebar';
 import { TYPE_LABELS, DEAL_LABELS } from '@/components/property/propertyLabels';
 import AIMatchModal from '@/components/AIMatchModal';
 import SchemaOrg, { makeRealEstateSchema, makeBreadcrumbSchema, makeVideoObjectSchema, makeFaqSchema } from '@/components/SchemaOrg';
+import SeoHead from '@/components/SeoHead';
 
 interface Props {
   onToggleFavorite: (id: number) => void;
@@ -134,9 +135,10 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
     setMeta('meta[name="description"]', () => Object.assign(document.createElement('meta'), { name: 'description' }), desc);
     setMeta('meta[property="og:title"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:title'); return m; }, title);
     setMeta('meta[property="og:description"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:description'); return m; }, desc);
-    setMeta('meta[property="og:type"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:type'); return m; }, 'product');
+    setMeta('meta[property="og:type"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:type'); return m; }, 'website');
     setMeta('meta[property="og:site_name"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:site_name'); return m; }, settings.company_name || 'Бизнес. Маркетинг. Недвижимость.');
-    setMeta('meta[property="og:url"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:url'); return m; }, window.location.href);
+    const siteOriginForOg = (settings.site_url || '').replace(/\/$/, '') || window.location.origin;
+    setMeta('meta[property="og:url"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:url'); return m; }, siteOriginForOg + window.location.pathname);
     setMeta('meta[name="twitter:title"]', () => Object.assign(document.createElement('meta'), { name: 'twitter:title' }), title);
     setMeta('meta[name="twitter:description"]', () => Object.assign(document.createElement('meta'), { name: 'twitter:description' }), desc);
     const mainImage = (item.images && item.images[0]) || item.image;
@@ -157,6 +159,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   if (!item) {
     return (
       <div className="container mx-auto px-4 py-20 text-center">
+        <SeoHead title="Объект не найден" noindex />
         <div className="font-display font-700 text-xl mb-2">Объект не найден</div>
         <button onClick={() => navigate('/catalog')} className="btn-blue text-white px-4 py-2 rounded-xl text-sm">К каталогу</button>
       </div>

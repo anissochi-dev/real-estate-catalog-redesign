@@ -237,6 +237,23 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
   const totalPages = Math.ceil(items.length / CAT_PAGE_SIZE);
   const pagedItems = items.slice((catPage - 1) * CAT_PAGE_SIZE, catPage * CAT_PAGE_SIZE);
 
+  // rel=prev/next для SEO-пагинации
+  useEffect(() => {
+    const base = `${(settings.site_url || '').replace(/\/$/, '')}/catalog/${type}`;
+    const setPaginationLink = (rel: 'prev' | 'next', page: number) => {
+      const id = `link-${rel}`;
+      let el = document.getElementById(id) as HTMLLinkElement | null;
+      if (!el) { el = document.createElement('link'); el.id = id; el.rel = rel; document.head.appendChild(el); }
+      el.href = page === 1 ? base : `${base}?page=${page}`;
+    };
+    const removePaginationLink = (rel: 'prev' | 'next') => {
+      document.getElementById(`link-${rel}`)?.remove();
+    };
+    if (catPage > 1) setPaginationLink('prev', catPage - 1); else removePaginationLink('prev');
+    if (catPage < totalPages) setPaginationLink('next', catPage + 1); else removePaginationLink('next');
+    return () => { removePaginationLink('prev'); removePaginationLink('next'); };
+  }, [catPage, totalPages, type, settings.site_url]);
+
   if (!meta) {
     return (
       <div className="min-h-screen flex items-center justify-center">

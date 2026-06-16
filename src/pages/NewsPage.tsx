@@ -5,6 +5,7 @@ import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
 import SchemaOrg, { makeNewsArticleSchema, makeItemListSchema, makeBreadcrumbSchema } from '@/components/SchemaOrg';
 import { getSiteUrl } from '@/lib/siteUrl';
+import SeoHead from '@/components/SeoHead';
 
 interface NewsItem {
   id: number;
@@ -15,6 +16,7 @@ interface NewsItem {
   source_name?: string;
   category?: string;
   published_at?: string;
+  updated_at?: string;
   created_at: string;
   content?: string;
   seo_h1?: string | null;
@@ -193,10 +195,18 @@ export function NewsArticlePage() {
     setMeta('meta[name="description"]', () => Object.assign(document.createElement('meta'), { name: 'description' }), desc);
     setMeta('meta[property="og:title"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:title'); return m; }, article.title);
     setMeta('meta[property="og:description"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:description'); return m; }, desc);
+    setMeta('meta[property="og:type"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:type'); return m; }, 'article');
+    const siteOrigin = (settings.site_url || '').replace(/\/$/, '') || window.location.origin;
+    setMeta('meta[property="og:url"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:url'); return m; }, siteOrigin + window.location.pathname);
     if (article.image_url) {
       setMeta('meta[property="og:image"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:image'); return m; }, article.image_url!);
     }
-  }, [article, settings.company_name]);
+    if (article.published_at) {
+      setMeta('meta[property="article:published_time"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'article:published_time'); return m; }, article.published_at!);
+      setMeta('meta[property="article:modified_time"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'article:modified_time'); return m; }, article.updated_at || article.published_at!);
+    }
+    setMeta('meta[property="article:author"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'article:author'); return m; }, settings.company_name || 'Бизнес. Маркетинг. Недвижимость.');
+  }, [article, settings.company_name, settings.site_url]);
 
   if (loading) return (
     <div className="container mx-auto px-4 py-20 text-center text-muted-foreground">Загрузка...</div>
@@ -204,6 +214,7 @@ export function NewsArticlePage() {
 
   if (!article) return (
     <div className="container mx-auto px-4 py-20 text-center">
+      <SeoHead title="Статья не найдена" noindex />
       <div className="text-5xl mb-4">📰</div>
       <div className="font-display font-700 text-xl mb-2">Статья не найдена</div>
       <button onClick={() => navigate('/news')} className="btn-blue text-white px-6 py-2.5 rounded-xl text-sm font-semibold mt-4">

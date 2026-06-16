@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Property } from '@/App';
 import PropertyCard from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
+import SeoHead from '@/components/SeoHead';
 
 interface FavoritesPageProps {
   properties: Property[];
@@ -25,6 +26,7 @@ export default function FavoritesPage({ properties, favorites, compareList, onTo
 
   return (
     <div className="min-h-screen bg-background">
+      <SeoHead title="Избранное — сохранённые объекты" noindex />
       <div className="bg-white border-b border-border py-6">
         <div className="container mx-auto px-4">
           <div className="flex items-center gap-3">
@@ -58,7 +60,18 @@ export default function FavoritesPage({ properties, favorites, compareList, onTo
               <p className="text-sm text-muted-foreground">
                 Сохранено <span className="font-semibold text-foreground">{properties.length}</span> объектов
               </p>
-              <button className="flex items-center gap-2 text-sm text-brand-orange font-semibold hover:opacity-80 transition-opacity">
+              <button
+                className="flex items-center gap-2 text-sm text-brand-orange font-semibold hover:opacity-80 transition-opacity"
+                onClick={() => {
+                  const ids = properties.map(p => p.id).join(',');
+                  const url = `${window.location.origin}/catalog?ids=${ids}`;
+                  if (navigator.share) {
+                    navigator.share({ title: 'Подборка объектов', url });
+                  } else {
+                    navigator.clipboard.writeText(url).then(() => alert('Ссылка скопирована'));
+                  }
+                }}
+              >
                 <Icon name="Share2" size={16} />
                 Поделиться подборкой
               </button>
