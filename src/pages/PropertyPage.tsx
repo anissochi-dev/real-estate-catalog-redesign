@@ -14,6 +14,7 @@ import PropertyMainContent from '@/components/property/PropertyMainContent';
 import PropertySidebar from '@/components/property/PropertySidebar';
 import { TYPE_LABELS, DEAL_LABELS } from '@/components/property/propertyLabels';
 import AIMatchModal from '@/components/AIMatchModal';
+import AIChatWidget from '@/components/property/AIChatWidget';
 import SchemaOrg, { makeRealEstateSchema, makeBreadcrumbSchema, makeVideoObjectSchema, makeFaqSchema } from '@/components/SchemaOrg';
 import SeoHead from '@/components/SeoHead';
 
@@ -46,6 +47,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   const [faqLoading, setFaqLoading] = useState(false);
   const [captcha, setCaptcha] = useState<CaptchaResult | null>(null);
   const [captchaKey, setCaptchaKey] = useState(0);
+  const [mobileChatOpen, setMobileChatOpen] = useState(false);
 
   const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
 
@@ -361,12 +363,19 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
                 ) : null}
               </div>
               {agents.filter(a => a.phone)[0] && (
-                <div className="px-4 py-3 border-t border-border">
+                <div className="px-4 py-3 border-t border-border flex items-center gap-2">
                   <a href={`tel:${agents.filter(a => a.phone)[0].phone}`}
-                    className="w-full flex items-center justify-center gap-2 bg-brand-blue text-white text-sm font-bold px-4 py-2.5 rounded-xl">
+                    className="flex-1 flex items-center justify-center gap-2 bg-brand-blue text-white text-sm font-bold px-4 py-2.5 rounded-xl">
                     <Icon name="Phone" size={16} />
-                    {agents.filter(a => a.phone)[0].phone}
+                    Позвонить
                   </a>
+                  <button
+                    onClick={() => setMobileChatOpen(true)}
+                    className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border-2 border-brand-blue text-brand-blue text-sm font-bold hover:bg-brand-blue/5 transition-colors"
+                  >
+                    <Icon name="MessageCircle" size={16} />
+                    Написать
+                  </button>
                 </div>
               )}
             </div>
@@ -435,6 +444,14 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
         initialPrompt={aiQuery || `${dealLabel} ${typeLabel} ${item.area} м² ${item.city || 'Краснодар'}`}
         autoSubmit
       />
+
+      {mobileChatOpen && (
+        <AIChatWidget
+          listingId={item.id}
+          listingTitle={item.title}
+          onClose={() => setMobileChatOpen(false)}
+        />
+      )}
 
     </article>
   );

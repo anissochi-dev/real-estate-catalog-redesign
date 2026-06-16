@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { ListingDetail, Agent } from '@/lib/api';
 import Icon from '@/components/ui/icon';
 import { DEAL_LABELS } from './propertyLabels';
@@ -5,6 +6,7 @@ import { formatPhone } from '@/lib/phone';
 import PublicPhoneInput from '@/components/PublicPhoneInput';
 import { fmtListingId } from '@/lib/formatPrice';
 import SmartCaptcha, { CaptchaResult } from '@/components/SmartCaptcha';
+import AIChatWidget from './AIChatWidget';
 
 interface Props {
   item: ListingDetail;
@@ -21,8 +23,10 @@ interface Props {
 
 export default function PropertySidebar({ item, agents, sent, sending, form, setForm, onSubmit, captcha, setCaptcha, captchaKey }: Props) {
   const agent = agents[0] || null;
+  const [chatOpen, setChatOpen] = useState(false);
 
   return (
+    <>
     <div className="space-y-4 hidden lg:block">
       {/* Единый sticky блок: цена + агент */}
       <div className="sticky top-20 space-y-3">
@@ -58,11 +62,20 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
               <div className="text-[10px] text-muted-foreground mb-2 uppercase tracking-widest font-semibold">
                 Представитель собственника
               </div>
-              <a href={`tel:${agent.phone}`}
-                className="inline-flex items-center gap-2 text-lg font-bold text-brand-blue hover:underline">
-                <Icon name="Phone" size={18} />
-                {formatPhone(agent.phone)}
-              </a>
+              <div className="flex items-center gap-2">
+                <a href={`tel:${agent.phone}`}
+                  className="inline-flex items-center gap-2 text-lg font-bold text-brand-blue hover:underline flex-1 min-w-0">
+                  <Icon name="Phone" size={18} className="flex-shrink-0" />
+                  <span className="truncate">{formatPhone(agent.phone)}</span>
+                </a>
+                <button
+                  onClick={() => setChatOpen(true)}
+                  className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-blue/10 text-brand-blue text-xs font-semibold hover:bg-brand-blue hover:text-white transition-all"
+                >
+                  <Icon name="MessageCircle" size={13} />
+                  Написать
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -100,5 +113,14 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
 
       </div>
     </div>
+
+    {chatOpen && (
+      <AIChatWidget
+        listingId={item.id}
+        listingTitle={item.title}
+        onClose={() => setChatOpen(false)}
+      />
+    )}
+    </>
   );
 }

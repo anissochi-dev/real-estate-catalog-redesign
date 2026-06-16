@@ -1,0 +1,19 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "chat — пустое сообщение",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "chat", "message": ""},
+      "expectedStatus": 400,
+      "expectedBody": {"error": "Пустое сообщение"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}
