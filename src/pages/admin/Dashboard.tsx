@@ -49,8 +49,13 @@ export default function Dashboard({ setSection }: { setSection?: (s: string) => 
       .catch(e => setError(e.message));
   }, []);
 
-  if (error) return <div className="text-red-600">{error}</div>;
-  if (!stats) return <div>Загрузка...</div>;
+  if (error) return (
+    <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-sm text-red-700 flex items-center gap-3">
+      <Icon name="AlertCircle" size={18} className="shrink-0" />
+      <span>{error}</span>
+    </div>
+  );
+  if (!stats) return <div className="p-6 text-sm text-muted-foreground">Загрузка...</div>;
 
   const canSeeUsers = user && ['admin', 'director'].includes(user.role);
 

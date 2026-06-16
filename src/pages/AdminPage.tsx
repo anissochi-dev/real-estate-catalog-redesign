@@ -31,13 +31,20 @@ export default function AdminPage({ onExit, initialSection }: Props) {
   const { user } = useAuth();
   const [section, setSection] = useState<AdminSection>(() => {
     if (initialSection) return initialSection as AdminSection;
-    try {
-      const saved = localStorage.getItem(SECTION_KEY) as AdminSection;
-      // Для брокера стартовая страница — Объекты
-      if (!saved && user?.role === 'broker') return 'listings';
-      return saved || 'dashboard';
-    } catch { return 'dashboard'; }
+    try { return (localStorage.getItem(SECTION_KEY) as AdminSection) || 'dashboard'; } catch { return 'dashboard'; }
   });
+
+  // Брокер всегда стартует на Объектах (user приходит асинхронно)
+  useEffect(() => {
+    if (user?.role === 'broker') {
+      const saved = localStorage.getItem(SECTION_KEY) as AdminSection;
+      // Если сохранена секция недоступная брокеру — сбрасываем на listings
+      const brokerAllowed: AdminSection[] = ['listings', 'leads', 'phones', 'crm-kanban', 'crm-gamification', 'crm-checks'];
+      if (!saved || !brokerAllowed.includes(saved)) {
+        setSection('listings');
+      }
+    }
+  }, [user?.role]);
 
   useEffect(() => {
     try { localStorage.setItem(SECTION_KEY, section); } catch { /* ignore */ }
