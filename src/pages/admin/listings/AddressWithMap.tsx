@@ -18,7 +18,7 @@ import AddressInputRow from './AddressInputRow';
 import YandexMap from './YandexMap';
 
 const GEO_URL = 'https://functions.poehali.dev/9b2f9622-9d12-4809-a614-023af6958251';
-const EGRN_URL = 'https://functions.poehali.dev/83ef375d-1f72-4f65-8825-10df58a37159';
+const EGRN_URL = GEO_URL; // egrn merged into geo
 
 interface DadataSuggestion { value: string; full: string; lat: number | null; lon: number | null; district?: string; }
 
@@ -114,9 +114,9 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     setEgrnLoadingSet(prev => new Set(prev).add(cadNumber));
     try {
       const requests: Promise<Response>[] = [
-        fetch(`${EGRN_URL}?action=details&cadNumber=${encodeURIComponent(cadNumber)}`),
+        fetch(`${EGRN_URL}?action=egrn_details&cadNumber=${encodeURIComponent(cadNumber)}`),
       ];
-      if (withStat) requests.push(fetch(`${EGRN_URL}?action=stat`));
+      if (withStat) requests.push(fetch(`${EGRN_URL}?action=egrn_stat`));
       const results = await Promise.all(requests);
       const det: EgrnData = await results[0].json();
       if (withStat && results[1]) {

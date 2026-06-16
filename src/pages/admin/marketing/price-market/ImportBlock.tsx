@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
 
-const XLSX_URL = 'https://functions.poehali.dev/b498eec3-fbe9-46de-8f00-749fc3012e63';
+const XLSX_URL = 'https://functions.poehali.dev/debf4d7f-d8d8-4317-b617-1d5dbc519978'; // market-import (xlsx-reader merged)
 
 const SOURCE_OPTIONS = [
   { value: 'cian', label: 'ЦИАН' },

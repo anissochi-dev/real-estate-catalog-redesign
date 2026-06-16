@@ -689,6 +689,52 @@ def handler(event: dict, context) -> dict:
                 'category_breakdown': cat_counts,
             })
 
+        # ── Алиасы xlsx-reader (import_market_*) для обратной совместимости ─────
+        # Фронт ImportBlock.tsx вызывает эти actions — теперь работают здесь.
+        if action == 'import_market_start':
+            body['action'] = 'import_start'
+            action = 'import_start'
+        if action == 'import_market_continue':
+            body['action'] = 'import_continue'
+            action = 'import_continue'
+        if action == 'import_market_status':
+            body['action'] = 'status'
+            action = 'status'
+        if action == 'import_market_list':
+            body['action'] = 'list'
+            action = 'list'
+
+        # Пересвязываем — повторный dispatch после алиаса
+        if action == 'import_start':
+            file_url = body.get('file_url', '').strip()
+            source   = body.get('source', 'xlsx')[:50]
+            replace  = bool(body.get('replace', False))
+            if not file_url:
+                return err(400, 'Укажите file_url')
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.import_jobs "
+                f"(file_url, source, replace_existing, status, checkpoint_row) "
+                f"VALUES (%s, %s, %s, 'running', 0) RETURNING id",
+                (file_url, source, replace)
+            )
+            job_id = cur.fetchone()['id']
+            conn.commit()
+            return ok({'job_id': job_id, 'status': 'running', 'done': False})
+
+        if action in ('status', 'import_market_status'):
+            job_id = body.get('job_id')
+            if not job_id:
+                return err(400, 'job_id required')
+            cur.execute(f"SELECT * FROM {SCHEMA}.import_jobs WHERE id=%s", (job_id,))
+            row = cur.fetchone()
+            if not row:
+                return err(404, 'job not found')
+            return ok(dict(row))
+
+        if action in ('list', 'import_market_list'):
+            cur.execute(f"SELECT * FROM {SCHEMA}.import_jobs ORDER BY created_at DESC LIMIT 20")
+            return ok([dict(r) for r in cur.fetchall()])
+
         return err(400, f'Неизвестный action: {action}')
 
     finally:
