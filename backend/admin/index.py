@@ -135,34 +135,6 @@ def _jsonb_or_null(v):
         return 'NULL'
 
 
-_RU_MAP = {
-    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e',
-    'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
-    'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
-    'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
-    'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
-}
-
-
-def _make_slug(title: str, listing_id: int) -> str:
-    s = (title or '').lower()
-    out = []
-    for ch in s:
-        out.append(_RU_MAP.get(ch, ch))
-    s = ''.join(out)
-    clean = []
-    for ch in s:
-        if ch.isalnum():
-            clean.append(ch)
-        elif ch in (' ', '-', '_'):
-            clean.append('-')
-    s = ''.join(clean)
-    while '--' in s:
-        s = s.replace('--', '-')
-    s = s.strip('-')[:80].rstrip('-') or 'object'
-    return f"{s}-{listing_id}"
-
-
 def _num_or_null(v):
     if v is None or v == '':
         return 'NULL'

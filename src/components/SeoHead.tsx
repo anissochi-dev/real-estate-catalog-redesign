@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useSettings } from '@/contexts/SettingsContext';
-
-const SEO_BASE = 'https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d';
+import { SEO_BASE } from '@/pages/admin/seo/seoTypes';
 
 interface RemoteSeo {
   path: string;

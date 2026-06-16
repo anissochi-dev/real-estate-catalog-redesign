@@ -5,9 +5,10 @@ import { AuditData, FixResult } from './seoAuditTypes';
 import SeoAuditHeader from './SeoAuditHeader';
 import SeoAuditScore from './SeoAuditScore';
 import SeoFaqManager from './SeoFaqManager';
+import { SEO_BASE } from './seoTypes';
 
 const SEO_AUDIT_URL = 'https://functions.poehali.dev/08a36654-5f5d-4ebb-8148-540529a369d3';
-const AUTO_SEO_URL  = 'https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d';
+const AUTO_SEO_URL  = SEO_BASE;
 const FAQ_URL       = 'https://functions.poehali.dev/282b9c5f-29fa-41ea-bc42-0793bdf8950d';
 
 export default function SeoAuditTab() {

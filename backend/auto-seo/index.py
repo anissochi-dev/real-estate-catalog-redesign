@@ -70,39 +70,6 @@ PAGE_HINTS = {
     '/contacts': 'Контакты офиса BIZNEST в Краснодаре: телефон, адрес, мессенджеры.',
 }
 
-_RU_MAP = {
-    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e',
-    'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
-    'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
-    'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
-    'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
-}
-
-
-def _make_slug(title: str, listing_id: int) -> str:
-    s = (title or '').lower()
-    out = []
-    for ch in s:
-        out.append(_RU_MAP.get(ch, ch))
-    s = ''.join(out)
-    clean = []
-    for ch in s:
-        if ch.isalnum():
-            clean.append(ch)
-        elif ch in (' ', '-', '_'):
-            clean.append('-')
-    s = ''.join(clean)
-    while '--' in s:
-        s = s.replace('--', '-')
-    s = s.strip('-')[:80].rstrip('-') or 'object'
-    return f"{s}-{listing_id}"
-
-
-ROBOTS_DISALLOW = [
-    '/admin', '/admin/', '/login', '/auth', '/signin',
-    '/api/', '/private/',
-]
-
 DEAL_RU = {'sale': 'Продажа', 'rent': 'Аренда', 'business': 'Готовый бизнес'}
 CAT_RU = {
     'office': 'офиса', 'retail': 'магазина', 'warehouse': 'склада',
@@ -384,140 +351,23 @@ def _parse_page_seo(text: str) -> dict:
     return fields
 
 
-def _site_base_url(cur) -> str:
-    """Достаём базовый URL сайта из настроек."""
+_SITEMAP_GEN_URL = 'https://functions.poehali.dev/7db3cce2-3ae0-4bbb-bece-5c6076691344'
+
+
+def _sitemap_gen_call(action: str, auth_token: str = '') -> dict:
+    """Проксирует вызов в sitemap-gen — единственный источник правды для sitemap/robots."""
+    payload = json.dumps({'action': action, 'auth_token': auth_token}).encode()
+    req = urllib.request.Request(
+        _SITEMAP_GEN_URL,
+        data=payload,
+        headers={'Content-Type': 'application/json'},
+        method='POST',
+    )
     try:
-        cur.execute(f"SELECT site_url FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
-        row = cur.fetchone()
-        if row and row.get('site_url'):
-            url = str(row['site_url']).rstrip('/')
-            if url.startswith('http'):
-                return url
-    except Exception:
-        pass
-    return os.environ.get('SITE_URL', 'https://bmn.su').rstrip('/')
-
-
-def _build_sitemap_xml(cur) -> tuple:
-    """Возвращает (xml_string, urls_count).
-    Включает: статические страницы + активные объекты + новости +
-              категории (только с объектами) + районы (только с объектами) + заявки.
-    """
-    base = _site_base_url(cur)
-    urls = []
-    now = __import__('datetime').datetime.now()
-
-    # 1. Статические страницы из seo_pages (только не noindex)
-    cur.execute(
-        f"SELECT path, updated_at FROM {SCHEMA}.seo_pages "
-        f"WHERE noindex = FALSE ORDER BY path"
-    )
-    for r in cur.fetchall():
-        p = r.get('path') or '/'
-        if p.startswith('/admin') or p.startswith('/login') or p.startswith('/auth'):
-            continue
-        urls.append((base + p, r.get('updated_at'), '0.8', 'weekly'))
-
-    # 2. Активные объекты — приоритет 1.0 (ключевой контент)
-    cur.execute(
-        f"SELECT id, slug, title, updated_at FROM {SCHEMA}.listings "
-        f"WHERE status = 'active' ORDER BY updated_at DESC NULLS LAST LIMIT 5000"
-    )
-    for r in cur.fetchall():
-        lid = r.get('id')
-        slug = r.get('slug') or _make_slug(r.get('title') or '', lid)
-        path = f"/object/{slug}"
-        urls.append((base + path, r.get('updated_at'), '1.0', 'daily'))
-
-    # 3. Опубликованные новости — приоритет 0.6
-    cur.execute(
-        f"SELECT slug, updated_at, published_at FROM {SCHEMA}.news "
-        f"WHERE is_published = TRUE AND slug IS NOT NULL AND slug != '' "
-        f"ORDER BY published_at DESC NULLS LAST LIMIT 2000"
-    )
-    for r in cur.fetchall():
-        slug = r.get('slug')
-        if not slug:
-            continue
-        upd = r.get('updated_at') or r.get('published_at')
-        urls.append((base + f"/news/{slug}", upd, '0.6', 'monthly'))
-
-    # 4. Категории — только те, в которых есть хотя бы 1 активный объект
-    cur.execute(
-        f"SELECT category, MAX(updated_at) as last_upd "
-        f"FROM {SCHEMA}.listings WHERE status = 'active' "
-        f"GROUP BY category HAVING COUNT(id) > 0"
-    )
-    for r in cur.fetchall():
-        cat = r.get('category') or ''
-        if not cat:
-            continue
-        urls.append((base + f"/catalog/{cat}", r.get('last_upd') or now, '0.8', 'weekly'))
-
-    # 5. Районы — только те, в которых есть хотя бы 1 активный объект
-    cur.execute(
-        f"SELECT d.slug as d_slug, MAX(l.updated_at) as last_upd "
-        f"FROM {SCHEMA}.districts d "
-        f"INNER JOIN {SCHEMA}.listings l ON l.district = d.name AND l.status = 'active' "
-        f"WHERE d.slug IS NOT NULL AND d.slug != '' AND d.is_active = TRUE "
-        f"GROUP BY d.slug"
-    )
-    for r in cur.fetchall():
-        d_slug = r.get('d_slug') or ''
-        if not d_slug:
-            continue
-        urls.append((base + f"/district/{d_slug}", r.get('last_upd') or now, '0.7', 'weekly'))
-
-    # 6. Страница заявок (публичная лента спроса)
-    urls.append((base + '/leads', now, '0.5', 'daily'))
-
-    parts = [
-        '<?xml version="1.0" encoding="UTF-8"?>',
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
-        'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
-        'xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 '
-        'http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">',
-    ]
-    for u, upd, priority, changefreq in urls:
-        u_safe = u.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-        lastmod = ''
-        if upd:
-            try:
-                lastmod = f'<lastmod>{upd.strftime("%Y-%m-%d")}</lastmod>'
-            except Exception:
-                lastmod = ''
-        parts.append(
-            f'<url><loc>{u_safe}</loc>{lastmod}'
-            f'<changefreq>{changefreq}</changefreq>'
-            f'<priority>{priority}</priority></url>'
-        )
-    parts.append('</urlset>')
-    return '\n'.join(parts), len(urls)
-
-
-def _save_sitemap(cur, conn) -> dict:
-    """Перестраивает sitemap.xml и кэширует в seo_artifacts."""
-    xml, count = _build_sitemap_xml(cur)
-    safe_xml = _safe(xml, 2_000_000)
-    cur.execute(
-        f"INSERT INTO {SCHEMA}.seo_artifacts (kind, content, urls_count, updated_at) "
-        f"VALUES ('sitemap', '{safe_xml}', {int(count)}, NOW()) "
-        f"ON CONFLICT (kind) DO UPDATE SET content = EXCLUDED.content, "
-        f"urls_count = EXCLUDED.urls_count, updated_at = NOW()"
-    )
-    conn.commit()
-    return {'urls_count': count, 'xml_length': len(xml)}
-
-
-def _build_robots_txt(cur) -> str:
-    base = _site_base_url(cur)
-    lines = ['User-agent: *']
-    for d in ROBOTS_DISALLOW:
-        lines.append(f'Disallow: {d}')
-    lines.append('Allow: /')
-    lines.append('')
-    lines.append(f'Sitemap: {base}/sitemap.xml')
-    return '\n'.join(lines) + '\n'
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.loads(r.read().decode())
+    except Exception as e:
+        return {'error': str(e)[:200]}
 
 
 def handler(event: dict, context) -> dict:
@@ -616,33 +466,38 @@ def handler(event: dict, context) -> dict:
                 return _ok({'page': None})
 
             if action == 'robots_txt':
-                content = _build_robots_txt(cur)
+                # Делегируем в sitemap-gen — единственный источник правды
+                req2 = urllib.request.Request(
+                    f'{_SITEMAP_GEN_URL}?action=robots_txt',
+                    headers={'Content-Type': 'application/json'},
+                    method='GET',
+                )
+                try:
+                    with urllib.request.urlopen(req2, timeout=10) as r2:
+                        content = r2.read().decode()
+                except Exception:
+                    content = 'User-agent: *\nAllow: /\n'
                 return {
                     'statusCode': 200,
-                    'headers': {
-                        'Access-Control-Allow-Origin': '*',
-                        'Content-Type': 'text/plain; charset=utf-8',
-                        'Cache-Control': 'public, max-age=3600',
-                    },
+                    'headers': {'Access-Control-Allow-Origin': '*', 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600'},
                     'body': content,
                 }
 
             if action == 'sitemap_xml':
-                cur.execute(
-                    f"SELECT content, updated_at FROM {SCHEMA}.seo_artifacts WHERE kind='sitemap'"
-                )
+                # Читаем из кэша или делегируем в sitemap-gen
+                cur.execute(f"SELECT content FROM {SCHEMA}.seo_artifacts WHERE kind='sitemap'")
                 row = cur.fetchone()
-                if row and row.get('content'):
-                    xml = row['content']
-                else:
-                    xml, _cnt = _build_sitemap_xml(cur)
+                xml = row['content'] if row and row.get('content') else ''
+                if not xml:
+                    req2 = urllib.request.Request(f'{_SITEMAP_GEN_URL}?action=sitemap_xml', method='GET')
+                    try:
+                        with urllib.request.urlopen(req2, timeout=10) as r2:
+                            xml = r2.read().decode()
+                    except Exception:
+                        xml = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>'
                 return {
                     'statusCode': 200,
-                    'headers': {
-                        'Access-Control-Allow-Origin': '*',
-                        'Content-Type': 'application/xml; charset=utf-8',
-                        'Cache-Control': 'public, max-age=1800',
-                    },
+                    'headers': {'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=1800'},
                     'body': xml,
                 }
 
@@ -810,9 +665,10 @@ def handler(event: dict, context) -> dict:
                     f"auto_generated=FALSE, manual_override=TRUE, updated_at=NOW()"
                 )
                 conn.commit()
-                # Перестроим sitemap (страница могла стать (не)индексируемой)
+                # Инвалидируем кэш sitemap — sitemap-gen перестроит при следующем запросе
                 try:
-                    _save_sitemap(cur, conn)
+                    cur.execute(f"UPDATE {SCHEMA}.seo_artifacts SET urls_count = 0 WHERE kind = 'sitemap'")
+                    conn.commit()
                 except Exception:
                     pass
                 return _ok({'ok': True, 'path': path})
@@ -854,79 +710,15 @@ def handler(event: dict, context) -> dict:
 
             # ── robots.txt и sitemap.xml ───────────────────────────────────────
             if action == 'files_status':
-                cur.execute(
-                    f"SELECT urls_count, updated_at FROM {SCHEMA}.seo_artifacts "
-                    f"WHERE kind = 'sitemap'"
-                )
-                row = cur.fetchone()
-                base = _site_base_url(cur)
-                sitemap_count = int(row['urls_count']) if row and row.get('urls_count') else 0
-                sitemap_updated = row['updated_at'] if row else None
-
-                # Подсчёт реального количества по источникам для детального отображения
-                cur.execute(
-                    f"SELECT COUNT(id) as cnt FROM {SCHEMA}.listings WHERE status = 'active'"
-                )
-                r2 = cur.fetchone()
-                active_listings = int(r2['cnt']) if r2 else 0
-
-                cur.execute(
-                    f"SELECT COUNT(id) as cnt FROM {SCHEMA}.news "
-                    f"WHERE is_published = TRUE AND slug IS NOT NULL AND slug != ''"
-                )
-                r3 = cur.fetchone()
-                news_count = int(r3['cnt']) if r3 else 0
-
-                cur.execute(
-                    f"SELECT COUNT(id) as cnt FROM {SCHEMA}.seo_pages WHERE noindex = FALSE"
-                )
-                r4 = cur.fetchone()
-                static_count = int(r4['cnt']) if r4 else 0
-
-                cur.execute(
-                    f"SELECT COUNT(DISTINCT category) as cnt FROM {SCHEMA}.listings "
-                    f"WHERE status = 'active'"
-                )
-                r5 = cur.fetchone()
-                categories_count = int(r5['cnt']) if r5 else 0
-
-                cur.execute(
-                    f"SELECT COUNT(DISTINCT d.slug) as cnt "
-                    f"FROM {SCHEMA}.districts d "
-                    f"INNER JOIN {SCHEMA}.listings l ON l.district = d.name AND l.status = 'active' "
-                    f"WHERE d.slug IS NOT NULL AND d.slug != '' AND d.is_active = TRUE"
-                )
-                r6 = cur.fetchone()
-                districts_count = int(r6['cnt']) if r6 else 0
-
-                total_expected = (
-                    active_listings + news_count + static_count +
-                    categories_count + districts_count + 1  # +1 за /leads
-                )
-
-                return _ok({
-                    'robots_url': f'{base}/robots.txt',
-                    'sitemap_url': f'{base}/sitemap.xml',
-                    'sitemap_urls_count': sitemap_count,
-                    'sitemap_updated_at': sitemap_updated,
-                    'robots_disallow': ROBOTS_DISALLOW,
-                    'robots_exists': True,
-                    'sitemap_exists': sitemap_count > 0,
-                    'gpt_configured': bool(api_key and folder_id),
-                    'breakdown': {
-                        'listings': active_listings,
-                        'news': news_count,
-                        'static': static_count,
-                        'categories': categories_count,
-                        'districts': districts_count,
-                        'other': 1,
-                        'total_expected': total_expected,
-                    },
-                })
+                # Делегируем в sitemap-gen, добавляем gpt_configured
+                status_data = _sitemap_gen_call('status', token or '')
+                status_data['gpt_configured'] = bool(api_key and folder_id)
+                return _ok(status_data)
 
             if action == 'sitemap_rebuild':
-                r = _save_sitemap(cur, conn)
-                return _ok({'ok': True, **r})
+                # Делегируем в sitemap-gen
+                rebuild_data = _sitemap_gen_call('rebuild', token or '')
+                return _ok({'ok': True, **rebuild_data})
 
             # ── Публичная отдача robots.txt и sitemap.xml ──────────────────────
             # Эти actions работают без авторизации — обрабатываются раньше.
