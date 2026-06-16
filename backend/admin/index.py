@@ -2201,6 +2201,7 @@ def _auto_district(cur, address: str, city: str = 'Краснодар') -> str:
 
 _LISTING_FAQ_URL = 'https://functions.poehali.dev/282b9c5f-29fa-41ea-bc42-0793bdf8950d'
 _PHONE_SUB_URL = 'https://functions.poehali.dev/6dfb5518-6954-4ea5-972b-c20e8d06a8ab'
+_SMART_SEARCH_URL = 'https://functions.poehali.dev/32925bd2-c418-4a8c-8e32-97b5385e67da'
 
 
 def _notify_phone_subscribers(listing_id: int, body: dict, cur):
@@ -2337,6 +2338,21 @@ def _trigger_faq_async(listing_id: int, cur):
         print(f'[auto_faq] запущена генерация FAQ для listing {listing_id}')
     except Exception as e:
         print(f'[auto_faq] фоновый запуск для listing {listing_id}: {e}')
+
+
+def _trigger_reindex_async(listing_id: int):
+    """Обновляет эмбеддинг конкретного объекта в ИИ-поиске (fire-and-forget)."""
+    import urllib.request
+    try:
+        payload = json.dumps({'action': 'reindex', 'ids': [listing_id]}).encode()
+        req = urllib.request.Request(
+            _SMART_SEARCH_URL, data=payload,
+            headers={'Content-Type': 'application/json'}, method='POST'
+        )
+        urllib.request.urlopen(req, timeout=4)
+        print(f'[reindex] запущена переиндексация listing {listing_id}')
+    except Exception as e:
+        print(f'[reindex] ошибка для listing {listing_id}: {e}')
 
 
 def _listings(cur, conn, method, rid, event, user):
@@ -2544,6 +2560,7 @@ def _listings(cur, conn, method, rid, event, user):
         conn.commit()
         _trigger_faq_async(new_id, cur)
         _notify_phone_subscribers(new_id, body, cur)
+        _trigger_reindex_async(new_id)
         return _ok({'id': new_id, 'success': True, 'slug': new_slug, 'owner_phone_contact_id': owner_pc_id})
 
     if method == 'PUT' and rid:
@@ -2697,6 +2714,11 @@ def _listings(cur, conn, method, rid, event, user):
         # Перегенерируем FAQ если изменилось описание, название, категория или сделка
         if any(k in body for k in ('title', 'description', 'category', 'deal', 'price', 'area')):
             _trigger_faq_async(int(rid), cur)
+        # Обновляем эмбеддинг в ИИ-поиске если изменились характеристики объекта
+        if any(k in body for k in ('title', 'description', 'category', 'deal', 'price', 'area',
+                                    'address', 'district', 'condition', 'ceiling_height',
+                                    'electricity_kw', 'purpose', 'is_visible', 'status')):
+            _trigger_reindex_async(int(rid))
         return _ok({'success': True})
 
     if method == 'DELETE' and rid:
