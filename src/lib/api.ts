@@ -297,6 +297,8 @@ export interface PublicSettings {
   home_news_limit?: number;
   show_leads_on_home?: boolean;
   home_leads_limit?: number;
+  yandex_webmaster_verification?: string;
+  google_search_console_verification?: string;
 }
 
 export async function fetchPublicSettings(): Promise<PublicSettings> {

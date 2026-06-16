@@ -1,33 +1,51 @@
 {
   "tests": [
     {
-      "name": "Существующая статическая страница возвращает 200",
-      "method": "GET",
-      "path": "/?path=/catalog",
+      "name": "OPTIONS CORS",
+      "method": "OPTIONS",
+      "path": "/",
       "expectedStatus": 200
     },
     {
-      "name": "Главная страница возвращает 200",
+      "name": "Главная — 200 HTML",
       "method": "GET",
       "path": "/?path=/",
       "expectedStatus": 200
     },
     {
-      "name": "Несуществующая страница возвращает 404",
+      "name": "Каталог — 200",
       "method": "GET",
-      "path": "/?path=/nesuschestvuyushchaya-stranica-xyz",
+      "path": "/?path=/catalog",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Категория офисы — 200",
+      "method": "GET",
+      "path": "/?path=/catalog/office",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Новости — 200",
+      "method": "GET",
+      "path": "/?path=/news",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Несуществующая страница — 404",
+      "method": "GET",
+      "path": "/?path=/nesuschestvuet-xyz-abc",
       "expectedStatus": 404
     },
     {
-      "name": "Несуществующий объект возвращает 404",
+      "name": "Несуществующий объект — 404",
       "method": "GET",
       "path": "/?path=/object/nesuschestvuet-99999999",
       "expectedStatus": 404
     },
     {
-      "name": "OPTIONS возвращает 200 (CORS)",
-      "method": "OPTIONS",
-      "path": "/",
+      "name": "Существующий объект id=79 — 200",
+      "method": "GET",
+      "path": "/?path=/object/test-79",
       "expectedStatus": 200
     }
   ]

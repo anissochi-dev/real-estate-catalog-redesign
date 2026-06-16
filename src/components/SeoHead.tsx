@@ -104,6 +104,14 @@ export default function SeoHead({
     return () => { alive = false; };
   }, [effectivePath]);
 
+  // Коды верификации поисковиков — подставляем из настроек один раз
+  useEffect(() => {
+    if (settings.yandex_webmaster_verification)
+      setMeta('yandex-verification', settings.yandex_webmaster_verification);
+    if (settings.google_search_console_verification)
+      setMeta('google-site-verification', settings.google_search_console_verification);
+  }, [settings.yandex_webmaster_verification, settings.google_search_console_verification]);
+
   useEffect(() => {
     // SEO-лимиты: title ≤ 68 символов, meta description ≤ 160 символов
     const clip = (s: string, max: number) => (s && s.length > max ? s.slice(0, max - 1).trimEnd() + '…' : s);

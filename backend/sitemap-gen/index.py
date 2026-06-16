@@ -59,6 +59,12 @@ def _make_slug(title: str, lid) -> str:
     return f"{t}-{lid}"
 
 
+def _url_encode_path(path: str) -> str:
+    """URL-кодирует не-ASCII и спецсимволы в пути (кириллица, ², и т.д.)."""
+    from urllib.parse import quote
+    return quote(path, safe='/:@!$&\'()*+,;=.-_~')
+
+
 def _build_sitemap_xml(cur) -> tuple:
     """Возвращает (xml_string, urls_count).
     Источники: статические страницы, активные объекты, новости,
@@ -69,6 +75,9 @@ def _build_sitemap_xml(cur) -> tuple:
     urls = []
     now = datetime.now()
 
+    # Страницы исключённые из индекса
+    NOINDEX_PATHS = {'/favorites', '/compare'}
+
     # 1. Статические страницы
     cur.execute(
         f"SELECT path, updated_at FROM {SCHEMA}.seo_pages "
@@ -78,21 +87,25 @@ def _build_sitemap_xml(cur) -> tuple:
         p = r.get('path') or '/'
         if p.startswith('/admin') or p.startswith('/login') or p.startswith('/auth'):
             continue
+        if p in NOINDEX_PATHS:
+            continue
         urls.append((base + p, r.get('updated_at'), '0.8', 'weekly'))
 
-    # 2. Активные объекты — приоритет 1.0
+    # 2. Активные и видимые объекты — приоритет 1.0
     cur.execute(
         f"SELECT id, slug, title, updated_at FROM {SCHEMA}.listings "
-        f"WHERE status = 'active' ORDER BY updated_at DESC NULLS LAST LIMIT 5000"
+        f"WHERE status = 'active' AND is_visible = TRUE "
+        f"ORDER BY updated_at DESC NULLS LAST LIMIT 5000"
     )
     for r in cur.fetchall():
         lid = r.get('id')
         slug = r.get('slug') or _make_slug(r.get('title') or '', lid)
-        urls.append((base + f"/object/{slug}", r.get('updated_at'), '1.0', 'daily'))
+        encoded = _url_encode_path(f"/object/{slug}")
+        urls.append((base + encoded, r.get('updated_at'), '1.0', 'daily'))
 
-    # 3. Опубликованные новости
+    # 3. Опубликованные новости — lastmod по дате публикации
     cur.execute(
-        f"SELECT slug, updated_at, published_at FROM {SCHEMA}.news "
+        f"SELECT slug, published_at FROM {SCHEMA}.news "
         f"WHERE is_published = TRUE AND slug IS NOT NULL AND slug != '' "
         f"ORDER BY published_at DESC NULLS LAST LIMIT 2000"
     )
@@ -100,13 +113,13 @@ def _build_sitemap_xml(cur) -> tuple:
         slug = r.get('slug')
         if not slug:
             continue
-        upd = r.get('updated_at') or r.get('published_at')
-        urls.append((base + f"/news/{slug}", upd, '0.6', 'monthly'))
+        encoded = _url_encode_path(f"/news/{slug}")
+        urls.append((base + encoded, r.get('published_at'), '0.6', 'monthly'))
 
-    # 4. Категории — только с хотя бы 1 активным объектом
+    # 4. Категории — только с хотя бы 1 активным видимым объектом
     cur.execute(
         f"SELECT category, MAX(updated_at) as last_upd "
-        f"FROM {SCHEMA}.listings WHERE status = 'active' "
+        f"FROM {SCHEMA}.listings WHERE status = 'active' AND is_visible = TRUE "
         f"GROUP BY category HAVING COUNT(id) > 0"
     )
     for r in cur.fetchall():
@@ -115,11 +128,12 @@ def _build_sitemap_xml(cur) -> tuple:
             continue
         urls.append((base + f"/catalog/{cat}", r.get('last_upd') or now, '0.8', 'weekly'))
 
-    # 5. Районы — только с хотя бы 1 активным объектом
+    # 5. Районы — только с хотя бы 1 активным видимым объектом
     cur.execute(
         f"SELECT d.slug as d_slug, MAX(l.updated_at) as last_upd "
         f"FROM {SCHEMA}.districts d "
-        f"INNER JOIN {SCHEMA}.listings l ON l.district = d.name AND l.status = 'active' "
+        f"INNER JOIN {SCHEMA}.listings l ON l.district = d.name "
+        f"  AND l.status = 'active' AND l.is_visible = TRUE "
         f"WHERE d.slug IS NOT NULL AND d.slug != '' AND d.is_active = TRUE "
         f"GROUP BY d.slug"
     )
