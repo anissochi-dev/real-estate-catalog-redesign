@@ -7,6 +7,16 @@ import { CRM_CHECKS_URL as CHECKS_URL } from '@/lib/adminApi';
 import { SOURCE_INFO, CheckResult } from './checks/checksTypes';
 import ChecksSearchTab from './checks/ChecksSearchTab';
 import { ChecksHistoryTab, ChecksQuotaTab } from './checks/ChecksHistoryTab';
+import NewDbTab from './checks/NewDbTab';
+
+type Tab = 'search' | 'newdb' | 'history' | 'quota';
+
+const TABS: { id: Tab; label: string; icon: string }[] = [
+  { id: 'search',  label: 'Проверка',       icon: 'Search' },
+  { id: 'newdb',   label: 'Физлица (NewDB)', icon: 'UserSearch' },
+  { id: 'history', label: 'История',         icon: 'Clock' },
+  { id: 'quota',   label: 'Квоты',           icon: 'BarChart2' },
+];
 
 export default function CrmChecks() {
   const { token } = useAuth();
@@ -14,7 +24,7 @@ export default function CrmChecks() {
   const [query, setQuery] = useState('');
   const [selectedSources, setSelectedSources] = useState(['zachestny', 'newdb', 'bezopasno']);
   const [results, setResults] = useState<Record<string, CheckResult> | null>(null);
-  const [tab, setTab] = useState<'search' | 'history' | 'quota'>('search');
+  const [tab, setTab] = useState<Tab>('search');
 
   const headers = { 'Content-Type': 'application/json', 'X-Auth-Token': token || '' };
 
@@ -81,9 +91,7 @@ export default function CrmChecks() {
       if (!r.ok) throw new Error(json.error || 'Ошибка');
       return json;
     },
-    onSuccess: (data) => {
-      setResults(data.results);
-    },
+    onSuccess: (data) => { setResults(data.results); },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -93,6 +101,7 @@ export default function CrmChecks() {
 
   return (
     <div className="space-y-6">
+      {/* Заголовок + статус сервисов */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="text-2xl font-display font-700">Проверка безопасности</h2>
@@ -104,7 +113,7 @@ export default function CrmChecks() {
             return (
               <div
                 key={src}
-                title={connected ? 'API-ключ настроен' : 'API-ключ не настроен — перейдите в Настройки → Интеграции ИИ'}
+                title={connected ? 'API-ключ настроен' : 'API-ключ не настроен'}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition ${
                   connected
                     ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
@@ -136,18 +145,28 @@ export default function CrmChecks() {
         </div>
       )}
 
-      <div className="flex gap-1 bg-muted rounded-xl p-1 w-fit">
-        {(['search', 'history', 'quota'] as const).map(t => (
+      {/* Вкладки */}
+      <div className="flex gap-1 bg-muted rounded-xl p-1 w-fit flex-wrap">
+        {TABS.map(t => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${tab === t ? 'bg-white shadow-sm text-brand-blue' : 'text-muted-foreground hover:text-foreground'}`}
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition ${
+              tab === t.id ? 'bg-white shadow-sm text-brand-blue' : 'text-muted-foreground hover:text-foreground'
+            }`}
           >
-            {t === 'search' ? 'Проверка' : t === 'history' ? 'История' : 'Квоты'}
+            <Icon name={t.icon} fallback="Circle" size={14} />
+            {t.label}
+            {t.id === 'newdb' && (
+              <span className="ml-1 text-[10px] font-bold bg-brand-blue text-white px-1.5 py-0.5 rounded-full leading-none">
+                12
+              </span>
+            )}
           </button>
         ))}
       </div>
 
+      {/* Контент вкладок */}
       {tab === 'search' && (
         <ChecksSearchTab
           checkType={checkType}
@@ -161,6 +180,10 @@ export default function CrmChecks() {
           isPending={checkMutation.isPending}
           onRun={() => checkMutation.mutate()}
         />
+      )}
+
+      {tab === 'newdb' && (
+        <NewDbTab newdbConnected={!!serviceStatus['newdb']} />
       )}
 
       {tab === 'history' && (

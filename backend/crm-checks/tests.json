@@ -7,9 +7,22 @@
       "expectedStatus": 200
     },
     {
-      "name": "GET quota no auth",
+      "name": "GET quota — нет доступа без токена",
       "method": "GET",
       "path": "/?action=quota",
+      "expectedStatus": 403
+    },
+    {
+      "name": "GET newdb_methods — нет доступа без токена",
+      "method": "GET",
+      "path": "/?action=newdb_methods",
+      "expectedStatus": 403
+    },
+    {
+      "name": "POST newdb_v2 — нет доступа без токена",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "newdb_v2", "method": "fssp_person"},
       "expectedStatus": 403
     }
   ]

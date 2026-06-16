@@ -188,6 +188,71 @@ def fetch_newdb(query, api_key):
         return {'error': str(e)}
 
 
+# ── NewDB v2 — 12 методов проверки физических лиц ──────────────────────────
+
+NEWDB_V2_BASE = 'https://api.newdb.net/v2'
+
+NEWDB_METHODS = {
+    'fssp_person':        'Долги ФССП (исполнительные производства)',
+    'passport_fns':       'Паспорт + ИНН через ФНС',
+    'passport_mvd':       'Паспорт на действительность (МВД)',
+    'complex_by_passport':'Комплексная проверка (МВД+ФНС+ФССП)',
+    'bankrot_person':     'Банкротство физлица (ЕФРСБ)',
+    'pledge_person':      'Залоги и обременения физлица',
+    'arbitr_person':      'Арбитражные дела (КАД)',
+    'nalog_debt':         'Налоговая задолженность по ИНН',
+    'fns_block_person':   'Блокировки счетов ФНС',
+    'egrul_ip':           'Статус ИП (ЕГРИП)',
+    'terrorist':          'Проверка по спискам террористов/экстремистов',
+    'elmk_registry':      'Электронная медкнижка (ЭЛМК)',
+}
+
+# Параметры для каждого метода (что нужно передать)
+NEWDB_METHOD_PARAMS = {
+    'fssp_person':         ['lastname', 'firstname', 'secondname', 'dob'],
+    'passport_fns':        ['seria', 'number', 'lastname', 'firstname', 'secondname', 'dob'],
+    'passport_mvd':        ['seria', 'number', 'lastname', 'firstname', 'secondname'],
+    'complex_by_passport': ['seria', 'number', 'lastname', 'firstname', 'secondname', 'dob'],
+    'bankrot_person':      ['lastname', 'firstname', 'secondname', 'dob'],
+    'pledge_person':       ['lastname', 'firstname', 'secondname', 'dob'],
+    'arbitr_person':       ['inn'],
+    'nalog_debt':          ['inn'],
+    'fns_block_person':    ['inn'],
+    'egrul_ip':            ['inn'],
+    'terrorist':           ['lastname', 'firstname', 'secondname'],
+    'elmk_registry':       ['lastname', 'firstname', 'secondname', 'dob'],
+}
+
+
+def fetch_newdb_v2(method: str, params: dict, api_key: str) -> dict:
+    """Вызывает NewDB API v2 для конкретного метода проверки физлица."""
+    if method not in NEWDB_METHODS:
+        return {'error': f'Неизвестный метод: {method}'}
+    if not api_key:
+        return {'error': 'NEWDB_API_KEY не настроен'}
+
+    payload = json.dumps({'method': method, **params}, ensure_ascii=False).encode()
+    req = urllib.request.Request(
+        NEWDB_V2_BASE,
+        data=payload,
+        headers={
+            'Content-Type': 'application/json',
+            'X-API-KEY': api_key,
+            'User-Agent': 'BizNest CRM/1.0',
+        },
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            raw = json.loads(resp.read().decode())
+        return {'method': method, 'label': NEWDB_METHODS[method], 'data': raw}
+    except urllib.error.HTTPError as e:
+        body_err = e.read().decode()[:300]
+        return {'method': method, 'error': f'HTTP {e.code}: {body_err}'}
+    except Exception as e:
+        return {'method': method, 'error': str(e)[:200]}
+
+
 def fetch_bezopasno(query, api_key):
     encoded = urllib.parse.quote(query)
     url = f"https://api.bezopasno.org/check?q={encoded}&key={api_key}"
@@ -366,6 +431,28 @@ def run_check(conn, user, method, qs, body, check_keys=None):
         return ok({
             'results': {r[0]: {'data': r[1], 'from_cache': True, 'cached_at': r[2]} for r in rows}
         })
+
+    # ── NewDB v2 — прямой вызов конкретного метода ───────────────────────────
+    if method == 'GET' and qs.get('action') == 'newdb_methods':
+        return ok({'methods': [
+            {'id': k, 'label': v, 'params': NEWDB_METHOD_PARAMS.get(k, [])}
+            for k, v in NEWDB_METHODS.items()
+        ]})
+
+    if method == 'POST' and body.get('action') == 'newdb_v2':
+        newdb_method = body.get('method', '')
+        params = {k: v for k, v in body.items() if k not in ('action', 'method')}
+        api_key = (check_keys or {}).get('newdb', '')
+        cache_key = make_cache_key(f'newdb_v2_{newdb_method}', json.dumps(params, sort_keys=True))
+        if not body.get('force_refresh'):
+            cached = get_cached(conn, f'newdb_v2_{newdb_method}', cache_key, 'newdb')
+            if cached:
+                return ok({'result': cached, 'from_cache': True, 'method': newdb_method})
+        result = fetch_newdb_v2(newdb_method, params, api_key)
+        if 'error' not in result:
+            save_cache(conn, f'newdb_v2_{newdb_method}', cache_key, 'newdb', result, user['id'])
+            inc_quota(conn, 'newdb')
+        return ok({'result': result, 'from_cache': False, 'method': newdb_method})
 
     if method != 'POST':
         return err('Метод не поддерживается')
