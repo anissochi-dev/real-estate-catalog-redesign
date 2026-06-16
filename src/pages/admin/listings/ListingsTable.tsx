@@ -19,46 +19,27 @@ interface Props {
   siteUrl?: string;
 }
 
-function PhotoCell({ it, large = false }: { it: Listing; large?: boolean; siteUrl?: string; onPhotoDownload?: (it: Listing) => void }) {
-  const imgs = splitImages(it.images);
-  const mainImg = imgs[0] || it.image;
+function openSite(it: Listing) {
+  const slug = it.slug || it.id;
+  try { localStorage.removeItem(VIEW_KEY); } catch { /* ignore */ }
+  window.open(`/object/${slug}`, '_blank');
+}
 
-  const openSite = () => {
-    const slug = it.slug || it.id;
-    try { localStorage.removeItem(VIEW_KEY); } catch { /* ignore */ }
-    window.open(`/object/${slug}`, '_blank');
-  };
-
-  const size = large
-    ? 'w-48 h-36'
-    : 'w-16 h-16';
-  const rounded = large ? 'rounded-xl' : 'rounded-lg';
-  const iconSize = large ? 36 : 20;
-
+function ExportBadges({ it }: { it: Listing }) {
+  if (!it.export_yandex && !it.export_avito && !it.export_cian) return null;
   return (
-    <div
-      className={`relative ${size} flex-shrink-0 cursor-pointer group`}
-      onClick={openSite}
-      title="Открыть объект на сайте"
-    >
-      {mainImg ? (
-        <img src={mainImg} alt={it.title}
-          className={`${size} ${rounded} object-cover border border-border group-hover:opacity-85 transition-opacity`} />
-      ) : (
-        <div className={`${size} ${rounded} bg-muted flex items-center justify-center border border-border`}>
-          <Icon name="Image" size={iconSize} className="text-muted-foreground" />
-        </div>
+    <div className="flex items-center gap-1">
+      {it.export_yandex && (
+        <span title="Яндекс.Недвижимость"
+          className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-50 text-red-600 border border-red-200">Я</span>
       )}
-      {imgs.length > 1 && (
-        large ? (
-          <span className="absolute bottom-2 right-2 bg-brand-blue/90 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow">
-            {imgs.length}
-          </span>
-        ) : (
-          <span className="absolute -bottom-1 -right-1 bg-brand-blue text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
-            {imgs.length}
-          </span>
-        )
+      {it.export_avito && (
+        <span title="Авито"
+          className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200">А</span>
+      )}
+      {it.export_cian && (
+        <span title="ЦИАН"
+          className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200">Ц</span>
       )}
     </div>
   );
@@ -67,7 +48,6 @@ function PhotoCell({ it, large = false }: { it: Listing; large?: boolean; siteUr
 export default function ListingsTable({
   items, onEdit, onArchive, onHistory, onPhotoDownload, onInternalCard,
   selected, onToggleSelect, onSelectAll, onDeselectAll,
-  siteUrl,
 }: Props) {
   const { user } = useAuth();
   const canSeeFullDetails = user?.role && ['admin', 'director', 'broker', 'office_manager'].includes(user.role);
@@ -75,93 +55,251 @@ export default function ListingsTable({
   const allSelected = items.length > 0 && items.every(i => selected.has(i.id));
 
   return (
-    <>
-    {/* ── Мобильный вид (карточки) ── */}
-    <div className="sm:hidden bg-white rounded-2xl overflow-hidden shadow-sm divide-y divide-border">
-      {/* Шапка с чекбоксом */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-muted/50">
-        <input type="checkbox" checked={allSelected}
-          onChange={allSelected ? onDeselectAll : onSelectAll} className="rounded" />
-        <span className="text-xs text-muted-foreground font-medium">Выбрать все ({items.length})</span>
+    <div className="space-y-0.5">
+
+      {/* ── Шапка с чекбоксом «Выбрать все» ── */}
+      <div className="flex items-center gap-2.5 px-4 py-2 bg-white rounded-xl border border-border shadow-sm mb-2">
+        <input
+          type="checkbox"
+          checked={allSelected}
+          onChange={allSelected ? onDeselectAll : onSelectAll}
+          className="rounded accent-brand-blue w-4 h-4 flex-shrink-0"
+        />
+        <span className="text-xs text-muted-foreground font-medium">
+          {selected.size > 0
+            ? `Выбрано: ${selected.size} из ${items.length}`
+            : `Выбрать все (${items.length})`}
+        </span>
       </div>
+
+      {/* ── Карточки ── */}
       {items.map(it => {
         const dm = dealMeta(it.deal);
         const m2 = perM2(it.price, it.area);
+        const imgs = splitImages(it.images);
+        const mainImg = imgs[0] || it.image;
+        const isSelected = selected.has(it.id);
+        const isHidden = it.is_visible === false;
+        const isArchived = it.status === 'archived';
+        const isAdminOrDirector = user?.role && ['admin', 'director'].includes(user.role);
+        const isBrokerAuthor = user?.role === 'broker' && (it.author_id === user?.id || it.broker_id === user?.id);
+        const showPhone = isAdminOrDirector || isBrokerAuthor;
+
         return (
-          <div key={it.id}
-            className={`px-3 py-2.5 ${selected.has(it.id) ? 'bg-brand-blue/5' : ''} ${it.is_visible === false ? 'bg-red-50/40' : ''}`}>
-            <div className="flex gap-2.5">
-              {/* Чекбокс + Фото */}
-              <div className="flex flex-col items-center gap-1.5 shrink-0">
-                <input type="checkbox" checked={selected.has(it.id)}
-                  onChange={() => onToggleSelect(it.id)} className="rounded" />
-                <PhotoCell it={it} />
-              </div>
-              {/* Контент */}
-              <div className="flex-1 min-w-0">
-                {/* Название + ID */}
-                <div className="flex items-start justify-between gap-1.5">
+          <div
+            key={it.id}
+            className={[
+              'group flex gap-0 bg-white rounded-2xl border overflow-hidden shadow-sm transition-all duration-150',
+              'hover:shadow-md hover:border-brand-blue/30',
+              isSelected ? 'border-brand-blue/50 bg-brand-blue/[0.02] shadow-brand-blue/10' : 'border-border',
+              isHidden ? 'opacity-70' : '',
+              isArchived ? 'opacity-60' : '',
+            ].filter(Boolean).join(' ')}
+          >
+            {/* ── Чекбокс-полоска слева ── */}
+            <div
+              className={[
+                'flex items-center justify-center w-10 flex-shrink-0 cursor-pointer transition-colors',
+                isSelected ? 'bg-brand-blue/10' : 'bg-muted/30 hover:bg-muted/60',
+              ].join(' ')}
+              onClick={() => onToggleSelect(it.id)}
+            >
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={() => onToggleSelect(it.id)}
+                onClick={e => e.stopPropagation()}
+                className="rounded accent-brand-blue w-4 h-4"
+              />
+            </div>
+
+            {/* ── Фото ── */}
+            <div
+              className="relative flex-shrink-0 w-48 cursor-pointer overflow-hidden"
+              onClick={() => openSite(it)}
+              title="Открыть объект на сайте"
+            >
+              {mainImg ? (
+                <img
+                  src={mainImg}
+                  alt={it.title}
+                  className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+                  style={{ minHeight: 140 }}
+                />
+              ) : (
+                <div className="w-full h-full bg-muted flex items-center justify-center" style={{ minHeight: 140 }}>
+                  <Icon name="Image" size={36} className="text-muted-foreground/40" />
+                </div>
+              )}
+              {/* Оверлей при hover */}
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-200" />
+              {/* Счётчик фото */}
+              {imgs.length > 1 && (
+                <span className="absolute bottom-2 left-2 bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <Icon name="Images" size={10} />
+                  {imgs.length}
+                </span>
+              )}
+              {/* Статус-метка поверх фото */}
+              {(isHidden || isArchived) && (
+                <div className="absolute top-2 left-2">
+                  {isHidden && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500 text-white flex items-center gap-1 shadow">
+                      <Icon name="EyeOff" size={9} /> Скрыт
+                    </span>
+                  )}
+                  {isArchived && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500 text-white shadow">
+                      Архив
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* ── Основной контент ── */}
+            <div className="flex-1 min-w-0 flex flex-col py-3 px-4 gap-0">
+
+              {/* Строка 1: Название + ID + кнопки */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
                   <button
                     onClick={() => onInternalCard?.(it)}
-                    className="font-semibold text-sm text-left hover:text-brand-blue transition-colors leading-snug"
+                    className="font-semibold text-[15px] leading-snug text-left hover:text-brand-blue transition-colors line-clamp-2"
                   >
                     {it.title}
                   </button>
-                  <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue shrink-0">
+                </div>
+                {/* ID + действия */}
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue">
                     #{fmtListingId(it.id)}
                   </span>
+                  <button
+                    onClick={() => onHistory(it)}
+                    title="История и статистика"
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-brand-blue transition-colors"
+                  >
+                    <Icon name="BarChart2" size={14} />
+                  </button>
+                  <button
+                    onClick={() => openSite(it)}
+                    title="Открыть на сайте"
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-brand-orange transition-colors"
+                  >
+                    <Icon name="ExternalLink" size={14} />
+                  </button>
+                  <button
+                    onClick={() => onEdit(it)}
+                    title="Редактировать"
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-brand-blue/10 hover:text-brand-blue transition-colors"
+                  >
+                    <Icon name="Pencil" size={14} />
+                  </button>
+                  <button
+                    onClick={() => onArchive(it.id)}
+                    title={isArchived ? 'Восстановить' : 'Архивировать'}
+                    className={[
+                      'w-7 h-7 rounded-lg flex items-center justify-center transition-colors',
+                      isArchived
+                        ? 'text-emerald-600 hover:bg-emerald-50'
+                        : 'text-muted-foreground hover:bg-orange-50 hover:text-orange-500',
+                    ].join(' ')}
+                  >
+                    <Icon name={isArchived ? 'RotateCcw' : 'Archive'} size={14} />
+                  </button>
                 </div>
-                {/* Адрес */}
-                <div className="text-xs text-muted-foreground mt-0.5 leading-snug">
-                  {it.city || 'Краснодар'}{it.district ? ` · ${it.district}` : ''}
-                  {canSeeFullDetails && it.address ? <span className="block">{it.address}</span> : null}
-                </div>
-                {/* Сделка + Цена + Площадь */}
-                <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  {dm && <span className={`text-xs px-2 py-0.5 rounded ${dm[2]} font-semibold`}>{dm[1]}</span>}
-                  <span className="text-xs font-semibold">{(it.price || 0).toLocaleString('ru')} ₽</span>
-                  {m2 > 0 && <span className="text-xs text-muted-foreground">{m2.toLocaleString('ru')} ₽/м²</span>}
-                  {it.area ? <span className="text-xs text-muted-foreground">{it.area} м²</span> : null}
-                </div>
-                {/* Бейджи статуса */}
-                <div className="flex items-center gap-1 mt-1 flex-wrap">
-                  {it.is_visible === false && (
-                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-700 inline-flex items-center gap-0.5">
-                      <Icon name="EyeOff" size={10} /> Скрыт
+              </div>
+
+              {/* Строка 2: Адрес */}
+              <div className="flex items-center gap-1.5 mt-1">
+                <Icon name="MapPin" size={12} className="text-muted-foreground/60 flex-shrink-0" />
+                <span className="text-xs text-muted-foreground truncate">
+                  {[it.city || 'Краснодар', it.district, canSeeFullDetails ? it.address : null]
+                    .filter(Boolean).join(' · ')}
+                </span>
+              </div>
+
+              {/* Строка 3: Сделка + Цена + Площадь + Экспорт */}
+              <div className="flex items-center gap-3 mt-2 flex-wrap">
+                {dm && (
+                  <span className={`text-xs px-2.5 py-1 rounded-lg font-semibold ${dm[2]}`}>
+                    {dm[1]}
+                  </span>
+                )}
+                <div>
+                  <span className="text-base font-bold text-foreground leading-none">
+                    {(it.price || 0).toLocaleString('ru')} ₽
+                  </span>
+                  {m2 > 0 && (
+                    <span className="text-xs text-muted-foreground ml-1.5">
+                      {m2.toLocaleString('ru')} ₽/м²
                     </span>
                   )}
-                  {it.status === 'archived' && (
-                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">Архив</span>
-                  )}
-                  {it.export_yandex && <span title="Яндекс" className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-50 text-red-600 border border-red-200">Я</span>}
-                  {it.export_avito  && <span title="Авито"  className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200">A</span>}
-                  {it.export_cian   && <span title="ЦИАН"   className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200">Ц</span>}
                 </div>
-                {/* Кнопки действий */}
-                <div className="flex items-center justify-between mt-2">
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <button onClick={() => onInternalCard?.(it)} className="flex items-center gap-1 hover:text-brand-blue">
-                      <Icon name="MessageSquare" size={13} /> Чат
-                    </button>
-                    <button onClick={() => onHistory(it)} className="flex items-center gap-1 hover:text-brand-blue">
-                      <Icon name="BarChart2" size={13} /> Ядро
-                    </button>
-                    <a href={`/object/${it.slug || it.id}`} target="_blank" rel="noreferrer"
-                      className="flex items-center gap-1 text-brand-orange hover:opacity-80">
-                      <Icon name="Globe" size={13} /> Сайт
-                    </a>
+                {it.area ? (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Icon name="Maximize" size={11} className="opacity-60" />
+                    {it.area} м²
+                  </span>
+                ) : null}
+                <ExportBadges it={it} />
+              </div>
+
+              {/* Разделитель */}
+              <div className="border-t border-border/60 mt-2.5 mb-2" />
+
+              {/* Строка 4: Статистика + Собственник + Даты */}
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+
+                {/* Статистика */}
+                <button
+                  onClick={() => onInternalCard?.(it)}
+                  title="Открыть внутреннюю карточку"
+                  className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                >
+                  <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground" title="Просмотры">
+                    <Icon name="Eye" size={13} className="text-brand-blue" />
+                    {(it.stats_views ?? 0).toLocaleString('ru')}
+                  </span>
+                  <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground" title="Звонки">
+                    <Icon name="Phone" size={13} className="text-emerald-500" />
+                    {(it.stats_calls ?? 0).toLocaleString('ru')}
+                  </span>
+                  <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground" title="Заявки">
+                    <Icon name="Inbox" size={13} className="text-brand-orange" />
+                    {(it.stats_leads ?? 0).toLocaleString('ru')}
+                  </span>
+                </button>
+
+                {/* Собственник */}
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Icon name="User" size={12} className="text-muted-foreground/50 flex-shrink-0" />
+                  <div className="text-xs text-muted-foreground truncate">
+                    {it.owner_name && <span className="font-medium text-foreground">{it.owner_name}</span>}
+                    {it.owner_phone && (
+                      <span className="ml-1.5">
+                        {showPhone
+                          ? <a href={`tel:${it.owner_phone}`} className="text-brand-blue hover:underline" onClick={e => e.stopPropagation()}>{it.owner_phone}</a>
+                          : <span className="text-muted-foreground">+7 •••</span>}
+                      </span>
+                    )}
+                    {!it.owner_name && !it.owner_phone && '—'}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => onEdit(it)} className="text-brand-blue hover:opacity-70">
-                      <Icon name="Pencil" size={16} />
-                    </button>
-                    <button
-                      onClick={() => onArchive(it.id)}
-                      title={it.status === 'archived' ? 'Восстановить' : 'Архивировать'}
-                      className={it.status === 'archived' ? 'text-emerald-600 hover:opacity-70' : 'text-orange-500 hover:opacity-70'}>
-                      <Icon name={it.status === 'archived' ? 'RotateCcw' : 'Archive'} size={16} />
-                    </button>
-                  </div>
+                </div>
+
+                {/* Даты */}
+                <div className="flex items-center gap-3 text-[11px] text-muted-foreground/70 flex-shrink-0">
+                  <span title="Дата создания">
+                    <Icon name="CalendarPlus" size={11} className="inline mr-1 opacity-60" />
+                    {fmtDate(it.created_at)}
+                  </span>
+                  {it.updated_at && it.updated_at !== it.created_at && (
+                    <span title="Дата изменения">
+                      <Icon name="CalendarCheck" size={11} className="inline mr-1 opacity-60" />
+                      {fmtDate(it.updated_at)}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -169,151 +307,5 @@ export default function ListingsTable({
         );
       })}
     </div>
-
-    {/* ── Десктопный вид (таблица) ── */}
-    <div className="hidden sm:block bg-white rounded-2xl overflow-hidden shadow-sm overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="bg-muted/50 text-left">
-          <tr>
-            <th className="px-3 py-3 w-8">
-              <input type="checkbox" checked={allSelected}
-                onChange={allSelected ? onDeselectAll : onSelectAll}
-                className="rounded" />
-            </th>
-            <th className="px-3 py-3 w-52">Фото</th>
-            <th className="px-3 py-3">Объект</th>
-            <th className="px-3 py-3">Сделка</th>
-            <th className="px-3 py-3">Цена</th>
-            <th className="px-3 py-3">Статистика</th>
-            <th className="px-3 py-3">Собственник</th>
-            <th className="px-3 py-3">Создан</th>
-            <th className="px-3 py-3">Изменён</th>
-            <th className="px-3 py-3"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map(it => {
-            const dm = dealMeta(it.deal);
-            const m2 = perM2(it.price, it.area);
-            return (
-              <tr key={it.id}
-                className={`border-t border-border hover:bg-muted/30 align-middle ${selected.has(it.id) ? 'bg-brand-blue/5' : ''} ${it.is_visible === false ? 'bg-red-50/60' : ''}`}>
-                <td className="px-3 py-3">
-                  <input type="checkbox" checked={selected.has(it.id)}
-                    onChange={() => onToggleSelect(it.id)} className="rounded" />
-                </td>
-                <td className="px-3 py-3 w-52">
-                  <PhotoCell it={it} large />
-                </td>
-                <td className="px-3 py-3">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {onInternalCard ? (
-                      <button
-                        onClick={() => onInternalCard(it)}
-                        className="font-semibold text-left hover:text-brand-blue hover:underline transition-colors"
-                        title="Открыть карточку брокера"
-                      >
-                        {it.title}
-                      </button>
-                    ) : (
-                      <div className="font-semibold">{it.title}</div>
-                    )}
-                    <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue">
-                      #{fmtListingId(it.id)}
-                    </span>
-                    {it.is_visible === false && (
-                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-700 inline-flex items-center gap-0.5">
-                        <Icon name="EyeOff" size={10} /> Скрыт
-                      </span>
-                    )}
-                    {it.status === 'archived' && (
-                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">
-                        Архив
-                      </span>
-                    )}
-                  </div>
-                  {(it.export_yandex || it.export_avito || it.export_cian) && (
-                    <div className="flex items-center gap-1 mt-1">
-                      {it.export_yandex && (
-                        <span title="Яндекс.Недвижимость" className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-50 text-red-600 border border-red-200">Я</span>
-                      )}
-                      {it.export_avito && (
-                        <span title="Авито" className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200">A</span>
-                      )}
-                      {it.export_cian && (
-                        <span title="ЦИАН" className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200">Ц</span>
-                      )}
-                    </div>
-                  )}
-                  <div className="text-xs text-muted-foreground">
-                    {it.city || 'Краснодар'}{it.district ? ` · ${it.district}` : ''}
-                    {canSeeFullDetails && it.address ? <div>{it.address}</div> : null}
-                  </div>
-                  <div className="text-xs text-muted-foreground">{it.area} м²</div>
-                </td>
-                <td className="px-3 py-3">
-                  {dm && (
-                    <span className={`text-xs px-2 py-0.5 rounded ${dm[2]} font-semibold`}>{dm[1]}</span>
-                  )}
-                </td>
-                <td className="px-3 py-3 whitespace-nowrap">
-                  <div className="font-semibold">{(it.price || 0).toLocaleString('ru')} ₽</div>
-                  {m2 > 0 && <div className="text-xs text-muted-foreground">{m2.toLocaleString('ru')} ₽/м²</div>}
-                </td>
-                <td className="px-3 py-3 whitespace-nowrap">
-                  <button onClick={() => onInternalCard?.(it)} title="Открыть статистику"
-                    className="flex items-center gap-2 text-xs hover:text-brand-blue">
-                    <span className="inline-flex items-center gap-1" title="Просмотры">
-                      <Icon name="Eye" size={11} className="text-brand-blue" />
-                      {(it.stats_views ?? 0).toLocaleString('ru')}
-                    </span>
-                    <span className="inline-flex items-center gap-1" title="Звонки">
-                      <Icon name="Phone" size={11} className="text-emerald-600" />
-                      {(it.stats_calls ?? 0).toLocaleString('ru')}
-                    </span>
-                    <span className="inline-flex items-center gap-1" title="Заявки">
-                      <Icon name="Inbox" size={11} className="text-brand-orange" />
-                      {(it.stats_leads ?? 0).toLocaleString('ru')}
-                    </span>
-                  </button>
-                </td>
-                <td className="px-3 py-3 text-xs">
-                  {it.owner_name && <div>{it.owner_name}</div>}
-                  {it.owner_phone && (() => {
-                    const isAdminOrDirector = user?.role && ['admin', 'director'].includes(user.role);
-                    const isBrokerAuthor = user?.role === 'broker' && (it.author_id === user?.id || it.broker_id === user?.id);
-                    const showPhone = isAdminOrDirector || isBrokerAuthor;
-                    return showPhone
-                      ? <a href={`tel:${it.owner_phone}`} className="text-brand-blue hover:underline">{it.owner_phone}</a>
-                      : <span className="text-muted-foreground">+7 ***</span>;
-                  })()}
-                  {!it.owner_name && !it.owner_phone && <span className="text-muted-foreground">—</span>}
-                </td>
-                <td className="px-3 py-3 text-xs whitespace-nowrap">{fmtDate(it.created_at)}</td>
-                <td className="px-3 py-3 text-xs whitespace-nowrap">{fmtDate(it.updated_at)}</td>
-                <td className="px-3 py-3 text-right whitespace-nowrap">
-                  <div className="flex items-center gap-2 justify-end">
-                    <button onClick={() => onHistory(it)} title="История и статистика"
-                      className="text-muted-foreground hover:text-brand-blue">
-                      <Icon name="BarChart2" size={16} />
-                    </button>
-                    <button onClick={() => onEdit(it)} className="text-brand-blue hover:opacity-70">
-                      <Icon name="Pencil" size={16} />
-                    </button>
-                    <button
-                      onClick={() => onArchive(it.id)}
-                      title={it.status === 'archived' ? 'Восстановить' : 'Архивировать'}
-                      className={it.status === 'archived' ? 'text-emerald-600 hover:opacity-70' : 'text-orange-500 hover:opacity-70'}>
-                      <Icon name={it.status === 'archived' ? 'RotateCcw' : 'Archive'} size={16} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-    </>
   );
 }
