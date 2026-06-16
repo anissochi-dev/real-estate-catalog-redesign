@@ -42,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const handler = () => {
       setUser(null);
       setTokenState('');
+      try { localStorage.removeItem('biznest_admin_section'); } catch { /* ignore */ }
     };
     window.addEventListener('auth:expired', handler);
     return () => window.removeEventListener('auth:expired', handler);
@@ -76,6 +77,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearToken();
     setTokenState('');
     setUser(null);
+    // Сбрасываем сохранённую секцию админки, чтобы следующий пользователь
+    // не наследовал чужой раздел (особенно важно при смене роли)
+    try { localStorage.removeItem('biznest_admin_section'); } catch { /* ignore */ }
   };
 
   return (
