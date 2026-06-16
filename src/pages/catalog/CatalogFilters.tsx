@@ -44,13 +44,14 @@ interface CatalogFiltersProps {
   onToggleFilters: () => void;
   onToggleMap: () => void;
   onResetFilters: () => void;
+  onSubscribe?: () => void;
 }
 
 export default function CatalogFilters({
   dealFilter, typeFilter, districtFilter, minArea, maxPrice, sortBy,
   showFilters, showMap, districts,
   onDealChange, onTypeChange, onDistrictChange, onMinAreaChange, onMaxPriceChange,
-  onSortChange, onToggleFilters, onToggleMap, onResetFilters,
+  onSortChange, onToggleFilters, onToggleMap, onResetFilters, onSubscribe,
 }: CatalogFiltersProps) {
   const hasActiveFilters = dealFilter !== 'all' || typeFilter !== 'all' || !!minArea || !!maxPrice || districtFilter !== 'all';
   const activeCount = [dealFilter !== 'all', typeFilter !== 'all', !!minArea, !!maxPrice, districtFilter !== 'all'].filter(Boolean).length;
@@ -75,6 +76,16 @@ export default function CatalogFilters({
             </button>
           ))}
           <div className="flex-1" />
+          {/* Кнопка уведомлений MAX */}
+          {onSubscribe && (
+            <button
+              onClick={onSubscribe}
+              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 my-1.5 rounded-lg text-xs font-semibold transition-all border border-brand-blue text-brand-blue hover:bg-brand-blue hover:text-white mr-1.5"
+            >
+              <Icon name="Bell" size={14} />
+              Уведомления в MAX
+            </button>
+          )}
           {/* Кнопка карты */}
           <button
             onClick={onToggleMap}

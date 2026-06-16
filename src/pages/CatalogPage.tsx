@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Property } from '@/App';
-import Icon from '@/components/ui/icon';
 import MaxSubscribeWidget from '@/components/MaxSubscribeWidget';
 import { useSeoH1 } from '@/components/SeoHead';
 import AIMatchModal from '@/components/AIMatchModal';
@@ -202,29 +201,8 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
         onToggleFilters={() => setShowFilters(!showFilters)}
         onToggleMap={() => { setShowMap(v => !v); setMapSelected(null); }}
         onResetFilters={() => { setDealFilter('all'); setTypeFilter('all'); setMinArea(''); setMaxPrice(''); setDistrictFilter('all'); }}
+        onSubscribe={() => setShowSubscribe(true)}
       />
-
-      {/* ── Кнопка уведомлений MAX — между фильтрами и результатами ── */}
-      <div className="container mx-auto px-4 py-2">
-        <button
-          onClick={() => setShowSubscribe(true)}
-          className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-brand-blue/20 bg-brand-blue/[0.03] hover:bg-brand-blue/[0.07] hover:border-brand-blue/40 transition-all group"
-        >
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-brand-blue flex items-center justify-center flex-shrink-0">
-              <Icon name="Bell" size={13} className="text-white" />
-            </div>
-            <div className="text-left">
-              <span className="text-sm font-semibold text-foreground">Уведомления в MAX</span>
-              <span className="text-xs text-muted-foreground ml-2">Новые объекты — сразу в мессенджер</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5 text-xs font-medium text-brand-blue shrink-0">
-            Подписаться
-            <Icon name="ChevronRight" size={14} className="group-hover:translate-x-0.5 transition-transform" />
-          </div>
-        </button>
-      </div>
 
       {showMap && (
         <CatalogMap
