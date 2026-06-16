@@ -92,6 +92,10 @@ export default function ListingsAdmin() {
         onSelectAll={() => s.setSelected(new Set(s.filtered.map(i => i.id)))}
         onDeselectAll={() => s.setSelected(new Set())}
         siteUrl={s.SITE_URL}
+        onBulk={s.runBulk}
+        onBulkDelete={s.bulkDelete}
+        bulkLoading={s.bulkLoading}
+        isAdmin={s.isAdmin}
       />
 
       {/* Показать ещё */}

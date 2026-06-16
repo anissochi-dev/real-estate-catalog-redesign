@@ -2,6 +2,7 @@ import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
 import { Listing, DEALS, fmtDate, perM2, splitImages } from './types';
 import { fmtListingId } from '@/lib/formatPrice';
+import ListingInlineActions from './ListingInlineActions';
 
 const VIEW_KEY = 'biznest_view';
 
@@ -17,6 +18,11 @@ interface Props {
   onSelectAll: () => void;
   onDeselectAll: () => void;
   siteUrl?: string;
+  // bulk actions
+  onBulk?: (op: string, value?: unknown) => void;
+  onBulkDelete?: () => void;
+  bulkLoading?: boolean;
+  isAdmin?: boolean;
 }
 
 function openSite(it: Listing) {
@@ -48,6 +54,7 @@ function ExportBadges({ it }: { it: Listing }) {
 export default function ListingsTable({
   items, onEdit, onArchive, onHistory, onPhotoDownload, onInternalCard,
   selected, onToggleSelect, onSelectAll, onDeselectAll,
+  onBulk, onBulkDelete, bulkLoading = false, isAdmin = false,
 }: Props) {
   const { user } = useAuth();
   const canSeeFullDetails = user?.role && ['admin', 'director', 'broker', 'office_manager'].includes(user.role);
@@ -303,6 +310,17 @@ export default function ListingsTable({
                 </div>
               </div>
             </div>
+
+            {/* ── Инлайн-панель действий при выборе ── */}
+            {isSelected && onBulk && onBulkDelete && (
+              <ListingInlineActions
+                listingId={it.id}
+                onBulk={onBulk}
+                onBulkDelete={onBulkDelete}
+                bulkLoading={bulkLoading}
+                isAdmin={isAdmin}
+              />
+            )}
           </div>
         );
       })}
