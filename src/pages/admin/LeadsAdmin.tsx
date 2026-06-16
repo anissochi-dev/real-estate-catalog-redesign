@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { adminApi, aiApi } from '@/lib/adminApi';
+import { adminApi } from '@/lib/adminApi';
 import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
 import { Lead, Comment, Listing, STATUSES, empty } from './leads/leadsTypes';
@@ -21,8 +21,7 @@ export default function LeadsAdmin() {
   const [active, setActive] = useState<Lead | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [comment, setComment] = useState('');
-  const [aiReply, setAiReply] = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
+
   const [editing, setEditing] = useState<Partial<Lead> | null>(null);
   const [filter, setFilter] = useState<'all' | 'network' | string>('all');
   const [search, setSearch] = useState('');
@@ -41,7 +40,6 @@ export default function LeadsAdmin() {
 
   const openLead = async (l: Lead) => {
     setActive(l);
-    setAiReply('');
     const d = await adminApi.getLead(l.id);
     setComments(d.comments || []);
   };
@@ -73,19 +71,7 @@ export default function LeadsAdmin() {
     setComments(d.comments || []);
   };
 
-  const generateReply = async () => {
-    if (!active) return;
-    setAiLoading(true);
-    try {
-      const r = await aiApi.ask('reply_lead',
-        `Клиент: ${active.name}, телефон: ${active.phone}, сообщение: ${active.message || 'без сообщения'}`);
-      setAiReply(r.text);
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Ошибка генерации ответа');
-    } finally {
-      setAiLoading(false);
-    }
-  };
+
 
   const save = async () => {
     if (!editing) return;
@@ -181,13 +167,10 @@ export default function LeadsAdmin() {
                 comments={comments}
                 comment={comment}
                 setComment={setComment}
-                aiReply={aiReply}
-                aiLoading={aiLoading}
                 onUpdate={update}
                 onEdit={() => setEditing(active)}
                 onDelete={() => del(active.id)}
                 onSendComment={sendComment}
-                onGenerateReply={generateReply}
                 canManage={canManageLead(active)}
               />
             </div>

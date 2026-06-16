@@ -7,19 +7,16 @@ interface Props {
   comments: Comment[];
   comment: string;
   setComment: (v: string) => void;
-  aiReply: string;
-  aiLoading: boolean;
   onUpdate: (changes: Partial<Lead>) => void;
   onEdit: () => void;
   onDelete: () => void;
   onSendComment: () => void;
-  onGenerateReply: () => void;
-  canManage?: boolean; // false для брокера на чужом лиде
+  canManage?: boolean;
 }
 
 export default function LeadDetail({
-  active, comments, comment, setComment, aiReply, aiLoading,
-  onUpdate, onEdit, onDelete, onSendComment, onGenerateReply,
+  active, comments, comment, setComment,
+  onUpdate, onEdit, onDelete, onSendComment,
   canManage = true,
 }: Props) {
   return (
@@ -181,22 +178,6 @@ export default function LeadDetail({
             <span className="text-xs text-muted-foreground flex items-center gap-1">
               <Icon name="Lock" size={11} /> Управление доступно только менеджеру
             </span>
-          </div>
-        )}
-      </div>
-
-      <div className="p-5 border-b border-border space-y-2">
-        <div className="flex justify-between items-center">
-          <div className="font-semibold text-sm">Черновик ответа клиенту</div>
-          <button onClick={onGenerateReply} disabled={aiLoading}
-            className="text-xs text-brand-orange hover:underline inline-flex items-center gap-1">
-            <Icon name="Sparkles" size={12} />
-            {aiLoading ? 'Генерация...' : 'Сгенерировать ИИ'}
-          </button>
-        </div>
-        {aiReply && (
-          <div className="p-3 bg-brand-orange/10 border border-brand-orange/30 rounded-xl text-sm whitespace-pre-wrap">
-            {aiReply}
           </div>
         )}
       </div>
