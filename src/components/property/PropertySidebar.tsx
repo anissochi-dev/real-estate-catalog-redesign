@@ -24,6 +24,17 @@ interface Props {
 export default function PropertySidebar({ item, agents, sent, sending, form, setForm, onSubmit, captcha, setCaptcha, captchaKey }: Props) {
   const agent = agents[0] || null;
   const [chatOpen, setChatOpen] = useState(false);
+  const [phoneRevealed, setPhoneRevealed] = useState(false);
+
+  // Скрываем последние 4 цифры: +7 (918) 335-••••
+  const maskedPhone = (phone: string) => {
+    const formatted = formatPhone(phone);
+    return formatted.slice(0, -4) + '••••';
+  };
+
+  const maxChatUrl = agent?.phone
+    ? `https://max.ru/chat?phone=${encodeURIComponent(agent.phone.replace(/\D/g, ''))}`
+    : null;
 
   return (
     <>
@@ -62,17 +73,43 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
               <div className="text-[10px] text-muted-foreground mb-2 uppercase tracking-widest font-semibold">
                 Представитель собственника
               </div>
-              <div className="flex items-center gap-2">
-                <a href={`tel:${agent.phone}`}
-                  className="inline-flex items-center gap-2 text-lg font-bold text-[#1a7a32] hover:underline flex-1 min-w-0">
-                  <Icon name="Phone" size={18} className="flex-shrink-0" />
-                  <span className="truncate">{formatPhone(agent.phone)}</span>
-                </a>
+              <div className="border border-border rounded-xl p-3 space-y-2">
+                {/* Строка телефона + иконка MAX */}
+                <div className="flex items-center gap-2">
+                  <Icon name="Phone" size={16} className="text-brand-blue flex-shrink-0" />
+                  {phoneRevealed ? (
+                    <a href={`tel:${agent.phone}`}
+                      className="text-base font-bold text-brand-blue hover:underline flex-1 min-w-0 truncate">
+                      {formatPhone(agent.phone)}
+                    </a>
+                  ) : (
+                    <button
+                      onClick={() => setPhoneRevealed(true)}
+                      className="text-base font-bold text-brand-blue hover:underline flex-1 min-w-0 text-left"
+                      title="Нажмите, чтобы показать номер"
+                    >
+                      {maskedPhone(agent.phone)}
+                    </button>
+                  )}
+                  {/* Иконка MAX — только иконка, без подписи */}
+                  {maxChatUrl && (
+                    <a
+                      href={maxChatUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Написать в MAX"
+                      className="flex-shrink-0 w-8 h-8 rounded-lg bg-brand-blue/10 hover:bg-brand-blue hover:text-white text-brand-blue flex items-center justify-center transition-colors"
+                    >
+                      <Icon name="Send" size={15} />
+                    </a>
+                  )}
+                </div>
+                {/* Кнопка Написать (ИИ-чат) */}
                 <button
                   onClick={() => setChatOpen(true)}
-                  className="flex-shrink-0 inline-flex items-center gap-2 text-lg font-bold text-[#1a7a32] hover:underline"
+                  className="w-full inline-flex items-center justify-center gap-2 text-sm font-semibold text-brand-blue hover:underline"
                 >
-                  <Icon name="MessageCircle" size={18} className="flex-shrink-0" />
+                  <Icon name="MessageCircle" size={15} />
                   Написать
                 </button>
               </div>
