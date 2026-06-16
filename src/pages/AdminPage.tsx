@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import AdminLayout, { AdminSection } from './admin/AdminLayout';
+import { useAuth } from '@/contexts/AuthContext';
 import Dashboard from './admin/Dashboard';
 import ListingsAdmin from './admin/ListingsAdmin';
 import LeadsAdmin from './admin/LeadsAdmin';
@@ -27,9 +28,15 @@ interface Props {
 const SECTION_KEY = 'biznest_admin_section';
 
 export default function AdminPage({ onExit, initialSection }: Props) {
+  const { user } = useAuth();
   const [section, setSection] = useState<AdminSection>(() => {
     if (initialSection) return initialSection as AdminSection;
-    try { return (localStorage.getItem(SECTION_KEY) as AdminSection) || 'dashboard'; } catch { return 'dashboard'; }
+    try {
+      const saved = localStorage.getItem(SECTION_KEY) as AdminSection;
+      // Для брокера стартовая страница — Объекты
+      if (!saved && user?.role === 'broker') return 'listings';
+      return saved || 'dashboard';
+    } catch { return 'dashboard'; }
   });
 
   useEffect(() => {

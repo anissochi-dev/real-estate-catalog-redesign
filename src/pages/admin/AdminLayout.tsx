@@ -36,7 +36,7 @@ const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; gro
   { id: 'crm-kanban',      label: 'Воронка сделок',   icon: 'KanbanSquare',    roles: CRM_ROLES, group: 'crm' },
   { id: 'crm-gamification',label: 'Рейтинг команды',  icon: 'Trophy',          roles: CRM_ROLES, group: 'crm' },
   { id: 'crm-checks',      label: 'Проверки',          icon: 'ShieldCheck',     roles: CRM_ROLES, group: 'crm' },
-  { id: 'crm-payments',    label: 'Платежи',           icon: 'CreditCard',      roles: CRM_ROLES, group: 'crm' },
+  { id: 'crm-payments',    label: 'Платежи',           icon: 'CreditCard',      roles: ['admin', 'director', 'office_manager', 'manager'], group: 'crm' },
 ];
 
 const SOCIAL_PARSER_URL = 'https://functions.poehali.dev/5d1bb364-c893-4d73-a003-e119069371ff';
