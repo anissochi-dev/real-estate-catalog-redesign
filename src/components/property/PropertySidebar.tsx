@@ -116,9 +116,9 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
                         target="_blank"
                         rel="noopener noreferrer"
                         title={title}
-                        className="flex-shrink-0 w-8 h-8 rounded-xl bg-muted flex items-center justify-center hover:opacity-75 transition-opacity p-1"
+                        className="flex-shrink-0 hover:opacity-75 transition-opacity"
                       >
-                        <img src={src} alt={title} className="w-full h-full object-contain" />
+                        <img src={src} alt={title} className="w-7 h-7 object-contain" />
                       </a>
                     ))}
                   </div>
