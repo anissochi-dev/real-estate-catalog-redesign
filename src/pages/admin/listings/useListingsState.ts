@@ -57,18 +57,20 @@ export function useListingsState() {
     setLoading(true);
     const currentTab = tab ?? statusFilter;
     const offset = reset ? 0 : items.length;
-    Promise.all([adminApi.listListings(offset, 25, currentTab), adminApi.listCities(), adminApi.listPurposes(), adminApi.listLandVri()])
-      .then(([l, c, p, v]) => {
+    // Загружаем объекты отдельно — чтобы ошибка справочников не блокировала список
+    adminApi.listListings(offset, 25, currentTab)
+      .then(l => {
         const newItems = l.listings || [];
         setItems(prev => reset ? newItems : [...prev, ...newItems]);
         setTotal(l.total || 0);
         if (l.counts) setCounts(l.counts);
-        setCities((c.cities || []).filter((x: City) => x.is_active));
-        setPurposes(p.purposes || []);
-        setLandVri((v.land_vri || []).filter((x: LandVri) => x.is_active !== false));
       })
       .catch(() => toast.error('Не удалось загрузить объявления'))
       .finally(() => setLoading(false));
+    // Справочники — тихо, не блокируют основной список
+    adminApi.listCities().then(c => setCities((c.cities || []).filter((x: City) => x.is_active))).catch(() => {});
+    adminApi.listPurposes().then(p => setPurposes(p.purposes || [])).catch(() => {});
+    adminApi.listLandVri().then(v => setLandVri((v.land_vri || []).filter((x: LandVri) => x.is_active !== false))).catch(() => {});
   };
 
   const loadMore = () => {
