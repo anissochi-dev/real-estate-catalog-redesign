@@ -14,11 +14,13 @@ interface Props {
   onDelete: () => void;
   onSendComment: () => void;
   onGenerateReply: () => void;
+  canManage?: boolean; // false для брокера на чужом лиде
 }
 
 export default function LeadDetail({
   active, comments, comment, setComment, aiReply, aiLoading,
   onUpdate, onEdit, onDelete, onSendComment, onGenerateReply,
+  canManage = true,
 }: Props) {
   return (
     <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
@@ -27,14 +29,22 @@ export default function LeadDetail({
           <div>
             <div className="font-display font-700 text-lg">{active.name}</div>
             <div className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
-              <a href={`tel:${active.phone}`}
-                 className={`font-mono hover:underline ${active.phone_hidden ? 'text-muted-foreground' : 'text-brand-blue'}`}>
-                {active.phone ? formatPhone(active.phone) : '—'}
-              </a>
-              {active.phone_hidden && (
-                <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded"
-                      title="Заявка брокера — телефон собственника видят только админ, директор и сам брокер.">
-                  <Icon name="EyeOff" size={10} /> Скрыт
+              {/* Телефон: для брокера на чужом лиде — полностью скрыт */}
+              {canManage ? (
+                <>
+                  <a href={`tel:${active.phone}`}
+                     className={`font-mono hover:underline ${active.phone_hidden ? 'text-muted-foreground' : 'text-brand-blue'}`}>
+                    {active.phone ? formatPhone(active.phone) : '—'}
+                  </a>
+                  {active.phone_hidden && (
+                    <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                      <Icon name="EyeOff" size={10} /> Скрыт
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                  <Icon name="Lock" size={10} /> Телефон скрыт
                 </span>
               )}
               {active.email && <span>· {active.email}</span>}
@@ -69,14 +79,16 @@ export default function LeadDetail({
               </div>
             )}
           </div>
-          <div className="flex gap-2">
-            <button onClick={onEdit} className="text-brand-blue p-2 rounded-lg hover:bg-muted">
-              <Icon name="Pencil" size={16} />
-            </button>
-            <button onClick={onDelete} className="text-red-600 p-2 rounded-lg hover:bg-red-50">
-              <Icon name="Trash2" size={16} />
-            </button>
-          </div>
+          {canManage && (
+            <div className="flex gap-2">
+              <button onClick={onEdit} className="text-brand-blue p-2 rounded-lg hover:bg-muted">
+                <Icon name="Pencil" size={16} />
+              </button>
+              <button onClick={onDelete} className="text-red-600 p-2 rounded-lg hover:bg-red-50">
+                <Icon name="Trash2" size={16} />
+              </button>
+            </div>
+          )}
         </div>
 
         {active.message && (
@@ -114,44 +126,63 @@ export default function LeadDetail({
           </div>
         )}
 
-        <div className="mt-4">
-          <div className="text-xs text-muted-foreground mb-1.5">Тип заявки:</div>
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            {LEAD_TYPES.map(t => (
-              <button key={t[0]} onClick={() => onUpdate({ lead_type: t[0] })}
-                className={`text-xs px-3 py-1.5 rounded-lg font-medium transition ${
-                  (active.lead_type || 'view') === t[0] ? t[2] + ' ring-1 ring-inset ring-current' : 'bg-muted hover:bg-muted/70'
-                }`}>
-                {t[1]}
-              </button>
-            ))}
+        {canManage ? (
+          <>
+            <div className="mt-4">
+              <div className="text-xs text-muted-foreground mb-1.5">Тип заявки:</div>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {LEAD_TYPES.map(t => (
+                  <button key={t[0]} onClick={() => onUpdate({ lead_type: t[0] })}
+                    className={`text-xs px-3 py-1.5 rounded-lg font-medium transition ${
+                      (active.lead_type || 'view') === t[0] ? t[2] + ' ring-1 ring-inset ring-current' : 'bg-muted hover:bg-muted/70'
+                    }`}>
+                    {t[1]}
+                  </button>
+                ))}
+              </div>
+              <div className="text-xs text-muted-foreground mb-1.5">Статус:</div>
+              <div className="flex flex-wrap gap-1.5">
+                {STATUSES.map(s => (
+                  <button key={s[0]} onClick={() => onUpdate({ status: s[0] })}
+                    className={`text-xs px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 transition ${
+                      active.status === s[0] ? `${s[2]} text-white` : 'bg-muted hover:bg-muted/70'
+                    }`}>
+                    <span className={`w-2 h-2 rounded-full ${active.status === s[0] ? 'bg-white' : s[2]}`} />
+                    {s[1]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-4 text-sm">
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={active.is_network_tenant}
+                  onChange={e => onUpdate({ is_network_tenant: e.target.checked })} />
+                Сетевой арендатор
+              </label>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={active.show_on_main}
+                  onChange={e => onUpdate({ show_on_main: e.target.checked })} />
+                Показывать на главной
+              </label>
+            </div>
+          </>
+        ) : (
+          /* Брокер видит только текущий статус — без изменения */
+          <div className="mt-4 flex items-center gap-2">
+            {(() => {
+              const st = STATUSES.find(s => s[0] === active.status);
+              return st ? (
+                <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-muted`}>
+                  <span className={`w-2 h-2 rounded-full ${st[2]}`} />
+                  {st[1]}
+                </span>
+              ) : null;
+            })()}
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <Icon name="Lock" size={11} /> Управление доступно только менеджеру
+            </span>
           </div>
-          <div className="text-xs text-muted-foreground mb-1.5">Статус:</div>
-          <div className="flex flex-wrap gap-1.5">
-            {STATUSES.map(s => (
-              <button key={s[0]} onClick={() => onUpdate({ status: s[0] })}
-                className={`text-xs px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 transition ${
-                  active.status === s[0] ? `${s[2]} text-white` : 'bg-muted hover:bg-muted/70'
-                }`}>
-                <span className={`w-2 h-2 rounded-full ${active.status === s[0] ? 'bg-white' : s[2]}`} />
-                {s[1]}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-3 flex flex-wrap gap-4 text-sm">
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={active.is_network_tenant}
-              onChange={e => onUpdate({ is_network_tenant: e.target.checked })} />
-            Сетевой арендатор
-          </label>
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={active.show_on_main}
-              onChange={e => onUpdate({ show_on_main: e.target.checked })} />
-            Показывать на главной
-          </label>
-        </div>
+        )}
       </div>
 
       <div className="p-5 border-b border-border space-y-2">

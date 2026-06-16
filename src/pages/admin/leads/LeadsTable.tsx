@@ -9,6 +9,8 @@ interface Props {
   onDelete?: (id: number) => void;
   onStatusChange?: (id: number, status: string) => void;
   search?: string;
+  currentUserId?: number;
+  isBroker?: boolean;
 }
 
 // Цвет левого бордера по статусу
@@ -66,8 +68,12 @@ function highlight(text: string, query: string) {
   );
 }
 
-export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, search = '' }: Props) {
+export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, search = '', currentUserId, isBroker = false }: Props) {
   const [statusMenuId, setStatusMenuId] = useState<number | null>(null);
+
+  // Для брокера: может управлять только лидами где broker_id === его id
+  const canManageLead = (l: Lead) =>
+    !isBroker || (l.broker_id != null && l.broker_id === currentUserId);
 
   const sorted = useMemo(() => {
     const STATUS_ORDER: Record<string, number> = { pending: 0, new: 1, in_progress: 2, done: 3, rejected: 4 };
@@ -97,6 +103,7 @@ export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, se
         const isNew = l.status === 'new' || l.status === 'pending';
         const name = l.name || 'Без имени';
         const avatarCls = avatarColor(name);
+        const canManage = canManageLead(l);
 
         return (
           <div
@@ -125,22 +132,30 @@ export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, se
                     )}
                   </div>
 
-                  {/* Телефон */}
+                  {/* Телефон: для брокера на чужом лиде — полностью скрыт */}
                   <div className="flex items-center gap-2 mt-0.5">
-                    <a
-                      href={`tel:${l.phone}`}
-                      onClick={e => e.stopPropagation()}
-                      className={`text-xs font-mono hover:underline flex items-center gap-1 ${l.phone_hidden ? 'text-muted-foreground' : 'text-brand-blue font-semibold'}`}
-                    >
-                      <Icon name="Phone" size={11} />
-                      {l.phone ? formatPhone(l.phone) : '—'}
-                    </a>
-                    {l.phone_hidden && (
-                      <span className="text-[10px] text-amber-600 flex items-center gap-0.5">
-                        <Icon name="EyeOff" size={10} /> скрыт
+                    {canManage ? (
+                      <>
+                        <a
+                          href={`tel:${l.phone}`}
+                          onClick={e => e.stopPropagation()}
+                          className={`text-xs font-mono hover:underline flex items-center gap-1 ${l.phone_hidden ? 'text-muted-foreground' : 'text-brand-blue font-semibold'}`}
+                        >
+                          <Icon name="Phone" size={11} />
+                          {l.phone ? formatPhone(l.phone) : '—'}
+                        </a>
+                        {l.phone_hidden && (
+                          <span className="text-[10px] text-amber-600 flex items-center gap-0.5">
+                            <Icon name="EyeOff" size={10} /> скрыт
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                        <Icon name="Lock" size={10} /> Телефон скрыт
                       </span>
                     )}
-                    {l.email && (
+                    {l.email && canManage && (
                       <a
                         href={`mailto:${l.email}`}
                         onClick={e => e.stopPropagation()}
@@ -230,8 +245,8 @@ export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, se
                 {/* Кнопки действий */}
                 <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
 
-                  {/* Быстрая смена статуса */}
-                  {onStatusChange && (
+                  {/* Быстрая смена статуса — только если есть права */}
+                  {onStatusChange && canManage && (
                     <div className="relative">
                       <button
                         onClick={() => setStatusMenuId(statusMenuId === l.id ? null : l.id)}
@@ -267,8 +282,8 @@ export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, se
                     Подробнее
                   </button>
 
-                  {/* Удалить */}
-                  {onDelete && (
+                  {/* Удалить — только если есть права */}
+                  {onDelete && canManage && (
                     <button
                       onClick={() => onDelete(l.id)}
                       className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors"
