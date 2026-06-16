@@ -1105,6 +1105,26 @@ def handler(event: dict, context) -> dict:
                     print(f'[price_digest] cron error: {pd_e}')
                 result['price_digest'] = price_digest_result
 
+                # ── Переиндексация ИИ-поиска объектов (02:00 МСК = 23:00 UTC) ─
+                search_reindex_result = None
+                try:
+                    _SEARCH_REINDEX_HOUR_UTC = 23  # 02:00 МСК
+                    if now_utc.hour == _SEARCH_REINDEX_HOUR_UTC:
+                        _sr_req = urllib.request.Request(
+                            'https://functions.poehali.dev/32925bd2-c418-4a8c-8e32-97b5385e67da',
+                            data=json.dumps({'action': 'reindex', 'batch': 50}).encode(),
+                            headers={'Content-Type': 'application/json'},
+                            method='POST',
+                        )
+                        with urllib.request.urlopen(_sr_req, timeout=25) as _sr_resp:
+                            search_reindex_result = json.loads(_sr_resp.read(4096).decode('utf-8', errors='replace'))
+                        print(f'[smart-search] reindex: {search_reindex_result}')
+                    else:
+                        search_reindex_result = {'skipped': True, 'reason': f'not 02:00 MSK, now_utc={now_utc.hour:02d}:{now_utc.minute:02d}'}
+                except Exception as _sr_e:
+                    search_reindex_result = {'error': str(_sr_e)[:100]}
+                result['search_reindex'] = search_reindex_result
+
                 return _ok(result)
 
             # ── ПУБЛИЧНЫЙ СПИСОК ─────────────────────────────────────────

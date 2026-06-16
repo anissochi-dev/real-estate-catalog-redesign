@@ -13,6 +13,7 @@ Returns: { results: [{id, title, score, ...}], total }
 import json
 import math
 import os
+import time
 import urllib.request
 import urllib.error
 import psycopg2
@@ -129,8 +130,11 @@ def _reindex(cur, conn, api_key: str, folder_id: str, ids: list | None, batch: i
 
     rows = cur.fetchall()
     done, errors = 0, 0
-    for row in rows:
+    for i, row in enumerate(rows):
         text = _listing_to_text(dict(row))
+        # Пауза каждые 5 запросов чтобы не получить 429 от Yandex API
+        if i > 0 and i % 5 == 0:
+            time.sleep(1.0)
         try:
             vec = _embed(text, EMBED_DOC_MODEL, api_key, folder_id)
             if vec:
@@ -141,6 +145,26 @@ def _reindex(cur, conn, api_key: str, folder_id: str, ids: list | None, batch: i
                     f"WHERE id = {row['id']}"
                 )
                 done += 1
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                print(f'[smart-search] rate limit id={row["id"]}, пауза 3 сек')
+                time.sleep(3.0)
+                try:
+                    vec = _embed(text, EMBED_DOC_MODEL, api_key, folder_id)
+                    if vec:
+                        vec_sql = '{' + ','.join(str(v) for v in vec) + '}'
+                        cur.execute(
+                            f"UPDATE {SCHEMA}.listings "
+                            f"SET embedding = '{vec_sql}', embedding_updated_at = NOW() "
+                            f"WHERE id = {row['id']}"
+                        )
+                        done += 1
+                except Exception as e2:
+                    print(f'[smart-search] retry error id={row["id"]}: {e2}')
+                    errors += 1
+            else:
+                print(f'[smart-search] reindex error id={row["id"]}: {e}')
+                errors += 1
         except Exception as e:
             print(f'[smart-search] reindex error id={row["id"]}: {e}')
             errors += 1
