@@ -56,16 +56,32 @@ export default function SiteHealthGeo() {
     const typesToLoad = types || selectedTypes;
     setLoadingTypes(typesToLoad);
     setLoadResult(null);
+    const allResults: LoadResult['results'] = [];
+    let totalLoaded = 0;
+
     try {
-      toast.info('Загрузка данных OSM... (~30–60 сек)');
-      const r = await fetch(GEO_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'osm_load', types: typesToLoad }),
-      }).then(r => r.json());
-      setLoadResult(r);
-      const loaded = r.results?.reduce((s: number, x: { loaded?: number }) => s + (x.loaded || 0), 0) || 0;
-      toast.success(`Загружено ${loaded} объектов из OpenStreetMap`);
+      toast.info(`Загрузка ${typesToLoad.length} типов из OSM... (~1–2 мин)`);
+      // Загружаем по одному типу последовательно — каждый запрос ~20-30 сек
+      for (const infra_type of typesToLoad) {
+        setLoadingTypes([infra_type]);
+        try {
+          const r = await fetch(GEO_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'osm_load', types: [infra_type] }),
+          }).then(r => r.json());
+          if (r.results) {
+            allResults.push(...r.results);
+            const loaded = r.results.reduce((s: number, x: { loaded?: number }) => s + (x.loaded || 0), 0);
+            totalLoaded += loaded;
+          }
+        } catch {
+          allResults.push({ type: infra_type, status: 'error', error: 'Timeout или сетевая ошибка' });
+        }
+      }
+
+      setLoadResult({ results: allResults, total_in_db: {} });
+      toast.success(`Загружено ${totalLoaded} объектов из OpenStreetMap`);
       loadStats();
     } catch {
       toast.error('Ошибка загрузки OSM');

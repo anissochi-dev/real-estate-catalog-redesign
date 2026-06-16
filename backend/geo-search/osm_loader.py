@@ -11,14 +11,16 @@ from datetime import datetime
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
 OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
+# Запасной Overpass-сервер
+OVERPASS_URL_FALLBACK = 'https://overpass.kumi.systems/api/interpreter'
 
-# Bounding box Краснодара (с запасом)
-KRD_BBOX = '44.9,38.8,45.2,39.2'  # south, west, north, east
+# Bounding box Краснодара — компактный, только город
+KRD_BBOX = '44.97,38.91,45.13,39.12'  # south, west, north, east (плотная городская зона)
 
 # Запросы Overpass QL — каждый тип отдельно для надёжности
 OSM_QUERIES = {
     'tram_stop': f"""
-        [out:json][timeout:30];
+        [out:json][timeout:15];
         (
           node["railway"="tram_stop"]({KRD_BBOX});
           node["public_transport"="stop_position"]["tram"="yes"]({KRD_BBOX});
@@ -26,17 +28,17 @@ OSM_QUERIES = {
         out body;
     """,
     'bus_stop': f"""
-        [out:json][timeout:30];
+        [out:json][timeout:15];
         node["highway"="bus_stop"]({KRD_BBOX});
         out body;
     """,
     'subway_entrance': f"""
-        [out:json][timeout:30];
+        [out:json][timeout:15];
         node["railway"="subway_entrance"]({KRD_BBOX});
         out body;
     """,
     'shopping_mall': f"""
-        [out:json][timeout:30];
+        [out:json][timeout:15];
         (
           node["shop"="mall"]({KRD_BBOX});
           way["shop"="mall"]({KRD_BBOX});
@@ -46,7 +48,7 @@ OSM_QUERIES = {
         out center;
     """,
     'supermarket': f"""
-        [out:json][timeout:30];
+        [out:json][timeout:15];
         (
           node["shop"="supermarket"]({KRD_BBOX});
           way["shop"="supermarket"]({KRD_BBOX});
@@ -54,7 +56,7 @@ OSM_QUERIES = {
         out center;
     """,
     'park': f"""
-        [out:json][timeout:30];
+        [out:json][timeout:15];
         (
           way["leisure"="park"]({KRD_BBOX});
           node["leisure"="park"]({KRD_BBOX});
@@ -62,7 +64,7 @@ OSM_QUERIES = {
         out center;
     """,
     'school': f"""
-        [out:json][timeout:30];
+        [out:json][timeout:15];
         (
           node["amenity"="school"]({KRD_BBOX});
           way["amenity"="school"]({KRD_BBOX});
@@ -70,15 +72,16 @@ OSM_QUERIES = {
         out center;
     """,
     'hospital': f"""
-        [out:json][timeout:30];
+        [out:json][timeout:15];
         (
           node["amenity"="hospital"]({KRD_BBOX});
+          node["amenity"="clinic"]({KRD_BBOX});
           way["amenity"="hospital"]({KRD_BBOX});
         );
         out center;
     """,
     'railway_station': f"""
-        [out:json][timeout:30];
+        [out:json][timeout:15];
         (
           node["railway"="station"]({KRD_BBOX});
           node["railway"="halt"]({KRD_BBOX});
@@ -86,7 +89,7 @@ OSM_QUERIES = {
         out body;
     """,
     'market': f"""
-        [out:json][timeout:30];
+        [out:json][timeout:15];
         (
           node["amenity"="marketplace"]({KRD_BBOX});
           way["amenity"="marketplace"]({KRD_BBOX});
@@ -94,11 +97,10 @@ OSM_QUERIES = {
         out center;
     """,
     'business_center': f"""
-        [out:json][timeout:30];
+        [out:json][timeout:15];
         (
-          node["office"="company"]["building"="office"]({KRD_BBOX});
           way["building"="office"]({KRD_BBOX});
-          way["office"="yes"]({KRD_BBOX});
+          node["office"="company"]({KRD_BBOX});
         );
         out center;
     """,
@@ -106,20 +108,24 @@ OSM_QUERIES = {
 
 
 def _overpass_query(ql: str) -> list:
-    """Выполняет запрос к Overpass API, возвращает список элементов."""
+    """Выполняет запрос к Overpass API, возвращает список элементов. При ошибке пробует резервный сервер."""
     data = urllib.parse.urlencode({'data': ql}).encode()
-    req = urllib.request.Request(
-        OVERPASS_URL,
-        data=data,
-        headers={
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': 'RealEstateCatalog/1.0 (krd.info)',
-        },
-        method='POST',
-    )
-    with urllib.request.urlopen(req, timeout=35) as r:
-        result = json.loads(r.read().decode())
-    return result.get('elements', [])
+    for url in [OVERPASS_URL, OVERPASS_URL_FALLBACK]:
+        try:
+            req = urllib.request.Request(
+                url, data=data,
+                headers={
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'User-Agent': 'RealEstateCatalog/1.0 (bmn.su)',
+                },
+                method='POST',
+            )
+            with urllib.request.urlopen(req, timeout=25) as r:
+                result = json.loads(r.read().decode())
+            return result.get('elements', [])
+        except Exception as e:
+            print(f'[osm] Overpass {url} error: {e}, trying fallback...')
+    raise Exception('Все Overpass-серверы недоступны')
 
 
 def _extract_point(el: dict) -> tuple[float, float] | None:
@@ -176,8 +182,8 @@ def load_infra_type(cur, conn, infra_type: str, ql: str) -> dict:
 def handle_osm_load(event: dict, cur, conn) -> dict:
     """
     action=osm_load — загружает или обновляет инфраструктуру Краснодара из OSM.
-    POST {action: 'osm_load', types?: ['tram_stop', 'bus_stop', ...]}
-    Без типов — загружает всё.
+    POST {action: 'osm_load', types?: ['tram_stop', ...]}
+    Рекомендуется передавать один тип за запрос (таймаут функции ~30 сек).
     """
     body = {}
     if event.get('body'):
@@ -187,8 +193,8 @@ def handle_osm_load(event: dict, cur, conn) -> dict:
             pass
 
     requested_types = body.get('types') or list(OSM_QUERIES.keys())
-    # Фильтруем только известные типы
-    types_to_load = [t for t in requested_types if t in OSM_QUERIES]
+    # Фильтруем только известные типы; берём не более 2 за раз во избежание таймаута
+    types_to_load = [t for t in requested_types if t in OSM_QUERIES][:2]
 
     results = []
     for infra_type in types_to_load:
