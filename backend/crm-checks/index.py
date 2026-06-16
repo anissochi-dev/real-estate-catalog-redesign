@@ -432,6 +432,52 @@ def run_check(conn, user, method, qs, body, check_keys=None):
             'results': {r[0]: {'data': r[1], 'from_cache': True, 'cached_at': r[2]} for r in rows}
         })
 
+    # ── Ping / проверка ключей из настроек ───────────────────────────────────
+    if method == 'POST' and body.get('check_type') == 'ping':
+        source = (body.get('sources') or [''])[0]
+        temp_key = body.get('api_key', '').strip()
+        # Используем переданный ключ или из настроек
+        api_key = temp_key or (check_keys or {}).get(source, '')
+        if not api_key:
+            return ok({'results': {source: {'error': 'API-ключ не введён', 'from_cache': False}}})
+
+        if source == 'newdb':
+            # Проверяем через NewDB v2 — простой GET на balance/info
+            ping_result = fetch_newdb_v2('fssp_person', {'lastname': 'Тест'}, api_key)
+            # Ключ рабочий если нет auth-ошибки (400/422 — ок, это значит ключ принят)
+            is_auth_error = 'HTTP 401' in str(ping_result.get('error', '')) or 'HTTP 403' in str(ping_result.get('error', '')) or 'unauthorized' in str(ping_result.get('error', '')).lower()
+            if is_auth_error:
+                return ok({'results': {source: {'error': 'Неверный API-ключ', 'from_cache': False}}})
+            return ok({'results': {source: {'message': 'Ключ принят NewDB API', 'from_cache': False}}})
+
+        elif source == 'zachestny':
+            try:
+                test_url = f"https://zachestnyibiznesapi.ru/paid/data/card?api_key={api_key}&id=7707083893"
+                req = urllib.request.Request(test_url, headers={'User-Agent': 'BizNest CRM/1.0', 'Accept': 'application/json'})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    d = json.loads(resp.read().decode())
+                if d.get('status') == 'error' and 'key' in str(d.get('message', '')).lower():
+                    return ok({'results': {source: {'error': d.get('message', 'Неверный ключ'), 'from_cache': False}}})
+                return ok({'results': {source: {'message': 'Ключ принят', 'from_cache': False}}})
+            except Exception as e:
+                return ok({'results': {source: {'error': str(e)[:100], 'from_cache': False}}})
+
+        elif source == 'bezopasno':
+            try:
+                test_url = f"https://api.bezopasno.org/check?q=test&key={api_key}"
+                req = urllib.request.Request(test_url, headers={'User-Agent': 'BizNest CRM/1.0'})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    json.loads(resp.read().decode())
+                return ok({'results': {source: {'message': 'Ключ принят', 'from_cache': False}}})
+            except urllib.error.HTTPError as e:
+                if e.code in (401, 403):
+                    return ok({'results': {source: {'error': 'Неверный API-ключ', 'from_cache': False}}})
+                return ok({'results': {source: {'message': 'Ключ принят', 'from_cache': False}}})
+            except Exception as e:
+                return ok({'results': {source: {'error': str(e)[:100], 'from_cache': False}}})
+
+        return ok({'results': {source: {'error': 'Неизвестный источник', 'from_cache': False}}})
+
     # ── NewDB v2 — прямой вызов конкретного метода ───────────────────────────
     if method == 'GET' and qs.get('action') == 'newdb_methods':
         return ok({'methods': [
