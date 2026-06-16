@@ -6,11 +6,25 @@ import { formatPrice } from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
 
 const STORAGE_KEY = 'recently_viewed';
+const STORAGE_MONTH_KEY = 'recently_viewed_month';
 const MAX_STORED = 50;
 const SHOW_DEFAULT = 10;
 
+function _clearIfNewMonth() {
+  try {
+    const now = new Date();
+    const current = `${now.getFullYear()}-${now.getMonth()}`;
+    const stored = localStorage.getItem(STORAGE_MONTH_KEY);
+    if (stored !== current) {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.setItem(STORAGE_MONTH_KEY, current);
+    }
+  } catch { /* ignore */ }
+}
+
 export function recordView(property: Property) {
   try {
+    _clearIfNewMonth();
     const stored = getRecentlyViewed();
     const filtered = stored.filter(p => p.id !== property.id);
     const updated = [property, ...filtered].slice(0, MAX_STORED);
@@ -20,6 +34,7 @@ export function recordView(property: Property) {
 
 export function getRecentlyViewed(): Property[] {
   try {
+    _clearIfNewMonth();
     const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
