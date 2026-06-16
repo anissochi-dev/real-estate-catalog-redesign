@@ -98,18 +98,21 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
                         href: `https://wa.me/${agent.phone.replace(/\D/g, '')}`,
                         title: 'WhatsApp',
                         src: 'https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg',
+                        cls: 'w-7 h-7',
                       },
                       {
                         href: `https://t.me/+${agent.phone.replace(/\D/g, '')}`,
                         title: 'Telegram',
                         src: 'https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg',
+                        cls: 'w-5 h-5',
                       },
                       ...(maxChatUrl ? [{
                         href: maxChatUrl,
                         title: 'MAX',
                         src: 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/bucket/dce3958e-1d6b-453c-b9d3-494c86fd2e4d.png',
+                        cls: 'w-7 h-7',
                       }] : []),
-                    ].map(({ href, title, src }) => (
+                    ].map(({ href, title, src, cls }) => (
                       <a
                         key={title}
                         href={href}
@@ -118,7 +121,7 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
                         title={title}
                         className="flex-shrink-0 hover:opacity-75 transition-opacity"
                       >
-                        <img src={src} alt={title} className="w-7 h-7 object-contain" />
+                        <img src={src} alt={title} className={`${cls} object-contain`} />
                       </a>
                     ))}
                   </div>
