@@ -107,6 +107,22 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
                       />
                     </a>
                   )}
+                  {/* Telegram */}
+                  {agent.phone && (
+                    <a
+                      href={`https://t.me/+${agent.phone.replace(/\D/g, '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Написать в Telegram"
+                      className="flex-shrink-0 w-8 h-8 rounded-lg overflow-hidden hover:opacity-80 transition-opacity"
+                    >
+                      <img
+                        src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg"
+                        alt="Telegram"
+                        className="w-full h-full object-contain"
+                      />
+                    </a>
+                  )}
                   {/* MAX */}
                   {maxChatUrl && (
                     <a
