@@ -43,6 +43,7 @@ export const STATUSES: [string, string, string, string][] = [
 ];
 
 export const SOURCE_LABELS: Record<string, string> = {
+  'ai-chat': 'ИИ-чат',
   'property-page': 'Страница объекта',
   'offer-to-lead': 'Предложение объекта',
   'network-tenant': 'Сетевой арендатор',

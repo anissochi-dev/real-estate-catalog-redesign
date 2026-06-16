@@ -83,6 +83,18 @@ export default function LeadDetail({
           <div className="mt-4 p-3 bg-muted/50 rounded-xl text-sm">{active.message}</div>
         )}
 
+        {active.source === 'ai-chat' && (
+          <div className="mt-3 p-3 bg-violet-50 border border-violet-200 rounded-xl flex items-center gap-2.5 text-sm text-violet-800">
+            <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center flex-shrink-0">
+              <Icon name="Bot" size={16} className="text-violet-600" />
+            </div>
+            <div>
+              <div className="font-semibold text-sm">Заявка через ИИ-чат</div>
+              <div className="text-xs text-violet-600 mt-0.5">Клиент написал Максу на странице объекта. Описание запроса — в тексте заявки.</div>
+            </div>
+          </div>
+        )}
+
         {active.status === 'pending' && (
           <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-xl flex items-center justify-between gap-3 flex-wrap">
             <div className="text-sm text-orange-800 flex items-center gap-2">

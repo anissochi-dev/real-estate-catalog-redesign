@@ -107,7 +107,13 @@ export default function LeadsTable({ leads, onOpen, onDelete }: Props) {
                     <Icon name="UserCheck" size={10} /> Брокер
                   </span>
                 )}
-                <span className="text-[11px] text-muted-foreground">{SOURCE_LABELS[l.source] || l.source || '—'}</span>
+                {l.source === 'ai-chat' ? (
+                  <span className="inline-flex items-center gap-1 bg-violet-50 text-violet-700 border border-violet-200 px-2 py-0.5 rounded-full text-[10px] font-semibold">
+                    <Icon name="Bot" size={10} /> ИИ-чат
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-muted-foreground">{SOURCE_LABELS[l.source] || l.source || '—'}</span>
+                )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {l.budget != null && l.budget > 0 && (
@@ -189,9 +195,15 @@ export default function LeadsTable({ leads, onOpen, onDelete }: Props) {
                         <Icon name="UserCheck" size={10} /> Брокер
                       </span>
                     )}
-                    <div className="text-muted-foreground mt-0.5">
-                      {SOURCE_LABELS[l.source] || l.source || '—'}
-                    </div>
+                    {l.source === 'ai-chat' ? (
+                      <span className="inline-flex items-center gap-1 bg-violet-50 text-violet-700 border border-violet-200 px-2 py-0.5 rounded-full text-[10px] font-semibold mt-0.5">
+                        <Icon name="Bot" size={10} /> ИИ-чат
+                      </span>
+                    ) : (
+                      <div className="text-muted-foreground mt-0.5">
+                        {SOURCE_LABELS[l.source] || l.source || '—'}
+                      </div>
+                    )}
                   </td>
                   <td className="px-3 py-2.5">
                     {tp && (
