@@ -78,8 +78,7 @@ def _get_listing(cur, listing_id: int) -> 'dict | None':
     cur.execute(
         f"SELECT id, title, description, price, area, floor, floors_total, "
         f"deal, type, address, city, district, phone "
-        f"FROM {SCHEMA}.listings WHERE id = %s AND is_active = TRUE LIMIT 1",
-        (listing_id,)
+        f"FROM {SCHEMA}.listings WHERE id = {int(listing_id)} AND is_active = TRUE LIMIT 1"
     )
     row = cur.fetchone()
     return dict(row) if row else None
@@ -181,9 +180,9 @@ def _create_lead(cur, conn, listing_id, name: str, phone: str,
     return lead_id
 
 
-def _get_listing_broker(cur, listing_id: int) -> int | None:
+def _get_listing_broker(cur, listing_id) -> 'int | None':
     cur.execute(
-        f"SELECT user_id FROM {SCHEMA}.listings WHERE id = {listing_id} LIMIT 1"
+        f"SELECT user_id FROM {SCHEMA}.listings WHERE id = {int(listing_id)} LIMIT 1"
     )
     row = cur.fetchone()
     return row['user_id'] if row and row.get('user_id') else None
