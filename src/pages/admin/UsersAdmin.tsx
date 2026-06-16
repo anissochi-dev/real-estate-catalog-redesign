@@ -34,6 +34,11 @@ const ROLE_COLORS: Record<string, string> = {
   client: 'bg-slate-100 text-slate-600',
 };
 
+function generatePassword() {
+  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  return Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
+
 export default function UsersAdmin() {
   const { user: me } = useAuth();
   const isAdmin = me?.role === 'admin';
@@ -41,6 +46,8 @@ export default function UsersAdmin() {
   const [editing, setEditing] = useState<(Partial<U> & { password?: string }) | null>(null);
   const [uploading, setUploading] = useState(false);
   const [roleChanging, setRoleChanging] = useState<number | null>(null);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [lastCreated, setLastCreated] = useState<{ email: string; password: string; name: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = () => adminApi.listUsers().then(d => setUsers(d.users));
@@ -71,14 +78,20 @@ export default function UsersAdmin() {
         };
         if (editing.password) payload.password = editing.password;
         await adminApi.updateUser(editing.id, payload);
+        setLastCreated(null);
       } else {
         await adminApi.createUser({
           email: editing.email,
           name: editing.name,
-          role: editing.role || 'client',
+          role: editing.role || 'broker',
           password: editing.password,
           phone: editing.phone,
           avatar: editing.avatar,
+        });
+        setLastCreated({
+          email: editing.email || '',
+          password: editing.password || '',
+          name: editing.name || '',
         });
       }
       setEditing(null);
@@ -86,6 +99,14 @@ export default function UsersAdmin() {
     } catch (e: unknown) {
       alert((e instanceof Error ? e.message : 'Ошибка'));
     }
+  };
+
+  const copyInvite = (email: string, password: string, name: string, id?: number) => {
+    const url = window.location.origin;
+    const text = `Добро пожаловать, ${name}!\n\nВаши данные для входа:\nСайт: ${url}\nЛогин: ${email}\nПароль: ${password}\n\nДля входа нажмите «Войти» на сайте.`;
+    navigator.clipboard.writeText(text).then(() => {
+      if (id) { setCopiedId(id); setTimeout(() => setCopiedId(null), 2000); }
+    });
   };
 
   const handleAvatar = async (file: File) => {
@@ -104,11 +125,31 @@ export default function UsersAdmin() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div className="text-sm text-muted-foreground">Всего: {users.length}</div>
-        <button onClick={() => setEditing({ role: 'client', is_active: true })}
+        <button onClick={() => { setLastCreated(null); setEditing({ role: 'broker', is_active: true }); }}
           className="btn-blue text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2">
           <Icon name="UserPlus" size={16} /> Добавить
         </button>
       </div>
+
+      {lastCreated && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
+          <Icon name="CheckCircle2" size={20} className="text-emerald-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-emerald-800 text-sm mb-1">Брокер создан успешно!</div>
+            <div className="text-xs text-emerald-700 space-y-0.5">
+              <div>Логин: <span className="font-mono font-semibold">{lastCreated.email}</span></div>
+              <div>Пароль: <span className="font-mono font-semibold">{lastCreated.password}</span></div>
+            </div>
+          </div>
+          <button
+            onClick={() => copyInvite(lastCreated.email, lastCreated.password, lastCreated.name)}
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors"
+          >
+            <Icon name="Copy" size={13} />
+            Скопировать приглашение
+          </button>
+        </div>
+      )}
 
       <>
       {/* Мобильный вид */}
@@ -224,9 +265,18 @@ export default function UsersAdmin() {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <button onClick={() => setEditing(u)} className="text-brand-blue hover:text-brand-blue/70">
-                    <Icon name="Pencil" size={16} />
-                  </button>
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => copyInvite(u.email, '••••••', u.name, u.id)}
+                      title="Скопировать приглашение (без пароля)"
+                      className="text-muted-foreground hover:text-emerald-600 transition-colors"
+                    >
+                      <Icon name={copiedId === u.id ? 'Check' : 'Copy'} size={15} />
+                    </button>
+                    <button onClick={() => setEditing(u)} className="text-brand-blue hover:text-brand-blue/70">
+                      <Icon name="Pencil" size={16} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -306,9 +356,25 @@ export default function UsersAdmin() {
                 onChange={e => setEditing({ ...editing, role: e.target.value as Role })}>
                 {ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
               </select>
-              <input className="w-full px-3 py-2 border rounded-lg" type="password"
-                placeholder={editing.id ? 'Новый пароль (если меняем)' : 'Пароль'}
-                value={editing.password || ''} onChange={e => setEditing({ ...editing, password: e.target.value })} />
+              <div className="space-y-1">
+                <div className="flex gap-2">
+                  <input className="flex-1 px-3 py-2 border rounded-lg font-mono text-sm" type="text"
+                    placeholder={editing.id ? 'Новый пароль (если меняем)' : 'Пароль'}
+                    value={editing.password || ''} onChange={e => setEditing({ ...editing, password: e.target.value })} />
+                  <button
+                    type="button"
+                    onClick={() => setEditing({ ...editing, password: generatePassword() })}
+                    title="Сгенерировать пароль"
+                    className="px-3 py-2 rounded-lg border border-border hover:bg-muted transition-colors text-sm flex items-center gap-1.5 text-muted-foreground hover:text-foreground whitespace-nowrap"
+                  >
+                    <Icon name="Shuffle" size={14} />
+                    Сгенерировать
+                  </button>
+                </div>
+                {!editing.id && editing.password && (
+                  <p className="text-[11px] text-muted-foreground pl-1">Запомните или скопируйте пароль — после сохранения он не отображается</p>
+                )}
+              </div>
               {editing.id && (
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <input type="checkbox" checked={!!editing.is_active}
