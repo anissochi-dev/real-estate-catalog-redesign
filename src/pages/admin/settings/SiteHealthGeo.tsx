@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
 const GEO_URL = 'https://functions.poehali.dev/94f11c58-4ec2-4d37-9918-69d86bfb02b8';
@@ -40,6 +40,8 @@ export default function SiteHealthGeo() {
   const [loadResult, setLoadResult] = useState<LoadResult | null>(null);
   const [selectedTypes, setSelectedTypes] = useState<string[]>(OSM_TYPES.map(t => t.key));
 
+  useEffect(() => { loadStats(); }, []);
+
   const loadStats = async () => {
     setStatsLoading(true);
     try {
@@ -57,6 +59,7 @@ export default function SiteHealthGeo() {
     setLoadingTypes(typesToLoad);
     setLoadResult(null);
     const allResults: LoadResult['results'] = [];
+    const totalInDb: Record<string, number> = {};
     let totalLoaded = 0;
 
     try {
@@ -75,12 +78,15 @@ export default function SiteHealthGeo() {
             const loaded = r.results.reduce((s: number, x: { loaded?: number }) => s + (x.loaded || 0), 0);
             totalLoaded += loaded;
           }
+          if (r.total_in_db) {
+            Object.assign(totalInDb, r.total_in_db);
+          }
         } catch {
           allResults.push({ type: infra_type, status: 'error', error: 'Timeout или сетевая ошибка' });
         }
       }
 
-      setLoadResult({ results: allResults, total_in_db: {} });
+      setLoadResult({ results: allResults, total_in_db: totalInDb });
       toast.success(`Загружено ${totalLoaded} объектов из OpenStreetMap`);
       loadStats();
     } catch {
@@ -255,7 +261,9 @@ export default function SiteHealthGeo() {
             ))}
           </div>
           <div className="mt-3 text-sm text-muted-foreground">
-            Итого в базе: {Object.values(loadResult.total_in_db || {}).reduce((a: number, b) => a + (b as number), 0)} объектов
+            Итого в базе: <span className="font-semibold text-foreground">
+              {stats ? stats.total.toLocaleString('ru') : Object.values(loadResult.total_in_db || {}).reduce((a: number, b) => a + (b as number), 0)}
+            </span> объектов
           </div>
         </div>
       )}
