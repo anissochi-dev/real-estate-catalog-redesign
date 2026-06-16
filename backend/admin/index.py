@@ -168,16 +168,83 @@ def _load_permissions(cur):
     return None
 
 
+STAFF_ROLES = ('admin', 'director', 'manager', 'editor', 'broker', 'office_manager')
+
+# Ресурсы доступные всем сотрудникам на чтение
+STAFF_READ_RESOURCES = (
+    'stats', 'listing_comments', 'listing_history', 'listing_stats',
+    'listing_documents', 'ai_inpaint',
+)
+
+# Встроенные права по умолчанию (fallback если role_permissions не настроены в БД)
+FALLBACK_PERMS = {
+    'director': {
+        'stats':            ['read'],
+        'listings':         ['read', 'create', 'update', 'delete'],
+        'leads':            ['read', 'create', 'update', 'delete'],
+        'phones':           ['read', 'create', 'update', 'delete'],
+        'pages':            ['read', 'create', 'update'],
+        'settings':         ['read', 'update'],
+        'users':            ['read', 'create', 'update'],
+        'crm-kanban':       ['read', 'create', 'update', 'delete'],
+        'crm-gamification': ['read'],
+        'crm-checks':       ['read', 'create'],
+        'crm-payments':     ['read', 'create', 'update'],
+    },
+    'manager': {
+        'stats':            ['read'],
+        'listings':         ['read', 'create', 'update', 'delete'],
+        'leads':            ['read', 'create', 'update', 'delete'],
+        'phones':           ['read', 'create', 'update'],
+        'cities':           ['read'],
+        'purposes':         ['read'],
+        'xml_feeds':        ['read'],
+        'land_vri':         ['read'],
+        'crm-kanban':       ['read', 'create', 'update'],
+        'crm-gamification': ['read'],
+        'crm-checks':       ['read'],
+        'crm-payments':     ['read'],
+    },
+    'editor': {
+        'stats':            ['read'],
+        'listings':         ['read', 'create', 'update'],
+        'leads':            ['read'],
+        'pages':            ['read', 'create', 'update'],
+        'settings':         ['read', 'update'],
+        'phones':           ['read', 'create', 'update'],
+        'cities':           ['read', 'create', 'update'],
+        'purposes':         ['read', 'create', 'update'],
+        'xml_feeds':        ['read', 'create', 'update'],
+        'land_vri':         ['read', 'create', 'update'],
+    },
+    'broker': {
+        'stats':            ['read'],
+        'listings':         ['read', 'create', 'update'],
+        'leads':            ['read', 'create'],
+        'phones':           ['read', 'create'],
+        'crm-kanban':       ['read', 'create', 'update'],
+        'crm-gamification': ['read'],
+        'crm-checks':       ['read'],
+    },
+    'office_manager': {
+        'stats':            ['read'],
+        'listings':         ['read'],
+        'leads':            ['read', 'create', 'update'],
+        'phones':           ['read', 'create', 'update'],
+        'crm-kanban':       ['read', 'create', 'update'],
+        'crm-payments':     ['read', 'create'],
+    },
+    'client': {
+        'leads': ['create'],
+    },
+}
+
+
 def _can(role, resource, op, permissions=None):
     if role == 'admin':
         return True
-    # Сабресурсы listing_comments/listing_history/listing_stats доступны всем сотрудникам
-    # на чтение и запись. Финальная проверка идёт внутри обработчиков (например, чат
-    # комментариев — только для команды объекта).
-    if resource in ('listing_comments', 'listing_history', 'listing_stats', 'listing_documents', 'ai_inpaint'):
-        if role in ('director', 'broker', 'office_manager', 'manager', 'editor'):
-            return True
-    if role == 'admin':
+    # Сабресурсы доступны всем сотрудникам
+    if resource in STAFF_READ_RESOURCES and role in STAFF_ROLES:
         return True
     # Проверка через кастомные права из БД
     if permissions and role in permissions:
@@ -190,23 +257,13 @@ def _can(role, resource, op, permissions=None):
             return bool(role_perms[section_key].get(op, False))
         return False
     # Fallback — встроенные права
-    if role == 'manager':
-        if resource in ('cities', 'purposes', 'xml_feeds', 'land_vri'):
-            return op == 'read'
-        return resource in ('listings', 'leads') and op in ('read', 'create', 'update', 'delete')
-    if role == 'editor':
-        if resource == 'listings':
-            return op in ('read', 'create', 'update')
-        if resource in ('pages', 'settings'):
-            return op in ('read', 'update')
-        if resource in ('cities', 'purposes', 'xml_feeds', 'land_vri'):
-            return op in ('read', 'create', 'update')
-        if resource == 'leads':
-            return op == 'read'
-        return False
-    if role == 'client':
-        return resource == 'leads' and op == 'create'
-    return False
+    fallback = FALLBACK_PERMS.get(role, {})
+    allowed_ops = fallback.get(resource, [])
+    if not allowed_ops:
+        # Проверяем по группе (crm-kanban → crm)
+        section_key = resource.split('-')[0] if '-' in resource else resource
+        allowed_ops = fallback.get(section_key, [])
+    return op in allowed_ops
 
 
 def handler(event, context):

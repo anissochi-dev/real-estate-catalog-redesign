@@ -21,22 +21,22 @@ interface Props {
 const CRM_ROLES = ['admin', 'director', 'broker', 'office_manager', 'manager'];
 
 const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; group?: string }[] = [
-  { id: 'dashboard', label: 'Дашборд', icon: 'LayoutDashboard', roles: ['admin', 'editor', 'manager'] },
-  { id: 'listings', label: 'Объекты', icon: 'Building2', roles: ['admin', 'editor', 'manager'] },
-  { id: 'leads', label: 'Заявки', icon: 'Inbox', roles: ['admin', 'editor', 'manager'] },
-  { id: 'users', label: 'Пользователи', icon: 'Users', roles: ['admin'] },
-  { id: 'news', label: 'Новости', icon: 'Newspaper', roles: ['admin', 'editor', 'manager', 'director'] },
-  { id: 'seo', label: 'SEO', icon: 'TrendingUp', roles: ['admin', 'editor'] },
-  { id: 'districts', label: 'Районы', icon: 'MapPin', roles: ['admin', 'editor'] },
-  { id: 'vb-knowledge', label: 'База знаний ВБ', icon: 'Brain', roles: ['admin', 'editor', 'director'] },
-  { id: 'marketing', label: 'Маркетолог', icon: 'Megaphone', roles: ['admin', 'editor', 'manager', 'director'] },
-  { id: 'market-import', label: 'Импорт рынка', icon: 'Upload', roles: ['admin', 'editor'] },
-  { id: 'settings', label: 'Настройки', icon: 'Settings', roles: ['admin', 'editor'] },
-  { id: 'phones', label: 'Телефонная база', icon: 'Phone', roles: ['admin', 'editor', 'manager'] },
-  { id: 'crm-kanban', label: 'Воронка сделок', icon: 'KanbanSquare', roles: ['admin', 'director'], group: 'crm' },
-  { id: 'crm-gamification', label: 'Рейтинг команды', icon: 'Trophy', roles: CRM_ROLES, group: 'crm' },
-  { id: 'crm-checks', label: 'Проверки', icon: 'ShieldCheck', roles: CRM_ROLES, group: 'crm' },
-  { id: 'crm-payments', label: 'Платежи', icon: 'CreditCard', roles: CRM_ROLES, group: 'crm' },
+  { id: 'dashboard',       label: 'Дашборд',          icon: 'LayoutDashboard', roles: ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'] },
+  { id: 'listings',        label: 'Объекты',           icon: 'Building2',       roles: ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'] },
+  { id: 'leads',           label: 'Заявки',            icon: 'Inbox',           roles: ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'] },
+  { id: 'users',           label: 'Пользователи',      icon: 'Users',           roles: ['admin', 'director'] },
+  { id: 'news',            label: 'Новости',           icon: 'Newspaper',       roles: ['admin', 'editor', 'manager', 'director'] },
+  { id: 'seo',             label: 'SEO',               icon: 'TrendingUp',      roles: ['admin', 'editor'] },
+  { id: 'districts',       label: 'Районы',            icon: 'MapPin',          roles: ['admin', 'editor'] },
+  { id: 'vb-knowledge',    label: 'База знаний ВБ',   icon: 'Brain',           roles: ['admin', 'editor', 'director'] },
+  { id: 'marketing',       label: 'Маркетолог',        icon: 'Megaphone',       roles: ['admin', 'editor', 'manager', 'director'] },
+  { id: 'market-import',   label: 'Импорт рынка',     icon: 'Upload',          roles: ['admin', 'editor'] },
+  { id: 'settings',        label: 'Настройки',         icon: 'Settings',        roles: ['admin', 'editor'] },
+  { id: 'phones',          label: 'Телефонная база',   icon: 'Phone',           roles: ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'] },
+  { id: 'crm-kanban',      label: 'Воронка сделок',   icon: 'KanbanSquare',    roles: CRM_ROLES, group: 'crm' },
+  { id: 'crm-gamification',label: 'Рейтинг команды',  icon: 'Trophy',          roles: CRM_ROLES, group: 'crm' },
+  { id: 'crm-checks',      label: 'Проверки',          icon: 'ShieldCheck',     roles: CRM_ROLES, group: 'crm' },
+  { id: 'crm-payments',    label: 'Платежи',           icon: 'CreditCard',      roles: CRM_ROLES, group: 'crm' },
 ];
 
 const SOCIAL_PARSER_URL = 'https://functions.poehali.dev/5d1bb364-c893-4d73-a003-e119069371ff';

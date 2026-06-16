@@ -3,6 +3,7 @@ import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import CrmDashboard from './crm/CrmDashboard';
 import CrmCalendar from './crm/CrmCalendar';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Stats {
   listings_active: number;
@@ -37,6 +38,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function Dashboard({ setSection }: { setSection?: (s: string) => void }) {
+  const { user } = useAuth();
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState('');
 
@@ -50,16 +52,18 @@ export default function Dashboard({ setSection }: { setSection?: (s: string) => 
   if (error) return <div className="text-red-600">{error}</div>;
   if (!stats) return <div>Загрузка...</div>;
 
+  const canSeeUsers = user && ['admin', 'director'].includes(user.role);
+
   const cards = [
-    { label: 'Активных объектов', value: stats.listings_active, icon: 'Building2', color: 'from-brand-blue to-brand-blue-dark' },
-    { label: 'Всего лидов', value: stats.leads_total, icon: 'Inbox', color: 'from-brand-orange to-orange-600' },
-    { label: 'Новых лидов', value: stats.leads_new, icon: 'BellRing', color: 'from-emerald-500 to-emerald-700' },
-    { label: 'Пользователей', value: stats.users_total, icon: 'Users', color: 'from-violet-500 to-violet-700' },
-  ];
+    { label: 'Активных объектов', value: stats.listings_active, icon: 'Building2', color: 'from-brand-blue to-brand-blue-dark', show: true },
+    { label: 'Всего лидов', value: stats.leads_total, icon: 'Inbox', color: 'from-brand-orange to-orange-600', show: true },
+    { label: 'Новых лидов', value: stats.leads_new, icon: 'BellRing', color: 'from-emerald-500 to-emerald-700', show: true },
+    { label: 'Пользователей', value: stats.users_total, icon: 'Users', color: 'from-violet-500 to-violet-700', show: !!canSeeUsers },
+  ].filter(c => c.show);
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={`grid gap-4 ${cards.length === 4 ? 'grid-cols-2 lg:grid-cols-4' : cards.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
         {cards.map(c => (
           <div
             key={c.label}
