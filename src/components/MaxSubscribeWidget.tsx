@@ -49,6 +49,8 @@ export default function MaxSubscribeWidget({
   const [phone, setPhone] = useState('');
   const [selectedCats, setSelectedCats] = useState<string[]>(initialCategories);
   const [dealType, setDealType] = useState(initialDealType);
+  const [priceMin, setPriceMin] = useState('');
+  const [priceMax, setPriceMax] = useState('');
   const [code, setCode] = useState('');
   const [verifyCode, setVerifyCode] = useState('');
   const [loading, setLoading] = useState(false);
@@ -58,6 +60,31 @@ export default function MaxSubscribeWidget({
   const toggleCat = (v: string) =>
     setSelectedCats(prev => prev.includes(v) ? prev.filter(c => c !== v) : [...prev, v]);
 
+  // Форматирование телефона: +7 (999) 000-00-00
+  const formatPhone = (raw: string) => {
+    const digits = raw.replace(/\D/g, '');
+    const d = digits.startsWith('8') ? '7' + digits.slice(1) : digits;
+    if (d.length === 0) return '';
+    if (d.length <= 1) return '+7';
+    if (d.length <= 4) return `+7 (${d.slice(1)}`;
+    if (d.length <= 7) return `+7 (${d.slice(1, 4)}) ${d.slice(4)}`;
+    if (d.length <= 9) return `+7 (${d.slice(1, 4)}) ${d.slice(4, 7)}-${d.slice(7)}`;
+    return `+7 (${d.slice(1, 4)}) ${d.slice(4, 7)}-${d.slice(7, 9)}-${d.slice(9, 11)}`;
+  };
+
+  const handlePhoneChange = (raw: string) => {
+    setPhone(formatPhone(raw));
+  };
+
+  // Форматирование цены с пробелами: 1 500 000
+  const formatPriceInput = (raw: string) => {
+    const digits = raw.replace(/\D/g, '');
+    return digits ? Number(digits).toLocaleString('ru') : '';
+  };
+
+  const parsePriceInput = (formatted: string) =>
+    formatted.replace(/\s/g, '').replace(/\D/g, '');
+
   const handleSubscribe = async () => {
     setError('');
     setLoading(true);
@@ -65,7 +92,15 @@ export default function MaxSubscribeWidget({
       const res = await fetch(SUB_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'subscribe', phone, categories: selectedCats, deal_type: dealType, city }),
+        body: JSON.stringify({
+          action: 'subscribe',
+          phone,
+          categories: selectedCats,
+          deal_type: dealType,
+          city,
+          price_min: parsePriceInput(priceMin) || undefined,
+          price_max: parsePriceInput(priceMax) || undefined,
+        }),
       });
       const d = await res.json();
       if (d.error) { setError(d.error); return; }
@@ -203,16 +238,49 @@ export default function MaxSubscribeWidget({
                     </div>
                   </div>
 
+                  {/* Цена */}
+                  <div>
+                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                      Бюджет <span className="font-normal normal-case text-muted-foreground/70">(необязательно)</span>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <div className="relative flex-1">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={priceMin}
+                          onChange={e => setPriceMin(formatPriceInput(e.target.value))}
+                          placeholder="От, ₽"
+                          className="w-full pl-3 pr-7 py-2.5 border border-border rounded-xl text-sm outline-none focus:border-brand-blue transition-colors"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">₽</span>
+                      </div>
+                      <span className="text-muted-foreground text-sm flex-shrink-0">—</span>
+                      <div className="relative flex-1">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={priceMax}
+                          onChange={e => setPriceMax(formatPriceInput(e.target.value))}
+                          placeholder="До, ₽"
+                          className="w-full pl-3 pr-7 py-2.5 border border-border rounded-xl text-sm outline-none focus:border-brand-blue transition-colors"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">₽</span>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Телефон */}
                   <div>
                     <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Номер телефона</div>
                     <input
                       type="tel"
                       value={phone}
-                      onChange={e => setPhone(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && phone.trim() && handleSubscribe()}
+                      onChange={e => handlePhoneChange(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && phone.length >= 16 && handleSubscribe()}
                       placeholder="+7 (999) 000-00-00"
-                      className="w-full px-3 py-2.5 border border-border rounded-xl text-sm outline-none focus:border-brand-blue transition-colors"
+                      maxLength={18}
+                      className="w-full px-3 py-2.5 border border-border rounded-xl text-sm outline-none focus:border-brand-blue transition-colors tracking-wide"
                     />
                   </div>
 
@@ -230,7 +298,7 @@ export default function MaxSubscribeWidget({
 
                   <button
                     onClick={handleSubscribe}
-                    disabled={loading || !phone.trim()}
+                    disabled={loading || phone.length < 16}
                     className="w-full btn-blue text-white py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     {loading

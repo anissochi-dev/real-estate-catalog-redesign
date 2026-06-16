@@ -122,6 +122,10 @@ def handler(event: dict, context) -> dict:
                     categories = [c.strip() for c in categories.split(',') if c.strip()]
                 deal_type = body.get('deal_type') or 'all'
                 city = body.get('city') or 'Краснодар'
+                price_min = body.get('price_min')
+                price_max = body.get('price_max')
+                price_min_int = int(price_min) if price_min and str(price_min).isdigit() else None
+                price_max_int = int(price_max) if price_max and str(price_max).isdigit() else None
 
                 bot_token = _load_max_token(cur)
                 if not bot_token:
@@ -145,10 +149,14 @@ def handler(event: dict, context) -> dict:
                 if existing and existing.get('verify_attempts', 0) >= 5:
                     return _err('Слишком много попыток. Попробуйте через час.')
 
+                price_min_sql = str(price_min_int) if price_min_int is not None else 'NULL'
+                price_max_sql = str(price_max_int) if price_max_int is not None else 'NULL'
+
                 if existing:
                     cur.execute(
                         f"UPDATE {SCHEMA}.phone_subscriptions SET "
                         f"categories = '{safe_cats}', deal_type = '{safe_deal}', city = '{safe_city}', "
+                        f"price_min = {price_min_sql}, price_max = {price_max_sql}, "
                         f"verify_code = '{code}', verify_expires_at = '{expires}', "
                         f"verify_attempts = verify_attempts + 1, is_active = TRUE "
                         f"WHERE phone = '{safe_phone}'"
@@ -156,8 +164,8 @@ def handler(event: dict, context) -> dict:
                 else:
                     cur.execute(
                         f"INSERT INTO {SCHEMA}.phone_subscriptions "
-                        f"(phone, categories, deal_type, city, verify_code, verify_expires_at, verify_attempts) "
-                        f"VALUES ('{safe_phone}', '{safe_cats}', '{safe_deal}', '{safe_city}', '{code}', '{expires}', 1)"
+                        f"(phone, categories, deal_type, city, price_min, price_max, verify_code, verify_expires_at, verify_attempts) "
+                        f"VALUES ('{safe_phone}', '{safe_cats}', '{safe_deal}', '{safe_city}', {price_min_sql}, {price_max_sql}, '{code}', '{expires}', 1)"
                     )
                 conn.commit()
 
