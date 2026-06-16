@@ -64,13 +64,13 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
               </div>
               <div className="flex items-center gap-2">
                 <a href={`tel:${agent.phone}`}
-                  className="inline-flex items-center gap-2 text-lg font-bold text-[#25a244] hover:underline flex-1 min-w-0">
+                  className="inline-flex items-center gap-2 text-lg font-bold text-[#1a7a32] hover:underline flex-1 min-w-0">
                   <Icon name="Phone" size={18} className="flex-shrink-0" />
                   <span className="truncate">{formatPhone(agent.phone)}</span>
                 </a>
                 <button
                   onClick={() => setChatOpen(true)}
-                  className="flex-shrink-0 inline-flex items-center gap-2 text-lg font-bold text-[#25a244] hover:underline"
+                  className="flex-shrink-0 inline-flex items-center gap-2 text-lg font-bold text-[#1a7a32] hover:underline"
                 >
                   <Icon name="MessageCircle" size={18} className="flex-shrink-0" />
                   Написать
