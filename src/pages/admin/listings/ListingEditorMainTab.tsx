@@ -11,11 +11,12 @@ interface Props {
   onGenerateTitle?: () => void;
   aiTitleLoading?: boolean;
   purposes?: Purpose[];
+  canEditOwner?: boolean;
 }
 
 const MAX_PURPOSES = 10;
 
-export default function ListingEditorMainTab({ editing, setEditing, errors, setErrors, onGenerateTitle, aiTitleLoading, purposes }: Props) {
+export default function ListingEditorMainTab({ editing, setEditing, errors, setErrors, onGenerateTitle, aiTitleLoading, purposes, canEditOwner = true }: Props) {
   // Список назначений: из БД (если передан) или хардкод как запасной вариант
   const purposeNames = purposes && purposes.length > 0
     ? purposes.filter(p => p.is_active !== false).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).map(p => p.name)
@@ -197,40 +198,49 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
       </div>
 
       {/* Собственник */}
-      <div className="border-t border-border pt-4">
-        <div className="text-sm font-semibold mb-3">Собственник</div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div {...errWrap('owner_name')}>
-            <label className="text-xs text-muted-foreground">Имя *</label>
-            <input className={`w-full px-3 py-2 border rounded-lg ${err('owner_name')}`}
-              value={editing.owner_name || ''}
-              onChange={e => { setEditing({ ...editing, owner_name: e.target.value }); setErrors(v => ({ ...v, owner_name: false })); }} />
-            {errMsg('owner_name', 'Введите имя собственника')}
-          </div>
-          <div {...errWrap('owner_phone')}>
-            <label className="text-xs text-muted-foreground">Телефон *</label>
-            <PhonePickerInput
-              value={editing.owner_phone || ''}
-              onChange={(phone, name, phoneContactId) => {
-                const update: Partial<typeof editing> = { owner_phone: phone };
-                if (name) update.owner_name = name;
-                if (phoneContactId) (update as Record<string, unknown>).owner_phone_contact_id = phoneContactId;
-                setEditing({ ...editing, ...update });
-                setErrors(v => ({ ...v, owner_phone: false }));
-              }}
-              onNameChange={name => { if (!editing.owner_name) setEditing({ ...editing, owner_name: name }); }}
-            />
-            {errMsg('owner_phone', 'Введите телефон собственника')}
-          </div>
-          <div className="sm:col-start-2">
-            <label className="text-xs text-muted-foreground">Доп. телефон</label>
-            <PhonePickerInput
-              value={(editing as Record<string, unknown>).owner_phone2 as string || ''}
-              onChange={phone => setEditing({ ...editing, owner_phone2: phone } as typeof editing)}
-            />
+      {canEditOwner ? (
+        <div className="border-t border-border pt-4">
+          <div className="text-sm font-semibold mb-3">Собственник</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div {...errWrap('owner_name')}>
+              <label className="text-xs text-muted-foreground">Имя *</label>
+              <input className={`w-full px-3 py-2 border rounded-lg ${err('owner_name')}`}
+                value={editing.owner_name || ''}
+                onChange={e => { setEditing({ ...editing, owner_name: e.target.value }); setErrors(v => ({ ...v, owner_name: false })); }} />
+              {errMsg('owner_name', 'Введите имя собственника')}
+            </div>
+            <div {...errWrap('owner_phone')}>
+              <label className="text-xs text-muted-foreground">Телефон *</label>
+              <PhonePickerInput
+                value={editing.owner_phone || ''}
+                onChange={(phone, name, phoneContactId) => {
+                  const update: Partial<typeof editing> = { owner_phone: phone };
+                  if (name) update.owner_name = name;
+                  if (phoneContactId) (update as Record<string, unknown>).owner_phone_contact_id = phoneContactId;
+                  setEditing({ ...editing, ...update });
+                  setErrors(v => ({ ...v, owner_phone: false }));
+                }}
+                onNameChange={name => { if (!editing.owner_name) setEditing({ ...editing, owner_name: name }); }}
+              />
+              {errMsg('owner_phone', 'Введите телефон собственника')}
+            </div>
+            <div className="sm:col-start-2">
+              <label className="text-xs text-muted-foreground">Доп. телефон</label>
+              <PhonePickerInput
+                value={(editing as Record<string, unknown>).owner_phone2 as string || ''}
+                onChange={phone => setEditing({ ...editing, owner_phone2: phone } as typeof editing)}
+              />
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="border-t border-border pt-4">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Icon name="Lock" size={14} />
+            Контакты собственника доступны только администратору и директору.
+          </div>
+        </div>
+      )}
     </div>
   );
 }

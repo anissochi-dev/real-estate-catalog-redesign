@@ -72,6 +72,18 @@ export default function ListingInternalCard({ listingId, onClose, onBrokerChange
   const catLabel = CATS.find(c => c[0] === listing.category)?.[1] || listing.category;
   const dealLabel = DEALS.find(d => d[0] === listing.deal)?.[1] || listing.deal;
 
+  const isAdminOrDirector = user && ['admin', 'director'].includes(user.role);
+  const isOwnBroker = user?.role === 'broker' && (
+    listing.broker_id === user.id ||
+    (listing as Record<string, unknown>).author_id === user.id
+  );
+  const canManageBroker = isAdminOrDirector;
+
+  // Вкладка «Брокер» — только admin/director
+  const visibleMoreTabs: TabId[] = MORE_TABS.filter(t => t !== 'broker' || !!canManageBroker);
+
+  void isOwnBroker;
+
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl">
@@ -147,18 +159,18 @@ export default function ListingInternalCard({ listingId, onClose, onBrokerChange
             <button
               onClick={() => setMoreOpen(v => !v)}
               className={`flex flex-col sm:flex-row items-center gap-0.5 sm:gap-1.5 px-2 sm:px-3 py-2 sm:py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors h-full ${
-                MORE_TABS.includes(tab)
+                visibleMoreTabs.includes(tab)
                   ? 'border-brand-blue text-brand-blue'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
               <Icon name="MoreHorizontal" size={15} />
-              <span>{MORE_TABS.includes(tab) ? (TABS.find(t => t.id === tab)?.label ?? 'Ещё') : 'Ещё'}</span>
+              <span>{visibleMoreTabs.includes(tab) ? (TABS.find(t => t.id === tab)?.label ?? 'Ещё') : 'Ещё'}</span>
             </button>
 
             {moreOpen && (
               <div className="absolute right-0 top-full mt-1 bg-white border border-border rounded-xl shadow-lg z-50 py-1 min-w-[160px]">
-                {TABS.filter(t => MORE_TABS.includes(t.id)).map(t => (
+                {TABS.filter(t => visibleMoreTabs.includes(t.id)).map(t => (
                   <button
                     key={t.id}
                     onClick={() => { setTab(t.id); setMoreOpen(false); }}

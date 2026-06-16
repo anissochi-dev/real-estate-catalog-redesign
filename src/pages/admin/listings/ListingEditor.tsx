@@ -9,6 +9,7 @@ import ListingEditorMainTab from './ListingEditorMainTab';
 import ListingEditorPhotosTab from './ListingEditorPhotosTab';
 import ListingEditorFooter from './ListingEditorFooter';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { geocodeAddress } from '@/lib/yandexGeocode';
 
 interface Props {
@@ -54,7 +55,16 @@ export default function ListingEditor({
   const [coordsManual, setCoordsManual] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
   const { settings } = useSettings();
+  const { user } = useAuth();
   const yandexApiKey = settings.yandex_maps_api_key || '';
+
+  // Контакты собственника: admin, director — всегда; broker — только свой объект
+  const canEditOwner = !!user && (
+    ['admin', 'director'].includes(user.role) ||
+    user.role !== 'broker' ||
+    (editing as Record<string, unknown>).broker_id === user.id ||
+    (editing as Record<string, unknown>).author_id === user.id
+  );
 
   // Определяем какие вкладки имеют ошибки
   const tabErrors: Partial<Record<EditorTab, boolean>> = {
@@ -69,8 +79,8 @@ export default function ListingEditor({
   const validate = (): boolean => {
     const e: Record<string, boolean> = {};
     if (!editing.title?.trim()) e.title = true;
-    if (!editing.owner_phone?.trim()) e.owner_phone = true;
-    if (!editing.owner_name?.trim()) e.owner_name = true;
+    if (canEditOwner && !editing.owner_phone?.trim()) e.owner_phone = true;
+    if (canEditOwner && !editing.owner_name?.trim()) e.owner_name = true;
     if (!photos.length) e.photos = true;
     if (!editing.category) e.category = true;
     if (!editing.deal) e.deal = true;
@@ -193,6 +203,7 @@ export default function ListingEditor({
               onGenerateTitle={onGenerateTitle}
               aiTitleLoading={aiTitleLoading}
               purposes={purposes}
+              canEditOwner={canEditOwner}
             />
           )}
 

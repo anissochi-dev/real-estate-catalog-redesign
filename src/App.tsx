@@ -175,14 +175,17 @@ export default function App() {
           localStorage.setItem('retrain_cron_last_ping', String(Date.now()));
           fireCron('https://functions.poehali.dev/e2f1d357-fb83-4fbb-8d8b-6fb063357afc?action=cron');
         }
-        const faqLast = parseInt(localStorage.getItem('faq_batch_cron_last_ping') || '0', 10);
-        if (Date.now() - faqLast > THROTTLE_MS) {
-          localStorage.setItem('faq_batch_cron_last_ping', String(Date.now()));
-          fireCron('https://functions.poehali.dev/282b9c5f-29fa-41ea-bc42-0793bdf8950d', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'batch', limit: 5 }),
-          });
+        const faqToken = localStorage.getItem('biznest_token') || '';
+        if (faqToken) {
+          const faqLast = parseInt(localStorage.getItem('faq_batch_cron_last_ping') || '0', 10);
+          if (Date.now() - faqLast > THROTTLE_MS) {
+            localStorage.setItem('faq_batch_cron_last_ping', String(Date.now()));
+            fireCron('https://functions.poehali.dev/282b9c5f-29fa-41ea-bc42-0793bdf8950d', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Auth-Token': faqToken },
+              body: JSON.stringify({ action: 'batch', limit: 5 }),
+            });
+          }
         }
       } catch { /* ignore */ }
     };
