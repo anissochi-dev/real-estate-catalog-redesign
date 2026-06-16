@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import { Listing, splitImages } from './types';
-
-const REMOVE_WM_URL = 'https://functions.poehali.dev/d86482e4-0555-457a-8063-0d3305c171ff';
+import { REMOVE_WM_URL } from '@/lib/adminApi';
 
 interface Props {
   listing: Listing;

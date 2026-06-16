@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NEWS_URL, getToken } from '@/lib/adminApi';
+import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
 import { NewsItem, Schedule } from './newsAdminTypes';
 import { NewsAdminList } from './NewsAdminList';
@@ -20,13 +21,15 @@ export default function NewsAdmin() {
     fetch(`${NEWS_URL}?action=admin_list`, { headers })
       .then(r => r.json())
       .then(d => setNews(d.news || []))
+      .catch(() => toast.error('Не удалось загрузить новости'))
       .finally(() => setLoading(false));
   };
 
   const loadSchedule = () => {
     fetch(`${NEWS_URL}?action=schedule`, { headers })
       .then(r => r.json())
-      .then(d => { if (d.schedule && d.schedule.id) setSchedule(d.schedule); });
+      .then(d => { if (d.schedule && d.schedule.id) setSchedule(d.schedule); })
+      .catch(() => {});
   };
 
   useEffect(() => { loadNews(); loadSchedule(); }, []);

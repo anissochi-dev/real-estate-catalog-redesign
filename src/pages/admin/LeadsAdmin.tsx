@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { adminApi, aiApi } from '@/lib/adminApi';
+import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
 import { Lead, Comment, Listing, STATUSES, empty } from './leads/leadsTypes';
 import LeadsFilterBar from './leads/LeadsFilterBar';
@@ -21,10 +22,12 @@ export default function LeadsAdmin() {
   const [listingDropOpen, setListingDropOpen] = useState(false);
 
   const load = () =>
-    Promise.all([adminApi.listLeads(), adminApi.listListings()]).then(([l, lg]) => {
-      setLeads(l.leads);
-      setListings(lg.listings.map((x: Listing) => ({ id: x.id, title: x.title })));
-    });
+    Promise.all([adminApi.listLeads(), adminApi.listListings()])
+      .then(([l, lg]) => {
+        setLeads(l.leads);
+        setListings(lg.listings.map((x: Listing) => ({ id: x.id, title: x.title })));
+      })
+      .catch(() => toast.error('Не удалось загрузить заявки'));
 
   useEffect(() => { load(); }, []);
 
@@ -58,7 +61,7 @@ export default function LeadsAdmin() {
         `Клиент: ${active.name}, телефон: ${active.phone}, сообщение: ${active.message || 'без сообщения'}`);
       setAiReply(r.text);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Ошибка');
+      toast.error(e instanceof Error ? e.message : 'Ошибка генерации ответа');
     } finally {
       setAiLoading(false);
     }
@@ -72,15 +75,19 @@ export default function LeadsAdmin() {
       setEditing(null);
       load();
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Ошибка');
+      toast.error(e instanceof Error ? e.message : 'Ошибка сохранения');
     }
   };
 
   const del = async (id: number) => {
     if (!confirm('Удалить лид безвозвратно?')) return;
-    await adminApi.deleteLead(id);
-    if (active?.id === id) setActive(null);
-    load();
+    try {
+      await adminApi.deleteLead(id);
+      if (active?.id === id) setActive(null);
+      load();
+    } catch {
+      toast.error('Не удалось удалить заявку');
+    }
   };
 
   const filtered = leads.filter(l => {

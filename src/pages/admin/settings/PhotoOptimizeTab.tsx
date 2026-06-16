@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { getToken } from '@/lib/adminApi';
+import { getToken, REMOVE_WM_URL } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 
-const REHOST_URL = 'https://functions.poehali.dev/d86482e4-0555-457a-8063-0d3305c171ff';
+const REHOST_URL = REMOVE_WM_URL;
 
 async function rehostReq(params: Record<string, string | number>) {
   const qs = new URLSearchParams(

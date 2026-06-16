@@ -23,7 +23,12 @@ export default function ListingsAdmin() {
     return () => window.removeEventListener('admin:open-listing', handler);
   }, []);
 
-  if (s.loading && s.items.length === 0) return <div>Загрузка...</div>;
+  if (s.loading && s.items.length === 0) return (
+    <div className="flex items-center justify-center py-20 text-muted-foreground gap-2">
+      <Icon name="Loader2" size={18} className="animate-spin" />
+      Загрузка объявлений...
+    </div>
+  );
 
   const hasMore = s.items.length < s.total;
 

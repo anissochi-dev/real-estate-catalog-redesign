@@ -129,6 +129,9 @@ export default function ListingEditorContentSection({
               }} />
           </div>
         )}
+        {descError && (
+          <p className="text-xs text-red-500 mt-0.5">Добавьте описание (минимум 30 символов)</p>
+        )}
         {!descError && descLen > 0 && descLen < 30 && (
           <div className="text-[11px] text-amber-600">
             Ещё {30 - descLen} симв. до минимума.

@@ -49,6 +49,9 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
 
   const err = (field: string) => errors[field] ? 'border-red-400 bg-red-50' : '';
   const errWrap = (field: string) => errors[field] ? { 'data-field-error': 'true' as const } : {};
+  const errMsg = (field: string, msg: string) => errors[field]
+    ? <p className="text-xs text-red-500 mt-0.5">{msg}</p>
+    : null;
 
   return (
     <div className="space-y-4">
@@ -81,6 +84,7 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
             {editing.title?.length || 0}/70
           </span>
         </div>
+        {errMsg('title', 'Введите название объекта')}
         {editing.deal && editing.category && (() => {
           const dealLabels: Record<string, string> = { sale: 'Продажа', rent: 'Аренда', business: 'Готовый бизнес' };
           const catLabels: Record<string, string> = {
@@ -112,6 +116,7 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
             <option value="">— Выберите категорию —</option>
             {CATS.map(c => <option key={c[0]} value={c[0]}>{c[1]}</option>)}
           </select>
+          {errMsg('category', 'Выберите категорию')}
         </div>
         <div {...errWrap('deal')}>
           <label className="text-xs text-muted-foreground">Тип сделки *</label>
@@ -120,6 +125,7 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
             <option value="">— Выберите тип сделки —</option>
             {DEALS.map(d => <option key={d[0]} value={d[0]}>{d[1]}</option>)}
           </select>
+          {errMsg('deal', 'Выберите тип сделки')}
         </div>
         <div {...errWrap('condition')}>
           <label className="text-xs text-muted-foreground">Состояние *</label>
@@ -128,6 +134,7 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
             <option value="">— Не выбрано —</option>
             {CONDITIONS.map(c => <option key={c[0]} value={c[0]}>{c[1]}</option>)}
           </select>
+          {errMsg('condition', 'Выберите состояние')}
         </div>
       </div>
 
@@ -198,6 +205,7 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
             <input className={`w-full px-3 py-2 border rounded-lg ${err('owner_name')}`}
               value={editing.owner_name || ''}
               onChange={e => { setEditing({ ...editing, owner_name: e.target.value }); setErrors(v => ({ ...v, owner_name: false })); }} />
+            {errMsg('owner_name', 'Введите имя собственника')}
           </div>
           <div {...errWrap('owner_phone')}>
             <label className="text-xs text-muted-foreground">Телефон *</label>
@@ -212,6 +220,7 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
               }}
               onNameChange={name => { if (!editing.owner_name) setEditing({ ...editing, owner_name: name }); }}
             />
+            {errMsg('owner_phone', 'Введите телефон собственника')}
           </div>
           <div className="sm:col-start-2">
             <label className="text-xs text-muted-foreground">Доп. телефон</label>

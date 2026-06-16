@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { adminApi, aiApi } from '@/lib/adminApi';
+import { adminApi, aiApi, getToken } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import { Listing, splitImages } from './types';
 import { AiMsg } from './internalCardTypes';
@@ -28,6 +28,7 @@ export function TabAi({ listing }: { listing: Listing }) {
   const [applying, setApplying] = useState<string | null>(null);
   const [asked, setAsked] = useState(false);
   const [marketData, setMarketData] = useState<{ median?: number; min?: number; max?: number; analogs?: number } | undefined>();
+  const [marketLoading, setMarketLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // ── ИИ-анализ ─────────────────────────────────────────────────────────────
@@ -40,9 +41,10 @@ export function TabAi({ listing }: { listing: Listing }) {
 
   useEffect(() => {
     if (!listing.area || !listing.price || !listing.category || !listing.deal) return;
+    setMarketLoading(true);
     fetch(PREDICT_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Auth-Token': getToken() },
       body: JSON.stringify({
         action: 'mela_price_check',
         category: listing.category,
@@ -66,7 +68,8 @@ export function TabAi({ listing }: { listing: Listing }) {
           });
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setMarketLoading(false));
   }, [listing.id]);
 
   const ask = async (text: string) => {
@@ -123,7 +126,7 @@ export function TabAi({ listing }: { listing: Listing }) {
     try {
       const pr = await fetch(PREDICT_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Auth-Token': getToken() },
         body: JSON.stringify({
           action: 'mela_price_check',
           category: listing.category,
@@ -152,7 +155,7 @@ export function TabAi({ listing }: { listing: Listing }) {
     try {
       const res = await fetch(ANALYZE_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Auth-Token': getToken() },
         body: JSON.stringify({
           action: 'analyze_property',
           listing: {
@@ -239,6 +242,12 @@ export function TabAi({ listing }: { listing: Listing }) {
       {activeSection === 'vb' && (
         <div className="flex flex-col" style={{ minHeight: 460 }}>
           <div className="flex-1 overflow-y-auto p-5 space-y-4" style={{ maxHeight: 380 }}>
+            {marketLoading && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-1.5 w-fit">
+                <Icon name="Loader2" size={12} className="animate-spin" />
+                Загружаю рыночные данные...
+              </div>
+            )}
             {messages.length === 0 && loading && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Icon name="Loader2" size={16} className="animate-spin text-brand-orange" />

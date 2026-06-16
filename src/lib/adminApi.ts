@@ -15,10 +15,9 @@ export function reportError(info: { message: string; url?: string; stack?: strin
 }
 export const AI_RETRAIN_URL = 'https://functions.poehali.dev/e2f1d357-fb83-4fbb-8d8b-6fb063357afc';
 const AI_URL = 'https://functions.poehali.dev/34bfc4a2-89b9-4c89-bcbc-d82314730aef';
-const DEVOPS_URL = 'https://functions.poehali.dev/8dc0ef1b-de31-4ede-94b2-c1779c324922';
-const SMART_RUN_URL = 'https://functions.poehali.dev/880b61c2-dbe7-491a-a147-ffd926b3fe73';
+
 const UPLOADS_URL = 'https://functions.poehali.dev/8983c0a8-a8c8-47ff-97ed-59cc1571aa15';
-const REMOVE_WM_URL = 'https://functions.poehali.dev/d86482e4-0555-457a-8063-0d3305c171ff';
+export const REMOVE_WM_URL = 'https://functions.poehali.dev/d86482e4-0555-457a-8063-0d3305c171ff';
 export const CRM_URL = 'https://functions.poehali.dev/221e23fa-e0a4-416e-b878-c2da2914daac';
 
 /** Билдер URL для CRM-функции.
@@ -56,7 +55,6 @@ export function crmUrl(
 export const CRM_CHECKS_URL = 'https://functions.poehali.dev/be6cb907-b50e-48fa-b9e2-092dd541a82a';
 export const CRM_PAYMENTS_URL = 'https://functions.poehali.dev/74ca5694-a05f-4053-992d-5e04cc5bc7a4';
 export const NEWS_URL = 'https://functions.poehali.dev/984cad3a-0783-4408-a614-52ed36f8c77f';
-export const SOCIAL_POST_URL = 'https://functions.poehali.dev/2f8f20f3-5dba-4a58-a1f6-aa6e886f4e5e';
 
 export type Role = 'admin' | 'editor' | 'manager' | 'client' | 'broker' | 'director' | 'office_manager';
 
@@ -519,57 +517,4 @@ export const aiApi = {
       tech_decisions: { date: string; q: string; a: string }[];
       mood: string;
     }>,
-};
-
-/** DevOps-агент: GitHub API — коммиты, issues, Actions, анализ ошибок. */
-export const devopsApi = {
-  call: (action: string, params: Record<string, unknown> = {}) =>
-    req(DEVOPS_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action, params }),
-    }) as Promise<{ ok: boolean; message?: string; error?: string; [key: string]: unknown }>,
-  checkGithub: () => devopsApi.call('check_github'),
-  getCommits: (repo?: string, branch?: string, limit?: number) =>
-    devopsApi.call('get_commits', { ...(repo ? { repo } : {}), ...(branch ? { branch } : {}), ...(limit ? { limit } : {}) }),
-  getIssues: (repo?: string, state: 'open' | 'closed' | 'all' = 'open') =>
-    devopsApi.call('get_issues', { ...(repo ? { repo } : {}), state }),
-  createIssue: (title: string, body?: string, repo?: string, labels?: string[]) =>
-    devopsApi.call('create_issue', { title, ...(body ? { body } : {}), ...(repo ? { repo } : {}), ...(labels ? { labels } : {}) }),
-  getWorkflows: (repo?: string) =>
-    devopsApi.call('get_workflows', { ...(repo ? { repo } : {}) }),
-  getRepoStats: (repo?: string) =>
-    devopsApi.call('get_repo_stats', { ...(repo ? { repo } : {}) }),
-  analyzeErrors: (hours = 24) =>
-    devopsApi.call('analyze_errors', { hours }),
-};
-
-/** Smart Run — умный многошаговый workflow: Страж + Инспектор + Опечатки. */
-export const smartRunApi = {
-  run: () => {
-    const token = getToken();
-    return fetch(SMART_RUN_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { 'X-Auth-Token': token } : {}),
-      },
-      body: JSON.stringify({}),
-    }).then(async res => {
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Ошибка Smart Run');
-      return data as {
-        ok: boolean;
-        severity: 'info' | 'warning' | 'critical';
-        steps: Record<string, unknown>;
-        totals: {
-          threats_found: number;
-          blocked: number;
-          seo_fixed: number;
-          typos_found: number;
-          total_actions: number;
-        };
-        message: string;
-      };
-    });
-  },
 };

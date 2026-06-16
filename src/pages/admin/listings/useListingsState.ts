@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { adminApi, aiApi } from '@/lib/adminApi';
+import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { Listing, City, Purpose, LandVri, empty, detectVideoType, splitImages } from './types';
@@ -66,7 +67,7 @@ export function useListingsState() {
         setPurposes(p.purposes || []);
         setLandVri((v.land_vri || []).filter((x: LandVri) => x.is_active !== false));
       })
-      .catch(() => {})
+      .catch(() => toast.error('Не удалось загрузить объявления'))
       .finally(() => setLoading(false));
   };
 
