@@ -363,18 +363,18 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
                 ) : null}
               </div>
               {agents.filter(a => a.phone)[0] && (
-                <div className="px-4 py-3 border-t border-border flex items-center gap-2">
+                <div className="px-3 py-3 border-t border-border flex items-center gap-2">
                   <a href={`tel:${agents.filter(a => a.phone)[0].phone}`}
-                    className="flex-1 flex items-center justify-center gap-2 bg-brand-blue text-white text-sm font-bold px-4 py-2.5 rounded-xl">
-                    <Icon name="Phone" size={16} />
-                    Позвонить
+                    className="flex-1 flex items-center justify-center gap-1.5 bg-brand-blue text-white text-xs font-bold px-3 py-2.5 rounded-xl min-w-0">
+                    <Icon name="Phone" size={14} className="flex-shrink-0" />
+                    <span className="truncate">Позвонить</span>
                   </a>
                   <button
                     onClick={() => setMobileChatOpen(true)}
-                    className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border-2 border-brand-blue text-brand-blue text-sm font-bold hover:bg-brand-blue/5 transition-colors"
+                    className="flex-1 flex items-center justify-center gap-1.5 border-2 border-brand-blue text-brand-blue text-xs font-bold px-3 py-2.5 rounded-xl min-w-0 hover:bg-brand-blue/5 transition-colors"
                   >
-                    <Icon name="MessageCircle" size={16} />
-                    Написать
+                    <Icon name="MessageCircle" size={14} className="flex-shrink-0" />
+                    <span className="truncate">Написать</span>
                   </button>
                 </div>
               )}
