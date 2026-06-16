@@ -1811,20 +1811,18 @@ def _site_health(cur, conn, method, action, event, user):
     if action == 'fix_seo_titles':
         try:
             cur.execute(
-                f"SELECT id, title FROM {SCHEMA}.listings "
-                f"WHERE status='active' AND (seo_title IS NULL OR seo_title='')"
+                f"SELECT id FROM {SCHEMA}.listings "
+                f"WHERE status='active' AND (seo_title IS NULL OR seo_title='' "
+                f"OR seo_description IS NULL OR seo_description='')"
             )
             rows = cur.fetchall()
             fixed = 0
             for r in rows:
-                title = (r['title'] or 'Объявление')[:70]
-                cur.execute(
-                    f"UPDATE {SCHEMA}.listings SET seo_title='{_safe(title)}' WHERE id={r['id']}"
-                )
+                _auto_seo(cur, r['id'])
                 fixed += 1
             conn.commit()
             return _ok({'success': True, 'fixed': fixed,
-                        'message': f'SEO-заголовки проставлены для {fixed} объявлений'})
+                        'message': f'SEO-теги проставлены для {fixed} объявлений'})
         except Exception as e:
             return _err(500, str(e)[:200])
 
