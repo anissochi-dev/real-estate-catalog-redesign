@@ -69,47 +69,50 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
 
           {/* Представитель собственника */}
           {agent && agent.phone && (
-            <div className="px-4 py-3 border-t border-border">
-              <div className="text-[10px] text-muted-foreground mb-2 uppercase tracking-widest font-semibold">
+            <div className="px-3 py-2.5 border-t border-border">
+              <div className="text-[9px] text-muted-foreground mb-1.5 uppercase tracking-widest font-semibold">
                 Представитель собственника
               </div>
-              <div className="border border-border rounded-xl p-3 space-y-2">
-                {/* Строка телефона + иконка MAX */}
-                <div className="flex items-center gap-2">
-                  <Icon name="Phone" size={16} className="text-brand-blue flex-shrink-0" />
+              <div className="border border-border rounded-lg px-2.5 py-2 space-y-1.5">
+                {/* Телефон + иконка MAX */}
+                <div className="flex items-center gap-1.5">
+                  <Icon name="Phone" size={13} className="text-brand-blue flex-shrink-0" />
                   {phoneRevealed ? (
                     <a href={`tel:${agent.phone}`}
-                      className="text-base font-bold text-brand-blue hover:underline flex-1 min-w-0 truncate">
+                      className="text-sm font-bold text-brand-blue hover:underline flex-1 min-w-0 truncate">
                       {formatPhone(agent.phone)}
                     </a>
                   ) : (
                     <button
                       onClick={() => setPhoneRevealed(true)}
-                      className="text-base font-bold text-brand-blue hover:underline flex-1 min-w-0 text-left"
+                      className="text-sm font-bold text-brand-blue hover:underline flex-1 min-w-0 text-left"
                       title="Нажмите, чтобы показать номер"
                     >
                       {maskedPhone(agent.phone)}
                     </button>
                   )}
-                  {/* Иконка MAX — только иконка, без подписи */}
                   {maxChatUrl && (
                     <a
                       href={maxChatUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       title="Написать в MAX"
-                      className="flex-shrink-0 w-8 h-8 rounded-lg bg-brand-blue/10 hover:bg-brand-blue hover:text-white text-brand-blue flex items-center justify-center transition-colors"
+                      className="flex-shrink-0 w-6 h-6 rounded-md overflow-hidden hover:opacity-80 transition-opacity"
                     >
-                      <Icon name="Send" size={15} />
+                      <img
+                        src="https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/bucket/dce3958e-1d6b-453c-b9d3-494c86fd2e4d.png"
+                        alt="MAX"
+                        className="w-full h-full object-contain"
+                      />
                     </a>
                   )}
                 </div>
-                {/* Кнопка Написать (ИИ-чат) */}
+                {/* Написать (ИИ-чат) */}
                 <button
                   onClick={() => setChatOpen(true)}
-                  className="w-full inline-flex items-center justify-center gap-2 text-sm font-semibold text-brand-blue hover:underline"
+                  className="w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-brand-blue hover:underline"
                 >
-                  <Icon name="MessageCircle" size={15} />
+                  <Icon name="MessageCircle" size={13} />
                   Написать
                 </button>
               </div>
