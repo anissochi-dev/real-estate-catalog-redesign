@@ -90,6 +90,7 @@ export default function ListingsTable({
         const isAdminOrDirector = user?.role && ['admin', 'director'].includes(user.role);
         const isBrokerAuthor = user?.role === 'broker' && (it.author_id === user?.id || it.broker_id === user?.id);
         const showPhone = isAdminOrDirector || isBrokerAuthor;
+        const canEdit = isAdminOrDirector || user?.role !== 'broker' || isBrokerAuthor;
         const isArchived = it.status === 'archived';
 
         return (
@@ -212,13 +213,15 @@ export default function ListingsTable({
                   >
                     <Icon name="ExternalLink" size={14} />
                   </button>
-                  <button
-                    onClick={() => onEdit(it)}
-                    title="Редактировать"
-                    className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-brand-blue/10 hover:text-brand-blue transition-colors"
-                  >
-                    <Icon name="Pencil" size={14} />
-                  </button>
+                  {canEdit && (
+                    <button
+                      onClick={() => onEdit(it)}
+                      title="Редактировать"
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-brand-blue/10 hover:text-brand-blue transition-colors"
+                    >
+                      <Icon name="Pencil" size={14} />
+                    </button>
+                  )}
                   <button
                     onClick={() => onArchive(it.id)}
                     title={isArchived ? 'Восстановить' : 'Архивировать'}

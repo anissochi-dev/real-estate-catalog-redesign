@@ -3,6 +3,7 @@ import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import { Listing, CONDITIONS, PARKING, ENTRANCE, FINISHING, ROAD_LINES, LAND_STATUSES, PROPERTY_RIGHTS, EgrnStoredObject } from './types';
 import { StatData, fmt, translate } from './internalCardTypes';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function Spinner() {
   return (
@@ -191,11 +192,18 @@ function EgrnOverviewBlock({ objects }: { objects: EgrnStoredObject[] }) {
 }
 
 export function TabOverview({ listing, siteUrl }: { listing: Listing; siteUrl?: string }) {
+  const { user } = useAuth();
   const conditionLabel = translate(listing.condition, CONDITIONS);
   const parkingLabel = translate(listing.parking, PARKING);
   const entranceLabel = translate(listing.entrance, ENTRANCE);
   const finishingLabel = translate(listing.finishing ?? null, FINISHING);
   const roadLineLabel = translate(listing.road_line ?? null, ROAD_LINES);
+
+  // Контакты собственника видит: admin, director, broker (только свой объект)
+  const canSeeOwner = user && (
+    ['admin', 'director'].includes(user.role) ||
+    (user.role === 'broker' && (listing.broker_id === user.id || (listing as { author_id?: number | null }).author_id === user.id))
+  );
 
   const headline: OverviewRow[] = [
     { label: 'Цена', value: `${fmt(listing.price)} ₽`, icon: 'Banknote' },
@@ -248,9 +256,9 @@ export function TabOverview({ listing, siteUrl }: { listing: Listing; siteUrl?: 
   const legal: OverviewRow[] = [
     listing.property_rights ? { label: 'Права собственности', value: translate(listing.property_rights, PROPERTY_RIGHTS) } : null,
     listing.broker_commission ? { label: 'Комиссия брокера', value: listing.broker_commission } : null,
-    { label: 'Собственник', value: listing.owner_name || '—' },
-    { label: 'Телефон', value: listing.owner_phone || '—' },
-    listing.owner_phone2 ? { label: 'Доп. телефон', value: listing.owner_phone2 } : null,
+    canSeeOwner ? { label: 'Собственник', value: listing.owner_name || '—' } : null,
+    canSeeOwner ? { label: 'Телефон', value: listing.owner_phone || '—' } : null,
+    canSeeOwner && listing.owner_phone2 ? { label: 'Доп. телефон', value: listing.owner_phone2 } : null,
   ].filter(Boolean) as OverviewRow[];
 
   const siteSlug = listing.slug;

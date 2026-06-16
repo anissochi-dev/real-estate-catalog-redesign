@@ -104,18 +104,26 @@ export default function ListingInternalCard({ listingId, onClose, onBrokerChange
               <Icon name="X" size={18} />
             </button>
           </div>
-          {/* Строка 2: кнопка редактировать */}
-          {onEdit && (
-            <div className="mt-2">
-              <button
-                onClick={() => { onEdit(listing); onClose(); }}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-blue text-white text-sm font-semibold hover:bg-brand-blue/90 transition w-full sm:w-auto justify-center sm:justify-start"
-              >
-                <Icon name="Pencil" size={14} />
-                Редактировать
-              </button>
-            </div>
-          )}
+          {/* Строка 2: кнопка редактировать — только admin, director, брокер своего объекта */}
+          {onEdit && (() => {
+            const canEdit = user && (
+              ['admin', 'director'].includes(user.role) ||
+              user.role !== 'broker' ||
+              listing.broker_id === user.id ||
+              (listing as { author_id?: number | null }).author_id === user.id
+            );
+            return canEdit ? (
+              <div className="mt-2">
+                <button
+                  onClick={() => { onEdit(listing); onClose(); }}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-blue text-white text-sm font-semibold hover:bg-brand-blue/90 transition w-full sm:w-auto justify-center sm:justify-start"
+                >
+                  <Icon name="Pencil" size={14} />
+                  Редактировать
+                </button>
+              </div>
+            ) : null;
+          })()}
         </div>
 
         {/* Tabs */}
