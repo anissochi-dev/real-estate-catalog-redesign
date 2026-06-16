@@ -97,17 +97,22 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
                   <span>Сравнить ({compareCount})</span>
                 </button>
               )}
-              {isStaff && (
-                <button onClick={onAdmin} title="Админка"
-                  className="hidden md:inline-flex items-center justify-center w-9 h-9 rounded-lg text-brand-blue hover:bg-brand-blue/10 transition">
-                  <Icon name="Shield" size={16} />
-                </button>
-              )}
               {user && (
-                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted text-sm">
-                  <Icon name="User" size={14} />
-                  <span className="truncate max-w-[100px]">{user.name}</span>
-                </div>
+                isStaff ? (
+                  <button
+                    onClick={onAdmin}
+                    title="Открыть админ-панель"
+                    className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted hover:bg-brand-blue/10 text-sm transition-colors"
+                  >
+                    <Icon name="User" size={14} className="text-brand-blue flex-shrink-0" />
+                    <span className="text-foreground font-medium">{user.name}</span>
+                  </button>
+                ) : (
+                  <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted text-sm">
+                    <Icon name="User" size={14} />
+                    <span>{user.name}</span>
+                  </div>
+                )
               )}
               {/* Hamburger — mobile */}
               <button
