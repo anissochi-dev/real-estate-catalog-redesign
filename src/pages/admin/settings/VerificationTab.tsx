@@ -1,8 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import Icon from '@/components/ui/icon';
-import { adminApi } from '@/lib/adminApi';
-import { toast } from 'sonner';
-import { useSettings } from '@/contexts/SettingsContext';
 
 const VERIFY_URL = 'https://functions.poehali.dev/f18a8295-a9d1-474d-9c3a-211d8092ef47';
 
@@ -26,32 +23,6 @@ interface Props {
 }
 
 export default function VerificationTab({ siteUrl }: Props) {
-  const { settings, reload } = useSettings();
-  const [yandexCode, setYandexCode] = useState('');
-  const [googleCode, setGoogleCode] = useState('');
-  const [metaSaving, setMetaSaving] = useState(false);
-
-  useEffect(() => {
-    setYandexCode(settings.yandex_webmaster_verification || '');
-    setGoogleCode(settings.google_search_console_verification || '');
-  }, [settings.yandex_webmaster_verification, settings.google_search_console_verification]);
-
-  const saveMetaCodes = async () => {
-    setMetaSaving(true);
-    try {
-      await adminApi.updateSettings({
-        yandex_webmaster_verification: yandexCode.trim(),
-        google_search_console_verification: googleCode.trim(),
-      });
-      await reload();
-      toast.success('Коды верификации сохранены');
-    } catch {
-      toast.error('Ошибка сохранения');
-    } finally {
-      setMetaSaving(false);
-    }
-  };
-
   const [files, setFiles] = useState<VerifFile[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -156,52 +127,6 @@ export default function VerificationTab({ siteUrl }: Props) {
 
   return (
     <div className="bg-white rounded-2xl shadow-sm p-6 space-y-6">
-
-      {/* Верификация через meta-теги */}
-      <div>
-        <h2 className="text-base font-semibold text-foreground">Верификация через meta-тег</h2>
-        <p className="text-sm text-muted-foreground mt-1 mb-4">
-          Скопируйте код из Яндекс.Вебмастера или Google Search Console и вставьте сюда.
-          Тег появится на сайте автоматически.
-        </p>
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">
-              Яндекс.Вебмастер — код верификации
-            </label>
-            <input
-              type="text"
-              value={yandexCode}
-              onChange={e => setYandexCode(e.target.value)}
-              placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-              className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-muted/20 font-mono focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-            />
-            <p className="text-xs text-muted-foreground mt-1">Только сам код, без &lt;meta ...&gt;</p>
-          </div>
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">
-              Google Search Console — код верификации
-            </label>
-            <input
-              type="text"
-              value={googleCode}
-              onChange={e => setGoogleCode(e.target.value)}
-              placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-              className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-muted/20 font-mono focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-            />
-          </div>
-          <button
-            onClick={saveMetaCodes}
-            disabled={metaSaving}
-            className="flex items-center gap-2 px-4 py-2 bg-brand-blue text-white rounded-lg text-sm font-semibold hover:bg-brand-blue/90 transition disabled:opacity-50"
-          >
-            <Icon name={metaSaving ? 'Loader2' : 'Save'} size={14} className={metaSaving ? 'animate-spin' : ''} />
-            Сохранить коды
-          </button>
-        </div>
-      </div>
-
-      <hr className="border-border" />
 
       <div>
         <h2 className="text-base font-semibold text-foreground">Файлы верификации</h2>
