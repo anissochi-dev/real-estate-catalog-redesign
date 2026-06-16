@@ -1,6 +1,31 @@
 import { useEffect } from 'react';
 import { toast } from 'sonner';
-import { aiApi, devopsApi, smartRunApi, AiAction } from '@/lib/adminApi';
+import { aiApi, getToken, AiAction } from '@/lib/adminApi';
+
+const DEVOPS_URL = 'https://functions.poehali.dev/8dc0ef1b-de31-4ede-94b2-c1779c324922';
+const SMART_RUN_URL = 'https://functions.poehali.dev/880b61c2-dbe7-491a-a147-ffd926b3fe73';
+
+const devopsApi = {
+  call: (action: string, params: Record<string, unknown> = {}) =>
+    fetch(DEVOPS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Auth-Token': getToken() },
+      body: JSON.stringify({ action, params }),
+    }).then(r => r.json()) as Promise<{ ok: boolean; message?: string; error?: string; [key: string]: unknown }>,
+};
+
+const smartRunApi = {
+  run: () =>
+    fetch(SMART_RUN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Auth-Token': getToken() },
+      body: JSON.stringify({}),
+    }).then(async res => {
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Ошибка Smart Run');
+      return data as { ok: boolean; severity: string; steps: Record<string, unknown>; totals: Record<string, number>; message: string };
+    }),
+};
 import {
   Msg, Suggestion, QuickCmd,
   isAutoApplicableAction,
