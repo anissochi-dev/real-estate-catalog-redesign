@@ -222,18 +222,20 @@ export default function ListingsTable({
                       <Icon name="Pencil" size={14} />
                     </button>
                   )}
-                  <button
-                    onClick={() => onArchive(it.id)}
-                    title={isArchived ? 'Восстановить' : 'Архивировать'}
-                    className={[
-                      'w-7 h-7 rounded-lg flex items-center justify-center transition-colors',
-                      isArchived
-                        ? 'text-emerald-600 hover:bg-emerald-50'
-                        : 'text-muted-foreground hover:bg-orange-50 hover:text-orange-500',
-                    ].join(' ')}
-                  >
-                    <Icon name={isArchived ? 'RotateCcw' : 'Archive'} size={14} />
-                  </button>
+                  {canEdit && (
+                    <button
+                      onClick={() => onArchive(it.id)}
+                      title={isArchived ? 'Восстановить' : 'Архивировать'}
+                      className={[
+                        'w-7 h-7 rounded-lg flex items-center justify-center transition-colors',
+                        isArchived
+                          ? 'text-emerald-600 hover:bg-emerald-50'
+                          : 'text-muted-foreground hover:bg-orange-50 hover:text-orange-500',
+                      ].join(' ')}
+                    >
+                      <Icon name={isArchived ? 'RotateCcw' : 'Archive'} size={14} />
+                    </button>
+                  )}
                 </div>
               </div>
 

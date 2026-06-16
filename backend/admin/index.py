@@ -2783,7 +2783,18 @@ def _listings(cur, conn, method, rid, event, user):
         return _ok({'success': True})
 
     if method == 'DELETE' and rid:
-        force = event.get('queryStringParameters', {}).get('force') == '1'
+        force = (event.get('queryStringParameters') or {}).get('force') == '1'
+        # Брокер может архивировать только свой объект
+        if user and user['role'] == 'broker':
+            cur.execute(
+                f"SELECT broker_id, author_id FROM {SCHEMA}.listings WHERE id = {int(rid)}"
+            )
+            row = cur.fetchone()
+            if not row:
+                return _err(404, 'Объект не найден')
+            owner_id = row['broker_id'] or row['author_id']
+            if owner_id != user['id']:
+                return _err(403, 'Вы можете архивировать только свои объекты')
         if force and user and user['role'] == 'admin':
             try:
                 _hard_delete_listings(cur, [int(rid)])
@@ -2813,20 +2824,17 @@ def _mask_phone(phone: str) -> str:
 
 
 def _can_see_phone(lead: dict, user: dict) -> bool:
-    """Правила видимости телефона:
-    - Сетевики (is_network_tenant=TRUE) — телефон виден всем сотрудникам
-    - Брокерские заявки (broker_id IS NOT NULL) — только админу, директору и тому самому брокеру
-    - Остальные заявки — всем сотрудникам
+    """Правила видимости телефона клиента в лиде:
+    - admin, director, manager, editor, office_manager — видят всегда
+    - broker — только если лид закреплён за ним (broker_id == user.id)
     """
-    if lead.get('is_network_tenant'):
-        return True
-    broker_id = lead.get('broker_id')
-    if broker_id is None:
-        return True
     role = user.get('role', '')
-    if role in ('admin', 'director'):
+    if role in ('admin', 'director', 'manager', 'editor', 'office_manager'):
         return True
-    return broker_id == user.get('id')
+    if role == 'broker':
+        broker_id = lead.get('broker_id')
+        return broker_id is not None and broker_id == user.get('id')
+    return False
 
 
 def _apply_phone_visibility(lead: dict, user: dict) -> dict:
