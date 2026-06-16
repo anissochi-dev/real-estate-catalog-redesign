@@ -19,7 +19,7 @@ interface Props {
   siteUrl?: string;
 }
 
-function PhotoCell({ it }: { it: Listing; siteUrl?: string; onPhotoDownload?: (it: Listing) => void }) {
+function PhotoCell({ it, large = false }: { it: Listing; large?: boolean; siteUrl?: string; onPhotoDownload?: (it: Listing) => void }) {
   const imgs = splitImages(it.images);
   const mainImg = imgs[0] || it.image;
 
@@ -29,24 +29,36 @@ function PhotoCell({ it }: { it: Listing; siteUrl?: string; onPhotoDownload?: (i
     window.open(`/object/${slug}`, '_blank');
   };
 
+  const size = large
+    ? 'w-48 h-36'
+    : 'w-16 h-16';
+  const rounded = large ? 'rounded-xl' : 'rounded-lg';
+  const iconSize = large ? 36 : 20;
+
   return (
     <div
-      className="relative w-16 h-16 flex-shrink-0 cursor-pointer group"
+      className={`relative ${size} flex-shrink-0 cursor-pointer group`}
       onClick={openSite}
       title="Открыть объект на сайте"
     >
       {mainImg ? (
         <img src={mainImg} alt={it.title}
-          className="w-16 h-16 rounded-lg object-cover border border-border group-hover:opacity-80 transition-opacity" />
+          className={`${size} ${rounded} object-cover border border-border group-hover:opacity-85 transition-opacity`} />
       ) : (
-        <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center border border-border">
-          <Icon name="Image" size={20} className="text-muted-foreground" />
+        <div className={`${size} ${rounded} bg-muted flex items-center justify-center border border-border`}>
+          <Icon name="Image" size={iconSize} className="text-muted-foreground" />
         </div>
       )}
       {imgs.length > 1 && (
-        <span className="absolute -bottom-1 -right-1 bg-brand-blue text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
-          {imgs.length}
-        </span>
+        large ? (
+          <span className="absolute bottom-2 right-2 bg-brand-blue/90 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow">
+            {imgs.length}
+          </span>
+        ) : (
+          <span className="absolute -bottom-1 -right-1 bg-brand-blue text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+            {imgs.length}
+          </span>
+        )
       )}
     </div>
   );
@@ -168,7 +180,7 @@ export default function ListingsTable({
                 onChange={allSelected ? onDeselectAll : onSelectAll}
                 className="rounded" />
             </th>
-            <th className="px-3 py-3">Фото</th>
+            <th className="px-3 py-3 w-52">Фото</th>
             <th className="px-3 py-3">Объект</th>
             <th className="px-3 py-3">Сделка</th>
             <th className="px-3 py-3">Цена</th>
@@ -185,13 +197,13 @@ export default function ListingsTable({
             const m2 = perM2(it.price, it.area);
             return (
               <tr key={it.id}
-                className={`border-t border-border hover:bg-muted/30 align-top ${selected.has(it.id) ? 'bg-brand-blue/5' : ''} ${it.is_visible === false ? 'bg-red-50/60' : ''}`}>
+                className={`border-t border-border hover:bg-muted/30 align-middle ${selected.has(it.id) ? 'bg-brand-blue/5' : ''} ${it.is_visible === false ? 'bg-red-50/60' : ''}`}>
                 <td className="px-3 py-3">
                   <input type="checkbox" checked={selected.has(it.id)}
                     onChange={() => onToggleSelect(it.id)} className="rounded" />
                 </td>
-                <td className="px-3 py-3">
-                  <PhotoCell it={it} />
+                <td className="px-3 py-3 w-52">
+                  <PhotoCell it={it} large />
                 </td>
                 <td className="px-3 py-3">
                   <div className="flex items-center gap-2 flex-wrap">
