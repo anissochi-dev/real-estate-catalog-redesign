@@ -51,7 +51,7 @@ export default function IntegrationsTab({
       />
       <IntegrationsMaxSection s={s} setS={setS} saved={saved} save={save} />
       <IntegrationsSecuritySection s={s} setS={setS} />
-      <IntegrationsWebmasterSection s={s} setS={setS} saved={saved} save={save} />
+      <IntegrationsWebmasterSection saved={saved} save={save} />
       <IntegrationsSearchApiSection s={s} setS={setS} saved={saved} save={save} />
       <IntegrationsAdsSection s={s} setS={setS} saved={saved} save={save} />
     </div>

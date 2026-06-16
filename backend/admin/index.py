@@ -2286,6 +2286,70 @@ def _notify_phone_subscribers(listing_id: int, body: dict, cur):
         print(f'[phone_sub] notify error for listing {listing_id}: {e}')
 
 
+_DEAL_RU = {'rent': 'Аренда', 'sale': 'Продажа', 'sale_rent': 'Аренда/Продажа'}
+_CAT_RU = {
+    'office': 'офисного помещения', 'retail': 'торгового помещения',
+    'warehouse': 'склада', 'restaurant': 'ресторана', 'hotel': 'гостиницы',
+    'business': 'готового бизнеса', 'gab': 'готового арендного бизнеса',
+    'production': 'производственного помещения', 'land': 'земельного участка',
+    'building': 'здания', 'free_purpose': 'помещения свободного назначения',
+    'car_service': 'автосервиса',
+}
+
+
+def _auto_seo(cur, listing_id: int):
+    """Генерирует seo_title и seo_description если они пустые."""
+    try:
+        cur.execute(
+            f"SELECT title, category, deal, area, price, address, city, seo_title, seo_description "
+            f"FROM {SCHEMA}.listings WHERE id = {int(listing_id)} LIMIT 1"
+        )
+        row = cur.fetchone()
+        if not row:
+            return
+        d = dict(row)
+        # Не перезаписываем если уже заполнены
+        need_title = not (d.get('seo_title') or '').strip()
+        need_desc = not (d.get('seo_description') or '').strip()
+        if not need_title and not need_desc:
+            return
+
+        cat = _CAT_RU.get(d.get('category') or '', 'коммерческой недвижимости')
+        deal = _DEAL_RU.get(d.get('deal') or 'rent', 'Аренда')
+        area = f"{int(d['area'])} м²" if d.get('area') else ''
+        price = f"{int(d['price']):,}".replace(',', ' ') + ' ₽' if d.get('price') else ''
+        city = d.get('city') or 'Краснодаре'
+        title_raw = d.get('title') or ''
+
+        if need_title:
+            parts = [deal, cat]
+            if area:
+                parts.append(area)
+            parts.append(f'в {city}')
+            seo_t = ' — '.join([', '.join(parts[:2])] + parts[2:])[:68]
+            cur.execute(
+                f"UPDATE {SCHEMA}.listings SET seo_title = '{_safe(seo_t, 68)}' WHERE id = {int(listing_id)}"
+            )
+
+        if need_desc:
+            desc_parts = [f'{deal} {cat}']
+            if area:
+                desc_parts.append(f'площадью {area}')
+            if price:
+                desc_parts.append(f'за {price}')
+            if d.get('address'):
+                desc_parts.append(f'по адресу {d["address"]}')
+            elif city:
+                desc_parts.append(f'в {city}')
+            seo_d = (title_raw[:100] + '. ' if title_raw else '') + ', '.join(desc_parts)
+            seo_d = seo_d[:160]
+            cur.execute(
+                f"UPDATE {SCHEMA}.listings SET seo_description = '{_safe(seo_d, 160)}' WHERE id = {int(listing_id)}"
+            )
+    except Exception as e:
+        print(f'[auto_seo] ошибка для listing {listing_id}: {e}')
+
+
 def _trigger_faq_async(listing_id: int, cur):
     """Фоновый вызов listing-faq если auto_faq_enabled=True в настройках."""
     import urllib.request
@@ -2506,6 +2570,7 @@ def _listings(cur, conn, method, rid, event, user):
         cur.execute(
             f"UPDATE {SCHEMA}.seo_artifacts SET urls_count = 0 WHERE kind = 'sitemap'"
         )
+        _auto_seo(cur, new_id)
         conn.commit()
         _trigger_faq_async(new_id, cur)
         _notify_phone_subscribers(new_id, body, cur)
@@ -2655,6 +2720,9 @@ def _listings(cur, conn, method, rid, event, user):
             # Не валим основной запрос если diff не получилось снять
             pass
 
+        # Авто-генерация seo_title/seo_description если пустые и изменились ключевые поля
+        if any(k in body for k in ('title', 'category', 'deal', 'area', 'price', 'address')):
+            _auto_seo(cur, int(rid))
         conn.commit()
         # Перегенерируем FAQ если изменилось описание, название, категория или сделка
         if any(k in body for k in ('title', 'description', 'category', 'deal', 'price', 'area')):
@@ -3770,12 +3838,14 @@ def _listings_bulk(cur, conn, event, user):
         )
         for lid in ids:
             _write_history(cur, lid, user, 'archived', {})
+        cur.execute(f"UPDATE {SCHEMA}.seo_artifacts SET urls_count = 0 WHERE kind = 'sitemap'")
     elif op == 'activate':
         cur.execute(
             f"UPDATE {SCHEMA}.listings SET status = 'active', updated_at = NOW() WHERE id IN ({ids_sql})"
         )
         for lid in ids:
             _write_history(cur, lid, user, 'restored', {})
+        cur.execute(f"UPDATE {SCHEMA}.seo_artifacts SET urls_count = 0 WHERE kind = 'sitemap'")
     elif op == 'set_hot':
         val = _bool(body.get('value', True))
         cur.execute(
@@ -3844,6 +3914,7 @@ def _listings_bulk(cur, conn, event, user):
         action_label = 'shown' if body.get('value', True) else 'hidden'
         for lid in ids:
             _write_history(cur, lid, user, action_label, {'is_visible': body.get('value', True)})
+        cur.execute(f"UPDATE {SCHEMA}.seo_artifacts SET urls_count = 0 WHERE kind = 'sitemap'")
     elif op == 'set_export':
         # Установить/снять флаги экспорта в XML-фиды: value = {'platform': 'yandex'|'avito'|'cian'|'all', 'enabled': bool}
         val = body.get('value') or {}
