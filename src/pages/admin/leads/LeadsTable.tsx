@@ -7,245 +7,283 @@ interface Props {
   leads: Lead[];
   onOpen: (l: Lead) => void;
   onDelete?: (id: number) => void;
+  onStatusChange?: (id: number, status: string) => void;
+  search?: string;
 }
 
-type SortKey = 'created_at' | 'name' | 'status' | 'budget' | 'source';
+// Цвет левого бордера по статусу
+const STATUS_BORDER: Record<string, string> = {
+  pending:     'border-l-orange-400',
+  new:         'border-l-emerald-500',
+  in_progress: 'border-l-amber-400',
+  done:        'border-l-blue-400',
+  rejected:    'border-l-red-400',
+};
+
+// Цвет фона аватара по имени (детерминированный)
+const AVATAR_COLORS = [
+  'bg-blue-100 text-blue-700',
+  'bg-emerald-100 text-emerald-700',
+  'bg-violet-100 text-violet-700',
+  'bg-amber-100 text-amber-700',
+  'bg-rose-100 text-rose-700',
+  'bg-cyan-100 text-cyan-700',
+];
+
+function avatarColor(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
 
 function fmtDate(s: string) {
   const d = new Date(s);
-  return d.toLocaleDateString('ru', { day: '2-digit', month: '2-digit', year: '2-digit' })
-    + ' ' + d.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const isYesterday = new Date(now.setDate(now.getDate() - 1)).toDateString() === d.toDateString();
+  const time = d.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
+  if (isToday) return `Сегодня, ${time}`;
+  if (isYesterday) return `Вчера, ${time}`;
+  return d.toLocaleDateString('ru', { day: '2-digit', month: '2-digit' }) + ` ${time}`;
 }
 
-export default function LeadsTable({ leads, onOpen, onDelete }: Props) {
-  const [sortKey, setSortKey] = useState<SortKey>('created_at');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-
-  const sorted = useMemo(() => {
-    const arr = [...leads];
-    arr.sort((a, b) => {
-      const va = (a[sortKey] ?? '') as string | number;
-      const vb = (b[sortKey] ?? '') as string | number;
-      if (va === vb) return 0;
-      const dir = sortDir === 'asc' ? 1 : -1;
-      return va > vb ? dir : -dir;
-    });
-    return arr;
-  }, [leads, sortKey, sortDir]);
-
-  const toggleSort = (k: SortKey) => {
-    if (sortKey === k) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortKey(k); setSortDir('desc'); }
-  };
-
-  const SortHeader = ({ k, label, className = '' }: { k: SortKey; label: string; className?: string }) => (
-    <th className={`px-3 py-2.5 text-left font-semibold text-xs uppercase tracking-wide text-muted-foreground ${className}`}>
-      <button onClick={() => toggleSort(k)} className="inline-flex items-center gap-1 hover:text-foreground">
-        {label}
-        {sortKey === k && <Icon name={sortDir === 'asc' ? 'ChevronUp' : 'ChevronDown'} size={12} />}
-      </button>
-    </th>
-  );
-
-  const statusOf = (s: string) => STATUSES.find(x => x[0] === s);
-  const typeOf = (t: string | null) => LEAD_TYPES.find(x => x[0] === t);
-
+function highlight(text: string, query: string) {
+  if (!query) return <>{text}</>;
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return <>{text}</>;
   return (
     <>
-    {/* ── Мобильный вид (карточки) ── */}
-    <div className="sm:hidden bg-white rounded-2xl shadow-sm divide-y divide-border">
-      {sorted.length === 0 && (
-        <div className="py-12 text-center text-muted-foreground">
-          <Icon name="Inbox" size={28} className="mx-auto mb-2 opacity-40" />
-          Нет заявок
-        </div>
-      )}
+      {text.slice(0, idx)}
+      <mark className="bg-yellow-200 text-yellow-900 rounded px-0.5">{text.slice(idx, idx + query.length)}</mark>
+      {text.slice(idx + query.length)}
+    </>
+  );
+}
+
+export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, search = '' }: Props) {
+  const [statusMenuId, setStatusMenuId] = useState<number | null>(null);
+
+  const sorted = useMemo(() => {
+    const STATUS_ORDER: Record<string, number> = { pending: 0, new: 1, in_progress: 2, done: 3, rejected: 4 };
+    return [...leads].sort((a, b) => {
+      const sa = STATUS_ORDER[a.status] ?? 9;
+      const sb = STATUS_ORDER[b.status] ?? 9;
+      if (sa !== sb) return sa - sb;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  }, [leads]);
+
+  if (sorted.length === 0) {
+    return (
+      <div className="bg-white rounded-2xl shadow-sm py-16 text-center text-muted-foreground">
+        <Icon name="Inbox" size={32} className="mx-auto mb-3 opacity-30" />
+        <div className="text-sm">Нет заявок</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
       {sorted.map(l => {
-        const st = statusOf(l.status);
-        const tp = typeOf(l.lead_type);
+        const st = STATUSES.find(x => x[0] === l.status);
+        const tp = LEAD_TYPES.find(x => x[0] === l.lead_type);
+        const borderCls = STATUS_BORDER[l.status] || 'border-l-muted';
+        const isNew = l.status === 'new' || l.status === 'pending';
+        const name = l.name || 'Без имени';
+        const avatarCls = avatarColor(name);
+
         return (
-          <div key={l.id} onClick={() => onOpen(l)}
-            className="px-4 py-3 cursor-pointer hover:bg-muted/20 transition">
-            {/* Строка 1: дата + статус */}
-            <div className="flex items-center justify-between gap-2 mb-1.5">
-              <span className="text-xs text-muted-foreground">{fmtDate(l.created_at)}</span>
-              <div className="flex items-center gap-1.5">
-                {tp && <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${tp[2]}`}>{tp[1]}</span>}
-                {st && (
-                  <span className="inline-flex items-center gap-1 text-xs font-medium">
-                    <span className={`w-2 h-2 rounded-full ${st[2]}`} />
-                    {st[1]}
-                  </span>
-                )}
+          <div
+            key={l.id}
+            className={`bg-white rounded-2xl shadow-sm border-l-4 ${borderCls} overflow-hidden hover:shadow-md transition-shadow cursor-pointer`}
+            onClick={() => onOpen(l)}
+          >
+            <div className="px-4 py-3">
+
+              {/* ── Строка 1: аватар + имя + телефон + дата ── */}
+              <div className="flex items-start gap-3">
+                {/* Аватар */}
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${avatarCls}`}>
+                  {initials(name)}
+                </div>
+
+                {/* Имя + телефон */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`text-sm font-semibold ${isNew ? 'text-foreground' : 'text-foreground/80'}`}>
+                      {highlight(name, search)}
+                    </span>
+                    {isNew && <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Новая" />}
+                    {l.company && (
+                      <span className="text-xs text-purple-700 font-medium">{l.company}</span>
+                    )}
+                  </div>
+
+                  {/* Телефон */}
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <a
+                      href={`tel:${l.phone}`}
+                      onClick={e => e.stopPropagation()}
+                      className={`text-xs font-mono hover:underline flex items-center gap-1 ${l.phone_hidden ? 'text-muted-foreground' : 'text-brand-blue font-semibold'}`}
+                    >
+                      <Icon name="Phone" size={11} />
+                      {l.phone ? formatPhone(l.phone) : '—'}
+                    </a>
+                    {l.phone_hidden && (
+                      <span className="text-[10px] text-amber-600 flex items-center gap-0.5">
+                        <Icon name="EyeOff" size={10} /> скрыт
+                      </span>
+                    )}
+                    {l.email && (
+                      <a
+                        href={`mailto:${l.email}`}
+                        onClick={e => e.stopPropagation()}
+                        className="text-xs text-muted-foreground hover:underline truncate max-w-[160px]"
+                      >
+                        {l.email}
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                {/* Дата */}
+                <div className="text-[11px] text-muted-foreground shrink-0 text-right">
+                  {fmtDate(l.created_at)}
+                </div>
               </div>
-            </div>
-            {/* Строка 2: имя + телефон */}
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <div className="font-semibold text-sm">{l.name || '—'}</div>
-                {l.company && <div className="text-xs text-purple-700">{l.company}</div>}
-              </div>
-              <div className="text-right shrink-0">
-                <a href={`tel:${l.phone}`} onClick={e => e.stopPropagation()}
-                   className={`text-sm font-mono font-semibold hover:underline ${l.phone_hidden ? 'text-muted-foreground' : 'text-brand-blue'}`}>
-                  {l.phone ? formatPhone(l.phone) : '—'}
-                </a>
-                {l.phone_hidden && <Icon name="EyeOff" size={11} className="text-amber-500 inline ml-1" />}
-                {l.email && <div className="text-[11px] text-muted-foreground">{l.email}</div>}
-              </div>
-            </div>
-            {/* Строка 3: источник + бюджет + бейджи */}
-            <div className="flex items-center justify-between gap-2 mt-1.5">
-              <div className="flex items-center gap-1 flex-wrap">
-                {l.is_network_tenant && (
-                  <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full text-[10px] font-semibold">
-                    <Icon name="Network" size={10} /> Сетевик
+
+              {/* ── Строка 2: объект ── */}
+              {(l.seo_h1 || l.object_url) && (
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Icon name="Building2" size={12} className="shrink-0" />
+                  {l.object_url ? (
+                    <a
+                      href={l.object_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={e => e.stopPropagation()}
+                      className="text-brand-blue hover:underline truncate"
+                    >
+                      {l.seo_h1 || l.object_url}
+                    </a>
+                  ) : (
+                    <span className="truncate">{l.seo_h1}</span>
+                  )}
+                </div>
+              )}
+
+              {/* ── Строка 3: текст сообщения ── */}
+              {l.message && (
+                <div className="mt-2 text-sm text-foreground/80 bg-muted/30 rounded-xl px-3 py-2 flex gap-2">
+                  <Icon name="MessageSquare" size={13} className="text-muted-foreground shrink-0 mt-0.5" />
+                  <span className="line-clamp-2 leading-relaxed">
+                    {highlight(l.message, search)}
                   </span>
-                )}
-                {l.broker_id && (
-                  <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full text-[10px] font-semibold">
-                    <Icon name="UserCheck" size={10} /> Брокер
-                  </span>
-                )}
-                {l.source === 'ai-chat' ? (
-                  <span className="inline-flex items-center gap-1 bg-violet-50 text-violet-700 border border-violet-200 px-2 py-0.5 rounded-full text-[10px] font-semibold">
-                    <Icon name="Bot" size={10} /> ИИ-чат
-                  </span>
-                ) : (
-                  <span className="text-[11px] text-muted-foreground">{SOURCE_LABELS[l.source] || l.source || '—'}</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {l.budget != null && l.budget > 0 && (
-                  <span className="text-xs font-semibold">{l.budget.toLocaleString('ru')} ₽</span>
-                )}
-                {onDelete && (
-                  <button onClick={e => { e.stopPropagation(); onDelete(l.id); }}
-                    className="p-1.5 rounded-lg hover:bg-red-50 text-red-400" title="Удалить">
-                    <Icon name="Trash2" size={14} />
+                </div>
+              )}
+
+              {/* ── Строка 4: бейджи + статус + бюджет + кнопки ── */}
+              <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+
+                {/* Бейджи */}
+                <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+                  {st && (
+                    <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-muted`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${st[2]}`} />
+                      {st[1]}
+                    </span>
+                  )}
+                  {tp && (
+                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${tp[2]}`}>{tp[1]}</span>
+                  )}
+                  {l.is_network_tenant && (
+                    <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full text-[11px] font-semibold">
+                      <Icon name="Network" size={10} /> Сетевик
+                    </span>
+                  )}
+                  {l.broker_id && (
+                    <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full text-[11px] font-semibold">
+                      <Icon name="UserCheck" size={10} /> Брокер
+                    </span>
+                  )}
+                  {l.source === 'ai-chat' && (
+                    <span className="inline-flex items-center gap-1 bg-violet-50 text-violet-700 border border-violet-200 px-2 py-0.5 rounded-full text-[11px] font-semibold">
+                      <Icon name="Bot" size={10} /> ИИ-чат
+                    </span>
+                  )}
+                  {l.source && l.source !== 'ai-chat' && SOURCE_LABELS[l.source] && (
+                    <span className="text-[11px] text-muted-foreground">{SOURCE_LABELS[l.source]}</span>
+                  )}
+                  {l.budget != null && l.budget > 0 && (
+                    <span className="text-[11px] font-semibold text-foreground/70">
+                      {l.budget.toLocaleString('ru')} ₽
+                    </span>
+                  )}
+                </div>
+
+                {/* Кнопки действий */}
+                <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+
+                  {/* Быстрая смена статуса */}
+                  {onStatusChange && (
+                    <div className="relative">
+                      <button
+                        onClick={() => setStatusMenuId(statusMenuId === l.id ? null : l.id)}
+                        className="h-7 px-2 rounded-lg text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors flex items-center gap-1"
+                        title="Сменить статус"
+                      >
+                        <Icon name="RefreshCw" size={12} />
+                        Статус
+                      </button>
+                      {statusMenuId === l.id && (
+                        <div className="absolute right-0 bottom-full mb-1 bg-white border border-border rounded-xl shadow-lg z-50 py-1 min-w-[140px]">
+                          {STATUSES.map(s => (
+                            <button
+                              key={s[0]}
+                              onClick={() => { onStatusChange(l.id, s[0]); setStatusMenuId(null); }}
+                              className={`flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-muted transition-colors ${l.status === s[0] ? 'font-semibold text-brand-blue' : 'text-foreground'}`}
+                            >
+                              <span className={`w-2 h-2 rounded-full ${s[2]} shrink-0`} />
+                              {s[1]}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Подробнее */}
+                  <button
+                    onClick={() => onOpen(l)}
+                    className="h-7 px-2 rounded-lg text-[11px] font-medium text-brand-blue hover:bg-brand-blue/10 transition-colors flex items-center gap-1"
+                  >
+                    <Icon name="Eye" size={12} />
+                    Подробнее
                   </button>
-                )}
+
+                  {/* Удалить */}
+                  {onDelete && (
+                    <button
+                      onClick={() => onDelete(l.id)}
+                      className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors"
+                      title="Удалить"
+                    >
+                      <Icon name="Trash2" size={13} />
+                    </button>
+                  )}
+                </div>
               </div>
+
             </div>
           </div>
         );
       })}
     </div>
-
-    {/* ── Десктопный вид (таблица) ── */}
-    <div className="hidden sm:block bg-white rounded-2xl shadow-sm overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/40 border-b border-border">
-            <tr>
-              <SortHeader k="created_at" label="Дата" />
-              <SortHeader k="name" label="Клиент" />
-              <th className="px-3 py-2.5 text-left font-semibold text-xs uppercase tracking-wide text-muted-foreground">Телефон</th>
-              <SortHeader k="source" label="Источник" />
-              <th className="px-3 py-2.5 text-left font-semibold text-xs uppercase tracking-wide text-muted-foreground">Тип</th>
-              <SortHeader k="status" label="Статус" />
-              <SortHeader k="budget" label="Бюджет" className="text-right" />
-              <th className="px-3 py-2.5 text-right font-semibold text-xs uppercase tracking-wide text-muted-foreground w-20">Действия</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.length === 0 && (
-              <tr>
-                <td colSpan={8} className="py-12 text-center text-muted-foreground">
-                  <Icon name="Inbox" size={28} className="mx-auto mb-2 opacity-40" />
-                  Нет заявок
-                </td>
-              </tr>
-            )}
-            {sorted.map(l => {
-              const st = statusOf(l.status);
-              const tp = typeOf(l.lead_type);
-              return (
-                <tr key={l.id} className="border-b border-border/60 hover:bg-muted/20 transition cursor-pointer"
-                    onClick={() => onOpen(l)}>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-xs text-muted-foreground">
-                    {fmtDate(l.created_at)}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <div className="font-medium">{l.name || '—'}</div>
-                    {l.company && <div className="text-xs text-purple-700">{l.company}</div>}
-                  </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap">
-                    <div className="inline-flex items-center gap-1.5">
-                      <a href={`tel:${l.phone}`} onClick={e => e.stopPropagation()}
-                         className={`text-sm font-mono hover:underline ${l.phone_hidden ? 'text-muted-foreground' : 'text-brand-blue'}`}>
-                        {l.phone ? formatPhone(l.phone) : '—'}
-                      </a>
-                      {l.phone_hidden && (
-                        <span title="Телефон скрыт: заявка брокера. Видят только админ, директор и сам брокер.">
-                          <Icon name="EyeOff" size={12} className="text-amber-500" />
-                        </span>
-                      )}
-                    </div>
-                    {l.email && <div className="text-xs text-muted-foreground">{l.email}</div>}
-                  </td>
-                  <td className="px-3 py-2.5 text-xs">
-                    {l.is_network_tenant && (
-                      <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full text-[10px] font-semibold mr-1">
-                        <Icon name="Network" size={10} /> Сетевик
-                      </span>
-                    )}
-                    {l.broker_id && (
-                      <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full text-[10px] font-semibold mr-1">
-                        <Icon name="UserCheck" size={10} /> Брокер
-                      </span>
-                    )}
-                    {l.source === 'ai-chat' ? (
-                      <span className="inline-flex items-center gap-1 bg-violet-50 text-violet-700 border border-violet-200 px-2 py-0.5 rounded-full text-[10px] font-semibold mt-0.5">
-                        <Icon name="Bot" size={10} /> ИИ-чат
-                      </span>
-                    ) : (
-                      <div className="text-muted-foreground mt-0.5">
-                        {SOURCE_LABELS[l.source] || l.source || '—'}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    {tp && (
-                      <span className={`inline-flex text-[10px] font-semibold px-2 py-0.5 rounded-full ${tp[2]}`}>
-                        {tp[1]}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    {st && (
-                      <span className="inline-flex items-center gap-1.5 text-xs">
-                        <span className={`w-2 h-2 rounded-full ${st[2]}`} />
-                        {st[1]}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5 text-right whitespace-nowrap text-xs">
-                    {l.budget != null && l.budget > 0
-                      ? <span className="font-semibold">{l.budget.toLocaleString('ru')} ₽</span>
-                      : <span className="text-muted-foreground">—</span>}
-                  </td>
-                  <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                    <div className="inline-flex items-center gap-1">
-                      <button onClick={(e) => { e.stopPropagation(); onOpen(l); }}
-                              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground" title="Открыть">
-                        <Icon name="Eye" size={14} />
-                      </button>
-                      {onDelete && (
-                        <button onClick={(e) => { e.stopPropagation(); onDelete(l.id); }}
-                                className="p-1.5 rounded-lg hover:bg-red-50 text-red-500" title="Удалить">
-                          <Icon name="Trash2" size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-    </>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { adminApi, aiApi } from '@/lib/adminApi';
 import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
@@ -18,6 +18,7 @@ export default function LeadsAdmin() {
   const [aiLoading, setAiLoading] = useState(false);
   const [editing, setEditing] = useState<Partial<Lead> | null>(null);
   const [filter, setFilter] = useState<'all' | 'network' | string>('all');
+  const [search, setSearch] = useState('');
   const [listingSearch, setListingSearch] = useState('');
   const [listingDropOpen, setListingDropOpen] = useState(false);
 
@@ -43,6 +44,18 @@ export default function LeadsAdmin() {
     await adminApi.updateLead(active.id, changes as Record<string, unknown>);
     setActive({ ...active, ...changes });
     load();
+  };
+
+  // Быстрая смена статуса прямо из списка
+  const quickStatus = async (id: number, status: string) => {
+    try {
+      await adminApi.updateLead(id, { status } as Record<string, unknown>);
+      setLeads(prev => prev.map(l => l.id === id ? { ...l, status } : l));
+      if (active?.id === id) setActive(prev => prev ? { ...prev, status } : prev);
+      toast.success('Статус обновлён');
+    } catch {
+      toast.error('Не удалось изменить статус');
+    }
   };
 
   const sendComment = async () => {
@@ -90,28 +103,55 @@ export default function LeadsAdmin() {
     }
   };
 
-  const filtered = leads.filter(l => {
-    if (filter === 'all') return true;
-    if (filter === 'network') return l.is_network_tenant;
-    return l.status === STATUSES.find(s => s[0] === filter)?.[0];
-  });
+  const filtered = useMemo(() => {
+    let list = leads;
+    // Фильтр по статусу/типу
+    if (filter === 'network') list = list.filter(l => l.is_network_tenant);
+    else if (filter !== 'all') list = list.filter(l => l.status === filter);
+    // Поиск
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(l =>
+        (l.name || '').toLowerCase().includes(q) ||
+        (l.phone || '').replace(/\D/g, '').includes(q.replace(/\D/g, '')) ||
+        (l.message || '').toLowerCase().includes(q) ||
+        (l.email || '').toLowerCase().includes(q) ||
+        (l.company || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [leads, filter, search]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <LeadsFilterBar
         leads={leads}
         filter={filter}
         setFilter={setFilter}
         onAdd={() => setEditing({ ...empty })}
+        search={search}
+        setSearch={setSearch}
       />
+
+      {filtered.length === 0 && search && (
+        <div className="bg-white rounded-2xl py-12 text-center text-muted-foreground shadow-sm">
+          <Icon name="SearchX" size={28} className="mx-auto mb-2 opacity-30" />
+          <div className="text-sm">По запросу <strong>«{search}»</strong> ничего не найдено</div>
+          <button onClick={() => setSearch('')} className="mt-2 text-xs text-brand-blue hover:underline">
+            Сбросить поиск
+          </button>
+        </div>
+      )}
 
       <LeadsTable
         leads={filtered}
         onOpen={openLead}
         onDelete={del}
+        onStatusChange={quickStatus}
+        search={search}
       />
 
-      {/* Модальное окно с деталями выбранной заявки */}
+      {/* Детали заявки — модалка */}
       {active && (
         <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4"
              onClick={() => setActive(null)}>
