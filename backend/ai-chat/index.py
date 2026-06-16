@@ -76,9 +76,9 @@ def _call_yandex_gpt(messages: list, folder_id: str, api_key: str) -> str:
 
 def _get_listing(cur, listing_id: int) -> 'dict | None':
     cur.execute(
-        f"SELECT id, title, description, price, area, floor, floors_total, "
-        f"deal, type, address, city, district, phone "
-        f"FROM {SCHEMA}.listings WHERE id = {int(listing_id)} AND is_active = TRUE LIMIT 1"
+        f"SELECT id, title, description, price, area, floor, total_floors, "
+        f"deal, purpose, address, city, district, broker_id "
+        f"FROM {SCHEMA}.listings WHERE id = {int(listing_id)} AND is_visible = TRUE LIMIT 1"
     )
     row = cur.fetchone()
     return dict(row) if row else None
@@ -99,14 +99,14 @@ def _build_listing_context(listing: dict) -> str:
 
     parts = [
         f"ОБЪЕКТ #{listing['id']}: {listing.get('title', '')}",
-        f"Тип: {type_map.get(listing.get('type', ''), listing.get('type', ''))}",
+        f"Тип: {type_map.get(listing.get('purpose', ''), listing.get('purpose', ''))}",
         f"Сделка: {deal_map.get(listing.get('deal', ''), listing.get('deal', ''))}",
         f"Цена: {price_str}",
     ]
     if listing.get('area'):
         parts.append(f"Площадь: {listing['area']} м²")
-    if listing.get('floor') and listing.get('floors_total'):
-        parts.append(f"Этаж: {listing['floor']}/{listing['floors_total']}")
+    if listing.get('floor') and listing.get('total_floors'):
+        parts.append(f"Этаж: {listing['floor']}/{listing['total_floors']}")
     if listing.get('address'):
         parts.append(f"Адрес: {listing['address']}")
     if listing.get('district'):
@@ -182,10 +182,10 @@ def _create_lead(cur, conn, listing_id, name: str, phone: str,
 
 def _get_listing_broker(cur, listing_id) -> 'int | None':
     cur.execute(
-        f"SELECT user_id FROM {SCHEMA}.listings WHERE id = {int(listing_id)} LIMIT 1"
+        f"SELECT broker_id FROM {SCHEMA}.listings WHERE id = {int(listing_id)} LIMIT 1"
     )
     row = cur.fetchone()
-    return row['user_id'] if row and row.get('user_id') else None
+    return row['broker_id'] if row and row.get('broker_id') else None
 
 
 def _generate_lead_summary(folder_id: str, api_key: str, messages: list, listing_title: str) -> str:
@@ -246,7 +246,7 @@ def handler(event: dict, context) -> dict:
                     if listing:
                         listing_context = _build_listing_context(listing)
                         listing_title = listing.get('title', '')
-                        broker_id = _get_listing_broker(cur, int(listing_id))
+                        broker_id = listing.get('broker_id')
             finally:
                 conn.close()
 
