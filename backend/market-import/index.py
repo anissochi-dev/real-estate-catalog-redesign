@@ -493,7 +493,7 @@ def handler(event: dict, context) -> dict:
                 return err(400, 'Укажите file_url')
             req = urllib.request.Request(file_url, headers={'User-Agent': 'Mozilla/5.0'})
             with urllib.request.urlopen(req, timeout=25) as resp:
-                raw = resp.read(5_000_000)  # читаем только первые 5 МБ для превью
+                raw = resp.read()  # читаем весь файл (XLSX — zip, нельзя обрезать)
             file_lower = file_url.lower().split('?')[0]
             is_xlsx = file_lower.endswith('.xlsx') or file_lower.endswith('.xls')
             records = []
