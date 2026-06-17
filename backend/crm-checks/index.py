@@ -420,10 +420,38 @@ def run_check(conn, user, method, qs, body, check_keys=None):
     cur = conn.cursor()
 
     if method == 'GET' and qs.get('action') == 'status':
+        dadata_key = (check_keys or {}).get('dadata', '')
+        dadata_info = None
+        if dadata_key:
+            try:
+                secret = os.environ.get('DADATA_SECRET_KEY', '')
+                req = urllib.request.Request(
+                    'https://dadata.ru/api/v2/profile/balance',
+                    headers={'Authorization': f'Token {dadata_key}', 'X-Secret': secret},
+                )
+                with urllib.request.urlopen(req, timeout=8) as resp:
+                    balance_data = json.loads(resp.read().decode())
+                req2 = urllib.request.Request(
+                    'https://dadata.ru/api/v2/stat/daily',
+                    headers={'Authorization': f'Token {dadata_key}', 'X-Secret': secret},
+                )
+                with urllib.request.urlopen(req2, timeout=8) as resp2:
+                    stat_data = json.loads(resp2.read().decode())
+                dadata_info = {
+                    'connected': True,
+                    'balance': balance_data.get('balance'),
+                    'services': stat_data.get('services', {}),
+                    'remaining': stat_data.get('remaining', {}),
+                    'date': stat_data.get('date'),
+                }
+            except Exception as e:
+                dadata_info = {'connected': bool(dadata_key), 'error': str(e)[:100]}
         return ok({
             'zachestny': bool((check_keys or {}).get('zachestny')),
             'newdb': bool((check_keys or {}).get('newdb')),
             'bezopasno': bool((check_keys or {}).get('bezopasno')),
+            'dadata': bool(dadata_key),
+            'dadata_info': dadata_info,
         })
 
     if method == 'GET' and qs.get('action') == 'quota':

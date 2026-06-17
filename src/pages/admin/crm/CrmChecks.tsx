@@ -35,7 +35,23 @@ export default function CrmChecks() {
 
   const headers = { 'Content-Type': 'application/json', 'X-Auth-Token': token || '' };
 
-  const { data: serviceStatus = {} } = useQuery<Record<string, boolean>>({
+  interface DadataInfo {
+    connected: boolean;
+    balance?: number;
+    services?: Record<string, number>;
+    remaining?: Record<string, number>;
+    date?: string;
+    error?: string;
+  }
+  interface ServiceStatus {
+    zachestny?: boolean;
+    newdb?: boolean;
+    bezopasno?: boolean;
+    dadata?: boolean;
+    dadata_info?: DadataInfo;
+    [key: string]: boolean | DadataInfo | undefined;
+  }
+  const { data: serviceStatus = {} } = useQuery<ServiceStatus>({
     queryKey: ['crm-checks-status'],
     queryFn: async () => {
       const r = await fetch(`${CHECKS_URL}/?action=status`, { headers });
@@ -133,7 +149,8 @@ export default function CrmChecks() {
         </div>
         <div className="flex flex-wrap gap-2">
           {Object.entries(SOURCE_INFO).map(([src, info]) => {
-            const connected = serviceStatus[src];
+            if (src === 'egrn') return null;
+            const connected = !!serviceStatus[src];
             return (
               <div
                 key={src}
@@ -156,14 +173,54 @@ export default function CrmChecks() {
         </div>
       </div>
 
+      {/* DaData: детальный блок с балансом и лимитами */}
+      {serviceStatus.dadata_info && (
+        <div className={`rounded-xl border p-4 ${serviceStatus.dadata_info.error ? 'border-amber-200 bg-amber-50' : 'border-sky-200 bg-sky-50'}`}>
+          <div className="flex items-center gap-2 mb-3">
+            <Icon name="Database" size={15} className="text-sky-600" />
+            <span className="font-semibold text-sm text-sky-800">DaData — детали подключения</span>
+            {serviceStatus.dadata_info.date && (
+              <span className="text-xs text-muted-foreground ml-auto">за {serviceStatus.dadata_info.date}</span>
+            )}
+          </div>
+          {serviceStatus.dadata_info.error ? (
+            <div className="text-sm text-amber-700 flex items-center gap-2">
+              <Icon name="AlertTriangle" size={13} />
+              Ошибка: {serviceStatus.dadata_info.error}
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-4">
+              {serviceStatus.dadata_info.balance !== undefined && (
+                <div className="text-sm">
+                  <div className="text-xs text-muted-foreground mb-0.5">Баланс</div>
+                  <div className="font-bold text-sky-700">{Number(serviceStatus.dadata_info.balance).toLocaleString('ru')} ₽</div>
+                </div>
+              )}
+              {serviceStatus.dadata_info.services && Object.entries(serviceStatus.dadata_info.services).map(([svc, count]) => (
+                <div key={svc} className="text-sm">
+                  <div className="text-xs text-muted-foreground mb-0.5">{svc}</div>
+                  <div className="font-semibold text-foreground">{Number(count).toLocaleString('ru')} запросов</div>
+                </div>
+              ))}
+              {serviceStatus.dadata_info.remaining && Object.entries(serviceStatus.dadata_info.remaining).map(([svc, count]) => (
+                <div key={`rem-${svc}`} className="text-sm">
+                  <div className="text-xs text-muted-foreground mb-0.5">{svc} (остаток)</div>
+                  <div className="font-semibold text-emerald-700">{Number(count).toLocaleString('ru')}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Баннер: показываем только если хотя бы один ключ получен с сервера */}
       {Object.keys(serviceStatus).length > 0 && (
-        Object.values(serviceStatus).some(v => v) ? (
+        (['zachestny', 'newdb', 'bezopasno', 'dadata'] as const).some(k => serviceStatus[k]) ? (
           <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm">
             <Icon name="CheckCircle2" size={16} className="shrink-0 text-emerald-600" />
             <span>
-              Подключено сервисов: <strong>{Object.values(serviceStatus).filter(Boolean).length}</strong> из {Object.keys(serviceStatus).length}.{' '}
-              {Object.values(serviceStatus).every(Boolean) ? 'Все сервисы активны.' : 'Остальные можно подключить в Настройках → Интеграции.'}
+              Подключено сервисов: <strong>{(['zachestny', 'newdb', 'bezopasno', 'dadata'] as const).filter(k => serviceStatus[k]).length}</strong> из 4.{' '}
+              {(['zachestny', 'newdb', 'bezopasno', 'dadata'] as const).every(k => serviceStatus[k]) ? 'Все сервисы активны.' : 'Остальные можно подключить в Настройках → Интеграции.'}
             </span>
           </div>
         ) : (
