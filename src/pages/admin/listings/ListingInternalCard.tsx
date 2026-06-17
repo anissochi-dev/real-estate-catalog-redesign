@@ -77,12 +77,15 @@ export default function ListingInternalCard({ listingId, onClose, onBrokerChange
     listing.broker_id === user.id ||
     (listing as Record<string, unknown>).author_id === user.id
   );
+  const isForeignBroker = user?.role === 'broker' && !isOwnBroker;
   const canManageBroker = isAdminOrDirector;
 
-  // Вкладка «Брокер» — только admin/director
-  const visibleMoreTabs: TabId[] = MORE_TABS.filter(t => t !== 'broker' || !!canManageBroker);
-
-  void isOwnBroker;
+  // Для чужого брокера скрываем служебные вкладки: история цен, статистика, документы, назначение брокера
+  const visibleMoreTabs: TabId[] = MORE_TABS.filter(t => {
+    if (t === 'broker') return !!canManageBroker;
+    if (isForeignBroker) return false; // чужой брокер не видит «Ещё»
+    return true;
+  });
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -154,8 +157,8 @@ export default function ListingInternalCard({ listingId, onClose, onBrokerChange
             </button>
           ))}
 
-          {/* Кнопка «Ещё» */}
-          <div ref={moreRef} className="relative ml-auto flex-shrink-0">
+          {/* Кнопка «Ещё» — скрыта если нет доступных вкладок */}
+          <div ref={moreRef} className={`relative ml-auto flex-shrink-0 ${visibleMoreTabs.length === 0 ? 'hidden' : ''}`}>
             <button
               onClick={() => setMoreOpen(v => !v)}
               className={`flex flex-col sm:flex-row items-center gap-0.5 sm:gap-1.5 px-2 sm:px-3 py-2 sm:py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors h-full ${

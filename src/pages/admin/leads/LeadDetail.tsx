@@ -104,7 +104,7 @@ export default function LeadDetail({
           </div>
         )}
 
-        {active.status === 'pending' && (
+        {active.status === 'pending' && canManage && (
           <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-xl flex items-center justify-between gap-3 flex-wrap">
             <div className="text-sm text-orange-800 flex items-center gap-2">
               <Icon name="ShieldAlert" size={16} />
