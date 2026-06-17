@@ -7,9 +7,7 @@
 import json
 import urllib.request
 from datetime import datetime
-
-YANDEX_GPT_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
-YANDEX_MODEL = 'yandexgpt-5-pro/latest'
+from ai_client import chat_simple
 
 # Бенчмарки альтернативных инструментов (Россия 2025)
 ALTERNATIVE_RETURNS = {
@@ -171,10 +169,7 @@ def compare_alternatives(noi: float, price: float, irr_pct: float | None) -> lis
     return sorted(result, key=lambda x: x['rate_pct'], reverse=True)
 
 
-def _gpt_investment_verdict(
-    listing: dict, metrics: dict, alternatives: list, liquidity: dict,
-    api_key: str, folder_id: str
-) -> str:
+def _gpt_investment_verdict(listing, metrics, alternatives, liquidity, api_key, folder_id) -> str:
     """GPT формулирует итоговый инвестиционный вердикт — только текст."""
     alts_text = '\n'.join([
         f"- {a['instrument']}: {a['rate_pct']}% ({'+' if a['property_better'] else ''}{a['vs_property_delta_pct']}%)"
@@ -193,29 +188,12 @@ def _gpt_investment_verdict(
         f"стоит ли вкладывать, как объект выглядит на фоне альтернатив, "
         f"для какого инвестора подходит. Только текст."
     )
-    payload = {
-        'modelUri': f'gpt://{folder_id}/{YANDEX_MODEL}',
-        'completionOptions': {'stream': False, 'temperature': 0.3, 'maxTokens': '350'},
-        'messages': [
-            {'role': 'system', 'text': 'Ты — инвестиционный аналитик. Отвечай конкретно и по делу.'},
-            {'role': 'user',   'text': prompt},
-        ],
-    }
     try:
-        req = urllib.request.Request(
-            YANDEX_GPT_URL,
-            data=json.dumps(payload).encode(),
-            headers={
-                'Authorization': f'Api-Key {api_key}',
-                'Content-Type': 'application/json',
-                'x-folder-id': folder_id,
-            },
-            method='POST',
+        return chat_simple(
+            'Ты — инвестиционный аналитик. Отвечай конкретно и по делу.',
+            prompt, api_key, folder_id,
+            max_tokens=350, timeout=15,
         )
-        with urllib.request.urlopen(req, timeout=15) as r:
-            data = json.loads(r.read().decode())
-        alts = (data.get('result') or {}).get('alternatives') or []
-        return ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
     except Exception:
         return ''
 

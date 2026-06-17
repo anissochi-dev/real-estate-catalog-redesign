@@ -10,9 +10,9 @@ Returns: { text: str, cached: bool }
 """
 import json
 import os
-import urllib.request
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from ai_client import load_keys, chat_simple
 
 SCHEMA = 't_p71821556_real_estate_catalog_.'
 
@@ -70,40 +70,13 @@ def _ensure_table(cur):
 
 
 def _load_yandex_keys(cur) -> tuple:
-    api_key = os.environ.get('AISTUDIO_API_KEY') or os.environ.get('YANDEX_API_KEY', '')
-    folder_id = os.environ.get('YANDEX_FOLDER_ID', '')
-    if api_key and folder_id:
-        return api_key, folder_id
-    try:
-        cur.execute(f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}settings ORDER BY id ASC LIMIT 1")
-        row = cur.fetchone()
-        if row:
-            api_key = api_key or row.get('yandex_api_key') or ''
-            folder_id = folder_id or row.get('yandex_folder_id') or ''
-    except Exception:
-        pass
-    return api_key, folder_id
+    """Загружает ключи YandexGPT из БД, fallback — env."""
+    return load_keys()
 
 
 def _yandex_gpt(prompt: str, system: str, api_key: str, folder_id: str) -> str:
-    payload = {
-        'modelUri': f'gpt://{folder_id}/yandexgpt-5-pro/latest',
-        'completionOptions': {'stream': False, 'temperature': 0.6, 'maxTokens': '800'},
-        'messages': [
-            {'role': 'system', 'text': system},
-            {'role': 'user', 'text': prompt},
-        ],
-    }
-    req = urllib.request.Request(
-        'https://llm.api.cloud.yandex.net/foundationModels/v1/completion',
-        data=json.dumps(payload).encode(),
-        headers={'Authorization': f'Api-Key {api_key}', 'Content-Type': 'application/json', 'x-folder-id': folder_id},
-        method='POST',
-    )
-    with urllib.request.urlopen(req, timeout=25) as resp:
-        data = json.loads(resp.read().decode())
-    alts = (data.get('result') or {}).get('alternatives') or []
-    return ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
+    return chat_simple(system, prompt, api_key, folder_id,
+                       temperature=0.6, max_tokens=800, timeout=25)
 
 
 def _prompt_category(category: str, city: str, stats: dict) -> str:

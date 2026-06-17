@@ -7,9 +7,7 @@
 import json
 import urllib.request
 from datetime import datetime
-
-YANDEX_GPT_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
-YANDEX_MODEL = 'yandexgpt-5-pro/latest'
+from ai_client import chat_simple
 
 
 def _npv(cash_flows: list[float], discount_rate: float) -> float:
@@ -166,7 +164,7 @@ def build_breakeven(
     }
 
 
-def _gpt_risk_summary(listing: dict, stress: list, breakeven: dict, api_key: str, folder_id: str) -> str:
+def _gpt_risk_summary(listing, stress, breakeven, api_key, folder_id) -> str:
     """GPT формулирует итоговый вывод по рискам — только текст."""
     base = stress[0]
     pessim = stress[2]
@@ -179,32 +177,14 @@ def _gpt_risk_summary(listing: dict, stress: list, breakeven: dict, api_key: str
         f"Кризисный: NOI={crisis['noi']:,.0f} ₽.\n"
         f"Break-even аренда: {breakeven['breakeven_investment_rent']:,.0f} ₽/м²/мес.\n\n"
         f"Дай краткий вывод об инвестиционных рисках (3–4 предложения): "
-        f"насколько устойчива инвестиция, при каких условиях она перестаёт быть привлекательной. "
-        f"Только текст."
+        f"насколько устойчива инвестиция, при каких условиях она перестаёт быть привлекательной. Только текст."
     )
-    payload = {
-        'modelUri': f'gpt://{folder_id}/{YANDEX_MODEL}',
-        'completionOptions': {'stream': False, 'temperature': 0.3, 'maxTokens': '300'},
-        'messages': [
-            {'role': 'system', 'text': 'Ты — инвестиционный аналитик недвижимости. Отвечай кратко.'},
-            {'role': 'user',   'text': prompt},
-        ],
-    }
     try:
-        req = urllib.request.Request(
-            YANDEX_GPT_URL,
-            data=json.dumps(payload).encode(),
-            headers={
-                'Authorization': f'Api-Key {api_key}',
-                'Content-Type': 'application/json',
-                'x-folder-id': folder_id,
-            },
-            method='POST',
+        return chat_simple(
+            'Ты — инвестиционный аналитик недвижимости. Отвечай кратко.',
+            prompt, api_key, folder_id,
+            max_tokens=300, timeout=15,
         )
-        with urllib.request.urlopen(req, timeout=15) as r:
-            data = json.loads(r.read().decode())
-        alts = (data.get('result') or {}).get('alternatives') or []
-        return ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
     except Exception:
         return ''
 

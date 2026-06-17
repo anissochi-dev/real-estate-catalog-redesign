@@ -14,15 +14,12 @@ import json
 import math
 import os
 import time
-import urllib.request
 import urllib.error
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from ai_client import load_keys, embed, EMBED_DOC_MODEL, EMBED_QRY_MODEL
 
 SCHEMA = os.environ.get('MAIN_DB_SCHEMA', 't_p71821556_real_estate_catalog_')
-EMBED_DOC_MODEL = 'text-search-doc/latest'
-EMBED_QUERY_MODEL = 'text-search-query/latest'
-EMBED_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/textEmbedding'
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -39,33 +36,6 @@ def _ok(body, status=200):
 
 def _err(code, msg):
     return _ok({'error': msg}, code)
-
-
-def _load_keys() -> tuple[str, str]:
-    api_key = os.environ.get('AISTUDIO_API_KEY', '')
-    folder_id = os.environ.get('YANDEX_FOLDER_ID', '')
-    if api_key and folder_id:
-        return api_key, folder_id
-    try:
-        with psycopg2.connect(os.environ['DATABASE_URL']) as conn:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
-                row = cur.fetchone() or {}
-                return (api_key or row.get('yandex_api_key') or '',
-                        folder_id or row.get('yandex_folder_id') or '')
-    except Exception:
-        return api_key, folder_id
-
-
-def _embed(text: str, model: str, api_key: str, folder_id: str) -> list[float]:
-    model_uri = f'emb://{folder_id}/{model}' if folder_id else model
-    payload = {'modelUri': model_uri, 'text': text[:2000]}
-    headers = {'Content-Type': 'application/json', 'Authorization': f'Api-Key {api_key}'}
-    if folder_id:
-        headers['x-folder-id'] = folder_id
-    req = urllib.request.Request(EMBED_URL, data=json.dumps(payload).encode(), headers=headers, method='POST')
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        return json.loads(resp.read().decode()).get('embedding', [])
 
 
 def _cosine(a: list[float], b: list[float]) -> float:
@@ -136,7 +106,7 @@ def _reindex(cur, conn, api_key: str, folder_id: str, ids: list | None, batch: i
         if i > 0 and i % 5 == 0:
             time.sleep(1.0)
         try:
-            vec = _embed(text, EMBED_DOC_MODEL, api_key, folder_id)
+            vec = embed(text, api_key, folder_id, model=EMBED_DOC_MODEL)
             if vec:
                 vec_sql = '{' + ','.join(str(v) for v in vec) + '}'
                 cur.execute(
@@ -150,7 +120,7 @@ def _reindex(cur, conn, api_key: str, folder_id: str, ids: list | None, batch: i
                 print(f'[smart-search] rate limit id={row["id"]}, пауза 3 сек')
                 time.sleep(3.0)
                 try:
-                    vec = _embed(text, EMBED_DOC_MODEL, api_key, folder_id)
+                    vec = embed(text, api_key, folder_id, model=EMBED_DOC_MODEL)
                     if vec:
                         vec_sql = '{' + ','.join(str(v) for v in vec) + '}'
                         cur.execute(
@@ -192,7 +162,7 @@ def handler(event: dict, context) -> dict:
         return _err(400, 'Invalid JSON')
 
     action = body.get('action', 'search')
-    api_key, folder_id = _load_keys()
+    api_key, folder_id = load_keys()
     if not api_key or not folder_id:
         return _err(500, 'Embeddings не настроены: нужен AISTUDIO_API_KEY + YANDEX_FOLDER_ID')
 
@@ -214,7 +184,7 @@ def handler(event: dict, context) -> dict:
 
     # 1. Эмбеддинг запроса — 1 HTTP-вызов
     try:
-        query_vec = _embed(query, EMBED_QUERY_MODEL, api_key, folder_id)
+        query_vec = embed(query, api_key, folder_id, model=EMBED_QRY_MODEL)
     except urllib.error.HTTPError as e:
         return _err(502, f'Ошибка эмбеддинга: {e.code}')
     except Exception as e:

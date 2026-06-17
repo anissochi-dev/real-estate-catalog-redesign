@@ -8,14 +8,11 @@ Returns: { faq: [{question: str, answer: str}, ...] }
 import json
 import os
 import re
-import urllib.request
-import urllib.error
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from ai_client import load_keys, chat_simple
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
-YANDEX_GPT_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
-YANDEX_MODEL = 'yandexgpt-5-pro/latest'
 
 DEAL_LABELS = {
     'sale': 'продажа',
@@ -55,14 +52,7 @@ def _json_resp(status: int, data: dict) -> dict:
 
 def _load_yandex_keys(cur) -> tuple:
     """Загружает ключи YandexGPT из БД, fallback — env."""
-    try:
-        cur.execute(f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
-        row = cur.fetchone()
-        if row:
-            return row.get('yandex_api_key') or '', row.get('yandex_folder_id') or ''
-    except Exception:
-        pass
-    return (os.environ.get('AISTUDIO_API_KEY') or os.environ.get('YANDEX_API_KEY', '')), os.environ.get('YANDEX_FOLDER_ID', '')
+    return load_keys()
 
 
 def _check_seo_faq_column(cur) -> bool:
@@ -118,40 +108,18 @@ def _build_prompt(listing: dict) -> str:
 def _call_yandex_gpt(api_key: str, folder_id: str, user_text: str) -> dict:
     """Вызывает YandexGPT и возвращает {'text': ...} или {'error': ...}."""
     system = (
-        'Ты — эксперт по коммерческой недвижимости России. '
-        'Составь ровно 6 вопросов и ответов, которые чаще всего задают потенциальные арендаторы или покупатели. '
-        'Вопросы конкретные, ответы — 1-3 предложения. Не придумывай данных которых нет в карточке. '
-        'Отвечай СТРОГО в формате JSON-массива без markdown и пояснений:\n'
-        '[{"question": "...", "answer": "..."}, ...]'
-    )
-    model_uri = f'gpt://{folder_id}/{YANDEX_MODEL}' if folder_id else YANDEX_MODEL
-    payload = {
-        'modelUri': model_uri,
-        'completionOptions': {'stream': False, 'temperature': 0.4, 'maxTokens': '1200'},
-        'messages': [
-            {'role': 'system', 'text': system},
-            {'role': 'user', 'text': user_text},
-        ],
-    }
-    headers = {'Authorization': f'Api-Key {api_key}', 'Content-Type': 'application/json'}
-    if folder_id:
-        headers['x-folder-id'] = folder_id
-    req = urllib.request.Request(
-        YANDEX_GPT_URL,
-        data=json.dumps(payload).encode(),
-        headers=headers,
-        method='POST',
+        'Ты — эксперт по коммерческой недвижимости. '
+        'Сгенерируй ровно 6 вопросов и ответов FAQ для страницы объекта. '
+        'Формат ответа — ТОЛЬКО валидный JSON-массив: '
+        '[{"question": "...", "answer": "..."}, ...] '
+        'Без markdown, без пояснений, только JSON.'
     )
     try:
-        with urllib.request.urlopen(req, timeout=45) as resp:
-            data = json.loads(resp.read().decode())
-        alts = (data.get('result') or {}).get('alternatives') or []
-        text = ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
+        text = chat_simple(system, user_text, api_key, folder_id,
+                           temperature=0.4, max_tokens=1200, timeout=45)
         return {'text': text}
-    except urllib.error.HTTPError as e:
-        return {'error': f'YandexGPT HTTP {e.code}'}
     except Exception as e:
-        return {'error': f'{type(e).__name__}: {str(e)[:200]}'}
+        return {'error': str(e)}
 
 
 def _parse_faq(text: str) -> list:

@@ -10,14 +10,12 @@ Returns: {districts:[...]} или {imported, skipped}
 """
 import json
 import os
-import urllib.request
 import urllib.error
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from ai_client import load_keys, chat_simple
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
-YANDEX_GPT_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
-YANDEX_MODEL_NAME = 'yandexgpt-5-pro/latest'
 
 _RU_MAP = {
     'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e',
@@ -79,42 +77,12 @@ def _get_user(cur, token):
     return cur.fetchone()
 
 
-def _load_keys(cur):
-    try:
-        cur.execute(f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
-        row = cur.fetchone()
-        if row:
-            return row.get('yandex_api_key') or '', row.get('yandex_folder_id') or ''
-    except Exception:
-        pass
-    return (
-        os.environ.get('AISTUDIO_API_KEY') or os.environ.get('YANDEX_API_KEY', '')
-    ), os.environ.get('YANDEX_FOLDER_ID', '')
-
-
 def _call_gpt(system: str, user_text: str, api_key: str, folder_id: str, max_tokens: str = '2000') -> dict:
     if not api_key:
         return {'error': 'YandexGPT не настроен — добавьте ключи в Настройки → Интеграции'}
-    model_uri = f'gpt://{folder_id}/{YANDEX_MODEL_NAME}' if folder_id else YANDEX_MODEL_NAME
-    payload = {
-        'modelUri': model_uri,
-        'completionOptions': {'stream': False, 'temperature': 0.3, 'maxTokens': max_tokens},
-        'messages': [{'role': 'system', 'text': system}, {'role': 'user', 'text': user_text}],
-    }
-    headers = {'Authorization': f'Api-Key {api_key}', 'Content-Type': 'application/json'}
-    if folder_id:
-        headers['x-folder-id'] = folder_id
-    req = urllib.request.Request(
-        YANDEX_GPT_URL,
-        data=json.dumps(payload).encode(),
-        headers=headers,
-        method='POST',
-    )
     try:
-        with urllib.request.urlopen(req, timeout=55) as resp:
-            data = json.loads(resp.read().decode())
-        alts = (data.get('result') or {}).get('alternatives') or []
-        text = ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
+        text = chat_simple(system, user_text, api_key, folder_id,
+                           temperature=0.4, max_tokens=int(max_tokens), timeout=25)
         return {'text': text}
     except urllib.error.HTTPError as e:
         if e.code == 401:
@@ -186,7 +154,7 @@ def handler(event: dict, context) -> dict:
 
             # ── suggest: ИИ сам придумывает список районов города ──────────────
             if action == 'suggest':
-                api_key, folder_id = _load_keys(cur)
+                api_key, folder_id = load_keys(conn)
                 system = (
                     'Ты — эксперт по географии и недвижимости. '
                     'По названию города сгенерируй список всех основных районов и микрорайонов этого города. '
@@ -220,7 +188,7 @@ def handler(event: dict, context) -> dict:
                 if len(names) > 60:
                     return _err(400, f'Слишком много районов ({len(names)}). Максимум 60 за раз')
 
-                api_key, folder_id = _load_keys(cur)
+                api_key, folder_id = load_keys(conn)
                 system = (
                     'Ты — эксперт по географии городов России и недвижимости. '
                     f'Тебе дан список районов / микрорайонов города {city}. '

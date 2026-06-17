@@ -8,10 +8,9 @@ import os
 import re
 import urllib.request
 from datetime import datetime
+from ai_client import chat_with_history, chat_simple
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
-YANDEX_GPT_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
-YANDEX_MODEL = 'gpt://b1g6sh80lrjnjr22jkfq/yandexgpt-5-pro/latest'
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -49,29 +48,18 @@ def _err(msg, status=400):
 
 
 def _call_yandex_gpt(messages: list, folder_id: str, api_key: str) -> str:
-    payload = {
-        'modelUri': YANDEX_MODEL.replace('b1g6sh80lrjnjr22jkfq', folder_id),
-        'completionOptions': {
-            'stream': False,
-            'temperature': 0.5,
-            'maxTokens': 600,
-        },
-        'messages': messages,
-    }
-    data = json.dumps(payload, ensure_ascii=False).encode('utf-8')
-    req = urllib.request.Request(
-        YANDEX_GPT_URL,
-        data=data,
-        headers={
-            'Content-Type': 'application/json',
-            'Authorization': f'Api-Key {api_key}',
-            'x-folder-id': folder_id,
-        },
-        method='POST',
-    )
-    with urllib.request.urlopen(req, timeout=25) as resp:
-        result = json.loads(resp.read().decode('utf-8'))
-    return result['result']['alternatives'][0]['message']['text'].strip()
+    system = ''
+    history = []
+    for m in messages:
+        if m.get('role') == 'system':
+            system = m.get('text', '')
+        else:
+            history.append(m)
+    user = history.pop()['text'] if history else ''
+    result = chat_with_history(system, user, api_key, folder_id,
+                               history=history, temperature=0.5,
+                               max_tokens=600, timeout=25)
+    return result['text']
 
 
 def _get_listing(cur, listing_id: int) -> 'dict | None':

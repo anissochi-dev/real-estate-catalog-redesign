@@ -31,9 +31,9 @@ import boto3
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
+from ai_client import load_keys, chat_simple
+
 SCHEMA = 't_p71821556_real_estate_catalog_'
-YANDEX_GPT_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
-YANDEX_MODEL = 'yandexgpt-5-pro/latest'
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -310,14 +310,7 @@ def _get_user(cur, token):
 
 
 def _load_gpt_keys(cur):
-    try:
-        cur.execute(f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings ORDER BY id LIMIT 1")
-        row = cur.fetchone()
-        if row:
-            return (row.get('yandex_api_key') or '').strip(), (row.get('yandex_folder_id') or '').strip()
-    except Exception:
-        pass
-    return (os.environ.get('AISTUDIO_API_KEY') or os.environ.get('YANDEX_API_KEY', '')), os.environ.get('YANDEX_FOLDER_ID', '')
+    return load_keys()
 
 
 def _fetch_news_snippets(query: str, limit: int = 8) -> tuple[list[dict], str]:
@@ -469,29 +462,9 @@ def _gpt(api_key, folder_id, topic, key_rate: float | None = None, news_snippets
         f'Напиши статью, пересказав эти новости своими словами. '
         f'Используй только факты из источников выше. Не придумывай цифры и данные которых нет в новостях.'
     )
-    payload = {
-        'modelUri': f'gpt://{folder_id}/{YANDEX_MODEL}',
-        'completionOptions': {'stream': False, 'temperature': 0.3, 'maxTokens': '3000'},
-        'messages': [
-            {'role': 'system', 'text': system_prompt},
-            {'role': 'user', 'text': user_text},
-        ],
-    }
-    req = urllib.request.Request(
-        YANDEX_GPT_URL,
-        data=json.dumps(payload).encode(),
-        headers={
-            'Authorization': f'Api-Key {api_key}',
-            'Content-Type': 'application/json',
-            'x-folder-id': folder_id,
-        },
-        method='POST',
-    )
     try:
-        with urllib.request.urlopen(req, timeout=55) as resp:
-            data = json.loads(resp.read().decode())
-        alts = (data.get('result') or {}).get('alternatives') or []
-        text = ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
+        text = chat_simple(system_prompt, user_text, api_key, folder_id,
+                           temperature=0.3, max_tokens=3000, timeout=55)
         if not text:
             return None, 'Пустой ответ от модели'
         # Парсим JSON из ответа

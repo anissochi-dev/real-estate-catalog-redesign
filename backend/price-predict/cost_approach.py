@@ -11,10 +11,9 @@ import json
 import urllib.request
 import urllib.error
 from datetime import datetime, timedelta
+from ai_client import chat_simple
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
-YANDEX_GPT_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
-YANDEX_MODEL = 'yandexgpt-5-pro/latest'
 CACHE_TTL_DAYS = 14
 
 # Соответствие класса здания → quality_class для справочника
@@ -169,29 +168,12 @@ def _gpt_comment(listing: dict, result: dict, api_key: str, folder_id: str) -> s
         f"соответствует затратной стоимости, какие факторы износа существенны, "
         f"есть ли красные флаги. Только текст, без заголовков и списков."
     )
-    payload = {
-        'modelUri': f'gpt://{folder_id}/{YANDEX_MODEL}',
-        'completionOptions': {'stream': False, 'temperature': 0.3, 'maxTokens': '300'},
-        'messages': [
-            {'role': 'system', 'text': 'Ты — эксперт-оценщик недвижимости. Отвечай кратко и по делу.'},
-            {'role': 'user',   'text': prompt},
-        ],
-    }
     try:
-        req = urllib.request.Request(
-            YANDEX_GPT_URL,
-            data=json.dumps(payload).encode(),
-            headers={
-                'Authorization': f'Api-Key {api_key}',
-                'Content-Type': 'application/json',
-                'x-folder-id': folder_id,
-            },
-            method='POST',
+        return chat_simple(
+            'Ты — эксперт-оценщик недвижимости. Отвечай кратко и по делу.',
+            prompt, api_key, folder_id,
+            temperature=0.3, max_tokens=300, timeout=15,
         )
-        with urllib.request.urlopen(req, timeout=15) as r:
-            data = json.loads(r.read().decode())
-        alts = (data.get('result') or {}).get('alternatives') or []
-        return ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
     except Exception:
         return ''
 

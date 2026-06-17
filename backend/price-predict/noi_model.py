@@ -10,10 +10,9 @@ import json
 import urllib.request
 import urllib.error
 from datetime import datetime, timedelta
+from ai_client import chat_simple
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
-YANDEX_GPT_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
-YANDEX_MODEL_NAME = 'yandexgpt-5-pro/latest'
 CACHE_TTL_DAYS = 7
 
 DEAL_RU = {'sale': 'продажа', 'rent': 'аренда', 'business': 'готовый бизнес'}
@@ -242,29 +241,12 @@ def _gpt_comment_only(listing: dict, bench: dict, api_key: str, folder_id: str) 
         f"Напиши 1–2 предложения: почему эти параметры актуальны для данного объекта "
         f"и на что обратить внимание инвестору. Только текст."
     )
-    payload = {
-        'modelUri': f'gpt://{folder_id}/{YANDEX_MODEL_NAME}',
-        'completionOptions': {'stream': False, 'temperature': 0.3, 'maxTokens': '200'},
-        'messages': [
-            {'role': 'system', 'text': 'Ты — аналитик коммерческой недвижимости Краснодара. Отвечай кратко.'},
-            {'role': 'user', 'text': prompt},
-        ],
-    }
     try:
-        req = urllib.request.Request(
-            YANDEX_GPT_URL,
-            data=json.dumps(payload).encode(),
-            headers={
-                'Authorization': f'Api-Key {api_key}',
-                'Content-Type': 'application/json',
-                'x-folder-id': folder_id,
-            },
-            method='POST',
+        return chat_simple(
+            'Ты — аналитик коммерческой недвижимости Краснодара. Отвечай кратко.',
+            prompt, api_key, folder_id,
+            max_tokens=200, timeout=15,
         )
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read().decode())
-        alts = (data.get('result') or {}).get('alternatives') or []
-        return ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
     except Exception:
         return ''
 
