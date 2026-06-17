@@ -31,10 +31,7 @@ const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; gro
   { id: 'market-import',   label: 'Импорт рынка',     icon: 'Upload',          roles: ['admin', 'editor'] },
   { id: 'settings',        label: 'Настройки',         icon: 'Settings',        roles: ['admin', 'editor'] },
   { id: 'phones',          label: 'Телефонная база',   icon: 'Phone',           roles: ['admin', 'editor', 'manager', 'director', 'office_manager'] },
-  { id: 'crm-kanban',      label: 'Воронка сделок',   icon: 'KanbanSquare',    roles: ['admin', 'director', 'manager', 'office_manager'], group: 'crm' },
-  { id: 'crm-gamification',label: 'Рейтинг команды',  icon: 'Trophy',          roles: ['admin', 'director', 'manager', 'office_manager', 'broker'], group: 'crm' },
-  { id: 'crm-checks',      label: 'Проверки',          icon: 'ShieldCheck',     roles: ['admin', 'director', 'manager', 'office_manager', 'broker'], group: 'crm' },
-  { id: 'crm-payments',    label: 'Платежи',           icon: 'CreditCard',      roles: ['admin', 'director', 'office_manager', 'manager'], group: 'crm' },
+
 ];
 
 const SOCIAL_PARSER_URL = 'https://functions.poehali.dev/5d1bb364-c893-4d73-a003-e119069371ff';
