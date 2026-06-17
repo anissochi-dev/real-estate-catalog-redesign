@@ -152,7 +152,24 @@ export default function RolesAdmin() {
     adminApi.getRolePermissions()
       .then(d => {
         if (d.permissions && Object.keys(d.permissions).length > 0) {
-          setPerms(d.permissions as AllPerms);
+          // Мержим с DEFAULT_PERMS: добавляем недостающие секции, не трогаем существующие
+          const merged: AllPerms = {};
+          for (const role of Object.keys(DEFAULT_PERMS) as Role[]) {
+            const dbRole = (d.permissions as AllPerms)[role] || {};
+            const defRole = DEFAULT_PERMS[role] || {};
+            merged[role] = { ...defRole, ...dbRole };
+          }
+          setPerms(merged);
+          // Если БД была неполной — сохраняем актуальные права
+          const dbKeys = Object.keys(d.permissions as AllPerms);
+          const needsUpdate = dbKeys.some(role => {
+            const dbRole = (d.permissions as AllPerms)[role] || {};
+            const defRole = DEFAULT_PERMS[role as Role] || {};
+            return Object.keys(defRole).some(sec => !(sec in dbRole));
+          });
+          if (needsUpdate) {
+            adminApi.updateRolePermissions(merged as Record<string, unknown>).catch(() => {});
+          }
         }
       })
       .catch(() => {})

@@ -71,8 +71,9 @@ function highlight(text: string, query: string) {
 export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, search = '', currentUserId, isBroker = false }: Props) {
   const [statusMenuId, setStatusMenuId] = useState<number | null>(null);
 
-  // Брокер управляет всеми лидами как менеджер
-  const canManageLead = (_l: Lead) => true;
+  // Брокер видит все лиды, управляет только своими (нет прав update/delete на чужие)
+  const canManageLead = (l: Lead) =>
+    !isBroker || (l.broker_id != null && l.broker_id === currentUserId);
 
   const sorted = useMemo(() => {
     const STATUS_ORDER: Record<string, number> = { pending: 0, new: 1, in_progress: 2, done: 3, rejected: 4 };
