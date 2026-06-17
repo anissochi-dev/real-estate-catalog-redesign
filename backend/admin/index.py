@@ -6,6 +6,7 @@ Returns: HTTP-ответ с данными ресурса или ошибкой 
 
 import json
 import os
+import re
 from datetime import datetime
 
 import psycopg2
@@ -28,6 +29,20 @@ def _err(code, msg):
 
 def _safe(s, length=255):
     return (s or '').replace("'", "''")[:length]
+
+
+TRANSLIT_MAP = {
+    'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'yo','ж':'zh','з':'z',
+    'и':'i','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r',
+    'с':'s','т':'t','у':'u','ф':'f','х':'kh','ц':'ts','ч':'ch','ш':'sh',
+    'щ':'shch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu','я':'ya',
+}
+
+def _make_slug(title: str, listing_id: int) -> str:
+    s = (title or '').lower()
+    s = ''.join(TRANSLIT_MAP.get(c, c) for c in s)
+    s = re.sub(r'[^a-z0-9]+', '-', s).strip('-')[:80]
+    return f"{s}-{listing_id}" if s else str(listing_id)
 
 
 # Антиспам для уведомлений об ошибках: одинаковый текст не чаще раза в 5 минут.
