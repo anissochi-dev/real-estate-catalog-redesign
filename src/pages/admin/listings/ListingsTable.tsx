@@ -116,7 +116,7 @@ export default function ListingsTable({
             {/* ── Сама карточка ── */}
           <div
             className={[
-              'group flex gap-0 bg-white border overflow-hidden shadow-sm transition-all duration-150',
+              'group bg-white border overflow-hidden shadow-sm transition-all duration-150',
               isSelected ? 'rounded-b-2xl rounded-t-none' : 'rounded-2xl',
               'hover:shadow-md hover:border-brand-blue/30',
               isSelected ? 'border-brand-blue/50 border-t-0' : 'border-border',
@@ -124,74 +124,75 @@ export default function ListingsTable({
               isArchived ? 'opacity-60' : '',
             ].filter(Boolean).join(' ')}
           >
-            {/* ── Чекбокс-полоска слева ── */}
-            <div
-              className={[
-                'flex items-center justify-center w-10 flex-shrink-0 transition-colors',
-                canSelect ? 'cursor-pointer' : 'cursor-default',
-                isSelected ? 'bg-brand-blue/10' : canSelect ? 'bg-muted/30 hover:bg-muted/60' : 'bg-muted/10',
-              ].join(' ')}
-              onClick={() => canSelect && onToggleSelect(it.id)}
-            >
-              {canSelect ? (
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={() => onToggleSelect(it.id)}
-                  onClick={e => e.stopPropagation()}
-                  className="rounded accent-brand-blue w-4 h-4"
-                />
-              ) : (
-                <Icon name="Lock" size={12} className="text-muted-foreground/30" />
-              )}
-            </div>
+            {/* ── Верхняя строка на десктопе: чекбокс + фото + контент ── */}
+            <div className="hidden sm:flex gap-0 flex-row">
 
-            {/* ── Фото ── */}
-            <div
-              className="relative flex-shrink-0 w-48 cursor-pointer overflow-hidden"
-              onClick={() => openSite(it)}
-              title="Открыть объект на сайте"
-            >
-              {mainImg ? (
-                <img
-                  src={mainImg}
-                  alt={it.title}
-                  className="w-full h-full object-cover transition-opacity duration-200 group-hover:opacity-90"
-                  style={{ minHeight: 140 }}
-                />
-              ) : (
-                <div className="w-full h-full bg-muted flex items-center justify-center" style={{ minHeight: 140 }}>
-                  <Icon name="Image" size={36} className="text-muted-foreground/40" />
-                </div>
-              )}
-              {/* Оверлей при hover */}
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-200" />
-              {/* Счётчик фото */}
-              {imgs.length > 1 && (
-                <span className="absolute bottom-2 left-2 bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <Icon name="Images" size={10} />
-                  {imgs.length}
-                </span>
-              )}
-              {/* Статус-метка поверх фото */}
-              {(isHidden || isArchived) && (
-                <div className="absolute top-2 left-2">
-                  {isHidden && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500 text-white flex items-center gap-1 shadow">
-                      <Icon name="EyeOff" size={9} /> Скрыт
-                    </span>
-                  )}
-                  {isArchived && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500 text-white shadow">
-                      Архив
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
+              {/* ── Чекбокс-полоска слева ── */}
+              <div
+                className={[
+                  'flex items-center justify-center w-10 flex-shrink-0 transition-colors',
+                  canSelect ? 'cursor-pointer' : 'cursor-default',
+                  isSelected ? 'bg-brand-blue/10' : canSelect ? 'bg-muted/30 hover:bg-muted/60' : 'bg-muted/10',
+                ].join(' ')}
+                onClick={() => canSelect && onToggleSelect(it.id)}
+              >
+                {canSelect ? (
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => onToggleSelect(it.id)}
+                    onClick={e => e.stopPropagation()}
+                    className="rounded accent-brand-blue w-4 h-4"
+                  />
+                ) : (
+                  <Icon name="Lock" size={12} className="text-muted-foreground/30" />
+                )}
+              </div>
 
-            {/* ── Основной контент ── */}
-            <div className="flex-1 min-w-0 flex flex-col py-3 px-4 gap-0">
+              {/* ── Фото (десктоп) ── */}
+              <div
+                className="relative flex-shrink-0 w-48 cursor-pointer overflow-hidden"
+                onClick={() => openSite(it)}
+                title="Открыть объект на сайте"
+                style={{ minHeight: 140 }}
+              >
+                {mainImg ? (
+                  <img
+                    src={mainImg}
+                    alt={it.title}
+                    className="w-full h-full object-cover transition-opacity duration-200 group-hover:opacity-90"
+                    style={{ minHeight: 140 }}
+                  />
+                ) : (
+                  <div className="w-full h-full bg-muted flex items-center justify-center" style={{ minHeight: 140 }}>
+                    <Icon name="Image" size={36} className="text-muted-foreground/40" />
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-200" />
+                {imgs.length > 1 && (
+                  <span className="absolute bottom-2 left-2 bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Icon name="Images" size={10} />
+                    {imgs.length}
+                  </span>
+                )}
+                {(isHidden || isArchived) && (
+                  <div className="absolute top-2 left-2">
+                    {isHidden && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500 text-white flex items-center gap-1 shadow">
+                        <Icon name="EyeOff" size={9} /> Скрыт
+                      </span>
+                    )}
+                    {isArchived && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500 text-white shadow">
+                        Архив
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* ── Основной контент (справа от фото) ── */}
+              <div className="flex flex-1 min-w-0 flex-col py-3 px-4 gap-0">
 
               {/* Строка 1: Название + ID + кнопки */}
               <div className="flex items-start justify-between gap-3">
@@ -338,6 +339,125 @@ export default function ListingsTable({
                     </span>
                   )}
                 </div>
+              </div>
+            </div>{/* конец десктопного контента */}
+
+            </div>{/* конец flex-строки фото+чекбокс */}
+
+            {/* ── Мобильное фото — во всю ширину ── */}
+            <div
+              className="sm:hidden relative cursor-pointer overflow-hidden w-full"
+              onClick={() => openSite(it)}
+              style={{ aspectRatio: '16/9' }}
+            >
+              {mainImg ? (
+                <img src={mainImg} alt={it.title} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-muted flex items-center justify-center min-h-[160px]">
+                  <Icon name="Image" size={36} className="text-muted-foreground/40" />
+                </div>
+              )}
+              {/* Чекбокс поверх фото */}
+              {canSelect && (
+                <div
+                  className={['absolute top-2 left-2 w-7 h-7 rounded-lg flex items-center justify-center shadow', isSelected ? 'bg-brand-blue' : 'bg-white/90'].join(' ')}
+                  onClick={e => { e.stopPropagation(); if (canSelect) onToggleSelect(it.id); }}
+                >
+                  <input type="checkbox" checked={isSelected} onChange={() => onToggleSelect(it.id)} onClick={e => e.stopPropagation()} className="rounded accent-brand-blue w-4 h-4" />
+                </div>
+              )}
+              {imgs.length > 1 && (
+                <span className="absolute bottom-2 left-2 bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <Icon name="Images" size={10} />{imgs.length}
+                </span>
+              )}
+              {(isHidden || isArchived) && (
+                <div className="absolute top-2 right-2 flex flex-col gap-1">
+                  {isHidden && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500 text-white flex items-center gap-1 shadow"><Icon name="EyeOff" size={9} /> Скрыт</span>}
+                  {isArchived && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500 text-white shadow">Архив</span>}
+                </div>
+              )}
+            </div>
+
+            {/* ── Мобильный контент — под фото ── */}
+            <div className="sm:hidden flex flex-col py-2.5 px-3 gap-0">
+
+              {/* Строка 1: Название + кнопки действий */}
+              <div className="flex items-start justify-between gap-2">
+                <button
+                  onClick={() => onInternalCard?.(it)}
+                  className="font-semibold text-[14px] leading-snug text-left hover:text-brand-blue transition-colors line-clamp-2 flex-1 min-w-0"
+                >
+                  {it.title}
+                </button>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue">
+                    #{fmtListingId(it.id)}
+                  </span>
+                  <button onClick={() => onHistory(it)} title="История" className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-brand-blue transition-colors">
+                    <Icon name="BarChart2" size={13} />
+                  </button>
+                  {canEdit && (
+                    <button onClick={() => onEdit(it)} title="Редактировать" className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-brand-blue/10 hover:text-brand-blue transition-colors">
+                      <Icon name="Pencil" size={13} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Строка 2: Адрес */}
+              <div className="flex items-center gap-1 mt-1">
+                <Icon name="MapPin" size={11} className="text-muted-foreground/60 flex-shrink-0" />
+                <span className="text-xs text-muted-foreground truncate">
+                  {[it.city || 'Краснодар', it.district].filter(Boolean).join(' · ')}
+                </span>
+              </div>
+
+              {/* Строка 3: Тип сделки + Цена + Площадь */}
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                {dm && (
+                  <span className={`text-xs px-2 py-0.5 rounded-lg font-semibold ${dm[2]}`}>{dm[1]}</span>
+                )}
+                <span className="text-sm font-bold text-foreground leading-none">
+                  {(it.price || 0).toLocaleString('ru')} ₽
+                </span>
+                {m2 > 0 && (
+                  <span className="text-xs text-muted-foreground">{m2.toLocaleString('ru')} ₽/м²</span>
+                )}
+                {it.area ? (
+                  <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+                    <Icon name="Maximize" size={10} className="opacity-60" />
+                    {it.area} м²
+                  </span>
+                ) : null}
+                <ExportBadges it={it} />
+              </div>
+
+              {/* Строка 4: Статистика + Собственник */}
+              <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-border/50">
+                <button onClick={() => onInternalCard?.(it)} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Icon name="Eye" size={12} className="text-brand-blue" />
+                    {(it.stats_views ?? 0).toLocaleString('ru')}
+                  </span>
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Icon name="Phone" size={12} className="text-emerald-500" />
+                    {(it.stats_calls ?? 0).toLocaleString('ru')}
+                  </span>
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Icon name="Inbox" size={12} className="text-brand-orange" />
+                    {(it.stats_leads ?? 0).toLocaleString('ru')}
+                  </span>
+                </button>
+                <div className="flex items-center gap-1 min-w-0">
+                  <Icon name="User" size={11} className="text-muted-foreground/50 flex-shrink-0" />
+                  <span className="text-xs text-muted-foreground truncate max-w-[120px]">
+                    {it.owner_name || '—'}
+                  </span>
+                </div>
+                <span className="text-[10px] text-muted-foreground/60 flex-shrink-0">
+                  {fmtDate(it.created_at)}
+                </span>
               </div>
             </div>
 
