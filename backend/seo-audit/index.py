@@ -6,6 +6,7 @@ Returns: { score, issues: [...], stats: {...}, top_problems: [...] }
 """
 import json
 import os
+from datetime import date, datetime
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -18,10 +19,16 @@ CORS = {
 }
 
 
+def _default(o):
+    if isinstance(o, (datetime, date)):
+        return o.isoformat()
+    raise TypeError(f'Object of type {type(o).__name__} is not JSON serializable')
+
+
 def _ok(data):
     return {'statusCode': 200,
             'headers': {**CORS, 'Content-Type': 'application/json; charset=utf-8'},
-            'body': json.dumps(data, ensure_ascii=False)}
+            'body': json.dumps(data, ensure_ascii=False, default=_default)}
 
 
 def _err(msg, status=400):
