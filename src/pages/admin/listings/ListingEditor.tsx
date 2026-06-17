@@ -61,13 +61,20 @@ export default function ListingEditor({
   // Контакты собственника: admin, director, editor, manager — всегда;
   // broker — на своём объекте или при создании нового (нет id)
   const isNewListing = !(editing as Record<string, unknown>).id;
+  const isBrokerOwn = user?.role === 'broker' && (
+    isNewListing ||
+    (editing as Record<string, unknown>).broker_id === user.id ||
+    (editing as Record<string, unknown>).author_id === user.id
+  );
   const canEditOwner = !!user && (
     ['admin', 'director', 'editor', 'manager'].includes(user.role) ||
-    (user.role === 'broker' && (
-      isNewListing ||
-      (editing as Record<string, unknown>).broker_id === user.id ||
-      (editing as Record<string, unknown>).author_id === user.id
-    ))
+    isBrokerOwn
+  );
+  // Редактирование телефона: брокер может только если объект его/новый
+  // На чужом объекте — только читает имя/телефон, не меняет
+  const canEditPhone = !!user && (
+    ['admin', 'director', 'editor', 'manager'].includes(user.role) ||
+    isBrokerOwn
   );
 
   // Определяем какие вкладки имеют ошибки
@@ -208,6 +215,7 @@ export default function ListingEditor({
               aiTitleLoading={aiTitleLoading}
               purposes={purposes}
               canEditOwner={canEditOwner}
+              canEditPhone={canEditPhone}
             />
           )}
 

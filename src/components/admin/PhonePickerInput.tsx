@@ -17,9 +17,10 @@ interface Props {
   onNameChange?: (name: string) => void;
   placeholder?: string;
   className?: string;
+  readOnly?: boolean;
 }
 
-export default function PhonePickerInput({ value, onChange, onNameChange, placeholder, className = '' }: Props) {
+export default function PhonePickerInput({ value, onChange, onNameChange, placeholder, className = '', readOnly = false }: Props) {
   const [inputDisplay, setInputDisplay] = useState(() => value ? formatPhone(value) : '');
   const [suggestions, setSuggestions] = useState<PhoneContact[]>([]);
   const [open, setOpen] = useState(false);
@@ -141,11 +142,12 @@ export default function PhonePickerInput({ value, onChange, onNameChange, placeh
             <input
               ref={inputRef}
               type="tel"
-              className="w-full px-3 py-2 border rounded-lg pr-8 font-mono tracking-wide"
+              className={`w-full px-3 py-2 border rounded-lg pr-8 font-mono tracking-wide ${readOnly ? 'bg-muted/50 text-muted-foreground cursor-not-allowed' : ''}`}
               placeholder={placeholder ?? '+7 900 000-00-00'}
               value={inputDisplay}
-              onChange={handleInputChange}
-              onFocus={e => {
+              readOnly={readOnly}
+              onChange={readOnly ? undefined : handleInputChange}
+              onFocus={readOnly ? undefined : e => {
                 const len = e.target.value.length;
                 setTimeout(() => e.target.setSelectionRange(len, len), 0);
                 if (digits.length >= 10 && suggestions.length > 0) setOpen(true);
