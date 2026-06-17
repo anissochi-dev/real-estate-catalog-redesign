@@ -90,17 +90,17 @@ export default function ListingInlineActions({ listingId: _listingId, onBulk, on
     <button
       onClick={e => { e.stopPropagation(); handleClick(); }}
       disabled={disabled || bulkLoading}
-      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold transition disabled:opacity-40 whitespace-nowrap ${cls}`}
+      className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold transition disabled:opacity-40 whitespace-nowrap ${cls}`}
     >
-      <Icon name={icon} size={13} />
+      <Icon name={icon} size={11} />
       {label}
-      {chevron && <Icon name={open ? 'ChevronUp' : 'ChevronDown'} size={11} className="ml-0.5 opacity-70" />}
+      {chevron && <Icon name={open ? 'ChevronUp' : 'ChevronDown'} size={10} className="ml-0.5 opacity-70" />}
     </button>
   );
 
   return (
     <div
-      className="bg-brand-blue rounded-t-2xl px-3 pt-3 pb-2.5 space-y-2"
+      className="bg-brand-blue rounded-t-2xl px-3 pt-2 pb-2 space-y-1.5"
       onClick={e => e.stopPropagation()}
     >
       {bulkLoading && (
@@ -112,7 +112,7 @@ export default function ListingInlineActions({ listingId: _listingId, onBulk, on
 
       {/* ── Строка 1: Действия ── */}
       <div className="flex items-center gap-1.5">
-        <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest w-16 shrink-0">Действия</span>
+        <span className="text-[9px] font-bold text-white/40 uppercase tracking-widest w-14 shrink-0">Действия</span>
         <div className="flex items-center gap-1.5 flex-wrap">
           <Btn icon="CheckCircle" label="Активный" cls="bg-emerald-500 text-white hover:bg-emerald-400"
             onClick={() => { if (confirm('Сделать активным?')) onBulk('activate'); }} />
@@ -127,7 +127,7 @@ export default function ListingInlineActions({ listingId: _listingId, onBulk, on
 
       {/* ── Строка 2: Статусы ── */}
       <div className="flex items-center gap-1.5">
-        <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest w-16 shrink-0">Статус</span>
+        <span className="text-[9px] font-bold text-white/40 uppercase tracking-widest w-14 shrink-0">Статус</span>
         <div className="flex items-center gap-1.5 flex-wrap">
 
           {/* Горячее */}
@@ -176,7 +176,7 @@ export default function ListingInlineActions({ listingId: _listingId, onBulk, on
 
       {/* ── Строка 3: Экспорт + Агент ── */}
       <div className="flex items-center gap-1.5">
-        <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest w-16 shrink-0">Экспорт</span>
+        <span className="text-[9px] font-bold text-white/40 uppercase tracking-widest w-14 shrink-0">Экспорт</span>
         <div className="flex items-center gap-1.5 flex-wrap">
 
           {/* XML */}
