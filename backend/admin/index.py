@@ -239,7 +239,6 @@ FALLBACK_PERMS = {
         'purposes':         ['read'],
         'land_vri':         ['read'],
         'xml_feeds':        ['read'],
-        'crm-kanban':       ['read', 'create', 'update'],
         'crm-gamification': ['read'],
         'crm-checks':       ['read'],
     },

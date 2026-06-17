@@ -39,7 +39,7 @@ export default function AdminPage({ onExit, initialSection }: Props) {
     if (user?.role === 'broker') {
       const saved = localStorage.getItem(SECTION_KEY) as AdminSection;
       // Если сохранена секция недоступная брокеру — сбрасываем на listings
-      const brokerAllowed: AdminSection[] = ['dashboard', 'listings', 'leads', 'crm-kanban', 'crm-gamification', 'crm-checks'];
+      const brokerAllowed: AdminSection[] = ['dashboard', 'listings', 'leads', 'crm-gamification', 'crm-checks'];
       if (!saved || !brokerAllowed.includes(saved)) {
         setSection('listings');
       }

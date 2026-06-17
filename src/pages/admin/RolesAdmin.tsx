@@ -155,7 +155,7 @@ const DEFAULT_NAV_ORDER: Record<string, string[]> = {
   director:       ['dashboard','listings','leads','news','phones','users','marketing','vb-knowledge','crm-kanban','crm-gamification','crm-checks','crm-payments'],
   manager:        ['dashboard','listings','leads','news','phones','marketing','crm-kanban','crm-gamification','crm-checks','crm-payments'],
   editor:         ['dashboard','listings','leads','news','phones','pages','settings','seo','districts','vb-knowledge','marketing','market-import'],
-  broker:         ['dashboard','listings','leads','crm-kanban','crm-gamification','crm-checks'],
+  broker:         ['dashboard','listings','leads','crm-gamification','crm-checks'],
   office_manager: ['dashboard','listings','leads','phones','crm-kanban','crm-payments'],
 };
 
