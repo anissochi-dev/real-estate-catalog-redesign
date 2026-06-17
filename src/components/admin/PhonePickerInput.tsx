@@ -50,7 +50,7 @@ export default function PhonePickerInput({ value, onChange, onNameChange, placeh
     if (timerRef.current) clearTimeout(timerRef.current);
     setMatchedContact(null);
     const digits = extractDigits(normalized);
-    if (!digits || digits.length < 3) { setSuggestions([]); setOpen(false); return; }
+    if (!digits || digits.length < 10) { setSuggestions([]); setOpen(false); return; }
     timerRef.current = setTimeout(async () => {
       setSearching(true);
       try {
