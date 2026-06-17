@@ -62,23 +62,36 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
   const [rolePerms, setRolePerms] = useState<Record<string, Record<string, boolean>> | null>(null);
   const [navOrder, setNavOrder] = useState<Record<string, string[]> | null>(null);
 
-  useEffect(() => {
+  const loadNavAndPerms = () => {
     if (!user) return;
     Promise.all([
       user.role !== 'admin' ? adminApi.getRolePermissions() : Promise.resolve(null),
       adminApi.getNavOrder(),
     ]).then(([pd, sd]) => {
       if (pd?.permissions) setRolePerms(pd.permissions);
-      if (sd?.settings?.nav_order) {
+      const rawNav = sd?.settings?.nav_order;
+      if (rawNav) {
         try {
-          const parsed = typeof sd.settings.nav_order === 'string'
-            ? JSON.parse(sd.settings.nav_order)
-            : sd.settings.nav_order;
-          if (parsed && typeof parsed === 'object') setNavOrder(parsed);
+          let parsed = typeof rawNav === 'string' ? JSON.parse(rawNav) : rawNav;
+          if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            setNavOrder(parsed);
+          }
         } catch { /* ignore */ }
       }
     }).catch(() => {});
-  }, [user]);
+  };
+
+  useEffect(() => {
+    loadNavAndPerms();
+  }, [user?.role]);
+
+  // Перезагружаем порядок меню после сохранения в RolesAdmin
+  useEffect(() => {
+    const handler = () => loadNavAndPerms();
+    window.addEventListener('admin:nav-order-updated', handler);
+    return () => window.removeEventListener('admin:nav-order-updated', handler);
+  }, [user?.role]);
 
   // Загружаем счётчик ожидающих постов из соцсетей раз в 5 минут
   useEffect(() => {
