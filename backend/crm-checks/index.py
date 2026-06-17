@@ -381,7 +381,13 @@ def fetch_checko(inn: str, api_key: str) -> dict:
         with urllib.request.urlopen(req, timeout=15) as resp:
             raw = json.loads(resp.read().decode())
 
-        print(f'[checko] raw keys: {list((raw.get("data") or {}).keys())}')
+        d_keys = list((raw.get("data") or {}).keys())
+        print(f'[checko] raw keys: {d_keys}')
+        # Логируем структуру ключевых полей для диагностики
+        for debug_key in ['Надежность', 'Оценка', 'НалРежим', 'Налоги', 'Финансы', 'Санкции', 'РМСП', 'СЧР', 'ОКПО', 'Контакты', 'Руковод', 'Учред']:
+            val = (raw.get('data') or {}).get(debug_key)
+            if val is not None:
+                print(f'[checko] {debug_key}: {json.dumps(val, ensure_ascii=False, default=str)[:300]}')
 
         meta = raw.get('meta', {})
         data = raw.get('data')
