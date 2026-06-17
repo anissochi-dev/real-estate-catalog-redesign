@@ -413,60 +413,89 @@ def fetch_checko(inn: str, api_key: str) -> dict:
         is_liquidated = any(w in status_text.lower() for w in ('ликвид', 'банкрот'))
         is_ip = bool(data.get('ОГРНИП'))
 
-        # ── Руководитель ──────────────────────────────────────────────────────
+        # ── Руководитель (Руковод — список) ──────────────────────────────────
         rukovod = data.get('Руковод') or []
         if isinstance(rukovod, dict):
             rukovod = [rukovod]
         director_fio = director_post = director_inn = ''
+        director_mass = False
         directors_history = []
         for d in rukovod:
-            fio  = d.get('ФИО') or d.get('Фио') or ''
-            post = d.get('Должность') or d.get('НаимДолжн') or ''
-            inn_d = d.get('ИНН') or d.get('ИННФЛ') or ''
-            date_from = d.get('ДатаНач') or d.get('ДатаНазнач') or ''
+            fio   = d.get('ФИО') or ''
+            post  = d.get('НаимДолжн') or d.get('ВидДолжн') or ''
+            inn_d = d.get('ИНН') or ''
+            mass  = bool(d.get('МассРуковод'))
+            diskv = bool(d.get('ДисквЛицо'))
+            date_from = d.get('ДатаНач') or ''
             date_to   = d.get('ДатаКон') or ''
             if not director_fio and fio:
-                director_fio = fio
+                director_fio  = fio
                 director_post = post
-                director_inn = inn_d
+                director_inn  = inn_d
+                director_mass = mass
             if fio:
-                directors_history.append({'фио': fio, 'должность': post, 'с': date_from, 'по': date_to})
+                directors_history.append({
+                    'фио': fio, 'должность': post, 'инн': inn_d,
+                    'с': date_from, 'по': date_to,
+                    'массовый': mass, 'дисквалифицирован': diskv,
+                })
 
-        # ── Учредители ────────────────────────────────────────────────────────
-        uchred = data.get('Учред') or []
-        if isinstance(uchred, dict):
-            uchred = [uchred]
+        # ── Учредители (Учред = {ФЛ: [...], ЮЛ: [...]}) ─────────────────────
+        uchred_raw = data.get('Учред') or {}
         founders = []
-        for f in uchred:
-            name  = f.get('НаимСокр') or f.get('НаимПолн') or f.get('ФИО') or f.get('Фио') or f.get('Наим') or ''
-            share = f.get('Доля') or f.get('НоминСтоим') or f.get('СумДоля') or ''
-            ogrn  = f.get('ОГРН') or ''
-            inn_f = f.get('ИНН') or f.get('ИННФЛ') or ''
+        fl_list = uchred_raw.get('ФЛ', []) if isinstance(uchred_raw, dict) else []
+        ul_list = uchred_raw.get('ЮЛ', []) if isinstance(uchred_raw, dict) else []
+        if isinstance(uchred_raw, list):
+            fl_list = uchred_raw
+        for f in fl_list:
+            name  = f.get('ФИО') or ''
+            inn_f = f.get('ИНН') or ''
+            dolja = f.get('Доля') or {}
+            nom   = dolja.get('Номинал', '') if isinstance(dolja, dict) else ''
+            pct   = dolja.get('Процент', '') if isinstance(dolja, dict) else ''
+            date_f = f.get('ДатаВкл') or ''
             if name:
-                founders.append({'наименование': name, 'доля_руб': share, 'огрн': ogrn, 'инн': inn_f})
+                founders.append({'наименование': name, 'инн': inn_f, 'доля_руб': nom, 'доля_пct': pct, 'с': date_f, 'тип': 'ФЛ'})
+        for f in ul_list:
+            name  = f.get('НаимСокр') or f.get('НаимПолн') or ''
+            ogrn  = f.get('ОГРН') or ''
+            inn_f = f.get('ИНН') or ''
+            dolja = f.get('Доля') or {}
+            nom   = dolja.get('Номинал', '') if isinstance(dolja, dict) else ''
+            pct   = dolja.get('Процент', '') if isinstance(dolja, dict) else ''
+            date_f = f.get('ДатаВкл') or ''
+            if name:
+                founders.append({'наименование': name, 'огрн': ogrn, 'инн': inn_f, 'доля_руб': nom, 'доля_пct': pct, 'с': date_f, 'тип': 'ЮЛ'})
 
-        # ── Контакты ──────────────────────────────────────────────────────────
+        # ── Контакты (Контакты = {Тел: ["+7..."], Емейл: [...], Сайт: [...]}) ─
         kontakty = data.get('Контакты') or {}
         if isinstance(kontakty, list):
             kontakty = {}
-        phones = [p if isinstance(p, str) else p.get('Номер', '') for p in (kontakty.get('Телефоны') or [])]
-        emails = [e if isinstance(e, str) else e.get('Адрес', '') for e in (kontakty.get('Емейлы') or [])]
-        sites  = [s if isinstance(s, str) else s.get('Адрес', '') for s in (kontakty.get('Сайты') or [])]
-        phones = [p for p in phones if p]
-        emails = [e for e in emails if e]
-        sites  = [s for s in sites if s]
+        # Тел — список строк
+        tels = kontakty.get('Тел') or kontakty.get('Телефоны') or []
+        phones = [p if isinstance(p, str) else str(p) for p in tels if p]
+        emails_raw = kontakty.get('Емейл') or kontakty.get('Емейлы') or []
+        emails = [e if isinstance(e, str) else str(e) for e in emails_raw if e]
+        sites_raw = kontakty.get('Сайт') or kontakty.get('Сайты') or []
+        sites = [s if isinstance(s, str) else str(s) for s in sites_raw if s]
 
-        # ── Налоги / налоговый режим ──────────────────────────────────────────
+        # ── Налоги (Налоги = {ОсобРежим: ["УСН"], СведУпл: [...]}) ──────────
         nalogi = data.get('Налоги') or {}
         tax_systems = []
+        tax_payments = []
         if isinstance(nalogi, dict):
-            rezhim = nalogi.get('НалРежим') or nalogi.get('Режим') or []
-            if isinstance(rezhim, str):
-                rezhim = [rezhim]
-            for t in rezhim:
-                name_t = t.get('Название') or t.get('Наим') or t if isinstance(t, str) else ''
-                if name_t:
-                    tax_systems.append(name_t)
+            # Специальный режим
+            osobrezhim = nalogi.get('ОсобРежим') or []
+            if isinstance(osobrezhim, str):
+                osobrezhim = [osobrezhim]
+            tax_systems = [r for r in osobrezhim if r]
+            # Суммы уплаченных налогов
+            for t in (nalogi.get('СведУпл') or []):
+                if isinstance(t, dict):
+                    naim = t.get('Наим') or ''
+                    summa = t.get('Сумма') or 0
+                    if naim:
+                        tax_payments.append({'наименование': naim, 'сумма': summa})
 
         # ── ОКВЭД ────────────────────────────────────────────────────────────
         okved_main = data.get('ОКВЭД') or {}
@@ -492,19 +521,22 @@ def fetch_checko(inn: str, api_key: str) -> dict:
                 if kind:
                     licenses.append({'вид': kind, 'номер': num, 'с': date_start})
 
-        # ── МСП ──────────────────────────────────────────────────────────────
+        # ── МСП (РМСП = {Кат: "МИКРОПРЕДПРИЯТИЕ", ДатаВкл: "2024-09-10"}) ────
         rmsp = data.get('РМСП') or {}
         if isinstance(rmsp, dict):
-            msp_cat  = rmsp.get('Категория') or rmsp.get('КатСубМСП') or ''
+            msp_cat  = rmsp.get('Кат') or rmsp.get('Категория') or rmsp.get('КатСубМСП') or ''
             msp_date = rmsp.get('ДатаВкл') or rmsp.get('Дата') or ''
         else:
             msp_cat = str(rmsp) if rmsp else ''
             msp_date = ''
 
-        # ── Сотрудники ────────────────────────────────────────────────────────
-        schr = data.get('СЧР') or data.get('СЧРГод') or ''
-        if isinstance(schr, dict):
-            schr = schr.get('Количество') or schr.get('Число') or ''
+        # ── Сотрудники (СЧР — число, СЧРГод — год) ───────────────────────────
+        schr_val = data.get('СЧР')
+        schr_year = data.get('СЧРГод') or ''
+        if isinstance(schr_val, dict):
+            schr = schr_val.get('Количество') or schr_val.get('Число') or ''
+        else:
+            schr = schr_val if schr_val is not None else ''
 
         # ── Финансы ───────────────────────────────────────────────────────────
         finance_raw = data.get('Финансы') or {}
@@ -554,6 +586,13 @@ def fetch_checko(inn: str, api_key: str) -> dict:
             if val and val is not False and val != 0 and val != [] and val != {}:
                 risks.append({'label': label, 'level': level})
 
+        # ── Санкции ───────────────────────────────────────────────────────────
+        # Санкции = false означает «не под санкциями»
+        sankc_val    = data.get('Санкции')
+        sankc_uchr   = data.get('СанкцУчр')
+        net_sankciy  = sankc_val is False or sankc_val is None or sankc_val == 0 or sankc_val == []
+        net_svyaz_sankc = sankc_uchr is False or sankc_uchr is None or sankc_uchr == 0 or sankc_uchr == []
+
         # ── Итоговая карточка ─────────────────────────────────────────────────
         card = {
             '_source': 'checko',
@@ -562,8 +601,10 @@ def fetch_checko(inn: str, api_key: str) -> dict:
             'огрн': data.get('ОГРН') or '',
             'огрнип': data.get('ОГРНИП') or '',
             'кпп': data.get('КПП') or '',
+            'окпо': data.get('ОКПО') or '',
             'наименование': data.get('НаимСокр') or data.get('НаимПолн') or '',
             'наименование_полное': data.get('НаимПолн') or '',
+            'наименование_англ': data.get('НаимАнгл') or '',
             'опф': (data.get('ОКОПФ') or {}).get('Название') or '' if isinstance(data.get('ОКОПФ'), dict) else '',
             'тип': 'ИП' if is_ip else 'ЮЛ',
             'статус': status_text,
@@ -576,11 +617,13 @@ def fetch_checko(inn: str, api_key: str) -> dict:
             'оквэд_основной': okved_code,
             'оквэд_наим': okved_name_main,
             'оквэд_список': okved_list,
-            'сотрудников': schr,
+            'сотрудников': str(schr) if schr != '' else '',
+            'сотрудников_год': str(schr_year),
             'уст_капитал': data.get('УстКап') or '',
             'директор_фио': director_fio,
             'директор_должность': director_post,
             'директор_инн': director_inn,
+            'директор_массовый': director_mass,
             'директора_история': directors_history,
             'учредители': founders,
             'телефоны': phones,
@@ -588,11 +631,14 @@ def fetch_checko(inn: str, api_key: str) -> dict:
             'сайты': sites,
             'лицензии': licenses,
             'налог_режим': tax_systems,
+            'налог_уплачено': tax_payments,
             'мсп_категория': msp_cat,
             'мсп_дата': msp_date,
             'товарные_знаки': trademarks,
             'финансы': finance_history,
             'риски': risks,
+            'санкции_нет': net_sankciy,
+            'санкции_связи_нет': net_svyaz_sankc,
             'запросов_сегодня': meta.get('today_request_count', 0),
             'запросов_остаток': meta.get('remaining') if 'remaining' in meta else None,
         }
