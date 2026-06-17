@@ -347,7 +347,12 @@ export default function UsersAdmin() {
                 </div>
               </div>
 
-              {!editing.id && (
+              {editing.id ? (
+                <div className="w-full px-3 py-2 border rounded-lg bg-muted/40 flex items-center gap-2 text-sm text-muted-foreground">
+                  <Icon name="Mail" size={14} />
+                  <span className="select-all">{editing.email}</span>
+                </div>
+              ) : (
                 <input className="w-full px-3 py-2 border rounded-lg" placeholder="Email" type="email"
                   value={editing.email || ''} onChange={e => setEditing({ ...editing, email: e.target.value })} />
               )}
