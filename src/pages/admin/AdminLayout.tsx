@@ -18,8 +18,6 @@ interface Props {
   children: ReactNode;
 }
 
-const CRM_ROLES = ['admin', 'director', 'broker', 'office_manager', 'manager'];
-
 const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; group?: string }[] = [
   { id: 'dashboard',       label: 'Дашборд',          icon: 'LayoutDashboard', roles: ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'] },
   { id: 'listings',        label: 'Объекты',           icon: 'Building2',       roles: ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'] },
@@ -34,7 +32,7 @@ const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; gro
   { id: 'settings',        label: 'Настройки',         icon: 'Settings',        roles: ['admin', 'editor'] },
   { id: 'phones',          label: 'Телефонная база',   icon: 'Phone',           roles: ['admin', 'editor', 'manager', 'director', 'office_manager'] },
   { id: 'crm-kanban',      label: 'Воронка сделок',   icon: 'KanbanSquare',    roles: ['admin', 'director', 'manager', 'office_manager'], group: 'crm' },
-  { id: 'crm-gamification',label: 'Рейтинг команды',  icon: 'Trophy',          roles: CRM_ROLES, group: 'crm' },
+  { id: 'crm-gamification',label: 'Рейтинг команды',  icon: 'Trophy',          roles: ['admin', 'director', 'manager', 'office_manager', 'broker'], group: 'crm' },
   { id: 'crm-checks',      label: 'Проверки',          icon: 'ShieldCheck',     roles: ['admin', 'director', 'manager', 'office_manager', 'broker'], group: 'crm' },
   { id: 'crm-payments',    label: 'Платежи',           icon: 'CreditCard',      roles: ['admin', 'director', 'office_manager', 'manager'], group: 'crm' },
 ];
@@ -180,7 +178,7 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
     director:       ['dashboard', 'listings', 'leads', 'news', 'phones', 'users', 'pages', 'settings', 'marketing', 'vb-knowledge', 'crm-kanban', 'crm-gamification', 'crm-checks', 'crm-payments'],
     manager:        ['dashboard', 'listings', 'leads', 'news', 'phones', 'marketing', 'crm-kanban', 'crm-gamification', 'crm-checks', 'crm-payments'],
     editor:         ['dashboard', 'listings', 'leads', 'news', 'phones', 'pages', 'settings', 'seo', 'districts', 'vb-knowledge', 'marketing', 'market-import'],
-    broker:         ['dashboard', 'listings', 'leads', 'crm-checks'],
+    broker:         ['dashboard', 'listings', 'leads', 'crm-gamification', 'crm-checks'],
     office_manager: ['dashboard', 'listings', 'leads', 'phones', 'crm-kanban', 'crm-payments'],
     client:         [],
   };
