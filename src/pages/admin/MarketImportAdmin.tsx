@@ -188,21 +188,12 @@ export default function MarketImportAdmin() {
       {/* Форма */}
       <div className="bg-white border rounded-xl p-5 space-y-4">
         <h2 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Параметры загрузки</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="md:col-span-2 space-y-1">
-            <label className="text-sm font-medium">Ссылка на файл (CSV или XLSX)</label>
-            <input type="url" value={fileUrl} onChange={e => setFileUrl(e.target.value)}
-              placeholder="https://cdn.poehali.dev/…/файл.csv"
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue" />
-            <p className="text-xs text-muted-foreground">Загрузите файл через «Скачать → S3» и вставьте CDN-ссылку</p>
-          </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Источник</label>
-            <select value={source} onChange={e => setSource(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue">
-              {SOURCES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-          </div>
+        <div className="space-y-1">
+          <label className="text-sm font-medium">Ссылка на файл (CSV или XLSX)</label>
+          <input type="url" value={fileUrl} onChange={e => setFileUrl(e.target.value)}
+            placeholder="https://cdn.poehali.dev/…/файл.csv"
+            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue" />
+          <p className="text-xs text-muted-foreground">Загрузите файл через «Скачать → S3» и вставьте CDN-ссылку</p>
         </div>
 
         <label className="flex items-center gap-2 text-sm cursor-pointer">
