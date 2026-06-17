@@ -238,7 +238,11 @@ def fetch_newdb_balance(api_key: str) -> dict:
     )
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read().decode())
+            raw = json.loads(resp.read().decode())
+        # Убираем токен из ответа — не должен светиться во фронтенде
+        HIDDEN_FIELDS = {'token', 'api_key', 'key', 'secret', 'password', 'access_token'}
+        cleaned = {k: v for k, v in raw.items() if k.lower() not in HIDDEN_FIELDS}
+        return cleaned
     except urllib.error.HTTPError as e:
         return {'error': f'HTTP {e.code}'}
     except Exception as e:

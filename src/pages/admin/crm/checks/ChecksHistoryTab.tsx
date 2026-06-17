@@ -181,23 +181,42 @@ export function ChecksQuotaTab({ quota, quotaLoading, quotaError, newdbBalance }
         </div>
       ))}
       {/* Баланс NewDB от самого сервиса */}
-      {newdbBalance && !('error' in newdbBalance) && (
-        <div className="sm:col-span-3 bg-white rounded-2xl border border-blue-200 p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">NewDB</span>
-            <span className="text-sm font-semibold text-foreground">Информация об аккаунте</span>
-            <Icon name="RefreshCw" size={13} className="text-muted-foreground ml-auto" />
+      {newdbBalance && !('error' in newdbBalance) && (() => {
+        // Человекопонятные названия полей NewDB
+        const FIELD_LABELS: Record<string, string> = {
+          balance:        'Баланс (руб.)',
+          requests_left:  'Запросов осталось',
+          requests_used:  'Запросов использовано',
+          requests_limit: 'Лимит запросов',
+          plan:           'Тариф',
+          expires_at:     'Действует до',
+          email:          'Email аккаунта',
+        };
+        const HIDDEN = new Set(['token', 'api_key', 'key', 'secret']);
+        const entries = Object.entries(newdbBalance).filter(([k]) => !HIDDEN.has(k));
+        if (entries.length === 0) return null;
+        return (
+          <div className="sm:col-span-3 bg-white rounded-2xl border border-blue-200 p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">NewDB</span>
+              <span className="text-sm font-semibold text-foreground">Аккаунт NewDB (реальные данные)</span>
+              <Icon name="ShieldCheck" size={14} className="text-emerald-500 ml-auto" />
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {entries.map(([key, val]) => (
+                <div key={key} className="bg-muted/30 rounded-xl p-3 text-center">
+                  <div className="text-xl font-bold text-brand-blue">{String(val ?? '—')}</div>
+                  <div className="text-xs text-muted-foreground mt-1">{FIELD_LABELS[key] || key.replace(/_/g, ' ')}</div>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
+              <Icon name="Info" size={11} />
+              Баланс — рублёвый счёт аккаунта NewDB. Запросы тарифицируются отдельно по методу.
+            </p>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {Object.entries(newdbBalance).map(([key, val]) => (
-              <div key={key} className="text-center">
-                <div className="text-lg font-bold text-brand-blue">{String(val ?? '—')}</div>
-                <div className="text-xs text-muted-foreground mt-0.5 capitalize">{key.replace(/_/g, ' ')}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+        );
+      })()}
       {newdbBalance && 'error' in newdbBalance && (
         <div className="sm:col-span-3 bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-2 text-sm text-amber-800">
           <Icon name="AlertTriangle" size={15} />
