@@ -364,7 +364,7 @@ def fetch_dadata(inn: str, api_key: str, secret_key: str = '') -> dict:
 
 
 def fetch_checko(inn: str, api_key: str) -> dict:
-    """Проверка компании или ИП по ИНН через Checko.ru API."""
+    """Проверка компании или ИП по ИНН через Checko.ru API — полные данные ЕГРЮЛ/ЕГРИП."""
     inn_clean = ''.join(filter(str.isdigit, str(inn)))
     if not inn_clean:
         return {'error': 'ИНН не указан или некорректен'}
@@ -381,6 +381,8 @@ def fetch_checko(inn: str, api_key: str) -> dict:
         with urllib.request.urlopen(req, timeout=15) as resp:
             raw = json.loads(resp.read().decode())
 
+        print(f'[checko] raw keys: {list((raw.get("data") or {}).keys())}')
+
         meta = raw.get('meta', {})
         data = raw.get('data')
 
@@ -388,77 +390,176 @@ def fetch_checko(inn: str, api_key: str) -> dict:
             msg = raw.get('message') or raw.get('error') or 'Компания не найдена'
             return {'error': msg, '_meta': meta}
 
-        # Нормализуем ответ в понятную структуру
         STATUS_MAP = {
-            'ACTIVE': 'Действует',
-            'LIQUIDATING': 'В процессе ликвидации',
-            'LIQUIDATED': 'Ликвидирована',
-            'BANKRUPT': 'Банкрот',
-            'REORGANIZING': 'Реорганизация',
+            'ACTIVE': 'Действует', 'LIQUIDATING': 'В процессе ликвидации',
+            'LIQUIDATED': 'Ликвидирована', 'BANKRUPT': 'Банкрот', 'REORGANIZING': 'Реорганизация',
         }
         status_code = data.get('СтатусЮЛ') or data.get('СтатусИП') or ''
+        is_ip = bool(data.get('ФИОИПолн'))
 
-        # Руководитель
+        # ── Руководитель ─────────────────────────────────────────────────────
         mgmt = data.get('Руководитель') or {}
-        director = mgmt.get('ФИО') or mgmt.get('НаимДолжн', '')
-        director_post = mgmt.get('НаимДолжн', '')
+        director_fio  = mgmt.get('ФИО') or ''
+        director_post = mgmt.get('НаимДолжн') or ''
+        director_inn  = mgmt.get('ИННФЛ') or ''
 
-        # Учредители
+        # История руководителей
+        directors_history = []
+        for d in (data.get('РуководительИст') or [])[:5]:
+            fio  = d.get('ФИО') or ''
+            post = d.get('НаимДолжн') or ''
+            date_from = d.get('ДатаНач') or ''
+            date_to   = d.get('ДатаКон') or ''
+            if fio:
+                directors_history.append({'фио': fio, 'должность': post, 'с': date_from, 'по': date_to})
+
+        # ── Учредители ────────────────────────────────────────────────────────
         founders = []
-        for f in (data.get('Учредители') or [])[:5]:
-            name = f.get('НаимЮЛПолн') or f.get('ФИО') or ''
-            share = f.get('НоминСтоим', '')
+        for f in (data.get('Учредители') or []):
+            name  = f.get('НаимЮЛПолн') or f.get('ФИО') or f.get('НаимИН') or ''
+            share = f.get('НоминСтоим') or f.get('Доля') or ''
+            ogrn  = f.get('ОГРН') or ''
+            inn_f = f.get('ИНН') or f.get('ИННФЛ') or ''
             if name:
-                founders.append(f'{name} ({share} ₽)' if share else name)
+                founders.append({
+                    'наименование': name,
+                    'доля_руб': share,
+                    'огрн': ogrn,
+                    'инн': inn_f,
+                })
 
-        # Флаги рисков
+        # ── Контакты ──────────────────────────────────────────────────────────
+        phones = []
+        for p in (data.get('Телефоны') or []):
+            v = p.get('Телефон') or p if isinstance(p, str) else ''
+            if v:
+                phones.append(v)
+        emails = []
+        for e in (data.get('Емейлы') or data.get('Email') or []):
+            v = e.get('Емейл') or e if isinstance(e, str) else ''
+            if v:
+                emails.append(v)
+        sites = []
+        for s in (data.get('Сайты') or []):
+            v = s.get('Сайт') or s if isinstance(s, str) else ''
+            if v:
+                sites.append(v)
+
+        # ── Лицензии ──────────────────────────────────────────────────────────
+        licenses = []
+        for lic in (data.get('Лицензии') or []):
+            kind = lic.get('НаимВидДеят') or lic.get('Вид') or ''
+            num  = lic.get('НомЛиц') or ''
+            date_start = lic.get('ДатаНачЛиц') or ''
+            if kind:
+                licenses.append({'вид': kind, 'номер': num, 'с': date_start})
+
+        # ── Налоговый режим ───────────────────────────────────────────────────
+        tax_systems = []
+        for t in (data.get('НалРежим') or []):
+            name_t = t.get('НаимНалРежим') or t if isinstance(t, str) else ''
+            if name_t:
+                tax_systems.append(name_t)
+
+        # ── Виды деятельности (все ОКВЭД) ────────────────────────────────────
+        okved_list = []
+        for o in (data.get('КодыОКВЭД') or []):
+            code = o.get('КодОКВЭД') or ''
+            name_o = o.get('НаимОКВЭД') or ''
+            is_main = o.get('ПрОсн') or False
+            if code:
+                okved_list.append({'код': code, 'наименование': name_o, 'основной': is_main})
+
+        # ── Финансы по годам ──────────────────────────────────────────────────
+        finance_raw = data.get('Финансы') or {}
+        finance_history = []
+        for year in sorted(finance_raw.keys(), reverse=True)[:5]:
+            f = finance_raw[year]
+            finance_history.append({
+                'год': year,
+                'выручка': f.get('Выручка') or f.get('ВырОбщ') or '',
+                'прибыль': f.get('ЧистПриб') or f.get('ПрибУб') or '',
+                'активы': f.get('ВалБал') or '',
+                'капитал': f.get('КапРез') or '',
+            })
+
+        # ── МСП ───────────────────────────────────────────────────────────────
+        msp_info = data.get('МСП') or {}
+        if isinstance(msp_info, str):
+            msp_cat = msp_info
+            msp_date = ''
+        else:
+            msp_cat  = msp_info.get('КатСубМСП') or msp_info.get('Категория') or ''
+            msp_date = msp_info.get('ДатаВкл') or ''
+
+        # ── Товарные знаки ────────────────────────────────────────────────────
+        trademarks = []
+        for tm in (data.get('ТоварЗнак') or []):
+            name_tm = tm.get('Наим') or tm.get('НаимТЗ') or ''
+            reg_date_tm = tm.get('ДатаРег') or ''
+            if name_tm:
+                trademarks.append({'наименование': name_tm, 'дата_рег': reg_date_tm})
+
+        # ── Флаги рисков ──────────────────────────────────────────────────────
         risks = []
-        if data.get('НедобПост'):
-            risks.append({'label': 'Недобросовестный поставщик', 'level': 'danger'})
-        if data.get('МассРуковод'):
-            risks.append({'label': 'Массовый руководитель', 'level': 'warning'})
-        if data.get('МассУчред'):
-            risks.append({'label': 'Массовый учредитель', 'level': 'warning'})
-        if data.get('МассАдрес'):
-            risks.append({'label': 'Массовый адрес', 'level': 'warning'})
-        if data.get('СвСанкции'):
-            risks.append({'label': 'Под санкциями', 'level': 'danger'})
-        if data.get('ДисквЛица'):
-            risks.append({'label': 'Дисквалифицированные лица в руководстве', 'level': 'danger'})
+        risk_flags = [
+            ('НедобПост',    'Недобросовестный поставщик',                  'danger'),
+            ('МассРуковод',  'Массовый руководитель',                        'warning'),
+            ('МассУчред',    'Массовый учредитель',                          'warning'),
+            ('МассАдрес',    'Массовый адрес регистрации',                   'warning'),
+            ('СвСанкции',    'Под санкциями',                                'danger'),
+            ('ДисквЛица',    'Дисквалифицированные лица в руководстве',      'danger'),
+            ('НедостСвед',   'Недостоверные сведения в ЕГРЮЛ',               'danger'),
+            ('НезавЛикв',    'Незавершённая ликвидация',                     'warning'),
+            ('БанкротПроц',  'В процессе банкротства',                      'danger'),
+            ('РеоргПроц',    'В процессе реорганизации',                    'warning'),
+        ]
+        for key, label, level in risk_flags:
+            if data.get(key):
+                risks.append({'label': label, 'level': level})
 
-        # Финансы
-        finance = data.get('Финансы') or {}
-        finance_last = sorted(finance.items(), reverse=True)[:1][0][1] if finance else {}
-
+        # ── Итоговая карточка ─────────────────────────────────────────────────
         card = {
             '_source': 'checko',
             '_meta': meta,
-            'inn': data.get('ИНН') or inn_clean,
-            'ogrn': data.get('ОГРН') or '',
-            'kpp': data.get('КПП') or '',
-            'name': data.get('НаимСокрЮЛ') or data.get('НаимПолнЮЛ') or data.get('ФИОИПолн') or '',
-            'name_full': data.get('НаимПолнЮЛ') or data.get('ФИОИПолн') or '',
-            'opf': data.get('НаимОПФКр') or '',
-            'status': STATUS_MAP.get(status_code, status_code) or data.get('СтатусТекст', ''),
-            'status_code': status_code,
-            'is_active': status_code == 'ACTIVE' or data.get('Действующее', False),
-            'is_liquidated': status_code in ('LIQUIDATED', 'BANKRUPT'),
-            'address': data.get('АдресПолн') or '',
-            'reg_date': data.get('ДатаОГРН') or data.get('ДатаРег') or '',
-            'okved': data.get('КодОКВЭД') or '',
-            'okved_name': data.get('НаимОКВЭД') or '',
-            'employees': data.get('ССЧ') or '',
-            'msp_category': data.get('МСП') or '',
-            'director': director,
-            'director_post': director_post,
-            'founders': founders,
-            'risks': risks,
-            'authorized_capital': data.get('УстКап') or '',
-            'revenue': finance_last.get('Выручка', '') if finance_last else '',
-            'profit': finance_last.get('ЧистПриб', '') if finance_last else '',
-            'finance_year': sorted(finance.keys(), reverse=True)[0] if finance else '',
-            'today_request_count': meta.get('today_request_count', 0),
-            'requests_remaining': meta.get('remaining', 0) if 'remaining' in meta else None,
+            '_raw_keys': list(data.keys()),  # для диагностики
+            'инн': data.get('ИНН') or inn_clean,
+            'огрн': data.get('ОГРН') or '',
+            'кпп': data.get('КПП') or '',
+            'огрнип': data.get('ОГРНИП') or '',
+            'наименование': data.get('НаимСокрЮЛ') or data.get('НаимПолнЮЛ') or data.get('ФИОИПолн') or '',
+            'наименование_полное': data.get('НаимПолнЮЛ') or data.get('ФИОИПолн') or '',
+            'опф': data.get('НаимОПФКр') or data.get('НаимОПФПолн') or '',
+            'тип': 'ИП' if is_ip else 'ЮЛ',
+            'статус': STATUS_MAP.get(status_code, status_code) or data.get('СтатусТекст', ''),
+            'статус_код': status_code,
+            'действующее': status_code == 'ACTIVE' or data.get('Действующее', False),
+            'ликвидировано': status_code in ('LIQUIDATED', 'BANKRUPT'),
+            'адрес': data.get('АдресПолн') or '',
+            'дата_регистрации': data.get('ДатаОГРН') or data.get('ДатаРег') or '',
+            'дата_ликвидации': data.get('ДатаЛиквид') or '',
+            'оквэд_основной': data.get('КодОКВЭД') or '',
+            'оквэд_наим': data.get('НаимОКВЭД') or '',
+            'оквэд_список': okved_list,
+            'сотрудников': data.get('ССЧ') or data.get('КолРаб') or '',
+            'уст_капитал': data.get('УстКап') or '',
+            'директор_фио': director_fio,
+            'директор_должность': director_post,
+            'директор_инн': director_inn,
+            'директора_история': directors_history,
+            'учредители': founders,
+            'телефоны': phones,
+            'email': emails,
+            'сайты': sites,
+            'лицензии': licenses,
+            'налог_режим': tax_systems,
+            'мсп_категория': msp_cat,
+            'мсп_дата': msp_date,
+            'товарные_знаки': trademarks,
+            'финансы': finance_history,
+            'риски': risks,
+            'запросов_сегодня': meta.get('today_request_count', 0),
+            'запросов_остаток': meta.get('remaining') if 'remaining' in meta else None,
         }
         return card
 
