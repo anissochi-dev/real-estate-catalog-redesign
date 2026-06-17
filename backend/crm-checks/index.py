@@ -34,6 +34,7 @@ def _load_check_keys(conn):
         'newdb': os.environ.get('NEWDB_API_KEY', ''),
         'bezopasno': os.environ.get('BEZOPASNO_API_KEY', ''),
         'dadata': os.environ.get('DADATA_API_KEY', ''),
+        'checko': os.environ.get('CHECKO_API_KEY', ''),
     }
     try:
         cur = conn.cursor()
@@ -51,9 +52,10 @@ def _load_check_keys(conn):
                 keys['bezopasno'] = row[2].strip()
     except Exception:
         pass
-    # DaData — всегда из env (секрет платформы)
     if not keys['dadata']:
         keys['dadata'] = os.environ.get('DADATA_API_KEY', '')
+    if not keys['checko']:
+        keys['checko'] = os.environ.get('CHECKO_API_KEY', '')
     return keys
 
 
@@ -361,6 +363,112 @@ def fetch_dadata(inn: str, api_key: str, secret_key: str = '') -> dict:
         return {'error': str(e)[:200]}
 
 
+def fetch_checko(inn: str, api_key: str) -> dict:
+    """Проверка компании или ИП по ИНН через Checko.ru API."""
+    inn_clean = ''.join(filter(str.isdigit, str(inn)))
+    if not inn_clean:
+        return {'error': 'ИНН не указан или некорректен'}
+    if not api_key:
+        return {'error': 'Checko API-ключ не настроен'}
+
+    url = f'https://api.checko.ru/v2/company?key={urllib.parse.quote(api_key)}&inn={inn_clean}'
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={'User-Agent': 'BizNest CRM/1.0', 'Accept': 'application/json'},
+            method='GET',
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = json.loads(resp.read().decode())
+
+        meta = raw.get('meta', {})
+        data = raw.get('data')
+
+        if not data:
+            msg = raw.get('message') or raw.get('error') or 'Компания не найдена'
+            return {'error': msg, '_meta': meta}
+
+        # Нормализуем ответ в понятную структуру
+        STATUS_MAP = {
+            'ACTIVE': 'Действует',
+            'LIQUIDATING': 'В процессе ликвидации',
+            'LIQUIDATED': 'Ликвидирована',
+            'BANKRUPT': 'Банкрот',
+            'REORGANIZING': 'Реорганизация',
+        }
+        status_code = data.get('СтатусЮЛ') or data.get('СтатусИП') or ''
+
+        # Руководитель
+        mgmt = data.get('Руководитель') or {}
+        director = mgmt.get('ФИО') or mgmt.get('НаимДолжн', '')
+        director_post = mgmt.get('НаимДолжн', '')
+
+        # Учредители
+        founders = []
+        for f in (data.get('Учредители') or [])[:5]:
+            name = f.get('НаимЮЛПолн') or f.get('ФИО') or ''
+            share = f.get('НоминСтоим', '')
+            if name:
+                founders.append(f'{name} ({share} ₽)' if share else name)
+
+        # Флаги рисков
+        risks = []
+        if data.get('НедобПост'):
+            risks.append({'label': 'Недобросовестный поставщик', 'level': 'danger'})
+        if data.get('МассРуковод'):
+            risks.append({'label': 'Массовый руководитель', 'level': 'warning'})
+        if data.get('МассУчред'):
+            risks.append({'label': 'Массовый учредитель', 'level': 'warning'})
+        if data.get('МассАдрес'):
+            risks.append({'label': 'Массовый адрес', 'level': 'warning'})
+        if data.get('СвСанкции'):
+            risks.append({'label': 'Под санкциями', 'level': 'danger'})
+        if data.get('ДисквЛица'):
+            risks.append({'label': 'Дисквалифицированные лица в руководстве', 'level': 'danger'})
+
+        # Финансы
+        finance = data.get('Финансы') or {}
+        finance_last = sorted(finance.items(), reverse=True)[:1][0][1] if finance else {}
+
+        card = {
+            '_source': 'checko',
+            '_meta': meta,
+            'inn': data.get('ИНН') or inn_clean,
+            'ogrn': data.get('ОГРН') or '',
+            'kpp': data.get('КПП') or '',
+            'name': data.get('НаимСокрЮЛ') or data.get('НаимПолнЮЛ') or data.get('ФИОИПолн') or '',
+            'name_full': data.get('НаимПолнЮЛ') or data.get('ФИОИПолн') or '',
+            'opf': data.get('НаимОПФКр') or '',
+            'status': STATUS_MAP.get(status_code, status_code) or data.get('СтатусТекст', ''),
+            'status_code': status_code,
+            'is_active': status_code == 'ACTIVE' or data.get('Действующее', False),
+            'is_liquidated': status_code in ('LIQUIDATED', 'BANKRUPT'),
+            'address': data.get('АдресПолн') or '',
+            'reg_date': data.get('ДатаОГРН') or data.get('ДатаРег') or '',
+            'okved': data.get('КодОКВЭД') or '',
+            'okved_name': data.get('НаимОКВЭД') or '',
+            'employees': data.get('ССЧ') or '',
+            'msp_category': data.get('МСП') or '',
+            'director': director,
+            'director_post': director_post,
+            'founders': founders,
+            'risks': risks,
+            'authorized_capital': data.get('УстКап') or '',
+            'revenue': finance_last.get('Выручка', '') if finance_last else '',
+            'profit': finance_last.get('ЧистПриб', '') if finance_last else '',
+            'finance_year': sorted(finance.keys(), reverse=True)[0] if finance else '',
+            'today_request_count': meta.get('today_request_count', 0),
+            'requests_remaining': meta.get('remaining', 0) if 'remaining' in meta else None,
+        }
+        return card
+
+    except urllib.error.HTTPError as e:
+        body_err = e.read().decode()[:300]
+        return {'error': f'Checko HTTP {e.code}: {body_err}'}
+    except Exception as e:
+        return {'error': str(e)[:200]}
+
+
 def fetch_egrn(cadastr_number: str) -> dict:
     """Получение данных ЕГРН по кадастровому номеру через api-assist.com."""
     api_key = os.environ.get('EGRN_API_KEY', '')
@@ -446,12 +554,36 @@ def run_check(conn, user, method, qs, body, check_keys=None):
                 }
             except Exception as e:
                 dadata_info = {'connected': bool(dadata_key), 'error': str(e)[:100]}
+        # Проверяем остаток запросов Checko
+        checko_key = (check_keys or {}).get('checko', '')
+        checko_info = None
+        if checko_key:
+            try:
+                test_url = f'https://api.checko.ru/v2/company?key={urllib.parse.quote(checko_key)}&inn=7707083893'
+                req_c = urllib.request.Request(
+                    test_url,
+                    headers={'User-Agent': 'BizNest CRM/1.0', 'Accept': 'application/json'},
+                )
+                with urllib.request.urlopen(req_c, timeout=8) as resp_c:
+                    c_data = json.loads(resp_c.read().decode())
+                meta = c_data.get('meta', {})
+                checko_info = {
+                    'connected': True,
+                    'today_request_count': meta.get('today_request_count', 0),
+                    'remaining': meta.get('remaining'),
+                    'limit': meta.get('limit'),
+                }
+            except Exception as e:
+                checko_info = {'connected': bool(checko_key), 'error': str(e)[:100]}
+
         return ok({
             'zachestny': bool((check_keys or {}).get('zachestny')),
             'newdb': bool((check_keys or {}).get('newdb')),
             'bezopasno': bool((check_keys or {}).get('bezopasno')),
             'dadata': bool(dadata_key),
             'dadata_info': dadata_info,
+            'checko': bool(checko_key),
+            'checko_info': checko_info,
         })
 
     if method == 'GET' and qs.get('action') == 'quota':
@@ -610,8 +742,8 @@ def run_check(conn, user, method, qs, body, check_keys=None):
 
     # ── Выбор источников по типу проверки ───────────────────────────────────
     default_sources_by_type = {
-        'company': ['zachestny', 'dadata'],   # NewDB — для физлиц, не компаний
-        'owner':   ['newdb', 'bezopasno'],     # физлица — NewDB + безопасно
+        'company': ['zachestny', 'dadata', 'checko'],
+        'owner':   ['newdb', 'bezopasno'],
     }
     requested_sources = body.get('sources', default_sources_by_type.get(check_type, ['zachestny', 'bezopasno']))
 
@@ -644,6 +776,8 @@ def run_check(conn, user, method, qs, body, check_keys=None):
         elif source == 'dadata':
             secret = os.environ.get('DADATA_SECRET_KEY', '')
             data = fetch_dadata(query, api_key, secret)
+        elif source == 'checko':
+            data = fetch_checko(query, api_key)
         else:
             data = {'error': 'Неизвестный источник'}
 

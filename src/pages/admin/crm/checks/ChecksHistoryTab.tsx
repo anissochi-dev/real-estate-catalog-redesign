@@ -37,12 +37,21 @@ interface DadataInfo {
   error?: string;
 }
 
+interface CheckoInfo {
+  connected?: boolean;
+  today_request_count?: number;
+  remaining?: number | null;
+  limit?: number | null;
+  error?: string;
+}
+
 interface QuotaTabProps {
   quota: QuotaItem[];
   quotaLoading: boolean;
   quotaError: boolean;
   newdbBalance?: Record<string, unknown> | null;
   dadataInfo?: DadataInfo | null;
+  checkoInfo?: CheckoInfo | null;
 }
 
 export function ChecksHistoryTab({
@@ -145,7 +154,7 @@ export function ChecksHistoryTab({
   );
 }
 
-export function ChecksQuotaTab({ quota, quotaLoading, quotaError, newdbBalance, dadataInfo }: QuotaTabProps) {
+export function ChecksQuotaTab({ quota, quotaLoading, quotaError, newdbBalance, dadataInfo, checkoInfo }: QuotaTabProps) {
   if (quotaLoading) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -190,6 +199,41 @@ export function ChecksQuotaTab({ quota, quotaLoading, quotaError, newdbBalance, 
           <div className="text-sm text-muted-foreground">{q.used} / {q.limit} запросов</div>
         </div>
       ))}
+      {/* Checko — остаток запросов */}
+      {checkoInfo && !checkoInfo.error && (
+        <div className="sm:col-span-3 bg-white rounded-2xl border border-indigo-200 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">Checko</span>
+            <span className="text-sm font-semibold text-foreground">Аккаунт Checko (реальные данные)</span>
+            <Icon name="ShieldCheck" size={14} className="text-emerald-500 ml-auto" />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div className="bg-muted/30 rounded-xl p-3 text-center">
+              <div className="text-xl font-bold text-indigo-700">{checkoInfo.today_request_count ?? 0}</div>
+              <div className="text-xs text-muted-foreground mt-1">Запросов сегодня</div>
+            </div>
+            {checkoInfo.remaining != null && (
+              <div className="bg-muted/30 rounded-xl p-3 text-center">
+                <div className="text-xl font-bold text-emerald-700">{checkoInfo.remaining.toLocaleString('ru')}</div>
+                <div className="text-xs text-muted-foreground mt-1">Остаток запросов</div>
+              </div>
+            )}
+            {checkoInfo.limit != null && (
+              <div className="bg-muted/30 rounded-xl p-3 text-center">
+                <div className="text-xl font-bold text-foreground">{checkoInfo.limit.toLocaleString('ru')}</div>
+                <div className="text-xs text-muted-foreground mt-1">Дневной лимит</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {checkoInfo?.error && (
+        <div className="sm:col-span-3 bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-2 text-sm text-amber-800">
+          <Icon name="AlertTriangle" size={15} />
+          Checko: {checkoInfo.error}
+        </div>
+      )}
+
       {/* DaData — реальные данные из API */}
       {dadataInfo && !dadataInfo.error && (
         <div className="sm:col-span-3 bg-white rounded-2xl border border-sky-200 p-5">

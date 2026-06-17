@@ -25,9 +25,9 @@ export default function CrmChecks() {
 
   // Источники по умолчанию зависят от типа проверки
   const DEFAULT_SOURCES: Record<string, string[]> = {
-    company:  ['zachestny', 'dadata'],
+    company:  ['zachestny', 'dadata', 'checko'],
     owner:    ['newdb', 'bezopasno'],
-    property: [],  // для property источник всегда egrn (автоматически на бэкенде)
+    property: [],
   };
   const [selectedSources, setSelectedSources] = useState(DEFAULT_SOURCES['company']);
   const [results, setResults] = useState<Record<string, CheckResult> | null>(null);
@@ -43,13 +43,22 @@ export default function CrmChecks() {
     date?: string;
     error?: string;
   }
+  interface CheckoInfo {
+    connected: boolean;
+    today_request_count?: number;
+    remaining?: number | null;
+    limit?: number | null;
+    error?: string;
+  }
   interface ServiceStatus {
     zachestny?: boolean;
     newdb?: boolean;
     bezopasno?: boolean;
     dadata?: boolean;
+    checko?: boolean;
     dadata_info?: DadataInfo;
-    [key: string]: boolean | DadataInfo | undefined;
+    checko_info?: CheckoInfo;
+    [key: string]: boolean | DadataInfo | CheckoInfo | undefined;
   }
   const { data: serviceStatus = {} } = useQuery<ServiceStatus>({
     queryKey: ['crm-checks-status'],
@@ -175,12 +184,12 @@ export default function CrmChecks() {
 
       {/* Баннер: показываем только если хотя бы один ключ получен с сервера */}
       {Object.keys(serviceStatus).length > 0 && (
-        (['zachestny', 'newdb', 'bezopasno', 'dadata'] as const).some(k => serviceStatus[k]) ? (
+        (['zachestny', 'newdb', 'bezopasno', 'dadata', 'checko'] as const).some(k => serviceStatus[k]) ? (
           <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm">
             <Icon name="CheckCircle2" size={16} className="shrink-0 text-emerald-600" />
             <span>
-              Подключено сервисов: <strong>{(['zachestny', 'newdb', 'bezopasno', 'dadata'] as const).filter(k => serviceStatus[k]).length}</strong> из 4.{' '}
-              {(['zachestny', 'newdb', 'bezopasno', 'dadata'] as const).every(k => serviceStatus[k]) ? 'Все сервисы активны.' : 'Остальные можно подключить в Настройках → Интеграции.'}
+              Подключено сервисов: <strong>{(['zachestny', 'newdb', 'bezopasno', 'dadata', 'checko'] as const).filter(k => serviceStatus[k]).length}</strong> из 5.{' '}
+              {(['zachestny', 'newdb', 'bezopasno', 'dadata', 'checko'] as const).every(k => serviceStatus[k]) ? 'Все сервисы активны.' : 'Остальные можно подключить в Настройках → Интеграции.'}
             </span>
           </div>
         ) : (
@@ -258,6 +267,7 @@ export default function CrmChecks() {
           quotaError={quotaError}
           newdbBalance={newdbBalance}
           dadataInfo={serviceStatus.dadata_info}
+          checkoInfo={serviceStatus.checko_info}
         />
       )}
     </div>

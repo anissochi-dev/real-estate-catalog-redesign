@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { SOURCE_INFO, CHECK_TYPES, ZachestnyData, CheckResult } from './checksTypes';
 import ZachestnyCard from './ZachestnyCard';
+import CheckoCard from './CheckoCard';
 
 function renderValue(val: unknown, depth = 0): React.ReactNode {
   if (val === null || val === undefined) return <span className="text-muted-foreground">—</span>;
@@ -165,6 +166,8 @@ export default function ChecksSearchTab({
                   </div>
                 ) : src === 'zachestny' && res.data && !(res.data as Record<string, unknown>).error ? (
                   <ZachestnyCard data={res.data as ZachestnyData} />
+                ) : src === 'checko' && res.data ? (
+                  <CheckoCard data={res.data as Parameters<typeof CheckoCard>[0]['data']} />
                 ) : (
                   <div className="text-sm">{renderValue(res.data)}</div>
                 )}
