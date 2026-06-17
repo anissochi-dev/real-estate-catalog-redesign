@@ -87,24 +87,23 @@ export default function MarketImportAdmin() {
     }
   }
 
-  const runBatchChain = useCallback(async (jobId: number, rowsDone: number, rowsTotal: number, inserted: number, updated: number) => {
-    if (runningRef.current && rowsDone === 0) return;
-
-    let curDone = rowsDone;
-    let curIns = inserted;
-    let curUpd = updated;
+  const runBatchChain = useCallback(async (jobId: number, initDone: number, initTotal: number, initIns: number, initUpd: number) => {
+    let curDone = initDone;
+    let curTotal = initTotal;
+    let curIns = initIns;
+    let curUpd = initUpd;
 
     while (true) {
       try {
         const r = await post({ action: 'import_continue', job_id: jobId });
-        curDone = r.rows_done ?? curDone;
-        curIns  = r.inserted ?? curIns;
-        curUpd  = r.updated ?? curUpd;
+        curDone  = r.rows_done  ?? curDone;
+        curTotal = r.rows_total ?? curTotal;
+        curIns   = r.inserted   ?? curIns;
+        curUpd   = r.updated    ?? curUpd;
 
-        setProgress({ jobId, rowsDone: curDone, rowsTotal: r.rows_total ?? rowsTotal, inserted: curIns, updated: curUpd, done: !!r.done });
+        setProgress({ jobId, rowsDone: curDone, rowsTotal: curTotal, inserted: curIns, updated: curUpd, done: !!r.done });
 
-        if (r.done) break;
-        if (r.error) { setError(r.error); break; }
+        if (r.done || r.error) break;
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Сетевая ошибка');
         await new Promise(res => setTimeout(res, 3000));
