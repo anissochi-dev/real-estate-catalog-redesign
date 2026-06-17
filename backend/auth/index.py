@@ -225,13 +225,21 @@ def handler(event: dict, context) -> dict:
             if action == 'me':
                 if not token:
                     return _err(401, 'Нет токена')
-                cur.execute(
-                    f"SELECT u.id, u.email, u.name, u.role, u.phone, u.avatar "
-                    f"FROM {SCHEMA}.sessions s JOIN {SCHEMA}.users u ON u.id = s.user_id "
-                    f"WHERE s.token = %s AND s.expires_at > NOW() AND u.is_active = TRUE",
-                    (token[:100],)
-                )
-                u = cur.fetchone()
+                try:
+                    cur.execute(
+                        f"SELECT u.id, u.email, u.name, u.role, u.phone, u.avatar "
+                        f"FROM {SCHEMA}.sessions s JOIN {SCHEMA}.users u ON u.id = s.user_id "
+                        f"WHERE s.token = %s AND s.expires_at > NOW() AND u.is_active = TRUE",
+                        (token[:100],)
+                    )
+                    u = cur.fetchone()
+                except Exception as db_err:
+                    err_str = str(db_err).lower()
+                    # rate limit / временная ошибка БД — не инвалидируем токен,
+                    # возвращаем 503 чтобы фронтенд НЕ стирал токен из localStorage
+                    if 'rate limit' in err_str or 'cancel' in err_str or 'timeout' in err_str:
+                        return _err(503, 'Временная ошибка сервера, попробуйте позже')
+                    return _err(500, 'Ошибка проверки сессии')
                 if not u:
                     return _err(401, 'Сессия истекла')
                 return _ok({'user': dict(u)})

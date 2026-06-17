@@ -76,6 +76,15 @@ export const getToken = () => localStorage.getItem(TOKEN_KEY) || '';
 export const setToken = (t: string) => localStorage.setItem(TOKEN_KEY, t);
 export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
+/** Ошибка HTTP-запроса с кодом статуса — используется в AuthContext для различения 401 и 503. */
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
 /**
  * Универсальный fetch к админ-API.
  * - Дублирует токен в query-параметр auth_token (Cloud Functions Gateway
@@ -149,17 +158,22 @@ async function req(url: string, init?: RequestInit) {
       window.dispatchEvent(new CustomEvent('auth:expired'));
       const { showError } = await import('./errorTranslator');
       showError('Сессия истекла — войдите заново');
-      throw new Error('Сессия истекла — войдите заново');
+      throw new ApiError('Сессия истекла — войдите заново', 401);
     }
     const msg = data.error || `HTTP ${res.status}`;
+    // 503 — временная ошибка сервера (rate limit БД) — бросаем без уведомления,
+    // AuthContext поймает статус и НЕ будет стирать токен.
+    if (res.status === 503) {
+      throw new ApiError(msg, 503);
+    }
     // 403 — тихо бросаем ошибку без всплывающего уведомления:
     // каждый раздел сам решает как реагировать (скрыть, показать заглушку и т.д.)
     if (res.status === 403) {
-      throw new Error(msg);
+      throw new ApiError(msg, 403);
     }
     const { showError } = await import('./errorTranslator');
     showError(msg);
-    throw new Error(msg);
+    throw new ApiError(msg, res.status);
   }
   return data;
 }

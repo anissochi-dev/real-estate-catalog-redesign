@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { authApi, clearToken, getToken, setToken, User } from '@/lib/adminApi';
+import { authApi, clearToken, getToken, setToken, User, ApiError } from '@/lib/adminApi';
 
 interface AuthCtx {
   user: User | null;
@@ -29,11 +29,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // загрузку, чтобы не висело бесконечное колесо.
     let done = false;
     const t = setTimeout(() => { if (!done) setLoading(false); }, 8000);
-    authApi
-      .me()
-      .then(d => setUser(d.user))
-      .catch(() => { clearToken(); setTokenState(''); })
-      .finally(() => { done = true; clearTimeout(t); setLoading(false); });
+    const tryMe = (retryDelay?: number) => {
+      authApi
+        .me()
+        .then(d => { done = true; clearTimeout(t); setUser(d.user); setLoading(false); })
+        .catch((err) => {
+          const status = err instanceof ApiError ? err.status : 0;
+          if (status === 503 && retryDelay === undefined) {
+            // Rate limit / временная ошибка БД — снимаем спиннер сразу,
+            // токен НЕ стираем, повторяем тихо в фоне через 2 сек.
+            done = true;
+            clearTimeout(t);
+            setLoading(false);
+            setTimeout(() => tryMe(2000), 2000);
+          } else {
+            // 401 = сессия истекла — стираем токен.
+            // Любая др. ошибка после retry — тоже разлогиниваем.
+            if (status !== 503) {
+              clearToken();
+              setTokenState('');
+            }
+            done = true;
+            clearTimeout(t);
+            setLoading(false);
+          }
+        });
+    };
+    tryMe();
     return () => clearTimeout(t);
   }, []);
 
