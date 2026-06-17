@@ -60,7 +60,14 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
   const [idleWarning, setIdleWarning] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(IDLE_WARNING_MS / 1000);
   const [rolePerms, setRolePerms] = useState<Record<string, Record<string, boolean>> | null>(null);
-  const [navOrder, setNavOrder] = useState<Record<string, string[]> | null>(null);
+  const [navOrder, setNavOrder] = useState<Record<string, string[]> | null>(() => {
+    // Читаем кэш сразу — чтобы меню не прыгало при загрузке
+    try {
+      const cached = localStorage.getItem('biznest_nav_order');
+      if (cached) return JSON.parse(cached);
+    } catch { /* ignore */ }
+    return null;
+  });
 
   const loadNavAndPerms = () => {
     if (!user) return;
@@ -76,6 +83,7 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
           if (typeof parsed === 'string') parsed = JSON.parse(parsed);
           if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
             setNavOrder(parsed);
+            try { localStorage.setItem('biznest_nav_order', JSON.stringify(parsed)); } catch { /* ignore */ }
           }
         } catch { /* ignore */ }
       }

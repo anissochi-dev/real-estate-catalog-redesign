@@ -307,7 +307,8 @@ export default function RolesAdmin() {
       setSaved(true);
       setHasChanges(false);
       setTimeout(() => setSaved(false), 3000);
-      // Сигнализируем AdminLayout перезагрузить nav_order
+      // Кэшируем и сигнализируем AdminLayout обновить nav_order
+      try { localStorage.setItem('biznest_nav_order', JSON.stringify(navOrder)); } catch { /* ignore */ }
       window.dispatchEvent(new CustomEvent('admin:nav-order-updated'));
     } catch {
       alert('Ошибка сохранения');
