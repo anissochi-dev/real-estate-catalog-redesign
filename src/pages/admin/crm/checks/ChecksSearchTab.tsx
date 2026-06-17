@@ -84,10 +84,9 @@ export default function ChecksSearchTab({
                 const connected = serviceStatus[src];
                 const selected = selectedSources.includes(src);
                 return (
-                  <button
+                  <div
                     key={src}
-                    onClick={() => toggleSource(src)}
-                    className={`flex items-center justify-between p-2.5 rounded-xl border text-sm transition ${selected ? 'border-brand-blue bg-brand-blue/5' : 'border-border opacity-60'}`}
+                    className={`flex items-center justify-between p-2.5 rounded-xl border text-sm ${selected ? 'border-brand-blue bg-brand-blue/5' : 'border-border opacity-40'}`}
                   >
                     <div className="text-left">
                       <div className="flex items-center gap-1.5">
@@ -106,7 +105,7 @@ export default function ChecksSearchTab({
                       <div className="text-xs text-muted-foreground mt-0.5">{info.desc}</div>
                     </div>
                     <Icon name={selected ? 'CheckCircle2' : 'Circle'} size={16} className={selected ? 'text-brand-blue' : 'text-muted-foreground'} />
-                  </button>
+                  </div>
                 );
               })}
             </div>

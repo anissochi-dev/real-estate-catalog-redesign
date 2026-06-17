@@ -25,7 +25,7 @@ export default function CrmChecks() {
 
   // Источники по умолчанию зависят от типа проверки
   const DEFAULT_SOURCES: Record<string, string[]> = {
-    company:  ['zachestny', 'dadata', 'checko'],
+    company:  ['checko'],
     owner:    ['newdb', 'bezopasno'],
     property: [],
   };
