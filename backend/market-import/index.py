@@ -611,8 +611,13 @@ def handler(event: dict, context) -> dict:
                     _job_upsert(conn, job_id, status='error', error_msg='Файл пустой')
                     return err(400, 'Файл пустой')
                 hidx = _build_xlsx_header_idx(header_row)
+                # Логируем найденные колонки для диагностики
+                print(f'[market-import] XLSX headers: {hidx}')
                 seen = set()
                 for row in rows_iter:
+                    # Пропускаем полностью пустые строки
+                    if all(c is None or str(c).strip() == '' for c in row):
+                        continue
                     total_rows += 1
                     if total_rows <= checkpoint:
                         continue
@@ -626,7 +631,7 @@ def handler(event: dict, context) -> dict:
                         break
                 else:
                     reached_end = True
-                if not reached_end and total_rows < checkpoint + BATCH:
+                if not reached_end and total_rows <= checkpoint + len(batch_records):
                     reached_end = True
                 wb.close()
             else:
@@ -661,7 +666,7 @@ def handler(event: dict, context) -> dict:
                 cat = r.get('category', 'other')
                 cat_counts[cat] = cat_counts.get(cat, 0) + 1
 
-            done = reached_end and len(batch_records) < BATCH
+            done = reached_end
 
             _job_upsert(conn, job_id,
                 status='done' if done else 'running',

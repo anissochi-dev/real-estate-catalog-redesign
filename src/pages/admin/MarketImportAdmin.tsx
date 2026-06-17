@@ -78,7 +78,7 @@ export default function MarketImportAdmin() {
     if (!fileUrl.trim()) { setError('Укажите ссылку на файл'); return; }
     setLoading(true); setError(''); setPreview(null); setProgress(null);
     try {
-      const data = await post({ action: 'import_preview', file_url: fileUrl.trim(), source });
+      const data = await post({ action: 'import_preview', file_url: fileUrl.trim(), source, preview: true });
       setPreview(data);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Ошибка');
