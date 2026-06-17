@@ -2458,12 +2458,6 @@ def _listings(cur, conn, method, rid, event, user):
             for k in ('pc_owner_name', 'pc_owner_phone', 'pc_owner_photo', 'pc_owner_company',
                       'pc_owner_notes', 'pc2_owner_name', 'pc2_owner_phone'):
                 row_dict.pop(k, None)
-            # Брокер не видит телефон на чужой карточке
-            if user and user.get('role') == 'broker':
-                uid = user.get('id')
-                if row_dict.get('broker_id') != uid and row_dict.get('author_id') != uid:
-                    row_dict['owner_phone'] = None
-                    row_dict['owner_phone2'] = None
             return _ok({'listing': _ser(row_dict)})
         qp = event.get('queryStringParameters') or {}
         limit = max(1, min(200, int(qp.get('limit') or 25)))
@@ -2544,12 +2538,6 @@ def _listings(cur, conn, method, rid, event, user):
                 d['owner_phone'] = d['owner_phone_final']
             d.pop('owner_name_final', None)
             d.pop('owner_phone_final', None)
-            # Брокер не видит телефон собственника на чужих объектах
-            if is_broker:
-                is_own = (d.get('broker_id') == broker_uid or d.get('author_id') == broker_uid)
-                if not is_own:
-                    d['owner_phone'] = None
-                    d['owner_phone2'] = None
             rows.append(_ser(d))
         return _ok({
             'listings': rows, 'total': total, 'limit': limit, 'offset': offset,
@@ -2840,16 +2828,10 @@ def _mask_phone(phone: str) -> str:
 
 def _can_see_phone(lead: dict, user: dict) -> bool:
     """Правила видимости телефона клиента в лиде:
-    - admin, director, manager, editor, office_manager — видят всегда
-    - broker — только если лид закреплён за ним (broker_id == user.id)
+    - admin, director, manager, editor, office_manager, broker — видят всегда
     """
     role = user.get('role', '')
-    if role in ('admin', 'director', 'manager', 'editor', 'office_manager'):
-        return True
-    if role == 'broker':
-        broker_id = lead.get('broker_id')
-        return broker_id is not None and broker_id == user.get('id')
-    return False
+    return role in ('admin', 'director', 'manager', 'editor', 'office_manager', 'broker')
 
 
 def _apply_phone_visibility(lead: dict, user: dict) -> dict:

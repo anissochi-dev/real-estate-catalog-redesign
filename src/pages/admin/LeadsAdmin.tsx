@@ -12,10 +12,6 @@ import { useAuth } from '@/contexts/AuthContext';
 export default function LeadsAdmin() {
   const { user } = useAuth();
   const isBroker = user?.role === 'broker';
-
-  // Брокер может управлять лидом только если он закреплён за ним
-  const canManageLead = (l: Lead) =>
-    !isBroker || (l.broker_id != null && l.broker_id === user?.id);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [listings, setListings] = useState<Listing[]>([]);
   const [active, setActive] = useState<Lead | null>(null);
@@ -171,7 +167,7 @@ export default function LeadsAdmin() {
                 onEdit={() => setEditing(active)}
                 onDelete={() => del(active.id)}
                 onSendComment={sendComment}
-                canManage={canManageLead(active)}
+                canManage={true}
               />
             </div>
           </div>
