@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useEffect, useState, ReactNode } from 'react';
 import { authApi, clearToken, getToken, setToken, User, ApiError } from '@/lib/adminApi';
 
 interface AuthCtx {
@@ -11,7 +11,7 @@ interface AuthCtx {
   refreshToken: () => string;
 }
 
-const Ctx = createContext<AuthCtx | null>(null);
+export const Ctx = createContext<AuthCtx | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -29,23 +29,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // загрузку, чтобы не висело бесконечное колесо.
     let done = false;
     const t = setTimeout(() => { if (!done) setLoading(false); }, 8000);
-    const tryMe = (retryDelay?: number) => {
+    const tryMe = (isRetry = false) => {
       authApi
         .me()
         .then(d => { done = true; clearTimeout(t); setUser(d.user); setLoading(false); })
         .catch((err) => {
           const status = err instanceof ApiError ? err.status : 0;
-          if (status === 503 && retryDelay === undefined) {
-            // Rate limit / временная ошибка БД — снимаем спиннер сразу,
-            // токен НЕ стираем, повторяем тихо в фоне через 2 сек.
+
+          // Только явный 401 от сервера означает что сессия истекла.
+          // Всё остальное (503, сетевые ошибки, timeout) — временные сбои,
+          // токен НЕ стираем.
+          const isExpired = status === 401;
+
+          if (!isRetry && !isExpired) {
+            // Первая попытка упала по временной причине — снимаем спиннер
+            // и тихо повторяем через 2 сек в фоне.
             done = true;
             clearTimeout(t);
             setLoading(false);
-            setTimeout(() => tryMe(2000), 2000);
+            setTimeout(() => tryMe(true), 2000);
           } else {
-            // 401 = сессия истекла — стираем токен.
-            // Любая др. ошибка после retry — тоже разлогиниваем.
-            if (status !== 503) {
+            // Вторая попытка или явный 401 — финализируем.
+            if (isExpired) {
               clearToken();
               setTokenState('');
             }
@@ -111,8 +116,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useAuth() {
-  const v = useContext(Ctx);
-  if (!v) throw new Error('useAuth must be used within AuthProvider');
-  return v;
-}
+// useAuth хук вынесен в отдельный файл useAuth.ts для совместимости с Vite Fast Refresh
+export { useAuth } from './useAuth';
