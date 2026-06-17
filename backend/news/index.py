@@ -1,5 +1,5 @@
 """
-Новости коммерческой недвижимости: CRUD + автокопирайтер на YandexGPT + расписание. v2
+Новости коммерческой недвижимости: CRUD + автокопирайтер на YandexGPT + расписание. v3
 Копирайтер анализирует рынок (ключевые ставки ЦБ, данные застройщиков Краснодара,
 ипотека, аренда) и генерирует профессиональные статьи для публикации на сайте.
 
@@ -615,29 +615,9 @@ def _call_gpt_raw(api_key: str, folder_id: str, user_text: str, system_text: str
             'Пиши профессиональные аналитические статьи на русском языке. '
             'Отвечай строго в формате JSON: {"title":"...","summary":"...","content":"..."}'
         )
-    payload = {
-        'modelUri': f'gpt://{folder_id}/{YANDEX_MODEL}',
-        'completionOptions': {'stream': False, 'temperature': 0.4, 'maxTokens': '3000'},
-        'messages': [
-            {'role': 'system', 'text': system_text},
-            {'role': 'user', 'text': user_text},
-        ],
-    }
     try:
-        req = urllib.request.Request(
-            YANDEX_GPT_URL,
-            data=json.dumps(payload).encode(),
-            headers={
-                'Authorization': f'Api-Key {api_key}',
-                'Content-Type': 'application/json',
-                'x-folder-id': folder_id,
-            },
-            method='POST',
-        )
-        with urllib.request.urlopen(req, timeout=55) as resp:
-            data = json.loads(resp.read().decode())
-        alts = (data.get('result') or {}).get('alternatives') or []
-        return ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
+        return chat_simple(system_text, user_text, api_key, folder_id,
+                           temperature=0.4, max_tokens=3000, timeout=55)
     except Exception as e:
         print(f'[price_digest] _call_gpt_raw error: {e}')
         return ''
