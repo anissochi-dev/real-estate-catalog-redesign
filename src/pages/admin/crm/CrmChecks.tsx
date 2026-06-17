@@ -173,46 +173,6 @@ export default function CrmChecks() {
         </div>
       </div>
 
-      {/* DaData: детальный блок с балансом и лимитами */}
-      {serviceStatus.dadata_info && (
-        <div className={`rounded-xl border p-4 ${serviceStatus.dadata_info.error ? 'border-amber-200 bg-amber-50' : 'border-sky-200 bg-sky-50'}`}>
-          <div className="flex items-center gap-2 mb-3">
-            <Icon name="Database" size={15} className="text-sky-600" />
-            <span className="font-semibold text-sm text-sky-800">DaData — детали подключения</span>
-            {serviceStatus.dadata_info.date && (
-              <span className="text-xs text-muted-foreground ml-auto">за {serviceStatus.dadata_info.date}</span>
-            )}
-          </div>
-          {serviceStatus.dadata_info.error ? (
-            <div className="text-sm text-amber-700 flex items-center gap-2">
-              <Icon name="AlertTriangle" size={13} />
-              Ошибка: {serviceStatus.dadata_info.error}
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-4">
-              {serviceStatus.dadata_info.balance !== undefined && (
-                <div className="text-sm">
-                  <div className="text-xs text-muted-foreground mb-0.5">Баланс</div>
-                  <div className="font-bold text-sky-700">{Number(serviceStatus.dadata_info.balance).toLocaleString('ru')} ₽</div>
-                </div>
-              )}
-              {serviceStatus.dadata_info.services && Object.entries(serviceStatus.dadata_info.services).map(([svc, count]) => (
-                <div key={svc} className="text-sm">
-                  <div className="text-xs text-muted-foreground mb-0.5">{svc}</div>
-                  <div className="font-semibold text-foreground">{Number(count).toLocaleString('ru')} запросов</div>
-                </div>
-              ))}
-              {serviceStatus.dadata_info.remaining && Object.entries(serviceStatus.dadata_info.remaining).map(([svc, count]) => (
-                <div key={`rem-${svc}`} className="text-sm">
-                  <div className="text-xs text-muted-foreground mb-0.5">{svc} (остаток)</div>
-                  <div className="font-semibold text-emerald-700">{Number(count).toLocaleString('ru')}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Баннер: показываем только если хотя бы один ключ получен с сервера */}
       {Object.keys(serviceStatus).length > 0 && (
         (['zachestny', 'newdb', 'bezopasno', 'dadata'] as const).some(k => serviceStatus[k]) ? (
@@ -297,6 +257,7 @@ export default function CrmChecks() {
           quotaLoading={quotaLoading}
           quotaError={quotaError}
           newdbBalance={newdbBalance}
+          dadataInfo={serviceStatus.dadata_info}
         />
       )}
     </div>

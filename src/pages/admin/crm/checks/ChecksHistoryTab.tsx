@@ -28,11 +28,21 @@ interface HistoryTabProps {
   onLoadCached: (check_type: string, query_key: string) => void;
 }
 
+interface DadataInfo {
+  connected?: boolean;
+  balance?: number;
+  services?: Record<string, number>;
+  remaining?: Record<string, number>;
+  date?: string;
+  error?: string;
+}
+
 interface QuotaTabProps {
   quota: QuotaItem[];
   quotaLoading: boolean;
   quotaError: boolean;
   newdbBalance?: Record<string, unknown> | null;
+  dadataInfo?: DadataInfo | null;
 }
 
 export function ChecksHistoryTab({
@@ -135,7 +145,7 @@ export function ChecksHistoryTab({
   );
 }
 
-export function ChecksQuotaTab({ quota, quotaLoading, quotaError, newdbBalance }: QuotaTabProps) {
+export function ChecksQuotaTab({ quota, quotaLoading, quotaError, newdbBalance, dadataInfo }: QuotaTabProps) {
   if (quotaLoading) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -180,6 +190,49 @@ export function ChecksQuotaTab({ quota, quotaLoading, quotaError, newdbBalance }
           <div className="text-sm text-muted-foreground">{q.used} / {q.limit} запросов</div>
         </div>
       ))}
+      {/* DaData — реальные данные из API */}
+      {dadataInfo && !dadataInfo.error && (
+        <div className="sm:col-span-3 bg-white rounded-2xl border border-sky-200 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">DaData</span>
+            <span className="text-sm font-semibold text-foreground">Аккаунт DaData (реальные данные)</span>
+            {dadataInfo.date && <span className="text-xs text-muted-foreground ml-auto">за {dadataInfo.date}</span>}
+            <Icon name="ShieldCheck" size={14} className="text-emerald-500" />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {dadataInfo.balance !== undefined && (
+              <div className="bg-muted/30 rounded-xl p-3 text-center">
+                <div className="text-xl font-bold text-sky-700">{Number(dadataInfo.balance).toLocaleString('ru')} ₽</div>
+                <div className="text-xs text-muted-foreground mt-1">Баланс</div>
+              </div>
+            )}
+            {dadataInfo.remaining && Object.entries(dadataInfo.remaining).map(([svc, count]) => {
+              const used = dadataInfo.services?.[svc] ?? 0;
+              const total = Number(count) + used;
+              const pct = total > 0 ? Math.round((used / total) * 100) : 0;
+              return (
+                <div key={svc} className="bg-muted/30 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-semibold text-foreground capitalize">{svc}</span>
+                    <span className={`text-xs font-bold ${pct > 80 ? 'text-red-500' : pct > 50 ? 'text-amber-500' : 'text-emerald-600'}`}>{pct}%</span>
+                  </div>
+                  <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-1.5">
+                    <div className={`h-full rounded-full ${pct > 80 ? 'bg-red-500' : pct > 50 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+                  </div>
+                  <div className="text-xs text-muted-foreground">{used} исп. / {Number(count).toLocaleString('ru')} ост.</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {dadataInfo?.error && (
+        <div className="sm:col-span-3 bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-2 text-sm text-amber-800">
+          <Icon name="AlertTriangle" size={15} />
+          DaData: {dadataInfo.error}
+        </div>
+      )}
+
       {/* Баланс NewDB от самого сервиса */}
       {newdbBalance && !('error' in newdbBalance) && (() => {
         // Человекопонятные названия полей NewDB
