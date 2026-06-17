@@ -26,13 +26,14 @@ interface Props {
   onAdd: () => void;
   onImport: (data: ImportedListing) => void;
   counts: { active: number; archived: number; hidden: number };
+  canCreate?: boolean;
 }
 
 export default function ListingsToolbar({
   statusFilter, switchTab,
   search, setSearch, catFilter, setCatFilter,
   hasDraft, setHasDraft, onAdd, onImport,
-  counts,
+  counts, canCreate = true,
 }: Props) {
   const [importOpen, setImportOpen] = useState(false);
 
@@ -55,29 +56,31 @@ export default function ListingsToolbar({
       </div>
 
       {/* Кнопки действий */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <button
-          onClick={() => setImportOpen(true)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
-        >
-          <Icon name="Link" size={14} /> Импорт
-        </button>
-        <button
-          onClick={onAdd}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg btn-blue text-white text-xs font-semibold leading-tight text-left"
-        >
-          <Icon name="Plus" size={14} className="shrink-0" />
-          {hasDraft ? <span>Продолжить<br/>черновик</span> : 'Добавить объект'}
-        </button>
-        {hasDraft && (
-          <span className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700" title="Черновик сохранён">
-            <Icon name="Pencil" size={14} className="shrink-0 text-orange-500" />
-            <button onClick={() => { clearDraft(); setHasDraft(false); }} className="hover:text-red-600 transition-colors shrink-0" title="Удалить черновик">
-              <Icon name="X" size={12} />
-            </button>
-          </span>
-        )}
-      </div>
+      {canCreate && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setImportOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
+          >
+            <Icon name="Link" size={14} /> Импорт
+          </button>
+          <button
+            onClick={onAdd}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg btn-blue text-white text-xs font-semibold leading-tight text-left"
+          >
+            <Icon name="Plus" size={14} className="shrink-0" />
+            {hasDraft ? <span>Продолжить<br/>черновик</span> : 'Добавить объект'}
+          </button>
+          {hasDraft && (
+            <span className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700" title="Черновик сохранён">
+              <Icon name="Pencil" size={14} className="shrink-0 text-orange-500" />
+              <button onClick={() => { clearDraft(); setHasDraft(false); }} className="hover:text-red-600 transition-colors shrink-0" title="Удалить черновик">
+                <Icon name="X" size={12} />
+              </button>
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Поиск и фильтр категории */}
       <div className="flex flex-col sm:flex-row gap-2">

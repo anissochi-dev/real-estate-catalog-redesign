@@ -45,6 +45,7 @@ export default function ListingsAdmin() {
         setHasDraft={s.setHasDraft}
         onAdd={() => s.openEdit()}
         counts={s.counts}
+        canCreate={s.canCreate}
         onImport={data => {
           const imagesStr = data.images.join('|');
           s.openEdit({

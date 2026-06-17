@@ -65,7 +65,13 @@ export function useListingsState() {
         setTotal(l.total || 0);
         if (l.counts) setCounts(l.counts);
       })
-      .catch(() => toast.error('Не удалось загрузить объявления'))
+      .catch((e: unknown) => {
+        // 403 — нет прав, не показываем ошибку (брокер с ограниченным доступом)
+        const msg = e instanceof Error ? e.message : '';
+        if (!msg.includes('403') && !msg.includes('прав')) {
+          toast.error('Не удалось загрузить объявления');
+        }
+      })
       .finally(() => setLoading(false));
     // Справочники — тихо, не блокируют основной список
     adminApi.listCities().then(c => setCities((c.cities || []).filter((x: City) => x.is_active))).catch(() => {});
@@ -418,6 +424,7 @@ export function useListingsState() {
     hasDraft, setHasDraft,
     // meta
     isAdmin, SITE_URL,
+    canCreate: !['office_manager', 'client'].includes(user?.role || ''),
     // actions
     load, loadMore, switchTab, openEdit, save, archive, runBulk, bulkDelete, toggleSelect,
     aiDescribe, aiTitle, generateTags, generateSeo, generateAll,

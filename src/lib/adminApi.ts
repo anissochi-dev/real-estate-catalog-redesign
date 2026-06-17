@@ -152,6 +152,11 @@ async function req(url: string, init?: RequestInit) {
       throw new Error('Сессия истекла — войдите заново');
     }
     const msg = data.error || `HTTP ${res.status}`;
+    // 403 — тихо бросаем ошибку без всплывающего уведомления:
+    // каждый раздел сам решает как реагировать (скрыть, показать заглушку и т.д.)
+    if (res.status === 403) {
+      throw new Error(msg);
+    }
     const { showError } = await import('./errorTranslator');
     showError(msg);
     throw new Error(msg);
