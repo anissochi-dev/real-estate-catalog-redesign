@@ -3084,7 +3084,11 @@ def _settings(cur, conn, method, event, user):
                           ('calltouch_id', 100),
                           ('telegram_ads_pixel', 100),
                           # МАХ автоответ
-                          ('max_autoreply_text', 2000)]:
+                          ('max_autoreply_text', 2000),
+                          # Ключи проверки безопасности
+                          ('zachestny_api_key', 500),
+                          ('newdb_api_key', 500),
+                          ('bezopasno_api_key', 500)]:
             if f in body:
                 fields.append(f"{f} = {_str_or_null(body[f], length)}")
         if 'company_since_year' in body:

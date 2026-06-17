@@ -132,14 +132,15 @@ export default function CrmChecks() {
         </div>
       </div>
 
-      {Object.values(serviceStatus).length > 0 && Object.values(serviceStatus).every(v => !v) && (
+      {/* Баннер только если статус загружен и ВСЕ сервисы отключены */}
+      {Object.keys(serviceStatus).length >= 3 && Object.values(serviceStatus).every(v => !v) && (
         <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
           <Icon name="AlertTriangle" size={18} className="shrink-0 mt-0.5 text-amber-600" />
           <div className="text-sm">
             <div className="font-semibold mb-0.5">Ни один сервис не подключён</div>
             <div className="text-amber-800">
               Добавьте API-ключи в{' '}
-              <span className="font-semibold">Настройки → Интеграции ИИ → Проверка безопасности</span>.
+              <span className="font-semibold">Настройки → Интеграции → Проверка безопасности</span>.
             </div>
           </div>
         </div>
