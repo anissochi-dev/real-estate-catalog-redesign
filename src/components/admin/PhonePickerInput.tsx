@@ -148,58 +148,60 @@ export default function PhonePickerInput({ value, onChange, onNameChange, placeh
               onFocus={e => {
                 const len = e.target.value.length;
                 setTimeout(() => e.target.setSelectionRange(len, len), 0);
-                if (digits.length >= 3 && suggestions.length > 0) setOpen(true);
+                if (digits.length >= 10 && suggestions.length > 0) setOpen(true);
               }}
               autoComplete="off"
             />
-            {searching && (
-              <Icon name="Loader2" size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground animate-spin" />
-            )}
-            {!searching && isComplete && !matchedContact && (
-              <Icon name="Phone" size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
-            )}
-            {!searching && matchedContact && (
-              <Icon name="UserCheck" size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-emerald-600" />
-            )}
+            {/* Иконка внутри инпута — всегда занимает место, меняется состояние */}
+            <span className="absolute right-2 top-1/2 -translate-y-1/2">
+              {searching
+                ? <Icon name="Loader2" size={14} className="text-muted-foreground animate-spin" />
+                : matchedContact
+                  ? <Icon name="UserCheck" size={14} className="text-emerald-600" />
+                  : <Icon name="Phone" size={14} className={isComplete ? 'text-muted-foreground/50' : 'text-muted-foreground/20'} />
+              }
+            </span>
           </div>
 
-          {/* Кнопка копирования */}
-          {isComplete && (
-            <button
-              type="button"
-              onClick={copyPhone}
-              title="Скопировать номер"
-              className={`shrink-0 px-2.5 py-2 rounded-lg border transition ${copied ? 'border-emerald-500 bg-emerald-50 text-emerald-600' : 'border-border text-muted-foreground hover:border-brand-blue hover:text-brand-blue'}`}
-            >
-              <Icon name={copied ? 'Check' : 'Copy'} size={14} />
-            </button>
-          )}
-
-
+          {/* Кнопка копирования — всегда в разметке, невидима пока номер не полный */}
+          <button
+            type="button"
+            onClick={copyPhone}
+            disabled={!isComplete}
+            title="Скопировать номер"
+            className={`shrink-0 px-2.5 py-2 rounded-lg border transition ${
+              !isComplete
+                ? 'invisible'
+                : copied
+                  ? 'border-emerald-500 bg-emerald-50 text-emerald-600'
+                  : 'border-border text-muted-foreground hover:border-brand-blue hover:text-brand-blue'
+            }`}
+          >
+            <Icon name={copied ? 'Check' : 'Copy'} size={14} />
+          </button>
         </div>
 
-        {/* Пример формата */}
-        {!isComplete && !open && (
-          <div className="mt-1 text-[11px] text-muted-foreground">
-            Пример: <span className="font-mono">+7 900 123-45-67</span>
-          </div>
-        )}
-
-        {/* Найден в базе */}
-        {matchedContact && (
-          <div className="mt-1 flex items-center gap-1.5 text-xs text-emerald-700">
-            <Icon name="CheckCircle2" size={12} />
-            Найден в базе: <span className="font-semibold">{matchedContact.name || formatPhone(matchedContact.phone)}</span>
-            {matchedContact.company && <span className="text-muted-foreground">· {matchedContact.company}</span>}
-            <button
-              type="button"
-              onClick={() => setCardContactId(matchedContact.id)}
-              className="ml-1 underline hover:no-underline text-brand-blue"
-            >
-              Открыть карточку
-            </button>
-          </div>
-        )}
+        {/* Подсказка под инпутом — фиксированная высота, контент меняется без сдвига */}
+        <div className="mt-1 h-4 flex items-center">
+          {matchedContact ? (
+            <div className="flex items-center gap-1.5 text-xs text-emerald-700 truncate">
+              <Icon name="CheckCircle2" size={12} className="shrink-0" />
+              <span className="font-semibold truncate">{matchedContact.name || formatPhone(matchedContact.phone)}</span>
+              {matchedContact.company && <span className="text-muted-foreground truncate">· {matchedContact.company}</span>}
+              <button
+                type="button"
+                onClick={() => setCardContactId(matchedContact.id)}
+                className="ml-1 underline hover:no-underline text-brand-blue shrink-0"
+              >
+                Карточка
+              </button>
+            </div>
+          ) : !isComplete ? (
+            <span className="text-[11px] text-muted-foreground">
+              Пример: <span className="font-mono">+7 900 123-45-67</span>
+            </span>
+          ) : null}
+        </div>
 
         {/* Дропдаун с подсказками */}
         {open && suggestions.length > 0 && (
