@@ -32,10 +32,10 @@ const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; gro
   { id: 'marketing',       label: 'Маркетолог',        icon: 'Megaphone',       roles: ['admin', 'editor', 'manager', 'director'] },
   { id: 'market-import',   label: 'Импорт рынка',     icon: 'Upload',          roles: ['admin', 'editor'] },
   { id: 'settings',        label: 'Настройки',         icon: 'Settings',        roles: ['admin', 'editor'] },
-  { id: 'phones',          label: 'Телефонная база',   icon: 'Phone',           roles: ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'] },
-  { id: 'crm-kanban',      label: 'Воронка сделок',   icon: 'KanbanSquare',    roles: CRM_ROLES, group: 'crm' },
+  { id: 'phones',          label: 'Телефонная база',   icon: 'Phone',           roles: ['admin', 'editor', 'manager', 'director', 'office_manager'] },
+  { id: 'crm-kanban',      label: 'Воронка сделок',   icon: 'KanbanSquare',    roles: ['admin', 'director', 'manager', 'office_manager'], group: 'crm' },
   { id: 'crm-gamification',label: 'Рейтинг команды',  icon: 'Trophy',          roles: CRM_ROLES, group: 'crm' },
-  { id: 'crm-checks',      label: 'Проверки',          icon: 'ShieldCheck',     roles: CRM_ROLES, group: 'crm' },
+  { id: 'crm-checks',      label: 'Проверки',          icon: 'ShieldCheck',     roles: ['admin', 'director', 'manager', 'office_manager'], group: 'crm' },
   { id: 'crm-payments',    label: 'Платежи',           icon: 'CreditCard',      roles: ['admin', 'director', 'office_manager', 'manager'], group: 'crm' },
 ];
 
@@ -174,16 +174,34 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
     logoutTimer.current = setTimeout(() => logout(), IDLE_TIMEOUT_MS);
   };
 
+  // Минимальные права по умолчанию (пока rolePerms грузится с сервера)
+  // Совпадают с FALLBACK_PERMS в backend/admin/index.py
+  const ROLE_DEFAULTS: Record<string, string[]> = {
+    director:       ['dashboard', 'listings', 'leads', 'news', 'phones', 'users', 'pages', 'settings', 'marketing', 'vb-knowledge', 'crm-kanban', 'crm-gamification', 'crm-checks', 'crm-payments'],
+    manager:        ['dashboard', 'listings', 'leads', 'news', 'phones', 'marketing', 'crm-kanban', 'crm-gamification', 'crm-checks', 'crm-payments'],
+    editor:         ['dashboard', 'listings', 'leads', 'news', 'phones', 'pages', 'settings', 'seo', 'districts', 'vb-knowledge', 'marketing', 'market-import'],
+    broker:         ['dashboard', 'listings', 'leads'],
+    office_manager: ['dashboard', 'listings', 'leads', 'phones', 'crm-kanban', 'crm-payments'],
+    client:         [],
+  };
+
   if (!user) return null;
   const items = NAV.filter(n => {
     if (!n.roles.includes(user.role)) return false;
     if (user.role === 'admin') return true;
-    if (!rolePerms || !rolePerms[user.role]) return true;
-    const sectionPerms = rolePerms[user.role][n.id];
-    if (sectionPerms === undefined) return true;
-    return !!(typeof sectionPerms === 'object'
-      ? Object.values(sectionPerms as Record<string, boolean>).some(Boolean)
-      : sectionPerms);
+    // Если кастомные права загружены — используем их
+    if (rolePerms && rolePerms[user.role]) {
+      const sectionPerms = rolePerms[user.role][n.id];
+      if (sectionPerms === undefined) {
+        // Раздел не описан в кастомных правах — используем дефолт
+        return ROLE_DEFAULTS[user.role]?.includes(n.id) ?? false;
+      }
+      return !!(typeof sectionPerms === 'object'
+        ? Object.values(sectionPerms as Record<string, boolean>).some(Boolean)
+        : sectionPerms);
+    }
+    // Права ещё грузятся — показываем только дефолтный набор (не всё подряд)
+    return ROLE_DEFAULTS[user.role]?.includes(n.id) ?? false;
   });
 
   const roleLabel: Record<string, string> = {
