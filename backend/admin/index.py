@@ -162,7 +162,15 @@ def _load_permissions(cur):
         cur.execute(f"SELECT role_permissions FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
         row = cur.fetchone()
         if row and row['role_permissions']:
-            return json.loads(row['role_permissions'])
+            val = row['role_permissions']
+            # Поле может быть строкой или уже dict (зависит от драйвера)
+            if isinstance(val, str):
+                val = json.loads(val)
+            # Двойной парсинг: если внутри снова строка (сохранено через JSON.stringify дважды)
+            if isinstance(val, str):
+                val = json.loads(val)
+            if isinstance(val, dict):
+                return val
     except Exception:
         pass
     return None
