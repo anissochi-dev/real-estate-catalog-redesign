@@ -14,13 +14,12 @@ import urllib.request
 import boto3
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from ai_client import load_keys, chat_with_history, CHAT_MODEL, CHAT_MODEL_FAST
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
-YANDEX_GPT_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
-# YandexGPT 5 Pro 32k — расширенный контекст (32k токенов), лучшая работа с длинными диалогами и памятью.
-YANDEX_MODEL_NAME = 'yandexgpt-5-pro/latest'
-# Для технических/быстрых задач (seo, теги) — Lite.
-YANDEX_MODEL_SHORT = 'yandexgpt-5-lite/latest'
+# Алиасы для совместимости с существующим кодом
+YANDEX_MODEL_NAME  = CHAT_MODEL       # основная модель
+YANDEX_MODEL_SHORT = CHAT_MODEL_FAST  # быстрая/лёгкая модель
 
 # S3 настройки для оптимизации изображений
 S3_BUCKET = 'files'
@@ -626,16 +625,8 @@ def _get_user(cur, token):
 
 
 def _load_keys_from_db(cur) -> tuple:
-    try:
-        cur.execute(f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
-        row = cur.fetchone()
-        if row:
-            key = (row.get('yandex_api_key') or '').strip()
-            folder = (row.get('yandex_folder_id') or '').strip()
-            return (key, folder)
-    except Exception as e:
-        print(f'[ai-assistant] _load_keys_from_db error: {e}')
-    return (os.environ.get('YANDEX_API_KEY', ''), os.environ.get('YANDEX_FOLDER_ID', ''))
+    # cur не используется — load_keys сам читает из БД через env DATABASE_URL
+    return load_keys()
 
 
 def _call_yandex_gpt(
@@ -659,58 +650,19 @@ def _call_yandex_gpt(
     if not api_key:
         return {'error': 'YandexGPT API-ключ не настроен. Добавьте его в админке: Настройки → Интеграции.'}
 
-    messages = [{'role': 'system', 'text': system_prompt}]
-    # Подмешиваем историю диалога (32k-модель позволяет хранить больше)
-    if isinstance(history, list):
-        for h in history[-30:]:  # максимум 30 предыдущих сообщений
-            if not isinstance(h, dict):
-                continue
-            role = h.get('role')
-            text = (h.get('text') or '').strip()
-            if not text:
-                continue
-            # YandexGPT принимает только user/assistant/system.
-            # На фронте у нас 'ai' — конвертируем.
-            if role == 'ai':
-                role = 'assistant'
-            if role not in ('user', 'assistant'):
-                continue
-            messages.append({'role': role, 'text': text[:4000]})
-    # Текущий запрос пользователя
-    if user_prompt:
-        messages.append({'role': 'user', 'text': user_prompt})
+    # 'short' — алиас для быстрой модели
+    mdl = YANDEX_MODEL_SHORT if model == 'short' else (model or YANDEX_MODEL_NAME)
 
-    model_name = model or YANDEX_MODEL_NAME
-    model_uri = f'gpt://{folder_id}/{model_name}' if folder_id else model_name
-    payload = {
-        'modelUri': model_uri,
-        'completionOptions': {
-            'stream': False,
-            'temperature': float(temperature),
-            'maxTokens': str(int(max_tokens)),
-        },
-        'messages': messages,
-    }
-
-    hdrs = {'Authorization': f'Api-Key {api_key}', 'Content-Type': 'application/json'}
-    if folder_id:
-        hdrs['x-folder-id'] = folder_id
-    req = urllib.request.Request(
-        YANDEX_GPT_URL,
-        data=json.dumps(payload).encode('utf-8'),
-        headers=hdrs,
-        method='POST',
-    )
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-        result = data.get('result') or {}
-        alternatives = result.get('alternatives') or []
-        text = ''
-        if alternatives:
-            text = ((alternatives[0].get('message') or {}).get('text') or '').strip()
-        usage = result.get('usage') or {}
-        return {'text': text, 'tokens': int(usage.get('totalTokens', 0))}
+        return chat_with_history(
+            system_prompt, user_prompt, api_key, folder_id,
+            history=history,
+            model=mdl,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout=60,
+            max_history=30,
+        )
     except Exception as e:
         msg = str(e)
         if hasattr(e, 'read'):
