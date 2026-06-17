@@ -225,11 +225,13 @@ export function useMarketData(): MarketDataState {
 
   const trendData = (() => {
     if (!data?.snapshots.length) return [];
+    const CUT_DATE = '2026-06-12';
     const filtered = data.snapshots.filter(s =>
       s.deal === filterDeal &&
       s.district === filterDistrict &&
       selectedCats.includes(s.category) &&
       s.snapshot_date &&
+      s.snapshot_date >= CUT_DATE &&
       s.price_per_m2_median != null
     );
     const byDate: Record<string, Record<string, number>> = {};
