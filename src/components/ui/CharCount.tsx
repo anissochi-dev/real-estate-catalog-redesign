@@ -19,22 +19,26 @@ type Props = TextareaProps | InputProps;
 
 const CharCount = forwardRef<HTMLTextAreaElement | HTMLInputElement, Props>(
   (props, ref) => {
-    const { max, warnAt, showCount = true, as = 'textarea', className = '', ...rest } = props;
+    const { max, warnAt, showCount = true, as = 'textarea', className = '', onChange, ...rest } = props;
 
     const value = String(rest.value ?? '');
-    const len = value.length;
+    // Обрезаем value до max для отображения
+    const displayValue = max != null ? value.slice(0, max) : value;
+    const len = displayValue.length;
     const isWarn = warnAt != null && len >= warnAt;
-    const isOver = max != null && len > max;
+    const isOver = false; // никогда не превышает — обрезаем
 
-    const countColor = isOver
-      ? 'text-red-500'
-      : isWarn
-      ? 'text-amber-500'
-      : 'text-muted-foreground';
+    const countColor = isWarn ? 'text-amber-500' : 'text-muted-foreground';
 
-    const baseClass = `w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30 resize-none transition ${
-      isOver ? 'border-red-400' : ''
-    } ${className}`;
+    const baseClass = `w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30 resize-none transition ${className}`;
+
+    // Перехватываем onChange и обрезаем до max
+    const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => {
+      if (max != null && e.target.value.length > max) {
+        e.target.value = e.target.value.slice(0, max);
+      }
+      (onChange as React.ChangeEventHandler<typeof e.target>)?.(e as never);
+    };
 
     return (
       <div className="relative">
@@ -42,13 +46,19 @@ const CharCount = forwardRef<HTMLTextAreaElement | HTMLInputElement, Props>(
           <textarea
             ref={ref as React.Ref<HTMLTextAreaElement>}
             className={baseClass}
+            maxLength={max}
             {...(rest as TextareaHTMLAttributes<HTMLTextAreaElement>)}
+            value={displayValue}
+            onChange={handleChange as React.ChangeEventHandler<HTMLTextAreaElement>}
           />
         ) : (
           <input
             ref={ref as React.Ref<HTMLInputElement>}
             className={baseClass}
+            maxLength={max}
             {...(rest as InputHTMLAttributes<HTMLInputElement>)}
+            value={displayValue}
+            onChange={handleChange as React.ChangeEventHandler<HTMLInputElement>}
           />
         )}
         {showCount && (

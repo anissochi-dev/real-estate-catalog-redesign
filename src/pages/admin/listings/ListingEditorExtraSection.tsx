@@ -213,15 +213,15 @@ export default function ListingEditorExtraSection({
           <label className="text-xs text-muted-foreground">SEO Title (до 70 символов)</label>
           <CharCount as="input" max={70} warnAt={60}
             placeholder="Аренда офиса 120 м² в центре Краснодара | BIZNEST"
-            value={editing.seo_title || ''}
-            onChange={e => setEditing({ ...editing, seo_title: (e.target as HTMLInputElement).value })} />
+            value={(editing.seo_title || '').slice(0, 70)}
+            onChange={e => setEditing({ ...editing, seo_title: (e.target as HTMLInputElement).value.slice(0, 70) })} />
         </div>
         <div>
           <label className="text-xs text-muted-foreground">SEO Description (до 160 символов)</label>
           <CharCount as="textarea" rows={2} max={160} warnAt={140}
             placeholder="Светлый офис 120 м² с евроремонтом в БЦ на ул. Красной. Парковка, охрана 24/7..."
-            value={editing.seo_description || ''}
-            onChange={e => setEditing({ ...editing, seo_description: (e.target as HTMLTextAreaElement).value })} />
+            value={(editing.seo_description || '').slice(0, 160)}
+            onChange={e => setEditing({ ...editing, seo_description: (e.target as HTMLTextAreaElement).value.slice(0, 160) })} />
         </div>
         <div className="text-[11px] text-muted-foreground">
           Если поля пустые — поисковики возьмут текст из названия и описания объекта.
