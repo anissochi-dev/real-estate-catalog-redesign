@@ -10,7 +10,7 @@ import json
 import urllib.request
 import urllib.error
 from datetime import datetime, timedelta
-from ai_client import chat_simple
+from ai_client import chat_simple, load_keys
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
 CACHE_TTL_DAYS = 7
@@ -72,14 +72,7 @@ SYSTEM_PROMPT = (
 
 
 def _load_keys(cur):
-    try:
-        cur.execute(f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
-        row = cur.fetchone()
-        if not row:
-            return None, None
-        return row.get('yandex_api_key'), row.get('yandex_folder_id')
-    except Exception:
-        return None, None
+    return load_keys()
 
 
 def _fallback_benchmarks(listing: dict) -> dict:

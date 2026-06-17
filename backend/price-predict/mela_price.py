@@ -16,9 +16,9 @@ import urllib.request
 import urllib.error
 from datetime import datetime, timedelta
 
+from ai_client import chat_simple
+
 SCHEMA = 't_p71821556_real_estate_catalog_'
-YANDEX_GPT_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
-YANDEX_MODEL_NAME = 'yandexgpt-5-pro/latest'
 YANDEX_SEARCH_URL = 'https://yandex.ru/search/xml'
 
 # TTL кеша по категориям — редкие категории обновляются реже (мало объявлений)
@@ -791,29 +791,9 @@ def _gpt_fallback(listing: dict, api_key: str, folder_id: str) -> list:
     if listing.get('condition'):
         parts.append(f"Состояние: {listing['condition']}")
 
-    payload = {
-        'modelUri': f'gpt://{folder_id}/{YANDEX_MODEL_NAME}',
-        'completionOptions': {'stream': False, 'temperature': 0.3, 'maxTokens': '700'},
-        'messages': [
-            {'role': 'system', 'text': GPT_PROMPT},
-            {'role': 'user', 'text': '\n'.join(parts)},
-        ],
-    }
-    req = urllib.request.Request(
-        YANDEX_GPT_URL,
-        data=json.dumps(payload).encode(),
-        headers={
-            'Authorization': f'Api-Key {api_key}',
-            'Content-Type': 'application/json',
-            'x-folder-id': folder_id,
-        },
-        method='POST',
-    )
     try:
-        with urllib.request.urlopen(req, timeout=45) as resp:
-            data = json.loads(resp.read().decode())
-        alts = (data.get('result') or {}).get('alternatives') or []
-        text = ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
+        text = chat_simple(GPT_PROMPT, '\n'.join(parts), api_key, folder_id,
+                           temperature=0.3, max_tokens=700, timeout=45)
         text = text.replace('```json', '').replace('```', '').strip()
         parsed = json.loads(text)
         analogs = parsed.get('analogs') or []
