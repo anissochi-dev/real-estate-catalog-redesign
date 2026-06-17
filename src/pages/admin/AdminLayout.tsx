@@ -60,12 +60,24 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
   const [idleWarning, setIdleWarning] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(IDLE_WARNING_MS / 1000);
   const [rolePerms, setRolePerms] = useState<Record<string, Record<string, boolean>> | null>(null);
+  const [navOrder, setNavOrder] = useState<Record<string, string[]> | null>(null);
 
   useEffect(() => {
-    if (!user || user.role === 'admin') return;
-    adminApi.getRolePermissions()
-      .then(d => { if (d.permissions) setRolePerms(d.permissions); })
-      .catch(() => {});
+    if (!user) return;
+    Promise.all([
+      user.role !== 'admin' ? adminApi.getRolePermissions() : Promise.resolve(null),
+      adminApi.getNavOrder(),
+    ]).then(([pd, sd]) => {
+      if (pd?.permissions) setRolePerms(pd.permissions);
+      if (sd?.settings?.nav_order) {
+        try {
+          const parsed = typeof sd.settings.nav_order === 'string'
+            ? JSON.parse(sd.settings.nav_order)
+            : sd.settings.nav_order;
+          if (parsed && typeof parsed === 'object') setNavOrder(parsed);
+        } catch { /* ignore */ }
+      }
+    }).catch(() => {});
   }, [user]);
 
   // Загружаем счётчик ожидающих постов из соцсетей раз в 5 минут
@@ -202,6 +214,17 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
     return ROLE_DEFAULTS[user.role]?.includes(n.id) ?? false;
   });
 
+  // Применяем сохранённый порядок меню для роли
+  const roleOrder = navOrder?.[user.role];
+  const sortedItems = roleOrder
+    ? [...items].sort((a, b) => {
+        const ai = roleOrder.indexOf(a.id);
+        const bi = roleOrder.indexOf(b.id);
+        // Если элемент не найден в порядке — ставим в конец
+        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+      })
+    : items;
+
   const roleLabel: Record<string, string> = {
     admin: 'Администратор',
     editor: 'Редактор',
@@ -238,7 +261,7 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
         </div>
 
         <nav className={`flex-1 overflow-y-auto space-y-1 ${collapsed ? 'p-2' : 'p-3'}`}>
-          {items.filter(n => !n.group).map(item => {
+          {sortedItems.filter(n => !n.group).map(item => {
             const badge =
               item.id === 'marketing' && socialPending > 0 ? socialPending
               : item.id === 'leads' && newLeadsCount > 0 ? newLeadsCount
@@ -288,7 +311,7 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
               </button>
             );
           })}
-          {items.some(n => n.group === 'crm') && (
+          {sortedItems.some(n => n.group === 'crm') && (
             <>
               {!collapsed ? (
                 <div className="pt-3 pb-1 px-3">
@@ -299,7 +322,7 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
                   <div className="border-t border-border mx-2" />
                 </div>
               )}
-              {items.filter(n => n.group === 'crm').map(item => (
+              {sortedItems.filter(n => n.group === 'crm').map(item => (
                 <button
                   key={item.id}
                   title={collapsed ? item.label : undefined}

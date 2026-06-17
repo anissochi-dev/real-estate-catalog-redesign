@@ -1,9 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { adminApi, Role } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 
 type Op = 'read' | 'create' | 'update' | 'delete';
-type ViewMode = 'role' | 'matrix';
+type ViewMode = 'role' | 'matrix' | 'nav';
+
+// Все роли включая admin (для порядка меню)
+const ALL_ROLES_NAV: { id: string; label: string; color: string; bg: string; dot: string }[] = [
+  { id: 'admin',          label: 'Администратор', color: 'text-violet-700',  bg: 'bg-violet-50 border-violet-200',  dot: 'bg-violet-500' },
+  { id: 'director',       label: 'Директор',      color: 'text-blue-700',   bg: 'bg-blue-50 border-blue-200',    dot: 'bg-blue-500' },
+  { id: 'manager',        label: 'Менеджер',      color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
+  { id: 'editor',         label: 'Редактор',      color: 'text-sky-700',    bg: 'bg-sky-50 border-sky-200',      dot: 'bg-sky-500' },
+  { id: 'broker',         label: 'Брокер',        color: 'text-amber-700',  bg: 'bg-amber-50 border-amber-200',  dot: 'bg-amber-500' },
+  { id: 'office_manager', label: 'Офис-менеджер', color: 'text-orange-700', bg: 'bg-orange-50 border-orange-200', dot: 'bg-orange-500' },
+];
 
 interface SectionDef {
   id: string;
@@ -139,41 +149,85 @@ function PermBadge({ on, op, onClick }: { on: boolean; op: Op; onClick: () => vo
   );
 }
 
+// Дефолтный порядок меню (id разделов из NAV AdminLayout)
+const DEFAULT_NAV_ORDER: Record<string, string[]> = {
+  admin:          ['dashboard','listings','leads','users','news','phones','seo','districts','vb-knowledge','marketing','market-import','settings','crm-kanban','crm-gamification','crm-checks','crm-payments'],
+  director:       ['dashboard','listings','leads','news','phones','users','marketing','vb-knowledge','crm-kanban','crm-gamification','crm-checks','crm-payments'],
+  manager:        ['dashboard','listings','leads','news','phones','marketing','crm-kanban','crm-gamification','crm-checks','crm-payments'],
+  editor:         ['dashboard','listings','leads','news','phones','pages','settings','seo','districts','vb-knowledge','marketing','market-import'],
+  broker:         ['dashboard','listings','leads','crm-kanban','crm-gamification','crm-checks'],
+  office_manager: ['dashboard','listings','leads','phones','crm-kanban','crm-payments'],
+};
+
+// Метаданные разделов для отображения в редакторе порядка
+const NAV_SECTION_META: Record<string, { label: string; icon: string; group: string }> = {
+  dashboard:        { label: 'Дашборд',          icon: 'LayoutDashboard', group: 'Основное' },
+  listings:         { label: 'Объекты',           icon: 'Building2',       group: 'Основное' },
+  leads:            { label: 'Заявки',            icon: 'Inbox',           group: 'Основное' },
+  users:            { label: 'Пользователи',      icon: 'Users',           group: 'Основное' },
+  news:             { label: 'Новости',           icon: 'Newspaper',       group: 'Основное' },
+  phones:           { label: 'Телефонная база',   icon: 'Phone',           group: 'Основное' },
+  seo:              { label: 'SEO',               icon: 'TrendingUp',      group: 'Контент' },
+  districts:        { label: 'Районы',            icon: 'MapPin',          group: 'Контент' },
+  'vb-knowledge':   { label: 'База знаний ВБ',   icon: 'Brain',           group: 'Контент' },
+  marketing:        { label: 'Маркетолог',        icon: 'Megaphone',       group: 'Контент' },
+  'market-import':  { label: 'Импорт рынка',     icon: 'Upload',          group: 'Контент' },
+  settings:         { label: 'Настройки',         icon: 'Settings',        group: 'Контент' },
+  pages:            { label: 'Страницы',          icon: 'FileText',        group: 'Контент' },
+  'crm-kanban':     { label: 'Воронка сделок',   icon: 'KanbanSquare',    group: 'CRM' },
+  'crm-gamification':{ label: 'Рейтинг команды', icon: 'Trophy',          group: 'CRM' },
+  'crm-checks':     { label: 'Проверки',          icon: 'ShieldCheck',     group: 'CRM' },
+  'crm-payments':   { label: 'Платежи',           icon: 'CreditCard',      group: 'CRM' },
+};
+
 export default function RolesAdmin() {
   const [perms, setPerms] = useState<AllPerms>(DEFAULT_PERMS);
+  const [navOrder, setNavOrder] = useState<Record<string, string[]>>(DEFAULT_NAV_ORDER);
+  const [navRole, setNavRole] = useState<string>('admin');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [activeRole, setActiveRole] = useState<Role>('director');
   const [viewMode, setViewMode] = useState<ViewMode>('role');
   const [hasChanges, setHasChanges] = useState(false);
+  const dragItem = useRef<number | null>(null);
+  const dragOver = useRef<number | null>(null);
 
   useEffect(() => {
-    adminApi.getRolePermissions()
-      .then(d => {
-        if (d.permissions && Object.keys(d.permissions).length > 0) {
-          // Мержим с DEFAULT_PERMS: добавляем недостающие секции, не трогаем существующие
-          const merged: AllPerms = {};
-          for (const role of Object.keys(DEFAULT_PERMS) as Role[]) {
-            const dbRole = (d.permissions as AllPerms)[role] || {};
-            const defRole = DEFAULT_PERMS[role] || {};
-            merged[role] = { ...defRole, ...dbRole };
-          }
-          setPerms(merged);
-          // Если БД была неполной — сохраняем актуальные права
-          const dbKeys = Object.keys(d.permissions as AllPerms);
-          const needsUpdate = dbKeys.some(role => {
-            const dbRole = (d.permissions as AllPerms)[role] || {};
-            const defRole = DEFAULT_PERMS[role as Role] || {};
-            return Object.keys(defRole).some(sec => !(sec in dbRole));
-          });
-          if (needsUpdate) {
-            adminApi.updateRolePermissions(merged as Record<string, unknown>).catch(() => {});
-          }
+    Promise.all([
+      adminApi.getRolePermissions(),
+      adminApi.getNavOrder(),
+    ]).then(([pd, sd]) => {
+      // Права ролей
+      if (pd.permissions && Object.keys(pd.permissions).length > 0) {
+        const merged: AllPerms = {};
+        for (const role of Object.keys(DEFAULT_PERMS) as Role[]) {
+          const dbRole = (pd.permissions as AllPerms)[role] || {};
+          const defRole = DEFAULT_PERMS[role] || {};
+          merged[role] = { ...defRole, ...dbRole };
         }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+        setPerms(merged);
+        const needsUpdate = Object.keys(pd.permissions as AllPerms).some(role => {
+          const dbRole = (pd.permissions as AllPerms)[role] || {};
+          const defRole = DEFAULT_PERMS[role as Role] || {};
+          return Object.keys(defRole).some(sec => !(sec in dbRole));
+        });
+        if (needsUpdate) {
+          adminApi.updateRolePermissions(merged as Record<string, unknown>).catch(() => {});
+        }
+      }
+      // Порядок меню
+      if (sd.settings?.nav_order) {
+        try {
+          const parsed = typeof sd.settings.nav_order === 'string'
+            ? JSON.parse(sd.settings.nav_order)
+            : sd.settings.nav_order;
+          if (parsed && typeof parsed === 'object') {
+            setNavOrder({ ...DEFAULT_NAV_ORDER, ...parsed });
+          }
+        } catch { /* ignore */ }
+      }
+    }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   const toggle = (role: Role, section: string, op: Op) => {
@@ -208,10 +262,48 @@ export default function RolesAdmin() {
     setHasChanges(true);
   };
 
+  // Порядок меню — перемещение кнопками
+  const moveNavItem = (role: string, from: number, to: number) => {
+    if (to < 0 || to >= (navOrder[role] || []).length) return;
+    setNavOrder(prev => {
+      const items = [...(prev[role] || [])];
+      const [moved] = items.splice(from, 1);
+      items.splice(to, 0, moved);
+      return { ...prev, [role]: items };
+    });
+    setHasChanges(true);
+  };
+
+  // Drag-and-drop
+  const onDragStart = (idx: number) => { dragItem.current = idx; };
+  const onDragEnter = (idx: number) => { dragOver.current = idx; };
+  const onDragEnd = (role: string) => {
+    if (dragItem.current === null || dragOver.current === null) return;
+    if (dragItem.current === dragOver.current) return;
+    setNavOrder(prev => {
+      const items = [...(prev[role] || [])];
+      const [moved] = items.splice(dragItem.current!, 1);
+      items.splice(dragOver.current!, 0, moved);
+      dragItem.current = null;
+      dragOver.current = null;
+      return { ...prev, [role]: items };
+    });
+    setHasChanges(true);
+  };
+
+  const resetNavOrder = () => {
+    if (!confirm('Сбросить порядок меню к значениям по умолчанию?')) return;
+    setNavOrder(DEFAULT_NAV_ORDER);
+    setHasChanges(true);
+  };
+
   const save = async () => {
     setSaving(true);
     try {
-      await adminApi.updateRolePermissions(perms as Record<string, unknown>);
+      await Promise.all([
+        adminApi.updateRolePermissions(perms as Record<string, unknown>),
+        adminApi.updateNavOrder(navOrder),
+      ]);
       setSaved(true);
       setHasChanges(false);
       setTimeout(() => setSaved(false), 3000);
@@ -269,6 +361,12 @@ export default function RolesAdmin() {
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${viewMode === 'matrix' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
             >
               <Icon name="Grid3x3" size={13} /> Матрица
+            </button>
+            <button
+              onClick={() => setViewMode('nav')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${viewMode === 'nav' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              <Icon name="Menu" size={13} /> Порядок меню
             </button>
           </div>
           <button
@@ -536,6 +634,116 @@ export default function RolesAdmin() {
             <span className="flex items-center gap-1 ml-2">
               Клик по иконке — toggle операции. Клик по кружку — toggle всех операций раздела.
             </span>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════
+          ВИД: порядок меню по ролям
+      ══════════════════════════════════════════ */}
+      {viewMode === 'nav' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-sm text-muted-foreground">
+              Перетащите пункты меню или используйте стрелки ↑↓ чтобы изменить порядок отображения в боковом меню для каждой роли.
+            </p>
+            <button
+              onClick={resetNavOrder}
+              className="px-3 py-1.5 rounded-xl border border-border text-xs font-medium hover:bg-muted transition-colors flex items-center gap-1.5 shrink-0"
+            >
+              <Icon name="RotateCcw" size={12} /> Сбросить порядок
+            </button>
+          </div>
+
+          {/* Выбор роли */}
+          <div className="flex flex-wrap gap-2">
+            {ALL_ROLES_NAV.map(r => (
+              <button
+                key={r.id}
+                onClick={() => setNavRole(r.id)}
+                className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all flex items-center gap-2 ${
+                  navRole === r.id
+                    ? r.bg + ' ' + r.color + ' shadow-sm'
+                    : 'border-border text-muted-foreground hover:border-brand-blue bg-white'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${r.dot}`} />
+                {r.label}
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-white/60 bg-opacity-60">
+                  {(navOrder[navRole] || []).length}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Список пунктов с drag-and-drop */}
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+            <div className="px-4 py-3 bg-muted/40 border-b border-border flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                {ALL_ROLES_NAV.find(r => r.id === navRole)?.label} — порядок пунктов меню
+              </span>
+              <span className="text-xs text-muted-foreground ml-auto">
+                Перетащите или используйте ↑↓
+              </span>
+            </div>
+            <div className="divide-y divide-border/50">
+              {(navOrder[navRole] || []).map((sectionId, idx) => {
+                const meta = NAV_SECTION_META[sectionId];
+                if (!meta) return null;
+                const isFirst = idx === 0;
+                const isLast = idx === (navOrder[navRole] || []).length - 1;
+                return (
+                  <div
+                    key={sectionId}
+                    draggable
+                    onDragStart={() => onDragStart(idx)}
+                    onDragEnter={() => onDragEnter(idx)}
+                    onDragEnd={() => onDragEnd(navRole)}
+                    onDragOver={e => e.preventDefault()}
+                    className="px-4 py-3 flex items-center gap-3 hover:bg-muted/20 transition-colors cursor-grab active:cursor-grabbing select-none group"
+                  >
+                    {/* Иконка drag */}
+                    <Icon name="GripVertical" size={16} className="text-muted-foreground/40 group-hover:text-muted-foreground shrink-0" />
+
+                    {/* Номер */}
+                    <span className="text-xs font-mono text-muted-foreground w-5 text-right shrink-0">{idx + 1}</span>
+
+                    {/* Иконка и название */}
+                    <Icon name={meta.icon} size={15} className="text-brand-blue shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium">{meta.label}</span>
+                      <span className="text-xs text-muted-foreground ml-2">{meta.group}</span>
+                    </div>
+
+                    {/* Кнопки ↑↓ */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => moveNavItem(navRole, idx, idx - 1)}
+                        disabled={isFirst}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center border border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Переместить выше"
+                      >
+                        <Icon name="ChevronUp" size={14} />
+                      </button>
+                      <button
+                        onClick={() => moveNavItem(navRole, idx, idx + 1)}
+                        disabled={isLast}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center border border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Переместить ниже"
+                      >
+                        <Icon name="ChevronDown" size={14} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Подсказка */}
+            <div className="px-4 py-3 border-t border-border bg-muted/20 text-xs text-muted-foreground flex items-center gap-2">
+              <Icon name="Info" size={13} />
+              Изменения вступят в силу после сохранения и перезагрузки страницы
+            </div>
           </div>
         </div>
       )}

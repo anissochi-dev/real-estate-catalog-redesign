@@ -381,6 +381,14 @@ export const adminApi = {
       body: JSON.stringify({ permissions }),
     }),
 
+  // nav order (порядок пунктов меню по ролям)
+  getNavOrder: () => req(`${ADMIN_URL}?resource=settings`),
+  updateNavOrder: (navOrder: Record<string, string[]>) =>
+    req(`${ADMIN_URL}?resource=settings`, {
+      method: 'PUT',
+      body: JSON.stringify({ nav_order: navOrder }),
+    }),
+
   // notifications (тестовая отправка email/telegram)
   testNotification: (data: { channel: 'email' | 'telegram' }) =>
     req(`${ADMIN_URL}?resource=notifications&action=test`, {

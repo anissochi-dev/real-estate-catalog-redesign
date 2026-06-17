@@ -3128,6 +3128,10 @@ def _settings(cur, conn, method, event, user):
             rp = body['role_permissions']
             rp_json = _safe(json.dumps(rp, ensure_ascii=False), 50000)
             fields.append(f"role_permissions = '{rp_json}'")
+        if 'nav_order' in body:
+            nav = body['nav_order']
+            nav_json = _safe(json.dumps(nav, ensure_ascii=False), 10000)
+            fields.append(f"nav_order = '{nav_json}'")
         if 'verification_files' in body:
             vf = body['verification_files']
             if not isinstance(vf, list):
