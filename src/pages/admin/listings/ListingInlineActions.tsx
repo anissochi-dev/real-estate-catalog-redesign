@@ -18,7 +18,7 @@ const ROLE_RU: Record<string, string> = {
   director: 'Директор', broker: 'Брокер', office_manager: 'Офис',
 };
 
-export default function ListingInlineActions({ listingId, onBulk, onBulkDelete, bulkLoading, isAdmin }: Props) {
+export default function ListingInlineActions({ listingId: _listingId, onBulk, onBulkDelete, bulkLoading, isAdmin }: Props) {
   const { user } = useAuth();
   const canAssignBroker = user?.role === 'admin' || user?.role === 'director';
 
@@ -61,35 +61,6 @@ export default function ListingInlineActions({ listingId, onBulk, onBulkDelete, 
     return q ? brokers.filter(b => b.name.toLowerCase().includes(q)) : brokers;
   }, [brokers, brokerQuery]);
 
-  // ── Переиспользуемые части ────────────────────────────────────────────────
-
-  const Btn = ({ icon, label, cls, onClick, disabled }: {
-    icon: string; label: string; cls: string; onClick: () => void; disabled?: boolean
-  }) => (
-    <button
-      onClick={e => { e.stopPropagation(); onClick(); }}
-      disabled={disabled || bulkLoading}
-      className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold border transition disabled:opacity-40 whitespace-nowrap ${cls}`}
-    >
-      <Icon name={icon} size={11} />
-      {label}
-    </button>
-  );
-
-  const DropBtn = ({ icon, label, cls, open, onClick }: {
-    icon: string; label: string; cls: string; open: boolean; onClick: () => void;
-  }) => (
-    <button
-      onClick={e => { e.stopPropagation(); onClick(); }}
-      disabled={bulkLoading}
-      className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold border transition disabled:opacity-40 whitespace-nowrap ${cls}`}
-    >
-      <Icon name={icon} size={11} />
-      {label}
-      <Icon name={open ? 'ChevronUp' : 'ChevronDown'} size={10} className="ml-0.5" />
-    </button>
-  );
-
   const Menu = ({ children }: { children: React.ReactNode }) => (
     <div
       className="absolute bottom-full mb-1.5 left-0 z-50 min-w-[160px] bg-white border border-border rounded-xl shadow-2xl overflow-hidden"
@@ -111,185 +82,179 @@ export default function ListingInlineActions({ listingId, onBulk, onBulkDelete, 
     </button>
   );
 
-  const Divider = () => <div className="w-px self-stretch bg-white/20 mx-0.5" />;
-
-  // Стили кнопок для тёмной полосы
-  const BtnLight = ({ icon, label, cls, onClick: handleClick, disabled }: {
-    icon: string; label: string; cls: string; onClick: () => void; disabled?: boolean
+  // Универсальная кнопка на тёмном фоне
+  const Btn = ({ icon, label, cls, onClick: handleClick, disabled, chevron, open }: {
+    icon: string; label: string; cls: string; onClick: () => void;
+    disabled?: boolean; chevron?: boolean; open?: boolean;
   }) => (
     <button
       onClick={e => { e.stopPropagation(); handleClick(); }}
       disabled={disabled || bulkLoading}
-      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition disabled:opacity-40 whitespace-nowrap ${cls}`}
+      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold transition disabled:opacity-40 whitespace-nowrap ${cls}`}
     >
-      <Icon name={icon} size={11} />
+      <Icon name={icon} size={13} />
       {label}
-    </button>
-  );
-
-  const DropBtnLight = ({ icon, label, cls, open, onClick: handleClick }: {
-    icon: string; label: string; cls: string; open: boolean; onClick: () => void;
-  }) => (
-    <button
-      onClick={e => { e.stopPropagation(); handleClick(); }}
-      disabled={bulkLoading}
-      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition disabled:opacity-40 whitespace-nowrap ${cls}`}
-    >
-      <Icon name={icon} size={11} />
-      {label}
-      <Icon name={open ? 'ChevronUp' : 'ChevronDown'} size={10} className="ml-0.5" />
+      {chevron && <Icon name={open ? 'ChevronUp' : 'ChevronDown'} size={11} className="ml-0.5 opacity-70" />}
     </button>
   );
 
   return (
     <div
-      className="flex items-center gap-1.5 flex-wrap px-4 py-2.5 bg-brand-blue rounded-t-2xl"
+      className="bg-brand-blue rounded-t-2xl px-3 pt-3 pb-2.5 space-y-2"
       onClick={e => e.stopPropagation()}
     >
-      {/* Загрузка */}
       {bulkLoading && (
-        <span className="inline-flex items-center gap-1 text-[11px] text-white/80">
-          <Icon name="Loader2" size={11} className="animate-spin" />
+        <div className="flex items-center gap-1.5 text-[11px] text-white/70 pb-1">
+          <Icon name="Loader2" size={12} className="animate-spin" />
           Применяю...
-        </span>
+        </div>
       )}
 
-      {/* Действия */}
-      <span className="text-[10px] font-semibold text-white/50 uppercase tracking-wide mr-0.5">Действия</span>
-      <BtnLight icon="CheckCircle" label="Активный" cls="bg-emerald-500 text-white hover:bg-emerald-400"
-        onClick={() => { if (confirm('Сделать активным?')) onBulk('activate'); }} />
-      <BtnLight icon="Archive" label="В архив" cls="bg-amber-500 text-white hover:bg-amber-400"
-        onClick={() => { if (confirm('В архив?')) onBulk('archive'); }} />
-      {isAdmin && (
-        <BtnLight icon="Trash2" label="Удалить" cls="bg-red-500 text-white hover:bg-red-400"
-          onClick={onBulkDelete} />
-      )}
-
-      <Divider />
-
-      {/* Статусы */}
-      <span className="text-[10px] font-semibold text-white/50 uppercase tracking-wide mr-0.5">Статус</span>
-
-      {/* Горячее */}
-      <div className="relative" ref={hotRef}>
-        <DropBtnLight icon="Flame" label="Горячее" cls="bg-white/15 text-white hover:bg-white/25"
-          open={showHot} onClick={() => setShowHot(s => !s)} />
-        {showHot && (
-          <Menu>
-            <MenuItem icon="Flame" label="Горячее" cls="text-orange-700"
-              onClick={() => { onBulk('set_hot', true); setShowHot(false); }} />
-            <MenuItem icon="FlameKindling" label="Не горячее" cls="text-muted-foreground"
-              onClick={() => { onBulk('set_hot', false); setShowHot(false); }} />
-          </Menu>
-        )}
+      {/* ── Строка 1: Действия ── */}
+      <div className="flex items-center gap-1.5">
+        <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest w-16 shrink-0">Действия</span>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <Btn icon="CheckCircle" label="Активный" cls="bg-emerald-500 text-white hover:bg-emerald-400"
+            onClick={() => { if (confirm('Сделать активным?')) onBulk('activate'); }} />
+          <Btn icon="Archive" label="В архив" cls="bg-amber-500 text-white hover:bg-amber-400"
+            onClick={() => { if (confirm('В архив?')) onBulk('archive'); }} />
+          {isAdmin && (
+            <Btn icon="Trash2" label="Удалить" cls="bg-red-500 text-white hover:bg-red-400"
+              onClick={onBulkDelete} />
+          )}
+        </div>
       </div>
 
-      {/* Новинка */}
-      <div className="relative" ref={newRef}>
-        <DropBtnLight icon="Sparkles" label="Новинка" cls="bg-white/15 text-white hover:bg-white/25"
-          open={showNew} onClick={() => setShowNew(s => !s)} />
-        {showNew && (
-          <Menu>
-            <MenuItem icon="Sparkles" label="Новинка" cls="text-sky-700"
-              onClick={() => { onBulk('set_new', true); setShowNew(false); }} />
-            <MenuItem icon="X" label="Не новинка" cls="text-muted-foreground"
-              onClick={() => { onBulk('set_new', false); setShowNew(false); }} />
-          </Menu>
-        )}
-      </div>
+      {/* ── Строка 2: Статусы ── */}
+      <div className="flex items-center gap-1.5">
+        <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest w-16 shrink-0">Статус</span>
+        <div className="flex items-center gap-1.5 flex-wrap">
 
-      {/* Видимость */}
-      <div className="relative" ref={visibleRef}>
-        <DropBtnLight icon="Eye" label="Видимость" cls="bg-white/15 text-white hover:bg-white/25"
-          open={showVisible} onClick={() => setShowVisible(s => !s)} />
-        {showVisible && (
-          <Menu>
-            <MenuItem icon="Eye" label="Виден на сайте" cls="text-teal-700"
-              onClick={() => { onBulk('set_visible', true); setShowVisible(false); }} />
-            <MenuItem icon="EyeOff" label="Скрыт" cls="text-rose-600"
-              onClick={() => { onBulk('set_visible', false); setShowVisible(false); }} />
-          </Menu>
-        )}
-      </div>
-
-      <Divider />
-
-      {/* Экспорт */}
-      <span className="text-[10px] font-semibold text-white/50 uppercase tracking-wide mr-0.5">Экспорт</span>
-
-      <div className="relative" ref={xmlRef}>
-        <DropBtnLight icon="FileCode2" label="XML" cls="bg-white/15 text-white hover:bg-white/25"
-          open={showXml} onClick={() => setShowXml(s => !s)} />
-        {showXml && (
-          <div
-            className="absolute bottom-full mb-1.5 left-0 z-50 w-64 bg-white border border-border rounded-xl shadow-2xl overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="px-3 py-2 border-b border-border bg-muted/30 text-[11px] font-semibold">Площадка XML-выгрузки</div>
-            {[
-              { platform: 'yandex', label: 'Яндекс.Недвижимость', icon: 'Building2' },
-              { platform: 'avito',  label: 'Авито',               icon: 'ShoppingBag' },
-              { platform: 'cian',   label: 'ЦИАН',                icon: 'MapPin' },
-              { platform: 'all',    label: 'Все площадки',        icon: 'Globe' },
-            ].map(({ platform, label, icon }) => (
-              <div key={platform} className="flex items-center justify-between px-3 py-1.5 border-b border-border/30 last:border-0">
-                <div className="flex items-center gap-1.5 text-[11px]">
-                  <Icon name={icon} size={12} className="text-muted-foreground" />
-                  {label}
-                </div>
-                <div className="flex gap-1">
-                  <button onClick={e => { e.stopPropagation(); onBulk('set_export', { platform, enabled: true }); setShowXml(false); }}
-                    className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 font-medium">+</button>
-                  <button onClick={e => { e.stopPropagation(); onBulk('set_export', { platform, enabled: false }); setShowXml(false); }}
-                    className="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-600 hover:bg-red-100 font-medium">−</button>
-                </div>
-              </div>
-            ))}
+          {/* Горячее */}
+          <div className="relative" ref={hotRef}>
+            <Btn icon="Flame" label="Горячее" cls="bg-white/15 text-white hover:bg-white/25"
+              chevron open={showHot} onClick={() => setShowHot(s => !s)} />
+            {showHot && (
+              <Menu>
+                <MenuItem icon="Flame" label="Горячее" cls="text-orange-700"
+                  onClick={() => { onBulk('set_hot', true); setShowHot(false); }} />
+                <MenuItem icon="FlameKindling" label="Не горячее" cls="text-muted-foreground"
+                  onClick={() => { onBulk('set_hot', false); setShowHot(false); }} />
+              </Menu>
+            )}
           </div>
-        )}
+
+          {/* Новинка */}
+          <div className="relative" ref={newRef}>
+            <Btn icon="Sparkles" label="Новинка" cls="bg-white/15 text-white hover:bg-white/25"
+              chevron open={showNew} onClick={() => setShowNew(s => !s)} />
+            {showNew && (
+              <Menu>
+                <MenuItem icon="Sparkles" label="Новинка" cls="text-sky-700"
+                  onClick={() => { onBulk('set_new', true); setShowNew(false); }} />
+                <MenuItem icon="X" label="Не новинка" cls="text-muted-foreground"
+                  onClick={() => { onBulk('set_new', false); setShowNew(false); }} />
+              </Menu>
+            )}
+          </div>
+
+          {/* Видимость */}
+          <div className="relative" ref={visibleRef}>
+            <Btn icon="Eye" label="Видимость" cls="bg-white/15 text-white hover:bg-white/25"
+              chevron open={showVisible} onClick={() => setShowVisible(s => !s)} />
+            {showVisible && (
+              <Menu>
+                <MenuItem icon="Eye" label="Виден на сайте" cls="text-teal-700"
+                  onClick={() => { onBulk('set_visible', true); setShowVisible(false); }} />
+                <MenuItem icon="EyeOff" label="Скрыт" cls="text-rose-600"
+                  onClick={() => { onBulk('set_visible', false); setShowVisible(false); }} />
+              </Menu>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Передать агенту */}
-      {canAssignBroker && (
-        <div className="relative" ref={brokerRef}>
-          <DropBtnLight icon="UserCheck" label="Агент" cls="bg-white/15 text-white hover:bg-white/25"
-            open={showBrokers} onClick={() => setShowBrokers(s => !s)} />
-          {showBrokers && (
-            <div
-              className="absolute bottom-full mb-1.5 left-0 z-50 w-64 bg-white border border-border rounded-xl shadow-2xl overflow-hidden"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="p-2 border-b border-border">
-                <div className="relative">
-                  <Icon name="Search" size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <input autoFocus type="text" placeholder="Поиск..." value={brokerQuery}
-                    onChange={e => setBrokerQuery(e.target.value)}
-                    className="w-full pl-6 pr-2 py-1 text-[11px] border border-border rounded-lg focus:outline-none focus:border-brand-blue" />
-                </div>
+      {/* ── Строка 3: Экспорт + Агент ── */}
+      <div className="flex items-center gap-1.5">
+        <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest w-16 shrink-0">Экспорт</span>
+        <div className="flex items-center gap-1.5 flex-wrap">
+
+          {/* XML */}
+          <div className="relative" ref={xmlRef}>
+            <Btn icon="FileCode2" label="XML" cls="bg-white/15 text-white hover:bg-white/25"
+              chevron open={showXml} onClick={() => setShowXml(s => !s)} />
+            {showXml && (
+              <div
+                className="absolute bottom-full mb-1.5 left-0 z-50 w-64 bg-white border border-border rounded-xl shadow-2xl overflow-hidden"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="px-3 py-2 border-b border-border bg-muted/30 text-[11px] font-semibold">Площадка XML-выгрузки</div>
+                {[
+                  { platform: 'yandex', label: 'Яндекс.Недвижимость', icon: 'Building2' },
+                  { platform: 'avito',  label: 'Авито',               icon: 'ShoppingBag' },
+                  { platform: 'cian',   label: 'ЦИАН',                icon: 'MapPin' },
+                  { platform: 'all',    label: 'Все площадки',        icon: 'Globe' },
+                ].map(({ platform, label, icon }) => (
+                  <div key={platform} className="flex items-center justify-between px-3 py-1.5 border-b border-border/30 last:border-0">
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      <Icon name={icon} size={12} className="text-muted-foreground" />
+                      {label}
+                    </div>
+                    <div className="flex gap-1">
+                      <button onClick={e => { e.stopPropagation(); onBulk('set_export', { platform, enabled: true }); setShowXml(false); }}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 font-medium">+</button>
+                      <button onClick={e => { e.stopPropagation(); onBulk('set_export', { platform, enabled: false }); setShowXml(false); }}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-600 hover:bg-red-100 font-medium">−</button>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="max-h-52 overflow-y-auto">
-                {filteredBrokers.length === 0
-                  ? <div className="p-3 text-[11px] text-center text-muted-foreground">Нет агентов</div>
-                  : filteredBrokers.map(b => (
-                    <button key={b.id}
-                      onClick={e => { e.stopPropagation(); if (confirm(`Передать объект агенту ${b.name}?`)) { onBulk('set_broker', b.id); setShowBrokers(false); setBrokerQuery(''); } }}
-                      className="w-full text-left flex items-center justify-between px-3 py-2 text-[11px] hover:bg-muted/60 border-b border-border/30 last:border-0 transition"
-                    >
-                      <span className="font-medium">{b.name}</span>
-                      <span className="text-muted-foreground text-[10px]">{ROLE_RU[b.role] || b.role}</span>
-                    </button>
-                  ))}
-                <button
-                  onClick={e => { e.stopPropagation(); if (confirm('Снять агента?')) { onBulk('set_broker', null); setShowBrokers(false); } }}
-                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[11px] text-muted-foreground hover:bg-red-50 hover:text-red-600 border-t border-border/40 transition"
+            )}
+          </div>
+
+          {/* Агент */}
+          {canAssignBroker && (
+            <div className="relative" ref={brokerRef}>
+              <Btn icon="UserCheck" label="Агент" cls="bg-white/15 text-white hover:bg-white/25"
+                chevron open={showBrokers} onClick={() => setShowBrokers(s => !s)} />
+              {showBrokers && (
+                <div
+                  className="absolute bottom-full mb-1.5 left-0 z-50 w-64 bg-white border border-border rounded-xl shadow-2xl overflow-hidden"
+                  onClick={e => e.stopPropagation()}
                 >
-                  <Icon name="UserX" size={11} /> Снять агента
-                </button>
-              </div>
+                  <div className="p-2 border-b border-border">
+                    <div className="relative">
+                      <Icon name="Search" size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <input autoFocus type="text" placeholder="Поиск..." value={brokerQuery}
+                        onChange={e => setBrokerQuery(e.target.value)}
+                        className="w-full pl-6 pr-2 py-1 text-[11px] border border-border rounded-lg focus:outline-none focus:border-brand-blue" />
+                    </div>
+                  </div>
+                  <div className="max-h-52 overflow-y-auto">
+                    {filteredBrokers.length === 0
+                      ? <div className="p-3 text-[11px] text-center text-muted-foreground">Нет агентов</div>
+                      : filteredBrokers.map(b => (
+                        <button key={b.id}
+                          onClick={e => { e.stopPropagation(); if (confirm(`Передать объект агенту ${b.name}?`)) { onBulk('set_broker', b.id); setShowBrokers(false); setBrokerQuery(''); } }}
+                          className="w-full text-left flex items-center justify-between px-3 py-2 text-[11px] hover:bg-muted/60 border-b border-border/30 last:border-0 transition"
+                        >
+                          <span className="font-medium">{b.name}</span>
+                          <span className="text-muted-foreground text-[10px]">{ROLE_RU[b.role] || b.role}</span>
+                        </button>
+                      ))}
+                    <button
+                      onClick={e => { e.stopPropagation(); if (confirm('Снять агента?')) { onBulk('set_broker', null); setShowBrokers(false); } }}
+                      className="w-full text-left flex items-center gap-2 px-3 py-2 text-[11px] text-muted-foreground hover:bg-red-50 hover:text-red-600 border-t border-border/40 transition"
+                    >
+                      <Icon name="UserX" size={11} /> Снять агента
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
