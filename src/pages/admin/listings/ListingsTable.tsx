@@ -57,6 +57,7 @@ export default function ListingsTable({
   onBulk, onBulkDelete, bulkLoading = false, isAdmin = false,
 }: Props) {
   const { user } = useAuth();
+  const isBrokerRole = user?.role === 'broker';
   const canSeeFullDetails = user?.role && ['admin', 'director', 'broker', 'office_manager'].includes(user.role);
   const dealMeta = (d: string) => DEALS.find(x => x[0] === d);
   const allSelected = items.length > 0 && items.every(i => selected.has(i.id));
@@ -64,20 +65,22 @@ export default function ListingsTable({
   return (
     <div className="space-y-0.5">
 
-      {/* ── Шапка с чекбоксом «Выбрать все» ── */}
-      <div className="flex items-center gap-2.5 px-4 py-2 bg-white rounded-xl border border-border shadow-sm mb-2">
-        <input
-          type="checkbox"
-          checked={allSelected}
-          onChange={allSelected ? onDeselectAll : onSelectAll}
-          className="rounded accent-brand-blue w-4 h-4 flex-shrink-0"
-        />
-        <span className="text-xs text-muted-foreground font-medium">
-          {selected.size > 0
-            ? `Выбрано: ${selected.size} из ${items.length}`
-            : `Выбрать все (${items.length})`}
-        </span>
-      </div>
+      {/* ── Шапка с чекбоксом «Выбрать все» (скрыта для брокера) ── */}
+      {!isBrokerRole && (
+        <div className="flex items-center gap-2.5 px-4 py-2 bg-white rounded-xl border border-border shadow-sm mb-2">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={allSelected ? onDeselectAll : onSelectAll}
+            className="rounded accent-brand-blue w-4 h-4 flex-shrink-0"
+          />
+          <span className="text-xs text-muted-foreground font-medium">
+            {selected.size > 0
+              ? `Выбрано: ${selected.size} из ${items.length}`
+              : `Выбрать все (${items.length})`}
+          </span>
+        </div>
+      )}
 
       {/* ── Карточки ── */}
       {items.map(it => {
@@ -90,7 +93,8 @@ export default function ListingsTable({
         const isBroker = user?.role === 'broker';
         const isBrokerOwner = isBroker && (it.author_id === user?.id || it.broker_id === user?.id);
         const showPhone = !isBroker || isBrokerOwner;
-        const canEdit = !['client'].includes(user?.role || '');
+        const canEdit = !isBroker || isBrokerOwner;
+        const canSelect = !isBroker || isBrokerOwner;
         const isArchived = it.status === 'archived';
 
         return (
@@ -123,18 +127,23 @@ export default function ListingsTable({
             {/* ── Чекбокс-полоска слева ── */}
             <div
               className={[
-                'flex items-center justify-center w-10 flex-shrink-0 cursor-pointer transition-colors',
-                isSelected ? 'bg-brand-blue/10' : 'bg-muted/30 hover:bg-muted/60',
+                'flex items-center justify-center w-10 flex-shrink-0 transition-colors',
+                canSelect ? 'cursor-pointer' : 'cursor-default',
+                isSelected ? 'bg-brand-blue/10' : canSelect ? 'bg-muted/30 hover:bg-muted/60' : 'bg-muted/10',
               ].join(' ')}
-              onClick={() => onToggleSelect(it.id)}
+              onClick={() => canSelect && onToggleSelect(it.id)}
             >
-              <input
-                type="checkbox"
-                checked={isSelected}
-                onChange={() => onToggleSelect(it.id)}
-                onClick={e => e.stopPropagation()}
-                className="rounded accent-brand-blue w-4 h-4"
-              />
+              {canSelect ? (
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => onToggleSelect(it.id)}
+                  onClick={e => e.stopPropagation()}
+                  className="rounded accent-brand-blue w-4 h-4"
+                />
+              ) : (
+                <Icon name="Lock" size={12} className="text-muted-foreground/30" />
+              )}
             </div>
 
             {/* ── Фото ── */}

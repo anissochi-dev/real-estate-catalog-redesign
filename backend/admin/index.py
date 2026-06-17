@@ -2481,6 +2481,7 @@ def _listings(cur, conn, method, rid, event, user):
         limit = max(1, min(200, int(qp.get('limit') or 25)))
         offset = max(0, int(qp.get('offset') or 0))
         tab = qp.get('tab') or 'active'
+        my_only = qp.get('my') == '1'
         if tab == 'active':
             tab_where = "l.status = 'active' AND l.is_visible = TRUE"
         elif tab == 'archived':
@@ -2489,17 +2490,22 @@ def _listings(cur, conn, method, rid, event, user):
             tab_where = "l.status = 'active' AND l.is_visible = FALSE"
         else:
             tab_where = "TRUE"
+        # Фильтр «Мои объекты» — только для брокера
+        if my_only and user and user.get('role') == 'broker':
+            uid = int(user['id'])
+            tab_where += f" AND (l.broker_id = {uid} OR l.author_id = {uid})"
+        # COUNT с учётом фильтра my_only
+        is_broker = user and user.get('role') == 'broker'
+        broker_uid = user.get('id') if is_broker else None
+        cnt_where = f"WHERE broker_id = {int(broker_uid)} OR author_id = {int(broker_uid)}" if (my_only and is_broker and broker_uid) else ""
         cur.execute(
             f"SELECT "
             f"  COUNT(*) FILTER (WHERE status = 'active' AND is_visible = TRUE) AS cnt_active, "
             f"  COUNT(*) FILTER (WHERE status = 'archived') AS cnt_archived, "
             f"  COUNT(*) FILTER (WHERE status = 'active' AND is_visible = FALSE) AS cnt_hidden "
-            f"FROM {SCHEMA}.listings"
+            f"FROM {SCHEMA}.listings {cnt_where}"
         )
         cnt = dict(cur.fetchone())
-        # Брокер видит все объекты — флаг для скрытия телефона на чужих
-        is_broker = user and user.get('role') == 'broker'
-        broker_uid = user.get('id') if is_broker else None
         list_cols = (
             "l.id, l.title, l.category, l.deal, l.price, l.price_per_m2, l.area, "
             "l.payback, l.profit, l.floor, l.total_floors, l.address, l.district, l.city, "

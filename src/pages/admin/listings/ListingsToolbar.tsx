@@ -27,6 +27,9 @@ interface Props {
   onImport: (data: ImportedListing) => void;
   counts: { active: number; archived: number; hidden: number };
   canCreate?: boolean;
+  isBroker?: boolean;
+  myOnly?: boolean;
+  toggleMyOnly?: () => void;
 }
 
 export default function ListingsToolbar({
@@ -34,6 +37,7 @@ export default function ListingsToolbar({
   search, setSearch, catFilter, setCatFilter,
   hasDraft, setHasDraft, onAdd, onImport,
   counts, canCreate = true,
+  isBroker = false, myOnly = true, toggleMyOnly,
 }: Props) {
   const [importOpen, setImportOpen] = useState(false);
 
@@ -54,6 +58,34 @@ export default function ListingsToolbar({
           </button>
         ))}
       </div>
+
+      {/* Переключатель Мои / Все для брокера */}
+      {isBroker && toggleMyOnly && (
+        <div className="flex items-center gap-2">
+          <div className="flex items-center bg-muted rounded-xl p-1 gap-1">
+            <button
+              onClick={() => !myOnly && toggleMyOnly()}
+              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5 ${myOnly ? 'bg-white shadow-sm text-brand-blue' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              <Icon name="User" size={14} />
+              Мои объекты
+            </button>
+            <button
+              onClick={() => myOnly && toggleMyOnly()}
+              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5 ${!myOnly ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              <Icon name="Building2" size={14} />
+              Все объекты
+            </button>
+          </div>
+          {myOnly && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <Icon name="Info" size={12} />
+              Телефоны и управление доступны только на своих
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Кнопки действий */}
       {canCreate && (

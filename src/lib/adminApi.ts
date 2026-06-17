@@ -180,7 +180,7 @@ export const adminApi = {
     req(`${ADMIN_URL}?resource=users&id=${id}`, { method: 'PUT', body: JSON.stringify(data) }),
 
   // listings
-  listListings: (offset = 0, limit = 25, tab = 'active') => req(`${ADMIN_URL}?resource=listings&limit=${limit}&offset=${offset}&tab=${tab}`),
+  listListings: (offset = 0, limit = 25, tab = 'active', myOnly = false) => req(`${ADMIN_URL}?resource=listings&limit=${limit}&offset=${offset}&tab=${tab}${myOnly ? '&my=1' : ''}`),
   getListing: (id: number) => req(`${ADMIN_URL}?resource=listings&id=${id}`),
   createListing: (data: Record<string, unknown>) =>
     req(`${ADMIN_URL}?resource=listings`, { method: 'POST', body: JSON.stringify(data) }),

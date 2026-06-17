@@ -46,6 +46,9 @@ export default function ListingsAdmin() {
         onAdd={() => s.openEdit()}
         counts={s.counts}
         canCreate={s.canCreate}
+        isBroker={s.isBroker}
+        myOnly={s.myOnly}
+        toggleMyOnly={s.toggleMyOnly}
         onImport={data => {
           const imagesStr = data.images.join('|');
           s.openEdit({

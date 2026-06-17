@@ -27,8 +27,10 @@ export function useListingsState() {
   const { settings } = useSettings();
   const SITE_URL = (settings.site_url || '').replace(/\/$/, '');
   const isAdmin = user?.role === 'admin';
+  const isBroker = user?.role === 'broker';
 
   const [items, setItems] = useState<Listing[]>([]);
+  const [myOnly, setMyOnly] = useState<boolean>(true); // брокер по умолчанию видит свои
   const [total, setTotal] = useState(0);
   const [counts, setCounts] = useState({ active: 0, archived: 0, hidden: 0 });
   const [cities, setCities] = useState<City[]>([]);
@@ -53,12 +55,12 @@ export function useListingsState() {
   const [hasDraft, setHasDraft] = useState(() => !!loadDraft());
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const load = (reset = true, tab?: StatusFilter) => {
+  const load = (reset = true, tab?: StatusFilter, overrideMyOnly?: boolean) => {
     setLoading(true);
     const currentTab = tab ?? statusFilter;
     const offset = reset ? 0 : items.length;
-    // Загружаем объекты отдельно — чтобы ошибка справочников не блокировала список
-    adminApi.listListings(offset, 25, currentTab)
+    const useMyOnly = isBroker && (overrideMyOnly !== undefined ? overrideMyOnly : myOnly);
+    adminApi.listListings(offset, 25, currentTab, useMyOnly)
       .then(l => {
         const newItems = l.listings || [];
         setItems(prev => reset ? newItems : [...prev, ...newItems]);
@@ -66,14 +68,12 @@ export function useListingsState() {
         if (l.counts) setCounts(l.counts);
       })
       .catch((e: unknown) => {
-        // 403 — нет прав, не показываем ошибку (брокер с ограниченным доступом)
         const msg = e instanceof Error ? e.message : '';
         if (!msg.includes('403') && !msg.includes('прав')) {
           toast.error('Не удалось загрузить объявления');
         }
       })
       .finally(() => setLoading(false));
-    // Справочники — тихо, не блокируют основной список
     adminApi.listCities().then(c => setCities((c.cities || []).filter((x: City) => x.is_active))).catch(() => {});
     adminApi.listPurposes().then(p => setPurposes(p.purposes || [])).catch(() => {});
     adminApi.listLandVri().then(v => setLandVri((v.land_vri || []).filter((x: LandVri) => x.is_active !== false))).catch(() => {});
@@ -82,7 +82,8 @@ export function useListingsState() {
   const loadMore = () => {
     if (loading || items.length >= total) return;
     setLoading(true);
-    adminApi.listListings(items.length, 25, statusFilter)
+    const useMyOnly = isBroker && myOnly;
+    adminApi.listListings(items.length, 25, statusFilter, useMyOnly)
       .then(l => {
         setItems(prev => [...prev, ...(l.listings || [])]);
         setTotal(l.total || 0);
@@ -92,7 +93,14 @@ export function useListingsState() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => load(true, 'active'), []);
+  const toggleMyOnly = () => {
+    const next = !myOnly;
+    setMyOnly(next);
+    setSelected(new Set());
+    load(true, statusFilter, next);
+  };
+
+  useEffect(() => load(true, 'active', isBroker ? true : false), []);
 
   useEffect(() => {
     if (!editing || editing.id) return;
@@ -107,7 +115,7 @@ export function useListingsState() {
   const switchTab = (tab: StatusFilter) => {
     setStatusFilter(tab);
     setSelected(new Set());
-    load(true, tab);
+    load(true, tab, myOnly);
   };
 
   const filtered = items
@@ -423,8 +431,9 @@ export function useListingsState() {
     // draft
     hasDraft, setHasDraft,
     // meta
-    isAdmin, SITE_URL,
+    isAdmin, isBroker, SITE_URL,
     canCreate: !['office_manager', 'client'].includes(user?.role || ''),
+    myOnly, toggleMyOnly,
     // actions
     load, loadMore, switchTab, openEdit, save, archive, runBulk, bulkDelete, toggleSelect,
     aiDescribe, aiTitle, generateTags, generateSeo, generateAll,
