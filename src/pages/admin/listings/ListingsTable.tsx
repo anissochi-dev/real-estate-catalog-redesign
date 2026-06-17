@@ -87,7 +87,9 @@ export default function ListingsTable({
         const mainImg = imgs[0] || it.image;
         const isSelected = selected.has(it.id);
         const isHidden = it.is_visible === false;
-        const showPhone = true;
+        const isBroker = user?.role === 'broker';
+        const isBrokerOwner = isBroker && (it.author_id === user?.id || it.broker_id === user?.id);
+        const showPhone = !isBroker || isBrokerOwner;
         const canEdit = !['client'].includes(user?.role || '');
         const isArchived = it.status === 'archived';
 

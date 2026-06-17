@@ -2470,6 +2470,12 @@ def _listings(cur, conn, method, rid, event, user):
             for k in ('pc_owner_name', 'pc_owner_phone', 'pc_owner_photo', 'pc_owner_company',
                       'pc_owner_notes', 'pc2_owner_name', 'pc2_owner_phone'):
                 row_dict.pop(k, None)
+            # Брокер не видит телефон на чужой карточке
+            if user and user.get('role') == 'broker':
+                uid = user.get('id')
+                if row_dict.get('broker_id') != uid and row_dict.get('author_id') != uid:
+                    row_dict['owner_phone'] = None
+                    row_dict['owner_phone2'] = None
             return _ok({'listing': _ser(row_dict)})
         qp = event.get('queryStringParameters') or {}
         limit = max(1, min(200, int(qp.get('limit') or 25)))
@@ -2550,6 +2556,12 @@ def _listings(cur, conn, method, rid, event, user):
                 d['owner_phone'] = d['owner_phone_final']
             d.pop('owner_name_final', None)
             d.pop('owner_phone_final', None)
+            # Брокер не видит телефон собственника на чужих объектах
+            if user and user.get('role') == 'broker':
+                uid = user.get('id')
+                if d.get('broker_id') != uid and d.get('author_id') != uid:
+                    d['owner_phone'] = None
+                    d['owner_phone2'] = None
             rows.append(_ser(d))
         return _ok({
             'listings': rows, 'total': total, 'limit': limit, 'offset': offset,
