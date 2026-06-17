@@ -118,27 +118,23 @@ export function useListingsState() {
     load(true, tab, myOnly);
   };
 
-  const filtered = items
-    .filter(it => {
-      if (catFilter && it.category !== catFilter) return false;
-      if (search) {
-        const q = search.toLowerCase().replace(/^#/, '');
-        return (
-          it.title?.toLowerCase().includes(q) ||
-          it.address?.toLowerCase().includes(q) ||
-          it.owner_name?.toLowerCase().includes(q) ||
-          it.owner_phone?.includes(q) ||
-          String(`123${it.id}`).includes(q) ||
-          String(it.id).includes(q)
-        );
-      }
-      return true;
-    })
-    .sort((a, b) => {
-      const ta = a.updated_at ? new Date(a.updated_at).getTime() : (a.created_at ? new Date(a.created_at).getTime() : 0);
-      const tb = b.updated_at ? new Date(b.updated_at).getTime() : (b.created_at ? new Date(b.created_at).getTime() : 0);
-      return tb - ta;
-    });
+  // Фильтрация без клиентской сортировки — бэкенд отдаёт объекты уже отсортированными
+  // по updated_at DESC. Клиентская сортировка ломала порядок при пагинации (loadMore).
+  const filtered = items.filter(it => {
+    if (catFilter && it.category !== catFilter) return false;
+    if (search) {
+      const q = search.toLowerCase().replace(/^#/, '');
+      return (
+        it.title?.toLowerCase().includes(q) ||
+        it.address?.toLowerCase().includes(q) ||
+        it.owner_name?.toLowerCase().includes(q) ||
+        it.owner_phone?.includes(q) ||
+        String(`123${it.id}`).includes(q) ||
+        String(it.id).includes(q)
+      );
+    }
+    return true;
+  });
 
   const openEdit = (it?: Listing | Partial<Listing>) => {
     egrnObjectsRef.current = null; // сбрасываем при открытии нового объекта

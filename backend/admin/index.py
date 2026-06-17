@@ -2548,7 +2548,7 @@ def _listings(cur, conn, method, rid, event, user):
             f"  WHERE listing_id IS NOT NULL GROUP BY listing_id"
             f") sl ON sl.listing_id = l.id "
             f"WHERE {tab_where} "
-            f"ORDER BY l.created_at DESC "
+            f"ORDER BY COALESCE(l.updated_at, l.created_at) DESC "
             f"LIMIT {limit} OFFSET {offset}"
         )
         total = 0

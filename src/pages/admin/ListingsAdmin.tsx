@@ -105,7 +105,10 @@ export default function ListingsAdmin() {
       {/* Показать ещё */}
       <div className="flex items-center justify-between pt-1 pb-2">
         <span className="text-xs text-muted-foreground">
-          Показано {s.items.length} из {s.total}
+          {(s.search || s.catFilter)
+            ? <>Показано <b>{s.filtered.length}</b> (фильтр) из {s.items.length} загружено / {s.total} всего</>
+            : <>Показано {s.items.length} из {s.total}</>
+          }
         </span>
         {hasMore && (
           <button
@@ -114,7 +117,7 @@ export default function ListingsAdmin() {
             className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border text-xs font-semibold hover:bg-muted disabled:opacity-50 transition"
           >
             {s.loading ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="ChevronDown" size={13} />}
-            Показать ещё 25
+            Загрузить ещё 25
           </button>
         )}
       </div>
