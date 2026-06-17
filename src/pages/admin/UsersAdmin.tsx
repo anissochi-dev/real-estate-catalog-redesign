@@ -172,7 +172,10 @@ export default function UsersAdmin() {
                   <Icon name="Pencil" size={16} />
                 </button>
               </div>
-              <div className="text-xs text-muted-foreground mt-0.5">{u.phone || u.email}</div>
+              <div className="text-xs text-muted-foreground mt-0.5 space-y-0.5">
+                {u.phone && <div className="flex items-center gap-1"><Icon name="Phone" size={10} />{u.phone}</div>}
+                <div className="flex items-center gap-1"><Icon name="Mail" size={10} />{u.email}</div>
+              </div>
               <div className="flex items-center gap-2 mt-1">
                 {isAdmin ? (
                   roleChanging === u.id ? (
@@ -206,7 +209,7 @@ export default function UsersAdmin() {
           <thead className="bg-muted/50 text-left">
             <tr>
               <th className="px-4 py-3">Фото</th>
-              <th className="px-4 py-3">Имя</th>
+              <th className="px-4 py-3">Имя / Email</th>
               <th className="px-4 py-3">Телефон</th>
               <th className="px-4 py-3">Роль</th>
               <th className="px-4 py-3">Статус</th>
@@ -225,7 +228,13 @@ export default function UsersAdmin() {
                     </div>
                   )}
                 </td>
-                <td className="px-4 py-3 font-semibold">{u.name}</td>
+                <td className="px-4 py-3">
+                  <div className="font-semibold leading-tight">{u.name}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                    <Icon name="Mail" size={11} />
+                    {u.email}
+                  </div>
+                </td>
                 <td className="px-4 py-3">
                   {u.phone ? (
                     <span className="text-foreground">{u.phone}</span>
