@@ -132,18 +132,28 @@ export default function CrmChecks() {
         </div>
       </div>
 
-      {/* Баннер только если статус загружен и ВСЕ сервисы отключены */}
-      {Object.keys(serviceStatus).length >= 3 && Object.values(serviceStatus).every(v => !v) && (
-        <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
-          <Icon name="AlertTriangle" size={18} className="shrink-0 mt-0.5 text-amber-600" />
-          <div className="text-sm">
-            <div className="font-semibold mb-0.5">Ни один сервис не подключён</div>
-            <div className="text-amber-800">
-              Добавьте API-ключи в{' '}
-              <span className="font-semibold">Настройки → Интеграции → Проверка безопасности</span>.
+      {/* Баннер: показываем только если хотя бы один ключ получен с сервера */}
+      {Object.keys(serviceStatus).length > 0 && (
+        Object.values(serviceStatus).some(v => v) ? (
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm">
+            <Icon name="CheckCircle2" size={16} className="shrink-0 text-emerald-600" />
+            <span>
+              Подключено сервисов: <strong>{Object.values(serviceStatus).filter(Boolean).length}</strong> из {Object.keys(serviceStatus).length}.{' '}
+              {Object.values(serviceStatus).every(Boolean) ? 'Все сервисы активны.' : 'Остальные можно подключить в Настройках → Интеграции.'}
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
+            <Icon name="AlertTriangle" size={18} className="shrink-0 mt-0.5 text-amber-600" />
+            <div className="text-sm">
+              <div className="font-semibold mb-0.5">Ни один сервис не подключён</div>
+              <div className="text-amber-800">
+                Добавьте API-ключи в{' '}
+                <span className="font-semibold">Настройки → Интеграции → Проверка безопасности</span>.
+              </div>
             </div>
           </div>
-        </div>
+        )
       )}
 
       {/* Вкладки */}
