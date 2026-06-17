@@ -48,6 +48,17 @@ export default function CrmChecks() {
     enabled: tab === 'quota',
   });
 
+  const { data: newdbBalance } = useQuery<Record<string, unknown>>({
+    queryKey: ['crm-newdb-balance'],
+    queryFn: async () => {
+      const r = await fetch(`${CHECKS_URL}/?action=newdb_balance`, { headers });
+      const json = await r.json();
+      return json.balance || null;
+    },
+    enabled: tab === 'quota' && !!serviceStatus['newdb'],
+    staleTime: 5 * 60_000,
+  });
+
   const [historySearch, setHistorySearch] = useState('');
   const [historyFilter, setHistoryFilter] = useState<'all' | 'company' | 'owner' | 'property'>('all');
 
@@ -215,6 +226,7 @@ export default function CrmChecks() {
           quota={quota}
           quotaLoading={quotaLoading}
           quotaError={quotaError}
+          newdbBalance={newdbBalance}
         />
       )}
     </div>

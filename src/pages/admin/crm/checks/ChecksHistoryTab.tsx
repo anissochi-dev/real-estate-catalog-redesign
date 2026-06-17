@@ -32,6 +32,7 @@ interface QuotaTabProps {
   quota: QuotaItem[];
   quotaLoading: boolean;
   quotaError: boolean;
+  newdbBalance?: Record<string, unknown> | null;
 }
 
 export function ChecksHistoryTab({
@@ -134,7 +135,7 @@ export function ChecksHistoryTab({
   );
 }
 
-export function ChecksQuotaTab({ quota, quotaLoading, quotaError }: QuotaTabProps) {
+export function ChecksQuotaTab({ quota, quotaLoading, quotaError, newdbBalance }: QuotaTabProps) {
   if (quotaLoading) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -179,6 +180,30 @@ export function ChecksQuotaTab({ quota, quotaLoading, quotaError }: QuotaTabProp
           <div className="text-sm text-muted-foreground">{q.used} / {q.limit} запросов</div>
         </div>
       ))}
+      {/* Баланс NewDB от самого сервиса */}
+      {newdbBalance && !('error' in newdbBalance) && (
+        <div className="sm:col-span-3 bg-white rounded-2xl border border-blue-200 p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">NewDB</span>
+            <span className="text-sm font-semibold text-foreground">Информация об аккаунте</span>
+            <Icon name="RefreshCw" size={13} className="text-muted-foreground ml-auto" />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {Object.entries(newdbBalance).map(([key, val]) => (
+              <div key={key} className="text-center">
+                <div className="text-lg font-bold text-brand-blue">{String(val ?? '—')}</div>
+                <div className="text-xs text-muted-foreground mt-0.5 capitalize">{key.replace(/_/g, ' ')}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {newdbBalance && 'error' in newdbBalance && (
+        <div className="sm:col-span-3 bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-2 text-sm text-amber-800">
+          <Icon name="AlertTriangle" size={15} />
+          NewDB баланс: {String(newdbBalance.error)}
+        </div>
+      )}
     </div>
   );
 }

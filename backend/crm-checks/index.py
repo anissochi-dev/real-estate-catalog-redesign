@@ -224,6 +224,27 @@ NEWDB_METHOD_PARAMS = {
 }
 
 
+def fetch_newdb_balance(api_key: str) -> dict:
+    """Запрашивает баланс и лимиты аккаунта NewDB через GET /v2/balance."""
+    if not api_key:
+        return {'error': 'Ключ не настроен'}
+    req = urllib.request.Request(
+        f'{NEWDB_V2_BASE}/balance',
+        headers={
+            'X-API-KEY': api_key,
+            'User-Agent': 'BizNest CRM/1.0',
+        },
+        method='GET',
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        return {'error': f'HTTP {e.code}'}
+    except Exception as e:
+        return {'error': str(e)[:200]}
+
+
 def fetch_newdb_v2(method: str, params: dict, api_key: str) -> dict:
     """Вызывает NewDB API v2 для конкретного метода проверки физлица."""
     if method not in NEWDB_METHODS:
@@ -378,6 +399,13 @@ def run_check(conn, user, method, qs, body, check_keys=None):
         cur.execute("SELECT source, requests_used, requests_limit FROM crm_api_quota ORDER BY source")
         rows = cur.fetchall()
         return ok([{'source': r[0], 'used': r[1], 'limit': r[2], 'percent': round(r[1]/r[2]*100 if r[2] else 0)} for r in rows])
+
+    if method == 'GET' and qs.get('action') == 'newdb_balance':
+        api_key = (check_keys or {}).get('newdb', '')
+        if not api_key:
+            return err('NewDB ключ не настроен', 400)
+        balance = fetch_newdb_balance(api_key)
+        return ok({'balance': balance})
 
     if method == 'GET' and qs.get('action') == 'history':
         search = (qs.get('search') or '').strip()
