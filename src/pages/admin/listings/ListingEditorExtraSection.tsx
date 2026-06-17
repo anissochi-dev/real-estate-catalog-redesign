@@ -38,11 +38,12 @@ interface Props {
   setErrors?: (fn: (prev: Record<string, boolean>) => Record<string, boolean>) => void;
   aiSeoLoading: boolean;
   onGenerateSeo: () => void;
+  canEditSeo?: boolean;
 }
 
 export default function ListingEditorExtraSection({
   editing, setEditing, errors = {}, setErrors,
-  aiSeoLoading, onGenerateSeo,
+  aiSeoLoading, onGenerateSeo, canEditSeo = true,
 }: Props) {
   const err = (field: string) => errors[field] ? 'border-red-400 bg-red-50' : '';
   const errWrap = (field: string) => errors[field] ? { 'data-field-error': 'true' as const } : {};
@@ -198,57 +199,66 @@ export default function ListingEditorExtraSection({
       </div>
 
       {/* ─── SEO ─── */}
-      <div className="space-y-2 border-t border-border pt-4">
-        <div className="flex items-center justify-between">
-          <div className="text-sm font-semibold flex items-center gap-1.5">
-            <Icon name="Search" size={14} /> SEO для поисковых систем
+      {canEditSeo ? (
+        <>
+          <div className="space-y-2 border-t border-border pt-4">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold flex items-center gap-1.5">
+                <Icon name="Search" size={14} /> SEO для поисковых систем
+              </div>
+              <button type="button" onClick={onGenerateSeo} disabled={aiSeoLoading}
+                className="text-xs text-brand-orange hover:underline inline-flex items-center gap-1">
+                <Icon name="Sparkles" size={12} />
+                {aiSeoLoading ? 'Генерация...' : 'Сгенерировать ИИ'}
+              </button>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">SEO Title (до 70 символов)</label>
+              <CharCount as="input" max={70} warnAt={60}
+                placeholder="Аренда офиса 120 м² в центре Краснодара | BIZNEST"
+                value={(editing.seo_title || '').slice(0, 70)}
+                onChange={e => setEditing({ ...editing, seo_title: (e.target as HTMLInputElement).value.slice(0, 70) })} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">SEO Description (до 160 символов)</label>
+              <CharCount as="textarea" rows={2} max={160} warnAt={140}
+                placeholder="Светлый офис 120 м² с евроремонтом в БЦ на ул. Красной. Парковка, охрана 24/7..."
+                value={(editing.seo_description || '').slice(0, 160)}
+                onChange={e => setEditing({ ...editing, seo_description: (e.target as HTMLTextAreaElement).value.slice(0, 160) })} />
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              Если поля пустые — поисковики возьмут текст из названия и описания объекта.
+            </div>
           </div>
-          <button type="button" onClick={onGenerateSeo} disabled={aiSeoLoading}
-            className="text-xs text-brand-orange hover:underline inline-flex items-center gap-1">
-            <Icon name="Sparkles" size={12} />
-            {aiSeoLoading ? 'Генерация...' : 'Сгенерировать ИИ'}
-          </button>
-        </div>
-        <div>
-          <label className="text-xs text-muted-foreground">SEO Title (до 70 символов)</label>
-          <CharCount as="input" max={70} warnAt={60}
-            placeholder="Аренда офиса 120 м² в центре Краснодара | BIZNEST"
-            value={(editing.seo_title || '').slice(0, 70)}
-            onChange={e => setEditing({ ...editing, seo_title: (e.target as HTMLInputElement).value.slice(0, 70) })} />
-        </div>
-        <div>
-          <label className="text-xs text-muted-foreground">SEO Description (до 160 символов)</label>
-          <CharCount as="textarea" rows={2} max={160} warnAt={140}
-            placeholder="Светлый офис 120 м² с евроремонтом в БЦ на ул. Красной. Парковка, охрана 24/7..."
-            value={(editing.seo_description || '').slice(0, 160)}
-            onChange={e => setEditing({ ...editing, seo_description: (e.target as HTMLTextAreaElement).value.slice(0, 160) })} />
-        </div>
-        <div className="text-[11px] text-muted-foreground">
-          Если поля пустые — поисковики возьмут текст из названия и описания объекта.
-        </div>
-      </div>
 
-      {/* ─── H1-H5 ─── */}
-      <div className="pt-2">
-        <SeoHeadingsBlock
-          generated={generateHeadings(editing)}
-          value={{
-            h1: editing.seo_h1 || undefined,
-            h2: editing.seo_h2 || undefined,
-            h3: editing.seo_h3 || undefined,
-            h4: editing.seo_h4 || undefined,
-            h5: editing.seo_h5 || undefined,
-          }}
-          onChange={(v: Partial<SeoHeadings>) => setEditing({
-            ...editing,
-            seo_h1: v.h1 || null,
-            seo_h2: v.h2 || null,
-            seo_h3: v.h3 || null,
-            seo_h4: v.h4 || null,
-            seo_h5: v.h5 || null,
-          })}
-        />
-      </div>
+          {/* ─── H1-H5 ─── */}
+          <div className="pt-2">
+            <SeoHeadingsBlock
+              generated={generateHeadings(editing)}
+              value={{
+                h1: editing.seo_h1 || undefined,
+                h2: editing.seo_h2 || undefined,
+                h3: editing.seo_h3 || undefined,
+                h4: editing.seo_h4 || undefined,
+                h5: editing.seo_h5 || undefined,
+              }}
+              onChange={(v: Partial<SeoHeadings>) => setEditing({
+                ...editing,
+                seo_h1: v.h1 || null,
+                seo_h2: v.h2 || null,
+                seo_h3: v.h3 || null,
+                seo_h4: v.h4 || null,
+                seo_h5: v.h5 || null,
+              })}
+            />
+          </div>
+        </>
+      ) : (
+        <div className="border-t border-border pt-4 flex items-center gap-2 text-sm text-muted-foreground">
+          <Icon name="Lock" size={14} />
+          SEO-поля заполняются автоматически при создании объекта.
+        </div>
+      )}
     </div>
   );
 }

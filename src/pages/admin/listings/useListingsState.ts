@@ -186,11 +186,35 @@ export function useListingsState() {
     setEditing(prev => prev ? { ...prev, egrn_objects: objects } : prev);
   };
 
+  // Генерация H1-H5 из данных объекта (без ИИ, по шаблону)
+  const _buildHeadings = (e: Partial<Listing>) => {
+    const DEAL: Record<string, string> = { sale: 'Продажа', rent: 'Аренда', business: 'Готовый бизнес' };
+    const TYPE: Record<string, string> = {
+      office: 'офиса', retail: 'торгового помещения', warehouse: 'склада',
+      restaurant: 'помещения под общепит', hotel: 'гостиницы', business: 'готового бизнеса',
+      gab: 'готового арендного бизнеса', production: 'производственного помещения',
+      land: 'земельного участка', building: 'здания', free_purpose: 'помещения',
+      car_service: 'помещения под автосервис',
+    };
+    const city = e.city || 'Краснодар';
+    const deal = DEAL[e.deal || ''] || 'Аренда';
+    const type = TYPE[e.category || ''] || 'объекта';
+    const area = e.area ? `${e.area} м²` : '';
+    const addr = e.district || e.address || city;
+    const price = e.price ? `${(e.price / 1_000_000).toFixed(e.price >= 10_000_000 ? 0 : 1)} млн ₽` : '';
+    return {
+      h1: e.title || `${deal} ${type} в ${city}`,
+      h2: [deal, type, area, `в ${city}`].filter(Boolean).join(' '),
+      h3: addr ? `${deal} ${type} — ${addr}` : `${deal} ${type} в ${city}`,
+      h4: [area, price].filter(Boolean).join(' · ') || `Параметры ${type}`,
+      h5: price ? `Стоимость: ${price}` : `Цена по запросу — ${city}`,
+    };
+  };
+
   const save = async (override?: Partial<Listing>) => {
     if (!editing) return;
     const isNew = !editing.id;
     const merged = { ...editing, ...(override || {}) };
-    // Подмешиваем egrn_objects из ref — страховка на случай гонки состояний
     if (egrnObjectsRef.current && egrnObjectsRef.current.length > 0) {
       merged.egrn_objects = egrnObjectsRef.current;
     }
@@ -199,6 +223,44 @@ export function useListingsState() {
     data.images = photos.join('|');
     data.image = photos[0] || '';
     if (data.video_url) data.video_type = detectVideoType(String(data.video_url));
+
+    // При создании нового объекта — автогенерация SEO, тегов и H1-H5 через ИИ
+    if (isNew) {
+      setAiAllLoading(true);
+      try {
+        const dealLabel = merged.deal === 'rent' ? 'аренда' : merged.deal === 'business' ? 'готовый бизнес' : 'продажа';
+        const tagsCtx = `Название: ${merged.title}, категория: ${merged.category}, назначение: ${(merged as Record<string, unknown>).purpose || ''}, состояние: ${merged.condition || ''}, парковка: ${merged.parking || ''}, описание: ${merged.description || ''}`;
+        const seoCtx = `Название: ${merged.title || ''}. Тип: ${merged.category || ''}. Сделка: ${dealLabel}. Город: ${merged.city || 'Краснодар'}. Район: ${merged.district || ''}. Адрес: ${merged.address || ''}. Площадь: ${merged.area || 0} м². Цена: ${merged.price || 0} ₽. Описание: ${merged.description || ''}`;
+
+        const [tagsRes, seoRes] = await Promise.all([
+          aiApi.ask('auto_tags', tagsCtx).catch(() => ({ text: '' })),
+          aiApi.ask('seo_listing', seoCtx).catch(() => ({ text: '' })),
+        ]);
+
+        // Теги
+        data.tags = (tagsRes.text || '').replace(/\n/g, ',').replace(/\s+,/g, ',');
+
+        // SEO title + description
+        const txt = seoRes.text || '';
+        const titleMatch = txt.match(/TITLE:\s*(.+)/i);
+        const descMatch = txt.match(/DESCRIPTION:\s*([\s\S]+)/i);
+        data.seo_title = (titleMatch ? titleMatch[1] : '').trim().replace(/^["«]|["»]$/g, '').slice(0, 70);
+        data.seo_description = (descMatch ? descMatch[1] : '').trim().replace(/^["«]|["»]$/g, '').slice(0, 160);
+
+        // H1-H5 по шаблону
+        const h = _buildHeadings(merged);
+        data.seo_h1 = h.h1;
+        data.seo_h2 = h.h2;
+        data.seo_h3 = h.h3;
+        data.seo_h4 = h.h4;
+        data.seo_h5 = h.h5;
+      } catch {
+        // Не блокируем сохранение если ИИ недоступен
+      } finally {
+        setAiAllLoading(false);
+      }
+    }
+
     try {
       if (editing.id) {
         await adminApi.updateListing(editing.id, data);

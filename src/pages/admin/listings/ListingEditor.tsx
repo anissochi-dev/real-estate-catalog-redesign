@@ -76,6 +76,9 @@ export default function ListingEditor({
     ['admin', 'director', 'editor', 'manager'].includes(user.role) ||
     isBrokerOwn
   );
+  // SEO-поля и теги: новый объект — скрыты (заполняются авто при сохранении),
+  // существующий — только admin/director; брокеры и прочие не видят
+  const canEditSeo = !isNewListing && !!user && ['admin', 'director'].includes(user.role);
 
   // Определяем какие вкладки имеют ошибки
   const tabErrors: Partial<Record<EditorTab, boolean>> = {
@@ -274,6 +277,7 @@ export default function ListingEditor({
               onGenerateTags={onGenerateTags}
               errors={errors}
               setErrors={setErrors}
+              canEditSeo={canEditSeo}
             />
           )}
 
@@ -286,6 +290,7 @@ export default function ListingEditor({
               setErrors={setErrors}
               aiSeoLoading={aiSeoLoading}
               onGenerateSeo={onGenerateSeo}
+              canEditSeo={canEditSeo}
             />
           )}
         </div>
@@ -297,7 +302,8 @@ export default function ListingEditor({
           tabErrors={tabErrors}
           onClose={onClose}
           onSave={handleSave}
-          saving={geocoding}
+          saving={geocoding || aiAllLoading}
+          savingLabel={aiAllLoading ? 'Генерирую SEO...' : undefined}
         />
       </div>
     </div>

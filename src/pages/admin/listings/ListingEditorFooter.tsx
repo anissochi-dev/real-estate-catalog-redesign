@@ -10,9 +10,10 @@ interface Props {
   onClose: () => void;
   onSave: () => void;
   saving?: boolean;
+  savingLabel?: string;
 }
 
-export default function ListingEditorFooter({ editing, tab, setTab, tabErrors, onClose, onSave, saving }: Props) {
+export default function ListingEditorFooter({ editing, tab, setTab, tabErrors, onClose, onSave, saving, savingLabel }: Props) {
   return (
     <div className="p-4 border-t border-border flex items-center justify-between gap-3 flex-shrink-0">
       <div className="flex gap-2">
@@ -34,7 +35,7 @@ export default function ListingEditorFooter({ editing, tab, setTab, tabErrors, o
           className="btn-blue text-white px-5 py-2 rounded-xl text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center gap-2"
         >
           {saving && <Icon name="Loader2" size={14} className="animate-spin" />}
-          Сохранить
+          {saving && savingLabel ? savingLabel : 'Сохранить'}
         </button>
       </div>
     </div>
