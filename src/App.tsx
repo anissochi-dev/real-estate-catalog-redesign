@@ -351,16 +351,18 @@ export default function App() {
   }, [user, authLoading]);
 
   // Флаг «в админке» для восстановления режима при F5.
-  // Ставим, только когда реально показана админка (вошёл сотрудник с админ-ролью),
-  // снимаем во всех остальных случаях (выход, переход на сайт, недостаточно прав).
+  // Ставим когда реально показана админка (вошёл сотрудник с ролью).
+  // Снимаем только когда явно вышли или сессия истекла — НЕ снимаем пока идёт загрузка (authLoading),
+  // иначе F5 во время verify стирает ключ и при следующей перезагрузке открывается сайт.
   useEffect(() => {
     try {
+      if (authLoading) return; // ждём окончания verify — не трогаем ключ
       const inAdmin = view === 'admin' && !!user && ADMIN_ROLES.includes(user.role);
       if (inAdmin) localStorage.setItem(IN_ADMIN_KEY, '1');
       else localStorage.removeItem(IN_ADMIN_KEY);
     } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, user]);
+  }, [view, user, authLoading]);
 
   const pageFallback = <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 rounded-full border-4 border-brand-blue/20 border-t-brand-blue animate-spin" /></div>;
 

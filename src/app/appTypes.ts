@@ -73,17 +73,18 @@ export const IN_ADMIN_KEY = 'biznest_in_admin';
 
 export function loadInitialView(): AppView {
   try {
+    // 1. Если сотрудник работал в админке — восстанавливаем её ПЕРВЫМ ДЕЛОМ,
+    //    независимо от текущего пути. Путь в адресной строке мог остаться любым
+    //    (/, /catalog, /map и т.д.) — это не значит что нужен сайт.
+    if (localStorage.getItem(IN_ADMIN_KEY) === '1') return 'admin';
+
     const path = window.location.pathname;
 
-    // 1. Публичные страницы — ВСЕГДА открываем как сайт, даже если сотрудник
-    //    работал в админке. Это нужно чтобы ссылки "открыть на сайте" из
-    //    админки корректно открывались в новой вкладке публичным контентом.
+    // 2. Публичные страницы — открываем как сайт только если сотрудник
+    //    НЕ работал в админке (IN_ADMIN_KEY уже проверен выше).
+    //    Нужно чтобы ссылки "открыть на сайте" из новой вкладки работали корректно.
     const publicPaths = ['/object', '/catalog', '/map', '/favorites', '/compare', '/network-tenants', '/news', '/leads', '/declined'];
     if (path === '/' || publicPaths.some(p => path.startsWith(p))) return 'site';
-
-    // 2. Если сотрудник работал в админке — восстанавливаем её при перезагрузке
-    //    (F5 внутри админки где в адресной строке остался прежний путь).
-    if (localStorage.getItem(IN_ADMIN_KEY) === '1') return 'admin';
 
     // 3. Если в localStorage сохранён admin/login — восстанавливаем его.
     const v = localStorage.getItem(VIEW_KEY);
