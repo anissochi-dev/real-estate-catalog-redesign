@@ -58,12 +58,16 @@ export default function ListingEditor({
   const { user } = useAuth();
   const yandexApiKey = settings.yandex_maps_api_key || '';
 
-  // Контакты собственника: admin, director — всегда; broker — только свой объект
+  // Контакты собственника: admin, director, editor, manager — всегда;
+  // broker — на своём объекте или при создании нового (нет id)
+  const isNewListing = !(editing as Record<string, unknown>).id;
   const canEditOwner = !!user && (
-    ['admin', 'director'].includes(user.role) ||
-    user.role !== 'broker' ||
-    (editing as Record<string, unknown>).broker_id === user.id ||
-    (editing as Record<string, unknown>).author_id === user.id
+    ['admin', 'director', 'editor', 'manager'].includes(user.role) ||
+    (user.role === 'broker' && (
+      isNewListing ||
+      (editing as Record<string, unknown>).broker_id === user.id ||
+      (editing as Record<string, unknown>).author_id === user.id
+    ))
   );
 
   // Определяем какие вкладки имеют ошибки

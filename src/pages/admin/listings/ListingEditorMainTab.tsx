@@ -237,7 +237,7 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
         <div className="border-t border-border pt-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Icon name="Lock" size={14} />
-            Контакты собственника доступны только администратору и директору.
+            Контакты собственника доступны только ответственному агенту, администратору и директору.
           </div>
         </div>
       )}

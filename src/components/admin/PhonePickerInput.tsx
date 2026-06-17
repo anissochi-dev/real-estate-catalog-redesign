@@ -175,16 +175,7 @@ export default function PhonePickerInput({ value, onChange, onNameChange, placeh
             </button>
           )}
 
-          {matchedContact && (
-            <button
-              type="button"
-              onClick={() => setCardContactId(matchedContact.id)}
-              className="shrink-0 px-2.5 py-2 rounded-lg border border-brand-blue/30 bg-brand-blue/5 hover:bg-brand-blue/10 text-brand-blue transition"
-              title="Открыть карточку контакта"
-            >
-              <Icon name="ExternalLink" size={14} />
-            </button>
-          )}
+
         </div>
 
         {/* Пример формата */}
