@@ -390,158 +390,187 @@ def fetch_checko(inn: str, api_key: str) -> dict:
             msg = raw.get('message') or raw.get('error') or 'Компания не найдена'
             return {'error': msg, '_meta': meta}
 
-        STATUS_MAP = {
-            'ACTIVE': 'Действует', 'LIQUIDATING': 'В процессе ликвидации',
-            'LIQUIDATED': 'Ликвидирована', 'BANKRUPT': 'Банкрот', 'REORGANIZING': 'Реорганизация',
-        }
-        status_code = data.get('СтатусЮЛ') or data.get('СтатусИП') or ''
-        is_ip = bool(data.get('ФИОИПолн'))
+        # ── Реальные ключи Checko API ─────────────────────────────────────────
+        # НаимСокр, НаимПолн, Статус, ЮрАдрес, ОКВЭД, ОКВЭДДоп
+        # Руковод, Учред, Контакты, Налоги, РМСП, СЧР, Лиценз, ТоварЗнак
+        # НедобПост, МассРуковод, МассУчред, ДисквЛица, Санкции, НелегалФин, СанкцУчр, ЕФРСБ
 
-        # ── Руководитель ─────────────────────────────────────────────────────
-        mgmt = data.get('Руководитель') or {}
-        director_fio  = mgmt.get('ФИО') or ''
-        director_post = mgmt.get('НаимДолжн') or ''
-        director_inn  = mgmt.get('ИННФЛ') or ''
+        # Статус
+        status_raw = data.get('Статус') or {}
+        if isinstance(status_raw, dict):
+            status_text = status_raw.get('Название') or status_raw.get('Текст') or str(status_raw)
+            status_code = status_raw.get('Код') or ''
+        else:
+            status_text = str(status_raw)
+            status_code = ''
+        is_active = 'действу' in status_text.lower() or status_code in ('1', 'ACTIVE', 'active')
+        is_liquidated = any(w in status_text.lower() for w in ('ликвид', 'банкрот'))
+        is_ip = bool(data.get('ОГРНИП'))
 
-        # История руководителей
+        # ── Руководитель ──────────────────────────────────────────────────────
+        rukovod = data.get('Руковод') or []
+        if isinstance(rukovod, dict):
+            rukovod = [rukovod]
+        director_fio = director_post = director_inn = ''
         directors_history = []
-        for d in (data.get('РуководительИст') or [])[:5]:
-            fio  = d.get('ФИО') or ''
-            post = d.get('НаимДолжн') or ''
-            date_from = d.get('ДатаНач') or ''
+        for d in rukovod:
+            fio  = d.get('ФИО') or d.get('Фио') or ''
+            post = d.get('Должность') or d.get('НаимДолжн') or ''
+            inn_d = d.get('ИНН') or d.get('ИННФЛ') or ''
+            date_from = d.get('ДатаНач') or d.get('ДатаНазнач') or ''
             date_to   = d.get('ДатаКон') or ''
+            if not director_fio and fio:
+                director_fio = fio
+                director_post = post
+                director_inn = inn_d
             if fio:
                 directors_history.append({'фио': fio, 'должность': post, 'с': date_from, 'по': date_to})
 
         # ── Учредители ────────────────────────────────────────────────────────
+        uchred = data.get('Учред') or []
+        if isinstance(uchred, dict):
+            uchred = [uchred]
         founders = []
-        for f in (data.get('Учредители') or []):
-            name  = f.get('НаимЮЛПолн') or f.get('ФИО') or f.get('НаимИН') or ''
-            share = f.get('НоминСтоим') or f.get('Доля') or ''
+        for f in uchred:
+            name  = f.get('НаимСокр') or f.get('НаимПолн') or f.get('ФИО') or f.get('Фио') or f.get('Наим') or ''
+            share = f.get('Доля') or f.get('НоминСтоим') or f.get('СумДоля') or ''
             ogrn  = f.get('ОГРН') or ''
             inn_f = f.get('ИНН') or f.get('ИННФЛ') or ''
             if name:
-                founders.append({
-                    'наименование': name,
-                    'доля_руб': share,
-                    'огрн': ogrn,
-                    'инн': inn_f,
-                })
+                founders.append({'наименование': name, 'доля_руб': share, 'огрн': ogrn, 'инн': inn_f})
 
         # ── Контакты ──────────────────────────────────────────────────────────
-        phones = []
-        for p in (data.get('Телефоны') or []):
-            v = p.get('Телефон') or p if isinstance(p, str) else ''
-            if v:
-                phones.append(v)
-        emails = []
-        for e in (data.get('Емейлы') or data.get('Email') or []):
-            v = e.get('Емейл') or e if isinstance(e, str) else ''
-            if v:
-                emails.append(v)
-        sites = []
-        for s in (data.get('Сайты') or []):
-            v = s.get('Сайт') or s if isinstance(s, str) else ''
-            if v:
-                sites.append(v)
+        kontakty = data.get('Контакты') or {}
+        if isinstance(kontakty, list):
+            kontakty = {}
+        phones = [p if isinstance(p, str) else p.get('Номер', '') for p in (kontakty.get('Телефоны') or [])]
+        emails = [e if isinstance(e, str) else e.get('Адрес', '') for e in (kontakty.get('Емейлы') or [])]
+        sites  = [s if isinstance(s, str) else s.get('Адрес', '') for s in (kontakty.get('Сайты') or [])]
+        phones = [p for p in phones if p]
+        emails = [e for e in emails if e]
+        sites  = [s for s in sites if s]
 
-        # ── Лицензии ──────────────────────────────────────────────────────────
-        licenses = []
-        for lic in (data.get('Лицензии') or []):
-            kind = lic.get('НаимВидДеят') or lic.get('Вид') or ''
-            num  = lic.get('НомЛиц') or ''
-            date_start = lic.get('ДатаНачЛиц') or ''
-            if kind:
-                licenses.append({'вид': kind, 'номер': num, 'с': date_start})
-
-        # ── Налоговый режим ───────────────────────────────────────────────────
+        # ── Налоги / налоговый режим ──────────────────────────────────────────
+        nalogi = data.get('Налоги') or {}
         tax_systems = []
-        for t in (data.get('НалРежим') or []):
-            name_t = t.get('НаимНалРежим') or t if isinstance(t, str) else ''
-            if name_t:
-                tax_systems.append(name_t)
+        if isinstance(nalogi, dict):
+            rezhim = nalogi.get('НалРежим') or nalogi.get('Режим') or []
+            if isinstance(rezhim, str):
+                rezhim = [rezhim]
+            for t in rezhim:
+                name_t = t.get('Название') or t.get('Наим') or t if isinstance(t, str) else ''
+                if name_t:
+                    tax_systems.append(name_t)
 
-        # ── Виды деятельности (все ОКВЭД) ────────────────────────────────────
+        # ── ОКВЭД ────────────────────────────────────────────────────────────
+        okved_main = data.get('ОКВЭД') or {}
+        okved_code = okved_main.get('Код') or okved_main.get('КодОКВЭД') or '' if isinstance(okved_main, dict) else str(okved_main)
+        okved_name_main = okved_main.get('Название') or okved_main.get('НаимОКВЭД') or '' if isinstance(okved_main, dict) else ''
+
         okved_list = []
-        for o in (data.get('КодыОКВЭД') or []):
-            code = o.get('КодОКВЭД') or ''
-            name_o = o.get('НаимОКВЭД') or ''
-            is_main = o.get('ПрОсн') or False
-            if code:
-                okved_list.append({'код': code, 'наименование': name_o, 'основной': is_main})
+        if okved_code:
+            okved_list.append({'код': okved_code, 'наименование': okved_name_main, 'основной': True})
+        for o in (data.get('ОКВЭДДоп') or []):
+            code_o = o.get('Код') or o.get('КодОКВЭД') or '' if isinstance(o, dict) else str(o)
+            name_o = o.get('Название') or o.get('НаимОКВЭД') or '' if isinstance(o, dict) else ''
+            if code_o:
+                okved_list.append({'код': code_o, 'наименование': name_o, 'основной': False})
 
-        # ── Финансы по годам ──────────────────────────────────────────────────
+        # ── Лицензии ─────────────────────────────────────────────────────────
+        licenses = []
+        for lic in (data.get('Лиценз') or []):
+            if isinstance(lic, dict):
+                kind = lic.get('ВидДеят') or lic.get('Вид') or lic.get('Наим') or ''
+                num  = lic.get('Номер') or lic.get('НомЛиц') or ''
+                date_start = lic.get('ДатаНач') or lic.get('ДатаВыд') or ''
+                if kind:
+                    licenses.append({'вид': kind, 'номер': num, 'с': date_start})
+
+        # ── МСП ──────────────────────────────────────────────────────────────
+        rmsp = data.get('РМСП') or {}
+        if isinstance(rmsp, dict):
+            msp_cat  = rmsp.get('Категория') or rmsp.get('КатСубМСП') or ''
+            msp_date = rmsp.get('ДатаВкл') or rmsp.get('Дата') or ''
+        else:
+            msp_cat = str(rmsp) if rmsp else ''
+            msp_date = ''
+
+        # ── Сотрудники ────────────────────────────────────────────────────────
+        schr = data.get('СЧР') or data.get('СЧРГод') or ''
+        if isinstance(schr, dict):
+            schr = schr.get('Количество') or schr.get('Число') or ''
+
+        # ── Финансы ───────────────────────────────────────────────────────────
         finance_raw = data.get('Финансы') or {}
         finance_history = []
-        for year in sorted(finance_raw.keys(), reverse=True)[:5]:
-            f = finance_raw[year]
-            finance_history.append({
-                'год': year,
-                'выручка': f.get('Выручка') or f.get('ВырОбщ') or '',
-                'прибыль': f.get('ЧистПриб') or f.get('ПрибУб') or '',
-                'активы': f.get('ВалБал') or '',
-                'капитал': f.get('КапРез') or '',
-            })
-
-        # ── МСП ───────────────────────────────────────────────────────────────
-        msp_info = data.get('МСП') or {}
-        if isinstance(msp_info, str):
-            msp_cat = msp_info
-            msp_date = ''
-        else:
-            msp_cat  = msp_info.get('КатСубМСП') or msp_info.get('Категория') or ''
-            msp_date = msp_info.get('ДатаВкл') or ''
+        if isinstance(finance_raw, dict):
+            for year in sorted(finance_raw.keys(), reverse=True)[:5]:
+                f = finance_raw[year]
+                if isinstance(f, dict):
+                    finance_history.append({
+                        'год': year,
+                        'выручка': f.get('Выручка') or f.get('ВырОбщ') or f.get('Доход') or '',
+                        'прибыль': f.get('ЧистПриб') or f.get('Прибыль') or f.get('ПрибУб') or '',
+                        'активы':  f.get('ВалБал') or f.get('Активы') or '',
+                        'капитал': f.get('КапРез') or f.get('Капитал') or '',
+                    })
 
         # ── Товарные знаки ────────────────────────────────────────────────────
         trademarks = []
         for tm in (data.get('ТоварЗнак') or []):
-            name_tm = tm.get('Наим') or tm.get('НаимТЗ') or ''
-            reg_date_tm = tm.get('ДатаРег') or ''
-            if name_tm:
-                trademarks.append({'наименование': name_tm, 'дата_рег': reg_date_tm})
+            if isinstance(tm, dict):
+                name_tm = tm.get('Название') or tm.get('Наим') or tm.get('НаимТЗ') or ''
+                reg_date_tm = tm.get('ДатаРег') or tm.get('Дата') or ''
+                if name_tm:
+                    trademarks.append({'наименование': name_tm, 'дата_рег': reg_date_tm})
 
-        # ── Флаги рисков ──────────────────────────────────────────────────────
+        # ── Адрес ────────────────────────────────────────────────────────────
+        adr = data.get('ЮрАдрес') or {}
+        if isinstance(adr, dict):
+            address = adr.get('АдресПолн') or adr.get('Адрес') or adr.get('Значение') or ''
+        else:
+            address = str(adr) if adr else ''
+
+        # ── Флаги рисков ─────────────────────────────────────────────────────
         risks = []
         risk_flags = [
-            ('НедобПост',    'Недобросовестный поставщик',                  'danger'),
-            ('МассРуковод',  'Массовый руководитель',                        'warning'),
-            ('МассУчред',    'Массовый учредитель',                          'warning'),
-            ('МассАдрес',    'Массовый адрес регистрации',                   'warning'),
-            ('СвСанкции',    'Под санкциями',                                'danger'),
-            ('ДисквЛица',    'Дисквалифицированные лица в руководстве',      'danger'),
-            ('НедостСвед',   'Недостоверные сведения в ЕГРЮЛ',               'danger'),
-            ('НезавЛикв',    'Незавершённая ликвидация',                     'warning'),
-            ('БанкротПроц',  'В процессе банкротства',                      'danger'),
-            ('РеоргПроц',    'В процессе реорганизации',                    'warning'),
+            ('НедобПост',   'Недобросовестный поставщик',              'danger'),
+            ('МассРуковод', 'Массовый руководитель',                    'warning'),
+            ('МассУчред',   'Массовый учредитель',                      'warning'),
+            ('ДисквЛица',   'Дисквалифицированные лица в руководстве', 'danger'),
+            ('Санкции',     'Под санкциями',                            'danger'),
+            ('НелегалФин',  'Нелегальная финансовая деятельность',      'danger'),
+            ('СанкцУчр',    'Учредители под санкциями',                 'danger'),
+            ('ЕФРСБ',       'Сведения о банкротстве (ЕФРСБ)',           'warning'),
         ]
         for key, label, level in risk_flags:
-            if data.get(key):
+            val = data.get(key)
+            if val and val is not False and val != 0 and val != [] and val != {}:
                 risks.append({'label': label, 'level': level})
 
         # ── Итоговая карточка ─────────────────────────────────────────────────
         card = {
             '_source': 'checko',
             '_meta': meta,
-            '_raw_keys': list(data.keys()),  # для диагностики
             'инн': data.get('ИНН') or inn_clean,
             'огрн': data.get('ОГРН') or '',
-            'кпп': data.get('КПП') or '',
             'огрнип': data.get('ОГРНИП') or '',
-            'наименование': data.get('НаимСокрЮЛ') or data.get('НаимПолнЮЛ') or data.get('ФИОИПолн') or '',
-            'наименование_полное': data.get('НаимПолнЮЛ') or data.get('ФИОИПолн') or '',
-            'опф': data.get('НаимОПФКр') or data.get('НаимОПФПолн') or '',
+            'кпп': data.get('КПП') or '',
+            'наименование': data.get('НаимСокр') or data.get('НаимПолн') or '',
+            'наименование_полное': data.get('НаимПолн') or '',
+            'опф': (data.get('ОКОПФ') or {}).get('Название') or '' if isinstance(data.get('ОКОПФ'), dict) else '',
             'тип': 'ИП' if is_ip else 'ЮЛ',
-            'статус': STATUS_MAP.get(status_code, status_code) or data.get('СтатусТекст', ''),
+            'статус': status_text,
             'статус_код': status_code,
-            'действующее': status_code == 'ACTIVE' or data.get('Действующее', False),
-            'ликвидировано': status_code in ('LIQUIDATED', 'BANKRUPT'),
-            'адрес': data.get('АдресПолн') or '',
+            'действующее': is_active,
+            'ликвидировано': is_liquidated,
+            'адрес': address,
             'дата_регистрации': data.get('ДатаОГРН') or data.get('ДатаРег') or '',
-            'дата_ликвидации': data.get('ДатаЛиквид') or '',
-            'оквэд_основной': data.get('КодОКВЭД') or '',
-            'оквэд_наим': data.get('НаимОКВЭД') or '',
+            'дата_ликвидации': '',
+            'оквэд_основной': okved_code,
+            'оквэд_наим': okved_name_main,
             'оквэд_список': okved_list,
-            'сотрудников': data.get('ССЧ') or data.get('КолРаб') or '',
+            'сотрудников': schr,
             'уст_капитал': data.get('УстКап') or '',
             'директор_фио': director_fio,
             'директор_должность': director_post,
