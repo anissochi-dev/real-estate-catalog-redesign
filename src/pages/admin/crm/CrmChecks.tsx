@@ -22,7 +22,14 @@ export default function CrmChecks() {
   const { token } = useAuth();
   const [checkType, setCheckType] = useState('company');
   const [query, setQuery] = useState('');
-  const [selectedSources, setSelectedSources] = useState(['zachestny', 'newdb', 'bezopasno']);
+
+  // Источники по умолчанию зависят от типа проверки
+  const DEFAULT_SOURCES: Record<string, string[]> = {
+    company:  ['zachestny', 'dadata'],
+    owner:    ['newdb', 'bezopasno'],
+    property: [],  // для property источник всегда egrn (автоматически на бэкенде)
+  };
+  const [selectedSources, setSelectedSources] = useState(DEFAULT_SOURCES['company']);
   const [results, setResults] = useState<Record<string, CheckResult> | null>(null);
   const [tab, setTab] = useState<Tab>('search');
 
@@ -105,6 +112,12 @@ export default function CrmChecks() {
     onSuccess: (data) => { setResults(data.results); },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const handleSetCheckType = (type: string) => {
+    setCheckType(type);
+    setSelectedSources(DEFAULT_SOURCES[type] || []);
+    setResults(null);
+  };
 
   const toggleSource = (s: string) => {
     setSelectedSources(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
@@ -192,7 +205,7 @@ export default function CrmChecks() {
       {tab === 'search' && (
         <ChecksSearchTab
           checkType={checkType}
-          setCheckType={setCheckType}
+          setCheckType={handleSetCheckType}
           query={query}
           setQuery={setQuery}
           selectedSources={selectedSources}

@@ -22,8 +22,10 @@ export type CheckResult = { data?: unknown; error?: string; from_cache?: boolean
 
 export const SOURCE_INFO: Record<string, { label: string; color: string; desc: string }> = {
   zachestny: { label: 'ЧестныйБизнес', color: 'bg-green-100 text-green-700', desc: 'Компании и ИП' },
-  newdb: { label: 'NewDB', color: 'bg-blue-100 text-blue-700', desc: 'Физлица и телефоны' },
+  newdb:     { label: 'NewDB',          color: 'bg-blue-100 text-blue-700',   desc: 'Физлица и телефоны' },
   bezopasno: { label: 'Безопасно.org', color: 'bg-purple-100 text-purple-700', desc: 'Комплексная проверка' },
+  dadata:    { label: 'DaData',         color: 'bg-sky-100 text-sky-700',     desc: 'ФНС / реестр компаний' },
+  egrn:      { label: 'ЕГРН',           color: 'bg-orange-100 text-orange-700', desc: 'Кадастровые данные' },
 };
 
 export const CHECK_TYPES = [

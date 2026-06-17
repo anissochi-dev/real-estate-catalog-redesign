@@ -361,6 +361,33 @@ def fetch_dadata(inn: str, api_key: str, secret_key: str = '') -> dict:
         return {'error': str(e)[:200]}
 
 
+def fetch_egrn(cadastr_number: str) -> dict:
+    """Получение данных ЕГРН по кадастровому номеру через api-assist.com."""
+    api_key = os.environ.get('EGRN_API_KEY', '')
+    if not api_key:
+        return {'error': 'EGRN_API_KEY не настроен'}
+    cadastr_clean = cadastr_number.strip()
+    url = f'https://api-assist.com/api/egrn-object?cadastral_number={urllib.parse.quote(cadastr_clean)}'
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={'Authorization': f'Bearer {api_key}', 'User-Agent': 'BizNest CRM/1.0'},
+            method='GET',
+        )
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            raw = json.loads(resp.read().decode())
+        return {
+            '_source': 'egrn',
+            'cadastral_number': cadastr_clean,
+            '_raw': raw,
+        }
+    except urllib.error.HTTPError as e:
+        body_err = e.read().decode()[:300]
+        return {'error': f'EGRН HTTP {e.code}: {body_err}'}
+    except Exception as e:
+        return {'error': str(e)[:200]}
+
+
 def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
@@ -537,16 +564,33 @@ def run_check(conn, user, method, qs, body, check_keys=None):
 
     check_type = body.get('check_type')
     query = body.get('query', '').strip()
-    sources = body.get('sources', ['zachestny', 'newdb', 'bezopasno'])
     force_refresh = body.get('force_refresh', False)
 
     if not check_type or not query:
         return err('Укажите check_type и query')
 
+    # ── Кадастровая проверка (ЕГРН) ─────────────────────────────────────────
+    if check_type == 'property':
+        cache_key = make_cache_key('property', query)
+        cached = get_cached(conn, 'property', cache_key, 'egrn')
+        if cached and not force_refresh:
+            return ok({'query': query, 'check_type': 'property', 'results': {'egrn': {'data': cached, 'from_cache': True}}})
+        data = fetch_egrn(query)
+        if 'error' not in data:
+            save_cache(conn, 'property', cache_key, 'egrn', data, user['id'])
+        return ok({'query': query, 'check_type': 'property', 'results': {'egrn': {'data': data, 'from_cache': False}}})
+
+    # ── Выбор источников по типу проверки ───────────────────────────────────
+    default_sources_by_type = {
+        'company': ['zachestny', 'dadata'],   # NewDB — для физлиц, не компаний
+        'owner':   ['newdb', 'bezopasno'],     # физлица — NewDB + безопасно
+    }
+    requested_sources = body.get('sources', default_sources_by_type.get(check_type, ['zachestny', 'bezopasno']))
+
     cache_key = make_cache_key(check_type, query)
     results = {}
 
-    for source in sources:
+    for source in requested_sources:
         if not force_refresh:
             cached = get_cached(conn, check_type, cache_key, source)
             if cached:
