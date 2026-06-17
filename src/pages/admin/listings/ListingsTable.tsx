@@ -4,7 +4,7 @@ import { Listing, DEALS, fmtDate, perM2, splitImages } from './types';
 import { fmtListingId } from '@/lib/formatPrice';
 import ListingInlineActions from './ListingInlineActions';
 
-const VIEW_KEY = 'biznest_view';
+
 
 interface Props {
   items: Listing[];
@@ -25,11 +25,6 @@ interface Props {
   isAdmin?: boolean;
 }
 
-function openSite(it: Listing) {
-  const slug = it.slug || it.id;
-  try { localStorage.removeItem(VIEW_KEY); } catch { /* ignore */ }
-  window.open(`/object/${slug}`, '_blank');
-}
 
 function ExportBadges({ it }: { it: Listing }) {
   if (!it.export_yandex && !it.export_avito && !it.export_cian) return null;
@@ -151,9 +146,7 @@ export default function ListingsTable({
 
               {/* ── Фото (десктоп) ── */}
               <div
-                className="relative flex-shrink-0 w-48 cursor-pointer overflow-hidden"
-                onClick={() => openSite(it)}
-                title="Открыть объект на сайте"
+                className="relative flex-shrink-0 w-48 overflow-hidden"
                 style={{ minHeight: 140 }}
               >
                 {mainImg ? (
@@ -216,13 +209,7 @@ export default function ListingsTable({
                   >
                     <Icon name="BarChart2" size={14} />
                   </button>
-                  <button
-                    onClick={() => openSite(it)}
-                    title="Открыть на сайте"
-                    className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-brand-orange transition-colors"
-                  >
-                    <Icon name="ExternalLink" size={14} />
-                  </button>
+
                   {canEdit && (
                     <button
                       onClick={() => onEdit(it)}

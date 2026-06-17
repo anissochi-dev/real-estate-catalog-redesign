@@ -136,10 +136,6 @@ export function NewsAdminList({ news, loading, headers, onNewsChange }: Props) {
                           Опубл.
                         </button>
                       )}
-                      <a href={`${siteOrigin}/news/${n.slug}`} target="_blank" rel="noopener noreferrer"
-                        className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
-                        <Icon name="ExternalLink" size={14} />
-                      </a>
                       <button onClick={() => remove(n.id)} disabled={deletingId === n.id}
                         className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition disabled:opacity-50">
                         {deletingId === n.id ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Trash2" size={14} />}
@@ -196,10 +192,6 @@ export function NewsAdminList({ news, loading, headers, onNewsChange }: Props) {
                             Опубл.
                           </button>
                         )}
-                        <a href={`${siteOrigin}/news/${n.slug}`} target="_blank" rel="noopener noreferrer"
-                          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-brand-blue transition">
-                          <Icon name="ExternalLink" size={14} />
-                        </a>
                         <button onClick={() => remove(n.id)} disabled={deletingId === n.id}
                           className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition disabled:opacity-50">
                           {deletingId === n.id ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Trash2" size={14} />}
