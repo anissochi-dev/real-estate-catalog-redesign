@@ -353,6 +353,16 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
             {!collapsed && 'Свернуть'}
           </button>
           <button
+            onClick={onExit}
+            title="На сайт"
+            className={`w-full flex items-center rounded-xl text-sm hover:bg-muted transition ${
+              collapsed ? 'justify-center px-2 py-2' : 'gap-3 px-3 py-2'
+            }`}
+          >
+            <Icon name="ExternalLink" size={16} />
+            {!collapsed && 'На сайт'}
+          </button>
+          <button
             onClick={() => logout()}
             title="Выйти"
             className={`w-full flex items-center rounded-xl text-sm text-red-600 hover:bg-red-50 transition ${
@@ -412,6 +422,13 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
                       <div className="font-semibold text-sm truncate">{user.name}</div>
                       <div className="text-xs text-muted-foreground">{roleLabel[user.role] || user.role}</div>
                     </div>
+                    <button
+                      onClick={() => { setUserMenuOpen(false); onExit(); }}
+                      className="w-full flex items-center gap-2 px-4 py-3 text-sm hover:bg-muted transition text-left min-h-[44px]"
+                    >
+                      <Icon name="ExternalLink" size={16} className="text-muted-foreground" />
+                      На сайт
+                    </button>
                     <button
                       onClick={() => { setUserMenuOpen(false); logout(); }}
                       className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition text-left min-h-[44px] border-t border-border"
