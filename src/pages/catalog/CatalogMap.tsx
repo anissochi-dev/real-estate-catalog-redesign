@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Property } from '@/App';
 import Icon from '@/components/ui/icon';
@@ -58,20 +58,6 @@ export default function CatalogMap({
     return () => window.removeEventListener('keydown', handler);
   }, [fullscreen, onClose]);
 
-  const toggleFullscreen = useCallback(async () => {
-    if (!wrapRef.current) return;
-    try {
-      if (!document.fullscreenElement) {
-        await wrapRef.current.requestFullscreen();
-      } else {
-        await document.exitFullscreen();
-      }
-    } catch {
-      // Fallback: браузер не поддерживает Fullscreen API (редко)
-      onFullscreenChange(!fullscreen);
-    }
-  }, [fullscreen, onFullscreenChange]);
-
   return (
     <div
       ref={wrapRef}
@@ -91,15 +77,7 @@ export default function CatalogMap({
 
         {/* Кнопки управления — единая группа-пилюля */}
         <div className="absolute top-3 right-3 z-10 flex items-center bg-white/95 backdrop-blur-sm rounded-xl shadow-md overflow-hidden border border-border/40">
-          {/* На весь экран / Свернуть */}
-          <button
-            onClick={toggleFullscreen}
-            title={fullscreen ? 'Свернуть' : 'На весь экран'}
-            className="flex items-center gap-1.5 px-2.5 h-8 text-xs font-semibold text-muted-foreground hover:text-brand-blue hover:bg-brand-blue/5 transition-all border-r border-border/40"
-          >
-            <Icon name={fullscreen ? 'Minimize2' : 'Maximize2'} size={13} />
-            {fullscreen ? 'Свернуть' : 'На весь экран'}
-          </button>
+
           {/* Закрыть карту */}
           <button
             onClick={() => {
