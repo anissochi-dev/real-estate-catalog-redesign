@@ -71,7 +71,7 @@ export default function CatalogMap({
             className="flex items-center gap-1.5 px-2.5 h-8 text-xs font-semibold text-muted-foreground hover:text-brand-blue hover:bg-brand-blue/5 transition-all border-r border-border/40"
           >
             <Icon name={fullscreen ? 'Minimize2' : 'Maximize2'} size={13} />
-            <span className="hidden sm:inline">{fullscreen ? 'Свернуть' : 'На весь экран'}</span>
+            {fullscreen ? 'Свернуть' : 'На весь экран'}
           </button>
           {/* Закрыть карту */}
           <button
@@ -79,7 +79,7 @@ export default function CatalogMap({
             className="flex items-center gap-1.5 px-2.5 h-8 text-xs font-semibold text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-all"
           >
             <Icon name="X" size={13} />
-            <span className="hidden sm:inline">Скрыть</span>
+            Скрыть
           </button>
         </div>
 
