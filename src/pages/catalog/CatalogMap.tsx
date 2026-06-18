@@ -62,23 +62,24 @@ export default function CatalogMap({
           <div className="text-[10px] text-muted-foreground">{mapPoints.length} объектов на карте</div>
         </div>
 
-        {/* Кнопки управления — правый верхний угол */}
-        <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
+        {/* Кнопки управления — единая группа-пилюля */}
+        <div className="absolute top-3 right-3 z-10 flex items-center bg-white/95 backdrop-blur-sm rounded-xl shadow-md overflow-hidden border border-border/40">
           {/* Полный экран */}
           <button
             onClick={() => setFullscreen(v => !v)}
             title={fullscreen ? 'Свернуть' : 'На весь экран'}
-            className="w-8 h-8 bg-white/95 backdrop-blur-sm rounded-xl shadow-md flex items-center justify-center text-foreground hover:bg-brand-blue hover:text-white transition-all group"
+            className="flex items-center gap-1.5 px-2.5 h-8 text-xs font-semibold text-muted-foreground hover:text-brand-blue hover:bg-brand-blue/5 transition-all border-r border-border/40"
           >
-            <Icon name={fullscreen ? 'Minimize2' : 'Maximize2'} size={15} />
+            <Icon name={fullscreen ? 'Minimize2' : 'Maximize2'} size={13} />
+            <span className="hidden sm:inline">{fullscreen ? 'Свернуть' : 'На весь экран'}</span>
           </button>
-
           {/* Закрыть карту */}
           <button
             onClick={() => { setFullscreen(false); onClose(); }}
-            className="bg-white/95 backdrop-blur-sm rounded-xl px-2.5 py-1.5 shadow-md text-xs font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors h-8"
+            className="flex items-center gap-1.5 px-2.5 h-8 text-xs font-semibold text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-all"
           >
-            <Icon name="X" size={12} /> Скрыть
+            <Icon name="X" size={13} />
+            <span className="hidden sm:inline">Скрыть</span>
           </button>
         </div>
 
