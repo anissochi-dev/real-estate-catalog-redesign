@@ -206,6 +206,17 @@ export default function YandexMap({
     }
   }, [points, center, zoom, onPointClick, mapReady]);
 
+  // Ресайз карты при смене fullscreen (нативный Fullscreen API)
+  useEffect(() => {
+    const handler = () => {
+      if (mapRef.current) {
+        try { mapRef.current.container.fitToViewport(); } catch { /* ignore */ }
+      }
+    };
+    document.addEventListener('fullscreenchange', handler);
+    return () => document.removeEventListener('fullscreenchange', handler);
+  }, []);
+
   useEffect(() => {
     const ref = mapRef;
     return () => {

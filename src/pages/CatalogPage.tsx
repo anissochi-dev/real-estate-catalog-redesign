@@ -74,6 +74,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
   const [aiOpen, setAiOpen] = useState(false);
   const [showSubscribe, setShowSubscribe] = useState(false);
   const [showMap, setShowMap] = useState(false);
+  const [mapFullscreen, setMapFullscreen] = useState(false);
   const [mapSelected, setMapSelected] = useState<Property | null>(null);
 
   const isStubCoord = (n: number) => Math.abs(n - Math.round(n)) < 1e-6 && Math.abs(n * 1000 - Math.round(n * 1000)) < 1e-9;
@@ -206,7 +207,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
 
       {/* Карта: при открытых фильтрах — side-by-side, иначе на всю ширину */}
       {showMap && (
-        showFilters ? (
+        showFilters && !mapFullscreen ? (
           <div className="flex border-b border-border bg-white" style={{ height: 480 }}>
             {/* Панель фильтров слева */}
             <div className="w-72 shrink-0 border-r border-border overflow-y-auto bg-white flex flex-col">
@@ -288,6 +289,8 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
                 mapPoints={mapPoints}
                 mapSelected={mapSelected}
                 city={settings.main_city || 'Краснодар'}
+                fullscreen={mapFullscreen}
+                onFullscreenChange={setMapFullscreen}
                 onClose={() => { setShowMap(false); setMapSelected(null); }}
                 onPointClick={handleMapPointClick}
                 onDeselectPoint={() => setMapSelected(null)}
@@ -301,6 +304,8 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
             mapPoints={mapPoints}
             mapSelected={mapSelected}
             city={settings.main_city || 'Краснодар'}
+            fullscreen={mapFullscreen}
+            onFullscreenChange={setMapFullscreen}
             onClose={() => { setShowMap(false); setMapSelected(null); }}
             onPointClick={handleMapPointClick}
             onDeselectPoint={() => setMapSelected(null)}

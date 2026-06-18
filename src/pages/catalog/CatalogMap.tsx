@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Property } from '@/App';
 import Icon from '@/components/ui/icon';
@@ -20,9 +20,11 @@ interface CatalogMapProps {
   mapPoints: MapPoint[];
   mapSelected: Property | null;
   city: string;
+  fullscreen: boolean;
   onClose: () => void;
   onPointClick: (pt: { id: number }) => void;
   onDeselectPoint: () => void;
+  onFullscreenChange: (v: boolean) => void;
   className?: string;
   height?: number | string;
 }
@@ -30,28 +32,53 @@ interface CatalogMapProps {
 const KRASNODAR_CENTER: [number, number] = [45.0355, 38.9753];
 
 export default function CatalogMap({
-  mapPoints, mapSelected, city, onClose, onPointClick, onDeselectPoint,
-  className, height = 420,
+  mapPoints, mapSelected, city, fullscreen, onClose, onPointClick,
+  onDeselectPoint, onFullscreenChange, className, height = 420,
 }: CatalogMapProps) {
   const navigate = useNavigate();
-  const [fullscreen, setFullscreen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
 
+  // Слушаем нативное событие fullscreenchange — синхронизируем стейт наверх
   useEffect(() => {
-    if (!fullscreen) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setFullscreen(false); };
+    const handler = () => {
+      onFullscreenChange(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handler);
+    return () => document.removeEventListener('fullscreenchange', handler);
+  }, [onFullscreenChange]);
+
+  // ESC при нативном fullscreen браузер обрабатывает сам (выходит из fullscreen)
+  // Дополнительно ловим ESC для закрытия когда fullscreen = false (обычный режим)
+  useEffect(() => {
+    if (fullscreen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [fullscreen]);
+  }, [fullscreen, onClose]);
 
-  const containerClass = fullscreen
-    ? 'fixed inset-0 z-[9999] overflow-hidden'
-    : (className ?? 'border-b border-border bg-white');
-
-  const containerStyle = fullscreen ? undefined : { height };
+  const toggleFullscreen = useCallback(async () => {
+    if (!wrapRef.current) return;
+    try {
+      if (!document.fullscreenElement) {
+        await wrapRef.current.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch {
+      // Fallback: браузер не поддерживает Fullscreen API (редко)
+      onFullscreenChange(!fullscreen);
+    }
+  }, [fullscreen, onFullscreenChange]);
 
   return (
-    <div className={containerClass} style={containerStyle}>
-      <div className="relative w-full h-full" style={fullscreen ? { height: '100dvh' } : undefined}>
+    <div
+      ref={wrapRef}
+      className={fullscreen ? 'w-full h-full bg-white' : (className ?? 'border-b border-border bg-white')}
+      style={fullscreen ? undefined : { height }}
+    >
+      <div className="relative w-full h-full">
 
         {/* Счётчик объектов */}
         <div className="absolute top-3 left-3 z-10 bg-white/95 backdrop-blur-sm rounded-xl px-3 py-1.5 shadow-md">
@@ -64,9 +91,9 @@ export default function CatalogMap({
 
         {/* Кнопки управления — единая группа-пилюля */}
         <div className="absolute top-3 right-3 z-10 flex items-center bg-white/95 backdrop-blur-sm rounded-xl shadow-md overflow-hidden border border-border/40">
-          {/* Полный экран */}
+          {/* На весь экран / Свернуть */}
           <button
-            onClick={() => setFullscreen(v => !v)}
+            onClick={toggleFullscreen}
             title={fullscreen ? 'Свернуть' : 'На весь экран'}
             className="flex items-center gap-1.5 px-2.5 h-8 text-xs font-semibold text-muted-foreground hover:text-brand-blue hover:bg-brand-blue/5 transition-all border-r border-border/40"
           >
@@ -75,7 +102,10 @@ export default function CatalogMap({
           </button>
           {/* Закрыть карту */}
           <button
-            onClick={() => { setFullscreen(false); onClose(); }}
+            onClick={() => {
+              if (document.fullscreenElement) document.exitFullscreen();
+              onClose();
+            }}
             className="flex items-center gap-1.5 px-2.5 h-8 text-xs font-semibold text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-all"
           >
             <Icon name="X" size={13} />
@@ -88,7 +118,7 @@ export default function CatalogMap({
           points={mapPoints}
           center={mapPoints.length === 0 ? KRASNODAR_CENTER : undefined}
           zoom={11}
-          height={fullscreen ? '100dvh' : '100%'}
+          height="100%"
           className={fullscreen ? '!rounded-none' : ''}
           onPointClick={onPointClick}
         />
@@ -115,13 +145,6 @@ export default function CatalogMap({
                 ✕
               </button>
             </div>
-          </div>
-        )}
-
-        {/* Подсказка ESC в полноэкранном режиме */}
-        {fullscreen && (
-          <div className="absolute bottom-3 right-3 z-10 bg-black/40 text-white text-[10px] px-2 py-1 rounded-lg backdrop-blur-sm">
-            ESC — свернуть
           </div>
         )}
       </div>
