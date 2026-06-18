@@ -117,8 +117,8 @@ export default function CatalogFilters({
           </button>
         </div>
 
-        {/* Раскрытые фильтры */}
-        {showFilters && (
+        {/* Раскрытые фильтры — скрываем когда карта открыта (там своя боковая панель) */}
+        {showFilters && !showMap && (
           <div className="pb-4 pt-1 border-t border-border animate-fade-in">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-3">
 
