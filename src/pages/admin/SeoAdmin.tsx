@@ -10,7 +10,7 @@ import SeoRunTab from './seo/SeoRunTab';
 import SeoScheduleTab from './seo/SeoScheduleTab';
 import SeoHistoryTab from './seo/SeoHistoryTab';
 import SeoPagesTab from './seo/SeoPagesTab';
-import SeoFilesTab from './seo/SeoFilesTab';
+import SeoTechnicalTab from './seo/SeoTechnicalTab';
 
 export default function SeoAdmin() {
   const { refreshToken } = useAuth();
@@ -203,7 +203,7 @@ export default function SeoAdmin() {
           )}
 
           {activeTab === 'files' && (
-            <SeoFilesTab token={refreshToken() || ''} />
+            <SeoTechnicalTab />
           )}
 
           {activeTab === 'schedule' && (
