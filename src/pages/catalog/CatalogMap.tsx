@@ -22,17 +22,22 @@ interface CatalogMapProps {
   onClose: () => void;
   onPointClick: (pt: { id: number }) => void;
   onDeselectPoint: () => void;
+  /** Кастомные классы контейнера — переопределяют высоту/размер */
+  className?: string;
+  /** Высота карты (по умолчанию 420px) */
+  height?: number | string;
 }
 
 const KRASNODAR_CENTER: [number, number] = [45.0355, 38.9753];
 
 export default function CatalogMap({
   mapPoints, mapSelected, city, onClose, onPointClick, onDeselectPoint,
+  className, height = 420,
 }: CatalogMapProps) {
   const navigate = useNavigate();
 
   return (
-    <div className="border-b border-border bg-white" style={{ height: 420 }}>
+    <div className={className ?? 'border-b border-border bg-white'} style={{ height }}>
       <div className="relative h-full">
         {/* Счётчик объектов */}
         <div className="absolute top-3 left-3 z-10 bg-white/95 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-sm">
