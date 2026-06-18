@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Property } from '@/App';
 import Icon from '@/components/ui/icon';
@@ -22,9 +23,7 @@ interface CatalogMapProps {
   onClose: () => void;
   onPointClick: (pt: { id: number }) => void;
   onDeselectPoint: () => void;
-  /** Кастомные классы контейнера — переопределяют высоту/размер */
   className?: string;
-  /** Высота карты (по умолчанию 420px) */
   height?: number | string;
 }
 
@@ -35,25 +34,55 @@ export default function CatalogMap({
   className, height = 420,
 }: CatalogMapProps) {
   const navigate = useNavigate();
+  const [fullscreen, setFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (!fullscreen) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setFullscreen(false); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [fullscreen]);
+
+  const containerClass = fullscreen
+    ? 'fixed inset-0 z-50 bg-white'
+    : (className ?? 'border-b border-border bg-white');
+
+  const containerStyle = fullscreen ? undefined : { height };
 
   return (
-    <div className={className ?? 'border-b border-border bg-white'} style={{ height }}>
+    <div className={containerClass} style={containerStyle}>
       <div className="relative h-full">
+
         {/* Счётчик объектов */}
-        <div className="absolute top-3 left-3 z-10 bg-white/95 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-sm">
+        <div className="absolute top-3 left-3 z-10 bg-white/95 backdrop-blur-sm rounded-xl px-3 py-1.5 shadow-md">
           <div className="text-xs font-semibold text-brand-blue font-display flex items-center gap-1">
             <Icon name="MapPin" size={12} />
             {city || 'Краснодар'}
           </div>
           <div className="text-[10px] text-muted-foreground">{mapPoints.length} объектов на карте</div>
         </div>
-        {/* Кнопка закрытия */}
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 z-10 bg-white/95 backdrop-blur-sm rounded-lg px-2.5 py-1.5 shadow-sm text-xs font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
-        >
-          <Icon name="X" size={12} /> Скрыть
-        </button>
+
+        {/* Кнопки управления — правый верхний угол */}
+        <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
+          {/* Полный экран */}
+          <button
+            onClick={() => setFullscreen(v => !v)}
+            title={fullscreen ? 'Свернуть' : 'На весь экран'}
+            className="w-8 h-8 bg-white/95 backdrop-blur-sm rounded-xl shadow-md flex items-center justify-center text-foreground hover:bg-brand-blue hover:text-white transition-all group"
+          >
+            <Icon name={fullscreen ? 'Minimize2' : 'Maximize2'} size={15} />
+          </button>
+
+          {/* Закрыть карту */}
+          <button
+            onClick={() => { setFullscreen(false); onClose(); }}
+            className="bg-white/95 backdrop-blur-sm rounded-xl px-2.5 py-1.5 shadow-md text-xs font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors h-8"
+          >
+            <Icon name="X" size={12} /> Скрыть
+          </button>
+        </div>
+
+        {/* Сама карта */}
         <YandexMap
           points={mapPoints}
           center={mapPoints.length === 0 ? KRASNODAR_CENTER : undefined}
@@ -61,6 +90,7 @@ export default function CatalogMap({
           height="100%"
           onPointClick={onPointClick}
         />
+
         {/* Карточка выбранного объекта */}
         {mapSelected && (
           <div className="absolute bottom-3 left-3 right-3 z-10 bg-white rounded-xl shadow-lg border border-border p-3 flex gap-3 items-start max-w-sm">
@@ -83,6 +113,13 @@ export default function CatalogMap({
                 ✕
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Подсказка ESC в полноэкранном режиме */}
+        {fullscreen && (
+          <div className="absolute bottom-3 right-3 z-10 bg-black/40 text-white text-[10px] px-2 py-1 rounded-lg backdrop-blur-sm">
+            ESC — свернуть
           </div>
         )}
       </div>
