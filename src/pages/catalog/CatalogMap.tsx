@@ -44,14 +44,14 @@ export default function CatalogMap({
   }, [fullscreen]);
 
   const containerClass = fullscreen
-    ? 'fixed inset-0 z-50 bg-white'
+    ? 'fixed inset-0 z-[9999] overflow-hidden'
     : (className ?? 'border-b border-border bg-white');
 
   const containerStyle = fullscreen ? undefined : { height };
 
   return (
     <div className={containerClass} style={containerStyle}>
-      <div className="relative h-full">
+      <div className="relative w-full h-full" style={fullscreen ? { height: '100dvh' } : undefined}>
 
         {/* Счётчик объектов */}
         <div className="absolute top-3 left-3 z-10 bg-white/95 backdrop-blur-sm rounded-xl px-3 py-1.5 shadow-md">
@@ -88,7 +88,8 @@ export default function CatalogMap({
           points={mapPoints}
           center={mapPoints.length === 0 ? KRASNODAR_CENTER : undefined}
           zoom={11}
-          height="100%"
+          height={fullscreen ? '100dvh' : '100%'}
+          className={fullscreen ? '!rounded-none' : ''}
           onPointClick={onPointClick}
         />
 
