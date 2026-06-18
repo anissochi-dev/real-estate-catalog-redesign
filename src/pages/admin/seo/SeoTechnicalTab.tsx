@@ -50,6 +50,7 @@ export default function SeoTechnicalTab() {
   const [seoStatus, setSeoStatus] = useState<SeoStatus | null>(null);
   const [seoLoading, setSeoLoading] = useState(false);
   const [seoErr, setSeoErr] = useState('');
+  const [rebuilding, setRebuilding] = useState(false);
 
   useEffect(() => {
     adminApi.getSettings().then(d => setS(d.settings || {}));
@@ -84,9 +85,11 @@ export default function SeoTechnicalTab() {
   };
 
   const rebuildSitemap = async () => {
-    const { error } = await sitemapCall('rebuild');
-    if (error) { toast.error(error); return; }
-    toast.success('Sitemap перестроен');
+    setRebuilding(true);
+    const { data, error } = await sitemapCall('rebuild');
+    setRebuilding(false);
+    if (error) { toast.error(`Ошибка: ${error}`); return; }
+    toast.success(`Sitemap перестроен: ${data?.urls_count ?? '?'} URL в кэше БД. Изменения появятся после следующего деплоя.`);
     loadSeoStatus();
   };
 
@@ -224,9 +227,11 @@ export default function SeoTechnicalTab() {
             )}
             <button
               onClick={rebuildSitemap}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-brand-blue text-brand-blue text-xs font-semibold hover:bg-brand-blue/5"
+              disabled={rebuilding}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-brand-blue text-brand-blue text-xs font-semibold hover:bg-brand-blue/5 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Icon name="RefreshCw" size={12} /> Перестроить
+              <Icon name={rebuilding ? 'Loader2' : 'RefreshCw'} size={12} className={rebuilding ? 'animate-spin' : ''} />
+              {rebuilding ? 'Перестройка...' : 'Перестроить'}
             </button>
           </div>
         </div>
