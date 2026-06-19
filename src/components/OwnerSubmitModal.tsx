@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -69,6 +69,19 @@ export default function OwnerSubmitModal({ onClose }: Props) {
   const [step, setStep] = useState<Step>(1);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+
+  // ── Антибот ─────────────────────────────────────────────────────────────
+  const [formToken, setFormToken] = useState('');
+  const openedAt = useRef(Date.now());        // фиксируем время открытия формы
+  const [honeypot, setHoneypot] = useState(''); // скрытое поле — бот заполнит
+
+  // Получаем одноразовый токен при монтировании
+  useEffect(() => {
+    fetch(`${OWNER_SUBMIT_URL}?action=token`)
+      .then(r => r.json())
+      .then(d => { if (d.token) setFormToken(d.token); })
+      .catch(() => {});
+  }, []);
 
   // Шаг 1 — контакты
   const [ownerName,  setOwnerName]  = useState('');
@@ -145,9 +158,16 @@ export default function OwnerSubmitModal({ onClose }: Props) {
   };
 
   const handleSubmit = async () => {
+    // Если honeypot заполнен — тихо «успех», не отправляем
+    if (honeypot) { setDone(true); return; }
+
     setSubmitting(true);
     try {
+      const fillSeconds = Math.round((Date.now() - openedAt.current) / 1000);
       const body = {
+        form_token:  formToken,
+        fill_time:   fillSeconds,
+        website:     '',           // honeypot всегда пустой от человека
         owner_name:  ownerName.trim(),
         owner_phone: ownerPhone.trim(),
         owner_email: ownerEmail.trim() || undefined,
@@ -162,7 +182,7 @@ export default function OwnerSubmitModal({ onClose }: Props) {
         condition:    condition || undefined,
         ceiling_height: ceilHeight ? parseFloat(ceilHeight) : undefined,
         video_url:    videoUrl.trim() || undefined,
-        photos: photos.map(b64 => b64.split(',')[1] || b64), // убираем data:...;base64, prefix
+        photos: photos.map(b64 => b64.split(',')[1] || b64),
       };
 
       const r = await fetch(OWNER_SUBMIT_URL, {
@@ -297,6 +317,19 @@ export default function OwnerSubmitModal({ onClose }: Props) {
                 <label className="text-xs font-semibold text-muted-foreground block mb-1">Email <span className="font-normal opacity-60">(необязательно)</span></label>
                 <input value={ownerEmail} onChange={e => setOwnerEmail(e.target.value)}
                   placeholder="ivan@mail.ru" type="email" className={inputCls('ownerEmail')} />
+              </div>
+
+              {/* Honeypot — скрыто от людей, боты заполняют */}
+              <div style={{ position: 'absolute', left: '-9999px', opacity: 0, pointerEvents: 'none' }} aria-hidden="true" tabIndex={-1}>
+                <label>Website</label>
+                <input
+                  type="text"
+                  name="website"
+                  value={honeypot}
+                  onChange={e => setHoneypot(e.target.value)}
+                  tabIndex={-1}
+                  autoComplete="off"
+                />
               </div>
 
               <label className={`flex items-start gap-2.5 cursor-pointer rounded-xl p-3 border transition ${
