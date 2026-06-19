@@ -1,19 +1,17 @@
 import { useState } from 'react';
 import Icon from '@/components/ui/icon';
-import PriceMarketTab from '@/pages/admin/marketing/PriceMarketTab';
-import PricingTab from '@/pages/admin/marketing/PricingTab';
 import UtmTab from '@/pages/admin/marketing/UtmTab';
 import SocialParserTab from '@/pages/admin/marketing/SocialParserTab';
 import MarketingDashboard from '@/pages/admin/marketing/MarketingDashboard';
+import PriceAssessmentTab from '@/pages/admin/marketing/PriceAssessmentTab';
 
-type Tab = 'dashboard' | 'pricing' | 'market-prices' | 'utm' | 'social';
+type Tab = 'dashboard' | 'pricing' | 'utm' | 'social';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'dashboard',     label: 'Пульт',            icon: 'LayoutDashboard' },
-  { id: 'pricing',       label: 'Ценообразование',   icon: 'Sparkles' },
-  { id: 'market-prices', label: 'Рынок цен',         icon: 'TrendingUp' },
-  { id: 'utm',           label: 'UTM-ссылки',        icon: 'Link' },
-  { id: 'social',        label: 'Соцсети',           icon: 'Share2' },
+  { id: 'dashboard', label: 'Пульт',       icon: 'LayoutDashboard' },
+  { id: 'pricing',   label: 'Оценка цен',  icon: 'Sparkles' },
+  { id: 'utm',       label: 'UTM-ссылки',  icon: 'Link' },
+  { id: 'social',    label: 'Соцсети',     icon: 'Share2' },
 ];
 
 export default function MarketingAdmin() {
@@ -21,7 +19,6 @@ export default function MarketingAdmin() {
 
   return (
     <div className="space-y-4">
-      {/* Вкладки */}
       <div className="flex gap-1 overflow-x-auto pb-0.5 scrollbar-hide">
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
@@ -36,12 +33,10 @@ export default function MarketingAdmin() {
         ))}
       </div>
 
-      {/* Контент */}
-      {tab === 'dashboard'     && <MarketingDashboard />}
-      {tab === 'pricing'       && <PricingTab />}
-      {tab === 'market-prices' && <PriceMarketTab />}
-      {tab === 'utm'           && <UtmTab />}
-      {tab === 'social'        && <SocialParserTab />}
+      {tab === 'dashboard' && <MarketingDashboard />}
+      {tab === 'pricing'   && <PriceAssessmentTab />}
+      {tab === 'utm'       && <UtmTab />}
+      {tab === 'social'    && <SocialParserTab />}
     </div>
   );
 }
