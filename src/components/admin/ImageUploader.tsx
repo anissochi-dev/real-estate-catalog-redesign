@@ -151,66 +151,72 @@ export default function ImageUploader({
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [wmState, setWmState] = useState<Record<number, string>>({});
 
-  // ── Pointer-drag (мышь + тач) ──────────────────────────────────────────────
-  const pointerDragIdx = useRef<number | null>(null);
-  const pointerStartPos = useRef<{ x: number; y: number } | null>(null);
-  const pointerMoved = useRef(false);
+  // ── Pointer-drag (мышь + тач) — всё через refs, нет stale closure ──────────
   const gridRef = useRef<HTMLDivElement>(null);
+  const dragFromIdx = useRef<number | null>(null);
+  const dragStartXY = useRef<{ x: number; y: number } | null>(null);
+  const isDraggingRef = useRef(false);
+  const valueRef = useRef(value);
+  useEffect(() => { valueRef.current = value; }, [value]);
 
-  const getCardIdxAt = (x: number, y: number): number | null => {
-    if (!gridRef.current) return null;
-    const cards = gridRef.current.querySelectorAll<HTMLElement>('[data-card-idx]');
-    for (const card of cards) {
-      const r = card.getBoundingClientRect();
-      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
-        return parseInt(card.dataset.cardIdx!);
-      }
+  // Снапшот рект-ов карточек в начале drag-а (не меняются во время перетаскивания)
+  const cardRects = useRef<{ idx: number; rect: DOMRect }[]>([]);
+
+  const snapRects = () => {
+    if (!gridRef.current) return;
+    cardRects.current = Array.from(
+      gridRef.current.querySelectorAll<HTMLElement>('[data-card-idx]')
+    ).map(el => ({ idx: parseInt(el.dataset.cardIdx!), rect: el.getBoundingClientRect() }));
+  };
+
+  const getIdxAt = (x: number, y: number): number | null => {
+    for (const { idx, rect } of cardRects.current) {
+      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) return idx;
     }
     return null;
   };
 
-  const onPointerDown = useCallback((e: React.PointerEvent, i: number) => {
+  const handlePointerDown = useCallback((e: React.PointerEvent, i: number) => {
     if (!multiple) return;
-    // Не перехватываем клики по кнопкам
     if ((e.target as HTMLElement).closest('button')) return;
-    pointerDragIdx.current = i;
-    pointerStartPos.current = { x: e.clientX, y: e.clientY };
-    pointerMoved.current = false;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    dragFromIdx.current = i;
+    dragStartXY.current = { x: e.clientX, y: e.clientY };
+    isDraggingRef.current = false;
+    // Захватываем pointer на сетке (не на карточке!) чтобы pointermove шёл на gridRef
+    gridRef.current?.setPointerCapture(e.pointerId);
   }, [multiple]);
 
-  const onPointerMove = useCallback((e: React.PointerEvent) => {
-    if (pointerDragIdx.current === null || !pointerStartPos.current) return;
-    const dx = Math.abs(e.clientX - pointerStartPos.current.x);
-    const dy = Math.abs(e.clientY - pointerStartPos.current.y);
-    if (!pointerMoved.current && dx < 5 && dy < 5) return;
-    pointerMoved.current = true;
-    if (dragIdx !== pointerDragIdx.current) setDragIdx(pointerDragIdx.current);
-    const overIdx = getCardIdxAt(e.clientX, e.clientY);
-    setDragOverIdx(overIdx !== pointerDragIdx.current ? overIdx : null);
-  }, [dragIdx]);
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (dragFromIdx.current === null || !dragStartXY.current) return;
+    const dx = Math.abs(e.clientX - dragStartXY.current.x);
+    const dy = Math.abs(e.clientY - dragStartXY.current.y);
+    if (!isDraggingRef.current) {
+      if (dx < 6 && dy < 6) return; // ещё не начали drag
+      isDraggingRef.current = true;
+      snapRects(); // снимаем ректы один раз в начале
+      setDragIdx(dragFromIdx.current);
+    }
+    const over = getIdxAt(e.clientX, e.clientY);
+    setDragOverIdx(over !== null && over !== dragFromIdx.current ? over : null);
+  }, [multiple]);
 
-  // Реордер через ref на value (избегаем stale closure)
-  const valueRef = useRef(value);
-  useEffect(() => { valueRef.current = value; }, [value]);
-
-  const onPointerUpFinal = useCallback((e: React.PointerEvent) => {
-    if (pointerDragIdx.current === null) return;
-    if (pointerMoved.current) {
-      const fromIdx = pointerDragIdx.current;
-      const overIdx = getCardIdxAt(e.clientX, e.clientY);
-      if (overIdx !== null && overIdx !== fromIdx) {
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    if (dragFromIdx.current === null) return;
+    if (isDraggingRef.current) {
+      const over = getIdxAt(e.clientX, e.clientY);
+      if (over !== null && over !== dragFromIdx.current) {
         const next = [...valueRef.current];
-        const [moved] = next.splice(fromIdx, 1);
-        next.splice(overIdx, 0, moved);
+        const [moved] = next.splice(dragFromIdx.current, 1);
+        next.splice(over, 0, moved);
         onChange(next);
       }
     }
+    dragFromIdx.current = null;
+    dragStartXY.current = null;
+    isDraggingRef.current = false;
+    cardRects.current = [];
     setDragIdx(null);
     setDragOverIdx(null);
-    pointerDragIdx.current = null;
-    pointerMoved.current = false;
-    pointerStartPos.current = null;
   }, [onChange]);
 
   const shouldCompress = compress ?? (folder === 'photos');
@@ -338,6 +344,9 @@ export default function ImageUploader({
             ref={gridRef}
             className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-2"
             style={{ touchAction: multiple ? 'none' : 'auto' }}
+            onPointerMove={multiple ? handlePointerMove : undefined}
+            onPointerUp={multiple ? handlePointerUp : undefined}
+            onPointerCancel={multiple ? handlePointerUp : undefined}
           >
             {value.map((url, i) => {
               const wm = wmState[i] || 'idle';
@@ -349,10 +358,7 @@ export default function ImageUploader({
                   key={url + i}
                   data-card-idx={i}
                   data-url={url}
-                  onPointerDown={e => onPointerDown(e, i)}
-                  onPointerMove={onPointerMove}
-                  onPointerUp={onPointerUpFinal}
-                  onPointerCancel={onPointerUpFinal}
+                  onPointerDown={e => handlePointerDown(e, i)}
                   className={`rounded-xl border-2 bg-white overflow-hidden select-none transition-all duration-150 ${
                     isDragging
                       ? 'opacity-40 scale-95 border-brand-blue shadow-lg z-10'
