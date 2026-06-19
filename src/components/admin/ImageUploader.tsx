@@ -305,6 +305,7 @@ export default function ImageUploader({
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-2">
             {value.map((url, i) => {
               const wm = wmState[i] || 'idle';
+              const hasOwnWm = /_wm\.(jpe?g|png|webp)$/i.test(url);
               return (
                 <div
                   key={url + i}
@@ -313,7 +314,7 @@ export default function ImageUploader({
                   onDragOver={e => handleCardDragOver(e, i)}
                   onDrop={e => handleCardDrop(e, i)}
                   onDragEnd={handleCardDragEnd}
-                  className={`relative group rounded-xl overflow-hidden border-2 transition-all ${
+                  className={`rounded-xl border-2 bg-white transition-all overflow-hidden ${
                     dragIdx === i
                       ? 'opacity-40 scale-95 border-brand-blue'
                       : dragOverIdx === i
@@ -321,87 +322,98 @@ export default function ImageUploader({
                       : 'border-border hover:border-brand-blue/40'
                   } ${multiple ? 'cursor-grab active:cursor-grabbing' : ''}`}
                 >
-                  {/* Фото — высота увеличена до h-44 */}
-                  <img
-                    src={url}
-                    alt=""
-                    className="w-full h-44 object-cover pointer-events-none"
-                  />
+                  {/* ── Фото ── */}
+                  <div className="relative">
+                    <img
+                      src={url}
+                      alt=""
+                      className="w-full h-40 object-cover"
+                    />
+                    {/* Бейдж «Главная» */}
+                    {i === 0 && (
+                      <div className="absolute top-2 left-2 text-[10px] bg-brand-blue text-white px-2 py-0.5 rounded-full font-semibold shadow">
+                        Главная
+                      </div>
+                    )}
+                    {/* Номер */}
+                    {i > 0 && (
+                      <div className="absolute top-2 left-2 text-[10px] bg-black/50 text-white px-1.5 py-0.5 rounded-full font-semibold">
+                        {i + 1}
+                      </div>
+                    )}
+                    {/* Кнопка лупы */}
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); setLightboxIdx(i); }}
+                      className="absolute top-2 right-2 w-7 h-7 rounded-lg bg-black/50 hover:bg-black/80 flex items-center justify-center text-white transition"
+                      title="Увеличить"
+                    >
+                      <Icon name="ZoomIn" size={14} />
+                    </button>
+                  </div>
 
-                  {/* Бейдж «Главная» */}
-                  {i === 0 && (
-                    <div className="absolute top-2 left-2 text-[10px] bg-brand-blue text-white px-2 py-0.5 rounded-full font-semibold shadow">
-                      Главная
-                    </div>
-                  )}
+                  {/* ── Панель кнопок под фото ── */}
+                  <div className="px-2 py-2 space-y-1.5 bg-muted/30 border-t border-border">
 
-                  {/* Кнопка лупы — всегда видна */}
-                  <button
-                    type="button"
-                    onClick={e => { e.stopPropagation(); setLightboxIdx(i); }}
-                    className="absolute top-2 right-2 w-7 h-7 rounded-lg bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition opacity-0 group-hover:opacity-100"
-                    title="Увеличить"
-                  >
-                    <Icon name="ZoomIn" size={14} />
-                  </button>
-
-                  {/* Оверлей с кнопками при наведении */}
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all flex flex-col items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100">
-                    {/* Строка навигации */}
+                    {/* Строка 1: порядок + удалить */}
                     {multiple && (
-                      <div className="flex items-center gap-1">
-                        {i > 0 && (
+                      <div className="flex items-center gap-1 justify-between">
+                        <div className="flex items-center gap-1">
                           <button type="button" onClick={e => { e.stopPropagation(); move(i, -1); }}
-                            className="w-7 h-7 bg-white/90 hover:bg-white rounded-lg flex items-center justify-center shadow transition" title="Влево">
-                            <Icon name="ChevronLeft" size={14} />
+                            disabled={i === 0}
+                            className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition disabled:opacity-30" title="Переместить влево">
+                            <Icon name="ChevronLeft" size={13} />
                           </button>
-                        )}
-                        {allowDownload && (
-                          <button type="button" onClick={e => { e.stopPropagation(); download(url); }}
-                            className="w-7 h-7 bg-white/90 hover:bg-white rounded-lg flex items-center justify-center shadow transition" title="Скачать">
-                            <Icon name="Download" size={14} />
-                          </button>
-                        )}
-                        {/* Скачать без нашего ВЗ */}
-                        {allowDownload && /_wm\.(jpe?g|png|webp)$/i.test(url) && (
-                          <button type="button" onClick={e => { e.stopPropagation(); download(url, { original: true }); }}
-                            className="w-7 h-7 bg-emerald-500 hover:bg-emerald-400 text-white rounded-lg flex items-center justify-center shadow transition" title="Скачать без водяного знака">
-                            <Icon name="DownloadCloud" size={14} />
-                          </button>
-                        )}
-                        <button type="button" onClick={e => { e.stopPropagation(); remove(i); }}
-                          className="w-7 h-7 bg-red-500 hover:bg-red-400 text-white rounded-lg flex items-center justify-center shadow transition" title="Удалить">
-                          <Icon name="Trash2" size={14} />
-                        </button>
-                        {i < value.length - 1 && (
                           <button type="button" onClick={e => { e.stopPropagation(); move(i, 1); }}
-                            className="w-7 h-7 bg-white/90 hover:bg-white rounded-lg flex items-center justify-center shadow transition" title="Вправо">
-                            <Icon name="ChevronRight" size={14} />
+                            disabled={i === value.length - 1}
+                            className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition disabled:opacity-30" title="Переместить вправо">
+                            <Icon name="ChevronRight" size={13} />
+                          </button>
+                        </div>
+                        <button type="button" onClick={e => { e.stopPropagation(); remove(i); }}
+                          className="w-6 h-6 rounded flex items-center justify-center text-red-500 hover:bg-red-50 transition" title="Удалить фото">
+                          <Icon name="Trash2" size={13} />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Строка 2: скачать */}
+                    {allowDownload && (
+                      <div className="flex items-center gap-1">
+                        <button type="button" onClick={e => { e.stopPropagation(); download(url); }}
+                          className="flex-1 inline-flex items-center justify-center gap-1 text-[10px] font-semibold px-2 py-1 rounded bg-white border border-border hover:bg-muted/60 transition" title="Скачать фото">
+                          <Icon name="Download" size={11} /> Скачать
+                        </button>
+                        {hasOwnWm && (
+                          <button type="button" onClick={e => { e.stopPropagation(); download(url, { original: true }); }}
+                            className="flex-1 inline-flex items-center justify-center gap-1 text-[10px] font-semibold px-2 py-1 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition" title="Скачать без нашего водяного знака">
+                            <Icon name="DownloadCloud" size={11} /> Без ВЗ
                           </button>
                         )}
                       </div>
                     )}
 
-                    {/* Кнопка удаления чужого водяного знака */}
+                    {/* Строка 3: удалить чужой водяной знак */}
                     <button
                       type="button"
                       onClick={e => { e.stopPropagation(); if (wm === 'idle') removeWatermark(i, url); }}
                       disabled={wm === 'loading'}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold shadow transition ${
-                        wm === 'loading' ? 'bg-amber-400 text-white cursor-wait' :
-                        wm === 'done'    ? 'bg-emerald-500 text-white' :
-                        wm === 'error'   ? 'bg-red-500 text-white' :
-                        'bg-white/90 hover:bg-white text-foreground'
+                      className={`w-full inline-flex items-center justify-center gap-1.5 text-[10px] font-semibold px-2 py-1.5 rounded border transition ${
+                        wm === 'loading' ? 'bg-amber-50 border-amber-200 text-amber-700 cursor-wait' :
+                        wm === 'done'    ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+                        wm === 'error'   ? 'bg-red-50 border-red-200 text-red-600' :
+                        'bg-white border-border text-muted-foreground hover:bg-muted/60 hover:text-foreground'
                       }`}
-                      title="Удалить водяной знак с фото (Яндекс Vision)"
+                      title="Удалить чужой водяной знак (Яндекс Vision AI)"
                     >
                       <Icon
-                        name={wm === 'loading' ? 'Loader2' : wm === 'done' ? 'Check' : wm === 'error' ? 'X' : 'Eraser'}
-                        size={12}
+                        name={wm === 'loading' ? 'Loader2' : wm === 'done' ? 'CheckCircle2' : wm === 'error' ? 'AlertCircle' : 'Eraser'}
+                        size={11}
                         className={wm === 'loading' ? 'animate-spin' : ''}
                       />
-                      {wm === 'loading' ? 'Обработка…' : wm === 'done' ? 'Готово' : wm === 'error' ? 'Ошибка' : 'Удалить ВЗ'}
+                      {wm === 'loading' ? 'Удаление ВЗ…' : wm === 'done' ? 'Водяной знак удалён' : wm === 'error' ? 'Ошибка удаления' : 'Удалить водяной знак'}
                     </button>
+
                   </div>
                 </div>
               );
