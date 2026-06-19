@@ -267,6 +267,7 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
             'all':   "TRUE",
         }.get(period, "created_at >= date_trunc('month', NOW())")
 
+        # ── Базовые метрики сделок ──
         cur.execute("SELECT COUNT(*) FROM crm_deals")
         total_deals = cur.fetchone()[0]
         cur.execute(f"SELECT COUNT(*) FROM crm_deals WHERE {period_filter}")
@@ -285,23 +286,80 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
         cur.execute(f"SELECT COALESCE(SUM(commission), 0) FROM crm_deals WHERE stage_id IN (SELECT id FROM crm_stages WHERE is_win = TRUE) AND {period_filter.replace('created_at', 'closed_at')}")
         commission_period = float(cur.fetchone()[0])
 
-        # Просроченные сделки (без обновления >14 дней, не закрытые)
+        cur.execute(f"SELECT COALESCE(SUM(amount), 0) FROM crm_deals WHERE {period_filter}")
+        amount_period = float(cur.fetchone()[0])
+
+        # ── Просроченные и тревожные ──
         cur.execute("SELECT COUNT(*) FROM crm_deals WHERE closed_at IS NULL AND updated_at < NOW() - INTERVAL '14 days'")
         overdue_deals = cur.fetchone()[0]
+
+        # Заявки без ответа > 24 часов
+        cur.execute("SELECT COUNT(*) FROM leads WHERE status IN ('new','pending') AND created_at < NOW() - INTERVAL '24 hours'")
+        leads_unanswered = cur.fetchone()[0]
+
+        # Новые заявки сегодня
+        cur.execute("SELECT COUNT(*) FROM leads WHERE created_at >= date_trunc('day', NOW())")
+        leads_today = cur.fetchone()[0]
 
         # Активные события на ближайшие 7 дней
         cur.execute("SELECT COUNT(*) FROM crm_events WHERE is_done = FALSE AND starts_at BETWEEN NOW() AND NOW() + INTERVAL '7 days'")
         upcoming_events = cur.fetchone()[0]
 
+        # ── Ближайшие события (до 5) ──
+        cur.execute("""
+            SELECT e.id, e.title, e.starts_at, e.event_type,
+                   u.name as assignee_name, d.id as deal_id, d.title as deal_title
+            FROM crm_events e
+            LEFT JOIN users u ON u.id = e.assigned_to
+            LEFT JOIN crm_deals d ON d.id = e.deal_id
+            WHERE e.is_done = FALSE AND e.starts_at >= NOW()
+            ORDER BY e.starts_at ASC LIMIT 5
+        """)
+        upcoming_list = [
+            {
+                'id': r[0], 'title': r[1],
+                'starts_at': str(r[2]) if r[2] else None,
+                'event_type': r[3], 'assignee_name': r[4],
+                'deal_id': r[5], 'deal_title': r[6],
+            }
+            for r in cur.fetchall()
+        ]
+
+        # ── Рейтинг команды ──
         cur.execute(
             "SELECT u.id, u.name, u.avatar, COALESCE(SUM(p.points),0) as total_points "
             f"FROM users u LEFT JOIN crm_points p ON p.user_id = u.id AND p.{period_filter} "
             "WHERE u.role IN ('broker','director','office_manager','manager') "
             "  AND u.is_active = TRUE "
-            "GROUP BY u.id, u.name, u.avatar ORDER BY total_points DESC LIMIT 5"
+            "GROUP BY u.id, u.name, u.avatar ORDER BY total_points DESC LIMIT 7"
         )
         leaderboard = [{'id': r[0], 'name': r[1], 'avatar': r[2], 'points': int(r[3])} for r in cur.fetchall()]
 
+        # ── Активность брокеров за период (сделки + заявки) ──
+        cur.execute(f"""
+            SELECT u.id, u.name, u.avatar,
+                   COUNT(DISTINCT d.id) AS deals_count,
+                   COALESCE(SUM(d.commission), 0) AS commission_sum,
+                   COUNT(DISTINCT CASE WHEN s.is_win THEN d.id END) AS won_count
+            FROM users u
+            LEFT JOIN crm_deals d ON d.assigned_to = u.id AND d.{period_filter}
+            LEFT JOIN crm_stages s ON s.id = d.stage_id
+            WHERE u.role IN ('broker','director','manager') AND u.is_active = TRUE
+            GROUP BY u.id, u.name, u.avatar
+            ORDER BY deals_count DESC, commission_sum DESC
+            LIMIT 8
+        """)
+        team_stats = [
+            {
+                'id': r[0], 'name': r[1], 'avatar': r[2],
+                'deals_count': int(r[3]),
+                'commission_sum': float(r[4] or 0),
+                'won_count': int(r[5]),
+            }
+            for r in cur.fetchall()
+        ]
+
+        # ── Воронка этапов ──
         cur.execute(
             "SELECT s.id, s.name, s.color, COUNT(d.id) as cnt, "
             "       COALESCE(SUM(d.amount), 0) as total_amount "
@@ -314,46 +372,55 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
             for r in cur.fetchall()
         ]
 
-        # Динамика по дням за период (для графика)
+        # ── Динамика по дням ──
         cur.execute(f"""
             SELECT DATE(created_at) AS day, COUNT(*) AS cnt
-            FROM crm_deals
-            WHERE {period_filter}
-            GROUP BY DATE(created_at)
-            ORDER BY day ASC
+            FROM crm_deals WHERE {period_filter}
+            GROUP BY DATE(created_at) ORDER BY day ASC
         """)
         timeline = [{'day': str(r[0]), 'count': int(r[1])} for r in cur.fetchall()]
 
-        # Детализация: список сделок за период с суммой, комиссией, этапом и ответственным
+        # ── Последние лиды без ответа ──
+        cur.execute("""
+            SELECT id, name, phone, source, created_at, message
+            FROM leads
+            WHERE status IN ('new','pending')
+            ORDER BY created_at DESC LIMIT 5
+        """)
+        fresh_leads = [
+            {
+                'id': r[0], 'name': r[1], 'phone': r[2],
+                'source': r[3], 'created_at': str(r[4]) if r[4] else None,
+                'message': (r[5] or '')[:80] if r[5] else None,
+            }
+            for r in cur.fetchall()
+        ]
+
+        # ── Список сделок за период ──
         cur.execute(f"""
             SELECT d.id, d.title, d.amount, d.commission, d.source, d.created_at,
                    s.name AS stage_name, s.color AS stage_color, s.is_win,
-                   u.name AS manager_name,
-                   l.title AS listing_title
+                   u.name AS manager_name, l.title AS listing_title
             FROM crm_deals d
             LEFT JOIN crm_stages s ON s.id = d.stage_id
             LEFT JOIN users u ON u.id = d.assigned_to
             LEFT JOIN listings l ON l.id = d.listing_id
             WHERE d.{period_filter}
-            ORDER BY d.created_at DESC
-            LIMIT 100
+            ORDER BY d.created_at DESC LIMIT 100
         """)
         deals_list = [
             {
-                'id': r[0],
-                'title': r[1] or 'Без названия',
-                'amount': float(r[2] or 0),
-                'commission': float(r[3] or 0),
-                'source': r[4],
-                'created_at': str(r[5]) if r[5] else None,
-                'stage_name': r[6],
-                'stage_color': r[7],
-                'is_win': bool(r[8]),
-                'manager_name': r[9],
-                'listing_title': r[10],
+                'id': r[0], 'title': r[1] or 'Без названия',
+                'amount': float(r[2] or 0), 'commission': float(r[3] or 0),
+                'source': r[4], 'created_at': str(r[5]) if r[5] else None,
+                'stage_name': r[6], 'stage_color': r[7], 'is_win': bool(r[8]),
+                'manager_name': r[9], 'listing_title': r[10],
             }
             for r in cur.fetchall()
         ]
+
+        # Конверсия: выиграно / всего за период
+        conversion_rate = round(won_deals_period / deals_period * 100, 1) if deals_period > 0 else 0
 
         return ok({
             'period': period,
@@ -364,11 +431,18 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
             'total_owners': total_owners,
             'total_commission': total_commission,
             'commission_period': commission_period,
+            'amount_period': amount_period,
+            'conversion_rate': conversion_rate,
             'overdue_deals': overdue_deals,
+            'leads_unanswered': leads_unanswered,
+            'leads_today': leads_today,
             'upcoming_events': upcoming_events,
+            'upcoming_list': upcoming_list,
             'leaderboard': leaderboard,
+            'team_stats': team_stats,
             'funnel': funnel,
             'timeline': timeline,
+            'fresh_leads': fresh_leads,
             'deals_list': deals_list,
         })
 
