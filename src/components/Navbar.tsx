@@ -4,6 +4,7 @@ import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { prefetchPage } from '@/app/lazyPages';
+import OwnerSubmitModal from '@/components/OwnerSubmitModal';
 
 interface NavbarProps {
   currentPage: Page;
@@ -27,6 +28,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
   const { user } = useAuth();
   const { settings } = useSettings();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [ownerModalOpen, setOwnerModalOpen] = useState(false);
   const isStaff = user && ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'].includes(user.role);
   const brandName = settings.company_name || 'Бизнес. Маркетинг. Недвижимость.';
   const logoUrl = settings.logo_url;
@@ -88,6 +90,15 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
 
             {/* Right side — desktop */}
             <div className="flex items-center gap-2">
+              {/* Кнопка "Разместить объект" */}
+              <button
+                onClick={() => setOwnerModalOpen(true)}
+                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-orange text-white text-sm font-semibold hover:bg-brand-orange/90 transition-all duration-200 shrink-0"
+              >
+                <Icon name="PlusCircle" size={15} />
+                Разместить объект
+              </button>
+
               {compareCount > 0 && (
                 <button
                   onClick={() => handleNav('compare')}
@@ -168,6 +179,15 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
 
         {/* Drawer nav */}
         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+          {/* Кнопка "Разместить объект" — мобиль */}
+          <button
+            onClick={() => { setOwnerModalOpen(true); setDrawerOpen(false); }}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold bg-brand-orange text-white hover:bg-brand-orange/90 transition mb-1"
+          >
+            <Icon name="PlusCircle" size={18} />
+            Разместить объект
+          </button>
+
           {navItems.map((item) => (
             <button
               key={item.id}
@@ -232,6 +252,9 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
           )}
         </div>
       </div>}
+
+      {/* Модальная форма собственника */}
+      {ownerModalOpen && <OwnerSubmitModal onClose={() => setOwnerModalOpen(false)} />}
     </>
   );
 }

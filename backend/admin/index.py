@@ -2622,6 +2622,8 @@ def _listings(cur, conn, method, rid, event, user):
             tab_where = "l.status = 'archived'"
         elif tab == 'hidden':
             tab_where = "l.status = 'active' AND l.is_visible = FALSE"
+        elif tab == 'moderation':
+            tab_where = "l.status = 'moderation'"
         else:
             tab_where = "TRUE"
         # Фильтр «Мои объекты» — только для брокера
@@ -2636,7 +2638,8 @@ def _listings(cur, conn, method, rid, event, user):
             f"SELECT "
             f"  COUNT(*) FILTER (WHERE status = 'active' AND is_visible = TRUE) AS cnt_active, "
             f"  COUNT(*) FILTER (WHERE status = 'archived') AS cnt_archived, "
-            f"  COUNT(*) FILTER (WHERE status = 'active' AND is_visible = FALSE) AS cnt_hidden "
+            f"  COUNT(*) FILTER (WHERE status = 'active' AND is_visible = FALSE) AS cnt_hidden, "
+            f"  COUNT(*) FILTER (WHERE status = 'moderation') AS cnt_moderation "
             f"FROM {SCHEMA}.listings {cnt_where}"
         )
         cnt = dict(cur.fetchone())
@@ -2705,7 +2708,7 @@ def _listings(cur, conn, method, rid, event, user):
             rows.append(_ser(d))
         return _ok({
             'listings': rows, 'total': total, 'limit': limit, 'offset': offset,
-            'counts': {'active': cnt['cnt_active'], 'archived': cnt['cnt_archived'], 'hidden': cnt['cnt_hidden']},
+            'counts': {'active': cnt['cnt_active'], 'archived': cnt['cnt_archived'], 'hidden': cnt['cnt_hidden'], 'moderation': cnt['cnt_moderation']},
         })
 
     body = json.loads(event.get('body') or '{}')

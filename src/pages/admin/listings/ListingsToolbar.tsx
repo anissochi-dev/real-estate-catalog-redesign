@@ -25,7 +25,7 @@ interface Props {
   setHasDraft: (v: boolean) => void;
   onAdd: () => void;
   onImport: (data: ImportedListing) => void;
-  counts: { active: number; archived: number; hidden: number };
+  counts: { active: number; archived: number; hidden: number; moderation: number };
   canCreate?: boolean;
   isBroker?: boolean;
   myOnly?: boolean;
@@ -46,6 +46,22 @@ export default function ListingsToolbar({
       {/* Строка: вкладки + кнопки действий */}
       <div className="flex items-center gap-2 flex-wrap">
         {/* Вкладки статуса (без «Все») */}
+        {/* Таб модерации — выделен отдельно с бейджем */}
+        {counts.moderation > 0 && (
+          <button onClick={() => switchTab('moderation')}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${
+              statusFilter === 'moderation'
+                ? 'bg-amber-500 text-white'
+                : 'border-2 border-amber-400 text-amber-700 bg-amber-50 hover:bg-amber-100'
+            }`}>
+            <Icon name="Clock" size={14} />
+            На модерации
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${statusFilter === 'moderation' ? 'bg-white/25' : 'bg-amber-500 text-white'}`}>
+              {counts.moderation}
+            </span>
+          </button>
+        )}
+
         {([
           ['active',   `Активные (${counts.active})`,   'CheckCircle'],
           ['hidden',   `Скрытые (${counts.hidden})`,    'EyeOff'],

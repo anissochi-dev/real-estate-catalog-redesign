@@ -13,6 +13,7 @@ interface Props {
   onHistory: (it: Listing) => void;
   onPhotoDownload: (it: Listing) => void;
   onInternalCard?: (it: Listing) => void;
+  onModerate?: (id: number, action: 'approve' | 'reject') => void;
   selected: Set<number>;
   onToggleSelect: (id: number) => void;
   onSelectAll: () => void;
@@ -47,7 +48,7 @@ function ExportBadges({ it }: { it: Listing }) {
 }
 
 export default function ListingsTable({
-  items, onEdit, onArchive, onHistory, onPhotoDownload, onInternalCard,
+  items, onEdit, onArchive, onHistory, onPhotoDownload, onInternalCard, onModerate,
   selected, onToggleSelect, onSelectAll, onDeselectAll,
   onBulk, onBulkDelete, bulkLoading = false, isAdmin = false,
 }: Props) {
@@ -91,6 +92,7 @@ export default function ListingsTable({
         const canEdit = !isBroker || isBrokerOwner;
         const canSelect = !isBroker || isBrokerOwner;
         const isArchived = it.status === 'archived';
+        const isModeration = it.status === 'moderation';
 
         return (
           <div key={it.id} className="space-y-0">
@@ -235,6 +237,32 @@ export default function ListingsTable({
                   )}
                 </div>
               </div>
+
+              {/* Баннер модерации с кнопками Принять / Отклонить */}
+              {isModeration && onModerate && (
+                <div className="flex items-center gap-2 mt-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200">
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    <Icon name="Clock" size={13} className="text-amber-600 shrink-0" />
+                    <span className="text-xs font-semibold text-amber-800">От собственника — на модерации</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={e => { e.stopPropagation(); onEdit(it); }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-brand-blue text-white text-xs font-bold hover:bg-brand-blue/90 transition"
+                      title="Открыть редактор, дозаполнить и принять"
+                    >
+                      <Icon name="Pencil" size={11} /> Принять
+                    </button>
+                    <button
+                      onClick={e => { e.stopPropagation(); if (confirm('Отклонить объект? Он уйдёт в архив.')) onModerate(it.id, 'reject'); }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-500 text-white text-xs font-bold hover:bg-red-600 transition"
+                      title="Отклонить — объект уйдёт в архив"
+                    >
+                      <Icon name="X" size={11} /> Отклонить
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Строка 2: Адрес */}
               <div className="flex items-center gap-1.5 mt-1">

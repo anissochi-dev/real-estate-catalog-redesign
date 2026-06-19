@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import ListingsTable from './listings/ListingsTable';
 import ListingEditor from './listings/ListingEditor';
 import ListingHistory from './listings/ListingHistory';
@@ -8,10 +9,26 @@ import PhotoPickModal from './listings/PhotoPickModal';
 import ListingInternalCard from './listings/ListingInternalCard';
 import Icon from '@/components/ui/icon';
 import { useListingsState } from './listings/useListingsState';
+import { adminApi } from '@/lib/adminApi';
 
 export default function ListingsAdmin() {
   const s = useListingsState();
   const [internalCardId, setInternalCardId] = useState<number | null>(null);
+
+  const handleModerate = async (id: number, action: 'approve' | 'reject') => {
+    try {
+      if (action === 'approve') {
+        const r = await adminApi.getListing(id);
+        if (r.listing) s.openEdit(r.listing);
+      } else {
+        await adminApi.updateListing(id, { status: 'archived', is_visible: false });
+        toast.success('Объект отклонён — отправлен в архив');
+        s.load(true);
+      }
+    } catch {
+      toast.error('Ошибка при обработке');
+    }
+  };
 
   // Открытие карточки из других разделов (например из SEO-аудита)
   useEffect(() => {
@@ -91,6 +108,7 @@ export default function ListingsAdmin() {
         onHistory={it => s.setHistoryListing(it)}
         onPhotoDownload={it => s.setPhotoPickListing(it)}
         onInternalCard={it => setInternalCardId(it.id)}
+        onModerate={handleModerate}
         selected={s.selected}
         onToggleSelect={s.toggleSelect}
         onSelectAll={() => s.setSelected(new Set(s.filtered.map(i => i.id)))}

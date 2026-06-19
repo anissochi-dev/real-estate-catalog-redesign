@@ -20,7 +20,7 @@ export function clearDraft() {
   try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
 }
 
-export type StatusFilter = 'active' | 'archived' | 'hidden' | 'all';
+export type StatusFilter = 'active' | 'archived' | 'hidden' | 'all' | 'moderation';
 
 export function useListingsState() {
   const { user } = useAuth();
@@ -32,7 +32,7 @@ export function useListingsState() {
   const [items, setItems] = useState<Listing[]>([]);
   const [myOnly, setMyOnly] = useState<boolean>(true); // брокер по умолчанию видит свои
   const [total, setTotal] = useState(0);
-  const [counts, setCounts] = useState({ active: 0, archived: 0, hidden: 0 });
+  const [counts, setCounts] = useState({ active: 0, archived: 0, hidden: 0, moderation: 0 });
   const [cities, setCities] = useState<City[]>([]);
   const [purposes, setPurposes] = useState<Purpose[]>([]);
   const [landVri, setLandVri] = useState<LandVri[]>([]);

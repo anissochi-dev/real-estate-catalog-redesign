@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS CORS",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "POST без обязательных полей",
+      "method": "POST",
+      "path": "/",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": { "error": "Укажите ваше имя" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "POST с неверным телефоном",
+      "method": "POST",
+      "path": "/",
+      "body": { "owner_name": "Иван", "owner_phone": "123" },
+      "expectedStatus": 400,
+      "expectedBody": { "error": "Некорректный номер телефона" },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

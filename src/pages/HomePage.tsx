@@ -10,6 +10,7 @@ import SchemaOrg, { makeFaqSchema } from '@/components/SchemaOrg';
 
 const ClientLeadsSection = lazy(() => import('@/components/ClientLeadsSection'));
 const AIMatchModal = lazy(() => import('@/components/AIMatchModal'));
+const OwnerSubmitModal = lazy(() => import('@/components/OwnerSubmitModal'));
 
 interface PublicStats {
   total: number;
@@ -61,6 +62,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   const [leadsCount, setLeadsCount] = useState(pf?.leadsCount ?? 0);
 
   const [aiOpen, setAiOpen] = useState(false);
+  const [ownerOpen, setOwnerOpen] = useState(false);
   const [latestNews, setLatestNews] = useState<NewsPreview[] | null>(null);
   const newsLimit = settings.home_news_limit ?? 10;
   const showNewsOnHome = settings.show_news_on_home;
@@ -362,6 +364,37 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
         </div>
       </section>
 
+      {/* CTA — Разместить объект */}
+      <section className="py-8 bg-gradient-to-r from-brand-blue to-indigo-700">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="text-white text-center sm:text-left">
+              <div className="flex items-center justify-center sm:justify-start gap-2 mb-1">
+                <Icon name="Home" size={20} className="opacity-80" />
+                <span className="font-bold text-lg">Вы собственник?</span>
+              </div>
+              <p className="text-white/75 text-sm">
+                Разместите объект бесплатно — заявка на модерацию и публикация в течение 24 часов
+              </p>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="hidden sm:flex flex-col gap-1 text-white/70 text-xs text-right">
+                <div className="flex items-center gap-1.5"><Icon name="Check" size={12} /> Бесплатно</div>
+                <div className="flex items-center gap-1.5"><Icon name="Check" size={12} /> Без регистрации</div>
+                <div className="flex items-center gap-1.5"><Icon name="Check" size={12} /> Быстро — 3 шага</div>
+              </div>
+              <button
+                onClick={() => setOwnerOpen(true)}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-white text-brand-blue font-bold text-sm rounded-xl hover:bg-white/90 transition shadow-lg"
+              >
+                <Icon name="PlusCircle" size={18} />
+                Разместить объект
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {showLeads && (
         <Suspense fallback={<div className="py-8 bg-muted/20 border-t border-border" style={{minHeight: 200}} />}>
           <ClientLeadsSection limit={settings.home_leads_limit ?? 6} />
@@ -445,6 +478,12 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
             initialPrompt={searchQuery}
             autoSubmit={!!searchQuery.trim()}
           />
+        </Suspense>
+      )}
+
+      {ownerOpen && (
+        <Suspense fallback={null}>
+          <OwnerSubmitModal onClose={() => setOwnerOpen(false)} />
         </Suspense>
       )}
     </div>
