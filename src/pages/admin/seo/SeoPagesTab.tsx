@@ -41,26 +41,31 @@ interface Props {
 }
 
 export default function SeoPagesTab({ token: _token, gptOk }: Props) {
-  // Всегда берём свежий токен из localStorage при каждом запросе
   const seoCall = async (payload: Record<string, unknown>) => {
-    const doFetch = async () => {
+    try {
       const tok = getToken() || _token;
-      return fetch(seoUrl(tok), {
+      let r = await fetch(seoUrl(tok), {
         method: 'POST',
         headers: seoHeaders(tok),
         body: JSON.stringify({ ...payload, auth_token: tok || undefined }),
       });
-    };
-    let r = await doFetch();
-    if (r.status === 401) {
-      await new Promise(res => setTimeout(res, 200));
-      r = await doFetch();
+      if (r.status === 401) {
+        await new Promise(res => setTimeout(res, 200));
+        const tok2 = getToken() || _token;
+        r = await fetch(seoUrl(tok2), {
+          method: 'POST',
+          headers: seoHeaders(tok2),
+          body: JSON.stringify({ ...payload, auth_token: tok2 || undefined }),
+        });
+      }
+      const raw = await r.json();
+      // Платформа может отдать body как строку внутри объекта
+      const d = typeof raw?.body === 'string' ? JSON.parse(raw.body) : raw;
+      if (!r.ok || d?.error) return { data: null, error: String(d?.error || `Ошибка ${r.status}`) };
+      return { data: d, error: null };
+    } catch (e) {
+      return { data: null, error: e instanceof Error ? e.message : 'Нет связи' };
     }
-    if (r.status === 401) return { data: null, error: 'Сессия истекла — войдите заново' };
-    if (!r.ok) return { data: null, error: `Сервис временно недоступен (код ${r.status})` };
-    const d = await r.json();
-    if (d?.error) return { data: null, error: String(d.error) };
-    return { data: d, error: null };
   };
   const [pages, setPages] = useState<SeoPage[]>(DEFAULT_PAGES);
   const [activePath, setActivePath] = useState<string>('/');
@@ -75,20 +80,32 @@ export default function SeoPagesTab({ token: _token, gptOk }: Props) {
   const load = async () => {
     setLoading(true);
     setError('');
-    const { data, error: err } = await seoCall({ action: 'pages_list' });
-    setLoading(false);
-    if (err) { setError(err); return; }
-    if (data && Array.isArray(data.pages)) {
-      const list = data.pages as SeoPage[];
-      // Мёрж: дефолтные пути обогащаем данными из БД
+    try {
+      const tok = getToken() || _token;
+      const r = await fetch(seoUrl(tok), {
+        method: 'POST',
+        headers: seoHeaders(tok),
+        body: JSON.stringify({ action: 'pages_list', auth_token: tok || undefined }),
+      });
+      const raw = await r.json();
+      // Платформа может отдать body как строку или как объект
+      const d = typeof raw?.body === 'string' ? JSON.parse(raw.body) : raw;
+      if (!r.ok || d?.error) {
+        setError(d?.error || `Ошибка ${r.status}`);
+        setLoading(false);
+        return;
+      }
+      const list: SeoPage[] = Array.isArray(d?.pages) ? d.pages : [];
       const merged: SeoPage[] = DEFAULT_PAGES.map(def => {
         const found = list.find(p => p.path === def.path);
         return found ? { ...def, ...found } : def;
       });
-      // Добавляем страницы из БД которых нет в дефолтном списке
-      const extra = list.filter(p => !DEFAULT_PAGES.some(d => d.path === p.path));
+      const extra = list.filter(p => !DEFAULT_PAGES.some(d2 => d2.path === p.path));
       setPages([...merged, ...extra]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Нет связи');
     }
+    setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
@@ -119,11 +136,11 @@ export default function SeoPagesTab({ token: _token, gptOk }: Props) {
     const { data, error: err } = await seoCall({ action: 'page_generate', path: activePath });
     setGenerating(false);
     if (err) { setError(err); return; }
-    if (data && data.page) {
+    if (data?.page) {
       const page = data.page as Partial<SeoPage>;
       setPages(ps => ps.map(p => p.path === activePath ? { ...p, ...page, auto_generated: true } : p));
-      setSavedMsg('Сгенерировано ИИ');
-      setTimeout(() => setSavedMsg(''), 2000);
+      setSavedMsg('Сгенерировано ИИ — не забудьте сохранить');
+      setTimeout(() => setSavedMsg(''), 4000);
     }
   };
 
