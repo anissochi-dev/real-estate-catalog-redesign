@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
+import { formatPhone, extractDigits } from '@/lib/phone';
 
 const OWNER_SUBMIT_URL = 'https://functions.poehali.dev/50fb474d-3de8-4007-91f4-a7d1a971a547';
 
@@ -84,9 +85,11 @@ export default function OwnerSubmitModal({ onClose }: Props) {
   }, []);
 
   // Шаг 1 — контакты
-  const [ownerName,  setOwnerName]  = useState('');
-  const [ownerPhone, setOwnerPhone] = useState('');
-  const [ownerEmail, setOwnerEmail] = useState('');
+  const [ownerName,     setOwnerName]     = useState('');
+  const [ownerPhone,    setOwnerPhone]    = useState('');   // нормализованный: +7XXXXXXXXXX
+  const [phoneDisplay,  setPhoneDisplay]  = useState('');   // отображаемый: +7 9XX XXX-XX-XX
+  const [ownerEmail,    setOwnerEmail]    = useState('');
+  const phoneRef = useRef<HTMLInputElement>(null);
   const [consent,    setConsent]    = useState(false);
 
   // Шаг 2 — объект
@@ -117,7 +120,7 @@ export default function OwnerSubmitModal({ onClose }: Props) {
     const e: Record<string, string> = {};
     if (!ownerName.trim())  e.ownerName  = 'Введите имя';
     if (!ownerPhone.trim()) e.ownerPhone = 'Введите телефон';
-    else if (ownerPhone.replace(/\D/g, '').length < 10) e.ownerPhone = 'Некорректный номер';
+    else if (extractDigits(ownerPhone).length < 10) e.ownerPhone = 'Введите полный номер (10 цифр)';
     if (!consent) e.consent = 'Необходимо согласие';
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -200,21 +203,41 @@ export default function OwnerSubmitModal({ onClose }: Props) {
     }
   };
 
-  // Маска телефона
-  const handlePhone = (v: string) => {
-    let d = v.replace(/\D/g, '');
-    if (d.startsWith('8')) d = '7' + d.slice(1);
-    if (d.startsWith('7')) {
-      const p = d.slice(1);
-      let f = '+7';
-      if (p.length > 0) f += ' (' + p.slice(0, 3);
-      if (p.length >= 3) f += ') ' + p.slice(3, 6);
-      if (p.length >= 6) f += '-' + p.slice(6, 8);
-      if (p.length >= 8) f += '-' + p.slice(8, 10);
-      setOwnerPhone(f);
-    } else {
-      setOwnerPhone(v);
-    }
+  // Маска телефона — точная копия логики PhonePickerInput с поддержкой курсора
+  const handlePhone = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const el = e.target;
+    const oldValue = el.value;
+    const cursorPos = el.selectionStart ?? oldValue.length;
+    const oldFullRaw = oldValue.replace(/\D/g, '');
+    const rawPosBefore = oldValue.slice(0, cursorPos).replace(/\D/g, '').length;
+
+    const digits = extractDigits(oldValue).slice(0, 10);
+    const normalized = digits ? '+7' + digits : '';
+    const display = digits ? formatPhone('+7' + digits) : '';
+
+    setOwnerPhone(normalized);
+    setPhoneDisplay(display);
+    setErrors(er => ({ ...er, ownerPhone: '' }));
+
+    requestAnimationFrame(() => {
+      if (!phoneRef.current) return;
+      const newFormatted = phoneRef.current.value;
+      const newFullRaw = newFormatted.replace(/\D/g, '');
+      const delta = newFullRaw.length - oldFullRaw.length;
+      const rawPosAfter = Math.max(0, Math.min(rawPosBefore + delta, newFullRaw.length));
+
+      let newCursorPos = newFormatted.length;
+      if (rawPosAfter < newFullRaw.length) {
+        let digitCount = 0;
+        for (let i = 0; i < newFormatted.length; i++) {
+          if (/\d/.test(newFormatted[i])) {
+            if (digitCount === rawPosAfter) { newCursorPos = i; break; }
+            digitCount++;
+          }
+        }
+      }
+      phoneRef.current.setSelectionRange(newCursorPos, newCursorPos);
+    });
   };
 
   const inputCls = (field: string) =>
@@ -308,9 +331,26 @@ export default function OwnerSubmitModal({ onClose }: Props) {
 
               <div>
                 <label className="text-xs font-semibold text-muted-foreground block mb-1">Телефон *</label>
-                <input value={ownerPhone} onChange={e => { handlePhone(e.target.value); setErrors(er => ({ ...er, ownerPhone: '' })); }}
-                  placeholder="+7 (___) ___-__-__" type="tel" className={inputCls('ownerPhone')} />
-                {errors.ownerPhone && <div className="text-xs text-red-500 mt-1">{errors.ownerPhone}</div>}
+                <input
+                  ref={phoneRef}
+                  value={phoneDisplay}
+                  onChange={handlePhone}
+                  onFocus={e => {
+                    const len = e.target.value.length;
+                    setTimeout(() => e.target.setSelectionRange(len, len), 0);
+                  }}
+                  placeholder="+7 900 000-00-00"
+                  type="tel"
+                  autoComplete="tel"
+                  inputMode="tel"
+                  className={`${inputCls('ownerPhone')} font-mono tracking-wide`}
+                />
+                {errors.ownerPhone
+                  ? <div className="text-xs text-red-500 mt-1">{errors.ownerPhone}</div>
+                  : <div className="text-[11px] text-muted-foreground mt-1">
+                      Пример: <span className="font-mono">+7 900 123-45-67</span>
+                    </div>
+                }
               </div>
 
               <div>
