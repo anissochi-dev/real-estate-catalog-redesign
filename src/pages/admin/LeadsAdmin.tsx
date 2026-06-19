@@ -171,6 +171,7 @@ export default function LeadsAdmin() {
                 onDelete={() => del(active.id)}
                 onSendComment={sendComment}
                 canManage={canManageLead(active)}
+                onRefresh={load}
               />
             </div>
           </div>

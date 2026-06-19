@@ -22,6 +22,7 @@ export interface Lead {
   seo_h3?: string | null;
   seo_h4?: string | null;
   seo_h5?: string | null;
+  crm_deal_id?: number | null;
 }
 
 export const LEAD_TYPES: [string, string, string][] = [

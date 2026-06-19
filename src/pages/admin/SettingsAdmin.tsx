@@ -21,6 +21,7 @@ import BrandKitTab from './settings/BrandKitTab';
 import NotificationsTab from './settings/NotificationsTab';
 import SiteHealthTab from './settings/SiteHealthTab';
 import VerificationTab from './settings/VerificationTab';
+import SettingsSearch from './settings/SettingsSearch';
 
 export default function SettingsAdmin() {
   const { reload } = useSettings();
@@ -244,23 +245,26 @@ export default function SettingsAdmin() {
 
   return (
     <div className="max-w-4xl space-y-3">
-      {/* Группы */}
-      <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm overflow-x-auto scrollbar-hide">
-        {GROUPS.map(g => {
-          const active = currentGroup.id === g.id;
-          return (
-            <button
-              key={g.id}
-              onClick={() => setTab(g.tabs[0][0])}
-              className={`flex-1 min-w-fit px-4 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap transition inline-flex items-center justify-center gap-2 ${
-                active ? 'bg-brand-blue text-white' : 'hover:bg-muted text-foreground/80'
-              }`}
-            >
-              <Icon name={g.icon} size={15} />
-              {g.label}
-            </button>
-          );
-        })}
+      {/* Шапка: группы + поиск */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm overflow-x-auto scrollbar-hide flex-1 min-w-0">
+          {GROUPS.map(g => {
+            const active = currentGroup.id === g.id;
+            return (
+              <button
+                key={g.id}
+                onClick={() => setTab(g.tabs[0][0])}
+                className={`flex-1 min-w-fit px-4 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap transition inline-flex items-center justify-center gap-2 ${
+                  active ? 'bg-brand-blue text-white' : 'hover:bg-muted text-foreground/80'
+                }`}
+              >
+                <Icon name={g.icon} size={15} />
+                {g.label}
+              </button>
+            );
+          })}
+        </div>
+        <SettingsSearch onNavigate={(t) => setTab(t as TabId)} />
       </div>
 
       {/* Вкладки текущей группы */}

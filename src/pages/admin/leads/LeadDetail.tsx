@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import { Lead, Comment, STATUSES, LEAD_TYPES, SOURCE_LABELS } from './leadsTypes';
 import { formatPhone } from '@/lib/phone';
+import ConvertToDealModal from './ConvertToDealModal';
 
 interface Props {
   active: Lead;
@@ -12,13 +14,24 @@ interface Props {
   onDelete: () => void;
   onSendComment: () => void;
   canManage?: boolean;
+  onRefresh?: () => void;
 }
 
 export default function LeadDetail({
   active, comments, comment, setComment,
   onUpdate, onEdit, onDelete, onSendComment,
-  canManage = true,
+  canManage = true, onRefresh,
 }: Props) {
+  const [convertOpen, setConvertOpen] = useState(false);
+
+  const hasDeal = !!(active as Lead & { crm_deal_id?: number }).crm_deal_id;
+  const dealId = (active as Lead & { crm_deal_id?: number }).crm_deal_id;
+
+  const handleConvertSuccess = (newDealId: number) => {
+    onUpdate({ status: 'in_progress', crm_deal_id: newDealId } as Partial<Lead>);
+    onRefresh?.();
+  };
+
   return (
     <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
       <div className="p-5 border-b border-border">
@@ -26,7 +39,6 @@ export default function LeadDetail({
           <div>
             <div className="font-display font-700 text-lg">{active.name}</div>
             <div className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
-              {/* Телефон: для брокера на чужом лиде — полностью скрыт */}
               {canManage ? (
                 <>
                   <a href={`tel:${active.phone}`}
@@ -76,20 +88,55 @@ export default function LeadDetail({
               </div>
             )}
           </div>
-          {canManage && (
-            <div className="flex gap-2">
-              <button onClick={onEdit} className="text-brand-blue p-2 rounded-lg hover:bg-muted">
-                <Icon name="Pencil" size={16} />
+          <div className="flex gap-2 items-start">
+            {/* Кнопка конвертации — только для admin/director, только если нет сделки */}
+            {canManage && !hasDeal && active.status !== 'rejected' && active.status !== 'done' && (
+              <button
+                onClick={() => setConvertOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold transition shadow-sm"
+                title="Создать сделку в CRM из этой заявки"
+              >
+                <Icon name="ArrowRightLeft" size={13} />
+                В сделку
               </button>
-              <button onClick={onDelete} className="text-red-600 p-2 rounded-lg hover:bg-red-50">
-                <Icon name="Trash2" size={16} />
-              </button>
-            </div>
-          )}
+            )}
+            {canManage && (
+              <>
+                <button onClick={onEdit} className="text-brand-blue p-2 rounded-lg hover:bg-muted">
+                  <Icon name="Pencil" size={16} />
+                </button>
+                <button onClick={onDelete} className="text-red-600 p-2 rounded-lg hover:bg-red-50">
+                  <Icon name="Trash2" size={16} />
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {active.message && (
           <div className="mt-4 p-3 bg-muted/50 rounded-xl text-sm">{active.message}</div>
+        )}
+
+        {/* Блок связанной сделки CRM */}
+        {hasDeal && dealId && (
+          <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
+              <Icon name="Handshake" size={15} className="text-emerald-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-semibold text-emerald-800">Связана со сделкой CRM</div>
+              <div className="text-xs text-emerald-700 mt-0.5">Сделка #{dealId} · открыта в воронке</div>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.setItem('crm_open_deal_id', String(dealId));
+                window.dispatchEvent(new CustomEvent('admin:navigate', { detail: 'crm' }));
+              }}
+              className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 flex items-center gap-1 shrink-0"
+            >
+              Открыть <Icon name="ArrowRight" size={12} />
+            </button>
+          </div>
         )}
 
         {active.source === 'ai-chat' && (
@@ -164,12 +211,11 @@ export default function LeadDetail({
             </div>
           </>
         ) : (
-          /* Брокер видит только текущий статус — без изменения */
           <div className="mt-4 flex items-center gap-2">
             {(() => {
               const st = STATUSES.find(s => s[0] === active.status);
               return st ? (
-                <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-muted`}>
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-muted">
                   <span className={`w-2 h-2 rounded-full ${st[2]}`} />
                   {st[1]}
                 </span>
@@ -199,6 +245,7 @@ export default function LeadDetail({
         </div>
         <div className="flex gap-2">
           <input value={comment} onChange={e => setComment(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && onSendComment()}
             placeholder="Добавить комментарий..."
             className="flex-1 px-3 py-2 border rounded-xl text-sm" />
           <button onClick={onSendComment} className="btn-blue text-white px-4 rounded-xl">
@@ -206,6 +253,13 @@ export default function LeadDetail({
           </button>
         </div>
       </div>
+
+      <ConvertToDealModal
+        open={convertOpen}
+        onOpenChange={setConvertOpen}
+        lead={active}
+        onSuccess={handleConvertSuccess}
+      />
     </div>
   );
 }

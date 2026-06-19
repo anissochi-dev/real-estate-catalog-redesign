@@ -619,7 +619,8 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
                        d.listing_id, l.title as listing_title,
                        d.assigned_to, u.name as assignee_name,
                        d.amount, d.commission, d.source, d.notes,
-                       d.closed_at, d.created_at, d.updated_at
+                       d.closed_at, d.created_at, d.updated_at,
+                       d.lead_id
                 FROM crm_deals d
                 LEFT JOIN crm_stages s ON s.id = d.stage_id
                 LEFT JOIN crm_owners o ON o.id = d.owner_id
@@ -638,7 +639,8 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
                 'amount': float(r[12]) if r[12] else None,
                 'commission': float(r[13]) if r[13] else None,
                 'source': r[14], 'notes': r[15], 'closed_at': r[16],
-                'created_at': r[17], 'updated_at': r[18]
+                'created_at': r[17], 'updated_at': r[18],
+                'lead_id': r[19],
             }
             cur.execute("""
                 SELECT a.id, a.type, a.content, a.scheduled_at, a.done_at, a.created_at,
@@ -659,20 +661,27 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
             cur.execute("SELECT id, position FROM crm_stages ORDER BY position LIMIT 1")
             first_stage = cur.fetchone()
             stage_id = body.get('stage_id', first_stage[0] if first_stage else None)
+            lead_id = body.get('lead_id') or None
             cur.execute(
-                "INSERT INTO crm_deals (title, stage_id, owner_id, listing_id, assigned_to, amount, commission, source, notes, created_by) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+                "INSERT INTO crm_deals (title, stage_id, owner_id, listing_id, assigned_to, amount, commission, source, notes, created_by, lead_id) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
                 (body['title'], stage_id, body.get('owner_id'), body.get('listing_id'),
                  body.get('assigned_to', user['id']), body.get('amount'), body.get('commission'),
-                 body.get('source'), body.get('notes'), user['id'])
+                 body.get('source'), body.get('notes'), user['id'], lead_id)
             )
             new_id = cur.fetchone()[0]
+            activity_note = f'Сделка создана пользователем {user["name"]}'
+            if lead_id:
+                activity_note += f' из заявки #{lead_id}'
+                cur.execute(
+                    f"UPDATE {SCHEMA}.leads SET status = 'in_progress', crm_deal_id = %s WHERE id = %s",
+                    (new_id, lead_id)
+                )
             cur.execute(
                 "INSERT INTO crm_activities (deal_id, user_id, type, content) VALUES (%s,%s,'note',%s)",
-                (new_id, user['id'], f'Сделка создана пользователем {user["name"]}')
+                (new_id, user['id'], activity_note)
             )
             award_points(conn, user['id'], 10, 'Создана сделка', new_id, unique=True)
-            # Авто-проверка собственника по ИНН через DaData (фоновый поток)
             if body.get('owner_id'):
                 raw_headers = event.get('headers') or {}
                 headers_lc = {k.lower(): v for k, v in raw_headers.items()}

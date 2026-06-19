@@ -149,7 +149,7 @@ def _cron_check(cur, conn) -> dict:
     src = remaining[0]
 
     # Загружаем ключи GPT (нужны только для текстовых источников)
-    PROGRAMMATIC_SOURCES = {'biweekly_history', 'invest', 'demand', 'market_history', 'market_import', 'district_prices'}
+    PROGRAMMATIC_SOURCES = {'biweekly_history', 'invest', 'demand', 'market_history', 'market_import', 'district_prices', 'auto_seo'}
     cur.execute(f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings ORDER BY id LIMIT 1")
     keys = cur.fetchone() or {}
     api_key = keys.get('yandex_api_key') or os.environ.get('YANDEX_API_KEY', '')
@@ -352,6 +352,12 @@ def _process_source(cur, src: str, api_key: str, folder_id: str):
         facts, count_input = _generate_district_price_facts(cur)
         saved = _save_facts(cur, facts, 'district_')
         print(f'[retrain:district_prices] generated={len(facts)} saved={saved}')
+        return saved, count_input, None
+
+    if src == 'auto_seo':
+        facts, count_input = _generate_auto_seo_facts(cur)
+        saved = _save_facts(cur, facts, 'seo_')
+        print(f'[retrain:auto_seo] generated={len(facts)} saved={saved}')
         return saved, count_input, None
 
     source_configs = {
@@ -702,6 +708,68 @@ def _generate_district_price_facts(cur) -> tuple:
             })
 
     return facts, len(rows)
+
+
+def _generate_auto_seo_facts(cur) -> tuple:
+    """Генерирует факты из SEO-тегов объектов и страниц сайта.
+    Позволяет ВБ знать мета-описания объектов и разделов сайта."""
+    facts = []
+
+    cur.execute(
+        f"SELECT id, title, seo_title, seo_description, category, deal, district "
+        f"FROM {SCHEMA}.listings "
+        f"WHERE status = 'active' AND (seo_title IS NOT NULL OR seo_description IS NOT NULL) "
+        f"ORDER BY updated_at DESC LIMIT 60"
+    )
+    listings = cur.fetchall() or []
+    for row in listings:
+        lid = row.get('id') or row[0]
+        title = (row.get('title') or row[1] or '').strip()
+        seo_title = (row.get('seo_title') or row[2] or '').strip()
+        seo_desc = (row.get('seo_description') or row[3] or '').strip()
+        category = (row.get('category') or row[4] or '').strip()
+        deal = (row.get('deal') or row[5] or '').strip()
+        district = (row.get('district') or row[6] or '').strip()
+        if seo_title or seo_desc:
+            value_parts = []
+            if seo_title:
+                value_parts.append(f'SEO-заголовок: {seo_title}')
+            if seo_desc:
+                value_parts.append(f'Описание: {seo_desc}')
+            if district:
+                value_parts.append(f'Район: {district}')
+            facts.append({
+                'key': f'seo_listing_{lid}',
+                'value': f'Объект "{title}" ({category}, {deal}). ' + '. '.join(value_parts),
+            })
+
+    cur.execute(
+        f"SELECT slug, seo_title, seo_description, seo_h1 "
+        f"FROM {SCHEMA}.seo_pages "
+        f"WHERE seo_title IS NOT NULL OR seo_description IS NOT NULL"
+    )
+    pages = cur.fetchall() or []
+    for row in pages:
+        slug = (row.get('slug') or row[0] or '').strip()
+        seo_title = (row.get('seo_title') or row[1] or '').strip()
+        seo_desc = (row.get('seo_description') or row[2] or '').strip()
+        h1 = (row.get('seo_h1') or row[3] or '').strip()
+        if seo_title or seo_desc:
+            value_parts = []
+            if h1:
+                value_parts.append(f'H1: {h1}')
+            if seo_title:
+                value_parts.append(f'Title: {seo_title}')
+            if seo_desc:
+                value_parts.append(f'Description: {seo_desc}')
+            slug_key = slug.replace('/', '_').strip('_') or 'home'
+            facts.append({
+                'key': f'seo_page_{slug_key}',
+                'value': f'Страница {slug}. ' + '. '.join(value_parts),
+            })
+
+    print(f'[retrain:auto_seo] listings={len(listings)} pages={len(pages)} facts={len(facts)}')
+    return facts, len(listings) + len(pages)
 
 
 def _process_market_prices(cur, api_key: str, folder_id: str):
