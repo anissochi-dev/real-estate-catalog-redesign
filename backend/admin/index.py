@@ -1901,6 +1901,88 @@ def _site_health(cur, conn, method, action, event, user):
             fields.append({'key': k, 'label': label, 'value': val, 'filled': bool(val)})
         return _ok({'fields': fields, 'exists': True})
 
+    # ── UTM-ССЫЛКИ ────────────────────────────────────────────────────────────
+    if resource == 'utm_links':
+        # GET — список ссылок
+        if method == 'GET':
+            limit = int(params.get('limit', 50))
+            offset = int(params.get('offset', 0))
+            src_filter = params.get('source', '')
+            where = 'WHERE 1=1'
+            if src_filter:
+                where += f" AND utm_source = '{_safe(src_filter)}'"
+            cur.execute(f"""
+                SELECT u.id, u.url, u.base_url, u.utm_source, u.utm_medium,
+                       u.utm_campaign, u.utm_content, u.utm_term,
+                       u.listing_id, u.label, u.clicks, u.created_at,
+                       l.title AS listing_title,
+                       us.name AS created_by_name
+                FROM {SCHEMA}.utm_links u
+                LEFT JOIN {SCHEMA}.listings l ON l.id = u.listing_id
+                LEFT JOIN {SCHEMA}.users us ON us.id = u.created_by
+                {where}
+                ORDER BY u.created_at DESC
+                LIMIT {limit} OFFSET {offset}
+            """)
+            rows = [dict(r) for r in cur.fetchall()]
+            for r in rows:
+                r['created_at'] = str(r['created_at']) if r['created_at'] else None
+            cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.utm_links {where}")
+            total = cur.fetchone()[0]
+            # Топ источников
+            cur.execute(f"""
+                SELECT utm_source, COUNT(*) AS cnt, SUM(clicks) AS total_clicks
+                FROM {SCHEMA}.utm_links
+                GROUP BY utm_source ORDER BY cnt DESC LIMIT 10
+            """)
+            sources_stat = [dict(r) for r in cur.fetchall()]
+            return _ok({'links': rows, 'total': total, 'sources_stat': sources_stat})
+
+        # POST — создать ссылку
+        if method == 'POST':
+            body_raw = event.get('body') or '{}'
+            body = json.loads(body_raw) if isinstance(body_raw, str) else body_raw
+            url = body.get('url', '').strip()
+            if not url:
+                return _err(400, 'url обязателен')
+            listing_id = body.get('listing_id') or None
+            cur.execute(f"""
+                INSERT INTO {SCHEMA}.utm_links
+                    (url, base_url, utm_source, utm_medium, utm_campaign,
+                     utm_content, utm_term, listing_id, label, created_by)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
+            """, (
+                url,
+                body.get('base_url', ''),
+                body.get('utm_source', ''),
+                body.get('utm_medium', ''),
+                body.get('utm_campaign', ''),
+                body.get('utm_content', ''),
+                body.get('utm_term', ''),
+                listing_id,
+                body.get('label') or None,
+                user.get('id'),
+            ))
+            new_id = cur.fetchone()[0]
+            conn.commit()
+            return _ok({'id': new_id, 'ok': True})
+
+        # PUT — обновить метку или listing_id
+        if method == 'PUT' and rid:
+            body_raw = event.get('body') or '{}'
+            body = json.loads(body_raw) if isinstance(body_raw, str) else body_raw
+            fields, vals = [], []
+            for f in ('label', 'listing_id', 'clicks'):
+                if f in body:
+                    fields.append(f'{f} = %s')
+                    vals.append(body[f])
+            if fields:
+                vals.append(int(rid))
+                cur.execute(f"UPDATE {SCHEMA}.utm_links SET {', '.join(fields)} WHERE id = %s", vals)
+                conn.commit()
+            return _ok({'ok': True})
+
     # ── FIX-ACTIONS ───────────────────────────────────────────────────────────
     if method != 'POST':
         return _err(405, 'Метод не поддерживается')
