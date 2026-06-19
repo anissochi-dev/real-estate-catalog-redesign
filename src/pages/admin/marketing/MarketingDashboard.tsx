@@ -129,10 +129,14 @@ export default function MarketingDashboard() {
 
   useEffect(() => { loadAll(period); }, [period, loadAll]);
 
-  const totalViews = stats
-    ? Object.values(stats.views_by_source).reduce((acc, evts) =>
-        acc + Object.values(evts).reduce((a, v) => a + v, 0), 0)
-    : 0;
+  const totalViews = (() => {
+    const vbs = stats?.views_by_source;
+    if (!vbs || typeof vbs !== 'object') return 0;
+    return Object.values(vbs).reduce((acc, evts) => {
+      if (!evts || typeof evts !== 'object') return acc + (Number(evts) || 0);
+      return acc + Object.values(evts as Record<string, number>).reduce((a, v) => a + (Number(v) || 0), 0);
+    }, 0);
+  })();
 
   const highPriority = budget?.items.filter(i => i.priority === 'high') ?? [];
   const filteredBudget = budget?.items.filter(i =>
@@ -418,8 +422,8 @@ export default function MarketingDashboard() {
                     <p className="text-sm text-muted-foreground">Нет данных</p>
                   ) : (
                     <div className="space-y-3">
-                      {Object.entries(stats.views_by_source).map(([src, evts]) => {
-                        const total = Object.values(evts).reduce((a, v) => a + v, 0);
+                      {Object.entries(stats.views_by_source ?? {}).map(([src, evts]) => {
+                        const total = evts && typeof evts === 'object' ? Object.values(evts as Record<string, number>).reduce((a, v) => a + (Number(v) || 0), 0) : (Number(evts) || 0);
                         return (
                           <div key={src} className="flex items-center gap-2">
                             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${SOURCE_COLORS[src] || 'bg-muted text-muted-foreground'}`}>
