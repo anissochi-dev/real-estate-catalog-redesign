@@ -17,6 +17,7 @@ interface SeoPage {
   keywords?: string;
   og_image?: string;
   auto_generated?: boolean;
+  noindex?: boolean;
   updated_at?: string | null;
 }
 
@@ -26,25 +27,33 @@ const blank = (path: string): SeoPage => ({
 });
 
 const DEFAULT_PAGES: SeoPage[] = [
-  '/', '/catalog', '/map', '/favorites', '/compare', '/about', '/contacts',
+  '/', '/catalog', '/map', '/network-tenants', '/news',
+  '/favorites', '/compare', '/about', '/contacts',
 ].map(blank);
+
+const getToken = () => {
+  try { return localStorage.getItem('biznest_token') || ''; } catch { return ''; }
+};
 
 interface Props {
   token: string;
   gptOk: boolean;
 }
 
-export default function SeoPagesTab({ token, gptOk }: Props) {
-  // Унифицированный вызов SEO-API с авто-retry при 401
+export default function SeoPagesTab({ token: _token, gptOk }: Props) {
+  // Всегда берём свежий токен из localStorage при каждом запросе
   const seoCall = async (payload: Record<string, unknown>) => {
-    const doFetch = async () => fetch(seoUrl(token), {
-      method: 'POST',
-      headers: seoHeaders(token),
-      body: JSON.stringify({ ...payload, auth_token: token || undefined }),
-    });
+    const doFetch = async () => {
+      const tok = getToken() || _token;
+      return fetch(seoUrl(tok), {
+        method: 'POST',
+        headers: seoHeaders(tok),
+        body: JSON.stringify({ ...payload, auth_token: tok || undefined }),
+      });
+    };
     let r = await doFetch();
     if (r.status === 401) {
-      await new Promise(res => setTimeout(res, 150));
+      await new Promise(res => setTimeout(res, 200));
       r = await doFetch();
     }
     if (r.status === 401) return { data: null, error: 'Сессия истекла — войдите заново' };
@@ -69,12 +78,14 @@ export default function SeoPagesTab({ token, gptOk }: Props) {
     const { data, error: err } = await seoCall({ action: 'pages_list' });
     setLoading(false);
     if (err) { setError(err); return; }
-    if (data && Array.isArray(data.pages) && data.pages.length) {
+    if (data && Array.isArray(data.pages)) {
       const list = data.pages as SeoPage[];
+      // Мёрж: дефолтные пути обогащаем данными из БД
       const merged: SeoPage[] = DEFAULT_PAGES.map(def => {
         const found = list.find(p => p.path === def.path);
         return found ? { ...def, ...found } : def;
       });
+      // Добавляем страницы из БД которых нет в дефолтном списке
       const extra = list.filter(p => !DEFAULT_PAGES.some(d => d.path === p.path));
       setPages([...merged, ...extra]);
     }
@@ -168,9 +179,12 @@ export default function SeoPagesTab({ token, gptOk }: Props) {
                   size={13}
                   className={hasData ? 'text-emerald-500' : 'text-muted-foreground/40'}
                 />
-                <span className="truncate font-mono text-xs">{p.path}</span>
+                <span className="truncate font-mono text-xs flex-1">{p.path}</span>
+                {p.noindex && (
+                  <Icon name="EyeOff" size={11} className="text-muted-foreground/50 shrink-0" title="noindex" />
+                )}
                 {p.auto_generated && (
-                  <Icon name="Sparkles" size={11} className="text-amber-500 ml-auto" />
+                  <Icon name="Sparkles" size={11} className="text-amber-500 shrink-0" />
                 )}
               </button>
             );
