@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import Icon from '@/components/ui/icon';
-import PagesAdmin from './PagesAdmin';
 import SeoAdmin from './SeoAdmin';
 import SeoSiteTab from './seo/SeoSiteTab';
+import SeoPagesTab from './seo/SeoPagesTab';
 import SeoTechnicalTab from './seo/SeoTechnicalTab';
 import SeoAuditTab from './seo/SeoAuditTab';
 
@@ -11,7 +11,7 @@ type HubTab = 'site' | 'listings' | 'pages' | 'technical' | 'audit';
 const TABS: { id: HubTab; label: string; icon: string; desc: string }[] = [
   { id: 'site',      label: 'Сайт',        icon: 'Globe',       desc: 'Мета-теги, описание, ключевые слова' },
   { id: 'listings',  label: 'Объекты',     icon: 'Zap',         desc: 'ИИ-генерация, расписание, покрытие' },
-  { id: 'pages',     label: 'Страницы',    icon: 'FileText',    desc: 'CMS-страницы и мета для разделов' },
+  { id: 'pages',     label: 'Страницы',    icon: 'FileText',    desc: 'Мета-теги разделов и страниц сайта' },
   { id: 'technical', label: 'Технические', icon: 'FileCode2',   desc: 'Robots.txt, Sitemap, счётчики' },
   { id: 'audit',     label: 'Аудит',       icon: 'ShieldCheck', desc: 'SEO-здоровье сайта и проблемные объекты' },
 ];
@@ -56,7 +56,7 @@ export default function SeoHubAdmin() {
       {/* Контент */}
       {tab === 'site'      && <SeoSiteTab />}
       {tab === 'listings'  && <SeoAdmin />}
-      {tab === 'pages'     && <PagesAdmin />}
+      {tab === 'pages'     && <SeoPagesTab token="" gptOk={false} />}
       {tab === 'technical' && <SeoTechnicalTab />}
       {tab === 'audit'     && <SeoAuditTab />}
     </div>
