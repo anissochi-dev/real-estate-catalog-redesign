@@ -118,7 +118,17 @@ export default function MarketingDashboard() {
         req(`site_health&action=marketing_stats&period=${p}`),
         fetch(SMART_BUDGET_URL).then(r => r.json()).catch(() => null),
       ]);
-      if (statsData && !statsData.error) setStats(statsData);
+      if (statsData && !statsData.error) setStats({
+        ...statsData,
+        leads_by_source:  Array.isArray(statsData.leads_by_source)  ? statsData.leads_by_source  : [],
+        leads_by_status:  Array.isArray(statsData.leads_by_status)  ? statsData.leads_by_status  : [],
+        leads_timeline:   Array.isArray(statsData.leads_timeline)   ? statsData.leads_timeline   : [],
+        leads_by_budget:  Array.isArray(statsData.leads_by_budget)  ? statsData.leads_by_budget  : [],
+        top_listings:     Array.isArray(statsData.top_listings)     ? statsData.top_listings     : [],
+        listings_stats:   Array.isArray(statsData.listings_stats)   ? statsData.listings_stats   : [],
+        deals_by_source:  Array.isArray(statsData.deals_by_source)  ? statsData.deals_by_source  : [],
+        views_by_source:  statsData.views_by_source && typeof statsData.views_by_source === 'object' ? statsData.views_by_source : {},
+      });
       if (budgetData && !budgetData.error) setBudget(budgetData);
     } catch {
       toast.error('Ошибка загрузки данных');
