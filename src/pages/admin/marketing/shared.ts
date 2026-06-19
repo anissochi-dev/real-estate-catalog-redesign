@@ -1,20 +1,25 @@
 // ── Общие типы, константы и утилиты для раздела Маркетолог ───────────────────
 
 export interface MarketingStats {
+  period?: string;
+  period_days?: number | null;
   totals: {
     total_leads: number;
     leads_30d: number;
     total_views: number;
     active_listings: number;
     total_deals: number;
+    total_commission?: number;
+    won_deals?: number;
   };
   leads_by_source: { source: string; cnt: number }[];
   leads_by_status: { status: string; cnt: number }[];
   leads_timeline: { day: string; cnt: number }[];
+  leads_by_budget: { bucket: string; cnt: number }[];
   views_by_source: Record<string, Record<string, number>>;
-  top_listings: { id: number; title: string; category: string; deal: string; views_site: number; price: number }[];
+  top_listings: { id: number; title: string; category: string; deal: string; views_site: number; price: number; district?: string; leads_count?: number; days_on_market?: number }[];
   listings_stats: { category: string; deal: string; cnt: number; total_views: number; avg_views: number }[];
-  deals_by_source: { source: string; cnt: number; total_amount: number }[];
+  deals_by_source: { source: string; cnt: number; total_amount: number; total_commission?: number }[];
 }
 
 export interface PriceResult {

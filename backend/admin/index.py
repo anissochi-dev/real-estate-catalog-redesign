@@ -1576,34 +1576,41 @@ def _site_health(cur, conn, method, action, event, user):
 
     # ── МАРКЕТИНГОВАЯ АНАЛИТИКА ──────────────────────────────────────────────
     if action == 'marketing_stats':
-        # 1. Лиды по источникам
+        # Фильтр по периоду: 7 / 30 / 90 дней или 'all'
+        period_raw = params.get('period', '30')
+        period_days = int(period_raw) if period_raw in ('7', '30', '90') else None
+        period_cond = f"AND created_at >= NOW() - INTERVAL '{period_days} days'" if period_days else ''
+        period_label = f'{period_days} дней' if period_days else 'всё время'
+
+        # 1. Лиды по источникам (с учётом периода)
         cur.execute(f"""
             SELECT COALESCE(NULLIF(source,''), 'Не указан') AS source,
                    COUNT(*) AS cnt
-            FROM {SCHEMA}.leads
+            FROM {SCHEMA}.leads WHERE 1=1 {period_cond}
             GROUP BY 1 ORDER BY cnt DESC
         """)
         leads_by_source = [dict(r) for r in cur.fetchall()]
 
-        # 2. Лиды по статусам
+        # 2. Лиды по статусам (с учётом периода)
         cur.execute(f"""
             SELECT COALESCE(NULLIF(status,''), 'Не указан') AS status,
                    COUNT(*) AS cnt
-            FROM {SCHEMA}.leads
+            FROM {SCHEMA}.leads WHERE 1=1 {period_cond}
             GROUP BY 1 ORDER BY cnt DESC
         """)
         leads_by_status = [dict(r) for r in cur.fetchall()]
 
-        # 3. Лиды за последние 30 дней (по дням)
+        # 3. Динамика лидов по дням за период
+        timeline_days = period_days or 30
         cur.execute(f"""
             SELECT DATE(created_at) AS day, COUNT(*) AS cnt
             FROM {SCHEMA}.leads
-            WHERE created_at >= NOW() - INTERVAL '30 days'
+            WHERE created_at >= NOW() - INTERVAL '{timeline_days} days'
             GROUP BY 1 ORDER BY 1
         """)
         leads_timeline = [{'day': str(r['day']), 'cnt': r['cnt']} for r in cur.fetchall()]
 
-        # 4. Статистика просмотров по источникам
+        # 4. Статистика просмотров по источникам (всё время — нет дат в listing_stats)
         cur.execute(f"""
             SELECT COALESCE(NULLIF(source,''), 'site') AS source,
                    event_type,
@@ -1621,14 +1628,21 @@ def _site_health(cur, conn, method, action, event, user):
 
         # 5. Топ объектов по просмотрам
         cur.execute(f"""
-            SELECT id, title, category, deal, views_site, price
+            SELECT id, title, category, deal, views_site, price, district,
+                   leads_count, days_on_market
             FROM {SCHEMA}.listings
             WHERE status = 'active' AND views_site > 0
             ORDER BY views_site DESC LIMIT 10
         """)
-        top_listings = [dict(r) for r in cur.fetchall()]
+        top_listings = []
+        for r in cur.fetchall():
+            row = dict(r)
+            # days_on_market может быть вычислен если нет колонки
+            if row.get('days_on_market') is None:
+                row['days_on_market'] = 0
+            top_listings.append(row)
 
-        # 6. Статистика объектов по категориям (просмотры + количество)
+        # 6. Статистика объектов по категориям
         cur.execute(f"""
             SELECT category, deal,
                    COUNT(*) AS cnt,
@@ -1640,32 +1654,55 @@ def _site_health(cur, conn, method, action, event, user):
         """)
         listings_stats = [dict(r) for r in cur.fetchall()]
 
-        # 7. Сделки CRM по источникам
+        # 7. Сделки CRM по источникам (с учётом периода)
+        deal_period_cond = f"AND created_at >= NOW() - INTERVAL '{period_days} days'" if period_days else ''
         cur.execute(f"""
             SELECT COALESCE(NULLIF(source,''), 'Не указан') AS source,
                    COUNT(*) AS cnt,
-                   COALESCE(SUM(amount), 0) AS total_amount
-            FROM {SCHEMA}.crm_deals
+                   COALESCE(SUM(amount), 0) AS total_amount,
+                   COALESCE(SUM(commission), 0) AS total_commission
+            FROM {SCHEMA}.crm_deals WHERE 1=1 {deal_period_cond}
             GROUP BY 1 ORDER BY cnt DESC
         """)
         deals_by_source = [dict(r) for r in cur.fetchall()]
 
-        # 8. Общие итоги
+        # 8. Лиды по бюджету (спрос клиентов)
         cur.execute(f"""
             SELECT
-                (SELECT COUNT(*) FROM {SCHEMA}.leads) AS total_leads,
+                CASE
+                    WHEN budget IS NULL THEN 'Не указан'
+                    WHEN budget < 5000000 THEN 'до 5 млн'
+                    WHEN budget < 15000000 THEN '5–15 млн'
+                    WHEN budget < 50000000 THEN '15–50 млн'
+                    ELSE 'от 50 млн'
+                END AS bucket,
+                COUNT(*) AS cnt
+            FROM {SCHEMA}.leads WHERE 1=1 {period_cond}
+            GROUP BY 1 ORDER BY cnt DESC
+        """)
+        leads_by_budget = [dict(r) for r in cur.fetchall()]
+
+        # 9. Общие итоги (часть с периодом, часть — всегда)
+        cur.execute(f"""
+            SELECT
+                (SELECT COUNT(*) FROM {SCHEMA}.leads WHERE 1=1 {period_cond}) AS total_leads,
                 (SELECT COUNT(*) FROM {SCHEMA}.leads WHERE created_at >= NOW() - INTERVAL '30 days') AS leads_30d,
                 (SELECT COALESCE(SUM(views_site),0) FROM {SCHEMA}.listings WHERE status='active') AS total_views,
                 (SELECT COUNT(*) FROM {SCHEMA}.listings WHERE status='active') AS active_listings,
-                (SELECT COUNT(*) FROM {SCHEMA}.crm_deals) AS total_deals
+                (SELECT COUNT(*) FROM {SCHEMA}.crm_deals WHERE 1=1 {deal_period_cond}) AS total_deals,
+                (SELECT COALESCE(SUM(commission),0) FROM {SCHEMA}.crm_deals WHERE 1=1 {deal_period_cond}) AS total_commission,
+                (SELECT COUNT(*) FROM {SCHEMA}.crm_deals WHERE is_win = TRUE {deal_period_cond.replace('AND','AND')}) AS won_deals
         """)
         totals = dict(cur.fetchone())
 
         return _ok({
+            'period': period_label,
+            'period_days': period_days,
             'totals': totals,
             'leads_by_source': leads_by_source,
             'leads_by_status': leads_by_status,
             'leads_timeline': leads_timeline,
+            'leads_by_budget': leads_by_budget,
             'views_by_source': views_by_source,
             'top_listings': top_listings,
             'listings_stats': listings_stats,
