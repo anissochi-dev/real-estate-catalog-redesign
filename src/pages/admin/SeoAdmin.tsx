@@ -10,7 +10,7 @@ import SeoRunTab from './seo/SeoRunTab';
 import SeoScheduleTab from './seo/SeoScheduleTab';
 import SeoHistoryTab from './seo/SeoHistoryTab';
 import SeoPagesTab from './seo/SeoPagesTab';
-import SeoTechnicalTab from './seo/SeoTechnicalTab';
+
 
 export default function SeoAdmin() {
   const { refreshToken } = useAuth();
@@ -28,7 +28,7 @@ export default function SeoAdmin() {
   const [previewMode, setPreviewMode] = useState(false);
   const [listingId, setListingId] = useState('');
   const [lastRun, setLastRun] = useState<{ processed: number; errors: number; total: number; dry_run: boolean } | null>(null);
-  const [activeTab, setActiveTab] = useState<'run' | 'pages' | 'files' | 'schedule' | 'history'>('run');
+  const [activeTab, setActiveTab] = useState<'run' | 'pages' | 'schedule' | 'history'>('run');
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [historyLoading, setHistoryLoading] = useState(false);
 
@@ -140,8 +140,7 @@ export default function SeoAdmin() {
           Автоматическая SEO-оптимизация
         </h2>
         <p className="text-sm text-muted-foreground">
-          ИИ генерирует Title и Description для объектов каталога и страниц сайта. Управление robots.txt и sitemap.xml,
-          ручной запуск и расписание.
+          ИИ генерирует Title и Description для объектов каталога и страниц сайта. Ручной запуск и расписание.
         </p>
       </div>
 
@@ -160,7 +159,6 @@ export default function SeoAdmin() {
           {([
             { id: 'run', label: 'Объекты', icon: 'Zap' },
             { id: 'pages', label: 'Страницы', icon: 'FileText' },
-            { id: 'files', label: 'Файлы', icon: 'FileCode2' },
             { id: 'schedule', label: 'Расписание', icon: 'Clock' },
             { id: 'history', label: 'История', icon: 'History' },
           ] as const).map(tab => (
@@ -200,10 +198,6 @@ export default function SeoAdmin() {
 
           {activeTab === 'pages' && (
             <SeoPagesTab token={refreshToken() || ''} gptOk={gptOk} />
-          )}
-
-          {activeTab === 'files' && (
-            <SeoTechnicalTab />
           )}
 
           {activeTab === 'schedule' && (
