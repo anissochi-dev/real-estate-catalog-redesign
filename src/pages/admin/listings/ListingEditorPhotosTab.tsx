@@ -15,20 +15,25 @@ export default function ListingEditorPhotosTab({ editing, setEditing, photos, se
 
   return (
     <div className="space-y-4">
-      <div {...errWrap('photos')}>
-        <label className={`text-sm font-semibold block mb-2 ${errors.photos ? 'text-red-600' : ''}`}>
-          Фотографии *{errors.photos && <span className="ml-2 text-xs font-normal text-red-500">Добавьте хотя бы одно фото</span>}
-        </label>
-        <ImageUploader
-          value={photos}
-          onChange={p => { setPhotos(p); setErrors(v => ({ ...v, photos: false })); }}
-          folder="photos"
-          multiple
-          applyWatermark={!!editing.use_watermark}
+
+      {/* 1. Видео — вверху */}
+      <div>
+        <label className="text-sm font-semibold block mb-1">Видео (VK Видео или RuTube URL)</label>
+        <input
+          className="w-full px-3 py-2 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+          placeholder="https://vk.com/video... или https://rutube.ru/video/..."
+          value={editing.video_url || ''}
+          onChange={e => setEditing({ ...editing, video_url: e.target.value })}
         />
+        {editing.video_url && (
+          <div className="text-xs text-muted-foreground mt-1">
+            Тип: {detectVideoType(editing.video_url) === 'vk' ? 'VK Видео' : detectVideoType(editing.video_url) === 'rutube' ? 'RuTube' : 'Другое'}
+          </div>
+        )}
       </div>
 
-      <div className="border-t border-border pt-3 space-y-2">
+      {/* 2. Метки и оформление */}
+      <div className="border border-border rounded-xl px-4 py-3 space-y-2">
         <div className="text-sm font-semibold">Метки и оформление</div>
         <div className="flex flex-wrap gap-x-4 gap-y-2">
           <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -60,18 +65,20 @@ export default function ListingEditorPhotosTab({ editing, setEditing, photos, se
         <div className="text-xs text-muted-foreground">Эксклюзив и Срочно отображаются бейджами на фото в каталоге.</div>
       </div>
 
-      <div className="border-t border-border pt-3">
-        <label className="text-sm font-semibold block mb-1">Видео (VK Видео или RuTube URL)</label>
-        <input className="w-full px-3 py-2 border rounded-lg"
-          placeholder="https://vk.com/video... или https://rutube.ru/video/..."
-          value={editing.video_url || ''}
-          onChange={e => setEditing({ ...editing, video_url: e.target.value })} />
-        {editing.video_url && (
-          <div className="text-xs text-muted-foreground mt-1">
-            Тип: {detectVideoType(editing.video_url) === 'vk' ? 'VK Видео' : detectVideoType(editing.video_url) === 'rutube' ? 'RuTube' : 'Другое'}
-          </div>
-        )}
+      {/* 3. Фотографии — внизу */}
+      <div {...errWrap('photos')}>
+        <label className={`text-sm font-semibold block mb-2 ${errors.photos ? 'text-red-600' : ''}`}>
+          Фотографии *{errors.photos && <span className="ml-2 text-xs font-normal text-red-500">Добавьте хотя бы одно фото</span>}
+        </label>
+        <ImageUploader
+          value={photos}
+          onChange={p => { setPhotos(p); setErrors(v => ({ ...v, photos: false })); }}
+          folder="photos"
+          multiple
+          applyWatermark={!!editing.use_watermark}
+        />
       </div>
+
     </div>
   );
 }
