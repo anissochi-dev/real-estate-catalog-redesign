@@ -33,57 +33,40 @@ export default function VBRetrainSchedule({
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1">Время запуска (МСК)</label>
-              <div className="flex items-center gap-1.5">
-                <select
-                  value={schedule.hour}
-                  onChange={e => onScheduleChange({ ...schedule, hour: +e.target.value })}
-                  className="px-3 py-2 border rounded-lg text-sm w-20"
-                >
-                  {Array.from({ length: 24 }, (_, i) => (
-                    <option key={i} value={i}>{String(i).padStart(2, '0')}</option>
-                  ))}
-                </select>
-                <span className="text-muted-foreground font-bold">:</span>
-                <select
-                  value={schedule.minute}
-                  onChange={e => onScheduleChange({ ...schedule, minute: +e.target.value })}
-                  className="px-3 py-2 border rounded-lg text-sm w-20"
-                >
-                  {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map(m => (
-                    <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Источники</div>
-              <div className="flex flex-wrap gap-2">
-                {TRAINING_SOURCES.map(src => {
-                  const active = schedule.sources.includes(src.id);
-                  return (
-                    <button
-                      key={src.id}
-                      type="button"
-                      onClick={() => onScheduleChange({
-                        ...schedule,
-                        sources: active
-                          ? schedule.sources.filter(x => x !== src.id)
-                          : [...schedule.sources, src.id],
-                      })}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors ${active ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30' : 'bg-muted/40 text-muted-foreground border-border'}`}
-                      title={src.hint}
-                    >
-                      {src.label}
-                    </button>
-                  );
-                })}
-              </div>
+          {/* Режим — фиксированный */}
+          <div className="flex items-center gap-2 text-sm bg-brand-blue/5 border border-brand-blue/20 rounded-xl px-4 py-3">
+            <Icon name="RefreshCw" size={15} className="text-brand-blue shrink-0" />
+            <span className="text-foreground font-semibold">Каждые 12 часов</span>
+            <span className="text-muted-foreground text-xs ml-1">— автоматически, без привязки к конкретному времени</span>
+          </div>
+
+          {/* Источники */}
+          <div>
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Источники для обучения</div>
+            <div className="flex flex-wrap gap-2">
+              {TRAINING_SOURCES.map(src => {
+                const active = schedule.sources.includes(src.id);
+                return (
+                  <button
+                    key={src.id}
+                    type="button"
+                    onClick={() => onScheduleChange({
+                      ...schedule,
+                      sources: active
+                        ? schedule.sources.filter(x => x !== src.id)
+                        : [...schedule.sources, src.id],
+                    })}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors ${active ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30' : 'bg-muted/40 text-muted-foreground border-border'}`}
+                    title={src.hint}
+                  >
+                    {src.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
+          {/* Статус последнего запуска */}
           <div className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2 flex items-center gap-2">
             <Icon name={schedule.last_at ? 'CheckCircle2' : 'Clock'} size={13} className={schedule.last_at ? 'text-emerald-500 shrink-0' : 'text-muted-foreground shrink-0'} />
             {schedule.last_at
@@ -98,7 +81,7 @@ export default function VBRetrainSchedule({
             className="btn-blue text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-60"
           >
             <Icon name={scheduleSaving ? 'Loader2' : 'Save'} size={14} className={scheduleSaving ? 'animate-spin' : ''} />
-            {scheduleSaving ? 'Сохранение…' : 'Сохранить расписание'}
+            {scheduleSaving ? 'Сохранение…' : 'Сохранить'}
           </button>
         </div>
       )}

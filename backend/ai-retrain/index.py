@@ -74,11 +74,12 @@ def _cron_check(cur, conn) -> dict:
     """Обрабатывает ОДИН источник за вызов (укладывается в 30 сек таймаут).
     Прогресс сохраняется в vb_retrain_last_status.
     Каждый последующий cron-вызов берёт следующий источник по очереди.
-    Когда все источники обработаны — выставляет vb_retrain_last_at = today."""
+    Когда все источники обработаны — выставляет vb_retrain_last_at = now.
+    Режим: каждые 12 часов (не привязан к конкретному времени)."""
     import datetime
 
     cur.execute(
-        f"SELECT vb_retrain_enabled, vb_retrain_hour, vb_retrain_minute, vb_retrain_sources, "
+        f"SELECT vb_retrain_enabled, vb_retrain_sources, "
         f"vb_retrain_last_at, vb_retrain_last_status "
         f"FROM {SCHEMA}.settings ORDER BY id LIMIT 1"
     )
@@ -87,8 +88,6 @@ def _cron_check(cur, conn) -> dict:
         return _ok({'skipped': True, 'reason': 'disabled'})
 
     now = datetime.datetime.utcnow()
-    target_hour = int(s.get('vb_retrain_hour') or 3)
-    target_minute = int(s.get('vb_retrain_minute') or 0)
     last_at = s.get('vb_retrain_last_at')
 
     # Читаем прогресс из last_status — ожидаем dict с полем in_progress (только от cron)
@@ -106,17 +105,17 @@ def _cron_check(cur, conn) -> dict:
     in_progress = is_cron_progress and bool(progress.get('in_progress'))
 
     if not in_progress:
-        # Не начато — проверяем что пора запускать
-        if now.hour != target_hour:
-            return _ok({'skipped': True, 'reason': f'not time, target={target_hour:02d}:{target_minute:02d}, now={now.hour:02d}:{now.minute:02d}'})
-        if abs(now.minute - target_minute) > 30:  # широкое окно — 30 минут
-            return _ok({'skipped': True, 'reason': f'minute out of window, target={target_minute}, now={now.minute}'})
+        # Не начато — проверяем что прошло не менее 12 часов с последнего запуска
         if last_at and is_cron_progress and progress.get('done'):
-            # Считаем "уже сделано сегодня" только если последний cron-цикл был завершён сегодня
             try:
-                last_date = last_at.date() if hasattr(last_at, 'date') else None
-                if last_date and last_date >= now.date():
-                    return _ok({'skipped': True, 'reason': 'already done today'})
+                if hasattr(last_at, 'tzinfo') and last_at.tzinfo is not None:
+                    import datetime as dt2
+                    last_naive = last_at.replace(tzinfo=None)
+                else:
+                    last_naive = last_at
+                hours_since = (now - last_naive).total_seconds() / 3600
+                if hours_since < 12:
+                    return _ok({'skipped': True, 'reason': f'too soon, {hours_since:.1f}h since last run (need 12h)'})
             except Exception:
                 pass
 
