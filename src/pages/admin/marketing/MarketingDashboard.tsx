@@ -120,6 +120,7 @@ export default function MarketingDashboard() {
       ]);
       if (statsData && !statsData.error) setStats({
         ...statsData,
+        totals: statsData.totals ?? { total_leads: 0, leads_30d: 0, total_views: 0, active_listings: 0, total_deals: 0, total_commission: 0, won_deals: 0 },
         leads_by_source:  Array.isArray(statsData.leads_by_source)  ? statsData.leads_by_source  : [],
         leads_by_status:  Array.isArray(statsData.leads_by_status)  ? statsData.leads_by_status  : [],
         leads_timeline:   Array.isArray(statsData.leads_timeline)   ? statsData.leads_timeline   : [],
