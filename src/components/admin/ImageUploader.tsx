@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { uploadFileEx, getOriginalPhotoUrl, getToken, REMOVE_WM_URL } from '@/lib/adminApi';
 import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
@@ -149,8 +149,69 @@ export default function ImageUploader({
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
-  // Состояния удаления ВЗ: { [i]: 'idle' | 'loading' | 'done' | 'error' }
   const [wmState, setWmState] = useState<Record<number, string>>({});
+
+  // ── Pointer-drag (мышь + тач) ──────────────────────────────────────────────
+  const pointerDragIdx = useRef<number | null>(null);
+  const pointerStartPos = useRef<{ x: number; y: number } | null>(null);
+  const pointerMoved = useRef(false);
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  const getCardIdxAt = (x: number, y: number): number | null => {
+    if (!gridRef.current) return null;
+    const cards = gridRef.current.querySelectorAll<HTMLElement>('[data-card-idx]');
+    for (const card of cards) {
+      const r = card.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+        return parseInt(card.dataset.cardIdx!);
+      }
+    }
+    return null;
+  };
+
+  const onPointerDown = useCallback((e: React.PointerEvent, i: number) => {
+    if (!multiple) return;
+    // Не перехватываем клики по кнопкам
+    if ((e.target as HTMLElement).closest('button')) return;
+    pointerDragIdx.current = i;
+    pointerStartPos.current = { x: e.clientX, y: e.clientY };
+    pointerMoved.current = false;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }, [multiple]);
+
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    if (pointerDragIdx.current === null || !pointerStartPos.current) return;
+    const dx = Math.abs(e.clientX - pointerStartPos.current.x);
+    const dy = Math.abs(e.clientY - pointerStartPos.current.y);
+    if (!pointerMoved.current && dx < 5 && dy < 5) return;
+    pointerMoved.current = true;
+    if (dragIdx !== pointerDragIdx.current) setDragIdx(pointerDragIdx.current);
+    const overIdx = getCardIdxAt(e.clientX, e.clientY);
+    setDragOverIdx(overIdx !== pointerDragIdx.current ? overIdx : null);
+  }, [dragIdx]);
+
+  // Реордер через ref на value (избегаем stale closure)
+  const valueRef = useRef(value);
+  useEffect(() => { valueRef.current = value; }, [value]);
+
+  const onPointerUpFinal = useCallback((e: React.PointerEvent) => {
+    if (pointerDragIdx.current === null) return;
+    if (pointerMoved.current) {
+      const fromIdx = pointerDragIdx.current;
+      const overIdx = getCardIdxAt(e.clientX, e.clientY);
+      if (overIdx !== null && overIdx !== fromIdx) {
+        const next = [...valueRef.current];
+        const [moved] = next.splice(fromIdx, 1);
+        next.splice(overIdx, 0, moved);
+        onChange(next);
+      }
+    }
+    setDragIdx(null);
+    setDragOverIdx(null);
+    pointerDragIdx.current = null;
+    pointerMoved.current = false;
+    pointerStartPos.current = null;
+  }, [onChange]);
 
   const shouldCompress = compress ?? (folder === 'photos');
 
@@ -222,35 +283,6 @@ export default function ImageUploader({
 
   const remove = (i: number) => onChange(value.filter((_, idx) => idx !== i));
 
-  const move = (i: number, dir: -1 | 1) => {
-    const next = [...value];
-    const j = i + dir;
-    if (j < 0 || j >= next.length) return;
-    [next[i], next[j]] = [next[j], next[i]];
-    onChange(next);
-  };
-
-  const handleCardDragStart = (e: React.DragEvent, i: number) => {
-    setDragIdx(i);
-    e.dataTransfer.effectAllowed = 'move';
-  };
-  const handleCardDragOver = (e: React.DragEvent, i: number) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    setDragOverIdx(i);
-  };
-  const handleCardDrop = (e: React.DragEvent, i: number) => {
-    e.preventDefault();
-    if (dragIdx === null || dragIdx === i) { setDragIdx(null); setDragOverIdx(null); return; }
-    const next = [...value];
-    const [moved] = next.splice(dragIdx, 1);
-    next.splice(i, 0, moved);
-    onChange(next);
-    setDragIdx(null);
-    setDragOverIdx(null);
-  };
-  const handleCardDragEnd = () => { setDragIdx(null); setDragOverIdx(null); };
-
   return (
     <div className={className}>
       {/* ── Зона загрузки (уменьшенная высота) ── */}
@@ -293,32 +325,39 @@ export default function ImageUploader({
         )}
       </div>
 
-      {/* ── Сетка фото (2x крупнее: 3 колонки) ── */}
+      {/* ── Сетка фото ── */}
       {value.length > 0 && (
         <>
           {multiple && (
             <div className="text-[10px] text-muted-foreground mt-2 flex items-center gap-1">
               <Icon name="GripVertical" size={11} />
-              Перетащите фото для изменения порядка. Первое фото — главное.
+              Удерживайте и перетащите фото для изменения порядка. Первое фото — главное.
             </div>
           )}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-2">
+          <div
+            ref={gridRef}
+            className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-2"
+            style={{ touchAction: multiple ? 'none' : 'auto' }}
+          >
             {value.map((url, i) => {
               const wm = wmState[i] || 'idle';
               const hasOwnWm = /_wm\.(jpe?g|png|webp)$/i.test(url);
+              const isDragging = dragIdx === i;
+              const isOver = dragOverIdx === i;
               return (
                 <div
                   key={url + i}
-                  draggable={multiple}
-                  onDragStart={e => handleCardDragStart(e, i)}
-                  onDragOver={e => handleCardDragOver(e, i)}
-                  onDrop={e => handleCardDrop(e, i)}
-                  onDragEnd={handleCardDragEnd}
-                  className={`rounded-xl border-2 bg-white transition-all overflow-hidden ${
-                    dragIdx === i
-                      ? 'opacity-40 scale-95 border-brand-blue'
-                      : dragOverIdx === i
-                      ? 'border-brand-blue ring-2 ring-brand-blue/30 scale-[1.02]'
+                  data-card-idx={i}
+                  data-url={url}
+                  onPointerDown={e => onPointerDown(e, i)}
+                  onPointerMove={onPointerMove}
+                  onPointerUp={onPointerUpFinal}
+                  onPointerCancel={onPointerUpFinal}
+                  className={`rounded-xl border-2 bg-white overflow-hidden select-none transition-all duration-150 ${
+                    isDragging
+                      ? 'opacity-40 scale-95 border-brand-blue shadow-lg z-10'
+                      : isOver
+                      ? 'border-brand-blue ring-2 ring-brand-blue/30 scale-[1.03] shadow-md'
                       : 'border-border hover:border-brand-blue/40'
                   } ${multiple ? 'cursor-grab active:cursor-grabbing' : ''}`}
                 >
@@ -327,23 +366,30 @@ export default function ImageUploader({
                     <img
                       src={url}
                       alt=""
-                      className="w-full h-40 object-cover"
+                      draggable={false}
+                      className="w-full h-40 object-cover pointer-events-none"
                     />
+                    {/* Иконка перетаскивания */}
+                    {multiple && (
+                      <div className="absolute top-2 left-2 w-6 h-6 rounded-md bg-black/40 flex items-center justify-center">
+                        <Icon name="GripVertical" size={13} className="text-white" />
+                      </div>
+                    )}
                     {/* Бейдж «Главная» */}
                     {i === 0 && (
-                      <div className="absolute top-2 left-2 text-[10px] bg-brand-blue text-white px-2 py-0.5 rounded-full font-semibold shadow">
+                      <div className="absolute bottom-2 left-2 text-[10px] bg-brand-blue text-white px-2 py-0.5 rounded-full font-semibold shadow">
                         Главная
                       </div>
                     )}
-                    {/* Номер */}
                     {i > 0 && (
-                      <div className="absolute top-2 left-2 text-[10px] bg-black/50 text-white px-1.5 py-0.5 rounded-full font-semibold">
+                      <div className="absolute bottom-2 left-2 text-[10px] bg-black/50 text-white px-1.5 py-0.5 rounded-full font-semibold">
                         {i + 1}
                       </div>
                     )}
                     {/* Кнопка лупы */}
                     <button
                       type="button"
+                      onPointerDown={e => e.stopPropagation()}
                       onClick={e => { e.stopPropagation(); setLightboxIdx(i); }}
                       className="absolute top-2 right-2 w-7 h-7 rounded-lg bg-black/50 hover:bg-black/80 flex items-center justify-center text-white transition"
                       title="Увеличить"
@@ -352,50 +398,52 @@ export default function ImageUploader({
                     </button>
                   </div>
 
-                  {/* ── Панель кнопок под фото ── */}
+                  {/* ── Панель под фото ── */}
                   <div className="px-2 py-2 space-y-1.5 bg-muted/30 border-t border-border">
 
-                    {/* Строка 1: порядок + удалить */}
-                    {multiple && (
-                      <div className="flex items-center gap-1 justify-between">
-                        <div className="flex items-center gap-1">
-                          <button type="button" onClick={e => { e.stopPropagation(); move(i, -1); }}
-                            disabled={i === 0}
-                            className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition disabled:opacity-30" title="Переместить влево">
-                            <Icon name="ChevronLeft" size={13} />
-                          </button>
-                          <button type="button" onClick={e => { e.stopPropagation(); move(i, 1); }}
-                            disabled={i === value.length - 1}
-                            className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition disabled:opacity-30" title="Переместить вправо">
-                            <Icon name="ChevronRight" size={13} />
-                          </button>
-                        </div>
-                        <button type="button" onClick={e => { e.stopPropagation(); remove(i); }}
-                          className="w-6 h-6 rounded flex items-center justify-center text-red-500 hover:bg-red-50 transition" title="Удалить фото">
-                          <Icon name="Trash2" size={13} />
-                        </button>
-                      </div>
-                    )}
+                    {/* Удалить */}
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onPointerDown={e => e.stopPropagation()}
+                        onClick={e => { e.stopPropagation(); remove(i); }}
+                        className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 transition"
+                        title="Удалить фото"
+                      >
+                        <Icon name="Trash2" size={11} /> Удалить
+                      </button>
+                    </div>
 
-                    {/* Строка 2: скачать */}
+                    {/* Скачать */}
                     {allowDownload && (
                       <div className="flex items-center gap-1">
-                        <button type="button" onClick={e => { e.stopPropagation(); download(url); }}
-                          className="flex-1 inline-flex items-center justify-center gap-1 text-[10px] font-semibold px-2 py-1 rounded bg-white border border-border hover:bg-muted/60 transition" title="Скачать фото">
+                        <button
+                          type="button"
+                          onPointerDown={e => e.stopPropagation()}
+                          onClick={e => { e.stopPropagation(); download(url); }}
+                          className="flex-1 inline-flex items-center justify-center gap-1 text-[10px] font-semibold px-2 py-1 rounded bg-white border border-border hover:bg-muted/60 transition"
+                          title="Скачать фото"
+                        >
                           <Icon name="Download" size={11} /> Скачать
                         </button>
                         {hasOwnWm && (
-                          <button type="button" onClick={e => { e.stopPropagation(); download(url, { original: true }); }}
-                            className="flex-1 inline-flex items-center justify-center gap-1 text-[10px] font-semibold px-2 py-1 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition" title="Скачать без нашего водяного знака">
+                          <button
+                            type="button"
+                            onPointerDown={e => e.stopPropagation()}
+                            onClick={e => { e.stopPropagation(); download(url, { original: true }); }}
+                            className="flex-1 inline-flex items-center justify-center gap-1 text-[10px] font-semibold px-2 py-1 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition"
+                            title="Скачать без нашего водяного знака"
+                          >
                             <Icon name="DownloadCloud" size={11} /> Без ВЗ
                           </button>
                         )}
                       </div>
                     )}
 
-                    {/* Строка 3: удалить чужой водяной знак */}
+                    {/* Удалить чужой ВЗ */}
                     <button
                       type="button"
+                      onPointerDown={e => e.stopPropagation()}
                       onClick={e => { e.stopPropagation(); if (wm === 'idle') removeWatermark(i, url); }}
                       disabled={wm === 'loading'}
                       className={`w-full inline-flex items-center justify-center gap-1.5 text-[10px] font-semibold px-2 py-1.5 rounded border transition ${
