@@ -4,9 +4,8 @@ import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
 import { getToken } from '@/lib/adminApi';
 
-const ADMIN_URL = 'https://functions.poehali.dev/aeccc0fe-9c55-4933-b292-432cec9cc09d';
-
-// ─────────────────────────────────────────────────────────────────────────────
+const ADMIN_URL   = 'https://functions.poehali.dev/aeccc0fe-9c55-4933-b292-432cec9cc09d';
+const TRACKER_URL = 'https://functions.poehali.dev/fcd92c6e-e089-41e3-93e9-5f05dcb73e47';
 
 const UTM_SOURCES  = ['avito', 'cian', 'yandex', 'google', 'vk', 'telegram', 'email', 'sms', 'instagram'];
 const UTM_MEDIUMS  = ['cpc', 'organic', 'social', 'email', 'referral', 'banner', 'sms'];
@@ -16,6 +15,14 @@ const SOURCE_ICONS: Record<string, string> = {
   avito: '🟢', cian: '🔵', yandex: '🔴', google: '🟡',
   vk: '🔵', telegram: '🔷', email: '📧', sms: '💬', instagram: '🟣',
 };
+
+type Period = 'today' | '30' | '90' | 'all';
+const PERIODS: { value: Period; label: string }[] = [
+  { value: 'today', label: 'Сегодня' },
+  { value: '30',    label: '30 дней' },
+  { value: '90',    label: '90 дней' },
+  { value: 'all',   label: 'Всё время' },
+];
 
 interface UtmLink {
   id: number;
@@ -29,16 +36,21 @@ interface UtmLink {
   listing_id: number | null;
   listing_title: string | null;
   label: string | null;
-  clicks: number;
+  clicks_period: number;
+  clicks_total: number;
   created_by_name: string | null;
   created_at: string | null;
 }
 
 interface SourceStat {
   utm_source: string;
-  cnt: number;
-  total_clicks: number;
+  links_count: number;
+  clicks_period: number;
+  clicks_total: number;
 }
+
+interface Campaign { utm_campaign: string; clicks_period: number }
+interface TimelinePoint { day: string; cnt: number }
 
 function adminUrl(resource: string, qs: Record<string, string | number> = {}) {
   const p = new URLSearchParams({ resource, ...Object.fromEntries(Object.entries(qs).map(([k, v]) => [k, String(v)])) });
@@ -46,12 +58,15 @@ function adminUrl(resource: string, qs: Record<string, string | number> = {}) {
   return `${ADMIN_URL}?${p}`;
 }
 
+function trackerUrl(qs: Record<string, string> = {}) {
+  const p = new URLSearchParams({ ...qs, auth_token: getToken() });
+  return `${TRACKER_URL}?${p}`;
+}
+
 function fmtDate(s: string | null) {
   if (!s) return '—';
   return new Date(s).toLocaleString('ru', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 type View = 'builder' | 'history' | 'stats';
 
@@ -60,24 +75,28 @@ export default function UtmTab() {
   const siteBase = settings.site_url?.replace(/\/$/, '') || '';
 
   // ── Конструктор ──
-  const [base, setBase]       = useState(siteBase + '/');
-  const [source, setSource]   = useState('avito');
-  const [medium, setMedium]   = useState('cpc');
+  const [base, setBase]         = useState(siteBase + '/');
+  const [source, setSource]     = useState('avito');
+  const [medium, setMedium]     = useState('cpc');
   const [campaign, setCampaign] = useState('');
-  const [content, setContent] = useState('');
-  const [term, setTerm]       = useState('');
-  const [label, setLabel]     = useState('');
-  const [listingId, setListingId] = useState('');
+  const [content, setContent]   = useState('');
+  const [term, setTerm]         = useState('');
+  const [label, setLabel]       = useState('');
+  const [listingId, setListingId]     = useState('');
   const [listingTitle, setListingTitle] = useState('');
   const [listingLoading, setListingLoading] = useState(false);
-  const [copied, setCopied]   = useState(false);
-  const [saving, setSaving]   = useState(false);
+  const [copied, setCopied]     = useState(false);
+  const [saving, setSaving]     = useState(false);
 
-  // ── История / статистика ──
-  const [view, setView]   = useState<View>('builder');
-  const [links, setLinks] = useState<UtmLink[]>([]);
-  const [stats, setStats] = useState<SourceStat[]>([]);
-  const [loadingLinks, setLoadingLinks] = useState(false);
+  // ── Данные ──
+  const [view, setView]     = useState<View>('builder');
+  const [period, setPeriod] = useState<Period>('30');
+  const [links, setLinks]   = useState<UtmLink[]>([]);
+  const [sources, setSources]     = useState<SourceStat[]>([]);
+  const [timeline, setTimeline]   = useState<TimelinePoint[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [totalClicks, setTotalClicks] = useState(0);
+  const [loadingData, setLoadingData] = useState(false);
   const [filterSource, setFilterSource] = useState('');
   const [copiedId, setCopiedId] = useState<number | null>(null);
 
@@ -104,8 +123,9 @@ export default function UtmTab() {
       const obj = r.listing || r;
       if (obj?.id) {
         setListingTitle(obj.title || `Объект #${obj.id}`);
-        setBase(siteBase + '/listing/' + obj.slug || siteBase + '/l/' + obj.id);
-        if (!label) setLabel(obj.title?.slice(0, 40) || '');
+        const slug = obj.slug || obj.id;
+        setBase(siteBase + '/listing/' + slug);
+        if (!label) setLabel((obj.title || '').slice(0, 40));
       } else {
         toast.error('Объект не найден');
       }
@@ -113,24 +133,26 @@ export default function UtmTab() {
     finally { setListingLoading(false); }
   }, [listingId, siteBase, label]);
 
-  // ── Загрузить историю ──
-  const loadLinks = useCallback(async () => {
-    setLoadingLinks(true);
+  // ── Загрузить статистику ──
+  const loadStats = useCallback(async () => {
+    setLoadingData(true);
     try {
-      const qs: Record<string, string> = {};
-      if (filterSource) qs.source = filterSource;
-      const r = await fetch(adminUrl('utm_links', qs)).then(r => r.json());
+      const r = await fetch(trackerUrl({ action: 'stats', period })).then(r => r.json());
+      if (r.error) { toast.error(r.error); return; }
       setLinks(r.links ?? []);
-      setStats(r.sources_stat ?? []);
-    } catch { toast.error('Ошибка загрузки истории'); }
-    finally { setLoadingLinks(false); }
-  }, [filterSource]);
+      setSources(r.sources ?? []);
+      setTimeline(r.timeline ?? []);
+      setCampaigns(r.campaigns ?? []);
+      setTotalClicks(r.total_clicks ?? 0);
+    } catch { toast.error('Ошибка загрузки'); }
+    finally { setLoadingData(false); }
+  }, [period]);
 
   useEffect(() => {
-    if (view === 'history' || view === 'stats') loadLinks();
-  }, [view, loadLinks]);
+    if (view !== 'builder') loadStats();
+  }, [view, period, loadStats]);
 
-  // ── Скопировать и сохранить ──
+  // ── Скопировать и сохранить в БД ──
   const copyAndSave = async () => {
     try {
       await navigator.clipboard.writeText(utmUrl);
@@ -139,7 +161,6 @@ export default function UtmTab() {
       toast.success('Ссылка скопирована');
     } catch { toast.error('Не удалось скопировать'); return; }
 
-    // Сохраняем в БД
     setSaving(true);
     try {
       const body = {
@@ -155,20 +176,28 @@ export default function UtmTab() {
         body: JSON.stringify(body),
       }).then(r => r.json());
       if (!r.ok) throw new Error(r.error || 'Ошибка');
-    } catch { /* тихо — копирование уже прошло */ }
+    } catch { /* тихо */ }
     finally { setSaving(false); }
   };
 
-  // ── Скопировать из истории ──
-  const copyLink = (link: UtmLink) => {
-    navigator.clipboard.writeText(link.url).then(() => {
+  // ── Зафиксировать клик ──
+  const trackClick = async (link: UtmLink) => {
+    try {
+      await navigator.clipboard.writeText(link.url);
       setCopiedId(link.id);
       setTimeout(() => setCopiedId(null), 2000);
       toast.success('Скопировано');
-    });
+    } catch { toast.error('Не удалось скопировать'); return; }
+
+    // Фиксируем клик
+    fetch(TRACKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ link_id: link.id }),
+    }).catch(() => {});
   };
 
-  // ── Загрузить настройки из истории в конструктор ──
+  // ── Загрузить настройки в конструктор ──
   const loadIntoBuilder = (link: UtmLink) => {
     setBase(link.base_url);
     setSource(link.utm_source);
@@ -183,26 +212,59 @@ export default function UtmTab() {
     toast('Параметры загружены в конструктор');
   };
 
-  const maxClicks = Math.max(...stats.map(s => s.total_clicks), 1);
+  const filteredLinks = filterSource
+    ? links.filter(l => l.utm_source === filterSource)
+    : links;
+  const timelineMax = Math.max(...timeline.map(t => t.cnt), 1);
+  const maxClicks   = Math.max(...sources.map(s => s.clicks_period), 1);
+
+  // ── Период-переключатель ──
+  function PeriodBar() {
+    return (
+      <div className="flex gap-1 bg-muted/40 rounded-xl p-1">
+        {PERIODS.map(p => (
+          <button key={p.value} onClick={() => setPeriod(p.value)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+              period === p.value ? 'bg-white shadow-sm text-brand-blue' : 'text-muted-foreground hover:text-foreground'
+            }`}>
+            {p.label}
+          </button>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
 
-      {/* ── Переключатель вида ── */}
-      <div className="flex gap-1 bg-white border border-border rounded-2xl p-1 w-fit">
-        {([
-          { id: 'builder', icon: 'Link',    label: 'Конструктор' },
-          { id: 'history', icon: 'History', label: 'История' },
-          { id: 'stats',   icon: 'BarChart3', label: 'Статистика' },
-        ] as const).map(v => (
-          <button key={v.id} onClick={() => setView(v.id)}
-            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition ${
-              view === v.id ? 'bg-brand-blue text-white' : 'text-muted-foreground hover:text-foreground'
-            }`}>
-            <Icon name={v.icon} size={13} />
-            {v.label}
-          </button>
-        ))}
+      {/* Шапка с переключателем вида */}
+      <div className="bg-white rounded-2xl border border-border p-4 flex items-center gap-3 flex-wrap">
+        <div className="flex gap-1 bg-muted/40 rounded-xl p-1">
+          {([
+            { id: 'builder', icon: 'Link',     label: 'Конструктор' },
+            { id: 'history', icon: 'History',  label: 'История' },
+            { id: 'stats',   icon: 'BarChart3', label: 'Статистика' },
+          ] as const).map(v => (
+            <button key={v.id} onClick={() => setView(v.id)}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition ${
+                view === v.id ? 'bg-brand-blue text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              }`}>
+              <Icon name={v.icon} size={13} />
+              {v.label}
+            </button>
+          ))}
+        </div>
+
+        {view !== 'builder' && (
+          <>
+            <PeriodBar />
+            <button onClick={loadStats} disabled={loadingData}
+              className="ml-auto text-xs px-3 py-2 border border-border rounded-xl hover:bg-muted/50 transition flex items-center gap-1.5">
+              <Icon name={loadingData ? 'Loader2' : 'RefreshCw'} size={12} className={loadingData ? 'animate-spin' : ''} />
+              Обновить
+            </button>
+          </>
+        )}
       </div>
 
       {/* ════════ КОНСТРУКТОР ════════ */}
@@ -217,13 +279,11 @@ export default function UtmTab() {
           <div className="bg-muted/30 rounded-xl p-3 space-y-2">
             <div className="text-xs font-semibold text-muted-foreground">Привязать к объекту (необязательно)</div>
             <div className="flex gap-2">
-              <input
-                value={listingId}
+              <input value={listingId}
                 onChange={e => { setListingId(e.target.value); setListingTitle(''); }}
                 onKeyDown={e => e.key === 'Enter' && loadListing()}
                 placeholder="ID объекта (#54)"
-                className="flex-1 border border-border rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-              />
+                className="flex-1 border border-border rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/30" />
               <button onClick={loadListing} disabled={listingLoading || !listingId}
                 className="px-3 py-2 border border-border rounded-xl text-sm hover:bg-muted/50 transition disabled:opacity-50 flex items-center gap-1.5">
                 <Icon name={listingLoading ? 'Loader2' : 'Search'} size={13} className={listingLoading ? 'animate-spin' : ''} />
@@ -246,9 +306,8 @@ export default function UtmTab() {
               className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30" />
           </div>
 
-          {/* UTM-параметры */}
+          {/* UTM параметры */}
           <div className="grid grid-cols-2 gap-3">
-            {/* source */}
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">utm_source *</label>
               <div className="flex gap-1 flex-wrap mb-1.5">
@@ -265,7 +324,6 @@ export default function UtmTab() {
                 placeholder="avito" className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30" />
             </div>
 
-            {/* medium */}
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">utm_medium *</label>
               <div className="flex gap-1 flex-wrap mb-1.5">
@@ -282,7 +340,6 @@ export default function UtmTab() {
                 placeholder="cpc" className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30" />
             </div>
 
-            {/* campaign */}
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">utm_campaign</label>
               <div className="flex gap-1 flex-wrap mb-1.5">
@@ -299,21 +356,18 @@ export default function UtmTab() {
                 placeholder="название_кампании" className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30" />
             </div>
 
-            {/* content */}
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">utm_content</label>
               <input value={content} onChange={e => setContent(e.target.value)}
                 placeholder="баннер_1 / кнопка" className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30" />
             </div>
 
-            {/* term */}
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">utm_term</label>
               <input value={term} onChange={e => setTerm(e.target.value)}
                 placeholder="аренда офис" className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30" />
             </div>
 
-            {/* label */}
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Название ссылки</label>
               <input value={label} onChange={e => setLabel(e.target.value)}
@@ -329,7 +383,6 @@ export default function UtmTab() {
             <div className="text-xs break-all font-mono text-foreground/80 leading-relaxed select-all">{utmUrl}</div>
           </div>
 
-          {/* Кнопки */}
           <div className="flex gap-2">
             <button onClick={copyAndSave} disabled={saving}
               className="flex-1 bg-brand-blue text-white rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-2 hover:bg-brand-blue/90 transition disabled:opacity-60">
@@ -347,54 +400,44 @@ export default function UtmTab() {
       {/* ════════ ИСТОРИЯ ════════ */}
       {view === 'history' && (
         <div className="space-y-3">
-          {/* Фильтр */}
-          <div className="bg-white rounded-2xl border border-border p-4 flex items-center gap-3 flex-wrap">
-            <div className="flex gap-1 flex-wrap flex-1">
-              <button onClick={() => setFilterSource('')}
-                className={`text-xs px-3 py-1.5 rounded-xl border font-semibold transition ${
-                  filterSource === '' ? 'bg-brand-blue text-white border-brand-blue' : 'border-border hover:bg-muted/50'
-                }`}>
-                Все
-              </button>
-              {stats.map(s => (
-                <button key={s.utm_source} onClick={() => setFilterSource(s.utm_source)}
-                  className={`text-xs px-3 py-1.5 rounded-xl border font-semibold transition ${
-                    filterSource === s.utm_source ? 'bg-brand-blue text-white border-brand-blue' : 'border-border hover:bg-muted/50'
-                  }`}>
-                  {SOURCE_ICONS[s.utm_source] || ''} {s.utm_source}
-                  <span className="ml-1 opacity-70">({s.cnt})</span>
-                </button>
-              ))}
-            </div>
-            <button onClick={loadLinks} disabled={loadingLinks}
-              className="text-xs px-3 py-1.5 border border-border rounded-xl hover:bg-muted/50 transition flex items-center gap-1.5">
-              <Icon name={loadingLinks ? 'Loader2' : 'RefreshCw'} size={12} className={loadingLinks ? 'animate-spin' : ''} />
-              Обновить
+          {/* Фильтр по источнику */}
+          <div className="bg-white rounded-2xl border border-border p-3 flex gap-1 flex-wrap">
+            <button onClick={() => setFilterSource('')}
+              className={`text-xs px-3 py-1.5 rounded-xl border font-semibold transition ${
+                filterSource === '' ? 'bg-brand-blue text-white border-brand-blue' : 'border-border hover:bg-muted/50'
+              }`}>
+              Все <span className="opacity-70">({links.length})</span>
             </button>
+            {sources.map(s => (
+              <button key={s.utm_source} onClick={() => setFilterSource(s.utm_source)}
+                className={`text-xs px-3 py-1.5 rounded-xl border font-semibold transition ${
+                  filterSource === s.utm_source ? 'bg-brand-blue text-white border-brand-blue' : 'border-border hover:bg-muted/50'
+                }`}>
+                {SOURCE_ICONS[s.utm_source] || ''} {s.utm_source}
+                <span className="ml-1 opacity-70">({s.links_count})</span>
+              </button>
+            ))}
           </div>
 
           {/* Список */}
-          {loadingLinks ? (
+          {loadingData ? (
             <div className="flex justify-center py-12 text-muted-foreground gap-2">
               <Icon name="Loader2" size={18} className="animate-spin" /> Загрузка…
             </div>
-          ) : links.length === 0 ? (
+          ) : filteredLinks.length === 0 ? (
             <div className="bg-white rounded-2xl border border-border p-10 text-center text-muted-foreground">
               <Icon name="History" size={32} className="mx-auto mb-2 opacity-20" />
               <p className="text-sm">История пуста — создайте первую UTM-ссылку</p>
             </div>
           ) : (
             <div className="space-y-2">
-              {links.map(link => (
+              {filteredLinks.map(link => (
                 <div key={link.id} className="bg-white rounded-2xl border border-border p-4 hover:border-brand-blue/30 transition">
-                  {/* Заголовок строки */}
                   <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        {link.label && (
-                          <span className="font-semibold text-sm">{link.label}</span>
-                        )}
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue`}>
+                        {link.label && <span className="font-semibold text-sm">{link.label}</span>}
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue">
                           {SOURCE_ICONS[link.utm_source] || ''} {link.utm_source}
                         </span>
                         {link.utm_medium && (
@@ -409,7 +452,6 @@ export default function UtmTab() {
                         )}
                       </div>
 
-                      {/* Объект */}
                       {link.listing_title && (
                         <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
                           <Icon name="Building2" size={11} />
@@ -417,23 +459,25 @@ export default function UtmTab() {
                         </div>
                       )}
 
-                      {/* URL */}
                       <div className="text-[11px] font-mono text-muted-foreground/70 truncate mt-1">{link.url}</div>
 
-                      {/* Мета */}
-                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-1.5">
+                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-1.5 flex-wrap">
                         {link.created_by_name && <span>{link.created_by_name}</span>}
                         <span>{fmtDate(link.created_at)}</span>
-                        {link.clicks > 0 && (
-                          <span className="text-brand-blue font-semibold">{link.clicks} кликов</span>
+                        <span className="text-brand-blue font-semibold">
+                          {link.clicks_period} кликов за период
+                        </span>
+                        {link.clicks_total > 0 && link.clicks_total !== link.clicks_period && (
+                          <span className="text-muted-foreground">
+                            ({link.clicks_total} всего)
+                          </span>
                         )}
                       </div>
                     </div>
 
-                    {/* Кнопки */}
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <button onClick={() => copyLink(link)}
-                        title="Скопировать ссылку"
+                      <button onClick={() => trackClick(link)}
+                        title="Скопировать + зафиксировать клик"
                         className="p-2 rounded-lg hover:bg-muted/60 transition text-muted-foreground hover:text-brand-blue">
                         <Icon name={copiedId === link.id ? 'Check' : 'Copy'} size={14} />
                       </button>
@@ -454,73 +498,160 @@ export default function UtmTab() {
       {/* ════════ СТАТИСТИКА ════════ */}
       {view === 'stats' && (
         <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-border p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <Icon name="BarChart3" size={16} className="text-brand-blue" />
-              <span className="font-semibold text-sm">Распределение по источникам</span>
-              <span className="ml-auto text-xs text-muted-foreground">
-                {stats.reduce((a, s) => a + s.cnt, 0)} ссылок всего
-              </span>
-            </div>
-            {loadingLinks ? (
-              <div className="flex justify-center py-8"><Icon name="Loader2" size={20} className="animate-spin text-muted-foreground" /></div>
-            ) : stats.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">Нет данных</p>
-            ) : (
-              <div className="space-y-3">
-                {stats.map(s => (
-                  <div key={s.utm_source} className="flex items-center gap-3">
-                    <div className="w-24 text-sm font-medium shrink-0 flex items-center gap-1.5">
-                      <span>{SOURCE_ICONS[s.utm_source] || '🔗'}</span>
-                      <span className="truncate">{s.utm_source}</span>
-                    </div>
-                    <div className="flex-1 bg-muted/40 rounded-full h-2">
-                      <div
-                        className="h-2 rounded-full bg-brand-blue transition-all"
-                        style={{ width: `${Math.round(s.total_clicks / maxClicks * 100)}%` }}
-                      />
-                    </div>
-                    <div className="text-right shrink-0 w-24 text-xs">
-                      <span className="font-bold">{s.cnt}</span>
-                      <span className="text-muted-foreground"> ссылок</span>
-                      {s.total_clicks > 0 && (
-                        <div className="text-brand-blue font-semibold">{s.total_clicks} кликов</div>
-                      )}
-                    </div>
-                  </div>
-                ))}
+
+          {/* KPI */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { icon: 'MousePointerClick', label: 'Кликов за период', value: totalClicks, color: 'text-brand-blue bg-brand-blue/10' },
+              { icon: 'Link',              label: 'Ссылок всего',      value: links.length, color: 'text-violet-600 bg-violet-100' },
+              { icon: 'Globe',             label: 'Источников',        value: sources.length, color: 'text-emerald-600 bg-emerald-100' },
+              { icon: 'Megaphone',         label: 'Кампаний',          value: campaigns.length, color: 'text-amber-600 bg-amber-100' },
+            ].map(k => (
+              <div key={k.label} className="bg-white rounded-2xl border border-border p-4 flex items-start gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${k.color}`}>
+                  <Icon name={k.icon} size={18} />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold">{loadingData ? '—' : k.value}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{k.label}</div>
+                </div>
               </div>
-            )}
+            ))}
           </div>
 
-          {/* Топ по кликам */}
-          {links.filter(l => l.clicks > 0).length > 0 && (
+          {/* Динамика кликов по дням */}
+          {timeline.length > 1 && (
             <div className="bg-white rounded-2xl border border-border p-5">
               <div className="flex items-center gap-2 mb-4">
-                <Icon name="TrendingUp" size={16} className="text-brand-blue" />
-                <span className="font-semibold text-sm">Топ ссылок по кликам</span>
+                <Icon name="TrendingUp" size={15} className="text-brand-blue" />
+                <span className="font-semibold text-sm">Динамика кликов</span>
               </div>
-              <div className="space-y-2">
-                {[...links].sort((a, b) => b.clicks - a.clicks).filter(l => l.clicks > 0).slice(0, 10).map((link, i) => (
-                  <div key={link.id} className="flex items-center gap-3 text-sm">
-                    <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground shrink-0">
-                      {i + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="truncate font-medium text-xs">{link.label || link.url}</div>
-                      <div className="text-[10px] text-muted-foreground">
-                        {SOURCE_ICONS[link.utm_source] || ''} {link.utm_source} · {link.utm_campaign || '—'}
-                      </div>
+              <div className="flex items-end gap-0.5 h-20">
+                {timeline.map((t, i) => (
+                  <div key={i} className="flex-1 flex flex-col items-center group relative">
+                    <div
+                      className="w-full bg-brand-blue/30 hover:bg-brand-blue rounded-t-sm transition-all"
+                      style={{ height: `${Math.max(4, Math.round(t.cnt / timelineMax * 100))}%` }}
+                    />
+                    <div className="absolute bottom-full mb-1 text-[10px] bg-foreground text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-10">
+                      {t.day.slice(5)}: {t.cnt}
                     </div>
-                    <div className="text-brand-blue font-bold text-xs shrink-0">{link.clicks}</div>
                   </div>
                 ))}
+              </div>
+              <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+                <span>{timeline[0]?.day?.slice(5)}</span>
+                <span>{timeline[timeline.length - 1]?.day?.slice(5)}</span>
               </div>
             </div>
           )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* По источникам */}
+            <div className="bg-white rounded-2xl border border-border p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <Icon name="BarChart3" size={15} className="text-brand-blue" />
+                <span className="font-semibold text-sm">По источникам</span>
+              </div>
+              {sources.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">Нет данных</p>
+              ) : (
+                <div className="space-y-3">
+                  {sources.map(s => (
+                    <div key={s.utm_source} className="flex items-center gap-3">
+                      <div className="w-20 text-sm font-medium shrink-0 flex items-center gap-1.5">
+                        <span>{SOURCE_ICONS[s.utm_source] || '🔗'}</span>
+                        <span className="truncate text-xs">{s.utm_source}</span>
+                      </div>
+                      <div className="flex-1 bg-muted/40 rounded-full h-2">
+                        <div
+                          className="h-2 rounded-full bg-brand-blue transition-all"
+                          style={{ width: `${maxClicks > 0 ? Math.round(s.clicks_period / maxClicks * 100) : 0}%` }}
+                        />
+                      </div>
+                      <div className="text-right shrink-0 w-20 text-xs">
+                        <span className="font-bold">{s.clicks_period}</span>
+                        <span className="text-muted-foreground"> кл.</span>
+                        <div className="text-[10px] text-muted-foreground">{s.links_count} ссылок</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Топ кампаний */}
+            <div className="bg-white rounded-2xl border border-border p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <Icon name="Megaphone" size={15} className="text-brand-blue" />
+                <span className="font-semibold text-sm">Топ кампаний</span>
+              </div>
+              {campaigns.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">Нет данных</p>
+              ) : (
+                <div className="space-y-2">
+                  {campaigns.map((c, i) => {
+                    const maxC = Math.max(...campaigns.map(x => x.clicks_period), 1);
+                    return (
+                      <div key={c.utm_campaign} className="flex items-center gap-3">
+                        <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground shrink-0">
+                          {i + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium truncate">{c.utm_campaign}</div>
+                          <div className="h-1.5 bg-muted/40 rounded-full mt-1">
+                            <div className="h-1.5 rounded-full bg-amber-400 transition-all"
+                              style={{ width: `${Math.round(c.clicks_period / maxC * 100)}%` }} />
+                          </div>
+                        </div>
+                        <span className="text-xs font-bold shrink-0 text-brand-blue">{c.clicks_period}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Топ ссылок */}
+          {links.some(l => l.clicks_period > 0) && (
+            <div className="bg-white rounded-2xl border border-border p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <Icon name="MousePointerClick" size={15} className="text-brand-blue" />
+                <span className="font-semibold text-sm">Топ ссылок за период</span>
+              </div>
+              <div className="space-y-2">
+                {[...links].sort((a, b) => b.clicks_period - a.clicks_period)
+                  .filter(l => l.clicks_period > 0).slice(0, 10)
+                  .map((link, i) => (
+                    <div key={link.id} className="flex items-center gap-3 py-2 border-b border-border/50 last:border-0">
+                      <span className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground shrink-0">
+                        {i + 1}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium truncate">{link.label || link.url}</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {SOURCE_ICONS[link.utm_source] || ''} {link.utm_source}
+                          {link.utm_campaign ? ` · ${link.utm_campaign}` : ''}
+                          {link.listing_title ? ` · ${link.listing_title}` : ''}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-sm font-bold text-brand-blue">{link.clicks_period}</div>
+                        <div className="text-[10px] text-muted-foreground">{link.clicks_total} всего</div>
+                      </div>
+                      <button onClick={() => trackClick(link)}
+                        className="p-1.5 rounded-lg hover:bg-muted/60 transition text-muted-foreground hover:text-brand-blue shrink-0">
+                        <Icon name={copiedId === link.id ? 'Check' : 'Copy'} size={13} />
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
         </div>
       )}
-
     </div>
   );
 }
