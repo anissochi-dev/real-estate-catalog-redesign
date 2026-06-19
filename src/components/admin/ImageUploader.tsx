@@ -148,6 +148,7 @@ export default function ImageUploader({
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [ghostPos, setGhostPos] = useState<{ x: number; y: number } | null>(null);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [wmState, setWmState] = useState<Record<number, string>>({});
 
@@ -191,11 +192,13 @@ export default function ImageUploader({
     const dx = Math.abs(e.clientX - dragStartXY.current.x);
     const dy = Math.abs(e.clientY - dragStartXY.current.y);
     if (!isDraggingRef.current) {
-      if (dx < 6 && dy < 6) return; // ещё не начали drag
+      if (dx < 6 && dy < 6) return;
       isDraggingRef.current = true;
-      snapRects(); // снимаем ректы один раз в начале
+      snapRects();
       setDragIdx(dragFromIdx.current);
     }
+    // Двигаем ghost за курсором
+    setGhostPos({ x: e.clientX, y: e.clientY });
     const over = getIdxAt(e.clientX, e.clientY);
     setDragOverIdx(over !== null && over !== dragFromIdx.current ? over : null);
   }, [multiple]);
@@ -217,6 +220,7 @@ export default function ImageUploader({
     cardRects.current = [];
     setDragIdx(null);
     setDragOverIdx(null);
+    setGhostPos(null);
   }, [onChange]);
 
   const shouldCompress = compress ?? (folder === 'photos');
@@ -359,14 +363,24 @@ export default function ImageUploader({
                   data-card-idx={i}
                   data-url={url}
                   onPointerDown={e => handlePointerDown(e, i)}
-                  className={`rounded-xl border-2 bg-white overflow-hidden select-none transition-all duration-150 ${
+                  className={`rounded-xl border-2 bg-white select-none transition-all duration-150 relative ${
                     isDragging
-                      ? 'opacity-40 scale-95 border-brand-blue shadow-lg z-10'
+                      ? 'opacity-25 border-brand-blue border-dashed'
                       : isOver
-                      ? 'border-brand-blue ring-2 ring-brand-blue/30 scale-[1.03] shadow-md'
+                      ? 'border-brand-blue ring-2 ring-brand-blue/40 shadow-lg'
                       : 'border-border hover:border-brand-blue/40'
                   } ${multiple ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                  style={{ overflow: isDragging ? 'visible' : 'hidden' }}
                 >
+                  {/* ── Индикатор вставки ── */}
+                  {isOver && (
+                    <div className="absolute inset-0 z-20 rounded-[10px] bg-brand-blue/15 flex items-center justify-center pointer-events-none">
+                      <div className="bg-brand-blue text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5">
+                        <Icon name="ArrowLeftRight" size={13} /> Вставить сюда
+                      </div>
+                    </div>
+                  )}
+
                   {/* ── Фото ── */}
                   <div className="relative">
                     <img
@@ -474,6 +488,24 @@ export default function ImageUploader({
             })}
           </div>
         </>
+      )}
+
+      {/* ── Ghost-элемент (следует за курсором во время drag) ── */}
+      {ghostPos && dragIdx !== null && value[dragIdx] && (
+        <div
+          className="fixed z-[999] pointer-events-none rounded-xl overflow-hidden shadow-2xl border-2 border-brand-blue"
+          style={{
+            left: ghostPos.x,
+            top: ghostPos.y,
+            transform: 'translate(-50%, -50%) rotate(2deg) scale(0.85)',
+            width: 160,
+            height: 120,
+            opacity: 0.95,
+          }}
+        >
+          <img src={value[dragIdx]} alt="" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-brand-blue/10" />
+        </div>
       )}
 
       {/* ── Лайтбокс ── */}
