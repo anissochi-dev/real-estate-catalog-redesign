@@ -1,4 +1,4 @@
-export type TabId = 'overview' | 'photos' | 'price_history' | 'stats' | 'leads' | 'comments' | 'ai' | 'documents' | 'broker' | 'qr_banner';
+export type TabId = 'overview' | 'photos' | 'price_history' | 'stats' | 'leads' | 'comments' | 'ai' | 'documents' | 'broker' | 'qr_banner' | 'radar';
 
 export interface HistoryRow {
   id: number;
@@ -59,16 +59,17 @@ export const LEAD_STATUS: Record<string, string> = {
 };
 
 export const TABS: { id: TabId; label: string; icon: string }[] = [
-  { id: 'overview', label: 'Обзор', icon: 'Info' },
-  { id: 'photos', label: 'Фото', icon: 'Image' },
-  { id: 'price_history', label: 'История цен', icon: 'TrendingDown' },
-  { id: 'stats', label: 'Статистика', icon: 'BarChart2' },
-  { id: 'leads', label: 'Заявки', icon: 'Inbox' },
-  { id: 'comments', label: 'Чат команды', icon: 'MessageSquare' },
-  { id: 'ai', label: 'ВБ', icon: 'Sparkles' },
-  { id: 'documents', label: 'Документы', icon: 'FileText' },
-  { id: 'broker', label: 'Брокер', icon: 'UserCheck' },
-  { id: 'qr_banner', label: 'QR Баннер', icon: 'QrCode' },
+  { id: 'radar',        label: 'Радар',        icon: 'Activity' },
+  { id: 'overview',     label: 'Обзор',        icon: 'Info' },
+  { id: 'photos',       label: 'Фото',         icon: 'Image' },
+  { id: 'price_history',label: 'История цен',  icon: 'TrendingDown' },
+  { id: 'stats',        label: 'Статистика',   icon: 'BarChart2' },
+  { id: 'leads',        label: 'Заявки',       icon: 'Inbox' },
+  { id: 'comments',     label: 'Чат команды',  icon: 'MessageSquare' },
+  { id: 'ai',           label: 'ВБ',           icon: 'Sparkles' },
+  { id: 'documents',    label: 'Документы',    icon: 'FileText' },
+  { id: 'broker',       label: 'Брокер',       icon: 'UserCheck' },
+  { id: 'qr_banner',    label: 'QR Баннер',    icon: 'QrCode' },
 ];
 
 export function fmt(n: number) { return n.toLocaleString('ru'); }

@@ -5,7 +5,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
 import { Listing, CATS, DEALS } from './types';
 import { TabId, TABS } from './internalCardTypes';
-import { Spinner, TabOverview, TabPriceHistory, TabStats, TabLeads, TabComments } from './InternalCardTabs1';
+import { Spinner, TabOverview, TabPriceHistory, TabStats, TabLeads, TabComments, TabRadar } from './InternalCardTabs1';
 import { fmtListingId } from '@/lib/formatPrice';
 import { TabAi, TabDocuments, TabBroker, TabQrBanner } from './InternalCardTabs2';
 import TabPhotos from './TabPhotos';
@@ -17,14 +17,14 @@ interface Props {
   onEdit?: (listing: Listing) => void;
 }
 
-// Первые 6 — основные (всегда видны), остальные — в меню «Ещё»
-const PRIMARY_TABS: TabId[] = ['overview', 'photos', 'leads', 'comments', 'ai', 'qr_banner'];
-const MORE_TABS: TabId[] = ['price_history', 'stats', 'documents', 'broker'];
+// radar — первая вкладка, остальные основные, «Ещё» — служебные
+const PRIMARY_TABS: TabId[] = ['radar', 'overview', 'photos', 'leads', 'comments', 'ai'];
+const MORE_TABS: TabId[] = ['price_history', 'stats', 'documents', 'broker', 'qr_banner'];
 
 export default function ListingInternalCard({ listingId, onClose, onBrokerChanged, onEdit }: Props) {
   const { user } = useAuth();
   const { settings } = useSettings();
-  const [tab, setTab] = useState<TabId>('overview');
+  const [tab, setTab] = useState<TabId>('radar');
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -192,6 +192,7 @@ export default function ListingInternalCard({ listingId, onClose, onBrokerChange
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
+          {tab === 'radar' && <TabRadar listingId={listingId} listing={listing} />}
           {tab === 'overview' && <TabOverview listing={listing} siteUrl={settings.site_url} />}
           {tab === 'photos' && <TabPhotos listing={listing} />}
           {tab === 'comments' && <TabComments listingId={listingId} />}
