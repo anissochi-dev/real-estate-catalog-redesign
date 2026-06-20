@@ -325,35 +325,92 @@ def fetch_dadata(inn: str, api_key: str, secret_key: str = '') -> dict:
         addr = data.get('address') or {}
         mgmt = data.get('management') or {}
         opf = data.get('opf') or {}
+        finance = data.get('finance') or {}
 
-        status_map = {'ACTIVE': 'Действует', 'LIQUIDATING': 'В процессе ликвидации', 'LIQUIDATED': 'Ликвидирована', 'BANKRUPT': 'Банкрот', 'REORGANIZING': 'Реорганизация'}
+        status_map = {
+            'ACTIVE':       'Действует',
+            'LIQUIDATING':  'В процессе ликвидации',
+            'LIQUIDATED':   'Ликвидирована',
+            'BANKRUPT':     'Банкрот',
+            'REORGANIZING': 'Реорганизация',
+        }
         status_code = state.get('status') or ''
 
+        # Учредители
+        founders_raw = data.get('founders') or []
+        founders = []
+        for f in founders_raw:
+            fio = (f.get('fio') or {})
+            name_f = (f.get('name') or
+                      ' '.join(filter(None, [fio.get('surname'), fio.get('name'), fio.get('patronymic')])) or '')
+            share = (f.get('share') or {})
+            share_str = ''
+            if share.get('percent'):
+                share_str = f"{share['percent']}%"
+            founders.append({'name': name_f, 'share': share_str, 'inn': f.get('inn') or ''})
+
+        # Лицензии
+        licenses_raw = data.get('licenses') or []
+        licenses = []
+        for lic in licenses_raw:
+            licenses.append({
+                'activity': lic.get('activity') or '',
+                'series': lic.get('series') or '',
+                'num': lic.get('num') or '',
+                'date': lic.get('date') or '',
+                'date_end': lic.get('date_end') or '',
+                'authority': lic.get('authority') or '',
+                'status': lic.get('status') or '',
+            })
+
+        # Финансы за последний год
+        fin_year   = finance.get('year') or ''
+        fin_income = finance.get('income') or ''
+        fin_expense= finance.get('expense') or ''
+        fin_profit = finance.get('profit') or ''
+        fin_debt   = finance.get('debt') or ''
+        fin_penalty= finance.get('penalty') or ''
+        ustavcap   = data.get('finance', {}).get('ustavcap') or data.get('authorized_capital') or ''
+
         card = {
-            '_type': 'ip' if data.get('type') == 'INDIVIDUAL' else 'ul',
-            '_source': 'dadata',
-            'inn': data.get('inn') or inn_clean,
-            'ogrn': data.get('ogrn') or '',
-            'kpp': data.get('kpp') or '',
-            'name': name_obj.get('short_with_opf') or name_obj.get('full_with_opf') or s.get('value') or '',
-            'name_full': name_obj.get('full_with_opf') or '',
-            'opf': opf.get('short') or '',
-            'status': status_map.get(status_code, status_code),
-            'status_code': status_code,
-            'address': (addr.get('value') or '').strip(),
-            'reg_date': state.get('registration_date') or '',
-            'liquidation_date': state.get('liquidation_date') or '',
-            'okved': data.get('okved') or '',
-            'okved_name': (data.get('okved_type') or {}).get('name') if isinstance(data.get('okved_type'), dict) else '',
-            'employees': data.get('employee_count') or '',
-            'capital': (data.get('finance') or {}).get('tax_system') or '',
-            'director': mgmt.get('name') or '',
-            'director_post': mgmt.get('post') or '',
-            'phones': [p.get('value') for p in (data.get('phones') or []) if p.get('value')],
-            'emails': [e.get('value') for e in (data.get('emails') or []) if e.get('value')],
-            'is_liquidated': status_code in ('LIQUIDATED', 'BANKRUPT'),
-            'is_active': status_code == 'ACTIVE',
-            '_raw': data,
+            '_type':             'ip' if data.get('type') == 'INDIVIDUAL' else 'ul',
+            '_source':           'dadata',
+            'inn':               data.get('inn') or inn_clean,
+            'ogrn':              data.get('ogrn') or '',
+            'kpp':               data.get('kpp') or '',
+            'name':              name_obj.get('short_with_opf') or name_obj.get('full_with_opf') or s.get('value') or '',
+            'name_full':         name_obj.get('full_with_opf') or '',
+            'opf':               opf.get('short') or '',
+            'status':            status_map.get(status_code, status_code),
+            'status_code':       status_code,
+            'address':           (addr.get('value') or '').strip(),
+            'address_postal':    addr.get('data', {}).get('postal_code') or '' if isinstance(addr.get('data'), dict) else '',
+            'address_region':    addr.get('data', {}).get('region_with_type') or '' if isinstance(addr.get('data'), dict) else '',
+            'reg_date':          state.get('registration_date') or '',
+            'liquidation_date':  state.get('liquidation_date') or '',
+            'okved':             data.get('okved') or '',
+            'okved_name':        (data.get('okved_type') or {}).get('name') if isinstance(data.get('okved_type'), dict) else '',
+            'employees':         data.get('employee_count') or '',
+            'ustavcap':          ustavcap,
+            'tax_system':        finance.get('tax_system') or '',
+            'director':          mgmt.get('name') or '',
+            'director_post':     mgmt.get('post') or '',
+            'branch_type':       data.get('branch_type') or '',
+            'branch_count':      data.get('branch_count') or '',
+            'phones':            [p.get('value') for p in (data.get('phones') or []) if p.get('value')],
+            'emails':            [e.get('value') for e in (data.get('emails') or []) if e.get('value')],
+            'founders':          founders,
+            'licenses':          licenses,
+            'finance': {
+                'year':    fin_year,
+                'income':  fin_income,
+                'expense': fin_expense,
+                'profit':  fin_profit,
+                'debt':    fin_debt,
+                'penalty': fin_penalty,
+            } if any([fin_year, fin_income, fin_expense, fin_profit]) else None,
+            'is_liquidated':     status_code in ('LIQUIDATED', 'BANKRUPT'),
+            'is_active':         status_code == 'ACTIVE',
         }
         return card
     except urllib.error.HTTPError as e:

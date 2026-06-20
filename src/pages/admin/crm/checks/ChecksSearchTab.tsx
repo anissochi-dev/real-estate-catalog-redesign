@@ -3,9 +3,10 @@ import Icon from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { SOURCE_INFO, CHECK_TYPES, ZachestnyData, CheckResult } from './checksTypes';
+import { SOURCE_INFO, CHECK_TYPES, ZachestnyData, DadataData, CheckResult } from './checksTypes';
 import ZachestnyCard from './ZachestnyCard';
 import CheckoCard from './CheckoCard';
+import DadataCard from './DadataCard';
 
 function renderValue(val: unknown, depth = 0): React.ReactNode {
   if (val === null || val === undefined) return <span className="text-muted-foreground">—</span>;
@@ -167,6 +168,8 @@ export default function ChecksSearchTab({
                   <ZachestnyCard data={res.data as ZachestnyData} />
                 ) : src === 'checko' && res.data ? (
                   <CheckoCard data={res.data as Parameters<typeof CheckoCard>[0]['data']} />
+                ) : src === 'dadata' && res.data && !(res.data as Record<string, unknown>).error ? (
+                  <DadataCard data={res.data as DadataData} />
                 ) : (
                   <div className="text-sm">{renderValue(res.data)}</div>
                 )}

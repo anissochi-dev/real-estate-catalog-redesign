@@ -1,3 +1,63 @@
+export interface DadataFinance {
+  year?: string | number;
+  income?: string | number;
+  expense?: string | number;
+  profit?: string | number;
+  debt?: string | number;
+  penalty?: string | number;
+}
+
+export interface DadataFounder {
+  name?: string;
+  share?: string;
+  inn?: string;
+}
+
+export interface DadataLicense {
+  activity?: string;
+  series?: string;
+  num?: string;
+  date?: string;
+  date_end?: string;
+  authority?: string;
+  status?: string;
+}
+
+export interface DadataData {
+  _type?: string;
+  _source?: 'dadata';
+  inn?: string;
+  ogrn?: string;
+  kpp?: string;
+  name?: string;
+  name_full?: string;
+  opf?: string;
+  status?: string;
+  status_code?: string;
+  address?: string;
+  address_postal?: string;
+  address_region?: string;
+  reg_date?: string;
+  liquidation_date?: string;
+  okved?: string;
+  okved_name?: string;
+  employees?: string | number;
+  ustavcap?: string | number;
+  tax_system?: string;
+  director?: string;
+  director_post?: string;
+  branch_type?: string;
+  branch_count?: string | number;
+  phones?: string[];
+  emails?: string[];
+  founders?: DadataFounder[];
+  licenses?: DadataLicense[];
+  finance?: DadataFinance | null;
+  is_liquidated?: boolean;
+  is_active?: boolean;
+  error?: string;
+}
+
 export interface ZachestnyData {
   _type?: string;
   inn?: string;
