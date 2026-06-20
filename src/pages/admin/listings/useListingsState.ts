@@ -27,6 +27,7 @@ export function useListingsState() {
   const { settings } = useSettings();
   const SITE_URL = (settings.site_url || '').replace(/\/$/, '');
   const isAdmin = user?.role === 'admin';
+  const isDirector = user?.role === 'director';
   const isBroker = user?.role === 'broker';
 
   const [items, setItems] = useState<Listing[]>([]);
@@ -489,7 +490,7 @@ export function useListingsState() {
     // draft
     hasDraft, setHasDraft,
     // meta
-    isAdmin, isBroker, SITE_URL,
+    isAdmin, isDirector, isBroker, SITE_URL,
     canCreate: !['office_manager', 'client'].includes(user?.role || ''),
     myOnly, toggleMyOnly,
     // actions

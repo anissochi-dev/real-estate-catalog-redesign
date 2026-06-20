@@ -356,17 +356,8 @@ def handler(event: dict, context) -> dict:
                     )
                     pc_id = cur.fetchone()['id']
 
-            # ── INSERT lead ───────────────────────────────────────────────────
-            cur.execute(f"""
-                INSERT INTO {SCHEMA}.leads
-                    (name, phone, email, message, listing_id, source, status, phone_contact_id)
-                VALUES (%s,%s,%s,%s,%s,'owner_submit','new',%s)
-            """, (
-                owner_name, owner_phone, owner_email,
-                f'Заявка от собственника. Объект #{listing_id}: {title}',
-                listing_id, pc_id,
-            ))
-
+            # Лид не создаём — объект уходит на модерацию в listings,
+            # там менеджер его принимает/отклоняет. Дублировать в заявки не нужно.
             conn.commit()
 
         return _ok({'ok': True, 'listing_id': listing_id})

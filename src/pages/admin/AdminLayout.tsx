@@ -45,6 +45,7 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [socialPending, setSocialPending] = useState(0);
   const [newLeadsCount, setNewLeadsCount] = useState(0);
+  const [newModerationCount, setNewModerationCount] = useState(0);
   // Меню пользователя в мобильной шапке (имя + На сайт + Выйти)
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<boolean>(() => {
@@ -129,10 +130,27 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
           const cnt = (d.leads || []).filter(
             (l: { status: string }) => l.status === 'new' || l.status === 'pending'
           ).length;
-          // Не показываем бейдж если пользователь уже смотрит заявки
-          setNewLeadsCount(prev => {
+          setNewLeadsCount(() => {
             if (section === 'leads') return 0;
             return cnt;
+          });
+        })
+        .catch(() => {});
+    };
+    load();
+    const interval = setInterval(load, 2 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user, section]);
+
+  // Polling объектов на модерации — только для admin и director
+  useEffect(() => {
+    if (!user || !['admin', 'director'].includes(user.role)) return;
+    const load = () => {
+      adminApi.listListings(0, 1, 'moderation')
+        .then(d => {
+          setNewModerationCount(() => {
+            if (section === 'listings') return 0;
+            return d.counts?.moderation ?? 0;
           });
         })
         .catch(() => {});
@@ -284,10 +302,14 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
         <nav className={`flex-1 overflow-y-auto space-y-1 ${collapsed ? 'p-2' : 'p-3'}`}>
           {sortedItems.map(item => {
             const badge =
-              item.id === 'marketing' && socialPending > 0 ? socialPending
-              : item.id === 'leads' && newLeadsCount > 0 ? newLeadsCount
+              item.id === 'marketing'  && socialPending > 0       ? socialPending
+              : item.id === 'leads'    && newLeadsCount > 0        ? newLeadsCount
+              : item.id === 'listings' && newModerationCount > 0   ? newModerationCount
               : 0;
-            const badgeColor = item.id === 'leads' ? 'bg-red-500' : 'bg-amber-500';
+            const badgeColor =
+              item.id === 'leads'    ? 'bg-red-500'
+              : item.id === 'listings' ? 'bg-amber-500'
+              : 'bg-amber-500';
             const isActive = section === item.id;
             return (
               <button
@@ -296,8 +318,8 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
                 onClick={() => {
                   setSection(item.id);
                   setSidebarOpen(false);
-                  // Сбрасываем счётчик при переходе в раздел заявок
-                  if (item.id === 'leads') setNewLeadsCount(0);
+                  if (item.id === 'leads')    setNewLeadsCount(0);
+                  if (item.id === 'listings') setNewModerationCount(0);
                 }}
                 className={`relative w-full flex items-center rounded-xl text-sm transition ${
                   collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'
@@ -312,9 +334,12 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
                       {badge > 99 ? '99+' : badge}
                     </span>
                   )}
-                  {/* Пульсирующий индикатор для заявок в collapsed */}
+                  {/* Пульсирующий индикатор в collapsed */}
                   {item.id === 'leads' && newLeadsCount > 0 && collapsed && (
                     <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full animate-ping opacity-75" />
+                  )}
+                  {item.id === 'listings' && newModerationCount > 0 && collapsed && (
+                    <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-500 rounded-full animate-ping opacity-75" />
                   )}
                 </span>
                 {!collapsed && item.label}
@@ -325,7 +350,7 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
                     {badge > 99 ? '99+' : badge}
                   </span>
                 )}
-                {/* Пульсирующая точка рядом с текстом */}
+                {/* Пульсирующая точка рядом с текстом (только когда нет числа) */}
                 {item.id === 'leads' && newLeadsCount > 0 && !collapsed && badge === 0 && (
                   <span className="ml-auto w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0" />
                 )}

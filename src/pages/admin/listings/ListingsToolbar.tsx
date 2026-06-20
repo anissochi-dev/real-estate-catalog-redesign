@@ -27,6 +27,7 @@ interface Props {
   onImport: (data: ImportedListing) => void;
   counts: { active: number; archived: number; hidden: number; moderation: number };
   canCreate?: boolean;
+  canModerate?: boolean;
   isBroker?: boolean;
   myOnly?: boolean;
   toggleMyOnly?: () => void;
@@ -36,7 +37,7 @@ export default function ListingsToolbar({
   statusFilter, switchTab,
   search, setSearch, catFilter, setCatFilter,
   hasDraft, setHasDraft, onAdd, onImport,
-  counts, canCreate = true,
+  counts, canCreate = true, canModerate = false,
   isBroker = false, myOnly = true, toggleMyOnly,
 }: Props) {
   const [importOpen, setImportOpen] = useState(false);
@@ -46,8 +47,8 @@ export default function ListingsToolbar({
       {/* Строка: вкладки + кнопки действий */}
       <div className="flex items-center gap-2 flex-wrap">
         {/* Вкладки статуса (без «Все») */}
-        {/* Таб модерации — выделен отдельно с бейджем */}
-        {counts.moderation > 0 && (
+        {/* Таб модерации — только для admin и director */}
+        {canModerate && counts.moderation > 0 && (
           <button onClick={() => switchTab('moderation')}
             className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${
               statusFilter === 'moderation'

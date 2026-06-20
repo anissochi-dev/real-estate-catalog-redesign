@@ -63,6 +63,7 @@ export default function ListingsAdmin() {
         onAdd={() => s.openEdit()}
         counts={s.counts}
         canCreate={s.canCreate}
+        canModerate={s.isAdmin || s.isDirector}
         isBroker={s.isBroker}
         myOnly={s.myOnly}
         toggleMyOnly={s.toggleMyOnly}
@@ -108,7 +109,7 @@ export default function ListingsAdmin() {
         onHistory={it => s.setHistoryListing(it)}
         onPhotoDownload={it => s.setPhotoPickListing(it)}
         onInternalCard={it => setInternalCardId(it.id)}
-        onModerate={handleModerate}
+        onModerate={(s.isAdmin || s.isDirector) ? handleModerate : undefined}
         selected={s.selected}
         onToggleSelect={s.toggleSelect}
         onSelectAll={() => s.setSelected(new Set(s.filtered.map(i => i.id)))}
