@@ -424,7 +424,8 @@ export interface UploadResult {
   watermarked: boolean;
 }
 
-/** Расширенная загрузка — возвращает url (с ВЗ), original_url (без ВЗ), watermarked */
+/** Расширенная загрузка — возвращает url (с ВЗ), original_url (без ВЗ), watermarked.
+ *  При 502/503/504 (таймаут бэкенда во время Pillow-обработки) — до 3 retry с паузой. */
 export async function uploadFileEx(
   file: File,
   folder: 'photos' | 'logo' | 'watermark' = 'photos',
@@ -438,18 +439,42 @@ export async function uploadFileEx(
   });
   const token = getToken();
   const kind = folder === 'photos' ? 'photo' : folder === 'logo' ? 'logo' : 'watermark';
-  const res = await fetch(UPLOADS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...(token ? { 'X-Auth-Token': token } : {}) },
-    body: JSON.stringify({ file_base64: b64, filename: file.name, kind, apply_watermark: applyWatermark }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Ошибка загрузки');
-  return {
-    url: data.url as string,
-    originalUrl: (data.original_url as string) || (data.url as string),
-    watermarked: !!data.watermarked,
-  };
+  const body = JSON.stringify({ file_base64: b64, filename: file.name, kind, apply_watermark: applyWatermark });
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(token ? { 'X-Auth-Token': token } : {}) };
+
+  const RETRYABLE = new Set([502, 503, 504]);
+  const MAX_ATTEMPTS = 3;
+
+  let lastErr: Error = new Error('Ошибка загрузки');
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    if (attempt > 0) {
+      // Пауза перед повтором: 1s, 2s
+      await new Promise(r => setTimeout(r, attempt * 1000));
+    }
+    let res: Response;
+    try {
+      res = await fetch(UPLOADS_URL, { method: 'POST', headers, body });
+    } catch (networkErr) {
+      lastErr = networkErr instanceof Error ? networkErr : new Error('Сеть недоступна');
+      continue; // retry
+    }
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        url: data.url as string,
+        originalUrl: (data.original_url as string) || (data.url as string),
+        watermarked: !!data.watermarked,
+      };
+    }
+    if (RETRYABLE.has(res.status)) {
+      lastErr = new Error(`HTTP ${res.status}`);
+      continue; // retry
+    }
+    // Не повторяем при 4xx
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as Record<string, string>).error || `HTTP ${res.status}`);
+  }
+  throw lastErr;
 }
 
 /** Обратно-совместимая загрузка — возвращает только URL (с ВЗ если есть, иначе оригинал) */
