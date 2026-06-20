@@ -2,9 +2,12 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import { uploadFileEx, getOriginalPhotoUrl, getToken, REMOVE_WM_URL } from '@/lib/adminApi';
 import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
+import { toast } from 'sonner';
 import ImageUploaderLightbox from './ImageUploaderLightbox';
 import ImageUploaderDropZone from './ImageUploaderDropZone';
 import ImageUploaderPhotoCard from './ImageUploaderPhotoCard';
+
+const MAX_FILES = 30;
 
 interface Props {
   value: string[];
@@ -151,11 +154,26 @@ export default function ImageUploader({
   const shouldCompress = compress ?? (folder === 'photos');
 
   const handleFiles = async (files: FileList | File[]) => {
-    const arr = Array.from(files).filter(f => f.type.startsWith('image/'));
-    if (!arr.length) return;
+    const all = Array.from(files).filter(f => f.type.startsWith('image/'));
+    if (!all.length) return;
+
+    // Ограничение: не более MAX_FILES итого
+    const currentCount = multiple ? value.length : 0;
+    const canAdd = multiple ? Math.max(0, MAX_FILES - currentCount) : 1;
+    if (canAdd === 0) {
+      toast.error(`Максимум ${MAX_FILES} фотографий`);
+      return;
+    }
+    const arr = all.slice(0, canAdd);
+    if (arr.length < all.length) {
+      toast.warning(`Добавлено ${arr.length} из ${all.length} — достигнут лимит ${MAX_FILES} фото`);
+    }
+
     setUploading(true);
     setProgress({ done: 0, total: arr.length });
     const uploaded: string[] = [];
+    const errors: string[] = [];
+
     for (const f of arr) {
       try {
         const compressed = shouldCompress ? await compressImage(f) : f;
@@ -164,11 +182,19 @@ export default function ImageUploader({
         uploaded.push(r.url);
         setProgress(p => ({ ...p, done: p.done + 1 }));
       } catch (e: unknown) {
-        alert('Ошибка загрузки: ' + (e instanceof Error ? e.message : ''));
+        errors.push(f.name);
+        setProgress(p => ({ ...p, done: p.done + 1 }));
       }
     }
+
     setUploading(false);
-    onChange(multiple ? [...value, ...uploaded] : uploaded.slice(0, 1));
+
+    if (uploaded.length > 0) {
+      onChange(multiple ? [...value, ...uploaded] : uploaded.slice(0, 1));
+    }
+    if (errors.length > 0) {
+      toast.error(`Не удалось загрузить ${errors.length} фото: ${errors.slice(0, 3).join(', ')}${errors.length > 3 ? '...' : ''}`);
+    }
   };
 
   const download = async (url: string, opts: { original?: boolean } = {}) => {

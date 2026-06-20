@@ -54,7 +54,7 @@ export default function ImageUploaderDropZone({
           : multiple ? 'Перетащите фото сюда' : 'Перетащите изображение'}
       </div>
       <div className="text-xs text-muted-foreground mt-0.5">
-        {hint || 'или нажмите для выбора с компьютера/телефона. JPG, PNG, WEBP до 10 МБ'}
+        {hint || 'или нажмите для выбора. JPG, PNG, WEBP — до 30 фото'}
       </div>
       {shouldCompress && (
         <div className="text-[10px] text-muted-foreground/80 mt-0.5 inline-flex items-center gap-1">
