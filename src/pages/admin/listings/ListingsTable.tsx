@@ -89,6 +89,8 @@ export default function ListingsTable({
         const isHidden = it.is_visible === false;
         const isBroker = user?.role === 'broker';
         const isBrokerOwner = isBroker && (it.author_id === user?.id || it.broker_id === user?.id);
+        // admin/director/manager/editor/office_manager видят телефон всегда
+        // брокер — только на своих объектах
         const showPhone = !isBroker || isBrokerOwner;
         const canEdit = !isBroker || isBrokerOwner;
         const canSelect = !isBroker || isBrokerOwner;
@@ -467,9 +469,15 @@ export default function ListingsTable({
                 </button>
                 <div className="flex items-center gap-1 min-w-0">
                   <Icon name="User" size={11} className="text-muted-foreground/50 flex-shrink-0" />
-                  <span className="text-xs text-muted-foreground truncate max-w-[120px]">
-                    {it.owner_name || '—'}
-                  </span>
+                  <div className="text-xs text-muted-foreground truncate max-w-[140px]">
+                    {it.owner_name && <span className="font-medium text-foreground">{it.owner_name}</span>}
+                    {it.owner_phone && showPhone && (
+                      <a href={`tel:${it.owner_phone}`} className="ml-1 text-brand-blue hover:underline" onClick={e => e.stopPropagation()}>
+                        {it.owner_phone}
+                      </a>
+                    )}
+                    {!it.owner_name && !it.owner_phone && '—'}
+                  </div>
                 </div>
                 <span className="text-[10px] text-muted-foreground/60 flex-shrink-0">
                   {fmtDate(it.created_at)}
