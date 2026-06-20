@@ -45,17 +45,17 @@ export default function ListingsToolbar({
   return (
     <>
       {/* Вкладки статуса — одна линия, на мобиле центрированы */}
-      <div className="flex items-center justify-center lg:justify-start gap-2 flex-wrap">
+      <div className="flex items-center justify-center lg:justify-start gap-1.5 flex-nowrap overflow-x-auto pb-0.5">
         {canModerate && counts.moderation > 0 && (
           <button onClick={() => switchTab('moderation')}
-            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${
+            className={`inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors shrink-0 ${
               statusFilter === 'moderation'
                 ? 'bg-amber-500 text-white'
                 : 'border-2 border-amber-400 text-amber-700 bg-amber-50 hover:bg-amber-100'
             }`}>
-            <Icon name="Clock" size={14} />
-            На модерации
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${statusFilter === 'moderation' ? 'bg-white/25' : 'bg-amber-500 text-white'}`}>
+            <Icon name="Clock" size={12} />
+            Модерация
+            <span className={`text-[9px] font-bold px-1 py-0.5 rounded-full ${statusFilter === 'moderation' ? 'bg-white/25' : 'bg-amber-500 text-white'}`}>
               {counts.moderation}
             </span>
           </button>
@@ -66,8 +66,8 @@ export default function ListingsToolbar({
           ['archived', `Архив (${counts.archived})`,    'Archive'],
         ] as [StatusFilter, string, string][]).map(([v, l, ic]) => (
           <button key={v} onClick={() => switchTab(v)}
-            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${statusFilter === v ? 'bg-brand-blue text-white' : 'border border-border hover:bg-muted'}`}>
-            <Icon name={ic} size={14} />
+            className={`inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors shrink-0 ${statusFilter === v ? 'bg-brand-blue text-white' : 'border border-border hover:bg-muted'}`}>
+            <Icon name={ic} size={12} />
             {l}
           </button>
         ))}
