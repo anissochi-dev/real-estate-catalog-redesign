@@ -255,9 +255,8 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
 
             {/* Вы собственник? — встроен в Hero */}
             <div className="mt-5 flex flex-col items-center gap-2 text-center animate-fade-in-up stagger-4">
-              <div className="flex items-center gap-1.5 text-white/70 text-xs">
-                <Icon name="Home" size={13} className="opacity-70" />
-                <span>Вы собственник? Разместите объект бесплатно — публикация в течение 24 часов</span>
+              <div className="text-white/70 text-xs">
+                Вы собственник? Разместите объект бесплатно — публикация в течение 24 часов
               </div>
               <button
                 onClick={() => setOwnerOpen(true)}
