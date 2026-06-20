@@ -41,6 +41,7 @@ export default function ListingEditor({
   onDescribe, onGenerateTitle, onGenerateTags, onGenerateSeo, onGenerateAll, onClose, onSave, setEgrnObjects,
 }: Props) {
   const [errors, setErrors] = useState<Record<string, boolean>>({});
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const [tab, setTab] = useState<EditorTab>('main');
   const [geocoding, setGeocoding] = useState(false);
   /**
@@ -80,15 +81,15 @@ export default function ListingEditor({
   // существующий — только admin/director; брокеры и прочие не видят
   const canEditSeo = !isNewListing && !!user && ['admin', 'director'].includes(user.role);
 
-  // Определяем какие вкладки имеют ошибки
-  const tabErrors: Partial<Record<EditorTab, boolean>> = {
+  // Определяем какие вкладки имеют ошибки — только после попытки сохранения
+  const tabErrors: Partial<Record<EditorTab, boolean>> = submitAttempted ? {
     main:     !!(errors.title || errors.category || errors.deal || errors.condition || errors.owner_name || errors.owner_phone),
     photos:   !!errors.photos,
     location: !!(errors.address || errors.district),
     details:  !!(errors.price || errors.area || errors.floor || errors.total_floors || errors.broker_commission || errors.land_status || errors.land_vri),
     content:  !!errors.description,
     extra:    !!(errors.finishing || errors.building_class || errors.building_year || errors.property_rights),
-  };
+  } : {};
 
   const validate = (): boolean => {
     const e: Record<string, boolean> = {};
@@ -166,6 +167,7 @@ export default function ListingEditor({
   };
 
   const handleSave = async () => {
+    setSubmitAttempted(true);
     if (validate()) {
       const patch = await ensureCoordinates();
       // Передаём patch явно — React-стейт ещё не успел обновиться,
@@ -198,7 +200,7 @@ export default function ListingEditor({
           tab={tab}
           setTab={setTab}
           tabErrors={tabErrors}
-          hasErrors={Object.keys(errors).length > 0}
+          hasErrors={submitAttempted && Object.keys(errors).length > 0}
           aiAllLoading={aiAllLoading}
           onGenerateAll={onGenerateAll}
           onClose={onClose}

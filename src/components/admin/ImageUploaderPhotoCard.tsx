@@ -95,76 +95,75 @@ export default function ImageUploaderPhotoCard({
         </button>
       </div>
 
-      {/* Панель под фото */}
-      <div className="px-2 py-2 space-y-1.5 bg-muted/30 border-t border-border">
+      {/* Панель под фото — все кнопки в одну строку */}
+      <div className="px-1.5 py-1.5 bg-muted/30 border-t border-border flex gap-1 flex-wrap">
 
-        {/* Строка 1: Скачать + Скачать без ВЗ */}
+        {/* Скачать */}
         {allowDownload && (
-          <div className="flex gap-1">
-            <button
-              type="button"
-              onPointerDown={e => e.stopPropagation()}
-              onClick={e => { e.stopPropagation(); onDownload(); }}
-              className="flex-1 inline-flex items-center justify-center gap-1 text-[10px] font-semibold px-2 py-1.5 rounded-lg bg-white border border-border hover:bg-muted/60 transition"
-              title="Скачать фото"
-            >
-              <Icon name="Download" size={11} /> Скачать
-            </button>
-            {hasOwnWm && (
-              <button
-                type="button"
-                onPointerDown={e => e.stopPropagation()}
-                onClick={e => { e.stopPropagation(); onDownloadOriginal(); }}
-                className="flex-1 inline-flex items-center justify-center gap-1 text-[10px] font-semibold px-2 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition"
-                title="Скачать без нашего водяного знака"
-              >
-                <Icon name="DownloadCloud" size={11} /> Без ВЗ
-              </button>
-            )}
-          </div>
+          <button
+            type="button"
+            onPointerDown={e => e.stopPropagation()}
+            onClick={e => { e.stopPropagation(); onDownload(); }}
+            className="inline-flex items-center justify-center gap-0.5 text-[9px] font-semibold px-1.5 py-1 rounded-md bg-white border border-border hover:bg-muted/60 transition"
+            title="Скачать фото"
+          >
+            <Icon name="Download" size={10} /> Скачать
+          </button>
         )}
 
-        {/* Строка 2: Удалить ВЗ + Удалить фото */}
-        <div className="flex gap-1">
+        {/* Скачать без ВЗ */}
+        {allowDownload && hasOwnWm && (
           <button
             type="button"
             onPointerDown={e => e.stopPropagation()}
-            onClick={e => { e.stopPropagation(); if (wmStatus === 'idle') onRemoveWatermark(); }}
-            disabled={wmStatus === 'loading'}
-            className={`flex-1 inline-flex items-center justify-center gap-1 text-[10px] font-semibold px-2 py-1.5 rounded-lg border transition ${
-              wmStatus === 'loading' ? 'bg-amber-50 border-amber-200 text-amber-700 cursor-wait' :
-              wmStatus === 'done'    ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
-              wmStatus === 'error'   ? 'bg-red-50 border-red-200 text-red-500' :
-              'bg-white border-border text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-            }`}
-            title="Удалить чужой водяной знак (Яндекс Vision AI)"
+            onClick={e => { e.stopPropagation(); onDownloadOriginal(); }}
+            className="inline-flex items-center justify-center gap-0.5 text-[9px] font-semibold px-1.5 py-1 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition"
+            title="Скачать без нашего водяного знака"
           >
-            <Icon
-              name={
-                wmStatus === 'loading' ? 'Loader2' :
-                wmStatus === 'done'    ? 'CheckCircle2' :
-                wmStatus === 'error'   ? 'AlertCircle' :
-                'Eraser'
-              }
-              size={11}
-              className={wmStatus === 'loading' ? 'animate-spin' : ''}
-            />
-            {wmStatus === 'loading' ? 'Обработка…' :
-             wmStatus === 'done'    ? 'ВЗ удалён' :
-             wmStatus === 'error'   ? 'Ошибка' :
-             'Удалить ВЗ'}
+            <Icon name="DownloadCloud" size={10} /> Без ВЗ
           </button>
+        )}
 
-          <button
-            type="button"
-            onPointerDown={e => e.stopPropagation()}
-            onClick={e => { e.stopPropagation(); onRemove(); }}
-            className="inline-flex items-center justify-center gap-1 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 transition"
-            title="Удалить фото"
-          >
-            <Icon name="Trash2" size={11} /> Удалить
-          </button>
-        </div>
+        {/* Удалить ВЗ */}
+        <button
+          type="button"
+          onPointerDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); if (wmStatus === 'idle') onRemoveWatermark(); }}
+          disabled={wmStatus === 'loading'}
+          className={`inline-flex items-center justify-center gap-0.5 text-[9px] font-semibold px-1.5 py-1 rounded-md border transition ${
+            wmStatus === 'loading' ? 'bg-amber-50 border-amber-200 text-amber-700 cursor-wait' :
+            wmStatus === 'done'    ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+            wmStatus === 'error'   ? 'bg-red-50 border-red-200 text-red-500' :
+            'bg-white border-border text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+          }`}
+          title="Удалить чужой водяной знак (Яндекс Vision AI)"
+        >
+          <Icon
+            name={
+              wmStatus === 'loading' ? 'Loader2' :
+              wmStatus === 'done'    ? 'CheckCircle2' :
+              wmStatus === 'error'   ? 'AlertCircle' :
+              'Eraser'
+            }
+            size={10}
+            className={wmStatus === 'loading' ? 'animate-spin' : ''}
+          />
+          {wmStatus === 'loading' ? '…' :
+           wmStatus === 'done'    ? 'Готово' :
+           wmStatus === 'error'   ? 'Ошибка' :
+           'Удалить ВЗ'}
+        </button>
+
+        {/* Удалить фото */}
+        <button
+          type="button"
+          onPointerDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); onRemove(); }}
+          className="inline-flex items-center justify-center gap-0.5 text-[9px] font-semibold px-1.5 py-1 rounded-md bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 transition"
+          title="Удалить фото"
+        >
+          <Icon name="Trash2" size={10} /> Удалить
+        </button>
 
       </div>
     </div>
