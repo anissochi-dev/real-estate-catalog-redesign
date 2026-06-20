@@ -467,16 +467,18 @@ export default function ListingsTable({
                     {(it.stats_leads ?? 0).toLocaleString('ru')}
                   </span>
                 </button>
-                <div className="flex items-center gap-1 min-w-0">
+                <div className="flex items-center gap-1 min-w-0 flex-1">
                   <Icon name="User" size={11} className="text-muted-foreground/50 flex-shrink-0" />
-                  <div className="text-xs text-muted-foreground truncate max-w-[140px]">
-                    {it.owner_name && <span className="font-medium text-foreground">{it.owner_name}</span>}
+                  <div className="flex flex-col min-w-0">
+                    {it.owner_name && (
+                      <span className="text-[11px] font-medium text-foreground truncate max-w-[100px]">{it.owner_name}</span>
+                    )}
                     {it.owner_phone && showPhone && (
-                      <a href={`tel:${it.owner_phone}`} className="ml-1 text-brand-blue hover:underline" onClick={e => e.stopPropagation()}>
+                      <a href={`tel:${it.owner_phone}`} className="text-[10px] text-brand-blue hover:underline whitespace-nowrap" onClick={e => e.stopPropagation()}>
                         {it.owner_phone}
                       </a>
                     )}
-                    {!it.owner_name && !it.owner_phone && '—'}
+                    {!it.owner_name && !it.owner_phone && <span className="text-[11px] text-muted-foreground">—</span>}
                   </div>
                 </div>
                 <span className="text-[10px] text-muted-foreground/60 flex-shrink-0">
