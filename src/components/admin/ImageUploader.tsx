@@ -26,8 +26,15 @@ const JPEG_QUALITY = 0.82;
 
 async function compressImage(file: File): Promise<File> {
   if (file.type === 'image/gif' || file.type === 'image/svg+xml') return file;
+  // HEIC/HEIF не поддерживаются createImageBitmap — грузим оригинал
+  if (file.type === 'image/heic' || file.type === 'image/heif' ||
+      file.name.toLowerCase().match(/\.(heic|heif)$/)) return file;
   try {
-    const bitmap = await createImageBitmap(file);
+    // Таймаут 10 сек — защита от зависания на неподдерживаемых форматах
+    const bitmap = await Promise.race([
+      createImageBitmap(file),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 10_000)),
+    ]);
     const { width, height } = bitmap;
     const longest = Math.max(width, height);
     const scale = longest > MAX_SIDE ? MAX_SIDE / longest : 1;
@@ -262,6 +269,7 @@ export default function ImageUploader({
         progress={progress}
         shouldCompress={shouldCompress}
         hint={hint}
+        canAdd={multiple ? Math.max(0, MAX_FILES - value.length) : 1}
         onFiles={handleFiles}
       />
 
