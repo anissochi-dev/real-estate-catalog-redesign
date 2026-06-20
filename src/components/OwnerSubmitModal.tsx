@@ -78,15 +78,17 @@ export default function OwnerSubmitModal({ onClose }: Props) {
   const [price,         setPrice]         = useState('');
   const [description,   setDescription]   = useState('');
   const [condition,     setCondition]     = useState('');
-  const [utilities,     setUtilities]     = useState<string[]>([]);
+  // utilities — Record<key, value>, e.g. { 'Вода': 'Центральная' }
+  // сериализуется в строку "Вода: Центральная, Газ: Магистральный" — точно как в редакторе
+  const [utilities,     setUtilities]     = useState<Record<string, string>>({});
   const [electricityKw, setElectricityKw] = useState('');
   const [showExtra,     setShowExtra]     = useState(false);
   const [floor,         setFloor]         = useState('');
   const [totalFloors,   setTotalFloors]   = useState('');
   const [ceilHeight,    setCeilHeight]    = useState('');
 
-  const toggleUtility = (id: string) =>
-    setUtilities(prev => prev.includes(id) ? prev.filter(u => u !== id) : [...prev, id]);
+  const setUtilityValue = (key: string, value: string) =>
+    setUtilities(prev => value ? { ...prev, [key]: value } : Object.fromEntries(Object.entries(prev).filter(([k]) => k !== key)));
 
   // Шаг 3 — фото
   const [photos,       setPhotos]       = useState<string[]>([]);
@@ -115,7 +117,7 @@ export default function OwnerSubmitModal({ onClose }: Props) {
     if (!price || +price <= 0)                 e.price         = 'Введите стоимость';
     if (!description.trim())                   e.description   = 'Добавьте описание';
     if (!condition)                            e.condition     = 'Укажите состояние объекта';
-    if (utilities.length === 0)                e.utilities     = 'Отметьте хотя бы одну коммуникацию';
+    if (Object.keys(utilities).length === 0)   e.utilities     = 'Укажите хотя бы одну коммуникацию';
     if (!electricityKw || +electricityKw <= 0) e.electricityKw = 'Укажите электрическую мощность';
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -166,7 +168,10 @@ export default function OwnerSubmitModal({ onClose }: Props) {
         floor:          floor ? parseInt(floor) : undefined,
         total_floors:   totalFloors ? parseInt(totalFloors) : undefined,
         condition:      condition || undefined,
-        utilities:      utilities.length ? utilities.join(', ') : undefined,
+        // Сериализуем в формат "Ключ: Значение, ..." — точно как хранит редактор объекта
+        utilities:      Object.keys(utilities).length
+          ? Object.entries(utilities).map(([k, v]) => `${k}: ${v}`).join(', ')
+          : undefined,
         electricity_kw: electricityKw ? parseFloat(electricityKw) : undefined,
         ceiling_height: ceilHeight ? parseFloat(ceilHeight) : undefined,
         video_url:      videoUrl.trim() || undefined,
@@ -286,7 +291,7 @@ export default function OwnerSubmitModal({ onClose }: Props) {
               area={area} setArea={setArea}
               price={price} setPrice={setPrice}
               condition={condition} setCondition={setCondition}
-              utilities={utilities} toggleUtility={toggleUtility}
+              utilities={utilities} setUtilityValue={setUtilityValue}
               electricityKw={electricityKw} setElectricityKw={setElectricityKw}
               description={description} setDescription={setDescription}
               showExtra={showExtra} setShowExtra={setShowExtra}

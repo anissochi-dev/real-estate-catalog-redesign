@@ -24,14 +24,15 @@ const CONDITIONS = [
   { id: 'shellcore', label: 'Черновая отделка' },
 ];
 
-const UTILITIES = [
-  { id: 'Электричество', label: 'Электричество', icon: 'Zap' },
-  { id: 'Вода',          label: 'Вода',          icon: 'Droplets' },
-  { id: 'Канализация',   label: 'Канализация',   icon: 'ArrowDownToLine' },
-  { id: 'Отопление',     label: 'Отопление',     icon: 'Flame' },
-  { id: 'Газ',           label: 'Газ',           icon: 'Wind' },
-  { id: 'Интернет',      label: 'Интернет',      icon: 'Wifi' },
-  { id: 'Вентиляция',    label: 'Вентиляция',    icon: 'AirVent' },
+// Точно такой же формат что в ListingRoomFeatures — ключ: значение
+export const UTILITIES_MAP = [
+  { key: 'Электричество', icon: 'Zap',             options: ['220В', '380В (3 фазы)', 'Генератор', 'Солнечные панели'] },
+  { key: 'Вода',          icon: 'Droplets',         options: ['Центральная', 'Скважина', 'Колодец', 'Привозная'] },
+  { key: 'Канализация',   icon: 'ArrowDownToLine',  options: ['Центральная', 'Септик', 'Выгребная яма', 'Ливневая'] },
+  { key: 'Отопление',     icon: 'Flame',            options: ['Центральное', 'Газовое', 'Электрическое', 'Автономное', 'Печное'] },
+  { key: 'Газ',           icon: 'Wind',             options: ['Магистральный', 'Баллонный', 'Отсутствует'] },
+  { key: 'Интернет',      icon: 'Wifi',             options: ['Оптоволокно', 'Wi-Fi', 'Кабельный', '4G/5G'] },
+  { key: 'Вентиляция',    icon: 'AirVent',          options: ['Приточно-вытяжная', 'Принудительная', 'Естественная'] },
 ];
 
 interface Props {
@@ -48,8 +49,9 @@ interface Props {
   setPrice: (v: string) => void;
   condition: string;
   setCondition: (v: string) => void;
-  utilities: string[];
-  toggleUtility: (id: string) => void;
+  // utilities — Record<key, value>, e.g. { 'Вода': 'Центральная', 'Газ': 'Магистральный' }
+  utilities: Record<string, string>;
+  setUtilityValue: (key: string, value: string) => void;
   electricityKw: string;
   setElectricityKw: (v: string) => void;
   description: string;
@@ -75,7 +77,7 @@ export default function OwnerSubmitStepObject({
   area, setArea,
   price, setPrice,
   condition, setCondition,
-  utilities, toggleUtility,
+  utilities, setUtilityValue,
   electricityKw, setElectricityKw,
   description, setDescription,
   showExtra, setShowExtra,
@@ -162,24 +164,37 @@ export default function OwnerSubmitStepObject({
         {errors.condition && <div className="text-xs text-red-500 mt-1">{errors.condition}</div>}
       </div>
 
-      {/* Коммуникации — обязательное */}
+      {/* Коммуникации — дропдауны с конкретными значениями, формат "Ключ: Значение" */}
       <div>
-        <label className="text-xs font-semibold text-muted-foreground block mb-1.5">Коммуникации *</label>
-        <div className="grid grid-cols-2 gap-1.5">
-          {UTILITIES.map(u => {
-            const checked = utilities.includes(u.id);
+        <label className="text-xs font-semibold text-muted-foreground block mb-1.5">
+          Коммуникации * <span className="font-normal opacity-60">(выберите хотя бы одну)</span>
+        </label>
+        <div className="space-y-1.5">
+          {UTILITIES_MAP.map(u => {
+            const selected = utilities[u.key] || '';
+            const hasValue = !!selected;
             return (
-              <button key={u.id} type="button"
-                onClick={() => { toggleUtility(u.id); setErrors(er => ({ ...er, utilities: '' })); }}
-                className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-xs font-semibold transition ${
-                  checked
-                    ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                    : 'border-border hover:border-emerald-400/60 text-foreground'
+              <div key={u.key}
+                className={`flex items-center gap-2 rounded-xl border-2 px-3 py-2 transition ${
+                  hasValue ? 'border-emerald-400 bg-emerald-50/60' : 'border-border bg-white'
                 }`}>
-                <Icon name={checked ? 'CheckSquare' : 'Square'} size={13} className={checked ? 'text-emerald-500' : 'text-muted-foreground'} />
-                <Icon name={u.icon} size={12} className={checked ? 'text-emerald-600' : 'text-muted-foreground'} />
-                {u.label}
-              </button>
+                <Icon name={u.icon} size={14} className={hasValue ? 'text-emerald-600 shrink-0' : 'text-muted-foreground shrink-0'} />
+                <span className={`text-xs font-semibold min-w-[100px] ${hasValue ? 'text-emerald-800' : 'text-foreground'}`}>
+                  {u.key}
+                </span>
+                <select
+                  value={selected}
+                  onChange={e => {
+                    setUtilityValue(u.key, e.target.value);
+                    setErrors(er => ({ ...er, utilities: '' }));
+                  }}
+                  className="flex-1 text-xs px-2 py-1 border border-border rounded-lg bg-white outline-none focus:border-emerald-400"
+                >
+                  <option value="">— не указано —</option>
+                  {u.options.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+                {hasValue && <Icon name="Check" size={13} className="text-emerald-500 shrink-0" />}
+              </div>
             );
           })}
         </div>
