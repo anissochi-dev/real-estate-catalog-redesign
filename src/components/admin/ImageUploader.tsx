@@ -157,8 +157,11 @@ export default function ImageUploader({
     const all = Array.from(files).filter(f => f.type.startsWith('image/'));
     if (!all.length) return;
 
+    // Снимаем актуальное значение через ref — избегаем stale closure
+    const currentValue = valueRef.current;
+
     // Ограничение: не более MAX_FILES итого
-    const currentCount = multiple ? value.length : 0;
+    const currentCount = multiple ? currentValue.length : 0;
     const canAdd = multiple ? Math.max(0, MAX_FILES - currentCount) : 1;
     if (canAdd === 0) {
       toast.error(`Максимум ${MAX_FILES} фотографий`);
@@ -171,8 +174,11 @@ export default function ImageUploader({
 
     setUploading(true);
     setProgress({ done: 0, total: arr.length });
+
+    // Накапливаем все загруженные URL и вызываем onChange ОДИН РАЗ в конце.
+    // Это исключает stale closure: мы не читаем value внутри цикла.
     const uploaded: string[] = [];
-    const errors: string[] = [];
+    const failed: string[] = [];
 
     for (const f of arr) {
       try {
@@ -180,20 +186,23 @@ export default function ImageUploader({
         const needWm = !!(applyWatermark && settings.watermark_enabled && settings.watermark_url);
         const r = await uploadFileEx(compressed, folder, needWm);
         uploaded.push(r.url);
-        setProgress(p => ({ ...p, done: p.done + 1 }));
-      } catch (e: unknown) {
-        errors.push(f.name);
-        setProgress(p => ({ ...p, done: p.done + 1 }));
+      } catch {
+        failed.push(f.name);
       }
+      setProgress(p => ({ ...p, done: p.done + 1 }));
     }
 
     setUploading(false);
 
     if (uploaded.length > 0) {
-      onChange(multiple ? [...value, ...uploaded] : uploaded.slice(0, 1));
+      // Читаем актуальный список через ref — он обновлялся через useEffect
+      const base = multiple ? valueRef.current : [];
+      onChange(multiple ? [...base, ...uploaded] : uploaded.slice(0, 1));
     }
-    if (errors.length > 0) {
-      toast.error(`Не удалось загрузить ${errors.length} фото: ${errors.slice(0, 3).join(', ')}${errors.length > 3 ? '...' : ''}`);
+    if (failed.length > 0) {
+      toast.error(
+        `Не удалось загрузить ${failed.length} фото: ${failed.slice(0, 3).join(', ')}${failed.length > 3 ? '...' : ''}`
+      );
     }
   };
 
