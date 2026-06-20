@@ -7,15 +7,15 @@ import { CRM_CHECKS_URL as CHECKS_URL } from '@/lib/adminApi';
 import { SOURCE_INFO, CheckResult } from './checks/checksTypes';
 import ChecksSearchTab from './checks/ChecksSearchTab';
 import { ChecksHistoryTab, ChecksQuotaTab } from './checks/ChecksHistoryTab';
-import NewDbTab from './checks/NewDbTab';
+import OwnersTab from './checks/OwnersTab';
 
-type Tab = 'search' | 'newdb' | 'history' | 'quota';
+type Tab = 'search' | 'owners' | 'history' | 'quota';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'search',  label: 'Проверка',       icon: 'Search' },
-  { id: 'newdb',   label: 'Физлица (NewDB)', icon: 'UserSearch' },
-  { id: 'history', label: 'История',         icon: 'Clock' },
-  { id: 'quota',   label: 'Квоты',           icon: 'BarChart2' },
+  { id: 'search',  label: 'Компании',    icon: 'Building2' },
+  { id: 'owners',  label: 'Собственники', icon: 'UserSearch' },
+  { id: 'history', label: 'История',      icon: 'Clock' },
+  { id: 'quota',   label: 'Квоты',        icon: 'BarChart2' },
 ];
 
 export default function CrmChecks() {
@@ -26,13 +26,11 @@ export default function CrmChecks() {
   // Источники по умолчанию зависят от типа проверки
   const DEFAULT_SOURCES: Record<string, string[]> = {
     company:  ['checko', 'dadata'],
-    owner:    ['newdb', 'bezopasno'],
     property: [],
   };
   const [selectedSources, setSelectedSources] = useState(DEFAULT_SOURCES['company']);
   const [results, setResults] = useState<Record<string, CheckResult> | null>(null);
   const [tab, setTab] = useState<Tab>('search');
-
   const headers = { 'Content-Type': 'application/json', 'X-Auth-Token': token || '' };
 
   interface DadataInfo {
@@ -218,7 +216,7 @@ export default function CrmChecks() {
           >
             <Icon name={t.icon} fallback="Circle" size={14} />
             {t.label}
-            {t.id === 'newdb' && (
+            {t.id === 'owners' && (
               <span className="ml-1 text-[10px] font-bold bg-brand-blue text-white px-1.5 py-0.5 rounded-full leading-none">
                 12
               </span>
@@ -243,8 +241,11 @@ export default function CrmChecks() {
         />
       )}
 
-      {tab === 'newdb' && (
-        <NewDbTab newdbConnected={!!serviceStatus['newdb']} />
+      {tab === 'owners' && (
+        <OwnersTab
+          serviceStatus={serviceStatus as Record<string, boolean>}
+          newdbConnected={!!serviceStatus['newdb']}
+        />
       )}
 
       {tab === 'history' && (

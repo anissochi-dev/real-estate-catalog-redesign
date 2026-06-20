@@ -90,7 +90,6 @@ export const SOURCE_INFO: Record<string, { label: string; color: string; desc: s
 };
 
 export const CHECK_TYPES = [
-  { id: 'company', label: 'Компания', placeholder: 'ИНН или название компании', icon: 'Building2' },
-  { id: 'owner', label: 'Собственник', placeholder: 'ФИО или телефон', icon: 'User' },
-  { id: 'property', label: 'Недвижимость', placeholder: 'Кадастровый номер или адрес', icon: 'MapPin' },
+  { id: 'company',  label: 'Компания',      placeholder: 'ИНН или название компании',      icon: 'Building2' },
+  { id: 'property', label: 'Недвижимость',  placeholder: 'Кадастровый номер или адрес',    icon: 'MapPin' },
 ];
