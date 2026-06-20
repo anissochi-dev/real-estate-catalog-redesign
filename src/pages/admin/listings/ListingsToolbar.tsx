@@ -44,10 +44,8 @@ export default function ListingsToolbar({
 
   return (
     <>
-      {/* Строка: вкладки + кнопки действий */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {/* Вкладки статуса (без «Все») */}
-        {/* Таб модерации — только для admin и director */}
+      {/* Вкладки статуса — одна линия, на мобиле центрированы */}
+      <div className="flex items-center justify-center lg:justify-start gap-2 flex-wrap">
         {canModerate && counts.moderation > 0 && (
           <button onClick={() => switchTab('moderation')}
             className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${
@@ -62,7 +60,6 @@ export default function ListingsToolbar({
             </span>
           </button>
         )}
-
         {([
           ['active',   `Активные (${counts.active})`,   'CheckCircle'],
           ['hidden',   `Скрытые (${counts.hidden})`,    'EyeOff'],
@@ -74,41 +71,37 @@ export default function ListingsToolbar({
             {l}
           </button>
         ))}
-
-        {/* Кнопки Импорт + Добавить — справа */}
-        {canCreate && (
-          <div className="flex items-center gap-2 ml-auto">
-            <button
-              onClick={() => setImportOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted transition-colors"
-            >
-              <Icon name="Link" size={14} /> Импорт
-            </button>
-
-            {/* Кнопка добавить/продолжить — фиксированный размер */}
-            <button
-              onClick={onAdd}
-              className="inline-flex items-center justify-center gap-1.5 w-[160px] h-[36px] rounded-xl btn-blue text-white text-sm font-semibold transition-colors shrink-0"
-            >
-              <Icon name={hasDraft ? 'FileEdit' : 'Plus'} size={14} className="shrink-0" />
-              {hasDraft ? 'Продолжить' : 'Добавить объект'}
-            </button>
-
-            {/* Крестик удаления черновика — всегда занимает место */}
-            <button
-              onClick={hasDraft ? () => { clearDraft(); setHasDraft(false); } : undefined}
-              title={hasDraft ? 'Удалить черновик' : undefined}
-              className={`inline-flex items-center justify-center w-[36px] h-[36px] rounded-xl border transition-colors shrink-0 ${
-                hasDraft
-                  ? 'border-amber-200 bg-amber-50 text-amber-600 hover:bg-red-50 hover:border-red-200 hover:text-red-600'
-                  : 'invisible pointer-events-none'
-              }`}
-            >
-              <Icon name="X" size={14} />
-            </button>
-          </div>
-        )}
       </div>
+
+      {/* Кнопки Импорт + Добавить */}
+      {canCreate && (
+        <div className="flex items-center gap-2 justify-center lg:justify-start">
+          <button
+            onClick={() => setImportOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted transition-colors"
+          >
+            <Icon name="Link" size={14} /> Импорт
+          </button>
+          <button
+            onClick={onAdd}
+            className="inline-flex items-center justify-center gap-1.5 w-[160px] h-[36px] rounded-xl btn-blue text-white text-sm font-semibold transition-colors shrink-0"
+          >
+            <Icon name={hasDraft ? 'FileEdit' : 'Plus'} size={14} className="shrink-0" />
+            {hasDraft ? 'Продолжить' : 'Добавить объект'}
+          </button>
+          <button
+            onClick={hasDraft ? () => { clearDraft(); setHasDraft(false); } : undefined}
+            title={hasDraft ? 'Удалить черновик' : undefined}
+            className={`inline-flex items-center justify-center w-[36px] h-[36px] rounded-xl border transition-colors shrink-0 ${
+              hasDraft
+                ? 'border-amber-200 bg-amber-50 text-amber-600 hover:bg-red-50 hover:border-red-200 hover:text-red-600'
+                : 'invisible pointer-events-none'
+            }`}
+          >
+            <Icon name="X" size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Переключатель Мои / Все для брокера */}
       {isBroker && toggleMyOnly && (
