@@ -22,11 +22,22 @@ const CATEGORIES = [
 ];
 
 const CONDITIONS = [
-  { id: 'new',      label: 'Новое' },
-  { id: 'euro',     label: 'Евроремонт' },
-  { id: 'good',     label: 'Хорошее' },
-  { id: 'cosmetic', label: 'Требует косметики' },
-  { id: 'rough',    label: 'Без отделки' },
+  { id: 'new',       label: 'Новое' },
+  { id: 'euro',      label: 'Евроремонт' },
+  { id: 'good',      label: 'Хорошее' },
+  { id: 'cosmetic',  label: 'Требуется косметика' },
+  { id: 'rough',     label: 'Без отделки' },
+  { id: 'shellcore', label: 'Черновая отделка' },
+];
+
+const UTILITIES = [
+  { id: 'Электричество', label: 'Электричество', icon: 'Zap' },
+  { id: 'Вода',          label: 'Вода',          icon: 'Droplets' },
+  { id: 'Канализация',   label: 'Канализация',   icon: 'ArrowDownToLine' },
+  { id: 'Отопление',     label: 'Отопление',     icon: 'Flame' },
+  { id: 'Газ',           label: 'Газ',           icon: 'Wind' },
+  { id: 'Интернет',      label: 'Интернет',      icon: 'Wifi' },
+  { id: 'Вентиляция',    label: 'Вентиляция',    icon: 'AirVent' },
 ];
 
 const MAX_SIDE = 1920;
@@ -99,11 +110,16 @@ export default function OwnerSubmitModal({ onClose }: Props) {
   const [area,        setArea]        = useState('');
   const [price,       setPrice]       = useState('');
   const [description, setDescription] = useState('');
-  const [showExtra,   setShowExtra]   = useState(false);
-  const [floor,       setFloor]       = useState('');
-  const [totalFloors, setTotalFloors] = useState('');
-  const [condition,   setCondition]   = useState('');
-  const [ceilHeight,  setCeilHeight]  = useState('');
+  const [condition,    setCondition]    = useState('');
+  const [utilities,    setUtilities]    = useState<string[]>([]);
+  const [electricityKw, setElectricityKw] = useState('');
+  const [showExtra,    setShowExtra]    = useState(false);
+  const [floor,        setFloor]        = useState('');
+  const [totalFloors,  setTotalFloors]  = useState('');
+  const [ceilHeight,   setCeilHeight]   = useState('');
+
+  const toggleUtility = (id: string) =>
+    setUtilities(prev => prev.includes(id) ? prev.filter(u => u !== id) : [...prev, id]);
 
   // Шаг 3 — фото
   const [photos,      setPhotos]     = useState<string[]>([]);  // base64
@@ -128,11 +144,14 @@ export default function OwnerSubmitModal({ onClose }: Props) {
 
   const validate2 = () => {
     const e: Record<string, string> = {};
-    if (!category)            e.category    = 'Выберите категорию';
-    if (!address.trim())      e.address     = 'Введите адрес';
-    if (!area || +area <= 0)  e.area        = 'Введите площадь';
-    if (!price || +price <= 0) e.price      = 'Введите стоимость';
-    if (!description.trim())  e.description = 'Добавьте описание';
+    if (!category)                      e.category      = 'Выберите категорию';
+    if (!address.trim())                e.address       = 'Введите адрес';
+    if (!area || +area <= 0)            e.area          = 'Введите площадь';
+    if (!price || +price <= 0)          e.price         = 'Введите стоимость';
+    if (!description.trim())            e.description   = 'Добавьте описание';
+    if (!condition)                     e.condition     = 'Укажите состояние объекта';
+    if (utilities.length === 0)         e.utilities     = 'Отметьте хотя бы одну коммуникацию';
+    if (!electricityKw || +electricityKw <= 0) e.electricityKw = 'Укажите электрическую мощность';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -182,9 +201,11 @@ export default function OwnerSubmitModal({ onClose }: Props) {
         description: description.trim(),
         floor:        floor ? parseInt(floor) : undefined,
         total_floors: totalFloors ? parseInt(totalFloors) : undefined,
-        condition:    condition || undefined,
+        condition:      condition || undefined,
+        utilities:      utilities.length ? utilities.join(', ') : undefined,
+        electricity_kw: electricityKw ? parseFloat(electricityKw) : undefined,
         ceiling_height: ceilHeight ? parseFloat(ceilHeight) : undefined,
-        video_url:    videoUrl.trim() || undefined,
+        video_url:      videoUrl.trim() || undefined,
         photos: photos.map(b64 => b64.split(',')[1] || b64),
       };
 
@@ -445,11 +466,68 @@ export default function OwnerSubmitModal({ onClose }: Props) {
                 </div>
               </div>
 
+              {/* Состояние — обязательное */}
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground block mb-1.5">Состояние объекта *</label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {CONDITIONS.map(c => (
+                    <button key={c.id} type="button" onClick={() => { setCondition(c.id); setErrors(er => ({ ...er, condition: '' })); }}
+                      className={`py-2 px-2 rounded-xl border-2 text-xs font-semibold transition text-center ${
+                        condition === c.id
+                          ? 'border-brand-blue bg-brand-blue/5 text-brand-blue'
+                          : 'border-border hover:border-brand-blue/40 text-foreground'
+                      }`}>
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+                {errors.condition && <div className="text-xs text-red-500 mt-1">{errors.condition}</div>}
+              </div>
+
+              {/* Коммуникации — обязательное */}
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground block mb-1.5">Коммуникации *</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {UTILITIES.map(u => {
+                    const checked = utilities.includes(u.id);
+                    return (
+                      <button key={u.id} type="button"
+                        onClick={() => { toggleUtility(u.id); setErrors(er => ({ ...er, utilities: '' })); }}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-xs font-semibold transition ${
+                          checked
+                            ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                            : 'border-border hover:border-emerald-400/60 text-foreground'
+                        }`}>
+                        <Icon name={checked ? 'CheckSquare' : 'Square'} size={13} className={checked ? 'text-emerald-500' : 'text-muted-foreground'} />
+                        <Icon name={u.icon} size={12} className={checked ? 'text-emerald-600' : 'text-muted-foreground'} />
+                        {u.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {errors.utilities && <div className="text-xs text-red-500 mt-1">{errors.utilities}</div>}
+              </div>
+
+              {/* Электрическая мощность — обязательное */}
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground block mb-1">Электрическая мощность, кВт *</label>
+                <input
+                  value={electricityKw}
+                  onChange={e => { setElectricityKw(e.target.value); setErrors(er => ({ ...er, electricityKw: '' })); }}
+                  type="number" min="0.1" step="0.1" placeholder="15"
+                  className={inputCls('electricityKw')}
+                />
+                {errors.electricityKw
+                  ? <div className="text-xs text-red-500 mt-1">{errors.electricityKw}</div>
+                  : <div className="text-[11px] text-muted-foreground mt-1">Пример: 15 кВт, 40 кВт (380В — три фазы)</div>
+                }
+              </div>
+
               {/* Описание */}
               <div>
                 <label className="text-xs font-semibold text-muted-foreground block mb-1">Описание *</label>
                 <textarea value={description} onChange={e => { setDescription(e.target.value); setErrors(er => ({ ...er, description: '' })); }}
-                  rows={4} placeholder="Расскажите об объекте: состояние, особенности, что рядом..."
+                  rows={3} placeholder="Расскажите об объекте: особенности, что рядом, условия..."
                   className={`${inputCls('description')} resize-none`} />
                 {errors.description && <div className="text-xs text-red-500 mt-1">{errors.description}</div>}
                 <div className="text-[10px] text-muted-foreground mt-0.5 text-right">{description.length}/3000</div>
@@ -459,30 +537,23 @@ export default function OwnerSubmitModal({ onClose }: Props) {
               <button type="button" onClick={() => setShowExtra(v => !v)}
                 className="flex items-center gap-2 text-sm text-brand-blue hover:underline">
                 <Icon name={showExtra ? 'ChevronUp' : 'ChevronDown'} size={14} />
-                Дополнительные характеристики {showExtra ? '' : '(необязательно)'}
+                Дополнительно {showExtra ? '' : '(этаж, потолки — необязательно)'}
               </button>
 
               {showExtra && (
-                <div className="grid grid-cols-2 gap-3 pt-1">
+                <div className="grid grid-cols-3 gap-3 pt-1">
                   <div>
                     <label className="text-xs font-semibold text-muted-foreground block mb-1">Этаж</label>
                     <input value={floor} onChange={e => setFloor(e.target.value)} type="number" min="1"
                       placeholder="2" className={inputCls('floor')} />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-muted-foreground block mb-1">Этажей в здании</label>
+                    <label className="text-xs font-semibold text-muted-foreground block mb-1">Этажей</label>
                     <input value={totalFloors} onChange={e => setTotalFloors(e.target.value)} type="number" min="1"
                       placeholder="5" className={inputCls('totalFloors')} />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-muted-foreground block mb-1">Состояние</label>
-                    <select value={condition} onChange={e => setCondition(e.target.value)} className={inputCls('condition')}>
-                      <option value="">— не указано —</option>
-                      {CONDITIONS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-muted-foreground block mb-1">Высота потолков, м</label>
+                    <label className="text-xs font-semibold text-muted-foreground block mb-1">Потолки, м</label>
                     <input value={ceilHeight} onChange={e => setCeilHeight(e.target.value)} type="number" min="1" step="0.1"
                       placeholder="3.2" className={inputCls('ceilHeight')} />
                   </div>
