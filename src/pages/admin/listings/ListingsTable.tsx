@@ -50,6 +50,7 @@ function ExportBadges({ it }: { it: Listing }) {
 export default function ListingsTable({
   items, onEdit, onArchive, onHistory, onPhotoDownload, onInternalCard, onModerate,
   selected, onToggleSelect, onSelectAll, onDeselectAll,
+  siteUrl,
   onBulk, onBulkDelete, bulkLoading = false, isAdmin = false,
 }: Props) {
   const { user } = useAuth();
@@ -362,7 +363,7 @@ export default function ListingsTable({
             {/* ── Мобильное фото — во всю ширину ── */}
             <div
               className="sm:hidden relative cursor-pointer overflow-hidden w-full"
-              onClick={() => openSite(it)}
+              onClick={() => it.slug ? window.open(`${siteUrl || ''}/property/${it.slug}`, '_blank') : onInternalCard?.(it)}
               style={{ aspectRatio: '16/9' }}
             >
               {mainImg ? (
