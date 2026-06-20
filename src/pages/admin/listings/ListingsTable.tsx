@@ -471,7 +471,7 @@ export default function ListingsTable({
                   <Icon name="User" size={11} className="text-muted-foreground/50 flex-shrink-0" />
                   <div className="flex flex-col min-w-0">
                     {it.owner_name && (
-                      <span className="text-[11px] font-medium text-foreground truncate max-w-[100px]">{it.owner_name}</span>
+                      <span className="text-[11px] font-medium text-foreground">{it.owner_name}</span>
                     )}
                     {it.owner_phone && showPhone && (
                       <a href={`tel:${it.owner_phone}`} className="text-[10px] text-brand-blue hover:underline whitespace-nowrap" onClick={e => e.stopPropagation()}>
