@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
 import Icon from '@/components/ui/icon';
 
+const MAX_FILES = 30;
+
 interface Props {
   multiple: boolean;
   uploading: boolean;
@@ -24,24 +26,21 @@ export default function ImageUploaderDropZone({
   const [dragOver, setDragOver] = useState(false);
 
   const isFull = multiple && canAdd !== undefined && canAdd <= 0;
+  const added = canAdd !== undefined ? MAX_FILES - canAdd : 0;
+  const pct = multiple && canAdd !== undefined ? Math.round((added / MAX_FILES) * 100) : 0;
+
+  const openPicker = () => { if (!isFull && !uploading) inputRef.current?.click(); };
 
   return (
     <div
-      onDragOver={e => { e.preventDefault(); if (!isFull) setDragOver(true); }}
+      onDragOver={e => { e.preventDefault(); if (!isFull && !uploading) setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={e => {
         e.preventDefault();
         setDragOver(false);
-        if (!isFull && e.dataTransfer.files.length) onFiles(e.dataTransfer.files);
+        if (!isFull && !uploading && e.dataTransfer.files.length) onFiles(e.dataTransfer.files);
       }}
-      onClick={() => { if (!isFull) inputRef.current?.click(); }}
-      className={`border-2 border-dashed rounded-xl py-4 px-6 text-center transition ${
-        isFull
-          ? 'border-border bg-muted/20 opacity-50 cursor-not-allowed'
-          : dragOver
-            ? 'cursor-pointer border-brand-blue bg-brand-blue/5'
-            : 'cursor-pointer border-border hover:border-brand-blue/50 bg-muted/30'
-      }`}
+      className="space-y-2"
     >
       <input
         ref={inputRef}
@@ -52,38 +51,92 @@ export default function ImageUploaderDropZone({
         onChange={e => {
           const files = e.target.files;
           if (!files || files.length === 0) return;
-          // Копируем файлы в массив до сброса input
           const fileArr = Array.from(files);
-          // Сбрасываем input (чтобы можно было выбрать те же файлы повторно) после копирования
           e.target.value = '';
           onFiles(fileArr);
         }}
       />
-      <Icon
-        name={uploading ? 'Loader2' : isFull ? 'CheckCircle2' : 'Upload'}
-        size={24}
-        className={`mx-auto mb-1.5 ${isFull ? 'text-emerald-500' : 'text-brand-blue'} ${uploading ? 'animate-spin' : ''}`}
-      />
-      <div className="text-sm font-semibold">
-        {uploading
-          ? `Загрузка ${progress.done}/${progress.total}...`
-          : isFull
-            ? 'Достигнут лимит 30 фото'
-            : multiple
-              ? 'Нажмите или перетащите фото'
-              : 'Нажмите или перетащите изображение'}
-      </div>
-      {!isFull && (
-        <div className="text-xs text-muted-foreground mt-0.5">
-          {hint || (multiple && canAdd !== undefined
-            ? `JPG, PNG, WEBP · можно добавить ещё ${canAdd} из 30`
-            : 'JPG, PNG, WEBP — до 30 фото')}
+
+      {/* Кнопка выбора */}
+      <button
+        type="button"
+        onClick={openPicker}
+        disabled={isFull || uploading}
+        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-dashed transition ${
+          dragOver
+            ? 'border-brand-blue bg-brand-blue/5'
+            : isFull
+              ? 'border-emerald-300 bg-emerald-50 cursor-not-allowed'
+              : uploading
+                ? 'border-border bg-muted/30 cursor-wait'
+                : 'border-border hover:border-brand-blue/60 hover:bg-brand-blue/5 bg-muted/30 cursor-pointer'
+        }`}
+      >
+        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+          isFull ? 'bg-emerald-100' : 'bg-brand-blue/10'
+        }`}>
+          <Icon
+            name={uploading ? 'Loader2' : isFull ? 'CheckCircle2' : 'ImagePlus'}
+            size={18}
+            className={`${isFull ? 'text-emerald-600' : 'text-brand-blue'} ${uploading ? 'animate-spin' : ''}`}
+          />
         </div>
-      )}
-      {shouldCompress && !isFull && (
-        <div className="text-[10px] text-muted-foreground/80 mt-0.5 inline-flex items-center gap-1">
-          <Icon name="Zap" size={10} />
-          Авто-оптимизация: 1920px · WebP 90% (без потери качества)
+
+        <div className="flex-1 text-left min-w-0">
+          {uploading ? (
+            <>
+              <div className="text-sm font-semibold">Загрузка {progress.done} из {progress.total}...</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Пожалуйста, подождите</div>
+            </>
+          ) : isFull ? (
+            <>
+              <div className="text-sm font-semibold text-emerald-700">Лимит достигнут</div>
+              <div className="text-xs text-emerald-600/80">{MAX_FILES} из {MAX_FILES} фото добавлено</div>
+            </>
+          ) : (
+            <>
+              <div className="text-sm font-semibold">
+                {hint || (multiple ? 'Добавить фотографии' : 'Выбрать изображение')}
+              </div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                {multiple && canAdd !== undefined
+                  ? `Осталось мест: ${canAdd} из ${MAX_FILES} · JPG, PNG, WEBP`
+                  : 'JPG, PNG, WEBP'}
+                {shouldCompress && ' · авто-оптимизация'}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Счётчик и прогресс-кольцо */}
+        {multiple && canAdd !== undefined && !uploading && (
+          <div className="shrink-0 flex flex-col items-center gap-0.5">
+            <div className="relative w-10 h-10">
+              <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
+                <circle cx="18" cy="18" r="15" fill="none" stroke="currentColor"
+                  className="text-border" strokeWidth="3" />
+                <circle cx="18" cy="18" r="15" fill="none" strokeWidth="3"
+                  stroke={isFull ? '#10b981' : '#2563eb'}
+                  strokeDasharray={`${pct * 0.942} 94.2`}
+                  strokeLinecap="round" />
+              </svg>
+              <span className={`absolute inset-0 flex items-center justify-center text-[10px] font-bold ${
+                isFull ? 'text-emerald-600' : 'text-brand-blue'
+              }`}>
+                {added}/{MAX_FILES}
+              </span>
+            </div>
+          </div>
+        )}
+      </button>
+
+      {/* Прогресс-бар при загрузке */}
+      {uploading && progress.total > 0 && (
+        <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+          <div
+            className="h-full bg-brand-blue rounded-full transition-all duration-300"
+            style={{ width: `${(progress.done / progress.total) * 100}%` }}
+          />
         </div>
       )}
     </div>
