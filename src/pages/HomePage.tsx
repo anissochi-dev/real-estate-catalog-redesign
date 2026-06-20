@@ -254,19 +254,14 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
             </div>
 
             {/* Вы собственник? — встроен в Hero */}
-            <div className="mt-5 pt-5 border-t border-white/15 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in-up stagger-4">
-              <div className="text-white">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <Icon name="Home" size={15} className="opacity-70" />
-                  <span className="font-semibold text-sm">Вы собственник?</span>
-                </div>
-                <p className="text-white/60 text-xs">
-                  Разместите объект бесплатно — публикация в течение 24 часов
-                </p>
+            <div className="mt-5 flex flex-col items-center gap-2 text-center animate-fade-in-up stagger-4">
+              <div className="flex items-center gap-1.5 text-white/70 text-xs">
+                <Icon name="Home" size={13} className="opacity-70" />
+                <span>Вы собственник? Разместите объект бесплатно — публикация в течение 24 часов</span>
               </div>
               <button
                 onClick={() => setOwnerOpen(true)}
-                className="shrink-0 inline-flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 border border-white/30 text-white font-semibold text-sm rounded-xl transition-colors"
+                className="inline-flex items-center gap-2 px-5 py-2 bg-white/15 hover:bg-white/25 border border-white/30 text-white font-semibold text-sm rounded-xl transition-colors"
               >
                 <Icon name="PlusCircle" size={15} />
                 Разместить объект
