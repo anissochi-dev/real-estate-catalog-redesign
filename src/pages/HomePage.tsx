@@ -252,6 +252,26 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
             <div className="text-[11px] text-white/55 mt-1.5 animate-fade-in-up stagger-3">
               Умный поиск понимает обычный язык — площадь, район, тип, назначение
             </div>
+
+            {/* Вы собственник? — встроен в Hero */}
+            <div className="mt-5 pt-5 border-t border-white/15 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in-up stagger-4">
+              <div className="text-white">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <Icon name="Home" size={15} className="opacity-70" />
+                  <span className="font-semibold text-sm">Вы собственник?</span>
+                </div>
+                <p className="text-white/60 text-xs">
+                  Разместите объект бесплатно — публикация в течение 24 часов
+                </p>
+              </div>
+              <button
+                onClick={() => setOwnerOpen(true)}
+                className="shrink-0 inline-flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 border border-white/30 text-white font-semibold text-sm rounded-xl transition-colors"
+              >
+                <Icon name="PlusCircle" size={15} />
+                Разместить объект
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -364,36 +384,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
         </div>
       </section>
 
-      {/* CTA — Разместить объект */}
-      <section className="py-8 bg-gradient-to-r from-brand-blue to-indigo-700">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
-            <div className="text-white text-center sm:text-left">
-              <div className="flex items-center justify-center sm:justify-start gap-2 mb-1">
-                <Icon name="Home" size={20} className="opacity-80" />
-                <span className="font-bold text-lg">Вы собственник?</span>
-              </div>
-              <p className="text-white/75 text-sm">
-                Разместите объект бесплатно — заявка на модерацию и публикация в течение 24 часов
-              </p>
-            </div>
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="hidden sm:flex flex-col gap-1 text-white/70 text-xs text-right">
-                <div className="flex items-center gap-1.5"><Icon name="Check" size={12} /> Бесплатно</div>
-                <div className="flex items-center gap-1.5"><Icon name="Check" size={12} /> Без регистрации</div>
-                <div className="flex items-center gap-1.5"><Icon name="Check" size={12} /> Быстро — 3 шага</div>
-              </div>
-              <button
-                onClick={() => setOwnerOpen(true)}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-white text-brand-blue font-bold text-sm rounded-xl hover:bg-white/90 transition shadow-lg"
-              >
-                <Icon name="PlusCircle" size={18} />
-                Разместить объект
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
+
 
       {showLeads && (
         <Suspense fallback={<div className="py-8 bg-muted/20 border-t border-border" style={{minHeight: 200}} />}>
