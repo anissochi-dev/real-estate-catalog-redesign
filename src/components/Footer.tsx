@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
 import { Page } from '@/App';
@@ -31,11 +31,6 @@ function LegalModal({ title, content, onClose }: { title: string; content: strin
   );
 }
 
-const DEFAULT_CATALOG: { label: string; page?: Page; href?: string }[] = [
-  { label: 'Все объекты', page: 'catalog' },
-  { label: 'На карте', page: 'map' },
-];
-
 const DEFAULT_CATEGORIES: { label: string; href: string }[] = [
   { label: 'Офисы', href: '/catalog/office' },
   { label: 'Магазин, торговое помещение', href: '/catalog/retail' },
@@ -65,7 +60,6 @@ function parseLinks(raw: string): { label: string; href: string }[] {
 
 export default function Footer({ onLogin, setCurrentPage }: Props) {
   const { settings } = useSettings();
-  const navigate = useNavigate();
   const [modal, setModal] = useState<{ title: string; content: string } | null>(null);
   const [districts, setDistricts] = useState<District[]>([]);
 
@@ -78,10 +72,6 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
   const email = settings.company_email;
   const city = settings.main_city || 'Краснодар';
   const description = settings.footer_description || `Коммерческая недвижимость и готовый бизнес ${city}а.`;
-
-  const catalogLinks = settings.footer_catalog_links
-    ? parseLinks(settings.footer_catalog_links)
-    : null;
 
   const categoryLinks = settings.footer_extra_links
     ? parseLinks(settings.footer_extra_links)
@@ -103,40 +93,18 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
     <>
       <footer className="bg-brand-blue-dark text-white/80 mt-12">
         <div className="container mx-auto px-4 py-8 md:py-10">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-6 md:gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-6 md:gap-8">
 
             {/* Компания */}
-            <div className="col-span-2 md:col-span-1">
+            <div className="md:col-span-1">
               <h3 className="font-display font-800 text-white text-lg mb-2">{company}</h3>
               <div className="text-sm leading-relaxed">{description}</div>
             </div>
 
-            {/* Каталог */}
-            <div>
-              <h3 className="font-semibold text-white mb-3">Каталог</h3>
-              <ul className="space-y-2 text-sm">
-                {catalogLinks
-                  ? catalogLinks.map(link => (
-                    <li key={link.href}>
-                      <Link to={link.href} className="hover:text-white transition-colors">{link.label}</Link>
-                    </li>
-                  ))
-                  : DEFAULT_CATALOG.map(item => (
-                    <li key={item.label}>
-                      {item.page
-                        ? <button onClick={() => setCurrentPage(item.page!)} className="hover:text-white transition-colors">{item.label}</button>
-                        : <Link to={item.href!} className="hover:text-white transition-colors">{item.label}</Link>
-                      }
-                    </li>
-                  ))
-                }
-              </ul>
-            </div>
-
-            {/* Категории — 2 столбца */}
-            <div className="col-span-2">
+            {/* Категории — 3 колонки */}
+            <div className="md:col-span-3">
               <h3 className="font-semibold text-white mb-3">Категории</h3>
-              <ul className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+              <ul className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-sm">
                 {(categoryLinks || DEFAULT_CATEGORIES).map(item => (
                   <li key={item.href}>
                     <Link to={item.href} className="hover:text-white transition-colors">{item.label}</Link>
@@ -146,7 +114,7 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
             </div>
 
             {/* Контакты */}
-            <div>
+            <div className="md:col-span-1">
               <h3 className="font-semibold text-white mb-3">Контакты</h3>
               <ul className="space-y-2 text-sm">
                 {phone && <li><a href={`tel:${phone}`} className="hover:text-white transition-colors break-all">{phone}</a></li>}
