@@ -50,10 +50,13 @@ export default function ImageUploaderDropZone({
         multiple={multiple}
         className="hidden"
         onChange={e => {
-          if (!e.target.files) return;
-          onFiles(e.target.files);
-          // Сбрасываем input чтобы можно было выбрать те же файлы повторно
+          const files = e.target.files;
+          if (!files || files.length === 0) return;
+          // Копируем файлы в массив до сброса input
+          const fileArr = Array.from(files);
+          // Сбрасываем input (чтобы можно было выбрать те же файлы повторно) после копирования
           e.target.value = '';
+          onFiles(fileArr);
         }}
       />
       <Icon
@@ -65,14 +68,16 @@ export default function ImageUploaderDropZone({
         {uploading
           ? `Загрузка ${progress.done}/${progress.total}...`
           : isFull
-            ? 'Достигнут лимит (30 фото)'
+            ? 'Достигнут лимит 30 фото'
             : multiple
-              ? `Перетащите фото сюда${canAdd !== undefined ? ` (ещё ${canAdd})` : ''}`
-              : 'Перетащите изображение'}
+              ? 'Нажмите или перетащите фото'
+              : 'Нажмите или перетащите изображение'}
       </div>
       {!isFull && (
         <div className="text-xs text-muted-foreground mt-0.5">
-          {hint || `или нажмите для выбора. JPG, PNG, WEBP${multiple && canAdd !== undefined ? ` — можно добавить ещё ${canAdd}` : ' — до 30 фото'}`}
+          {hint || (multiple && canAdd !== undefined
+            ? `JPG, PNG, WEBP · можно добавить ещё ${canAdd} из 30`
+            : 'JPG, PNG, WEBP — до 30 фото')}
         </div>
       )}
       {shouldCompress && !isFull && (
