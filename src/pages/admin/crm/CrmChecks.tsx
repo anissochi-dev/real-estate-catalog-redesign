@@ -132,11 +132,15 @@ export default function CrmChecks() {
     }
   };
 
+  const [searchMode, setSearchMode] = useState<'cadastral' | 'address'>('cadastral');
+
   const checkMutation = useMutation({
     mutationFn: async () => {
+      const body: Record<string, unknown> = { check_type: checkType, query, sources: selectedSources };
+      if (checkType === 'property') body.search_mode = searchMode;
       const r = await fetch(`${CHECKS_URL}/`, {
         method: 'POST', headers,
-        body: JSON.stringify({ check_type: checkType, query, sources: selectedSources }),
+        body: JSON.stringify(body),
       });
       const json = await r.json();
       if (!r.ok) throw new Error(json.error || 'Ошибка');
@@ -270,6 +274,8 @@ export default function CrmChecks() {
           results={results}
           isPending={checkMutation.isPending}
           onRun={() => checkMutation.mutate()}
+          searchMode={searchMode}
+          setSearchMode={setSearchMode}
         />
       )}
 

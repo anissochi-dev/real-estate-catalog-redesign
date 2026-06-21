@@ -708,6 +708,94 @@ def fetch_checko(inn: str, api_key: str) -> dict:
         return {'error': str(e)[:200]}
 
 
+def fetch_cadastr_by_address(address: str) -> dict:
+    """
+    Поиск кадастрового номера по адресу через публичное API Росреестра (pkk.rosreestr.ru).
+    Шаг 1: геокодируем адрес через Яндекс → получаем lat/lon.
+    Шаг 2: по координатам ищем объект на публичной кадастровой карте.
+    Возвращает список найденных объектов с кадастровыми номерами.
+    """
+    yandex_key = os.environ.get('YANDEX_GEOCODER_KEY', '')
+
+    # ── Шаг 1: геокодирование адреса → координаты ─────────────────────────────
+    try:
+        geo_url = (
+            f'https://geocode-maps.yandex.ru/1.x/?format=json&results=1'
+            f'&apikey={yandex_key}&geocode={urllib.parse.quote(address)}'
+        )
+        geo_req = urllib.request.Request(geo_url, headers={'User-Agent': 'BizNest CRM/1.0'})
+        with urllib.request.urlopen(geo_req, timeout=10) as resp:
+            geo_data = json.loads(resp.read().decode())
+
+        members = (
+            geo_data.get('response', {})
+            .get('GeoObjectCollection', {})
+            .get('featureMember', [])
+        )
+        if not members:
+            return {'error': 'Адрес не найден. Уточните запрос.', 'found': []}
+
+        point = members[0]['GeoObject']['Point']['pos']  # "lon lat"
+        lon_str, lat_str = point.split()
+        lat = float(lat_str)
+        lon = float(lon_str)
+    except Exception as e:
+        return {'error': f'Ошибка геокодирования: {str(e)[:150]}', 'found': []}
+
+    # ── Шаг 2: поиск объектов по координатам через Росреестр ──────────────────
+    # Параметры: center=[lon,lat], zoom=18, type=1 (здания/помещения)
+    try:
+        pkk_url = (
+            f'https://pkk.rosreestr.ru/api/features/1'
+            f'?text={lat}+{lon}'
+            f'&tolerance=2&limit=5'
+        )
+        pkk_req = urllib.request.Request(
+            pkk_url,
+            headers={
+                'User-Agent': 'Mozilla/5.0 (compatible; BizNest CRM/1.0)',
+                'Referer': 'https://pkk.rosreestr.ru/',
+                'Accept': 'application/json',
+            }
+        )
+        with urllib.request.urlopen(pkk_req, timeout=15) as resp:
+            pkk_data = json.loads(resp.read().decode())
+
+        features = pkk_data.get('features') or []
+        found = []
+        for f in features:
+            attrs = f.get('attrs') or {}
+            cad_num = attrs.get('cn') or attrs.get('id') or ''
+            obj_address = attrs.get('address') or attrs.get('name') or ''
+            area = attrs.get('area_value') or ''
+            purpose = attrs.get('util_by_doc') or attrs.get('category_type') or ''
+            if cad_num:
+                found.append({
+                    'cadastral_number': cad_num,
+                    'address': obj_address,
+                    'area': str(area) if area else '',
+                    'purpose': purpose,
+                })
+
+        if not found:
+            return {
+                'error': 'Объекты по этому адресу не найдены на кадастровой карте.',
+                'found': [],
+                'lat': lat,
+                'lon': lon,
+            }
+
+        return {
+            'found': found,
+            'lat': lat,
+            'lon': lon,
+            'geocoded_address': members[0]['GeoObject'].get('metaDataProperty', {})
+                                .get('GeocoderMetaData', {}).get('text', ''),
+        }
+    except Exception as e:
+        return {'error': f'Ошибка запроса к Росреестру: {str(e)[:150]}', 'found': []}
+
+
 def _parse_egrn_raw(raw: dict, cadastr_clean: str) -> dict:
     """Парсит сырой ответ api-assist.com/api/egrn-object в структурированные данные."""
 
@@ -1040,6 +1128,14 @@ def run_check(conn, user, method, qs, body, check_keys=None):
 
     # ── Кадастровая проверка (ЕГРН) ─────────────────────────────────────────
     if check_type == 'property':
+        search_mode = body.get('search_mode', 'cadastral')  # 'cadastral' | 'address'
+
+        # Поиск по адресу → возвращаем список найденных объектов с кадастровыми номерами
+        if search_mode == 'address':
+            result = fetch_cadastr_by_address(query)
+            return ok({'query': query, 'check_type': 'property', 'search_mode': 'address', 'results': {'egrn': {'data': result, 'from_cache': False}}})
+
+        # Поиск по кадастровому номеру (основной режим)
         cache_key = make_cache_key('property', query)
         cached = get_cached(conn, 'property', cache_key, 'egrn')
         if cached and not force_refresh:
