@@ -452,6 +452,16 @@ def handler(event: dict, context):
         # Статические страницы
         if path in STATIC_PATHS:
             meta = _get_static_meta(path)
+            # Для главной — добавляем SEO-текст из настроек
+            if path == '/':
+                try:
+                    cur.execute(f"SELECT home_seo_text FROM {SCHEMA}.settings LIMIT 1")
+                    row = cur.fetchone()
+                    seo_text = (dict(row).get('home_seo_text') or '') if row else ''
+                    if seo_text:
+                        meta['body_text'] = seo_text
+                except Exception as e:
+                    print(f'[prerender] settings fetch error: {e}')
             return _resp(200, _html(**meta), 'static')
 
         # Всё остальное — 404
