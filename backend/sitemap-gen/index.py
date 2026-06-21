@@ -172,11 +172,28 @@ def _build_sitemap_xml(cur) -> tuple:
 
 def _build_robots_txt(cur) -> str:
     base = _site_base_url(cur)
+    # Извлекаем домен для директивы Host
+    host = base.replace('https://', '').replace('http://', '').rstrip('/')
+
     lines = ['User-agent: *']
     for d in ROBOTS_DISALLOW:
         lines.append(f'Disallow: {d}')
     lines.append('Allow: /')
     lines.append('')
+
+    # Яндекс-специфичные директивы
+    lines.append('User-agent: Yandex')
+    for d in ROBOTS_DISALLOW:
+        lines.append(f'Disallow: {d}')
+    lines.append('Allow: /')
+    # Crawl-delay — не перегружать сервер при массовом обходе
+    lines.append('Crawl-delay: 1')
+    # Clean-param — сообщаем Яндексу какие параметры не меняют контент страницы
+    lines.append('Clean-param: utm_source&utm_medium&utm_campaign&utm_term&utm_content&utm_referrer&yclid&gclid&fbclid&_escaped_fragment_')
+    # Host — указываем главное зеркало сайта для Яндекса
+    lines.append(f'Host: {host}')
+    lines.append('')
+
     lines.append(f'Sitemap: {base}/sitemap.xml')
     return '\n'.join(lines) + '\n'
 
