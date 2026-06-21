@@ -58,65 +58,54 @@ export default function ChecksSearchTab({
   selectedSources, toggleSource, serviceStatus,
   results, isPending, onRun,
 }: Props) {
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-1 space-y-4">
-        <div className="bg-white rounded-2xl border border-border p-4 space-y-4">
-          {checkType !== 'property' && (
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Тип проверки</label>
-              <div className="flex flex-col gap-2 mt-2">
-                {CHECK_TYPES.filter(ct => ct.id !== 'property').map(ct => (
-                  <button
-                    key={ct.id}
-                    onClick={() => setCheckType(ct.id)}
-                    className={`flex items-center gap-3 p-3 rounded-xl border text-sm transition ${checkType === ct.id ? 'border-brand-blue bg-brand-blue/5 text-brand-blue' : 'border-border hover:bg-muted'}`}
-                  >
-                    <Icon name={ct.icon} size={16} />
-                    {ct.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+  const isProperty = checkType === 'property';
 
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Источники</label>
-            <div className="flex flex-col gap-2 mt-2">
-              {Object.entries(SOURCE_INFO).map(([src, info]) => {
-                const connected = serviceStatus[src];
-                const selected = selectedSources.includes(src);
-                return (
-                  <div
-                    key={src}
-                    className={`flex items-center justify-between p-2.5 rounded-xl border text-sm ${selected ? 'border-brand-blue bg-brand-blue/5' : 'border-border opacity-40'}`}
-                  >
-                    <div className="text-left">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full inline-block ${info.color}`}>{info.label}</span>
-                        {connected === true && (
-                          <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-0.5">
-                            <Icon name="Wifi" size={10} />подключён
-                          </span>
-                        )}
-                        {connected === false && (
-                          <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
-                            <Icon name="WifiOff" size={10} />нет ключа
-                          </span>
-                        )}
+  return (
+    <div className={isProperty ? 'grid grid-cols-1 lg:grid-cols-3 gap-6' : 'space-y-4'}>
+
+      {/* Левая колонка с источниками — только для вкладки Недвижимость */}
+      {isProperty && (
+        <div className="lg:col-span-1 space-y-4">
+          <div className="bg-white rounded-2xl border border-border p-4 space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Источники</label>
+              <div className="flex flex-col gap-2 mt-2">
+                {Object.entries(SOURCE_INFO).map(([src, info]) => {
+                  const connected = serviceStatus[src];
+                  const selected = selectedSources.includes(src);
+                  return (
+                    <div
+                      key={src}
+                      className={`flex items-center justify-between p-2.5 rounded-xl border text-sm ${selected ? 'border-brand-blue bg-brand-blue/5' : 'border-border opacity-40'}`}
+                    >
+                      <div className="text-left">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full inline-block ${info.color}`}>{info.label}</span>
+                          {connected === true && (
+                            <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-0.5">
+                              <Icon name="Wifi" size={10} />подключён
+                            </span>
+                          )}
+                          {connected === false && (
+                            <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                              <Icon name="WifiOff" size={10} />нет ключа
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">{info.desc}</div>
                       </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">{info.desc}</div>
+                      <Icon name={selected ? 'CheckCircle2' : 'Circle'} size={16} className={selected ? 'text-brand-blue' : 'text-muted-foreground'} />
                     </div>
-                    <Icon name={selected ? 'CheckCircle2' : 'Circle'} size={16} className={selected ? 'text-brand-blue' : 'text-muted-foreground'} />
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="lg:col-span-2 space-y-4">
+      {/* Правая/основная колонка — на весь экран для Компании */}
+      <div className={isProperty ? 'lg:col-span-2 space-y-4' : 'space-y-4'}>
         <div className="bg-white rounded-2xl border border-border p-4">
           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             {CHECK_TYPES.find(c => c.id === checkType)?.label}
