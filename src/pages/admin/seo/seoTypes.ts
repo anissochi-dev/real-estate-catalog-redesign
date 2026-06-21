@@ -84,6 +84,8 @@ export interface SeoResult {
   status: 'ok' | 'error';
   seo_title?: string;
   seo_description?: string;
+  description?: string;
+  faq?: { question: string; answer: string }[];
   error?: string;
 }
 

@@ -38,6 +38,33 @@ SEO_SYSTEM_PROMPT = (
     'Формат строго:\nTITLE: <заголовок>\nDESCRIPTION: <описание>'
 )
 
+DESC_SYSTEM_PROMPT = (
+    'Ты — опытный брокер коммерческой недвижимости агентства BIZNEST в Краснодаре. '
+    'Напиши продающее описание объекта на русском языке. '
+    'Структура: 1) Вводный абзац — тип объекта, площадь, район, общее впечатление. '
+    '2) Параметры и особенности — этаж, состояние, коммуникации, парковка. '
+    '3) Преимущества расположения — транспорт, инфраструктура, проходимость. '
+    '4) Для кого подходит — виды бизнеса, целевая аудитория. '
+    '5) Условия — тип сделки, цена, возможности торга. '
+    'Без markdown, без emoji, без цены в тексте (цену не упоминай). '
+    'Объём: 300–600 символов. '
+    'Формат строго:\nDESCRIPTION: <текст описания>'
+)
+
+FAQ_SYSTEM_PROMPT = (
+    'Ты — эксперт по коммерческой недвижимости агентства BIZNEST в Краснодаре. '
+    'По данным объекта составь 4 вопроса и ответа (FAQ) для страницы объекта. '
+    'Вопросы должны быть реальными — то, что спрашивают потенциальные арендаторы/покупатели. '
+    'Примеры тем: условия сделки, характеристики помещения, инфраструктура, юридическая чистота. '
+    'Ответы — конкретные, 1-3 предложения, без воды. '
+    'Без markdown, без нумерации, на русском языке. '
+    'Формат строго (4 пары Q/A):\n'
+    'Q: <вопрос 1>\nA: <ответ 1>\n'
+    'Q: <вопрос 2>\nA: <ответ 2>\n'
+    'Q: <вопрос 3>\nA: <ответ 3>\n'
+    'Q: <вопрос 4>\nA: <ответ 4>'
+)
+
 PAGE_SYSTEM_PROMPT = (
     'Ты — SEO-специалист агентства коммерческой недвижимости BIZNEST в Краснодаре. '
     'По описанию страницы сайта сгенерируй полный набор SEO-полей.\n'
@@ -196,37 +223,111 @@ def _parse_seo(text: str) -> tuple:
     return seo_title, seo_desc
 
 
-def _process_listing(cur, conn, listing: dict, api_key: str, folder_id: str, dry_run: bool = False) -> dict:
+def _parse_desc(text: str) -> str:
+    for line in text.splitlines():
+        line = line.strip()
+        if line.upper().startswith('DESCRIPTION:'):
+            return line[12:].strip()[:3000]
+    # Если формат не соблюдён — берём весь текст
+    return text.strip()[:3000]
+
+
+def _parse_faq(text: str) -> list:
+    """Парсит ответ ИИ в список FAQ [{question, answer}]."""
+    items = []
+    lines = text.splitlines()
+    q, a = '', ''
+    for line in lines:
+        line = line.strip()
+        if line.upper().startswith('Q:'):
+            if q and a:
+                items.append({'question': q, 'answer': a})
+            q = line[2:].strip()
+            a = ''
+        elif line.upper().startswith('A:'):
+            a = line[2:].strip()
+    if q and a:
+        items.append({'question': q, 'answer': a})
+    return items[:6]
+
+
+def _process_listing(cur, conn, listing: dict, api_key: str, folder_id: str,
+                     dry_run: bool = False, fields: list = None) -> dict:
     lid = listing['id']
+    if fields is None:
+        fields = ['seo_title', 'seo_description']
     prompt = _build_prompt(listing)
-    result = _gpt(SEO_SYSTEM_PROMPT, prompt, api_key, folder_id)
+    result_data = {'id': lid, 'status': 'ok'}
+    updates = {}
 
-    if 'error' in result:
-        return {'id': lid, 'status': 'error', 'error': result['error']}
+    # SEO title + description
+    if 'seo_title' in fields or 'seo_description' in fields:
+        r = _gpt(SEO_SYSTEM_PROMPT, prompt, api_key, folder_id)
+        if 'error' in r:
+            return {'id': lid, 'status': 'error', 'error': r['error']}
+        seo_title, seo_desc = _parse_seo(r['text'])
+        if 'seo_title' in fields:
+            result_data['seo_title'] = seo_title
+            updates['seo_title'] = _safe(seo_title, 120)
+        if 'seo_description' in fields:
+            result_data['seo_description'] = seo_desc
+            updates['seo_description'] = _safe(seo_desc, 300)
 
-    seo_title, seo_desc = _parse_seo(result['text'])
-    if not seo_title and not seo_desc:
-        return {'id': lid, 'status': 'error', 'error': 'Не удалось распарсить ответ ИИ'}
+    # Описание объекта
+    if 'description' in fields:
+        r = _gpt(DESC_SYSTEM_PROMPT, prompt, api_key, folder_id)
+        if 'error' in r:
+            return {'id': lid, 'status': 'error', 'error': r['error']}
+        desc = _parse_desc(r['text'])
+        result_data['description'] = desc
+        updates['description'] = _safe(desc, 3000)
 
-    if not dry_run:
-        st = _safe(seo_title, 120)
-        sd = _safe(seo_desc, 300)
+    # FAQ
+    if 'faq' in fields:
+        r = _gpt(FAQ_SYSTEM_PROMPT, prompt, api_key, folder_id)
+        if 'error' in r:
+            return {'id': lid, 'status': 'error', 'error': r['error']}
+        faq_items = _parse_faq(r['text'])
+        result_data['faq'] = faq_items
+        if not dry_run and faq_items:
+            faq_json = _safe(json.dumps(faq_items, ensure_ascii=False), 5000)
+            cur.execute(
+                f"UPDATE {SCHEMA}.listings SET faq = '{faq_json}'::jsonb, updated_at = NOW() "
+                f"WHERE id = {int(lid)}"
+            )
+            conn.commit()
+
+    if not dry_run and updates:
+        set_parts = ', '.join(f"{k} = '{v}'" for k, v in updates.items())
         cur.execute(
-            f"UPDATE {SCHEMA}.listings SET "
-            f"seo_title = '{st}', seo_description = '{sd}', updated_at = NOW() "
+            f"UPDATE {SCHEMA}.listings SET {set_parts}, updated_at = NOW() "
             f"WHERE id = {int(lid)}"
         )
         conn.commit()
 
-    return {'id': lid, 'status': 'ok', 'seo_title': seo_title, 'seo_description': seo_desc}
+    return result_data
+
+
+def _build_filter_clause(fields: list) -> str:
+    """Строит WHERE-условие для выбора объектов, у которых нужны поля."""
+    conditions = []
+    if 'seo_title' in fields:
+        conditions.append("(seo_title IS NULL OR seo_title = '')")
+    if 'seo_description' in fields:
+        conditions.append("(seo_description IS NULL OR seo_description = '')")
+    if 'description' in fields:
+        conditions.append("(description IS NULL OR LENGTH(description) < 50)")
+    if 'faq' in fields:
+        conditions.append("(faq IS NULL OR faq = '[]'::jsonb)")
+    return ' OR '.join(conditions) if conditions else 'TRUE'
 
 
 def _run_batch(cur, conn, api_key: str, folder_id: str, limit: int, dry_run: bool,
-               listing_id=None, triggered_by: str = 'manual') -> dict:
+               listing_id=None, triggered_by: str = 'manual', fields: list = None) -> dict:
     """Запускает пакетную оптимизацию, пишет лог в БД."""
-    started = datetime.now(timezone.utc)
+    if fields is None:
+        fields = ['seo_title', 'seo_description']
 
-    # Создаём запись лога
     cur.execute(
         f"INSERT INTO {SCHEMA}.seo_run_log (triggered_by, dry_run, started_at) "
         f"VALUES ('{_safe(triggered_by, 50)}', {'TRUE' if dry_run else 'FALSE'}, NOW()) "
@@ -241,10 +342,11 @@ def _run_batch(cur, conn, api_key: str, folder_id: str, limit: int, dry_run: boo
             f"FROM {SCHEMA}.listings WHERE id = {int(listing_id)} AND status = 'active'"
         )
     else:
+        filter_clause = _build_filter_clause(fields)
         cur.execute(
             f"SELECT id, title, category, deal, price, area, district, city, description "
-            f"FROM {SCHEMA}.listings WHERE status = 'active' "
-            f"AND (seo_title IS NULL OR seo_title = '') "
+            f"FROM {SCHEMA}.listings WHERE status = 'active' AND is_visible = TRUE "
+            f"AND ({filter_clause}) "
             f"ORDER BY id DESC LIMIT {limit}"
         )
 
@@ -257,27 +359,25 @@ def _run_batch(cur, conn, api_key: str, folder_id: str, limit: int, dry_run: boo
         )
         conn.commit()
         return {'processed': 0, 'errors': 0, 'total': 0, 'results': [], 'log_id': log_id,
-                'message': 'Все активные объекты уже имеют SEO-данные'}
+                'message': 'Все активные объекты уже заполнены по выбранным полям'}
 
     results = []
     processed = 0
     errors = 0
     for lst in listings:
-        r = _process_listing(cur, conn, lst, api_key, folder_id, dry_run)
+        r = _process_listing(cur, conn, lst, api_key, folder_id, dry_run, fields=fields)
         results.append(r)
         if r['status'] == 'ok':
             processed += 1
         else:
             errors += 1
 
-    # Обновляем лог
     details_json = _safe(json.dumps(results[:20], ensure_ascii=False), 5000)
     cur.execute(
         f"UPDATE {SCHEMA}.seo_run_log SET processed={processed}, errors={errors}, "
         f"total={len(listings)}, finished_at=NOW(), "
         f"details='{details_json}' WHERE id={log_id}"
     )
-    # Обновляем расписание
     if not dry_run:
         cur.execute(
             f"UPDATE {SCHEMA}.seo_schedule SET last_run_at=NOW(), "
@@ -292,6 +392,7 @@ def _run_batch(cur, conn, api_key: str, folder_id: str, limit: int, dry_run: boo
         'total': len(listings),
         'dry_run': dry_run,
         'log_id': log_id,
+        'fields': fields,
         'results': results,
     }
 
@@ -544,7 +645,8 @@ def handler(event: dict, context) -> dict:
                     f"COUNT(*) FILTER (WHERE status='active') AS total_active,"
                     f"COUNT(*) FILTER (WHERE status='active' AND (seo_title IS NULL OR seo_title='')) AS no_seo_title,"
                     f"COUNT(*) FILTER (WHERE status='active' AND (seo_description IS NULL OR seo_description='')) AS no_seo_desc,"
-                    f"COUNT(*) FILTER (WHERE status='active' AND (description IS NULL OR LENGTH(description)<50)) AS no_desc "
+                    f"COUNT(*) FILTER (WHERE status='active' AND (description IS NULL OR LENGTH(description)<50)) AS no_desc,"
+                    f"COUNT(*) FILTER (WHERE status='active' AND (faq IS NULL OR faq = '[]'::jsonb)) AS no_faq "
                     f"FROM {SCHEMA}.listings"
                 )
                 row = dict(cur.fetchone())
@@ -599,6 +701,9 @@ def handler(event: dict, context) -> dict:
                 dry_run = action == 'preview'
                 limit = min(int(body.get('limit') or qs.get('limit') or 10), 50)
                 listing_id = body.get('listing_id') or qs.get('listing_id')
+                raw_fields = body.get('fields') or []
+                allowed = {'seo_title', 'seo_description', 'description', 'faq'}
+                fields = [f for f in raw_fields if f in allowed] or ['seo_title', 'seo_description']
 
                 if not api_key or not folder_id:
                     return _err(503, 'YandexGPT не настроен. Добавьте ключи в Настройки → Интеграции.')
@@ -606,13 +711,33 @@ def handler(event: dict, context) -> dict:
                 triggered_by = 'preview' if dry_run else 'manual'
                 result = _run_batch(
                     cur, conn, api_key, folder_id, limit, dry_run,
-                    listing_id=listing_id, triggered_by=triggered_by
+                    listing_id=listing_id, triggered_by=triggered_by, fields=fields
                 )
-
-                if 'message' in result:
-                    return _ok(result)
-
                 return _ok(result)
+
+            # Улучшение одного объекта прямо из карточки
+            if action == 'improve_listing':
+                listing_id = body.get('listing_id')
+                if not listing_id:
+                    return _err(400, 'Не указан listing_id')
+                raw_fields = body.get('fields') or []
+                allowed = {'seo_title', 'seo_description', 'description', 'faq'}
+                fields = [f for f in raw_fields if f in allowed] or ['seo_title', 'seo_description', 'description', 'faq']
+                dry_run = bool(body.get('dry_run', False))
+
+                if not api_key or not folder_id:
+                    return _err(503, 'YandexGPT не настроен. Добавьте ключи в Настройки → Интеграции.')
+
+                cur.execute(
+                    f"SELECT id, title, category, deal, price, area, district, city, description "
+                    f"FROM {SCHEMA}.listings WHERE id = {int(listing_id)}"
+                )
+                row = cur.fetchone()
+                if not row:
+                    return _err(404, 'Объект не найден')
+
+                r = _process_listing(cur, conn, dict(row), api_key, folder_id, dry_run=dry_run, fields=fields)
+                return _ok(r)
 
             # ── Мета-теги статических страниц ──────────────────────────────────
             if action == 'pages_list':

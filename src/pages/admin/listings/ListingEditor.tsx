@@ -25,11 +25,13 @@ interface Props {
   aiTagsLoading: boolean;
   aiSeoLoading: boolean;
   aiAllLoading: boolean;
+  aiImproveLoading: boolean;
   onDescribe: () => void;
   onGenerateTitle: () => void;
   onGenerateTags: () => void;
   onGenerateSeo: () => void;
   onGenerateAll: () => void;
+  onImproveWithAi: (fields: string[]) => void;
   onClose: () => void;
   onSave: (override?: Partial<Listing>) => void;
   setEgrnObjects?: (objects: import('./types').EgrnStoredObject[]) => void;
@@ -37,8 +39,8 @@ interface Props {
 
 export default function ListingEditor({
   editing, setEditing, photos, setPhotos, cities, purposes, landVri,
-  aiLoading, aiTitleLoading, aiTagsLoading, aiSeoLoading, aiAllLoading,
-  onDescribe, onGenerateTitle, onGenerateTags, onGenerateSeo, onGenerateAll, onClose, onSave, setEgrnObjects,
+  aiLoading, aiTitleLoading, aiTagsLoading, aiSeoLoading, aiAllLoading, aiImproveLoading,
+  onDescribe, onGenerateTitle, onGenerateTags, onGenerateSeo, onGenerateAll, onImproveWithAi, onClose, onSave, setEgrnObjects,
 }: Props) {
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
@@ -291,7 +293,9 @@ export default function ListingEditor({
               errors={errors}
               setErrors={setErrors}
               aiSeoLoading={aiSeoLoading}
+              aiImproveLoading={aiImproveLoading}
               onGenerateSeo={onGenerateSeo}
+              onImproveWithAi={onImproveWithAi}
               canEditSeo={canEditSeo}
             />
           )}

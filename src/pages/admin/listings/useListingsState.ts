@@ -473,6 +473,37 @@ export function useListingsState() {
     }
   };
 
+  const [aiImproveLoading, setAiImproveLoading] = useState(false);
+
+  const improveWithAi = async (fields: string[]) => {
+    if (!editing?.id) return;
+    setAiImproveLoading(true);
+    try {
+      let tok = '';
+      try { tok = localStorage.getItem('biznest_token') || ''; } catch { /* ignore */ }
+      const SEO_BASE = 'https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d';
+      const url = tok ? `${SEO_BASE}?auth_token=${encodeURIComponent(tok)}` : SEO_BASE;
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(tok ? { 'X-Auth-Token': tok } : {}) },
+        body: JSON.stringify({ action: 'improve_listing', listing_id: editing.id, fields, auth_token: tok }),
+      });
+      const data = await r.json();
+      if (data.error) { toast.error(data.error); return; }
+      const patch: Partial<typeof editing> = {};
+      if (data.seo_title) patch.seo_title = data.seo_title;
+      if (data.seo_description) patch.seo_description = data.seo_description;
+      if (data.description) patch.description = data.description;
+      if (data.faq) patch.faq = data.faq;
+      setEditing({ ...editing, ...patch });
+      toast.success(`ИИ улучшил: ${fields.join(', ')}`);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Ошибка ИИ');
+    } finally {
+      setAiImproveLoading(false);
+    }
+  };
+
   return {
     // data
     items, filtered, cities, purposes, landVri, loading, total, counts,
@@ -482,7 +513,7 @@ export function useListingsState() {
     historyListing, setHistoryListing,
     photoPickListing, setPhotoPickListing,
     // ai
-    aiLoading, aiTitleLoading, aiTagsLoading, aiSeoLoading, aiAllLoading,
+    aiLoading, aiTitleLoading, aiTagsLoading, aiSeoLoading, aiAllLoading, aiImproveLoading,
     // bulk
     selected, setSelected, bulkLoading,
     // filters
@@ -495,7 +526,7 @@ export function useListingsState() {
     myOnly, toggleMyOnly,
     // actions
     load, loadMore, switchTab, openEdit, save, archive, runBulk, bulkDelete, toggleSelect,
-    aiDescribe, aiTitle, generateTags, generateSeo, generateAll,
+    aiDescribe, aiTitle, generateTags, generateSeo, generateAll, improveWithAi,
     setEgrnObjects,
   };
 }

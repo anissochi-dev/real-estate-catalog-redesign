@@ -27,7 +27,8 @@ export default function SeoAdmin() {
   const [limit, setLimit] = useState(10);
   const [previewMode, setPreviewMode] = useState(false);
   const [listingId, setListingId] = useState('');
-  const [lastRun, setLastRun] = useState<{ processed: number; errors: number; total: number; dry_run: boolean } | null>(null);
+  const [lastRun, setLastRun] = useState<{ processed: number; errors: number; total: number; dry_run: boolean; fields?: string[] } | null>(null);
+  const [selectedFields, setSelectedFields] = useState<string[]>(['seo_title', 'seo_description']);
   const [activeTab, setActiveTab] = useState<'run' | 'pages' | 'schedule' | 'history'>('run');
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -112,6 +113,7 @@ export default function SeoAdmin() {
     const { data, error } = await seoCall({
       action: preview ? 'preview' : 'run',
       limit,
+      fields: selectedFields,
       ...(listingId ? { listing_id: parseInt(listingId) } : {}),
     });
     setRunning(false);
@@ -123,6 +125,7 @@ export default function SeoAdmin() {
       errors: Number(data.errors) || 0,
       total: Number(data.total) || 0,
       dry_run: !!data.dry_run,
+      fields: (data.fields as string[]) || selectedFields,
     });
     if (!preview) { await loadStatus(); }
   };
@@ -186,6 +189,8 @@ export default function SeoAdmin() {
               setListingId={setListingId}
               previewMode={previewMode}
               setPreviewMode={setPreviewMode}
+              selectedFields={selectedFields}
+              setSelectedFields={setSelectedFields}
               running={running}
               loading={loading}
               gptOk={gptOk}
