@@ -8,10 +8,11 @@ import urllib.error
 
 
 PRERENDER_URL = 'https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff'
+SITEMAP_URL   = 'https://functions.poehali.dev/7db3cce2-3ae0-4bbb-bece-5c6076691344'
 SITE_DOMAIN   = 'bmn.su'
 WORKER_NAME   = 'bmn-bot-router'
 
-# Скрипт Worker — перехватывает ботов и отдаёт prerender
+# Скрипт Worker — перехватывает ботов, отдаёт prerender, sitemap.xml и robots.txt
 WORKER_SCRIPT = r"""
 const BOT_AGENTS = [
   'googlebot','yandexbot','bingbot','baiduspider','duckduckbot',
@@ -21,7 +22,17 @@ const BOT_AGENTS = [
   'screaming frog','sitebulb','prerender','lighthouse',
 ];
 
-const PRERENDER = '__PRERENDER_URL__';
+const PRERENDER  = '__PRERENDER_URL__';
+const SITEMAP    = '__SITEMAP_URL__';
+const SITE_URL   = 'https://bmn.su';
+
+const ROBOTS_TXT = `User-agent: *
+Allow: /
+Disallow: /favorites
+Disallow: /compare
+Disallow: /admin
+
+Sitemap: ${SITE_URL}/sitemap.xml`;
 
 function isBot(ua) {
   if (!ua) return false;
@@ -32,7 +43,7 @@ function isBot(ua) {
 function isHtmlRequest(req) {
   const url = new URL(req.url);
   const ext = url.pathname.split('.').pop().toLowerCase();
-  const staticExts = ['js','css','png','jpg','jpeg','gif','webp','svg','ico','woff','woff2','ttf','json','xml','txt','map'];
+  const staticExts = ['js','css','png','jpg','jpeg','gif','webp','svg','ico','woff','woff2','ttf','json','map'];
   if (staticExts.includes(ext)) return false;
   const accept = req.headers.get('accept') || '';
   return accept.includes('text/html') || accept.includes('*/*') || accept === '';
@@ -40,11 +51,46 @@ function isHtmlRequest(req) {
 
 export default {
   async fetch(request, env, ctx) {
-    const ua = request.headers.get('user-agent') || '';
+    const ua  = request.headers.get('user-agent') || '';
     const url = new URL(request.url);
+    const path = url.pathname;
 
+    // robots.txt
+    if (path === '/robots.txt') {
+      return new Response(ROBOTS_TXT, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'public, max-age=86400',
+        },
+      });
+    }
+
+    // sitemap.xml — проксируем на backend функцию
+    if (path === '/sitemap.xml') {
+      try {
+        const resp = await fetch(SITEMAP, {
+          cf: { cacheTtl: 3600, cacheEverything: true },
+        });
+        const xml = await resp.text();
+        return new Response(xml, {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/xml; charset=utf-8',
+            'Cache-Control': 'public, max-age=3600',
+          },
+        });
+      } catch (e) {
+        return new Response('<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>', {
+          status: 200,
+          headers: { 'Content-Type': 'application/xml; charset=utf-8' },
+        });
+      }
+    }
+
+    // Prerender для поисковых ботов
     if (isBot(ua) && isHtmlRequest(request)) {
-      const prerenderUrl = `${PRERENDER}?path=${encodeURIComponent(url.pathname + url.search)}`;
+      const prerenderUrl = `${PRERENDER}?path=${encodeURIComponent(path + url.search)}`;
       try {
         const resp = await fetch(prerenderUrl, {
           headers: { 'X-Prerender-Token': 'internal', 'User-Agent': ua },
@@ -70,7 +116,7 @@ export default {
     return fetch(request);
   },
 };
-""".replace('__PRERENDER_URL__', PRERENDER_URL)
+""".replace('__PRERENDER_URL__', PRERENDER_URL).replace('__SITEMAP_URL__', SITEMAP_URL)
 
 
 def cf_request(method, path, token, data=None):

@@ -35,13 +35,12 @@ CATEGORY_LABELS = {
     'free_purpose': 'Свободного назначения', 'car_service': 'Автосервисы',
 }
 
-# TTL кэша по типу страницы (секунды)
 TTL_BY_TYPE = {
-    'object':   600,   # 10 мин — цены меняются
-    'news':     1800,  # 30 мин
-    'category': 900,   # 15 мин
-    'district': 1800,  # 30 мин
-    'static':   3600,  # 1 час — главная, map, leads
+    'object':   600,
+    'news':     1800,
+    'category': 900,
+    'district': 1800,
+    'static':   3600,
 }
 
 
@@ -96,7 +95,6 @@ def _html(title, desc, og_image='', canonical='', extra_meta='',
 
 
 def _jsonld_breadcrumb(items):
-    """BreadcrumbList JSON-LD. items = [('Название', 'https://...'), ...]"""
     list_items = []
     for pos, (name, url) in enumerate(items, 1):
         list_items.append({
@@ -112,6 +110,39 @@ def _jsonld_breadcrumb(items):
     }, ensure_ascii=False)
 
 
+def _fmt_price(price):
+    if not price:
+        return ''
+    return f"{int(price):,}".replace(',', ' ') + ' ₽'
+
+
+def _listing_card_html(row):
+    """HTML-карточка объекта для списка (каталог, район)."""
+    d = dict(row)
+    slug = d.get('slug') or f"object-{d['id']}"
+    url  = f"{SITE_URL}/object/{slug}"
+    title = _esc(d.get('title') or '')
+    addr  = _esc(d.get('address') or '')
+    price = _esc(_fmt_price(d.get('price')))
+    area  = _esc(f"{d['area']} м²" if d.get('area') else '')
+    deal  = 'Аренда' if d.get('deal') == 'rent' else 'Продажа'
+    img   = (d.get('image') or '').split('|')[0]
+    img_tag = f'<img src="{_esc(img)}" alt="{title}" loading="lazy">' if img else ''
+    parts = [p for p in [area, price] if p]
+    meta_str = ' · '.join(parts)
+    return (
+        f'<article itemscope itemtype="https://schema.org/Product">'
+        f'<a href="{_esc(url)}" itemprop="url">'
+        f'{img_tag}'
+        f'<h2 itemprop="name">{title}</h2>'
+        f'</a>'
+        f'<p>{_esc(deal)}</p>'
+        + ('<p itemprop="description">' + _esc(addr) + '</p>' if addr else '')
+        + ('<p>' + meta_str + '</p>' if meta_str else '')
+        + '</article>'
+    )
+
+
 def _get_listing_meta(cur, lid):
     cur.execute(f"""
         SELECT id, title, slug, seo_title, seo_description, description,
@@ -124,10 +155,10 @@ def _get_listing_meta(cur, lid):
     if not row:
         return None
     d = dict(row)
-    cat_label = CATEGORY_LABELS.get(d.get('category') or '', '')
-    price_str = f"{int(d['price']):,}".replace(',', ' ') + ' ₽' if d.get('price') else ''
-    area_str  = f"{d['area']} м²" if d.get('area') else ''
-    city      = d.get('city') or 'Краснодар'
+    cat_label  = CATEGORY_LABELS.get(d.get('category') or '', '')
+    price_str  = _fmt_price(d.get('price'))
+    area_str   = f"{d['area']} м²" if d.get('area') else ''
+    city       = d.get('city') or 'Краснодар'
     deal_label = 'Аренда' if d.get('deal') == 'rent' else 'Продажа'
 
     title = d.get('seo_title') or d.get('title') or DEFAULT_TITLE
@@ -155,12 +186,10 @@ def _get_listing_meta(cur, lid):
         body_parts.append(f'<p>Цена: {_esc(price_str)}</p>')
     if d.get('description'):
         body_parts.append(f'<p>{_esc((d["description"] or "")[:500])}</p>')
-    # Ссылки навигации для краулера
     cat_slug = d.get('category') or ''
     cat_link = f' | <a href="/catalog/{cat_slug}">{_esc(cat_label)}</a>' if cat_slug else ''
     body_parts.append(f'<nav><a href="/">Главная</a> | <a href="/catalog">Каталог</a>{cat_link}</nav>')
 
-    # JSON-LD: Product + BreadcrumbList
     product = {
         '@context': 'https://schema.org',
         '@graph': [
@@ -191,7 +220,6 @@ def _get_listing_meta(cur, lid):
             ])),
         ],
     }
-    # Убираем None-значения из offers
     product['@graph'][0]['offers'] = {k: v for k, v in product['@graph'][0]['offers'].items() if v is not None}
     if not product['@graph'][0].get('image'):
         del product['@graph'][0]['image']
@@ -268,11 +296,37 @@ def _get_category_meta(cur, cat):
         FROM {SCHEMA}.listings
         WHERE category = '{cat.replace("'","''")}' AND status = 'active' AND is_visible = TRUE
     """)
-    row   = cur.fetchone()
-    cnt   = (dict(row).get('cnt') or 0) if row else 0
+    row = cur.fetchone()
+    d   = dict(row) if row else {}
+    cnt = d.get('cnt') or 0
+
     title = f'{label} в Краснодаре — {cnt} объектов'
     desc  = f'Аренда и продажа: {label.lower()} в Краснодаре. {cnt} актуальных предложений на {SITE_NAME}.'
     canonical = f"{SITE_URL}/catalog/{cat}"
+
+    # Список объектов для ботов (до 30)
+    cur.execute(f"""
+        SELECT id, title, slug, price, area, address, deal, image
+        FROM {SCHEMA}.listings
+        WHERE category = '{cat.replace("'","''")}' AND status = 'active' AND is_visible = TRUE
+        ORDER BY updated_at DESC NULLS LAST
+        LIMIT 30
+    """)
+    rows = cur.fetchall() or []
+
+    cards_html = ''.join(_listing_card_html(r) for r in rows)
+
+    # ItemList JSON-LD с реальными объектами
+    item_elements = []
+    for pos, r in enumerate(rows, 1):
+        rd   = dict(r)
+        slug = rd.get('slug') or f"object-{rd['id']}"
+        item_elements.append({
+            '@type': 'ListItem',
+            'position': pos,
+            'url': f"{SITE_URL}/object/{slug}",
+            'name': rd.get('title') or '',
+        })
 
     item_list = {
         '@context': 'https://schema.org',
@@ -283,6 +337,7 @@ def _get_category_meta(cur, cat):
                 'description': desc,
                 'url': canonical,
                 'numberOfItems': cnt,
+                'itemListElement': item_elements,
             },
             json.loads(_jsonld_breadcrumb([
                 ('Главная', SITE_URL + '/'),
@@ -292,14 +347,97 @@ def _get_category_meta(cur, cat):
         ],
     }
 
+    body = (
+        f'<p>{_esc(desc)}</p>'
+        f'<section>{cards_html}</section>'
+        f'<nav><a href="/">Главная</a> | <a href="/catalog">Все категории</a></nav>'
+    )
+
     return {
         'title': title[:68],
         'desc': desc[:160],
         'og_image': '',
         'canonical': canonical,
         'h1': title,
-        'body_text': (f'<p>{_esc(desc)}</p>'
-                      f'<nav><a href="/">Главная</a> | <a href="/catalog">Все категории</a></nav>'),
+        'body_text': body,
+        'jsonld': json.dumps(item_list, ensure_ascii=False),
+    }
+
+
+def _get_catalog_meta(cur):
+    """Главная страница каталога /catalog — все объекты."""
+    cur.execute(f"""
+        SELECT COUNT(*) as cnt FROM {SCHEMA}.listings
+        WHERE status = 'active' AND is_visible = TRUE
+    """)
+    row = cur.fetchone()
+    cnt = (dict(row).get('cnt') or 0) if row else 0
+
+    title = f'Каталог коммерческой недвижимости Краснодара — {cnt} объектов'
+    desc  = f'Аренда и продажа коммерческой недвижимости в Краснодаре. {cnt} актуальных объектов: офисы, склады, торговые площади, рестораны, гостиницы.'
+    canonical = f"{SITE_URL}/catalog"
+
+    # Свежие объекты всех категорий (до 30)
+    cur.execute(f"""
+        SELECT id, title, slug, price, area, address, deal, image, category
+        FROM {SCHEMA}.listings
+        WHERE status = 'active' AND is_visible = TRUE
+        ORDER BY updated_at DESC NULLS LAST
+        LIMIT 30
+    """)
+    rows = cur.fetchall() or []
+    cards_html = ''.join(_listing_card_html(r) for r in rows)
+
+    # Ссылки на категории
+    cat_links = ' | '.join(
+        f'<a href="/catalog/{k}">{v}</a>'
+        for k, v in CATEGORY_LABELS.items()
+    )
+
+    # ItemList JSON-LD
+    item_elements = []
+    for pos, r in enumerate(rows, 1):
+        rd   = dict(r)
+        slug = rd.get('slug') or f"object-{rd['id']}"
+        item_elements.append({
+            '@type': 'ListItem',
+            'position': pos,
+            'url': f"{SITE_URL}/object/{slug}",
+            'name': rd.get('title') or '',
+        })
+
+    item_list = {
+        '@context': 'https://schema.org',
+        '@graph': [
+            {
+                '@type': 'ItemList',
+                'name': title,
+                'description': desc,
+                'url': canonical,
+                'numberOfItems': cnt,
+                'itemListElement': item_elements,
+            },
+            json.loads(_jsonld_breadcrumb([
+                ('Главная', SITE_URL + '/'),
+                ('Каталог', canonical),
+            ])),
+        ],
+    }
+
+    body = (
+        f'<p>{_esc(desc)}</p>'
+        f'<nav>{cat_links}</nav>'
+        f'<section>{cards_html}</section>'
+        f'<nav><a href="/">Главная</a></nav>'
+    )
+
+    return {
+        'title': title[:68],
+        'desc': desc[:160],
+        'og_image': '',
+        'canonical': canonical,
+        'h1': title,
+        'body_text': body,
         'jsonld': json.dumps(item_list, ensure_ascii=False),
     }
 
@@ -325,11 +463,51 @@ def _get_district_meta(cur, d_slug):
     desc  = d.get('description') or f'Аренда и продажа коммерческой недвижимости в районе {name}, Краснодар. {cnt} предложений.'
     canonical = f"{SITE_URL}/district/{d_slug}"
 
+    # Объекты района (до 20)
+    safe_name = name.replace("'", "''")
+    cur.execute(f"""
+        SELECT id, title, slug, price, area, address, deal, image
+        FROM {SCHEMA}.listings
+        WHERE district = '{safe_name}' AND status = 'active' AND is_visible = TRUE
+        ORDER BY updated_at DESC NULLS LAST
+        LIMIT 20
+    """)
+    rows = cur.fetchall() or []
+    cards_html = ''.join(_listing_card_html(r) for r in rows)
+
+    # ItemList JSON-LD для района
+    item_elements = []
+    for pos, r in enumerate(rows, 1):
+        rd   = dict(r)
+        slug = rd.get('slug') or f"object-{rd['id']}"
+        item_elements.append({
+            '@type': 'ListItem',
+            'position': pos,
+            'url': f"{SITE_URL}/object/{slug}",
+            'name': rd.get('title') or '',
+        })
+
     breadcrumb = json.loads(_jsonld_breadcrumb([
         ('Главная', SITE_URL + '/'),
         ('Каталог', SITE_URL + '/catalog'),
         (f'Район {name}', canonical),
     ]))
+
+    graph = [breadcrumb]
+    if item_elements:
+        graph.insert(0, {
+            '@type': 'ItemList',
+            'name': title,
+            'url': canonical,
+            'numberOfItems': cnt,
+            'itemListElement': item_elements,
+        })
+
+    body = (
+        f'<p>{_esc((desc or "")[:300])}</p>'
+        f'<section>{cards_html}</section>'
+        f'<nav><a href="/">Главная</a> | <a href="/catalog">Каталог</a></nav>'
+    )
 
     return {
         'title': title[:68],
@@ -337,16 +515,14 @@ def _get_district_meta(cur, d_slug):
         'og_image': '',
         'canonical': canonical,
         'h1': title,
-        'body_text': (f'<p>{_esc((desc or "")[:300])}</p>'
-                      f'<nav><a href="/">Главная</a> | <a href="/catalog">Каталог</a></nav>'),
-        'jsonld': json.dumps({'@context': 'https://schema.org', '@graph': [breadcrumb]}, ensure_ascii=False),
+        'body_text': body,
+        'jsonld': json.dumps({'@context': 'https://schema.org', '@graph': graph}, ensure_ascii=False),
     }
 
 
 def _get_static_meta(path):
     MAP = {
         '/':                (DEFAULT_TITLE, DEFAULT_DESC),
-        '/catalog':         ('Каталог коммерческой недвижимости Краснодара', 'Все объекты коммерческой недвижимости в Краснодаре. Офисы, склады, рестораны, гостиницы.'),
         '/news':            ('Новости рынка коммерческой недвижимости Краснодара', 'Актуальные новости и аналитика рынка коммерческой недвижимости Краснодара.'),
         '/leads':           ('Запросы на аренду и покупку недвижимости в Краснодаре', 'Актуальные заявки от арендаторов и покупателей коммерческой недвижимости.'),
         '/map':             ('Карта коммерческой недвижимости Краснодара', 'Интерактивная карта объектов коммерческой недвижимости в Краснодаре.'),
@@ -368,6 +544,19 @@ def _get_static_meta(path):
         'body_text': '',
         'jsonld': _jsonld_breadcrumb(breadcrumb_items),
     }
+
+
+def _notify_indexnow(url):
+    """Уведомляет Яндекс IndexNow о новой/обновлённой странице."""
+    import urllib.request
+    key = os.environ.get('INDEXNOW_KEY', '')
+    if not key:
+        return
+    api = f'https://yandex.com/indexnow?url={url}&key={key}'
+    try:
+        urllib.request.urlopen(api, timeout=3)
+    except Exception as e:
+        print(f'[indexnow] error: {e}')
 
 
 def handler(event: dict, context):
@@ -393,7 +582,6 @@ def handler(event: dict, context):
     path = params.get('path') or '/'
     if not path.startswith('/'):
         path = '/' + path
-    # Убираем query-string если попала в path
     path = path.split('?')[0].rstrip('/')
     if not path:
         path = '/'
@@ -412,7 +600,7 @@ def handler(event: dict, context):
         return _resp(200, _html(DEFAULT_TITLE, DEFAULT_DESC, canonical=f'{SITE_URL}{path}'), 'static')
 
     try:
-        # /object/{slug-с-id} — id всегда последнее число в slug
+        # /object/{slug-с-id}
         m = re.match(r'^/object/.*?(\d+)/?$', path)
         if m:
             lid  = int(m.group(1))
@@ -439,6 +627,11 @@ def handler(event: dict, context):
             meta = _get_category_meta(cur, cat)
             return _resp(200, _html(**meta), 'category')
 
+        # /catalog — главная каталога
+        if path == '/catalog':
+            meta = _get_catalog_meta(cur)
+            return _resp(200, _html(**meta), 'category')
+
         # /district/{slug}
         m = re.match(r'^/district/([^/]+)/?$', path)
         if m:
@@ -452,7 +645,6 @@ def handler(event: dict, context):
         # Статические страницы
         if path in STATIC_PATHS:
             meta = _get_static_meta(path)
-            # Для главной — добавляем SEO-текст из настроек
             if path == '/':
                 try:
                     cur.execute(f"SELECT home_seo_text FROM {SCHEMA}.settings LIMIT 1")
@@ -464,7 +656,7 @@ def handler(event: dict, context):
                     print(f'[prerender] settings fetch error: {e}')
             return _resp(200, _html(**meta), 'static')
 
-        # Всё остальное — 404
+        # 404
         return _resp(404, _html(
             'Страница не найдена',
             '404 — страница не существует.',

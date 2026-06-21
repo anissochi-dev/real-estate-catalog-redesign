@@ -1,0 +1,10 @@
+{
+  "tests": [
+    {
+      "name": "Sitemap returns XML",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200
+    }
+  ]
+}
