@@ -9,13 +9,14 @@ import ChecksSearchTab from './checks/ChecksSearchTab';
 import { ChecksHistoryTab, ChecksQuotaTab } from './checks/ChecksHistoryTab';
 import OwnersTab from './checks/OwnersTab';
 
-type Tab = 'search' | 'owners' | 'history' | 'quota';
+type Tab = 'search' | 'owners' | 'property' | 'history' | 'quota';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'search',  label: 'Компании',    icon: 'Building2' },
-  { id: 'owners',  label: 'Собственники', icon: 'UserSearch' },
-  { id: 'history', label: 'История',      icon: 'Clock' },
-  { id: 'quota',   label: 'Квоты',        icon: 'BarChart2' },
+  { id: 'search',   label: 'Компании',      icon: 'Building2' },
+  { id: 'owners',   label: 'Собственники',  icon: 'UserSearch' },
+  { id: 'property', label: 'Недвижимость',  icon: 'MapPin' },
+  { id: 'history',  label: 'История',       icon: 'Clock' },
+  { id: 'quota',    label: 'Квоты',         icon: 'BarChart2' },
 ];
 
 export default function CrmChecks() {
@@ -31,6 +32,15 @@ export default function CrmChecks() {
   const [selectedSources, setSelectedSources] = useState(DEFAULT_SOURCES['company']);
   const [results, setResults] = useState<Record<string, CheckResult> | null>(null);
   const [tab, setTab] = useState<Tab>('search');
+
+  const handleTabChange = (t: Tab) => {
+    setTab(t);
+    if (t === 'property') {
+      handleSetCheckType('property');
+    } else if (t === 'search') {
+      handleSetCheckType('company');
+    }
+  };
   const headers = { 'Content-Type': 'application/json', 'X-Auth-Token': token || '' };
 
   interface DadataInfo {
@@ -209,7 +219,7 @@ export default function CrmChecks() {
         {TABS.map(t => (
           <button
             key={t.id}
-            onClick={() => setTab(t.id)}
+            onClick={() => handleTabChange(t.id)}
             className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition ${
               tab === t.id ? 'bg-white shadow-sm text-brand-blue' : 'text-muted-foreground hover:text-foreground'
             }`}
@@ -245,6 +255,21 @@ export default function CrmChecks() {
         <OwnersTab
           serviceStatus={serviceStatus as Record<string, boolean>}
           newdbConnected={!!serviceStatus['newdb']}
+        />
+      )}
+
+      {tab === 'property' && (
+        <ChecksSearchTab
+          checkType="property"
+          setCheckType={handleSetCheckType}
+          query={query}
+          setQuery={setQuery}
+          selectedSources={selectedSources}
+          toggleSource={toggleSource}
+          serviceStatus={serviceStatus}
+          results={results}
+          isPending={checkMutation.isPending}
+          onRun={() => checkMutation.mutate()}
         />
       )}
 

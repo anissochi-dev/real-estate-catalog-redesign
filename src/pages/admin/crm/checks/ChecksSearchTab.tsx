@@ -62,21 +62,23 @@ export default function ChecksSearchTab({
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-1 space-y-4">
         <div className="bg-white rounded-2xl border border-border p-4 space-y-4">
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Тип проверки</label>
-            <div className="flex flex-col gap-2 mt-2">
-              {CHECK_TYPES.map(ct => (
-                <button
-                  key={ct.id}
-                  onClick={() => setCheckType(ct.id)}
-                  className={`flex items-center gap-3 p-3 rounded-xl border text-sm transition ${checkType === ct.id ? 'border-brand-blue bg-brand-blue/5 text-brand-blue' : 'border-border hover:bg-muted'}`}
-                >
-                  <Icon name={ct.icon} size={16} />
-                  {ct.label}
-                </button>
-              ))}
+          {checkType !== 'property' && (
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Тип проверки</label>
+              <div className="flex flex-col gap-2 mt-2">
+                {CHECK_TYPES.filter(ct => ct.id !== 'property').map(ct => (
+                  <button
+                    key={ct.id}
+                    onClick={() => setCheckType(ct.id)}
+                    className={`flex items-center gap-3 p-3 rounded-xl border text-sm transition ${checkType === ct.id ? 'border-brand-blue bg-brand-blue/5 text-brand-blue' : 'border-border hover:bg-muted'}`}
+                  >
+                    <Icon name={ct.icon} size={16} />
+                    {ct.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Источники</label>

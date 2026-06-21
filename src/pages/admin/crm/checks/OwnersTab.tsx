@@ -516,65 +516,24 @@ interface Props {
   newdbConnected: boolean;
 }
 
-type Mode = 'quick' | 'detailed';
-
 export default function OwnersTab({ serviceStatus, newdbConnected }: Props) {
   const { token } = useAuth();
-  const [mode, setMode] = useState<Mode>('quick');
 
   return (
     <div className="space-y-5">
-      {/* Переключатель режимов */}
-      <div className="flex gap-1 bg-muted rounded-xl p-1 w-fit">
-        <button
-          onClick={() => setMode('quick')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${
-            mode === 'quick' ? 'bg-white shadow-sm text-brand-blue' : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Icon name="Zap" size={14} />
-          Быстрый поиск
-        </button>
-        <button
-          onClick={() => setMode('detailed')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${
-            mode === 'detailed' ? 'bg-white shadow-sm text-brand-blue' : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Icon name="ShieldCheck" size={14} />
-          Детальные проверки
-          <span className="text-[10px] font-bold bg-brand-blue text-white px-1.5 py-0.5 rounded-full leading-none">
-            12
-          </span>
-        </button>
+      <div className="text-sm text-muted-foreground">
+        Глубокая проверка по государственным базам данных: ФССП, МВД, ФНС, ЕФРСБ, КАД и другим. Требует данные паспорта или ИНН.
       </div>
-
-      {mode === 'quick' && (
-        <>
-          <div className="text-sm text-muted-foreground">
-            Быстрый поиск физлица по ФИО или телефону через несколько источников одновременно.
+      {!newdbConnected && (
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
+          <Icon name="AlertTriangle" size={17} className="shrink-0 mt-0.5 text-amber-600" />
+          <div className="text-sm">
+            <div className="font-semibold">NewDB API-ключ не настроен</div>
+            <div className="text-amber-800">Перейдите в Настройки → Интеграции → Проверка безопасности.</div>
           </div>
-          <QuickSearch serviceStatus={serviceStatus} token={token || ''} />
-        </>
+        </div>
       )}
-
-      {mode === 'detailed' && (
-        <>
-          <div className="text-sm text-muted-foreground">
-            Глубокая проверка по государственным базам данных: ФССП, МВД, ФНС, ЕФРСБ, КАД и другим. Требует данные паспорта или ИНН.
-          </div>
-          {!newdbConnected && (
-            <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
-              <Icon name="AlertTriangle" size={17} className="shrink-0 mt-0.5 text-amber-600" />
-              <div className="text-sm">
-                <div className="font-semibold">NewDB API-ключ не настроен</div>
-                <div className="text-amber-800">Перейдите в Настройки → Интеграции → Проверка безопасности.</div>
-              </div>
-            </div>
-          )}
-          <DetailedChecks newdbConnected={newdbConnected} token={token || ''} />
-        </>
-      )}
+      <DetailedChecks newdbConnected={newdbConnected} token={token || ''} />
     </div>
   );
 }
