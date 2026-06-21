@@ -5,13 +5,34 @@ import OwnerDetailedChecks from './OwnerDetailedChecks';
 interface Props {
   serviceStatus: Record<string, boolean>;
   newdbConnected: boolean;
+  prefillName?: string | null;
+  onPrefillUsed?: () => void;
+  onOpenProperty?: (cadastralNumber: string) => void;
 }
 
-export default function OwnersTab({ serviceStatus: _serviceStatus, newdbConnected }: Props) {
+export default function OwnersTab({
+  newdbConnected,
+  prefillName,
+  onPrefillUsed,
+  onOpenProperty,
+}: Props) {
   const { token } = useAuth();
 
   return (
     <div className="space-y-5">
+      {prefillName && (
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-brand-blue/5 border border-brand-blue/20 text-sm">
+          <Icon name="UserSearch" size={15} className="text-brand-blue shrink-0" />
+          <span className="text-brand-blue">
+            Проверка владельца: <strong>{prefillName}</strong>
+          </span>
+          {onPrefillUsed && (
+            <button onClick={onPrefillUsed} className="ml-auto text-muted-foreground hover:text-foreground">
+              <Icon name="X" size={14} />
+            </button>
+          )}
+        </div>
+      )}
       <div className="text-sm text-muted-foreground">
         Глубокая проверка по государственным базам данных: ФССП, МВД, ФНС, ЕФРСБ, КАД и другим. Требует данные паспорта или ИНН.
       </div>
@@ -24,7 +45,13 @@ export default function OwnersTab({ serviceStatus: _serviceStatus, newdbConnecte
           </div>
         </div>
       )}
-      <OwnerDetailedChecks newdbConnected={newdbConnected} token={token || ''} />
+      <OwnerDetailedChecks
+        newdbConnected={newdbConnected}
+        token={token || ''}
+        prefillName={prefillName}
+        onPrefillUsed={onPrefillUsed}
+        onOpenProperty={onOpenProperty}
+      />
     </div>
   );
 }

@@ -41,6 +41,23 @@ export default function CrmChecks() {
       handleSetCheckType('company');
     }
   };
+
+  // Из ЕГРН → переходим на Собственники с предзаполненным именем
+  const handleCheckOwner = (name: string) => {
+    setTab('owners');
+    setOwnerPrefill(name);
+  };
+
+  // Из Собственников → переходим на Недвижимость с кадастровым номером
+  const handleOpenProperty = (cadastralNumber: string) => {
+    handleSetCheckType('property');
+    setQuery(cadastralNumber);
+    setSearchMode('cadastral');
+    setResults(null);
+    setTab('property');
+  };
+
+  const [ownerPrefill, setOwnerPrefill] = useState<string | null>(null);
   const headers = { 'Content-Type': 'application/json', 'X-Auth-Token': token || '' };
 
   interface DadataInfo {
@@ -259,6 +276,9 @@ export default function CrmChecks() {
         <OwnersTab
           serviceStatus={serviceStatus as Record<string, boolean>}
           newdbConnected={!!serviceStatus['newdb']}
+          prefillName={ownerPrefill}
+          onPrefillUsed={() => setOwnerPrefill(null)}
+          onOpenProperty={handleOpenProperty}
         />
       )}
 
@@ -276,6 +296,7 @@ export default function CrmChecks() {
           onRun={() => checkMutation.mutate()}
           searchMode={searchMode}
           setSearchMode={setSearchMode}
+          onCheckOwner={handleCheckOwner}
         />
       )}
 

@@ -33,6 +33,7 @@ export interface EgrnData {
 
 interface Props {
   data: EgrnData;
+  onCheckOwner?: (name: string) => void;
 }
 
 function Row({ label, value }: { label: string; value?: string }) {
@@ -45,7 +46,7 @@ function Row({ label, value }: { label: string; value?: string }) {
   );
 }
 
-export default function EgrnCard({ data }: Props) {
+export default function EgrnCard({ data, onCheckOwner }: Props) {
   const hasEncumbrances = (data.encumbrances?.length ?? 0) > 0;
   const hasRights = (data.rights?.length ?? 0) > 0;
 
@@ -135,7 +136,19 @@ export default function EgrnCard({ data }: Props) {
                     )}
                   </div>
                 )}
-                {r.person && <div className="text-xs font-medium">{r.person}</div>}
+                <div className="flex items-center justify-between gap-2">
+                  {r.person && <div className="text-xs font-medium">{r.person}</div>}
+                  {r.person && onCheckOwner && (
+                    <button
+                      onClick={() => onCheckOwner(r.person)}
+                      className="flex items-center gap-1 text-[11px] text-brand-blue hover:bg-brand-blue/10 px-2 py-1 rounded-lg transition shrink-0"
+                      title="Проверить владельца в разделе Собственники"
+                    >
+                      <Icon name="UserSearch" size={11} />
+                      Проверить
+                    </button>
+                  )}
+                </div>
                 {r.number && <div className="text-xs text-muted-foreground mt-0.5">№ {r.number}</div>}
                 {r.date && <div className="text-xs text-muted-foreground">Зарег.: {r.date}</div>}
               </div>

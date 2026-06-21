@@ -6,14 +6,45 @@ import { CRM_CHECKS_URL } from '@/lib/adminApi';
 import { METHODS, RISK_COLORS, RISK_LABELS, MethodMeta } from './ownersTypes';
 import ResultValue from './OwnerResultValue';
 
+// Рекурсивно ищем кадастровый номер в объекте результата
+function findCadastralNumber(obj: unknown, depth = 0): string | null {
+  if (depth > 5 || !obj || typeof obj !== 'object') return null;
+  const CADASTRAL_RE = /^\d{2}:\d{2}:\d{6,7}:\d+$/;
+  for (const [key, val] of Object.entries(obj as Record<string, unknown>)) {
+    if (typeof val === 'string' && CADASTRAL_RE.test(val.trim())) return val.trim();
+    if (key.toLowerCase().includes('кадастр') || key.toLowerCase().includes('cadastr')) {
+      if (typeof val === 'string' && val.trim()) return val.trim();
+    }
+    const nested = findCadastralNumber(val, depth + 1);
+    if (nested) return nested;
+  }
+  return null;
+}
+
 interface Props {
   newdbConnected: boolean;
   token: string;
+  prefillName?: string | null;
+  onPrefillUsed?: () => void;
+  onOpenProperty?: (cadastralNumber: string) => void;
 }
 
-export default function OwnerDetailedChecks({ newdbConnected, token }: Props) {
+export default function OwnerDetailedChecks({
+  newdbConnected, token, prefillName, onPrefillUsed, onOpenProperty,
+}: Props) {
   const [selectedMethod, setSelectedMethod] = useState<MethodMeta>(METHODS[0]);
-  const [fields, setFields] = useState<Record<string, string>>({});
+  const [fields, setFields] = useState<Record<string, string>>(() => {
+    // Предзаполняем поля из имени владельца если пришло из ЕГРН
+    if (prefillName) {
+      const parts = prefillName.trim().split(/\s+/);
+      return {
+        lastname:   parts[0] || '',
+        firstname:  parts[1] || '',
+        secondname: parts[2] || '',
+      };
+    }
+    return {};
+  });
   const [result, setResult] = useState<unknown>(null);
   const [fromCache, setFromCache] = useState(false);
 
@@ -37,6 +68,7 @@ export default function OwnerDetailedChecks({ newdbConnected, token }: Props) {
       setResult(data.result);
       setFromCache(data.from_cache);
       if (data.from_cache) toast.info('Результат из кэша (30 дней)');
+      onPrefillUsed?.();
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -45,6 +77,7 @@ export default function OwnerDetailedChecks({ newdbConnected, token }: Props) {
 
   const hasError = (result as Record<string, unknown>)?.error;
   const resultData = (result as Record<string, unknown>)?.data;
+  const cadastralInResult = resultData ? findCadastralNumber(resultData) : null;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -154,6 +187,16 @@ export default function OwnerDetailedChecks({ newdbConnected, token }: Props) {
                   <span className="text-xs bg-muted px-2 py-0.5 rounded-full text-muted-foreground border border-border">
                     Из кэша (30 дней)
                   </span>
+                )}
+                {cadastralInResult && onOpenProperty && (
+                  <button
+                    onClick={() => onOpenProperty(cadastralInResult)}
+                    className="flex items-center gap-1 text-[11px] text-orange-600 bg-orange-50 hover:bg-orange-100 border border-orange-200 px-2 py-0.5 rounded-lg transition"
+                    title="Открыть проверку объекта по кадастровому номеру"
+                  >
+                    <Icon name="MapPin" size={11} />
+                    Проверить объект
+                  </button>
                 )}
                 <span className="text-xs text-muted-foreground font-mono">{selectedMethod.id}</span>
               </div>

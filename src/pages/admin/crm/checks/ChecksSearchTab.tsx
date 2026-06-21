@@ -120,6 +120,7 @@ interface Props {
   onRun: () => void;
   searchMode?: 'cadastral' | 'address';
   setSearchMode?: (m: 'cadastral' | 'address') => void;
+  onCheckOwner?: (name: string) => void;
 }
 
 export default function ChecksSearchTab({
@@ -127,6 +128,7 @@ export default function ChecksSearchTab({
   selectedSources, toggleSource, serviceStatus,
   results, isPending, onRun,
   searchMode = 'cadastral', setSearchMode,
+  onCheckOwner,
 }: Props) {
   const isProperty = checkType === 'property';
 
@@ -239,7 +241,7 @@ export default function ChecksSearchTab({
               ) : src === 'dadata' && res.data && !(res.data as Record<string, unknown>).error ? (
                 <DadataCard data={res.data as DadataData} />
               ) : src === 'egrn' && res.data ? (
-                <EgrnCard data={res.data as EgrnData} />
+                <EgrnCard data={res.data as EgrnData} onCheckOwner={onCheckOwner} />
               ) : (
                 <div className="text-sm">{renderValue(res.data)}</div>
               )}
