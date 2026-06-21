@@ -1143,6 +1143,8 @@ def run_check(conn, user, method, qs, body, check_keys=None):
         data = fetch_egrn(query)
         if 'error' not in data:
             save_cache(conn, 'property', cache_key, 'egrn', data, user['id'])
+            inc_quota(conn, 'egrn')
+            conn.commit()
         return ok({'query': query, 'check_type': 'property', 'results': {'egrn': {'data': data, 'from_cache': False}}})
 
     # ── Выбор источников по типу проверки ───────────────────────────────────
