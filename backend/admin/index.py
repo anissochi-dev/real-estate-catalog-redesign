@@ -2562,6 +2562,21 @@ def _trigger_reindex_async(listing_id: int):
         print(f'[reindex] ошибка для listing {listing_id}: {e}')
 
 
+def _notify_indexnow(slug: str):
+    """Уведомляет Яндекс IndexNow о новой/обновлённой странице объекта."""
+    import urllib.request
+    key = os.environ.get('INDEXNOW_KEY', '')
+    if not key or not slug:
+        return
+    url = f'https://bmn.su/object/{slug}'
+    api = f'https://yandex.com/indexnow?url={url}&key={key}'
+    try:
+        urllib.request.urlopen(api, timeout=3)
+        print(f'[indexnow] уведомление отправлено: {url}')
+    except Exception as e:
+        print(f'[indexnow] ошибка: {e}')
+
+
 def _listings(cur, conn, method, rid, event, user):
     if method == 'GET':
         if rid:
@@ -2792,6 +2807,8 @@ def _listings(cur, conn, method, rid, event, user):
         _trigger_faq_async(new_id, cur)
         _notify_phone_subscribers(new_id, body, cur)
         _trigger_reindex_async(new_id)
+        if (body.get('status') or 'active') == 'active':
+            _notify_indexnow(new_slug)
         return _ok({'id': new_id, 'success': True, 'slug': new_slug, 'owner_phone_contact_id': owner_pc_id})
 
     if method == 'PUT' and rid:
@@ -2950,6 +2967,14 @@ def _listings(cur, conn, method, rid, event, user):
                                     'address', 'district', 'condition', 'ceiling_height',
                                     'electricity_kw', 'purpose', 'is_visible', 'status')):
             _trigger_reindex_async(int(rid))
+        # IndexNow: уведомляем при публикации (статус → active)
+        if body.get('status') == 'active':
+            cur2 = conn.cursor()
+            cur2.execute(f"SELECT slug FROM {SCHEMA}.listings WHERE id = {int(rid)} LIMIT 1")
+            row = cur2.fetchone()
+            cur2.close()
+            if row:
+                _notify_indexnow(dict(row).get('slug') or '')
         return _ok({'success': True})
 
     if method == 'DELETE' and rid:
