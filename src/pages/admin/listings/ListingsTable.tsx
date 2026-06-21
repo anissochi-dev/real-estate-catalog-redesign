@@ -250,11 +250,11 @@ export default function ListingsTable({
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
-                      onClick={e => { e.stopPropagation(); onEdit(it); }}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-brand-blue text-white text-xs font-bold hover:bg-brand-blue/90 transition"
-                      title="Открыть редактор, дозаполнить и принять"
+                      onClick={e => { e.stopPropagation(); if (confirm('Одобрить объект и опубликовать в каталоге?')) onModerate(it.id, 'approve'); }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition"
+                      title="Одобрить объект и опубликовать в каталоге"
                     >
-                      <Icon name="Pencil" size={11} /> Принять
+                      <Icon name="CheckCircle" size={11} /> Принять
                     </button>
                     <button
                       onClick={e => { e.stopPropagation(); if (confirm('Отклонить объект? Он уйдёт в архив.')) onModerate(it.id, 'reject'); }}

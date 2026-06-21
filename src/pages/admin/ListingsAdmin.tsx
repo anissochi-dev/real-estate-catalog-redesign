@@ -18,8 +18,9 @@ export default function ListingsAdmin() {
   const handleModerate = async (id: number, action: 'approve' | 'reject') => {
     try {
       if (action === 'approve') {
-        const r = await adminApi.getListing(id);
-        if (r.listing) s.openEdit(r.listing);
+        await adminApi.updateListing(id, { status: 'active', is_visible: true });
+        toast.success('Объект одобрен и опубликован в каталоге');
+        s.load(true);
       } else {
         await adminApi.updateListing(id, { status: 'archived', is_visible: false });
         toast.success('Объект отклонён — отправлен в архив');
