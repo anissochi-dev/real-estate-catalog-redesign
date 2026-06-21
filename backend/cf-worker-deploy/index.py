@@ -45,6 +45,7 @@ function isHtmlRequest(req) {
   const url = new URL(req.url);
   const ext = url.pathname.split('.').pop().toLowerCase();
   const staticExts = ['js','css','png','jpg','jpeg','gif','webp','svg','ico','woff','woff2','ttf','json','map'];
+  // .txt не исключаем — нужен для IndexNow верификации
   if (staticExts.includes(ext)) return false;
   const accept = req.headers.get('accept') || '';
   return accept.includes('text/html') || accept.includes('*/*') || accept === '';
