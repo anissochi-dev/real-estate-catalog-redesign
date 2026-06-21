@@ -711,34 +711,45 @@ def fetch_checko(inn: str, api_key: str) -> dict:
 def fetch_cadastr_by_address(address: str) -> dict:
     """
     Поиск кадастрового номера по адресу через публичное API Росреестра (pkk.rosreestr.ru).
-    Шаг 1: геокодируем адрес через Яндекс → получаем lat/lon.
+    Шаг 1: геокодируем адрес через DaData → получаем lat/lon.
     Шаг 2: по координатам ищем объект на публичной кадастровой карте.
     Возвращает список найденных объектов с кадастровыми номерами.
     """
-    yandex_key = os.environ.get('YANDEX_GEOCODER_KEY', '')
+    dadata_key = os.environ.get('DADATA_API_KEY', '')
+    if not dadata_key:
+        return {'error': 'DADATA_API_KEY не настроен', 'found': []}
 
-    # ── Шаг 1: геокодирование адреса → координаты ─────────────────────────────
+    # ── Шаг 1: геокодирование адреса через DaData → координаты ───────────────
     try:
-        geo_url = (
-            f'https://geocode-maps.yandex.ru/1.x/?format=json&results=1'
-            f'&apikey={yandex_key}&geocode={urllib.parse.quote(address)}'
+        geo_url = 'https://cleaner.dadata.ru/api/v1/clean/address'
+        geo_payload = json.dumps([address]).encode('utf-8')
+        geo_req = urllib.request.Request(
+            geo_url,
+            data=geo_payload,
+            headers={
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': f'Token {dadata_key}',
+                'X-Secret': os.environ.get('DADATA_SECRET_KEY', ''),
+            },
+            method='POST',
         )
-        geo_req = urllib.request.Request(geo_url, headers={'User-Agent': 'BizNest CRM/1.0'})
         with urllib.request.urlopen(geo_req, timeout=10) as resp:
             geo_data = json.loads(resp.read().decode())
 
-        members = (
-            geo_data.get('response', {})
-            .get('GeoObjectCollection', {})
-            .get('featureMember', [])
-        )
-        if not members:
+        if not geo_data or not isinstance(geo_data, list) or not geo_data[0]:
             return {'error': 'Адрес не найден. Уточните запрос.', 'found': []}
 
-        point = members[0]['GeoObject']['Point']['pos']  # "lon lat"
-        lon_str, lat_str = point.split()
-        lat = float(lat_str)
-        lon = float(lon_str)
+        result = geo_data[0]
+        lat = result.get('geo_lat')
+        lon = result.get('geo_lon')
+        geocoded_address = result.get('result') or address
+
+        if not lat or not lon:
+            return {'error': 'Не удалось определить координаты адреса. Уточните запрос.', 'found': []}
+
+        lat = float(lat)
+        lon = float(lon)
     except Exception as e:
         return {'error': f'Ошибка геокодирования: {str(e)[:150]}', 'found': []}
 
@@ -789,8 +800,7 @@ def fetch_cadastr_by_address(address: str) -> dict:
             'found': found,
             'lat': lat,
             'lon': lon,
-            'geocoded_address': members[0]['GeoObject'].get('metaDataProperty', {})
-                                .get('GeocoderMetaData', {}).get('text', ''),
+            'geocoded_address': geocoded_address,
         }
     except Exception as e:
         return {'error': f'Ошибка запроса к Росреестру: {str(e)[:150]}', 'found': []}
