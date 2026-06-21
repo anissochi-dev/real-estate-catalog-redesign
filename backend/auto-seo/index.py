@@ -292,7 +292,7 @@ def _process_listing(cur, conn, listing: dict, api_key: str, folder_id: str,
         if not dry_run and faq_items:
             faq_json = _safe(json.dumps(faq_items, ensure_ascii=False), 5000)
             cur.execute(
-                f"UPDATE {SCHEMA}.listings SET seo_faq = '{faq_json}', faq_updated_at = NOW(), updated_at = NOW() "
+                f"UPDATE {SCHEMA}.listings SET seo_faq = '{faq_json}'::jsonb, faq_updated_at = NOW(), updated_at = NOW() "
                 f"WHERE id = {int(lid)}"
             )
             conn.commit()
@@ -318,7 +318,7 @@ def _build_filter_clause(fields: list) -> str:
     if 'description' in fields:
         conditions.append("(description IS NULL OR LENGTH(description) < 50)")
     if 'faq' in fields:
-        conditions.append("(seo_faq IS NULL OR seo_faq = '' OR seo_faq = '[]')")
+        conditions.append("(seo_faq IS NULL OR seo_faq = '[]'::jsonb)")
     return ' OR '.join(conditions) if conditions else 'TRUE'
 
 
@@ -646,7 +646,7 @@ def handler(event: dict, context) -> dict:
                     f"COUNT(*) FILTER (WHERE status='active' AND (seo_title IS NULL OR seo_title='')) AS no_seo_title,"
                     f"COUNT(*) FILTER (WHERE status='active' AND (seo_description IS NULL OR seo_description='')) AS no_seo_desc,"
                     f"COUNT(*) FILTER (WHERE status='active' AND (description IS NULL OR LENGTH(description)<50)) AS no_desc,"
-                    f"COUNT(*) FILTER (WHERE status='active' AND (seo_faq IS NULL OR seo_faq = '' OR seo_faq = '[]')) AS no_faq "
+                    f"COUNT(*) FILTER (WHERE status='active' AND (seo_faq IS NULL OR seo_faq = '[]'::jsonb)) AS no_faq "
                     f"FROM {SCHEMA}.listings"
                 )
                 row = dict(cur.fetchone())
