@@ -253,19 +253,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
               Умный поиск понимает обычный язык — площадь, район, тип, назначение
             </div>
 
-            {/* Вы собственник? — встроен в Hero */}
-            <div className="mt-5 flex flex-col items-center gap-2 text-center animate-fade-in-up stagger-4">
-              <div className="text-white/70 text-xs">
-                Вы собственник? Разместите объект бесплатно — публикация в течение 24 часов
-              </div>
-              <button
-                onClick={() => setOwnerOpen(true)}
-                className="inline-flex items-center gap-2 px-5 py-2 bg-white/15 hover:bg-white/25 border border-white/30 text-white font-semibold text-sm rounded-xl transition-colors"
-              >
-                <Icon name="PlusCircle" size={15} />
-                Разместить объект
-              </button>
-            </div>
+
           </div>
         </div>
       </section>
