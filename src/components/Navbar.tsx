@@ -90,7 +90,14 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
 
             {/* Right side — desktop */}
             <div className="flex items-center gap-2">
-
+              {/* Кнопка "Разместить объект" */}
+              <button
+                onClick={() => setOwnerModalOpen(true)}
+                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-orange text-white text-sm font-semibold hover:bg-brand-orange/90 transition-all duration-200 shrink-0"
+              >
+                <Icon name="PlusCircle" size={15} />
+                Разместить объект
+              </button>
 
               {compareCount > 0 && (
                 <button
@@ -172,7 +179,14 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
 
         {/* Drawer nav */}
         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-
+          {/* Кнопка "Разместить объект" — мобиль */}
+          <button
+            onClick={() => { setOwnerModalOpen(true); setDrawerOpen(false); }}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold bg-brand-orange text-white hover:bg-brand-orange/90 transition mb-1"
+          >
+            <Icon name="PlusCircle" size={18} />
+            Разместить объект
+          </button>
 
           {navItems.map((item) => (
             <button
