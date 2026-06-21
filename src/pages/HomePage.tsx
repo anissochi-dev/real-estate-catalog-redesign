@@ -216,7 +216,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
               Коммерческая недвижимость и готовый бизнес в Краснодаре
             </h1>
             <p className="text-white/75 text-sm sm:text-base mb-5 animate-fade-in-up stagger-2 max-w-xl">
-              Более {totalCount} объектов в {mainCity}е. Умный поиск — находит за секунды.
+              Более {totalCount} объектов в {mainCity}е. Подбор с ИИ за 2 минуты.
             </p>
 
             {/* AI search bar */}
