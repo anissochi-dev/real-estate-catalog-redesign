@@ -3,7 +3,7 @@
 
 Уровни защиты:
   1. form_token — одноразовый UUID, выдаётся при открытии формы (GET ?action=token)
-  2. fill_time  — минимальное время заполнения (15 сек), бот заполняет мгновенно
+  2. fill_time  — минимальное время заполнения (15 сек), считается на сервере по token_ts
   3. honeypot   — скрытое поле website, бот заполняет его, человек нет
   4. IP rate limit — не более 3 заявок с одного IP в сутки (БД)
   5. Phone rate limit — не более 2 заявок с одного телефона в сутки (БД)
@@ -17,14 +17,12 @@ import json
 import os
 import random
 import re
-import smtplib
 import threading
 import time
 import urllib.request
 import uuid
 import boto3
 import psycopg2
-from email.mime.text import MIMEText
 from psycopg2.extras import RealDictCursor
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
@@ -134,7 +132,9 @@ def _upload_photo(b64: str, idx: int):
 def _notify_new_submission(listing_id: int, owner_name: str, owner_phone: str,
                             address: str, category: str, area: float, price: float,
                             deal: str, dsn: str):
-    """Уведомляет сотрудников о новой заявке от собственника через MAX и SMTP."""
+    """Уведомляет сотрудников о новой заявке от собственника через MAX.
+    SMTP-уведомления отключены — активен только MAX-мессенджер.
+    """
     MAX_API_URL = 'https://botapi.max.ru'
     CAT_LABELS = {
         'office': 'Офис', 'retail': 'Торговое помещение', 'warehouse': 'Склад',
@@ -151,98 +151,60 @@ def _notify_new_submission(listing_id: int, owner_name: str, owner_phone: str,
         with conn2.cursor() as cur:
             cur.execute(
                 f"SELECT notify_max_enabled, notify_max_on_lead, notify_max_bot_token, "
-                f"notify_max_roles, notify_max_extra_phones, company_name, "
-                f"notify_email_recipients, smtp_host, smtp_port, smtp_user, smtp_password, smtp_from "
+                f"notify_max_roles, notify_max_extra_phones, company_name "
                 f"FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
             )
             row = cur.fetchone()
             if not row:
                 conn2.close()
                 return
-            (max_enabled, max_on_lead, bot_token, roles_str, extra_phones,
-             company_name, email_recipients, smtp_host, smtp_port,
-             smtp_user, smtp_pass, smtp_from) = row
+            (max_enabled, max_on_lead, bot_token, roles_str, extra_phones, company_name) = row
 
-            # -- MAX-уведомление --------------------------------------------------
-            if max_enabled and max_on_lead and (bot_token or '').strip():
-                bot_token = bot_token.strip()
-                enabled_roles = [r.strip() for r in (roles_str or 'broker,admin,director,office_manager').split(',') if r.strip()]
-                roles_sql = ', '.join(f"'{r}'" for r in enabled_roles)
-                cur.execute(
-                    f"SELECT name, max_user_id FROM {SCHEMA}.users "
-                    f"WHERE is_active = TRUE AND max_user_id IS NOT NULL AND max_user_id != '' "
-                    f"AND role IN ({roles_sql})"
-                )
-                recipients = [(r[0], r[1]) for r in cur.fetchall()]
-                for extra in (extra_phones or '').split(','):
-                    uid = extra.strip()
-                    if uid:
-                        recipients.append(('Доп. получатель', uid))
+            if not max_enabled or not max_on_lead or not (bot_token or '').strip():
+                conn2.close()
+                return
 
-                if recipients:
-                    company = company_name or 'Система'
-                    text = (
-                        f'🏢 Новая заявка от собственника — {company}\n\n'
-                        f'👤 {owner_name}\n'
-                        f'📞 {owner_phone}\n'
-                        f'📍 {address}\n'
-                        f'🏷 {cat_label} · {deal_label}\n'
-                        f'📐 {int(area)} м² · {price_fmt} ₽\n'
-                        f'\n🆔 Объект #{listing_id} — на модерации'
-                    )
-                    for _, user_id in recipients:
-                        try:
-                            payload = json.dumps({'text': text}, ensure_ascii=False).encode('utf-8')
-                            req = urllib.request.Request(
-                                f'{MAX_API_URL}/messages?user_id={user_id}',
-                                data=payload,
-                                headers={'Authorization': bot_token, 'Content-Type': 'application/json'},
-                                method='POST',
-                            )
-                            urllib.request.urlopen(req, timeout=8)
-                        except Exception as e:
-                            print(f'[owner-submit] MAX notify error: {e}')
+            bot_token = bot_token.strip()
+            enabled_roles = [r.strip() for r in (roles_str or 'broker,admin,director,office_manager').split(',') if r.strip()]
+            roles_sql = ', '.join(f"'{r}'" for r in enabled_roles)
+            cur.execute(
+                f"SELECT name, max_user_id FROM {SCHEMA}.users "
+                f"WHERE is_active = TRUE AND max_user_id IS NOT NULL AND max_user_id != '' "
+                f"AND role IN ({roles_sql})"
+            )
+            recipients = [(r[0], r[1]) for r in cur.fetchall()]
+            for extra in (extra_phones or '').split(','):
+                uid = extra.strip()
+                if uid:
+                    recipients.append(('Доп. получатель', uid))
 
         conn2.close()
 
-        # -- SMTP-уведомление -----------------------------------------------------
-        recipients_str = (email_recipients or '').strip()
-        host           = (smtp_host or '').strip()
-        user           = (smtp_user or '').strip()
-        passwd         = smtp_pass or ''
-        from_addr      = (smtp_from or user or '').strip()
-        company        = company_name or 'Сайт'
+        if not recipients:
+            return
 
-        if recipients_str and host and user and passwd:
-            to_list = [r.strip() for r in recipients_str.split(',') if r.strip()]
-            subject = f'[{company}] Новая заявка от собственника — {cat_label}, {int(area)} м²'
-            body_text = (
-                f'Поступила новая заявка от собственника.\n\n'
-                f'Собственник:  {owner_name}\n'
-                f'Телефон:      {owner_phone}\n'
-                f'Адрес:        {address}\n'
-                f'Категория:    {cat_label} ({deal_label})\n'
-                f'Площадь:      {int(area)} м²\n'
-                f'Цена:         {price_fmt} ₽\n'
-                f'ID объекта:   #{listing_id} (статус: модерация)\n\n'
-                f'Войдите в админ-панель, чтобы рассмотреть заявку.\n'
-            )
+        company = company_name or 'Система'
+        text = (
+            f'🏢 Новая заявка от собственника — {company}\n\n'
+            f'👤 {owner_name}\n'
+            f'📞 {owner_phone}\n'
+            f'📍 {address}\n'
+            f'🏷 {cat_label} · {deal_label}\n'
+            f'📐 {int(area)} м² · {price_fmt} ₽\n'
+            f'\n🆔 Объект #{listing_id} — на модерации'
+        )
+        for _, user_id in recipients:
             try:
-                msg = MIMEText(body_text, 'plain', 'utf-8')
-                msg['Subject'] = subject
-                msg['From']    = from_addr
-                msg['To']      = ', '.join(to_list)
-                port = int(smtp_port or 465)
-                if port == 465:
-                    srv = smtplib.SMTP_SSL(host, port, timeout=15)
-                else:
-                    srv = smtplib.SMTP(host, port, timeout=15)
-                    srv.starttls()
-                srv.login(user, passwd)
-                srv.sendmail(from_addr, to_list, msg.as_string())
-                srv.quit()
+                payload = json.dumps({'text': text}, ensure_ascii=False).encode('utf-8')
+                req = urllib.request.Request(
+                    f'{MAX_API_URL}/messages?user_id={user_id}',
+                    data=payload,
+                    headers={'Authorization': bot_token, 'Content-Type': 'application/json'},
+                    method='POST',
+                )
+                urllib.request.urlopen(req, timeout=8)
             except Exception as e:
-                print(f'[owner-submit] SMTP notify error: {e}')
+                print(f'[owner-submit] MAX notify error: {e}')
 
     except Exception as e:
         print(f'[owner-submit] _notify_new_submission error: {e}')
@@ -332,11 +294,9 @@ def handler(event: dict, context) -> dict:
         return _err(400, f'Описание слишком короткое (минимум {MIN_DESC_LEN} символов)')
 
     # ── Уровень 7: Контентные эвристики ──────────────────────────────────────
-    # Имя не должно быть просто набором символов
     name_letters = re.sub(r'[^а-яёa-z]', '', owner_name.lower())
     if len(name_letters) < 2:
         return _err(400, 'Укажите корректное имя')
-    # Описание не должно состоять из одних пробелов/символов
     desc_letters = re.sub(r'[^а-яёa-z0-9]', '', description.lower())
     if len(desc_letters) < 10:
         return _err(400, 'Добавьте осмысленное описание объекта')
@@ -344,7 +304,6 @@ def handler(event: dict, context) -> dict:
     norm_phone = _normalize_phone(owner_phone)
     phone_tail = norm_phone[-7:] if len(norm_phone) >= 7 else norm_phone
 
-    # ── Уровни 4+5: Rate limit через БД ──────────────────────────────────────
     owner_email    = (body.get('owner_email') or '').strip()[:100] or None
     video_url      = (body.get('video_url') or '').strip()[:500] or None
     floor          = body.get('floor')
@@ -458,28 +417,22 @@ def handler(event: dict, context) -> dict:
             listing_id = cur.fetchone()['id']
 
             # ── Upsert phone_contacts ─────────────────────────────────────────
-            pc_id = None
             if norm_phone:
                 cur.execute(
                     f"SELECT id FROM {SCHEMA}.phone_contacts WHERE phone_normalized = %s LIMIT 1",
                     (norm_phone,)
                 )
                 row = cur.fetchone()
-                if row:
-                    pc_id = row['id']
-                else:
+                if not row:
                     cur.execute(
                         f"INSERT INTO {SCHEMA}.phone_contacts (phone, phone_normalized, name, email) "
                         f"VALUES (%s,%s,%s,%s) RETURNING id",
                         (owner_phone, norm_phone, owner_name, owner_email)
                     )
-                    pc_id = cur.fetchone()['id']
 
-            # Лид не создаём — объект уходит на модерацию в listings,
-            # там менеджер его принимает/отклоняет. Дублировать в заявки не нужно.
             conn.commit()
 
-        # Уведомляем сотрудников асинхронно (не задерживаем ответ пользователю)
+        # Уведомляем сотрудников через MAX асинхронно
         threading.Thread(
             target=_notify_new_submission,
             args=(listing_id, owner_name, owner_phone, address, category, area, price, deal, dsn),
