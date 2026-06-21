@@ -6,6 +6,7 @@ export interface S {
   hero_title: string;
   hero_subtitle: string;
   about_text: string;
+  home_seo_text: string;
   logo_url: string;
   main_city: string;
   watermark_url: string;

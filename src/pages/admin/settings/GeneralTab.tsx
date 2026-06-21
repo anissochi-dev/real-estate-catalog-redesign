@@ -34,11 +34,11 @@ export default function GeneralTab({ tab, s, setS, cities, saved, save }: Props)
       setPreviewing(false);
     }
   };
-  const field = (key: keyof S, label: string, multiline = false) => (
+  const field = (key: keyof S, label: string, multiline = false, rows = 3) => (
     <div>
       <label className="text-sm font-semibold block mb-1">{label}</label>
       {multiline ? (
-        <textarea className="w-full px-3 py-2 border rounded-lg" rows={3}
+        <textarea className="w-full px-3 py-2 border rounded-lg" rows={rows}
           value={(s[key] as string) || ''} onChange={e => setS({ ...s, [key]: e.target.value })} />
       ) : (
         <input className="w-full px-3 py-2 border rounded-lg"
@@ -81,6 +81,7 @@ export default function GeneralTab({ tab, s, setS, cities, saved, save }: Props)
           {field('hero_title', 'Заголовок Hero')}
           {field('hero_subtitle', 'Подзаголовок Hero', true)}
           {field('about_text', 'О компании', true)}
+          {field('home_seo_text', 'SEO-текст главной страницы', true, 8)}
         </div>
 
         <div className="bg-white rounded-2xl p-6 shadow-sm space-y-4">

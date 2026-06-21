@@ -3218,7 +3218,7 @@ def _settings(cur, conn, method, event, user):
         fields = []
         for f, length in [('company_name', 255), ('company_phone', 30), ('company_email', 100),
                           ('company_address', 255), ('hero_title', 500), ('hero_subtitle', 1000),
-                          ('about_text', 5000), ('logo_url', 500), ('main_city', 100),
+                          ('about_text', 5000), ('home_seo_text', 10000), ('logo_url', 500), ('main_city', 100),
                           ('watermark_url', 500), ('watermark_position', 20),
                           ('yandex_metrika_id', 50), ('google_analytics_id', 50),
                           ('yandex_maps_api_key', 200), ('site_url', 255),

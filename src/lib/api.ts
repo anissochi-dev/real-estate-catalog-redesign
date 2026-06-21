@@ -268,6 +268,7 @@ export interface PublicSettings {
   hero_title?: string;
   hero_subtitle?: string;
   about_text?: string;
+  home_seo_text?: string;
   logo_url?: string;
   main_city?: string;
   yandex_maps_api_key?: string;
