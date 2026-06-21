@@ -22,9 +22,10 @@ const BOT_AGENTS = [
   'screaming frog','sitebulb','prerender','lighthouse',
 ];
 
-const PRERENDER  = '__PRERENDER_URL__';
-const SITEMAP    = '__SITEMAP_URL__';
-const SITE_URL   = 'https://bmn.su';
+const PRERENDER      = '__PRERENDER_URL__';
+const SITEMAP        = '__SITEMAP_URL__';
+const INDEXNOW_KEY   = '__INDEXNOW_KEY__';
+const SITE_URL       = 'https://bmn.su';
 
 const ROBOTS_TXT = `User-agent: *
 Allow: /
@@ -54,6 +55,17 @@ export default {
     const ua  = request.headers.get('user-agent') || '';
     const url = new URL(request.url);
     const path = url.pathname;
+
+    // IndexNow верификационный файл: /{key}.txt
+    if (INDEXNOW_KEY && path === `/${INDEXNOW_KEY}.txt`) {
+      return new Response(INDEXNOW_KEY, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'public, max-age=86400',
+        },
+      });
+    }
 
     // robots.txt
     if (path === '/robots.txt') {
@@ -116,7 +128,15 @@ export default {
     return fetch(request);
   },
 };
-""".replace('__PRERENDER_URL__', PRERENDER_URL).replace('__SITEMAP_URL__', SITEMAP_URL)
+"""
+
+
+def _build_worker_script():
+    indexnow_key = os.environ.get('INDEXNOW_KEY', '')
+    return (WORKER_SCRIPT
+            .replace('__PRERENDER_URL__', PRERENDER_URL)
+            .replace('__SITEMAP_URL__', SITEMAP_URL)
+            .replace('__INDEXNOW_KEY__', indexnow_key))
 
 
 def cf_request(method, path, token, data=None):
@@ -191,7 +211,7 @@ def handler(event: dict, context) -> dict:
             f'--{boundary}\r\nContent-Disposition: form-data; name="metadata"\r\nContent-Type: application/json\r\n\r\n',
             json.dumps({'main_module': 'worker.js', 'compatibility_date': '2024-01-01'}),
             f'\r\n--{boundary}\r\nContent-Disposition: form-data; name="worker.js"; filename="worker.js"\r\nContent-Type: application/javascript+module\r\n\r\n',
-            WORKER_SCRIPT,
+            _build_worker_script(),
             f'\r\n--{boundary}--\r\n',
         ]
         body_bytes = ''.join(body_parts).encode('utf-8')
