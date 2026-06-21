@@ -15,6 +15,7 @@ import base64
 import hashlib
 import json
 import os
+import random
 import re
 import smtplib
 import threading
@@ -280,8 +281,8 @@ def handler(event: dict, context) -> dict:
     # ── Уровень 3: Honeypot ───────────────────────────────────────────────────
     # Бот заполняет скрытое поле, человек — нет
     if body.get('website') or body.get('url') or body.get('company_url'):
-        # Тихо возвращаем успех — бот не знает что заблокирован
-        return _ok({'ok': True, 'listing_id': 0})
+        # Возвращаем случайный ID — бот не отличит от реального успеха
+        return _ok({'ok': True, 'listing_id': random.randint(1_000_000, 9_999_999)})
 
     # ── Уровень 1+6: Токен формы (выдан GET /token, одноразовый) ─────────────
     form_token = (body.get('form_token') or '').strip()
