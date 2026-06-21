@@ -176,7 +176,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   const faqItems = [
     {
       question: `Какую коммерческую недвижимость можно подобрать в ${cityName}е?`,
-      answer: `В каталоге — офисы, торговые помещения, склады, помещения под общепит, производства, готовый бизнес и земельные участки в ${cityName}е и пригороде. Всего более ${totalCount} актуальных объектов.`,
+      answer: `В каталоге — офисы, торговые помещения, склады, помещения под общепит, производства, готовый бизнес и земельные участки в ${cityName}е. Всего более ${totalCount} актуальных объектов.`,
     },
     {
       question: 'Сколько лет компания работает на рынке?',
@@ -216,11 +216,11 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
               Коммерческая недвижимость и готовый бизнес в Краснодаре
             </h1>
             <p className="text-white/75 text-sm sm:text-base mb-5 animate-fade-in-up stagger-2 max-w-xl">
-              Более {totalCount} объектов в {mainCity}е и пригороде. Подбор с ИИ за 2 минуты.
+              Более {totalCount} объектов в {mainCity}е. Умный поиск — находит за секунды.
             </p>
 
             {/* AI search bar */}
-            <h2 className="sr-only">Подбор помещения с ИИ за 2 минуты</h2>
+            <h2 className="sr-only">Умный подбор коммерческой недвижимости в Краснодаре</h2>
             <form
               onSubmit={e => {
                 e.preventDefault();
