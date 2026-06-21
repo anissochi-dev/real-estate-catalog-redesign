@@ -16,10 +16,14 @@ import hashlib
 import json
 import os
 import re
+import smtplib
+import threading
 import time
+import urllib.request
 import uuid
 import boto3
 import psycopg2
+from email.mime.text import MIMEText
 from psycopg2.extras import RealDictCursor
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
@@ -126,6 +130,123 @@ def _upload_photo(b64: str, idx: int):
         return None
 
 
+def _notify_new_submission(listing_id: int, owner_name: str, owner_phone: str,
+                            address: str, category: str, area: float, price: float,
+                            deal: str, dsn: str):
+    """Уведомляет сотрудников о новой заявке от собственника через MAX и SMTP."""
+    MAX_API_URL = 'https://botapi.max.ru'
+    CAT_LABELS = {
+        'office': 'Офис', 'retail': 'Торговое помещение', 'warehouse': 'Склад',
+        'restaurant': 'Общепит', 'hotel': 'Гостиница', 'business': 'Готовый бизнес',
+        'gab': 'ГАБ', 'production': 'Производство', 'land': 'Земельный участок',
+        'building': 'Здание', 'free_purpose': 'ПСН', 'car_service': 'Автосервис',
+    }
+    cat_label  = CAT_LABELS.get(category, category)
+    deal_label = 'Аренда' if deal == 'rent' else 'Продажа'
+    price_fmt  = f"{int(price):,}".replace(',', ' ')
+
+    try:
+        conn2 = psycopg2.connect(dsn)
+        with conn2.cursor() as cur:
+            cur.execute(
+                f"SELECT notify_max_enabled, notify_max_on_lead, notify_max_bot_token, "
+                f"notify_max_roles, notify_max_extra_phones, company_name, "
+                f"notify_email_recipients, smtp_host, smtp_port, smtp_user, smtp_password, smtp_from "
+                f"FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
+            )
+            row = cur.fetchone()
+            if not row:
+                conn2.close()
+                return
+            (max_enabled, max_on_lead, bot_token, roles_str, extra_phones,
+             company_name, email_recipients, smtp_host, smtp_port,
+             smtp_user, smtp_pass, smtp_from) = row
+
+            # -- MAX-уведомление --------------------------------------------------
+            if max_enabled and max_on_lead and (bot_token or '').strip():
+                bot_token = bot_token.strip()
+                enabled_roles = [r.strip() for r in (roles_str or 'broker,admin,director,office_manager').split(',') if r.strip()]
+                roles_sql = ', '.join(f"'{r}'" for r in enabled_roles)
+                cur.execute(
+                    f"SELECT name, max_user_id FROM {SCHEMA}.users "
+                    f"WHERE is_active = TRUE AND max_user_id IS NOT NULL AND max_user_id != '' "
+                    f"AND role IN ({roles_sql})"
+                )
+                recipients = [(r[0], r[1]) for r in cur.fetchall()]
+                for extra in (extra_phones or '').split(','):
+                    uid = extra.strip()
+                    if uid:
+                        recipients.append(('Доп. получатель', uid))
+
+                if recipients:
+                    company = company_name or 'Система'
+                    text = (
+                        f'🏢 Новая заявка от собственника — {company}\n\n'
+                        f'👤 {owner_name}\n'
+                        f'📞 {owner_phone}\n'
+                        f'📍 {address}\n'
+                        f'🏷 {cat_label} · {deal_label}\n'
+                        f'📐 {int(area)} м² · {price_fmt} ₽\n'
+                        f'\n🆔 Объект #{listing_id} — на модерации'
+                    )
+                    for _, user_id in recipients:
+                        try:
+                            payload = json.dumps({'text': text}, ensure_ascii=False).encode('utf-8')
+                            req = urllib.request.Request(
+                                f'{MAX_API_URL}/messages?user_id={user_id}',
+                                data=payload,
+                                headers={'Authorization': bot_token, 'Content-Type': 'application/json'},
+                                method='POST',
+                            )
+                            urllib.request.urlopen(req, timeout=8)
+                        except Exception as e:
+                            print(f'[owner-submit] MAX notify error: {e}')
+
+        conn2.close()
+
+        # -- SMTP-уведомление -----------------------------------------------------
+        recipients_str = (email_recipients or '').strip()
+        host           = (smtp_host or '').strip()
+        user           = (smtp_user or '').strip()
+        passwd         = smtp_pass or ''
+        from_addr      = (smtp_from or user or '').strip()
+        company        = company_name or 'Сайт'
+
+        if recipients_str and host and user and passwd:
+            to_list = [r.strip() for r in recipients_str.split(',') if r.strip()]
+            subject = f'[{company}] Новая заявка от собственника — {cat_label}, {int(area)} м²'
+            body_text = (
+                f'Поступила новая заявка от собственника.\n\n'
+                f'Собственник:  {owner_name}\n'
+                f'Телефон:      {owner_phone}\n'
+                f'Адрес:        {address}\n'
+                f'Категория:    {cat_label} ({deal_label})\n'
+                f'Площадь:      {int(area)} м²\n'
+                f'Цена:         {price_fmt} ₽\n'
+                f'ID объекта:   #{listing_id} (статус: модерация)\n\n'
+                f'Войдите в админ-панель, чтобы рассмотреть заявку.\n'
+            )
+            try:
+                msg = MIMEText(body_text, 'plain', 'utf-8')
+                msg['Subject'] = subject
+                msg['From']    = from_addr
+                msg['To']      = ', '.join(to_list)
+                port = int(smtp_port or 465)
+                if port == 465:
+                    srv = smtplib.SMTP_SSL(host, port, timeout=15)
+                else:
+                    srv = smtplib.SMTP(host, port, timeout=15)
+                    srv.starttls()
+                srv.login(user, passwd)
+                srv.sendmail(from_addr, to_list, msg.as_string())
+                srv.quit()
+            except Exception as e:
+                print(f'[owner-submit] SMTP notify error: {e}')
+
+    except Exception as e:
+        print(f'[owner-submit] _notify_new_submission error: {e}')
+
+
 def handler(event: dict, context) -> dict:
     """Публичный приём объявлений от собственников с антибот-защитой."""
 
@@ -169,13 +290,10 @@ def handler(event: dict, context) -> dict:
         return _err(400, 'Недействительный токен формы. Обновите страницу.')
 
     # ── Уровень 2: Минимальное время заполнения ───────────────────────────────
-    fill_time = body.get('fill_time', 0)
-    try:
-        fill_time = int(fill_time)
-    except Exception:
-        fill_time = 0
+    # Считаем на сервере по времени выдачи токена — клиент не может подделать
+    fill_time = int(time.time()) - token_ts
     if fill_time < MIN_FILL_SECONDS:
-        return _err(400, f'Форма заполнена слишком быстро. Пожалуйста, заполните внимательно.')
+        return _err(400, 'Форма заполнена слишком быстро. Пожалуйста, заполните внимательно.')
 
     # ── Обязательные поля ─────────────────────────────────────────────────────
     owner_name  = (body.get('owner_name') or '').strip()[:100]
@@ -359,6 +477,13 @@ def handler(event: dict, context) -> dict:
             # Лид не создаём — объект уходит на модерацию в listings,
             # там менеджер его принимает/отклоняет. Дублировать в заявки не нужно.
             conn.commit()
+
+        # Уведомляем сотрудников асинхронно (не задерживаем ответ пользователю)
+        threading.Thread(
+            target=_notify_new_submission,
+            args=(listing_id, owner_name, owner_phone, address, category, area, price, deal, dsn),
+            daemon=True,
+        ).start()
 
         return _ok({'ok': True, 'listing_id': listing_id})
     except Exception as e:
