@@ -7,6 +7,7 @@ import { SOURCE_INFO, CHECK_TYPES, ZachestnyData, DadataData, CheckResult } from
 import ZachestnyCard from './ZachestnyCard';
 import CheckoCard from './CheckoCard';
 import DadataCard from './DadataCard';
+import EgrnCard, { EgrnData } from './EgrnCard';
 
 function renderValue(val: unknown, depth = 0): React.ReactNode {
   if (val === null || val === undefined) return <span className="text-muted-foreground">—</span>;
@@ -161,6 +162,8 @@ export default function ChecksSearchTab({
                   <CheckoCard data={res.data as Parameters<typeof CheckoCard>[0]['data']} />
                 ) : src === 'dadata' && res.data && !(res.data as Record<string, unknown>).error ? (
                   <DadataCard data={res.data as DadataData} />
+                ) : src === 'egrn' && res.data ? (
+                  <EgrnCard data={res.data as EgrnData} />
                 ) : (
                   <div className="text-sm">{renderValue(res.data)}</div>
                 )}

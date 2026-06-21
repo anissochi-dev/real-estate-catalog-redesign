@@ -708,6 +708,77 @@ def fetch_checko(inn: str, api_key: str) -> dict:
         return {'error': str(e)[:200]}
 
 
+def _parse_egrn_raw(raw: dict, cadastr_clean: str) -> dict:
+    """Парсит сырой ответ api-assist.com/api/egrn-object в структурированные данные."""
+
+    def _str(v):
+        return str(v).strip() if v is not None else ''
+
+    def _fmt_cost(v):
+        try:
+            return f"{float(str(v).replace(',', '.').replace(' ', '')):,.2f} ₽".replace(',', ' ')
+        except Exception:
+            return _str(v)
+
+    # ── Основные поля ──────────────────────────────────────────────────────────
+    # api-assist может вернуть данные в разных ключах
+    cad_num   = _str(raw.get('cadastral_number') or raw.get('number') or cadastr_clean)
+    address   = _str(raw.get('address') or raw.get('addr') or '')
+    area      = _str(raw.get('area') or raw.get('square') or '')
+    purpose   = _str(raw.get('purpose') or raw.get('category') or raw.get('type') or '')
+    cad_cost  = raw.get('cad_cost') or raw.get('cadastral_cost') or raw.get('cost') or ''
+    cad_cost_date = _str(raw.get('cad_cost_det_date') or raw.get('cad_cost_date') or '')
+    reg_date  = _str(raw.get('reg_date') or raw.get('registration_date') or '')
+    status    = _str(raw.get('status') or '')
+
+    # ── Обременения ────────────────────────────────────────────────────────────
+    encumbrances_raw = raw.get('encumbrances') or raw.get('restrictions') or []
+    encumbrances = []
+    if isinstance(encumbrances_raw, list):
+        for e in encumbrances_raw:
+            if isinstance(e, dict):
+                encumbrances.append({
+                    'number': _str(e.get('number') or e.get('num') or ''),
+                    'type':   _str(e.get('type') or e.get('kind') or ''),
+                    'date':   _str(e.get('date') or e.get('reg_date') or ''),
+                    'holder': _str(e.get('holder') or e.get('person') or ''),
+                })
+            elif isinstance(e, str) and e:
+                encumbrances.append({'type': e, 'number': '', 'date': '', 'holder': ''})
+
+    # ── Права собственности ────────────────────────────────────────────────────
+    rights_raw = raw.get('rights') or raw.get('owners') or []
+    rights = []
+    if isinstance(rights_raw, list):
+        for r in rights_raw:
+            if isinstance(r, dict):
+                rights.append({
+                    'number': _str(r.get('number') or r.get('num') or ''),
+                    'type':   _str(r.get('type') or r.get('right_type') or ''),
+                    'date':   _str(r.get('date') or r.get('reg_date') or ''),
+                    'person': _str(r.get('person') or r.get('owner') or r.get('name') or ''),
+                    'share':  _str(r.get('share') or ''),
+                })
+            elif isinstance(r, str) and r:
+                rights.append({'type': r, 'number': '', 'date': '', 'person': '', 'share': ''})
+
+    return {
+        '_source': 'egrn',
+        'cadastral_number': cad_num,
+        'address':          address,
+        'area':             area,
+        'purpose':          purpose,
+        'cadastral_cost':   _fmt_cost(cad_cost) if cad_cost else '',
+        'cadastral_cost_date': cad_cost_date,
+        'registration_date': reg_date,
+        'status':           status,
+        'encumbrances':     encumbrances,
+        'rights':           rights,
+        'has_encumbrances': len(encumbrances) > 0,
+        '_raw':             raw,
+    }
+
+
 def fetch_egrn(cadastr_number: str) -> dict:
     """Получение данных ЕГРН по кадастровому номеру через api-assist.com."""
     api_key = os.environ.get('EGRN_API_KEY', '')
@@ -723,11 +794,10 @@ def fetch_egrn(cadastr_number: str) -> dict:
         )
         with urllib.request.urlopen(req, timeout=20) as resp:
             raw = json.loads(resp.read().decode())
-        return {
-            '_source': 'egrn',
-            'cadastral_number': cadastr_clean,
-            '_raw': raw,
-        }
+        # Проверяем что API вернул успешный ответ
+        if isinstance(raw, dict) and (raw.get('success') == 0 or raw.get('error')):
+            return {'error': raw.get('error') or raw.get('message') or 'Объект не найден', '_raw': raw}
+        return _parse_egrn_raw(raw, cadastr_clean)
     except urllib.error.HTTPError as e:
         body_err = e.read().decode()[:300]
         return {'error': f'EGRН HTTP {e.code}: {body_err}'}
