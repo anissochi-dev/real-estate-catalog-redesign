@@ -40,41 +40,45 @@ function getCacheTTL(pathname: string): number {
   return 3600;                                            // 1 час — главная, map, leads
 }
 
-export default async (request: Request) => {
+// Netlify Edge Function context type
+interface Context {
+  next: () => Promise<Response>;
+}
+
+export default async (request: Request, context: Context) => {
   const url = new URL(request.url);
   const { pathname } = url;
 
   // Пропускаем статические ресурсы — js, css, fonts, images, favicon и т.д.
   if (/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|map|json|webp|avif|txt|xml)$/i.test(pathname)) {
-    return;
+    return context.next();
   }
 
   // Пропускаем закрытые пути
   if (SKIP_PATHS.test(pathname)) {
-    return;
+    return context.next();
   }
 
   const userAgent = request.headers.get('user-agent') || '';
-  const xPurpose = request.headers.get('x-purpose') || '';
+  const xPurpose  = request.headers.get('x-purpose') || '';
   const hasEscapedFragment = url.searchParams.has('_escaped_fragment_');
 
   // Определяем бота:
   // 1. По User-Agent (Yandex, Googlebot и др.)
-  // 2. По X-Purpose: preview (Яндекс Вебмастер при проверке страниц)
-  // 3. По параметру _escaped_fragment_ (старый стандарт AJAX-crawling)
+  // 2. По X-Purpose: preview (Яндекс Вебмастер при проверке страниц — без этого PARSER_ERROR)
+  // 3. По параметру _escaped_fragment_ (старый стандарт AJAX-crawling, Яндекс поддерживает)
   const isBot =
     BOT_UA_PATTERN.test(userAgent) ||
     xPurpose === 'preview' ||
     hasEscapedFragment;
 
   if (!isBot) {
-    // Обычный браузер — SPA работает как обычно
-    return;
+    return context.next();
   }
 
   // Проверяем что путь нужно prerender-ить
   if (!BOT_PATHS.test(pathname)) {
-    return;
+    return context.next();
   }
 
   // Формируем запрос к prerender-функции
@@ -88,7 +92,7 @@ export default async (request: Request) => {
         'X-Forwarded-For': request.headers.get('x-forwarded-for') || '',
         'X-Purpose': xPurpose,
       },
-      // Таймаут 8 секунд — если prerender не успел, лучше вернуть index.html
+      // Таймаут 8 секунд — если prerender не успел, возвращаем SPA
       signal: AbortSignal.timeout(8000),
     });
 
@@ -100,16 +104,14 @@ export default async (request: Request) => {
       status,
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
-        // Кэшируем на CDN с учётом типа страницы
         'Cache-Control': `public, max-age=${ttl}, s-maxage=${ttl}`,
-        // Маркируем что это prerender-ответ (удобно для дебага)
         'X-Prerendered': '1',
         'X-Prerender-Path': pathname,
       },
     });
   } catch (err) {
-    // Если prerender упал или timeout — не ломаем сайт, возвращаем SPA
+    // Prerender упал или timeout — не ломаем сайт, возвращаем SPA
     console.error(`[bot-render] prerender failed for ${pathname}:`, err);
-    return;
+    return context.next();
   }
 };
