@@ -546,6 +546,74 @@ def _get_static_meta(path):
     }
 
 
+def _get_news_list_meta(cur):
+    """Страница /news — список всех опубликованных новостей."""
+    title     = 'Новости рынка коммерческой недвижимости Краснодара'
+    desc      = 'Актуальные новости и аналитика рынка коммерческой недвижимости Краснодара.'
+    canonical = f'{SITE_URL}/news'
+
+    cur.execute(f"""
+        SELECT title, slug, summary, image_url, published_at
+        FROM {SCHEMA}.news
+        WHERE is_published = TRUE
+        ORDER BY published_at DESC NULLS LAST
+        LIMIT 30
+    """)
+    rows = cur.fetchall() or []
+
+    cards_html = ''
+    item_elements = []
+    for pos, row in enumerate(rows, 1):
+        d       = dict(row)
+        slug    = d.get('slug') or ''
+        url     = f"{SITE_URL}/news/{slug}"
+        t       = _esc(d.get('title') or '')
+        summary = _esc((d.get('summary') or '')[:200])
+        img     = d.get('image_url') or ''
+        img_tag = f'<img src="{_esc(img)}" alt="{t}" loading="lazy">' if img else ''
+        pub     = str(d.get('published_at') or '')[:10]
+        cards_html += (
+            f'<article>'
+            f'<a href="{_esc(url)}">{img_tag}<h2>{t}</h2></a>'
+            f'{"<time datetime=" + repr(pub) + ">" + pub + "</time>" if pub else ""}'
+            f'{"<p>" + summary + "</p>" if summary else ""}'
+            f'</article>'
+        )
+        item_elements.append({
+            '@type': 'ListItem',
+            'position': pos,
+            'url': url,
+            'name': d.get('title') or '',
+        })
+
+    jsonld = json.dumps({
+        '@context': 'https://schema.org',
+        '@graph': [
+            {
+                '@type': 'ItemList',
+                'name': title,
+                'url': canonical,
+                'numberOfItems': len(rows),
+                'itemListElement': item_elements,
+            },
+            json.loads(_jsonld_breadcrumb([
+                ('Главная', SITE_URL + '/'),
+                ('Новости', canonical),
+            ])),
+        ],
+    }, ensure_ascii=False)
+
+    return {
+        'title': title,
+        'desc': desc,
+        'og_image': '',
+        'canonical': canonical,
+        'h1': title,
+        'body_text': f'<section>{cards_html}</section><nav><a href="/">Главная</a></nav>',
+        'jsonld': jsonld,
+    }
+
+
 def _notify_indexnow(url):
     """Уведомляет Яндекс IndexNow о новой/обновлённой странице."""
     import urllib.request
@@ -631,6 +699,11 @@ def handler(event: dict, context):
         if path == '/catalog':
             meta = _get_catalog_meta(cur)
             return _resp(200, _html(**meta), 'category')
+
+        # /news — список новостей
+        if path == '/news':
+            meta = _get_news_list_meta(cur)
+            return _resp(200, _html(**meta), 'news')
 
         # /district/{slug}
         m = re.match(r'^/district/([^/]+)/?$', path)
