@@ -7,14 +7,14 @@ import AIMatchModal from '@/components/AIMatchModal';
 import { useSettings } from '@/contexts/SettingsContext';
 import { makeBreadcrumbSchema } from '@/components/SchemaOrg';
 import { fetchDistricts, District } from '@/lib/api';
-import DistrictOptions from '@/components/DistrictOptions';
 import { getOkrugChildNames } from '@/lib/districts';
 import { getSiteUrl } from '@/lib/siteUrl';
 import { formatPrice } from '@/components/PropertyCard';
 import CatalogHero from './catalog/CatalogHero';
 import CatalogFilters from './catalog/CatalogFilters';
-import CatalogMap from './catalog/CatalogMap';
+import CatalogMapSection from './catalog/CatalogMapSection';
 import CatalogResults from './catalog/CatalogResults';
+import { buildCatalogH1 } from './catalog/catalogH1';
 
 interface CatalogPageProps {
   properties: Property[];
@@ -26,33 +26,6 @@ interface CatalogPageProps {
 }
 
 type SortOption = 'price_asc' | 'price_desc' | 'area_asc' | 'newest';
-
-const DEAL_H1: Record<string, string> = {
-  sale: 'Продажа коммерческой недвижимости в Краснодаре',
-  rent: 'Аренда коммерческой недвижимости в Краснодаре',
-};
-
-const TYPE_H1: Record<string, Record<string, string>> = {
-  office:       { all: 'Офисы в Краснодаре', rent: 'Аренда офисов в Краснодаре', sale: 'Продажа офисов в Краснодаре' },
-  retail:       { all: 'Торговые площади в Краснодаре', rent: 'Торговые площади в аренду в Краснодаре', sale: 'Продажа торговых помещений в Краснодаре' },
-  warehouse:    { all: 'Склады в Краснодаре', rent: 'Аренда складов в Краснодаре', sale: 'Продажа складов в Краснодаре' },
-  restaurant:   { all: 'Рестораны и кафе в Краснодаре', rent: 'Аренда помещений под общепит в Краснодаре', sale: 'Рестораны и кафе на продажу в Краснодаре' },
-  hotel:        { all: 'Гостиницы в Краснодаре', rent: 'Аренда гостиниц в Краснодаре', sale: 'Продажа гостиниц в Краснодаре' },
-  business:     { all: 'Готовый бизнес в Краснодаре', rent: 'Готовый бизнес в Краснодаре', sale: 'Продажа готового бизнеса в Краснодаре', business: 'Готовый бизнес в Краснодаре — актуальные предложения' },
-  gab:          { all: 'Готовый арендный бизнес (ГАБ) в Краснодаре', rent: 'ГАБ в аренду в Краснодаре', sale: 'Продажа готового арендного бизнеса в Краснодаре' },
-  production:   { all: 'Производственные помещения в Краснодаре', rent: 'Аренда производственных помещений в Краснодаре', sale: 'Продажа производственных помещений в Краснодаре' },
-  land:         { all: 'Земельные участки в Краснодаре', rent: 'Аренда земельных участков в Краснодаре', sale: 'Продажа земельных участков в Краснодаре' },
-  building:     { all: 'Отдельно стоящие здания в Краснодаре', rent: 'Аренда зданий в Краснодаре', sale: 'Продажа зданий в Краснодаре' },
-  free_purpose: { all: 'Помещения свободного назначения в Краснодаре', rent: 'Аренда помещений свободного назначения', sale: 'Продажа помещений свободного назначения' },
-  car_service:  { all: 'Автосервисы в Краснодаре', rent: 'Аренда автосервисов в Краснодаре', sale: 'Продажа автосервисов в Краснодаре' },
-};
-
-function buildCatalogH1(deal: string, type: string): string {
-  if (type !== 'all' && TYPE_H1[type]) {
-    return TYPE_H1[type][deal] || TYPE_H1[type].all;
-  }
-  return DEAL_H1[deal] || 'Каталог коммерческой недвижимости в Краснодаре';
-}
 
 export default function CatalogPage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare, allLoaded = true }: CatalogPageProps) {
   const h1Base = useSeoH1('Каталог коммерческой недвижимости в Краснодаре');
@@ -218,108 +191,29 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
 
       {/* Карта: при открытых фильтрах — side-by-side, иначе на всю ширину */}
       {showMap && (
-        showFilters && !mapFullscreen ? (
-          <div className="flex border-b border-border bg-white" style={{ height: 480 }}>
-            {/* Панель фильтров слева */}
-            <div className="w-72 shrink-0 border-r border-border overflow-y-auto bg-white flex flex-col">
-              <div className="px-4 pt-4 pb-2 text-xs font-bold text-muted-foreground uppercase tracking-widest border-b border-border">
-                Фильтры
-              </div>
-              <div className="px-4 py-4 flex flex-col gap-4 flex-1">
-                {/* Тип объекта */}
-                <div>
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Тип объекта</div>
-                  <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm outline-none focus:border-brand-blue transition-colors">
-                    {[
-                      { value: 'all', label: 'Все типы' },
-                      { value: 'office', label: 'Офис' },
-                      { value: 'retail', label: 'Торговое' },
-                      { value: 'warehouse', label: 'Склад' },
-                      { value: 'restaurant', label: 'Общепит' },
-                      { value: 'hotel', label: 'Гостиница' },
-                      { value: 'free_purpose', label: 'Свободное назначение' },
-                      { value: 'production', label: 'Производство' },
-                      { value: 'building', label: 'Здание' },
-                      { value: 'land', label: 'Земельный участок' },
-                      { value: 'gab', label: 'ГАБ' },
-                      { value: 'car_service', label: 'Автосервис' },
-                    ].map(pt => <option key={pt.value} value={pt.value}>{pt.label}</option>)}
-                  </select>
-                </div>
-                {/* Район */}
-                <div>
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Район</div>
-                  <select value={districtFilter} onChange={e => setDistrictFilter(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm outline-none focus:border-brand-blue transition-colors">
-                    <option value="all">Все районы</option>
-                    <DistrictOptions districts={districts} />
-                  </select>
-                </div>
-                {/* Площадь */}
-                <div>
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">От м²</div>
-                  <input type="number" value={minArea} onChange={e => setMinArea(e.target.value)}
-                    placeholder="50"
-                    className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm outline-none focus:border-brand-blue transition-colors" />
-                </div>
-                {/* Цена */}
-                <div>
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">До цены (млн)</div>
-                  <input type="number" value={maxPrice} onChange={e => setMaxPrice(e.target.value)}
-                    placeholder="100"
-                    className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm outline-none focus:border-brand-blue transition-colors" />
-                </div>
-                {/* Сортировка */}
-                <div>
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Сортировка</div>
-                  <select value={sortBy} onChange={e => setSortBy(e.target.value as SortOption)}
-                    className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm outline-none focus:border-brand-blue transition-colors">
-                    <option value="newest">Сначала свежие</option>
-                    <option value="price_asc">Цена: по возрастанию</option>
-                    <option value="price_desc">Цена: по убыванию</option>
-                    <option value="area_asc">Площадь: по возрастанию</option>
-                  </select>
-                </div>
-                {/* Сброс */}
-                {(typeFilter !== 'all' || districtFilter !== 'all' || minArea || maxPrice) && (
-                  <button
-                    onClick={() => { setDealFilter('all'); setTypeFilter('all'); setMinArea(''); setMaxPrice(''); setDistrictFilter('all'); }}
-                    className="text-xs text-brand-orange font-semibold flex items-center gap-1 hover:opacity-80 mt-auto pt-2"
-                  >
-                    ✕ Сбросить фильтры
-                  </button>
-                )}
-              </div>
-            </div>
-            {/* Карта справа */}
-            <div className="flex-1 min-w-0">
-              <CatalogMap
-                mapPoints={mapPoints}
-                mapSelected={mapSelected}
-                city={settings.main_city || 'Краснодар'}
-                fullscreen={mapFullscreen}
-                onFullscreenChange={setMapFullscreen}
-                onClose={() => { setShowMap(false); setMapSelected(null); }}
-                onPointClick={handleMapPointClick}
-                onDeselectPoint={() => setMapSelected(null)}
-                className="relative h-full bg-white"
-                height="100%"
-              />
-            </div>
-          </div>
-        ) : (
-          <CatalogMap
-            mapPoints={mapPoints}
-            mapSelected={mapSelected}
-            city={settings.main_city || 'Краснодар'}
-            fullscreen={mapFullscreen}
-            onFullscreenChange={setMapFullscreen}
-            onClose={() => { setShowMap(false); setMapSelected(null); }}
-            onPointClick={handleMapPointClick}
-            onDeselectPoint={() => setMapSelected(null)}
-          />
-        )
+        <CatalogMapSection
+          showFilters={showFilters}
+          mapFullscreen={mapFullscreen}
+          mapPoints={mapPoints}
+          mapSelected={mapSelected}
+          city={settings.main_city || 'Краснодар'}
+          typeFilter={typeFilter}
+          districtFilter={districtFilter}
+          minArea={minArea}
+          maxPrice={maxPrice}
+          sortBy={sortBy}
+          districts={districts}
+          setTypeFilter={setTypeFilter}
+          setDistrictFilter={setDistrictFilter}
+          setMinArea={setMinArea}
+          setMaxPrice={setMaxPrice}
+          setSortBy={setSortBy}
+          setDealFilter={setDealFilter}
+          setMapFullscreen={setMapFullscreen}
+          onCloseMap={() => { setShowMap(false); setMapSelected(null); }}
+          onPointClick={handleMapPointClick}
+          onDeselectPoint={() => setMapSelected(null)}
+        />
       )}
 
       <AIMatchModal open={aiOpen} onClose={() => setAiOpen(false)} initialPrompt={aiQuery} autoSubmit={!!aiQuery.trim()} />
