@@ -31,22 +31,40 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
 
   const districtName = district ? decodeURIComponent(district) : '';
   const [districtData, setDistrictData] = useState<District | null>(null);
+  const [allDistricts, setAllDistricts] = useState<District[]>([]);
 
   useEffect(() => {
     if (!district) return;
     fetchDistricts().then(list => {
+      setAllDistricts(list);
       const found = list.find(d => d.slug === district);
       setDistrictData(found || null);
     });
   }, [district]);
 
+  const isOkrug = !!districtData?.is_okrug;
+  // Названия районов, входящих в округ (для фильтрации объектов и текстов)
+  const okrugChildNames = useMemo(() => {
+    if (!isOkrug || !districtData) return [];
+    return allDistricts
+      .filter(d => !d.is_okrug && d.parent_id === districtData.id)
+      .map(d => d.name);
+  }, [isOkrug, districtData, allDistricts]);
+
+  const placeLabel = isOkrug ? 'округ' : 'район';
+
   // SEO meta
   useEffect(() => {
     if (!districtName) return;
     const company = settings.company_name || '';
-    const title = `Коммерческая недвижимость — район ${districtName}, ${city}${company ? ` | ${company}` : ''}`;
+    const placeName = districtData?.name || districtName;
+    const title = isOkrug
+      ? `Коммерческая недвижимость — ${placeName}, ${city}${company ? ` | ${company}` : ''}`
+      : `Коммерческая недвижимость — район ${placeName}, ${city}${company ? ` | ${company}` : ''}`;
     document.title = title;
-    const desc = `Аренда и продажа коммерческой недвижимости в районе ${districtName}, ${city}. Офисы, склады, торговые помещения и другие объекты.`;
+    const desc = isOkrug
+      ? `Аренда и продажа коммерческой недвижимости в ${placeName} (${city}). Офисы, склады, торговые помещения и другие объекты во всех районах округа.`
+      : `Аренда и продажа коммерческой недвижимости в районе ${placeName}, ${city}. Офисы, склады, торговые помещения и другие объекты.`;
     const setMeta = (sel: string, attr: string, val: string) => {
       let el = document.querySelector(sel);
       if (!el) { el = document.createElement('meta'); document.head.appendChild(el); }
@@ -63,7 +81,7 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
     if (!canon) { canon = document.createElement('link'); canon.rel = 'canonical'; document.head.appendChild(canon); }
     canon.href = siteOrigin + window.location.pathname;
     return () => { document.title = company; };
-  }, [districtName, city, settings.company_name, settings.site_url]);
+  }, [districtName, city, settings.company_name, settings.site_url, isOkrug, districtData]);
 
   // Загружаем AI-текст
   useEffect(() => {
@@ -80,16 +98,27 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
 
   const items = useMemo(() => {
     if (!districtName) return [];
-    // Используем точное название из справочника (districtData.name),
-    // или slug как fallback пока данные грузятся
     const exactName = districtData?.name;
     if (!exactName) return []; // ждём загрузки districtData
+
+    // Для округа — объекты всех его районов
+    if (isOkrug) {
+      if (okrugChildNames.length === 0) return [];
+      const names = okrugChildNames.map(n => n.toLowerCase());
+      return properties.filter(p => {
+        const d = (p.district || '').toLowerCase();
+        const a = (p.address || '').toLowerCase();
+        return names.some(n => d.includes(n) || a.includes(n));
+      });
+    }
+
+    // Обычный район — по точному названию
     const q = exactName.toLowerCase();
     return properties.filter(p =>
       (p.district || '').toLowerCase().includes(q) ||
       (p.address || '').toLowerCase().includes(q)
     );
-  }, [properties, districtData, districtName]);
+  }, [properties, districtData, districtName, isOkrug, okrugChildNames]);
 
   const totalPages = Math.ceil(items.length / PAGE_SIZE);
   const pageItems = items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -98,10 +127,14 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
 
   const siteUrl = getSiteUrl(settings.site_url);
 
+  // Заголовок места: для округа — просто название (в нём уже есть слово «округ»),
+  // для района — «<Название> район»
+  const placeTitle = isOkrug ? displayName : `${displayName} район`;
+
   const breadcrumbSchema = makeBreadcrumbSchema([
     { name: 'Главная', url: siteUrl },
     { name: 'Каталог', url: `${siteUrl}/catalog` },
-    { name: `${displayName} район` },
+    { name: placeTitle },
   ]);
 
   const itemListSchema = makeItemListSchema(
@@ -111,7 +144,7 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
       image: p.image || undefined,
       description: p.description?.slice(0, 160),
     })),
-    `Коммерческая недвижимость — ${displayName} район`,
+    `Коммерческая недвижимость — ${placeTitle}`,
   );
 
   if (!districtName) {
@@ -141,7 +174,7 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
               items={[
                 { label: 'Главная', to: '/' },
                 { label: 'Каталог', to: '/catalog' },
-                { label: `${displayName} район` },
+                { label: placeTitle },
               ]}
               light
             />
@@ -152,15 +185,15 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
             </div>
             <div>
               <h1 className="font-display font-900 text-2xl md:text-3xl leading-tight mb-1">
-                Коммерческая недвижимость — {displayName} район
+                Коммерческая недвижимость — {placeTitle}
               </h1>
               <h2 className="font-display font-600 text-base text-white/75 mb-2 leading-snug">
-                Аренда и продажа объектов в районе {displayName}, {city}
+                Аренда и продажа объектов в {isOkrug ? displayName : `районе ${displayName}`}, {city}
               </h2>
               <p className="text-white/70 text-sm max-w-2xl leading-relaxed">
                 {items.length > 0
-                  ? `В базе ${items.length} активных объектов в этом районе — офисы, торговые площади, склады и другие.`
-                  : `Актуальные объекты коммерческой недвижимости в районе ${displayName}.`}
+                  ? `В базе ${items.length} активных объектов в этом ${placeLabel}е — офисы, торговые площади, склады и другие.`
+                  : `Актуальные объекты коммерческой недвижимости в ${isOkrug ? displayName : `районе ${displayName}`}.`}
               </p>
             </div>
           </div>
@@ -171,7 +204,7 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
       <div className="bg-white border-b border-border">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="text-sm text-muted-foreground">
-            <h3 className="inline font-semibold text-foreground">{displayName} район</h3>
+            <h3 className="inline font-semibold text-foreground">{placeTitle}</h3>
             {' '}— найдено <span className="font-semibold text-foreground">{items.length}</span> объектов
           </div>
           <div className="flex gap-2">
@@ -199,10 +232,10 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
           <div className="text-center py-20">
             <Icon name="MapPin" size={40} className="mx-auto mb-4 text-muted-foreground opacity-30" />
             <div className="font-display font-700 text-xl text-foreground mb-2">
-              Объектов в этом районе пока нет
+              Объектов в этом {placeLabel}е пока нет
             </div>
             <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
-              Попробуйте посмотреть все объекты или выбрать другой район.
+              Попробуйте посмотреть все объекты или выбрать другой {placeLabel}.
             </p>
             <button onClick={() => navigate('/catalog')} className="btn-blue text-white px-6 py-2.5 rounded-xl text-sm font-semibold">
               Смотреть все объекты
@@ -247,7 +280,7 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
             {/* AI SEO-текст */}
             <div className="mt-12 p-6 bg-white rounded-2xl border border-border">
               <h2 className="font-display font-700 text-lg mb-3">
-                О коммерческой недвижимости: район {displayName}
+                О коммерческой недвижимости: {isOkrug ? displayName : `район ${displayName}`}
               </h2>
               {aiLoading && !aiText && !districtData?.description ? (
                 <div className="space-y-2">
@@ -257,7 +290,7 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
-                  {aiText || districtData?.description || `Актуальные объекты коммерческой недвижимости в районе ${displayName}, ${city} — офисы, торговые площади, склады, производственные помещения и готовый бизнес.`}
+                  {aiText || districtData?.description || `Актуальные объекты коммерческой недвижимости в ${isOkrug ? displayName : `районе ${displayName}`}, ${city} — офисы, торговые площади, склады, производственные помещения и готовый бизнес.`}
                 </p>
               )}
             </div>

@@ -445,34 +445,61 @@ def _get_catalog_meta(cur):
 def _get_district_meta(cur, d_slug):
     safe = d_slug.replace("'", "''")[:100]
     cur.execute(f"""
-        SELECT d.name, d.description, COUNT(l.id) as cnt
-        FROM {SCHEMA}.districts d
-        LEFT JOIN {SCHEMA}.listings l
-            ON l.district = d.name AND l.status = 'active' AND l.is_visible = TRUE
-        WHERE d.slug = '{safe}'
-        GROUP BY d.name, d.description
+        SELECT id, name, description, is_okrug
+        FROM {SCHEMA}.districts
+        WHERE slug = '{safe}'
         LIMIT 1
     """)
     row = cur.fetchone()
     if not row:
         return None
-    d    = dict(row)
-    name = d.get('name') or d_slug
-    cnt  = d.get('cnt') or 0
+    d        = dict(row)
+    name     = d.get('name') or d_slug
+    is_okrug = bool(d.get('is_okrug'))
+    place_word = 'округ' if is_okrug else 'район'
+
+    # Список названий районов для выборки объектов:
+    # для округа — все его дочерние районы, для района — он сам.
+    if is_okrug:
+        cur.execute(f"""
+            SELECT name FROM {SCHEMA}.districts
+            WHERE parent_id = {int(d['id'])} AND is_okrug = FALSE
+        """)
+        child_names = [dict(r).get('name') for r in (cur.fetchall() or []) if dict(r).get('name')]
+        target_names = child_names
+    else:
+        target_names = [name]
+
+    if target_names:
+        in_list = ', '.join("'" + n.replace("'", "''") + "'" for n in target_names)
+        cur.execute(f"""
+            SELECT COUNT(id) as cnt FROM {SCHEMA}.listings
+            WHERE district IN ({in_list}) AND status = 'active' AND is_visible = TRUE
+        """)
+        cnt = dict(cur.fetchone() or {}).get('cnt') or 0
+    else:
+        cnt = 0
+
     title = f'Коммерческая недвижимость {name} — {cnt} объектов'
-    desc  = d.get('description') or f'Аренда и продажа коммерческой недвижимости в районе {name}, Краснодар. {cnt} предложений.'
+    if is_okrug:
+        desc = d.get('description') or f'Аренда и продажа коммерческой недвижимости в {name}, Краснодар — объекты во всех районах округа. {cnt} предложений.'
+    else:
+        desc = d.get('description') or f'Аренда и продажа коммерческой недвижимости в районе {name}, Краснодар. {cnt} предложений.'
     canonical = f"{SITE_URL}/district/{d_slug}"
 
-    # Объекты района (до 20)
-    safe_name = name.replace("'", "''")
-    cur.execute(f"""
-        SELECT id, title, slug, price, area, address, deal, image
-        FROM {SCHEMA}.listings
-        WHERE district = '{safe_name}' AND status = 'active' AND is_visible = TRUE
-        ORDER BY updated_at DESC NULLS LAST
-        LIMIT 20
-    """)
-    rows = cur.fetchall() or []
+    # Объекты места (до 20)
+    if target_names:
+        in_list = ', '.join("'" + n.replace("'", "''") + "'" for n in target_names)
+        cur.execute(f"""
+            SELECT id, title, slug, price, area, address, deal, image
+            FROM {SCHEMA}.listings
+            WHERE district IN ({in_list}) AND status = 'active' AND is_visible = TRUE
+            ORDER BY updated_at DESC NULLS LAST
+            LIMIT 20
+        """)
+        rows = cur.fetchall() or []
+    else:
+        rows = []
     cards_html = ''.join(_listing_card_html(r) for r in rows)
 
     # ItemList JSON-LD для района
@@ -487,10 +514,11 @@ def _get_district_meta(cur, d_slug):
             'name': rd.get('title') or '',
         })
 
+    crumb_label = name if is_okrug else f'Район {name}'
     breadcrumb = json.loads(_jsonld_breadcrumb([
         ('Главная', SITE_URL + '/'),
         ('Каталог', SITE_URL + '/catalog'),
-        (f'Район {name}', canonical),
+        (crumb_label, canonical),
     ]))
 
     graph = [breadcrumb]

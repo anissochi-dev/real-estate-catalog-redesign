@@ -64,7 +64,7 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
   const [districts, setDistricts] = useState<District[]>([]);
 
   useEffect(() => {
-    fetchDistricts().then(d => setDistricts(d.filter(x => x.listings_count && x.listings_count > 0)));
+    fetchDistricts().then(setDistricts);
   }, []);
 
   const company = settings.company_name || 'Бизнес. Маркетинг. Недвижимость.';
@@ -76,6 +76,37 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
   const categoryLinks = settings.footer_extra_links
     ? parseLinks(settings.footer_extra_links)
     : null;
+
+  // Иерархия: округа с дочерними районами, где есть объекты.
+  // Округ скрывается, если ни в одном его районе нет объектов.
+  const okrugGroups = districts
+    .filter(o => o.is_okrug)
+    .map(o => {
+      const children = districts
+        .filter(d => !d.is_okrug && d.parent_id === o.id && (d.listings_count ?? 0) > 0)
+        .sort((a, b) => (b.listings_count ?? 0) - (a.listings_count ?? 0));
+      const total = children.reduce((s, d) => s + (d.listings_count ?? 0), 0);
+      return { okrug: o, children, total };
+    })
+    .filter(g => g.children.length > 0)
+    .sort((a, b) => b.total - a.total);
+
+  // Районы без округа, в которых есть объекты
+  const orphanDistricts = districts
+    .filter(d => !d.is_okrug && d.parent_id == null && (d.listings_count ?? 0) > 0)
+    .sort((a, b) => (b.listings_count ?? 0) - (a.listings_count ?? 0));
+
+  const hasDistrictBlock = okrugGroups.length > 0 || orphanDistricts.length > 0;
+
+  const chipClass = (cnt: number) => {
+    const big = cnt >= 10;
+    const mid = cnt >= 3 && cnt < 10;
+    return big
+      ? 'bg-white/10 border border-white/15 text-white/85 hover:bg-white/18 hover:text-white'
+      : mid
+      ? 'bg-white/5 border border-white/8 text-white/65 hover:bg-white/10 hover:text-white/90'
+      : 'text-white/45 hover:text-white/75';
+  };
 
   const legalDocs = [
     settings.legal_privacy_policy
@@ -123,41 +154,69 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
             </div>
           </div>
 
-          {/* Районы города — SEO-ссылки, все 45 */}
-          {districts.length > 0 && (
+          {/* Районы города — SEO-ссылки, иерархия округ → районы */}
+          {hasDistrictBlock && (
             <div className="border-t border-white/10 mt-6 pt-5">
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-4">
                 <Icon name="MapPin" size={14} className="text-white/60" />
                 <h3 className="font-semibold text-white/80 text-sm">
                   Коммерческая недвижимость по районам — {city}
                 </h3>
               </div>
-              <div className="flex flex-wrap gap-x-1 gap-y-1">
-                {districts.map(d => {
-                  const cnt = d.listings_count ?? 0;
-                  const big = cnt >= 10;
-                  const mid = cnt >= 3 && cnt < 10;
-                  return (
+
+              <div className="space-y-3">
+                {okrugGroups.map(({ okrug, children, total }) => (
+                  <div key={okrug.id} className="flex flex-col sm:flex-row sm:items-baseline gap-x-3 gap-y-1.5">
+                    {/* Округ — кликабельный заголовок */}
                     <Link
-                      key={d.id}
-                      to={`/district/${d.slug}`}
-                      className={`inline-flex items-center gap-1 rounded-md transition-colors text-[11px] px-2 py-1 ${
-                        big
-                          ? 'bg-white/10 border border-white/15 text-white/85 hover:bg-white/18 hover:text-white'
-                          : mid
-                          ? 'bg-white/5 border border-white/8 text-white/65 hover:bg-white/10 hover:text-white/90'
-                          : 'text-white/45 hover:text-white/75'
-                      }`}
+                      to={`/district/${okrug.slug}`}
+                      className="inline-flex items-center gap-1 shrink-0 text-[12px] font-semibold text-white/90 hover:text-white transition-colors sm:w-48"
                     >
-                      {d.name}
-                      {cnt > 0 && (
-                        <span className={`${big ? 'text-white/50' : 'text-white/30'} tabular-nums`}>
-                          {cnt}
-                        </span>
-                      )}
+                      <Icon name="ChevronRight" size={12} className="text-white/40" />
+                      {okrug.name}
+                      <span className="text-white/40 tabular-nums font-normal">{total}</span>
                     </Link>
-                  );
-                })}
+
+                    {/* Районы округа */}
+                    <div className="flex flex-wrap gap-x-1 gap-y-1 min-w-0">
+                      {children.map(d => {
+                        const cnt = d.listings_count ?? 0;
+                        return (
+                          <Link
+                            key={d.id}
+                            to={`/district/${d.slug}`}
+                            className={`inline-flex items-center gap-1 rounded-md transition-colors text-[11px] px-2 py-1 ${chipClass(cnt)}`}
+                          >
+                            {d.name}
+                            <span className={`${cnt >= 10 ? 'text-white/50' : 'text-white/30'} tabular-nums`}>{cnt}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Районы без округа */}
+                {orphanDistricts.length > 0 && (
+                  <div className="flex flex-col sm:flex-row sm:items-baseline gap-x-3 gap-y-1.5">
+                    <span className="shrink-0 text-[12px] font-semibold text-white/60 sm:w-48">Другие районы</span>
+                    <div className="flex flex-wrap gap-x-1 gap-y-1 min-w-0">
+                      {orphanDistricts.map(d => {
+                        const cnt = d.listings_count ?? 0;
+                        return (
+                          <Link
+                            key={d.id}
+                            to={`/district/${d.slug}`}
+                            className={`inline-flex items-center gap-1 rounded-md transition-colors text-[11px] px-2 py-1 ${chipClass(cnt)}`}
+                          >
+                            {d.name}
+                            <span className={`${cnt >= 10 ? 'text-white/50' : 'text-white/30'} tabular-nums`}>{cnt}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

@@ -135,6 +135,7 @@ def _build_sitemap_xml(cur) -> tuple:
         f"INNER JOIN {SCHEMA}.listings l ON l.district = d.name "
         f"  AND l.status = 'active' AND l.is_visible = TRUE "
         f"WHERE d.slug IS NOT NULL AND d.slug != '' AND d.is_active = TRUE "
+        f"  AND d.is_okrug = FALSE "
         f"GROUP BY d.slug"
     )
     for r in cur.fetchall():
@@ -142,6 +143,23 @@ def _build_sitemap_xml(cur) -> tuple:
         if not d_slug:
             continue
         urls.append((base + f"/district/{d_slug}", r.get('last_upd') or now, '0.7', 'weekly'))
+
+    # 5b. Округа — если хотя бы в одном районе округа есть активный видимый объект
+    cur.execute(
+        f"SELECT o.slug as o_slug, MAX(l.updated_at) as last_upd "
+        f"FROM {SCHEMA}.districts o "
+        f"INNER JOIN {SCHEMA}.districts d ON d.parent_id = o.id AND d.is_okrug = FALSE "
+        f"INNER JOIN {SCHEMA}.listings l ON l.district = d.name "
+        f"  AND l.status = 'active' AND l.is_visible = TRUE "
+        f"WHERE o.is_okrug = TRUE AND o.is_active = TRUE "
+        f"  AND o.slug IS NOT NULL AND o.slug != '' "
+        f"GROUP BY o.slug"
+    )
+    for r in cur.fetchall():
+        o_slug = r.get('o_slug') or ''
+        if not o_slug:
+            continue
+        urls.append((base + f"/district/{o_slug}", r.get('last_upd') or now, '0.7', 'weekly'))
 
     # 6. Страница заявок (публичная лента спроса)
     urls.append((base + '/leads', now, '0.5', 'daily'))
