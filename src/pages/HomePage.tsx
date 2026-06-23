@@ -1,13 +1,17 @@
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Property, Page } from '@/App';
-import PropertyCard from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
 import { NEWS_URL } from '@/lib/adminApi';
 import SeoHead from '@/components/SeoHead';
 import SchemaOrg, { makeFaqSchema } from '@/components/SchemaOrg';
 import { CATALOG_CATEGORIES, catalogCategoryUrl } from '@/lib/categories';
+import HomeHero from './home/HomeHero';
+import HomeStatsBar from './home/HomeStatsBar';
+import HomeNewListings from './home/HomeNewListings';
+import HomeNewsSection, { NewsPreview } from './home/HomeNewsSection';
+import HomeFaqSection from './home/HomeFaqSection';
 
 const ClientLeadsSection = lazy(() => import('@/components/ClientLeadsSection'));
 const AIMatchModal = lazy(() => import('@/components/AIMatchModal'));
@@ -32,11 +36,6 @@ interface HomePageProps {
 const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
 
 const CATEGORIES = CATALOG_CATEGORIES;
-
-interface NewsPreview {
-  id: number; title: string; slug: string; summary?: string;
-  image_url?: string; published_at?: string; created_at: string;
-}
 
 export default function HomePage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare, onNavigate }: HomePageProps) {
   const { settings } = useSettings();
@@ -197,94 +196,16 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
       />
 
       {/* Hero — компактный */}
-      <section className="hero-bg text-white py-10 md:py-14">
-        <div className="container mx-auto px-4 relative z-10">
-          <div className="max-w-3xl">
-            <h1 className="font-display font-900 text-2xl sm:text-3xl md:text-4xl leading-tight mb-3" elementtiming="lcp-heading">
-              Коммерческая недвижимость и готовый бизнес в Краснодаре
-            </h1>
-            <p className="text-white/75 text-sm sm:text-base mb-5 animate-fade-in-up stagger-2 max-w-xl">
-              Более {totalCount} объектов в {mainCity}е. Подбор с ИИ за 2 минуты.
-            </p>
-
-            {/* AI search bar */}
-            <h2 className="sr-only">Умный подбор коммерческой недвижимости в Краснодаре</h2>
-            <form
-              onSubmit={e => {
-                e.preventDefault();
-                setAiOpen(true);
-              }}
-              className="flex flex-col sm:flex-row gap-2 animate-fade-in-up stagger-3"
-            >
-              <div className="w-full sm:flex-1 flex items-center gap-2 bg-white/10 border border-white/25 rounded-xl px-3 py-3 sm:py-2 backdrop-blur-sm focus-within:border-white/60 transition-colors">
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-                  <Icon name="Sparkles" size={14} className="text-white" />
-                </div>
-                <input
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Опишите объект: «офис до 100м² в центре»…"
-                  aria-label="Умный поиск объекта"
-                  className="bg-transparent text-white placeholder:text-white/55 outline-none w-full text-base sm:text-sm min-w-0"
-                />
-              </div>
-              <button
-                type="submit"
-                aria-label="Найти с ИИ"
-                className="btn-orange text-white w-full sm:w-auto px-3 sm:px-5 py-3 sm:py-2.5 rounded-xl font-semibold font-display text-base sm:text-sm flex-shrink-0 inline-flex items-center justify-center gap-1.5 min-h-[48px] sm:min-h-[44px]"
-              >
-                <Icon name="Search" size={16} />
-                Найти
-              </button>
-            </form>
-            <div className="text-[11px] text-white/55 mt-1.5 animate-fade-in-up stagger-3">
-              Умный поиск понимает обычный язык — площадь, район, тип, назначение
-            </div>
-
-
-          </div>
-        </div>
-      </section>
+      <HomeHero
+        totalCount={totalCount}
+        mainCity={mainCity}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        setAiOpen={setAiOpen}
+      />
 
       {/* Stats — компактная горизонтальная панель */}
-      <section className="bg-white border-b border-border py-3">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {STATS_VIEW.map((stat, i) => {
-              const clickable = stat.deal !== null;
-              const goCatalog = () => { navigate('/catalog'); };
-              const inner = (
-                <>
-                  <div className="w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
-                    <Icon name={stat.icon} size={16} className="text-brand-blue" />
-                  </div>
-                  <div>
-                    <h4 className="font-display font-800 text-lg text-brand-blue leading-none flex items-center gap-1">
-                      {stat.value}
-                      {clickable && <Icon name="ArrowRight" size={12} className="text-brand-blue/60" />}
-                    </h4>
-                    <h5 className="text-[11px] text-muted-foreground mt-0.5 font-normal">{stat.label}</h5>
-                  </div>
-                </>
-              );
-              const baseCls = `flex items-center gap-2.5 animate-fade-in-up stagger-${i + 1} text-left p-1.5`;
-              if (clickable) {
-                return (
-                  <button key={stat.label} type="button" onClick={goCatalog}
-                    className={`${baseCls} hover:bg-muted/40 rounded-lg transition-colors cursor-pointer`}>
-                    {inner}
-                  </button>
-                );
-              }
-              return (
-                <div key={stat.label} className={baseCls}>
-                  {inner}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
+      <HomeStatsBar statsView={STATS_VIEW} onGoCatalog={() => navigate('/catalog')} />
 
       {/* Categories — скрыты */}
       <section className="py-6 bg-background hidden">
@@ -313,48 +234,15 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
       </section>
 
       {/* Новые объекты */}
-      <section className="py-6 bg-muted/40">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-3">
-            <div className="flex items-center gap-2">
-              <Icon name="Building2" size={16} className="text-brand-blue" />
-              <h2 className="font-display font-700 text-base text-foreground">Аренда и продажа коммерческой недвижимости в Краснодаре</h2>
-            </div>
-            <button
-              onClick={() => onNavigate('catalog')}
-              aria-label="Смотреть все объекты каталога"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 sm:justify-start px-4 py-2.5 sm:px-0 sm:py-0 rounded-xl sm:rounded-none border border-brand-blue/30 sm:border-0 bg-brand-blue/5 sm:bg-transparent text-brand-blue font-semibold text-sm sm:hover:gap-3 transition-all duration-200 shrink-0"
-            >
-              Смотреть все объекты <Icon name="ArrowRight" size={14} />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            {newObjects.map((property, i) => (
-              <PropertyCard
-                key={property.id}
-                property={property}
-                isFavorite={favorites.includes(property.id)}
-                isCompare={compareList.includes(property.id)}
-                onToggleFavorite={onToggleFavorite}
-                onToggleCompare={onToggleCompare}
-                index={i}
-              />
-            ))}
-            {newObjects.length < homeLimit && Array.from({ length: homeLimit - newObjects.length }).map((_, i) => (
-              <div key={`sk-${i}`} className="rounded-xl overflow-hidden border border-border bg-white">
-                <div className="aspect-[4/3] bg-muted" />
-                <div className="p-3 space-y-2">
-                  <div className="h-4 bg-muted rounded w-3/4" />
-                  <div className="h-3 bg-muted rounded w-1/2" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-
+      <HomeNewListings
+        newObjects={newObjects}
+        homeLimit={homeLimit}
+        favorites={favorites}
+        compareList={compareList}
+        onToggleFavorite={onToggleFavorite}
+        onToggleCompare={onToggleCompare}
+        onSeeAll={() => onNavigate('catalog')}
+      />
 
       {showLeads && (
         <Suspense fallback={<div className="py-8 bg-muted/20 border-t border-border" style={{minHeight: 200}} />}>
@@ -364,72 +252,17 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
 
       {/* Блок новостей — 5 в ряд, 2 строки */}
       {showNews && (latestNews === null || latestNews.length > 0) && (
-        <section className="py-6 bg-muted/30 border-t border-border">
-          <div className="container mx-auto px-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-              <div className="flex items-center gap-2">
-                <Icon name="Newspaper" size={16} className="text-brand-blue" />
-                <h2 className="font-display font-700 text-base text-foreground">Новости коммерческой недвижимости Краснодара</h2>
-              </div>
-              <button
-                onClick={() => navigate('/news')}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 sm:justify-start px-4 py-2.5 sm:px-0 sm:py-0 rounded-xl sm:rounded-none border border-brand-blue/30 sm:border-0 bg-brand-blue/5 sm:bg-transparent text-brand-blue font-semibold text-sm sm:hover:gap-3 transition-all duration-200 shrink-0"
-              >
-                Смотреть все новости <Icon name="ArrowRight" size={14} />
-              </button>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-              {latestNews === null
-                ? Array.from({ length: Math.min(homeNewsLimit, 5) }).map((_, i) => (
-                  <div key={i} className="bg-white rounded-xl overflow-hidden border border-border">
-                    <div className="p-3 space-y-2">
-                      <div className="h-2.5 bg-muted rounded w-1/3" />
-                      <div className="h-3 bg-muted rounded w-full" />
-                      <div className="h-3 bg-muted rounded w-3/4" />
-                    </div>
-                  </div>
-                ))
-                : latestNews.slice(0, homeNewsLimit).map(n => (
-                  <article
-                    key={n.id}
-                    onClick={() => navigate(`/news/${n.slug}`)}
-                    className="group cursor-pointer bg-white rounded-xl overflow-hidden border border-border hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-                  >
-                    <div className="p-3 flex flex-col gap-1.5 h-full">
-                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                        <Icon name="Newspaper" size={12} className="text-brand-blue/50 shrink-0" />
-                        {new Date(n.published_at || n.created_at).toLocaleDateString('ru', { day: 'numeric', month: 'short' })}
-                      </div>
-                      <h3 className="font-medium text-xs leading-snug line-clamp-3 group-hover:text-brand-blue transition-colors">{n.title}</h3>
-                    </div>
-                  </article>
-                ))
-              }
-            </div>
-          </div>
-        </section>
+        <HomeNewsSection
+          latestNews={latestNews}
+          homeNewsLimit={homeNewsLimit}
+          onOpenNews={() => navigate('/news')}
+          onOpenArticle={(slug) => navigate(`/news/${slug}`)}
+        />
       )}
 
       {/* Частые вопросы — FAQ Schema + видимый блок (полезно для AI и поиска) */}
       <SchemaOrg id="faq" schema={makeFaqSchema(faqItems)} />
-      <section className="py-4 bg-white" aria-labelledby="faq-title">
-        <div className="container mx-auto px-4 max-w-5xl">
-          <h2 id="faq-title" className="font-display font-800 text-lg sm:text-xl text-foreground mb-3 text-center">
-            Частые вопросы
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-x-4 md:gap-y-2 md:items-start">
-            {faqItems.map((f, i) => (
-              <details key={i} className="group bg-muted/30 rounded-lg border border-border px-3 py-2">
-                <summary className="flex items-center justify-between cursor-pointer list-none font-medium text-[13px] text-foreground">
-                  {f.question}
-                  <Icon name="ChevronDown" size={15} className="text-muted-foreground transition-transform group-open:rotate-180 shrink-0 ml-2" />
-                </summary>
-                <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">{f.answer}</p>
-              </details>
-            ))}
-          </div>
-        </div>
-      </section>
+      <HomeFaqSection faqItems={faqItems} />
 
       {/* SEO-текст главной страницы */}
       {settings.home_seo_text && (
