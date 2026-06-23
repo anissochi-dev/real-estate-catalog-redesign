@@ -87,6 +87,7 @@ export interface S {
   // Рекламные пиксели
   vk_pixel_id: string;
   vk_ads_client_id: string;
+  vk_ads_client_secret: string;
   calltouch_id: string;
   telegram_ads_pixel: string;
   ya_metrika_goals_enabled: boolean;

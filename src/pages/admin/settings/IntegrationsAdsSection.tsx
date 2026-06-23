@@ -82,6 +82,23 @@ export default function IntegrationsAdsSection({ s, setS, saved, save }: Props) 
             {' '}→ правый верхний угол → имя аккаунта → <b>ID кабинета</b> (числовой)
           </div>
         </div>
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">VK Ads — Client Secret</span>
+            <span className="text-xs text-muted-foreground">Секретный ключ приложения</span>
+          </div>
+          <input
+            className="w-full px-3 py-2 border rounded-lg font-mono text-sm focus:border-brand-blue outline-none"
+            type="password"
+            placeholder="••••••••••••••••"
+            value={s.vk_ads_client_secret || ''}
+            onChange={e => setS({ ...s, vk_ads_client_secret: e.target.value })}
+          />
+          <div className="text-xs text-muted-foreground">
+            <a href="https://ads.vk.com" target="_blank" rel="noreferrer" className="text-brand-blue underline">ads.vk.com</a>
+            {' '}→ Настройки → API → <b>Client Secret</b>
+          </div>
+        </div>
       </div>
 
       {/* ── CallTouch ────────────────────────────────────────────────── */}
