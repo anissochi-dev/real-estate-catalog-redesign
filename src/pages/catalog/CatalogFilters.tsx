@@ -1,5 +1,6 @@
 import Icon from '@/components/ui/icon';
 import { District } from '@/lib/api';
+import DistrictOptions from '@/components/DistrictOptions';
 
 type SortOption = 'price_asc' | 'price_desc' | 'area_asc' | 'newest';
 
@@ -145,9 +146,7 @@ export default function CatalogFilters({
                   className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm outline-none focus:border-brand-blue transition-colors"
                 >
                   <option value="all">Все районы</option>
-                  {districts.map(d => (
-                    <option key={d.id} value={d.name}>{d.name}{d.listings_count ? ` (${d.listings_count})` : ''}</option>
-                  ))}
+                  <DistrictOptions districts={districts} />
                 </select>
               </div>
 

@@ -7,6 +7,7 @@ import AIMatchModal from '@/components/AIMatchModal';
 import { useSettings } from '@/contexts/SettingsContext';
 import { makeBreadcrumbSchema } from '@/components/SchemaOrg';
 import { fetchDistricts, District } from '@/lib/api';
+import DistrictOptions from '@/components/DistrictOptions';
 import { getSiteUrl } from '@/lib/siteUrl';
 import { formatPrice } from '@/components/PropertyCard';
 import CatalogHero from './catalog/CatalogHero';
@@ -242,9 +243,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
                   <select value={districtFilter} onChange={e => setDistrictFilter(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm outline-none focus:border-brand-blue transition-colors">
                     <option value="all">Все районы</option>
-                    {districts.map(d => (
-                      <option key={d.id} value={d.name}>{d.name}{d.listings_count ? ` (${d.listings_count})` : ''}</option>
-                    ))}
+                    <DistrictOptions districts={districts} />
                   </select>
                 </div>
                 {/* Площадь */}
