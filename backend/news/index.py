@@ -972,6 +972,19 @@ def handler(event: dict, context) -> dict:
                     price_refresh_result = {'error': str(_pr_e)[:100]}
                 result['price_refresh'] = price_refresh_result
 
+                # ── VK Ads: синхронизация кабинета (каждые 6 часов) ──────
+                vk_ads_result = None
+                try:
+                    _vk_req = urllib.request.Request(
+                        'https://functions.poehali.dev/d995fba6-2780-433f-bc4f-a430321d60d8?action=cron',
+                        method='GET',
+                    )
+                    with urllib.request.urlopen(_vk_req, timeout=25) as _vk_resp:
+                        vk_ads_result = json.loads(_vk_resp.read(4096).decode('utf-8', errors='replace'))
+                except Exception as _vk_e:
+                    vk_ads_result = {'error': str(_vk_e)[:100]}
+                result['vk_ads_sync'] = vk_ads_result
+
                 # ── Ценовой дайджест (еженедельно по расписанию) ──────────
                 price_digest_result = None
                 try:
