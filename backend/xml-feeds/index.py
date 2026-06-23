@@ -722,7 +722,7 @@ def handler(event, context):
                 if not feed:
                     return _json({'error': 'Фид не найден'}, 404)
 
-                where = ["status = 'active'"]
+                where = ["status = 'active'", "(is_visible IS NULL OR is_visible = TRUE)"]
                 if feed['filter_category']:
                     where.append(f"category = '{_safe(feed['filter_category'], 50)}'")
                 if feed['filter_deal']:

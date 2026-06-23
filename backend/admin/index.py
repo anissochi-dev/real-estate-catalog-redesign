@@ -2917,6 +2917,12 @@ def _listings(cur, conn, method, rid, event, user):
             fields.append(f"broker_id = " + ('NULL' if v is None else str(int(v))))
         if not fields:
             return _err(400, 'Нет полей для обновления')
+        # Автосброс видимости: неактивный объект не должен оставаться видимым.
+        # Если статус переводится в любой не 'active' (archived и т.п.) —
+        # принудительно is_visible = FALSE (перекрывает значение из body).
+        if 'status' in body and (body.get('status') or '') != 'active':
+            fields = [x for x in fields if not x.strip().startswith('is_visible =')]
+            fields.append("is_visible = FALSE")
         # Помечаем как «реально отредактированный человеком из админки»
         fields.append("updated_at = NOW()")
         fields.append("last_edited_at = NOW()")
@@ -3000,7 +3006,7 @@ def _listings(cur, conn, method, rid, event, user):
                 conn.rollback()
                 return _err(500, f'Ошибка удаления: {type(e).__name__}: {str(e)[:200]}')
         else:
-            cur.execute(f"UPDATE {SCHEMA}.listings SET status = 'archived' WHERE id = {int(rid)}")
+            cur.execute(f"UPDATE {SCHEMA}.listings SET status = 'archived', is_visible = FALSE WHERE id = {int(rid)}")
         cur.execute(f"UPDATE {SCHEMA}.seo_artifacts SET urls_count = 0 WHERE kind = 'sitemap'")
         conn.commit()
         return _ok({'success': True})

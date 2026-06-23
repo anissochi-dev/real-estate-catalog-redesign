@@ -321,7 +321,7 @@ def handle_location_score(event: dict, cur, conn) -> dict:
     if listing_id and not (lat and lng):
         cur.execute(
             f"SELECT lat::float, lng::float, category FROM {SCHEMA}.listings "
-            f"WHERE id = %s AND status = 'active'",
+            f"WHERE id = %s AND status = 'active' AND (is_visible IS NULL OR is_visible = TRUE)",
             (listing_id,)
         )
         row = cur.fetchone()
@@ -441,6 +441,7 @@ def handle_radius_search(event: dict, cur) -> dict:
 
     where_parts = [
         "status = 'active'",
+        "(is_visible IS NULL OR is_visible = TRUE)",
         "lat IS NOT NULL AND lng IS NOT NULL",
         "lat::float BETWEEN %(lat_min)s AND %(lat_max)s",
         "lng::float BETWEEN %(lng_min)s AND %(lng_max)s",
@@ -542,6 +543,7 @@ def handle_similar_location(event: dict, cur) -> dict:
         WHERE lc.listing_id != %s
           AND lc.score BETWEEN %s AND %s
           AND l.status = 'active'
+          AND (l.is_visible IS NULL OR l.is_visible = TRUE)
         ORDER BY ABS(lc.score - %s) ASC
         LIMIT %s
     """, (listing_id, base_score - max_delta, base_score + max_delta, base_score, limit))

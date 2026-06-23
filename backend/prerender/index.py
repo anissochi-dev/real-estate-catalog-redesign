@@ -202,6 +202,7 @@ def _get_listing_meta(cur, lid):
                price, area, category, address, city, image, updated_at, deal
         FROM {SCHEMA}.listings
         WHERE id = {int(lid)} AND status = 'active'
+          AND (is_visible IS NULL OR is_visible = TRUE)
         LIMIT 1
     """)
     row = cur.fetchone()

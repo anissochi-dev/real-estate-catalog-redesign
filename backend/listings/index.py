@@ -661,6 +661,7 @@ def handler(event: dict, context) -> dict:
                     "LEFT JOIN t_p71821556_real_estate_catalog_.land_vri lv ON lv.slug = l.land_vri "
                     "WHERE l.id = "
                     + str(int(listing_id))
+                    + " AND l.status = 'active'"
                     + " AND (l.is_visible IS NULL OR l.is_visible = TRUE)"
                 )
                 row = cur.fetchone()
