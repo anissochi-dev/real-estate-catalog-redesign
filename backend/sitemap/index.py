@@ -1,6 +1,5 @@
 """
 Динамический sitemap.xml из БД: объекты, категории, районы, новости.
-Доступен по адресу bmn.su/sitemap.xml через Cloudflare Worker.
 """
 import os
 import psycopg2
