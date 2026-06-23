@@ -7,6 +7,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { NEWS_URL } from '@/lib/adminApi';
 import SeoHead from '@/components/SeoHead';
 import SchemaOrg, { makeFaqSchema } from '@/components/SchemaOrg';
+import { CATALOG_CATEGORIES, catalogCategoryUrl } from '@/lib/categories';
 
 const ClientLeadsSection = lazy(() => import('@/components/ClientLeadsSection'));
 const AIMatchModal = lazy(() => import('@/components/AIMatchModal'));
@@ -30,20 +31,7 @@ interface HomePageProps {
 
 const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
 
-const CATEGORIES = [
-  { icon: 'Building2', label: 'Офисы', type: 'office', gradient: 'from-blue-500 to-indigo-600' },
-  { icon: 'ShoppingBag', label: 'Магазин, торговое помещение', type: 'retail', gradient: 'from-orange-500 to-rose-500' },
-  { icon: 'Warehouse', label: 'Склады', type: 'warehouse', gradient: 'from-slate-500 to-zinc-700' },
-  { icon: 'UtensilsCrossed', label: 'Общепит, кафе, ресторан', type: 'restaurant', gradient: 'from-amber-500 to-red-500' },
-  { icon: 'BedDouble', label: 'Гостиницы', type: 'hotel', gradient: 'from-pink-500 to-fuchsia-600' },
-  { icon: 'Briefcase', label: 'Готовый бизнес', type: 'business', gradient: 'from-violet-500 to-purple-700' },
-  { icon: 'TrendingUp', label: 'Готовый арендный бизнес (ГАБ)', type: 'gab', gradient: 'from-emerald-500 to-teal-600' },
-  { icon: 'Factory', label: 'Производственные помещения', type: 'production', gradient: 'from-stone-500 to-neutral-700' },
-  { icon: 'Trees', label: 'Земельные участки', type: 'land', gradient: 'from-lime-500 to-green-700' },
-  { icon: 'Landmark', label: 'Отдельно стоящие здания', type: 'building', gradient: 'from-sky-500 to-blue-700' },
-  { icon: 'Shuffle', label: 'Свободное назначение', type: 'free_purpose', gradient: 'from-cyan-500 to-teal-700' },
-  { icon: 'Wrench', label: 'Автосервисы', type: 'car_service', gradient: 'from-zinc-500 to-slate-800' },
-];
+const CATEGORIES = CATALOG_CATEGORIES;
 
 interface NewsPreview {
   id: number; title: string; slug: string; summary?: string;
@@ -305,7 +293,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
             {CATEGORIES.map((cat, i) => (
               <button
                 key={cat.type}
-                onClick={() => navigate(`/catalog/${cat.type}`)}
+                onClick={() => navigate(catalogCategoryUrl(cat.type))}
                 className={`group relative flex flex-col items-center gap-2 p-3 bg-white rounded-xl border border-border hover:border-transparent hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up stagger-${i + 1} overflow-hidden`}
               >
                 <div className={`absolute inset-0 bg-gradient-to-br ${cat.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />

@@ -13,6 +13,7 @@ import PropertyMediaGallery from '@/components/property/PropertyMediaGallery';
 import PropertyMainContent from '@/components/property/PropertyMainContent';
 import PropertySidebar from '@/components/property/PropertySidebar';
 import { TYPE_LABELS, DEAL_LABELS } from '@/components/property/propertyLabels';
+import { categoryLabel, catalogCategoryUrl } from '@/lib/categories';
 import AIMatchModal from '@/components/AIMatchModal';
 import AIChatWidget from '@/components/property/AIChatWidget';
 import SchemaOrg, { makeRealEstateSchema, makeBreadcrumbSchema, makeVideoObjectSchema, makeFaqSchema } from '@/components/SchemaOrg';
@@ -225,7 +226,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   const breadcrumbSchema = makeBreadcrumbSchema([
     { name: 'Главная', url: siteUrl },
     { name: 'Каталог', url: `${siteUrl}/catalog` },
-    { name: `${typeLabel} · ${dealLabel}`, url: `${siteUrl}/catalog?type=${item.type}&deal=${item.deal}` },
+    { name: categoryLabel(item.type), url: `${siteUrl}${catalogCategoryUrl(item.type)}` },
     { name: item.title, url: pageUrl },
   ]);
 
@@ -253,7 +254,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
             <Breadcrumbs items={[
               { label: 'Главная', to: '/' },
               { label: 'Каталог', to: '/catalog' },
-              { label: `${typeLabel} · ${dealLabel}`, to: `/catalog?type=${item.type}&deal=${item.deal}` },
+              { label: categoryLabel(item.type), to: catalogCategoryUrl(item.type) },
               { label: item.title },
             ]} />
           </div>

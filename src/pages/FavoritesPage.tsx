@@ -3,6 +3,7 @@ import { Property } from '@/App';
 import PropertyCard from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
 import SeoHead from '@/components/SeoHead';
+import { catalogCategoryUrl } from '@/lib/categories';
 
 interface FavoritesPageProps {
   properties: Property[];
@@ -18,7 +19,7 @@ export default function FavoritesPage({ properties, favorites, compareList, onTo
   const goToCatalog = () => {
     if (properties.length > 0) {
       const types = [...new Set(properties.map(p => p.type))];
-      navigate(`/catalog?type=${types[0]}`);
+      navigate(catalogCategoryUrl(String(types[0])));
     } else {
       navigate('/catalog');
     }

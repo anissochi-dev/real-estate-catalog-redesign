@@ -8,8 +8,14 @@ import { useSettings } from '@/contexts/SettingsContext';
 import AIMatchModal from '@/components/AIMatchModal';
 import SchemaOrg, { makeItemListSchema, makeBreadcrumbSchema } from '@/components/SchemaOrg';
 import { getSiteUrl } from '@/lib/siteUrl';
+import { catalogCategoryUrl } from '@/lib/categories';
+import { fetchDistricts, District } from '@/lib/api';
+import { getOkrugChildNames } from '@/lib/districts';
+import DistrictOptions from '@/components/DistrictOptions';
 
 const CATEGORY_SEO_URL = 'https://functions.poehali.dev/4f6d05ce-e38c-4e10-8a8b-f282e1ed2ddd';
+
+type CatSort = 'newest' | 'price_asc' | 'price_desc' | 'area_asc';
 
 interface Props {
   properties: Property[];
@@ -189,6 +195,17 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
   const [aiSeoText, setAiSeoText] = useState('');
   const [aiSeoLoading, setAiSeoLoading] = useState(false);
 
+  // Фильтры прямо на странице категории (вариант А)
+  const [showFilters, setShowFilters] = useState(false);
+  const [dealFilter, setDealFilter] = useState('all');
+  const [districtFilter, setDistrictFilter] = useState('all');
+  const [minArea, setMinArea] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
+  const [sortBy, setSortBy] = useState<CatSort>('newest');
+  const [districts, setDistricts] = useState<District[]>([]);
+
+  useEffect(() => { fetchDistricts().then(setDistricts); }, []);
+
   const meta = type ? CATEGORY_META[type] : null;
 
   useEffect(() => {
@@ -231,11 +248,49 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
 
   const items = useMemo(() => {
     if (!type) return [];
-    return properties.filter(p => String(p.type) === type);
-  }, [properties, type]);
+    let result = properties.filter(p => String(p.type) === type);
+
+    if (dealFilter !== 'all') result = result.filter(p => String(p.deal) === dealFilter);
+
+    if (districtFilter !== 'all') {
+      if (districtFilter.startsWith('okrug:')) {
+        const okrugId = Number(districtFilter.slice(6));
+        const okrug = districts.find(d => d.id === okrugId && d.is_okrug);
+        const names = okrug ? getOkrugChildNames(districts, okrug) : [];
+        result = result.filter(p =>
+          names.some(n => (p.district || '').toLowerCase().includes(n.toLowerCase()))
+        );
+      } else {
+        result = result.filter(p =>
+          (p.district || '').toLowerCase().includes(districtFilter.toLowerCase())
+        );
+      }
+    }
+
+    if (minArea) result = result.filter(p => p.area >= Number(minArea));
+    if (maxPrice) result = result.filter(p => p.price <= Number(maxPrice) * 1000000);
+
+    switch (sortBy) {
+      case 'price_asc': result = [...result].sort((a, b) => a.price - b.price); break;
+      case 'price_desc': result = [...result].sort((a, b) => b.price - a.price); break;
+      case 'area_asc': result = [...result].sort((a, b) => a.area - b.area); break;
+      case 'newest': break;
+    }
+
+    return result;
+  }, [properties, type, dealFilter, districtFilter, minArea, maxPrice, sortBy, districts]);
 
   const totalPages = Math.ceil(items.length / CAT_PAGE_SIZE);
   const pagedItems = items.slice((catPage - 1) * CAT_PAGE_SIZE, catPage * CAT_PAGE_SIZE);
+
+  // Сброс на первую страницу при смене фильтров
+  useEffect(() => { setCatPage(1); }, [dealFilter, districtFilter, minArea, maxPrice, sortBy]);
+
+  const hasActiveFilters = dealFilter !== 'all' || districtFilter !== 'all' || !!minArea || !!maxPrice;
+
+  const resetFilters = () => {
+    setDealFilter('all'); setDistrictFilter('all'); setMinArea(''); setMaxPrice(''); setSortBy('newest');
+  };
 
   // rel=prev/next для SEO-пагинации
   useEffect(() => {
@@ -299,7 +354,7 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
               items={[
                 { label: 'Главная', to: '/' },
                 { label: 'Каталог', to: '/catalog' },
-                { label: meta.labelRu },
+                { label: meta.labelRu, to: catalogCategoryUrl(type!) },
               ]}
               light
             />
@@ -378,11 +433,20 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
             </div>
             <div className="flex gap-2 flex-wrap">
               <button
-                onClick={() => navigate(`/catalog?type=${type}`)}
-                className="text-xs text-brand-blue font-semibold flex items-center gap-1 hover:underline"
+                onClick={() => setShowFilters(v => !v)}
+                className={`text-xs font-semibold flex items-center gap-1 px-3 py-1.5 rounded-lg border transition-colors ${
+                  showFilters || hasActiveFilters
+                    ? 'border-brand-blue bg-brand-blue text-white'
+                    : 'border-border text-brand-blue hover:border-brand-blue'
+                }`}
               >
                 <Icon name="SlidersHorizontal" size={13} />
                 Фильтры и сортировка
+                {hasActiveFilters && (
+                  <span className="w-4 h-4 rounded-full bg-white text-brand-blue text-[10px] flex items-center justify-center font-bold">
+                    {[dealFilter !== 'all', districtFilter !== 'all', !!minArea, !!maxPrice].filter(Boolean).length}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => navigate('/catalog')}
@@ -393,6 +457,63 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
               </button>
             </div>
           </div>
+
+          {/* Панель фильтров (вариант А — прямо на странице категории) */}
+          {showFilters && (
+            <div className="mt-4 pt-4 border-t border-border animate-fade-in">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Тип сделки */}
+                <div>
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Тип сделки</div>
+                  <select value={dealFilter} onChange={e => setDealFilter(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm outline-none focus:border-brand-blue transition-colors">
+                    <option value="all">Все</option>
+                    <option value="sale">Продажа</option>
+                    <option value="rent">Аренда</option>
+                  </select>
+                </div>
+                {/* Район */}
+                <div>
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Район</div>
+                  <select value={districtFilter} onChange={e => setDistrictFilter(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm outline-none focus:border-brand-blue transition-colors">
+                    <option value="all">Все районы</option>
+                    <DistrictOptions districts={districts} />
+                  </select>
+                </div>
+                {/* Площадь и цена */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">От м²</div>
+                    <input type="number" value={minArea} onChange={e => setMinArea(e.target.value)} placeholder="50"
+                      className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm outline-none focus:border-brand-blue transition-colors" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">До, млн ₽</div>
+                    <input type="number" value={maxPrice} onChange={e => setMaxPrice(e.target.value)} placeholder="100"
+                      className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm outline-none focus:border-brand-blue transition-colors" />
+                  </div>
+                </div>
+                {/* Сортировка */}
+                <div>
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Сортировка</div>
+                  <select value={sortBy} onChange={e => setSortBy(e.target.value as CatSort)}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm outline-none focus:border-brand-blue transition-colors">
+                    <option value="newest">Сначала свежие</option>
+                    <option value="price_asc">Цена: по возрастанию</option>
+                    <option value="price_desc">Цена: по убыванию</option>
+                    <option value="area_asc">Площадь: по возрастанию</option>
+                  </select>
+                </div>
+              </div>
+              {hasActiveFilters && (
+                <button onClick={resetFilters}
+                  className="mt-3 text-xs text-brand-orange font-semibold flex items-center gap-1 hover:opacity-80">
+                  <Icon name="X" size={12} /> Сбросить фильтры
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

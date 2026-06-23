@@ -5,6 +5,7 @@ import Icon from '@/components/ui/icon';
 import { Page } from '@/App';
 import { fetchDistricts, District } from '@/lib/api';
 import { groupByOkrug } from '@/lib/districts';
+import { CATALOG_CATEGORIES, catalogCategoryUrl } from '@/lib/categories';
 
 interface Props {
   onLogin: () => void;
@@ -32,20 +33,10 @@ function LegalModal({ title, content, onClose }: { title: string; content: strin
   );
 }
 
-const DEFAULT_CATEGORIES: { label: string; href: string }[] = [
-  { label: 'Офисы', href: '/catalog/office' },
-  { label: 'Магазин, торговое помещение', href: '/catalog/retail' },
-  { label: 'Склады', href: '/catalog/warehouse' },
-  { label: 'Общепит, кафе, ресторан', href: '/catalog/restaurant' },
-  { label: 'Гостиницы', href: '/catalog/hotel' },
-  { label: 'Готовый бизнес', href: '/catalog/business' },
-  { label: 'Готовый арендный бизнес (ГАБ)', href: '/catalog/gab' },
-  { label: 'Производственное помещение', href: '/catalog/production' },
-  { label: 'Земельный участок', href: '/catalog/land' },
-  { label: 'Отдельно стоящее здание', href: '/catalog/building' },
-  { label: 'Свободное назначение', href: '/catalog/free_purpose' },
-  { label: 'Автосервис', href: '/catalog/car_service' },
-];
+const DEFAULT_CATEGORIES: { label: string; href: string }[] = CATALOG_CATEGORIES.map(c => ({
+  label: c.label,
+  href: catalogCategoryUrl(c.type),
+}));
 
 function parseLinks(raw: string): { label: string; href: string }[] {
   return raw
