@@ -520,17 +520,27 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
       {/* Список объектов */}
       <div className="container mx-auto px-4 py-8">
         {items.length === 0 ? (
-          <div className="text-center py-20">
+          <div className="text-center py-16">
             <Icon name="Building2" size={40} className="mx-auto mb-4 text-muted-foreground opacity-30" />
             <div className="font-display font-700 text-xl text-foreground mb-2">
-              Объекты в этой категории появятся скоро
+              {hasActiveFilters
+                ? 'По выбранным фильтрам ничего не найдено'
+                : 'Объекты в этой категории появятся скоро'}
             </div>
             <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
-              Пока в категории «{meta.labelRu}» нет активных объектов. Смотрите другие категории или оставьте заявку.
+              {hasActiveFilters
+                ? 'Попробуйте смягчить условия фильтра или сбросить их.'
+                : `Пока в категории «${meta.labelRu}» нет активных объектов. Смотрите другие категории или оставьте заявку.`}
             </p>
-            <button onClick={() => navigate('/catalog')} className="btn-blue text-white px-6 py-2.5 rounded-xl text-sm font-semibold">
-              Смотреть все объекты
-            </button>
+            {hasActiveFilters ? (
+              <button onClick={resetFilters} className="btn-blue text-white px-6 py-2.5 rounded-xl text-sm font-semibold">
+                Сбросить фильтры
+              </button>
+            ) : (
+              <button onClick={() => navigate('/catalog')} className="btn-blue text-white px-6 py-2.5 rounded-xl text-sm font-semibold">
+                Смотреть все объекты
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -567,48 +577,48 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
                 </button>
               </div>
             )}
-
-            {/* SEO-текст внизу — AI-генерированный + статический фолбэк */}
-            <div className="mt-12 p-6 bg-white rounded-2xl border border-border">
-              <h2 className="font-display font-700 text-lg mb-1">{meta.h2}</h2>
-              <h5 className="text-sm text-brand-blue font-medium mb-3">{meta.h5}</h5>
-
-              {/* AI-текст или скелетон или статический фолбэк */}
-              {aiSeoLoading && !aiSeoText ? (
-                <div className="space-y-2 mb-4">
-                  {[1, 2, 3].map(i => (
-                    <div key={i} className={`h-3.5 bg-muted rounded animate-pulse ${i === 3 ? 'w-2/3' : 'w-full'}`} />
-                  ))}
-                </div>
-              ) : aiSeoText ? (
-                <div className="text-sm text-muted-foreground leading-relaxed mb-4 whitespace-pre-line">
-                  {aiSeoText}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                  {meta.description} Наша компания специализируется на подборе коммерческой недвижимости
-                  в {city}е с {settings.company_since_year || 2007} года. Мы помогаем как покупателям,
-                  так и арендаторам найти оптимальный объект с учётом бюджета, требований к площади и расположению.
-                </p>
-              )}
-
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Другие категории</h4>
-              <div className="flex flex-wrap gap-2">
-                {Object.entries(CATEGORY_META)
-                  .filter(([k]) => k !== type)
-                  .map(([k, v]) => (
-                    <button
-                      key={k}
-                      onClick={() => navigate(`/catalog/${k}`)}
-                      className="text-xs px-3 py-1.5 rounded-full border border-border hover:border-brand-blue hover:text-brand-blue transition-colors"
-                    >
-                      {v.labelRu}
-                    </button>
-                  ))}
-              </div>
-            </div>
           </>
         )}
+
+        {/* SEO-текст внизу — показывается ВСЕГДА, в т.ч. при пустой категории */}
+        <div className="mt-12 p-6 bg-white rounded-2xl border border-border">
+          <h2 className="font-display font-700 text-lg mb-1">{meta.h2}</h2>
+          <h5 className="text-sm text-brand-blue font-medium mb-3">{meta.h5}</h5>
+
+          {/* AI-текст или скелетон или статический фолбэк */}
+          {aiSeoLoading && !aiSeoText ? (
+            <div className="space-y-2 mb-4">
+              {[1, 2, 3].map(i => (
+                <div key={i} className={`h-3.5 bg-muted rounded animate-pulse ${i === 3 ? 'w-2/3' : 'w-full'}`} />
+              ))}
+            </div>
+          ) : aiSeoText ? (
+            <div className="text-sm text-muted-foreground leading-relaxed mb-4 whitespace-pre-line">
+              {aiSeoText}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+              {meta.description} Наша компания специализируется на подборе коммерческой недвижимости
+              в {city}е с {settings.company_since_year || 2007} года. Мы помогаем как покупателям,
+              так и арендаторам найти оптимальный объект с учётом бюджета, требований к площади и расположению.
+            </p>
+          )}
+
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Другие категории</h4>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(CATEGORY_META)
+              .filter(([k]) => k !== type)
+              .map(([k, v]) => (
+                <button
+                  key={k}
+                  onClick={() => navigate(catalogCategoryUrl(k))}
+                  className="text-xs px-3 py-1.5 rounded-full border border-border hover:border-brand-blue hover:text-brand-blue transition-colors"
+                >
+                  {v.labelRu}
+                </button>
+              ))}
+          </div>
+        </div>
       </div>
     </div>
   );
