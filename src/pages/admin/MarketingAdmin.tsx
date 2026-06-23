@@ -4,14 +4,16 @@ import UtmTab from '@/pages/admin/marketing/UtmTab';
 import SocialParserTab from '@/pages/admin/marketing/SocialParserTab';
 import MarketingDashboard from '@/pages/admin/marketing/MarketingDashboard';
 import PriceAssessmentTab from '@/pages/admin/marketing/PriceAssessmentTab';
+import VkAdsTab from '@/pages/admin/marketing/VkAdsTab';
 
-type Tab = 'dashboard' | 'pricing' | 'utm' | 'social';
+type Tab = 'dashboard' | 'pricing' | 'utm' | 'social' | 'vk-ads';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'Пульт',       icon: 'LayoutDashboard' },
   { id: 'pricing',   label: 'Оценка цен',  icon: 'Sparkles' },
   { id: 'utm',       label: 'UTM-ссылки',  icon: 'Link' },
   { id: 'social',    label: 'Соцсети',     icon: 'Share2' },
+  { id: 'vk-ads',   label: 'VK Ads',      icon: 'Megaphone' },
 ];
 
 export default function MarketingAdmin() {
@@ -37,6 +39,7 @@ export default function MarketingAdmin() {
       {tab === 'pricing'   && <PriceAssessmentTab />}
       {tab === 'utm'       && <UtmTab />}
       {tab === 'social'    && <SocialParserTab />}
+      {tab === 'vk-ads'   && <VkAdsTab />}
     </div>
   );
 }
