@@ -1,4 +1,5 @@
 import { District } from '@/lib/api';
+import { groupByOkrug } from '@/lib/districts';
 
 interface DistrictOptionsProps {
   districts: District[];
@@ -9,27 +10,15 @@ function optionLabel(d: District): string {
 }
 
 /**
- * Рендерит опции для <select> района с иерархией:
- * сначала округа (как заголовки <optgroup>), под ними — вложенные районы.
- * Районы без округа выводятся в группе «Другие районы».
+ * Опции для <select> района с иерархией: округа как <optgroup>,
+ * под ними районы. Округ выбирается значением `okrug:<id>` (все его районы).
  * Используется вместе с <option value="all">Все районы</option> в родителе.
  */
 export default function DistrictOptions({ districts }: DistrictOptionsProps) {
-  const okrugs = districts
-    .filter(d => d.is_okrug)
-    .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, 'ru'));
+  const { groups, orphans } = groupByOkrug(districts, { sortBy: 'order' });
 
-  const childrenOf = (okrugId: number) =>
-    districts
-      .filter(d => !d.is_okrug && d.parent_id === okrugId)
-      .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, 'ru'));
-
-  const orphans = districts
-    .filter(d => !d.is_okrug && (d.parent_id == null))
-    .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, 'ru'));
-
-  // Если иерархия не задана (нет округов) — плоский список как раньше
-  if (okrugs.length === 0) {
+  // Если иерархия не задана (нет округов) — плоский список
+  if (groups.length === 0) {
     return (
       <>
         {districts
@@ -43,14 +32,12 @@ export default function DistrictOptions({ districts }: DistrictOptionsProps) {
 
   return (
     <>
-      {okrugs.map(o => {
-        const kids = childrenOf(o.id);
-        if (kids.length === 0) return null;
-        const okrugCount = kids.reduce((s, d) => s + (d.listings_count || 0), 0);
+      {groups.map(({ okrug, children, total }) => {
+        if (children.length === 0) return null;
         return (
-          <optgroup key={o.id} label={o.name}>
-            <option value={`okrug:${o.id}`}>Весь {o.name}{okrugCount ? ` (${okrugCount})` : ''}</option>
-            {kids.map(d => (
+          <optgroup key={okrug.id} label={okrug.name}>
+            <option value={`okrug:${okrug.id}`}>Весь {okrug.name}{total ? ` (${total})` : ''}</option>
+            {children.map(d => (
               <option key={d.id} value={d.name}>{optionLabel(d)}</option>
             ))}
           </optgroup>

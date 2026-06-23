@@ -8,6 +8,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { makeBreadcrumbSchema } from '@/components/SchemaOrg';
 import { fetchDistricts, District } from '@/lib/api';
 import DistrictOptions from '@/components/DistrictOptions';
+import { getOkrugChildNames } from '@/lib/districts';
 import { getSiteUrl } from '@/lib/siteUrl';
 import { formatPrice } from '@/components/PropertyCard';
 import CatalogHero from './catalog/CatalogHero';
@@ -122,11 +123,10 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
     if (districtFilter !== 'all') {
       if (districtFilter.startsWith('okrug:')) {
         const okrugId = Number(districtFilter.slice(6));
-        const okrugDistricts = districts
-          .filter(d => !d.is_okrug && d.parent_id === okrugId)
-          .map(d => d.name.toLowerCase());
+        const okrug = districts.find(d => d.id === okrugId && d.is_okrug);
+        const names = okrug ? getOkrugChildNames(districts, okrug) : [];
         result = result.filter(p =>
-          okrugDistricts.some(name => (p.district || '').toLowerCase().includes(name))
+          names.some(name => (p.district || '').toLowerCase().includes(name.toLowerCase()))
         );
       } else {
         result = result.filter(p =>

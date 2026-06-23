@@ -4,6 +4,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
 import { Page } from '@/App';
 import { fetchDistricts, District } from '@/lib/api';
+import { groupByOkrug } from '@/lib/districts';
 
 interface Props {
   onLogin: () => void;
@@ -79,22 +80,10 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
 
   // Иерархия: округа с дочерними районами, где есть объекты.
   // Округ скрывается, если ни в одном его районе нет объектов.
-  const okrugGroups = districts
-    .filter(o => o.is_okrug)
-    .map(o => {
-      const children = districts
-        .filter(d => !d.is_okrug && d.parent_id === o.id && (d.listings_count ?? 0) > 0)
-        .sort((a, b) => (b.listings_count ?? 0) - (a.listings_count ?? 0));
-      const total = children.reduce((s, d) => s + (d.listings_count ?? 0), 0);
-      return { okrug: o, children, total };
-    })
-    .filter(g => g.children.length > 0)
-    .sort((a, b) => b.total - a.total);
-
-  // Районы без округа, в которых есть объекты
-  const orphanDistricts = districts
-    .filter(d => !d.is_okrug && d.parent_id == null && (d.listings_count ?? 0) > 0)
-    .sort((a, b) => (b.listings_count ?? 0) - (a.listings_count ?? 0));
+  const { groups: okrugGroups, orphans: orphanDistricts } = groupByOkrug(districts, {
+    onlyWithListings: true,
+    sortBy: 'count',
+  });
 
   const hasDistrictBlock = okrugGroups.length > 0 || orphanDistricts.length > 0;
 

@@ -7,6 +7,7 @@ import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
 import SchemaOrg, { makeItemListSchema, makeBreadcrumbSchema } from '@/components/SchemaOrg';
 import { fetchDistricts, District } from '@/lib/api';
+import { getOkrugChildNames, matchesDistrictNames } from '@/lib/districts';
 import { getSiteUrl } from '@/lib/siteUrl';
 
 const DISTRICT_SEO_URL = 'https://functions.poehali.dev/4f6d05ce-e38c-4e10-8a8b-f282e1ed2ddd';
@@ -46,9 +47,7 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
   // Названия районов, входящих в округ (для фильтрации объектов и текстов)
   const okrugChildNames = useMemo(() => {
     if (!isOkrug || !districtData) return [];
-    return allDistricts
-      .filter(d => !d.is_okrug && d.parent_id === districtData.id)
-      .map(d => d.name);
+    return getOkrugChildNames(allDistricts, districtData);
   }, [isOkrug, districtData, allDistricts]);
 
   const placeLabel = isOkrug ? 'округ' : 'район';
@@ -101,23 +100,10 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
     const exactName = districtData?.name;
     if (!exactName) return []; // ждём загрузки districtData
 
-    // Для округа — объекты всех его районов
-    if (isOkrug) {
-      if (okrugChildNames.length === 0) return [];
-      const names = okrugChildNames.map(n => n.toLowerCase());
-      return properties.filter(p => {
-        const d = (p.district || '').toLowerCase();
-        const a = (p.address || '').toLowerCase();
-        return names.some(n => d.includes(n) || a.includes(n));
-      });
-    }
-
-    // Обычный район — по точному названию
-    const q = exactName.toLowerCase();
-    return properties.filter(p =>
-      (p.district || '').toLowerCase().includes(q) ||
-      (p.address || '').toLowerCase().includes(q)
-    );
+    // Для округа — объекты всех его районов, для района — по его названию
+    const names = isOkrug ? okrugChildNames : [exactName];
+    if (names.length === 0) return [];
+    return properties.filter(p => matchesDistrictNames(p.district, p.address, names));
   }, [properties, districtData, districtName, isOkrug, okrugChildNames]);
 
   const totalPages = Math.ceil(items.length / PAGE_SIZE);
