@@ -2,13 +2,15 @@ import { useMemo, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { Property } from '@/App';
 import PropertyCard from '@/components/PropertyCard';
-import Breadcrumbs from '@/components/Breadcrumbs';
 import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
 import SchemaOrg, { makeItemListSchema, makeBreadcrumbSchema } from '@/components/SchemaOrg';
 import { fetchDistricts, District } from '@/lib/api';
 import { getOkrugChildNames, matchesDistrictNames } from '@/lib/districts';
 import { getSiteUrl } from '@/lib/siteUrl';
+import DistrictHero from './district/DistrictHero';
+import DistrictStatsBar from './district/DistrictStatsBar';
+import DistrictSeoBlock from './district/DistrictSeoBlock';
 
 const DISTRICT_SEO_URL = 'https://functions.poehali.dev/4f6d05ce-e38c-4e10-8a8b-f282e1ed2ddd';
 const PAGE_SIZE = 12;
@@ -153,64 +155,21 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
       <SchemaOrg schema={itemListSchema} id={`district-list-${district}`} />
 
       {/* Hero */}
-      <div className="bg-gradient-to-br from-slate-700 to-slate-900 text-white">
-        <div className="container mx-auto px-4 py-10 md:py-14">
-          <div className="mb-4">
-            <Breadcrumbs
-              items={[
-                { label: 'Главная', to: '/' },
-                { label: 'Каталог', to: '/catalog' },
-                { label: placeTitle },
-              ]}
-              light
-            />
-          </div>
-          <div className="flex items-start gap-5">
-            <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0">
-              <Icon name="MapPin" size={28} className="text-white" />
-            </div>
-            <div>
-              <h1 className="font-display font-900 text-2xl md:text-3xl leading-tight mb-1">
-                Коммерческая недвижимость — {placeTitle}
-              </h1>
-              <h2 className="font-display font-600 text-base text-white/75 mb-2 leading-snug">
-                Аренда и продажа объектов в {isOkrug ? displayName : `районе ${displayName}`}, {city}
-              </h2>
-              <p className="text-white/70 text-sm max-w-2xl leading-relaxed">
-                {items.length > 0
-                  ? `В базе ${items.length} активных объектов в этом ${placeLabel}е — офисы, торговые площади, склады и другие.`
-                  : `Актуальные объекты коммерческой недвижимости в ${isOkrug ? displayName : `районе ${displayName}`}.`}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <DistrictHero
+        placeTitle={placeTitle}
+        displayName={displayName}
+        isOkrug={isOkrug}
+        placeLabel={placeLabel}
+        city={city}
+        itemsCount={items.length}
+      />
 
       {/* Панель статистики */}
-      <div className="bg-white border-b border-border">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4 flex-wrap">
-          <div className="text-sm text-muted-foreground">
-            <h3 className="inline font-semibold text-foreground">{placeTitle}</h3>
-            {' '}— найдено <span className="font-semibold text-foreground">{items.length}</span> объектов
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => navigate(`/catalog?search=${encodeURIComponent(displayName)}`)}
-              className="text-xs text-brand-blue font-semibold flex items-center gap-1 hover:underline"
-            >
-              <Icon name="SlidersHorizontal" size={13} />
-              Фильтры
-            </button>
-            <button
-              onClick={() => navigate('/catalog')}
-              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-            >
-              <Icon name="LayoutGrid" size={13} />
-              Все районы
-            </button>
-          </div>
-        </div>
-      </div>
+      <DistrictStatsBar
+        placeTitle={placeTitle}
+        displayName={displayName}
+        itemsCount={items.length}
+      />
 
       {/* Объекты */}
       <div className="container mx-auto px-4 py-8">
@@ -264,22 +223,14 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
             )}
 
             {/* AI SEO-текст */}
-            <div className="mt-12 p-6 bg-white rounded-2xl border border-border">
-              <h2 className="font-display font-700 text-lg mb-3">
-                О коммерческой недвижимости: {isOkrug ? displayName : `район ${displayName}`}
-              </h2>
-              {aiLoading && !aiText && !districtData?.description ? (
-                <div className="space-y-2">
-                  {[1, 2, 3].map(i => (
-                    <div key={i} className={`h-3.5 bg-muted rounded animate-pulse ${i === 3 ? 'w-2/3' : 'w-full'}`} />
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
-                  {aiText || districtData?.description || `Актуальные объекты коммерческой недвижимости в ${isOkrug ? displayName : `районе ${displayName}`}, ${city} — офисы, торговые площади, склады, производственные помещения и готовый бизнес.`}
-                </p>
-              )}
-            </div>
+            <DistrictSeoBlock
+              displayName={displayName}
+              isOkrug={isOkrug}
+              city={city}
+              aiText={aiText}
+              aiLoading={aiLoading}
+              description={districtData?.description}
+            />
           </>
         )}
       </div>
