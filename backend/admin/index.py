@@ -3276,6 +3276,8 @@ def _settings(cur, conn, method, event, user):
                           ('google_search_console_key', 10000),
                           # Рекламные пиксели
                           ('vk_pixel_id', 100),
+                          ('vk_ads_client_id', 100),
+                          ('vk_ads_client_secret', 500),
                           ('calltouch_id', 100),
                           ('telegram_ads_pixel', 100),
                           # МАХ автоответ
