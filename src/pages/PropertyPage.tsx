@@ -2,16 +2,18 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchListingById, ListingDetail, sendLead, fetchAgents, Agent } from '@/lib/api';
 import { fireLeadConversion } from '@/lib/analytics';
-import SmartCaptcha, { CaptchaResult } from '@/components/SmartCaptcha';
+import { CaptchaResult } from '@/components/SmartCaptcha';
 import { recordView } from '@/components/RecentlyViewed';
 import { extractIdFromSlug } from '@/lib/slug';
 import { useSettings } from '@/contexts/SettingsContext';
 import { getSiteUrl } from '@/lib/siteUrl';
 import Icon from '@/components/ui/icon';
-import Breadcrumbs from '@/components/Breadcrumbs';
 import PropertyMediaGallery from '@/components/property/PropertyMediaGallery';
 import PropertyMainContent from '@/components/property/PropertyMainContent';
 import PropertySidebar from '@/components/property/PropertySidebar';
+import PropertyTopBar from '@/components/property/PropertyTopBar';
+import PropertyAiSearchBar from '@/components/property/PropertyAiSearchBar';
+import PropertyFaqSection from '@/components/property/PropertyFaqSection';
 import { TYPE_LABELS, DEAL_LABELS } from '@/components/property/propertyLabels';
 import { categoryLabel, catalogCategoryUrl } from '@/lib/categories';
 import AIMatchModal from '@/components/AIMatchModal';
@@ -40,8 +42,6 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [aiQuery, setAiQuery] = useState('');
   const [aiOpen, setAiOpen] = useState(false);
   const [faq, setFaq] = useState<{ question: string; answer: string }[]>([]);
@@ -51,37 +51,6 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
 
   const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
-
-  const copyLink = () => {
-    navigator.clipboard.writeText(shareUrl).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  };
-
-  // Сети для шеринга — единые компактные иконки lucide, без фирменных цветов
-  const shareNetworks: { label: string; href: string; icon: string }[] = [
-    {
-      label: 'ВКонтакте',
-      href: `https://vk.com/share.php?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(item?.title || '')}`,
-      icon: 'Share2',
-    },
-    {
-      label: 'Telegram',
-      href: `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent((item?.title || '') + '\n')}`,
-      icon: 'Send',
-    },
-    {
-      label: 'WhatsApp',
-      href: `https://wa.me/?text=${encodeURIComponent((item?.title || '') + '\n' + shareUrl)}`,
-      icon: 'MessageCircle',
-    },
-    {
-      label: 'Макс',
-      href: `https://max.ru/share?url=${encodeURIComponent(shareUrl)}`,
-      icon: 'Sparkles',
-    },
-  ];
 
   useEffect(() => {
     const id = extractIdFromSlug(slug || '');
@@ -249,80 +218,15 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
       {faqSchema && <SchemaOrg schema={faqSchema} id="faq" />}
 
       <div className="container mx-auto px-4 py-4">
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <div className="hidden md:block min-w-0 flex-1">
-            <Breadcrumbs items={[
-              { label: 'Главная', to: '/' },
-              { label: 'Каталог', to: '/catalog' },
-              { label: categoryLabel(item.type), to: catalogCategoryUrl(item.type) },
-              { label: item.title },
-            ]} />
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="relative">
-              <button
-                onClick={() => setShareOpen(v => !v)}
-                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition whitespace-nowrap"
-              >
-                <Icon name="Share2" size={11} /> Поделиться
-              </button>
-              {shareOpen && (
-                <div className="absolute right-0 top-full mt-1.5 z-50 bg-white border border-border rounded-xl shadow-lg p-1.5 min-w-[180px]">
-                  <div className="text-[10px] font-semibold text-muted-foreground/70 px-2 py-1 uppercase tracking-wide">Поделиться</div>
-                  {shareNetworks.map(n => (
-                    <a key={n.label} href={n.href} target="_blank" rel="noopener noreferrer"
-                      className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-muted transition text-[12px] text-foreground"
-                      onClick={() => setShareOpen(false)}
-                    >
-                      <Icon name={n.icon} size={13} className="text-muted-foreground" />
-                      <span>{n.label}</span>
-                    </a>
-                  ))}
-                  <div className="border-t border-border my-1" />
-                  <button onClick={copyLink}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-muted transition text-[12px] w-full text-left">
-                    <Icon name={copied ? 'Check' : 'Link2'} size={13} className={copied ? 'text-emerald-600' : 'text-muted-foreground'} />
-                    <span>{copied ? 'Скопировано' : 'Скопировать ссылку'}</span>
-                  </button>
-                </div>
-              )}
-              {shareOpen && <div className="fixed inset-0 z-40" onClick={() => setShareOpen(false)} />}
-            </div>
-            <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground whitespace-nowrap">
-              <Icon name="ArrowLeft" size={11} /> Назад
-            </button>
-          </div>
-        </div>
+        <PropertyTopBar itemType={item.type} itemTitle={item.title} shareUrl={shareUrl} />
 
         {/* ИИ-панель: подбор похожих */}
-        <div className="bg-gradient-to-r from-brand-blue to-indigo-600 rounded-2xl px-4 py-3 mb-4">
-          <form
-            onSubmit={e => { e.preventDefault(); setAiOpen(true); }}
-            className="flex items-center gap-2"
-          >
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-orange to-rose-500 flex items-center justify-center flex-shrink-0">
-              <Icon name="Sparkles" size={14} className="text-white" />
-            </div>
-            <input
-              value={aiQuery}
-              onChange={e => setAiQuery(e.target.value)}
-              placeholder={`Найти похожие на «${item.title.slice(0, 40)}${item.title.length > 40 ? '…' : ''}»`}
-              className="flex-1 bg-transparent text-white placeholder:text-white/50 outline-none text-sm min-w-0"
-            />
-            {aiQuery && (
-              <button type="button" onClick={() => setAiQuery('')} className="text-white/50 hover:text-white/80 flex-shrink-0">
-                <Icon name="X" size={13} />
-              </button>
-            )}
-            <button
-              type="submit"
-              className="flex-shrink-0 btn-orange text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1.5"
-            >
-              <Icon name="Sparkles" size={12} />
-              Найти с ИИ
-            </button>
-          </form>
-        </div>
+        <PropertyAiSearchBar
+          aiQuery={aiQuery}
+          setAiQuery={setAiQuery}
+          setAiOpen={setAiOpen}
+          itemTitle={item.title}
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 space-y-3">
@@ -410,33 +314,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
         </div>
 
         {/* FAQ — часто задаваемые вопросы */}
-        {faqLoading && (
-          <div className="mt-8 border-t border-border pt-6 flex items-center gap-2 text-sm text-muted-foreground">
-            <span className="w-3.5 h-3.5 rounded-full border-2 border-brand-blue/30 border-t-brand-blue animate-spin" />
-            Генерируем FAQ для этого объекта…
-          </div>
-        )}
-        {faq.length > 0 && (
-          <section className="mt-8 border-t border-border pt-8" aria-label="Часто задаваемые вопросы">
-            <h2 className="font-display font-700 text-xl text-foreground mb-5 flex items-center justify-center gap-2">
-              <Icon name="HelpCircle" size={20} className="text-brand-blue" />
-              Часто задаваемые вопросы
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {faq.slice(0, 6).map((faqItem, i) => (
-                <details key={i} className="group border border-border rounded-xl overflow-hidden">
-                  <summary className="flex items-center justify-between px-4 py-3.5 cursor-pointer font-semibold text-sm select-none list-none hover:bg-muted/50 transition-colors">
-                    <span>{faqItem.question}</span>
-                    <Icon name="ChevronDown" size={16} className="shrink-0 text-muted-foreground transition-transform group-open:rotate-180 ml-3" />
-                  </summary>
-                  <div className="px-4 pb-4 pt-1 text-sm text-foreground/80 leading-relaxed border-t border-border">
-                    {faqItem.answer}
-                  </div>
-                </details>
-              ))}
-            </div>
-          </section>
-        )}
+        <PropertyFaqSection faq={faq} faqLoading={faqLoading} />
       </div>
 
       <AIMatchModal
