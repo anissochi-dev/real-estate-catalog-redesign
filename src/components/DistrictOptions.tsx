@@ -46,8 +46,10 @@ export default function DistrictOptions({ districts }: DistrictOptionsProps) {
       {okrugs.map(o => {
         const kids = childrenOf(o.id);
         if (kids.length === 0) return null;
+        const okrugCount = kids.reduce((s, d) => s + (d.listings_count || 0), 0);
         return (
           <optgroup key={o.id} label={o.name}>
+            <option value={`okrug:${o.id}`}>Весь {o.name}{okrugCount ? ` (${okrugCount})` : ''}</option>
             {kids.map(d => (
               <option key={d.id} value={d.name}>{optionLabel(d)}</option>
             ))}

@@ -120,9 +120,19 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
     if (dealFilter !== 'all') result = result.filter(p => String(p.deal) === dealFilter);
     if (typeFilter !== 'all') result = result.filter(p => String(p.type) === typeFilter);
     if (districtFilter !== 'all') {
-      result = result.filter(p =>
-        (p.district || '').toLowerCase().includes(districtFilter.toLowerCase())
-      );
+      if (districtFilter.startsWith('okrug:')) {
+        const okrugId = Number(districtFilter.slice(6));
+        const okrugDistricts = districts
+          .filter(d => !d.is_okrug && d.parent_id === okrugId)
+          .map(d => d.name.toLowerCase());
+        result = result.filter(p =>
+          okrugDistricts.some(name => (p.district || '').toLowerCase().includes(name))
+        );
+      } else {
+        result = result.filter(p =>
+          (p.district || '').toLowerCase().includes(districtFilter.toLowerCase())
+        );
+      }
     }
     if (minArea) result = result.filter(p => p.area >= Number(minArea));
     if (maxPrice) result = result.filter(p => p.price <= Number(maxPrice) * 1000000);
@@ -139,7 +149,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
     }
 
     return result;
-  }, [properties, search, dealFilter, typeFilter, districtFilter, sortBy, minArea, maxPrice]);
+  }, [properties, search, dealFilter, typeFilter, districtFilter, sortBy, minArea, maxPrice, districts]);
 
   const mapPoints = useMemo(
     () => filtered
