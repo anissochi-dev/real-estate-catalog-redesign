@@ -3958,7 +3958,9 @@ def _xml_feeds(cur, conn, method, rid, event, user):
 
 
 def _stats(cur):
-    cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.listings WHERE status = 'active'")
+    # Считаем так же, как публичный каталог сайта: активные и не скрытые
+    _vis = "status = 'active' AND (is_visible IS NULL OR is_visible = TRUE)"
+    cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.listings WHERE {_vis}")
     listings_active = cur.fetchone()['c']
     cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.leads")
     leads_total = cur.fetchone()['c']
@@ -3966,7 +3968,7 @@ def _stats(cur):
     leads_new = cur.fetchone()['c']
     cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.users")
     users_total = cur.fetchone()['c']
-    cur.execute(f"SELECT category, COUNT(*) AS c FROM {SCHEMA}.listings WHERE status = 'active' GROUP BY category")
+    cur.execute(f"SELECT category, COUNT(*) AS c FROM {SCHEMA}.listings WHERE {_vis} GROUP BY category")
     by_cat = [dict(r) for r in cur.fetchall()]
     cur.execute(f"SELECT status, COUNT(*) AS c FROM {SCHEMA}.leads GROUP BY status")
     by_status = [dict(r) for r in cur.fetchall()]
