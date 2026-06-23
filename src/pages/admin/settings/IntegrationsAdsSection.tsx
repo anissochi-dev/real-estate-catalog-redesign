@@ -65,6 +65,23 @@ export default function IntegrationsAdsSection({ s, setS, saved, save }: Props) 
             <Icon name="CheckCircle2" size={12} /> Пиксель подключится после сохранения
           </div>
         )}
+        <div className="border-t border-border pt-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">VK Ads — Client ID</span>
+            <span className="text-xs text-muted-foreground">ID рекламного кабинета</span>
+          </div>
+          <input
+            className="w-full px-3 py-2 border rounded-lg font-mono text-sm focus:border-brand-blue outline-none"
+            type="text"
+            placeholder="Например: 12345678"
+            value={s.vk_ads_client_id || ''}
+            onChange={e => setS({ ...s, vk_ads_client_id: e.target.value })}
+          />
+          <div className="text-xs text-muted-foreground">
+            <a href="https://ads.vk.com" target="_blank" rel="noreferrer" className="text-brand-blue underline">ads.vk.com</a>
+            {' '}→ правый верхний угол → имя аккаунта → <b>ID кабинета</b> (числовой)
+          </div>
+        </div>
       </div>
 
       {/* ── CallTouch ────────────────────────────────────────────────── */}

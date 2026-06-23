@@ -86,6 +86,7 @@ export interface S {
   google_pagespeed_api_key: string;
   // Рекламные пиксели
   vk_pixel_id: string;
+  vk_ads_client_id: string;
   calltouch_id: string;
   telegram_ads_pixel: string;
   ya_metrika_goals_enabled: boolean;
