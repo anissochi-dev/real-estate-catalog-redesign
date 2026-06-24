@@ -436,7 +436,7 @@ def handler(event: dict, context) -> dict:
                     f"AND (image_thumb IS NULL OR image_thumb = '') "
                     f"AND image IS NOT NULL AND image != '' "
                     f"ORDER BY id ASC "
-                    f"LIMIT {batch_size} OFFSET {offset}"
+                    f"LIMIT {batch_size}"
                 )
                 listings = cur.fetchall()
 
