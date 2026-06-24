@@ -122,10 +122,11 @@ export default function SeoTechnicalTab() {
     setPrerenderErrors(0);
     setPrerenderFinished(false);
 
-    // Собираем пути из sitemap
+    // Собираем пути из sitemap — читаем напрямую через sitemap-функцию (минуя CORS)
     const paths: string[] = [...PRERENDER_STATIC];
     try {
-      const r = await fetch(`${SITE_URL}/sitemap.xml`);
+      const sitemapFnUrl = 'https://functions.poehali.dev/7db3cce2-3ae0-4bbb-bece-5c6076691344?action=sitemap_xml';
+      const r = await fetch(sitemapFnUrl);
       const xml = await r.text();
       const matches = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)];
       const sitemapPaths = matches
@@ -134,6 +135,7 @@ export default function SeoTechnicalTab() {
       for (const p of sitemapPaths) {
         if (!paths.includes(p)) paths.push(p);
       }
+      setPrerenderLog(l => [...l, `Sitemap загружен: ${sitemapPaths.length} URL`]);
     } catch {
       setPrerenderLog(l => [...l, '⚠ Не удалось загрузить sitemap, работаем только со статическими страницами']);
     }

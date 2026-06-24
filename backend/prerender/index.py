@@ -152,6 +152,8 @@ def _html(title, desc, og_image='', canonical='', extra_meta='',
         f'<meta name="twitter:description" content="{d}">'
         f'{extra_meta}'
         f'{jsonld_tag}'
+        f'<meta name="yandex-verification" content="7099028f3e2220eb">'
+        f'<meta name="mailru-domain" content="6dS7udsVWBpJx77O">'
         f'<link rel="sitemap" type="application/xml" href="/sitemap.xml">'
         f'<link rel="preconnect" href="https://cdn.poehali.dev">'
         f'<link rel="preconnect" href="https://functions.poehali.dev">'
