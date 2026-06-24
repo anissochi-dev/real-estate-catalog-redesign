@@ -253,13 +253,27 @@ def handler(event, context):
                 return _err(400, 'Файл больше 15 МБ')
 
             ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'jpg'
-            if ext not in ('jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'):
+            if ext not in ('jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'heic', 'heif'):
                 ext = 'jpg'
+
+            # HEIC/HEIF (фото с iPhone) — конвертируем в JPEG через pillow-heif
+            if ext in ('heic', 'heif') and kind == 'photo':
+                try:
+                    import pillow_heif
+                    pillow_heif.register_heif_opener()
+                    from PIL import Image as _PilTemp
+                    img_heic = _PilTemp.open(io.BytesIO(data)).convert('RGB')
+                    buf_heic = io.BytesIO()
+                    img_heic.save(buf_heic, format='JPEG', quality=92)
+                    data = buf_heic.getvalue()
+                    ext = 'jpg'
+                except Exception:
+                    ext = 'jpg'
 
             content_type = {
                 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
                 'webp': 'image/webp', 'gif': 'image/gif', 'svg': 'image/svg+xml',
-            }[ext]
+            }.get(ext, 'image/jpeg')
 
             # Конвертируем фото в WebP для экономии 30-40% трафика
             if kind == 'photo' and ext in ('jpg', 'jpeg', 'png', 'webp'):

@@ -26,7 +26,7 @@ const JPEG_QUALITY = 0.82;
 
 async function compressImage(file: File): Promise<File> {
   if (file.type === 'image/gif' || file.type === 'image/svg+xml') return file;
-  // HEIC/HEIF не поддерживаются createImageBitmap — грузим оригинал
+  // HEIC/HEIF — браузер не умеет сжимать, отправляем как есть, бэкенд конвертирует через pillow-heif
   if (file.type === 'image/heic' || file.type === 'image/heif' ||
       file.name.toLowerCase().match(/\.(heic|heif)$/)) return file;
   try {
@@ -161,7 +161,10 @@ export default function ImageUploader({
   const shouldCompress = compress ?? (folder === 'photos');
 
   const handleFiles = async (files: FileList | File[]) => {
-    const all = Array.from(files).filter(f => f.type.startsWith('image/'));
+    const all = Array.from(files).filter(f =>
+      f.type.startsWith('image/') ||
+      /\.(heic|heif)$/i.test(f.name)
+    );
     if (!all.length) return;
 
     // Снимаем актуальное значение через ref — избегаем stale closure
