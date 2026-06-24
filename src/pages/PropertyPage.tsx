@@ -63,18 +63,11 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
       if (d) {
         recordView(d);
         const statsUrl = 'https://functions.poehali.dev/1d84bd40-ef8c-4bd3-82c3-af294b1ec0b1';
-        fetch(statsUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ listing_id: d.id, event_type: 'view_site' }),
-        }).catch(() => {});
-        if (fromQr) {
-          fetch(statsUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ listing_id: d.id, event_type: 'qr_scan' }),
-          }).catch(() => {});
-        }
+        const statReqs = [
+          fetch(statsUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ listing_id: d.id, event_type: 'view_site' }) }),
+          ...(fromQr ? [fetch(statsUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ listing_id: d.id, event_type: 'qr_scan' }) })] : []),
+        ];
+        Promise.all(statReqs).catch(() => {});
       }
     }).finally(() => setLoading(false));
   }, [slug]);

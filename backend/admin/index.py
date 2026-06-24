@@ -48,6 +48,23 @@ def _make_slug(title: str, listing_id: int) -> str:
 # Антиспам для уведомлений об ошибках: одинаковый текст не чаще раза в 5 минут.
 _ERROR_REPORT_LAST = {}
 
+# Кеш настроек в памяти функции — один SELECT вместо 7+ за сессию
+import time as _time
+_SETTINGS_CACHE: dict = {'ts': 0.0, 'data': None}
+_SETTINGS_TTL = 60  # секунд
+
+
+def _get_settings(cur) -> dict:
+    now = _time.time()
+    if _SETTINGS_CACHE['data'] is not None and now - _SETTINGS_CACHE['ts'] < _SETTINGS_TTL:
+        return _SETTINGS_CACHE['data']
+    cur.execute(f"SELECT * FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
+    row = cur.fetchone()
+    data = dict(row) if row else {}
+    _SETTINGS_CACHE['ts'] = now
+    _SETTINGS_CACHE['data'] = data
+    return data
+
 
 def _error_report(cur, event):
     """Приём клиентской (frontend) ошибки и отправка письма админам через SMTP.
@@ -74,8 +91,7 @@ def _error_report(cur, event):
     if now_ts - _ERROR_REPORT_LAST.get(key, 0) < 300:
         return _ok({'sent': False, 'throttled': True})
 
-    cur.execute(f"SELECT * FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
-    s = cur.fetchone() or {}
+    s = _get_settings(cur)
 
     recipients = (s.get('notify_email_recipients') or '').strip()
     host = (s.get('smtp_host') or '').strip()
@@ -174,9 +190,8 @@ def _get_user(cur, token):
 def _load_permissions(cur):
     """Загружает role_permissions из settings как dict {role: {section: {op: bool}}}"""
     try:
-        cur.execute(f"SELECT role_permissions FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
-        row = cur.fetchone()
-        if row and row['role_permissions']:
+        row = _get_settings(cur)
+        if row and row.get('role_permissions'):
             val = row['role_permissions']
             # Поле может быть строкой или уже dict (зависит от драйвера)
             if isinstance(val, str):
@@ -912,12 +927,7 @@ def _vb_retrain_schedule(cur, conn, method, event, user):
         return _err(403, 'Доступ только для admin/director')
 
     if method == 'GET':
-        cur.execute(
-            f"SELECT vb_retrain_enabled, vb_retrain_hour, vb_retrain_minute, "
-            f"vb_retrain_sources, vb_retrain_last_at, vb_retrain_last_status, vb_retrain_last_saved "
-            f"FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
-        )
-        row = cur.fetchone() or {}
+        row = _get_settings(cur)
         sources = row.get('vb_retrain_sources') or []
         if isinstance(sources, str):
             try:
@@ -1318,12 +1328,8 @@ def _site_health(cur, conn, method, action, event, user):
 
         # 7. Пароли/токены в открытом виде в настройках
         try:
-            cur.execute(
-                f"SELECT yandex_api_key IS NOT NULL AND yandex_api_key != '' AS has_api_key "
-                f"FROM {SCHEMA}.settings ORDER BY id LIMIT 1"
-            )
-            row = cur.fetchone()
-            has_key = row and row.get('has_api_key')
+            _s = _get_settings(cur)
+            has_key = bool(_s.get('yandex_api_key'))
         except Exception:
             has_key = False
 
@@ -1904,12 +1910,7 @@ def _site_health(cur, conn, method, action, event, user):
         return _ok({'redirect': '/admin/settings', 'message': 'Перейдите в настройки сайта'})
 
     if action == 'view_settings':
-        cur.execute(
-            f"SELECT id, company_name, company_phone, company_email, company_address, "
-            f"seo_description, hero_title, hero_subtitle, about_text, main_city "
-            f"FROM {SCHEMA}.settings ORDER BY id LIMIT 1"
-        )
-        row = cur.fetchone()
+        row = _get_settings(cur) or None
         if not row:
             return _ok({'fields': [], 'exists': False, 'message': 'Строка настроек не создана'})
         FIELD_LABELS = {
@@ -2058,8 +2059,7 @@ def _site_health(cur, conn, method, action, event, user):
             except Exception:
                 pass
             try:
-                cur.execute(f"SELECT company_name, company_phone, company_email, company_address, main_city FROM {SCHEMA}.settings ORDER BY id LIMIT 1")
-                s = cur.fetchone() or {}
+                s = _get_settings(cur)
                 existing = {k: v for k, v in s.items() if v}
                 if existing:
                     ctx_parts.append('Уже заполнено: ' + ', '.join(f"{k}={v}" for k, v in existing.items()))
@@ -2093,8 +2093,7 @@ def _site_health(cur, conn, method, action, event, user):
 
             # Обновляем только пустые поля
             ALLOWED = {'company_name', 'meta_title', 'seo_description', 'hero_title', 'hero_subtitle', 'about_text'}
-            cur.execute(f"SELECT id, company_name, meta_title, seo_description, hero_title, hero_subtitle, about_text FROM {SCHEMA}.settings ORDER BY id LIMIT 1")
-            cur_row = cur.fetchone()
+            cur_row = _get_settings(cur) or None
             if not cur_row:
                 return _err(404, 'Строка настроек не найдена')
 

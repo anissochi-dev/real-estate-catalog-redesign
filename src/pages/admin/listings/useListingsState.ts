@@ -75,9 +75,29 @@ export function useListingsState() {
         }
       })
       .finally(() => setLoading(false));
-    adminApi.listCities().then(c => setCities((c.cities || []).filter((x: City) => x.is_active))).catch(() => {});
-    adminApi.listPurposes().then(p => setPurposes(p.purposes || [])).catch(() => {});
-    adminApi.listLandVri().then(v => setLandVri((v.land_vri || []).filter((x: LandVri) => x.is_active !== false))).catch(() => {});
+    // Метаданные: кешируем в sessionStorage, грузим один раз за сессию
+    const META_KEY = 'admin_listings_meta';
+    try {
+      const cached = sessionStorage.getItem(META_KEY);
+      if (cached) {
+        const { cities: cc, purposes: pp, landVri: vv } = JSON.parse(cached);
+        if (cc) setCities(cc);
+        if (pp) setPurposes(pp);
+        if (vv) setLandVri(vv);
+      } else {
+        Promise.all([
+          adminApi.listCities(),
+          adminApi.listPurposes(),
+          adminApi.listLandVri(),
+        ]).then(([c, p, v]) => {
+          const cc = (c.cities || []).filter((x: City) => x.is_active);
+          const pp = p.purposes || [];
+          const vv = (v.land_vri || []).filter((x: LandVri) => x.is_active !== false);
+          setCities(cc); setPurposes(pp); setLandVri(vv);
+          try { sessionStorage.setItem(META_KEY, JSON.stringify({ cities: cc, purposes: pp, landVri: vv })); } catch { /* ignore */ }
+        }).catch(() => {});
+      }
+    } catch { /* ignore */ }
   };
 
   const loadMore = () => {

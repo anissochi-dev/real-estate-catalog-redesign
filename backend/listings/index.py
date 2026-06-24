@@ -237,14 +237,14 @@ def handler(event: dict, context) -> dict:
                         "ORDER BY sort_order ASC, name ASC"
                     )
                 districts = [dict(r) for r in cur.fetchall()]
-                # Количество активных объектов в каждом районе — параметризованный запрос
+                # Количество активных объектов в каждом районе — один GROUP BY вместо N запросов
+                cur.execute(
+                    "SELECT district, COUNT(*) AS c FROM t_p71821556_real_estate_catalog_.listings "
+                    "WHERE status = 'active' AND is_visible = TRUE GROUP BY district"
+                )
+                counts_map = {r['district']: r['c'] for r in cur.fetchall()}
                 for d in districts:
-                    cur.execute(
-                        "SELECT COUNT(*) AS c FROM t_p71821556_real_estate_catalog_.listings "
-                        "WHERE status = 'active' AND district = %s",
-                        (d['name'],)
-                    )
-                    d['listings_count'] = cur.fetchone()['c']
+                    d['listings_count'] = counts_map.get(d['name'], 0)
                 return _ok({'districts': districts}, cache='public, max-age=300, stale-while-revalidate=60')
 
             if params.get('resource') == 'public_purposes':
@@ -749,7 +749,7 @@ def handler(event: dict, context) -> dict:
             # Карточкам нужна только обложка `image`. Доп. фото и галерея
             # подтягиваются на странице объекта через fetchListingById.
             cols = (
-                "id, title, description, category, deal, price, price_per_m2, area, "
+                "id, title, LEFT(description, 200) AS description, category, deal, price, price_per_m2, area, "
                 "payback, profit, floor, total_floors, address, district, lat, lng, "
                 "image, tags, is_hot, is_new, is_exclusive, is_urgent, public_code, "
                 "tenant_name, monthly_rent, yearly_rent, purpose, finishing, "

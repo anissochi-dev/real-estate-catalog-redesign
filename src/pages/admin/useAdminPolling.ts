@@ -71,59 +71,49 @@ export function useAdminPolling(section: AdminSection) {
     return () => window.removeEventListener('admin:nav-order-updated', handler);
   }, [user?.role]);
 
-  // Polling соцсетей — раз в 5 минут
-  useEffect(() => {
-    if (!user) return;
-    const token = localStorage.getItem('admin_token') || '';
-    const load = () => {
-      fetch(SOCIAL_PARSER_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
-        body: JSON.stringify({ action: 'queue_stats' }),
-      })
-        .then(r => r.json())
-        .then(r => { if (!r.error) setSocialPending(r.total_pending || 0); })
-        .catch(() => {});
-    };
-    load();
-    const interval = setInterval(load, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [user]);
-
-  // Polling новых заявок — раз в 2 минуты
+  // Единый polling — все три счётчика одним интервалом раз в 2 минуты
   useEffect(() => {
     if (!user || user.role === 'client') return;
-    const load = () => {
-      adminApi.listLeads()
-        .then(d => {
-          const cnt = (d.leads || []).filter(
-            (l: { status: string }) => l.status === 'new' || l.status === 'pending'
-          ).length;
-          setNewLeadsCount(() => {
-            if (section === 'leads') return 0;
-            return cnt;
-          });
-        })
-        .catch(() => {});
-    };
-    load();
-    const interval = setInterval(load, 2 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [user, section]);
+    const token = localStorage.getItem('admin_token') || '';
+    const isAdminDir = ['admin', 'director'].includes(user.role);
 
-  // Polling объектов на модерации — только для admin и director
-  useEffect(() => {
-    if (!user || !['admin', 'director'].includes(user.role)) return;
     const load = () => {
-      adminApi.listListings(0, 1, 'moderation')
-        .then(d => {
-          setNewModerationCount(() => {
-            if (section === 'listings') return 0;
-            return d.counts?.moderation ?? 0;
-          });
+      const tasks: Promise<void>[] = [
+        // Заявки
+        adminApi.listLeads()
+          .then(d => {
+            const cnt = (d.leads || []).filter(
+              (l: { status: string }) => l.status === 'new' || l.status === 'pending'
+            ).length;
+            setNewLeadsCount(section === 'leads' ? 0 : cnt);
+          })
+          .catch(() => {}),
+
+        // Соцсети
+        fetch(SOCIAL_PARSER_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
+          body: JSON.stringify({ action: 'queue_stats' }),
         })
-        .catch(() => {});
+          .then(r => r.json())
+          .then(r => { if (!r.error) setSocialPending(r.total_pending || 0); })
+          .catch(() => {}),
+      ];
+
+      // Модерация — только admin/director
+      if (isAdminDir) {
+        tasks.push(
+          adminApi.listListings(0, 1, 'moderation')
+            .then(d => {
+              setNewModerationCount(section === 'listings' ? 0 : (d.counts?.moderation ?? 0));
+            })
+            .catch(() => {})
+        );
+      }
+
+      Promise.all(tasks);
     };
+
     load();
     const interval = setInterval(load, 2 * 60 * 1000);
     return () => clearInterval(interval);
