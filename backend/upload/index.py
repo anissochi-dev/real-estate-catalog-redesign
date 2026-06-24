@@ -122,6 +122,13 @@ def _apply_watermark(image_bytes, settings):
         wm_bytes = wm_resp.read()
 
         base_img = Image.open(io.BytesIO(image_bytes)).convert('RGBA')
+        # Масштабируем до 1920px если не было сделано раньше
+        max_side = 1920
+        if max(base_img.width, base_img.height) > max_side:
+            scale = max_side / max(base_img.width, base_img.height)
+            base_img = base_img.resize(
+                (int(base_img.width * scale), int(base_img.height * scale)), Image.LANCZOS
+            )
         wm = Image.open(io.BytesIO(wm_bytes)).convert('RGBA')
 
         # Размер водяного знака — 20% от ширины фото
@@ -275,7 +282,7 @@ def handler(event, context):
                 'webp': 'image/webp', 'gif': 'image/gif', 'svg': 'image/svg+xml',
             }.get(ext, 'image/jpeg')
 
-            # Конвертируем фото в WebP для экономии 30-40% трафика
+            # Конвертируем фото в WebP + масштабируем до 1920px
             if kind == 'photo' and ext in ('jpg', 'jpeg', 'png', 'webp'):
                 try:
                     from PIL import Image as PilImage
@@ -290,13 +297,23 @@ def handler(event, context):
                         img = img.convert('RGBA')
                     else:
                         img = img.convert('RGB')
-                    buf = io.BytesIO()
-                    img.save(buf, format='WEBP', quality=82, method=4)
-                    webp_data = buf.getvalue()
+                    # Пробуем WebP
+                    buf_webp = io.BytesIO()
+                    img.save(buf_webp, format='WEBP', quality=82, method=4)
+                    webp_data = buf_webp.getvalue()
                     if len(webp_data) < len(data):
+                        # WebP лучше — берём его
                         data = webp_data
                         ext = 'webp'
                         content_type = 'image/webp'
+                    else:
+                        # WebP не выиграл — сохраняем масштабированный JPEG
+                        buf_jpg = io.BytesIO()
+                        img.convert('RGB').save(buf_jpg, format='JPEG', quality=85, optimize=True)
+                        jpg_data = buf_jpg.getvalue()
+                        if len(jpg_data) < len(data):
+                            data = jpg_data
+                        # ext остаётся jpg, масштабирование применено
                 except Exception:
                     pass  # если Pillow не смог — грузим оригинал
 
