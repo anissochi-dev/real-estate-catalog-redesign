@@ -3190,6 +3190,41 @@ def _users(cur, conn, method, rid, event, user):
 
     body = json.loads(event.get('body') or '{}')
 
+    params = event.get('queryStringParameters') or {}
+    action = params.get('action', '')
+
+    if method == 'PUT' and rid and action == 'grant_access':
+        # Выдать доступ к личному кабинету: активировать аккаунт + отправить пароль в MAX
+        if user.get('role') not in ('admin', 'director', 'office_manager'):
+            return _err(403, 'Недостаточно прав')
+        target_id = int(rid)
+        cur.execute(
+            f"SELECT id, email, name, role, is_active, max_phone, max_user_id "
+            f"FROM {SCHEMA}.users WHERE id = {target_id} AND role = 'client'"
+        )
+        target = cur.fetchone()
+        if not target:
+            return _err(404, 'Клиент не найден')
+        t = dict(target)
+        if t.get('is_active'):
+            return _err(409, 'Доступ уже выдан')
+
+        tmp_password = t.get('max_phone')  # временный пароль хранился здесь
+        cur.execute(
+            f"UPDATE {SCHEMA}.users SET is_active = TRUE, max_phone = NULL, updated_at = NOW() "
+            f"WHERE id = {target_id}"
+        )
+        conn.commit()
+
+        # Отправляем пароль в MAX если есть max_user_id и временный пароль
+        sent = False
+        if tmp_password and t.get('max_user_id'):
+            sent = _send_access_credentials(
+                t['max_user_id'], t['email'], tmp_password, t['name'], conn
+            )
+
+        return _ok({'success': True, 'credentials_sent': sent})
+
     if method == 'PUT' and rid:
         fields = []
         for f, length in [('name', 150), ('phone', 30), ('max_phone', 30), ('max_user_id', 64), ('role', 20)]:
@@ -3283,6 +3318,44 @@ def _users(cur, conn, method, rid, event, user):
     return _err(400, 'Bad request')
 
 
+def _send_access_credentials(max_user_id, email, password, name, conn):
+    """Отправляет собственнику логин и пароль для входа в личный кабинет через MAX."""
+    import urllib.request as _ureq
+    try:
+        with conn.cursor() as cur2:
+            cur2.execute(
+                f"SELECT notify_max_enabled, notify_max_bot_token FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
+            )
+            srow = cur2.fetchone()
+            if not srow or not srow[0] or not (srow[1] or '').strip():
+                return False
+            bot_token = srow[1].strip()
+
+        site_url = 'https://bmn.su'
+        text = (
+            f'🔑 Доступ к личному кабинету открыт!\n\n'
+            f'Здравствуйте, {name}!\n\n'
+            f'Ваши данные для входа:\n'
+            f'🌐 Сайт: {site_url}\n'
+            f'📧 Логин: {email}\n'
+            f'🔐 Пароль: {password}\n\n'
+            f'В личном кабинете вы можете отслеживать просмотры и заявки по вашим объектам.\n'
+            f'Нажмите «Войти» на сайте, чтобы получить доступ.'
+        )
+        payload = json.dumps({'text': text}, ensure_ascii=False).encode('utf-8')
+        req = _ureq.Request(
+            f'https://botapi.max.ru/messages?user_id={max_user_id}',
+            data=payload,
+            headers={'Authorization': bot_token, 'Content-Type': 'application/json'},
+            method='POST',
+        )
+        _ureq.urlopen(req, timeout=8)
+        return True
+    except Exception as e:
+        print(f'[admin] _send_access_credentials error: {e}')
+        return False
+
+
 def _user_profile(cur, method, rid, user):
     """Профиль пользователя: его объекты, заявки, статистика. Только для admin/director/office_manager."""
     ALLOWED = ('admin', 'director', 'office_manager', 'manager')
@@ -3370,32 +3443,20 @@ def _moderation(cur, conn, method, rid, event, user):
         listing = dict(listing)
 
         if action == 'approve':
-            # Одобряем: делаем видимым, меняем статус
+            # Одобряем объект: делаем видимым, меняем статус.
+            # Доступ к кабинету выдаётся отдельно через PUT users?action=grant_access
             cur.execute(
                 f"UPDATE {SCHEMA}.listings SET status = 'active', is_visible = TRUE, "
                 f"moderation_comment = NULL, updated_at = NOW() WHERE id = {lid}"
             )
-
-            # Активируем аккаунт клиента и получаем временный пароль для отправки
-            tmp_password = None
-            if listing.get('owner_user_id'):
-                oid = listing['owner_user_id']
-                cur.execute(f"SELECT is_active, max_phone FROM {SCHEMA}.users WHERE id = {oid}")
-                urow = cur.fetchone()
-                if urow and not dict(urow).get('is_active'):
-                    tmp_password = dict(urow).get('max_phone')  # хранили пароль здесь
-                    cur.execute(
-                        f"UPDATE {SCHEMA}.users SET is_active = TRUE, max_phone = NULL WHERE id = {oid}"
-                    )
-
             conn.commit()
 
-            # Если у объекта есть owner_user_id — отправляем уведомление в MAX
+            # Уведомляем собственника что объект опубликован (без пароля — доступ отдельно)
             if listing.get('owner_user_id'):
                 _notify_owner_moderation(
                     listing['owner_user_id'], lid, 'approved',
                     listing.get('owner_name') or '', None, conn,
-                    tmp_password=tmp_password
+                    tmp_password=None
                 )
             return _ok({'success': True, 'action': 'approved'})
 

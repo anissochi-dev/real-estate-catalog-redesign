@@ -60,13 +60,29 @@ export default function UsersAdmin() {
   const visibleUsers = tab === 'staff' ? staffUsers : clientUsers;
   const pendingClients = clientUsers.filter(u => !u.is_active).length;
 
-  const handleToggleAccess = async (u: U) => {
+  const handleGrantAccess = async (u: U) => {
     setAccessToggling(u.id);
     try {
-      await adminApi.updateUser(u.id, { is_active: !u.is_active });
-      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, is_active: !u.is_active } : x));
+      const res = await adminApi.grantAccess(u.id);
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, is_active: true } : x));
+      if (res?.credentials_sent) {
+        // пароль отправлен в MAX — показываем подтверждение
+      }
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Ошибка выдачи доступа');
+    } finally {
+      setAccessToggling(null);
+    }
+  };
+
+  const handleRevokeAccess = async (u: U) => {
+    if (!confirm(`Закрыть доступ к кабинету для ${u.name}?`)) return;
+    setAccessToggling(u.id);
+    try {
+      await adminApi.revokeAccess(u.id);
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, is_active: false } : x));
     } catch {
-      alert('Ошибка изменения доступа');
+      alert('Ошибка отзыва доступа');
     } finally {
       setAccessToggling(null);
     }
@@ -236,14 +252,25 @@ export default function UsersAdmin() {
                 <div className="font-semibold text-sm truncate">{u.name}</div>
                 <div className="flex items-center gap-2 shrink-0">
                   {u.role === 'client' && isAdmin && (
-                    <button
-                      onClick={() => handleToggleAccess(u)}
-                      disabled={accessToggling === u.id}
-                      title={u.is_active ? 'Закрыть доступ к кабинету' : 'Дать доступ к кабинету'}
-                      className={u.is_active ? 'text-emerald-600 hover:text-red-500' : 'text-amber-500 hover:text-emerald-600'}
-                    >
-                      <Icon name={accessToggling === u.id ? 'Loader2' : u.is_active ? 'ShieldCheck' : 'ShieldOff'} size={16} className={accessToggling === u.id ? 'animate-spin' : ''} />
-                    </button>
+                    u.is_active ? (
+                      <button
+                        onClick={() => handleRevokeAccess(u)}
+                        disabled={accessToggling === u.id}
+                        title="Закрыть доступ к кабинету"
+                        className="text-emerald-600 hover:text-red-500"
+                      >
+                        <Icon name={accessToggling === u.id ? 'Loader2' : 'ShieldCheck'} size={16} className={accessToggling === u.id ? 'animate-spin' : ''} />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleGrantAccess(u)}
+                        disabled={accessToggling === u.id}
+                        title="Дать доступ к кабинету"
+                        className="text-amber-500 hover:text-emerald-600"
+                      >
+                        <Icon name={accessToggling === u.id ? 'Loader2' : 'ShieldOff'} size={16} className={accessToggling === u.id ? 'animate-spin' : ''} />
+                      </button>
+                    )
                   )}
                   <button onClick={() => setEditing(u)} className="text-brand-blue">
                     <Icon name="Pencil" size={16} />
@@ -359,15 +386,27 @@ export default function UsersAdmin() {
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-2">
                     {u.role === 'client' && isAdmin ? (
-                      <button
-                        onClick={() => handleToggleAccess(u)}
-                        disabled={accessToggling === u.id}
-                        title={u.is_active ? 'Закрыть доступ к кабинету' : 'Дать доступ к кабинету'}
-                        className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${u.is_active ? 'bg-emerald-50 text-emerald-700 hover:bg-red-50 hover:text-red-600' : 'bg-amber-50 text-amber-700 hover:bg-emerald-50 hover:text-emerald-700'}`}
-                      >
-                        <Icon name={accessToggling === u.id ? 'Loader2' : u.is_active ? 'ShieldCheck' : 'ShieldOff'} size={13} className={accessToggling === u.id ? 'animate-spin' : ''} />
-                        {u.is_active ? 'Доступ открыт' : 'Дать доступ'}
-                      </button>
+                      u.is_active ? (
+                        <button
+                          onClick={() => handleRevokeAccess(u)}
+                          disabled={accessToggling === u.id}
+                          title="Закрыть доступ к кабинету"
+                          className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-colors bg-emerald-50 text-emerald-700 hover:bg-red-50 hover:text-red-600"
+                        >
+                          <Icon name={accessToggling === u.id ? 'Loader2' : 'ShieldCheck'} size={13} className={accessToggling === u.id ? 'animate-spin' : ''} />
+                          Доступ открыт
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleGrantAccess(u)}
+                          disabled={accessToggling === u.id}
+                          title="Дать доступ к личному кабинету"
+                          className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-colors bg-amber-50 text-amber-700 hover:bg-emerald-50 hover:text-emerald-700"
+                        >
+                          <Icon name={accessToggling === u.id ? 'Loader2' : 'ShieldOff'} size={13} className={accessToggling === u.id ? 'animate-spin' : ''} />
+                          Дать доступ
+                        </button>
+                      )
                     ) : (
                       <button
                         onClick={() => copyInvite(u.email, '••••••', u.name, u.id)}

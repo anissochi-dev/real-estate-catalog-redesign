@@ -197,6 +197,10 @@ export const adminApi = {
     req(`${ADMIN_URL}?resource=users&id=${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteUser: (id: number, toUserId?: number) =>
     req(`${ADMIN_URL}?resource=users&id=${id}`, { method: 'DELETE', body: JSON.stringify(toUserId ? { to_user_id: toUserId } : {}) }),
+  grantAccess: (id: number) =>
+    req(`${ADMIN_URL}?resource=users&id=${id}&action=grant_access`, { method: 'PUT', body: '{}' }),
+  revokeAccess: (id: number) =>
+    req(`${ADMIN_URL}?resource=users&id=${id}`, { method: 'PUT', body: JSON.stringify({ is_active: false }) }),
   getUserProfile: (id: number) =>
     req(`${ADMIN_URL}?resource=user_profile&id=${id}`),
   listModeration: () =>
