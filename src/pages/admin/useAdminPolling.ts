@@ -74,7 +74,7 @@ export function useAdminPolling(section: AdminSection) {
   // Единый polling — все три счётчика одним интервалом раз в 2 минуты
   useEffect(() => {
     if (!user || user.role === 'client') return;
-    const token = localStorage.getItem('admin_token') || '';
+    const token = localStorage.getItem('biznest_token') || '';
     const isAdminDir = ['admin', 'director'].includes(user.role);
 
     const load = () => {
