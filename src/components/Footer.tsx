@@ -230,8 +230,8 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
                 Все права защищены.
                 <button
                   onClick={onLogin}
-                  aria-label="Вход для сотрудников"
-                  title="Вход для сотрудников"
+                  aria-label="Войти"
+                  title="Войти"
                   className="text-white/30 hover:text-white/70 active:text-white/90 focus-visible:text-white/80 transition-colors p-1.5 -m-0.5 rounded inline-flex items-center justify-center min-w-[32px] min-h-[32px] sm:min-w-0 sm:min-h-0 sm:p-1"
                 >
                   <Icon name="Lock" size={12} className="sm:hidden" />

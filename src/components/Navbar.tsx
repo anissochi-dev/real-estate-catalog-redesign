@@ -267,7 +267,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
               className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-foreground hover:bg-muted transition"
             >
               <Icon name="LogIn" size={18} />
-              Вход для сотрудников
+              Войти
             </button>
           )}
         </div>

@@ -35,7 +35,7 @@ export default function AppViewManager({
   if (view === 'login') {
     return (
       <Suspense fallback={pageFallback}>
-        <SeoHead title="Вход для сотрудников" noindex />
+        <SeoHead title="Войти" noindex />
         <LoginPage
           onSuccess={() => { /* переход сработает через useEffect в App */ }}
           onBack={() => onSetView('site')}
@@ -72,7 +72,7 @@ export default function AppViewManager({
     if (!user) {
       return (
         <Suspense fallback={pageFallback}>
-          <SeoHead title="Вход для сотрудников" noindex />
+          <SeoHead title="Войти" noindex />
           <LoginPage
             onSuccess={() => onSetView(user && ADMIN_ROLES.includes((user as { role: string }).role) ? 'admin' : 'site')}
             onBack={() => onSetView('site')}
@@ -83,7 +83,7 @@ export default function AppViewManager({
     if (!ADMIN_ROLES.includes(user.role)) {
       return (
         <Suspense fallback={pageFallback}>
-          <SeoHead title="Вход для сотрудников" noindex />
+          <SeoHead title="Войти" noindex />
           <LoginPage
             onSuccess={() => onSetView('admin')}
             onBack={() => onSetView('site')}

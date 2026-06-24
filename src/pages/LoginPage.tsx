@@ -41,7 +41,7 @@ export default function LoginPage({ onSuccess, onBack }: Props) {
         <div className="bg-white rounded-3xl p-8 shadow-2xl animate-fade-in">
           <div className="text-center mb-6">
             <div className="font-display font-700 text-xl text-brand-blue leading-tight">Бизнес. Маркетинг. Недвижимость.</div>
-            <div className="text-xs text-muted-foreground mt-1">Вход для сотрудников</div>
+            <div className="text-xs text-muted-foreground mt-1">Личный кабинет</div>
           </div>
 
           <form onSubmit={submit} className="space-y-3">
