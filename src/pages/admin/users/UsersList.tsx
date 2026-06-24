@@ -10,8 +10,8 @@ interface UsersListProps {
   roleChanging: number | null;
   accessToggling: number | null;
   copiedId: number | null;
+  onOpenProfile: (u: U) => void;
   onEdit: (u: U) => void;
-  onDelete: (u: U) => void;
   onRoleChange: (userId: number, newRole: Role) => void;
   onGrantAccess: (u: U) => void;
   onRevokeAccess: (u: U) => void;
@@ -26,8 +26,8 @@ export default function UsersList({
   roleChanging,
   accessToggling,
   copiedId,
+  onOpenProfile,
   onEdit,
-  onDelete,
   onRoleChange,
   onGrantAccess,
   onRevokeAccess,
@@ -38,8 +38,11 @@ export default function UsersList({
       {/* Мобильный вид */}
       <div className="sm:hidden bg-white rounded-2xl shadow-sm divide-y divide-border">
         {visibleUsers.map(u => (
-          <div key={u.id} className="px-4 py-3 flex items-center gap-3">
-            <div className="shrink-0">
+          <div
+            key={u.id}
+            className={`px-4 py-3 flex items-center gap-3 ${u.is_archived ? 'opacity-60' : ''}`}
+          >
+            <div className="shrink-0 relative">
               {u.avatar ? (
                 <img src={u.avatar} alt={u.name} className="w-10 h-10 rounded-full object-cover" />
               ) : (
@@ -47,12 +50,17 @@ export default function UsersList({
                   <Icon name="User" size={18} className="text-brand-blue" />
                 </div>
               )}
+              {u.is_archived && (
+                <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-gray-400 flex items-center justify-center">
+                  <Icon name="Archive" size={9} className="text-white" />
+                </span>
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2">
                 <div className="font-semibold text-sm truncate">{u.name}</div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {u.role === 'client' && isAdmin && (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {u.role === 'client' && isAdmin && !u.is_archived && (
                     u.is_active ? (
                       <button
                         onClick={() => onRevokeAccess(u)}
@@ -60,7 +68,7 @@ export default function UsersList({
                         title="Закрыть доступ к кабинету"
                         className="text-emerald-600 hover:text-red-500"
                       >
-                        <Icon name={accessToggling === u.id ? 'Loader2' : 'ShieldCheck'} size={16} className={accessToggling === u.id ? 'animate-spin' : ''} />
+                        <Icon name={accessToggling === u.id ? 'Loader2' : 'ShieldCheck'} size={15} className={accessToggling === u.id ? 'animate-spin' : ''} />
                       </button>
                     ) : (
                       <button
@@ -69,16 +77,20 @@ export default function UsersList({
                         title="Дать доступ к кабинету"
                         className="text-amber-500 hover:text-emerald-600"
                       >
-                        <Icon name={accessToggling === u.id ? 'Loader2' : 'ShieldOff'} size={16} className={accessToggling === u.id ? 'animate-spin' : ''} />
+                        <Icon name={accessToggling === u.id ? 'Loader2' : 'ShieldOff'} size={15} className={accessToggling === u.id ? 'animate-spin' : ''} />
                       </button>
                     )
                   )}
-                  <button onClick={() => onEdit(u)} className="text-brand-blue">
-                    <Icon name="Pencil" size={16} />
+                  <button onClick={() => onEdit(u)} className="text-brand-blue" title="Редактировать">
+                    <Icon name="Pencil" size={15} />
                   </button>
                   {isAdmin && meId !== u.id && u.role !== 'admin' && (
-                    <button onClick={() => onDelete(u)} className="text-red-400 hover:text-red-600">
-                      <Icon name="Trash2" size={16} />
+                    <button
+                      onClick={() => onOpenProfile(u)}
+                      title="Профиль: объекты, заявки, архив/удаление"
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <Icon name="MoreHorizontal" size={15} />
                     </button>
                   )}
                 </div>
@@ -105,8 +117,8 @@ export default function UsersList({
                     {ROLES.find(r => r.id === u.role)?.label}
                   </span>
                 )}
-                <span className={`text-xs px-2 py-0.5 rounded ${u.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                  {u.is_active ? 'Активен' : 'Отключён'}
+                <span className={`text-xs px-2 py-0.5 rounded ${u.is_archived ? 'bg-gray-100 text-gray-500' : u.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                  {u.is_archived ? 'В архиве' : u.is_active ? 'Активен' : 'Отключён'}
                 </span>
               </div>
             </div>
@@ -129,15 +141,22 @@ export default function UsersList({
           </thead>
           <tbody>
             {visibleUsers.map(u => (
-              <tr key={u.id} className="border-t border-border hover:bg-muted/30">
+              <tr key={u.id} className={`border-t border-border hover:bg-muted/30 ${u.is_archived ? 'opacity-60' : ''}`}>
                 <td className="px-4 py-3">
-                  {u.avatar ? (
-                    <img src={u.avatar} alt={u.name} className="w-9 h-9 rounded-full object-cover" />
-                  ) : (
-                    <div className="w-9 h-9 rounded-full bg-brand-blue/10 flex items-center justify-center">
-                      <Icon name="User" size={16} className="text-brand-blue" />
-                    </div>
-                  )}
+                  <div className="relative inline-block">
+                    {u.avatar ? (
+                      <img src={u.avatar} alt={u.name} className="w-9 h-9 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full bg-brand-blue/10 flex items-center justify-center">
+                        <Icon name="User" size={16} className="text-brand-blue" />
+                      </div>
+                    )}
+                    {u.is_archived && (
+                      <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-gray-400 flex items-center justify-center">
+                        <Icon name="Archive" size={9} className="text-white" />
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-3">
                   <div className="font-semibold leading-tight">{u.name}</div>
@@ -157,7 +176,7 @@ export default function UsersList({
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  {isAdmin ? (
+                  {isAdmin && !u.is_archived ? (
                     <div className="relative inline-block">
                       {roleChanging === u.id ? (
                         <span className="text-xs text-muted-foreground">Сохранение...</span>
@@ -180,13 +199,13 @@ export default function UsersList({
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  <span className={`text-xs px-2 py-0.5 rounded ${u.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                    {u.is_active ? 'Активен' : 'Отключён'}
+                  <span className={`text-xs px-2 py-0.5 rounded ${u.is_archived ? 'bg-gray-100 text-gray-500' : u.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                    {u.is_archived ? 'В архиве' : u.is_active ? 'Активен' : 'Отключён'}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-2">
-                    {u.role === 'client' && isAdmin ? (
+                    {u.role === 'client' && isAdmin && !u.is_archived ? (
                       u.is_active ? (
                         <button
                           onClick={() => onRevokeAccess(u)}
@@ -208,7 +227,7 @@ export default function UsersList({
                           Дать доступ
                         </button>
                       )
-                    ) : (
+                    ) : u.role !== 'client' ? (
                       <button
                         onClick={() => onCopyInvite(u.email, '••••••', u.name, u.id)}
                         title="Скопировать приглашение (без пароля)"
@@ -216,17 +235,17 @@ export default function UsersList({
                       >
                         <Icon name={copiedId === u.id ? 'Check' : 'Copy'} size={15} />
                       </button>
-                    )}
-                    <button onClick={() => onEdit(u)} className="text-brand-blue hover:text-brand-blue/70">
+                    ) : null}
+                    <button onClick={() => onEdit(u)} className="text-brand-blue hover:text-brand-blue/70" title="Редактировать">
                       <Icon name="Pencil" size={16} />
                     </button>
                     {isAdmin && meId !== u.id && u.role !== 'admin' && (
                       <button
-                        onClick={() => onDelete(u)}
-                        title="Удалить пользователя"
-                        className="text-red-400 hover:text-red-600 transition-colors"
+                        onClick={() => onOpenProfile(u)}
+                        title="Профиль: объекты, заявки, архив/удаление"
+                        className="text-muted-foreground hover:text-foreground transition-colors"
                       >
-                        <Icon name="Trash2" size={15} />
+                        <Icon name="MoreHorizontal" size={16} />
                       </button>
                     )}
                   </div>

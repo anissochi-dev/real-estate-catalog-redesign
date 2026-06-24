@@ -3183,8 +3183,9 @@ def _leads(cur, conn, method, rid, action, event, user):
 def _users(cur, conn, method, rid, event, user):
     if method == 'GET':
         cur.execute(
-            f"SELECT id, email, name, phone, max_phone, max_user_id, role, avatar, is_active, created_at "
-            f"FROM {SCHEMA}.users ORDER BY created_at DESC"
+            f"SELECT id, email, name, phone, max_phone, max_user_id, role, avatar, "
+            f"is_active, is_archived, archived_at, created_at "
+            f"FROM {SCHEMA}.users ORDER BY is_archived ASC, created_at DESC"
         )
         return _ok({'users': [dict(r) for r in cur.fetchall()]})
 
@@ -3192,6 +3193,63 @@ def _users(cur, conn, method, rid, event, user):
 
     params = event.get('queryStringParameters') or {}
     action = params.get('action', '')
+
+    if method == 'PUT' and rid and action == 'archive':
+        # Архивировать пользователя (is_active=FALSE, is_archived=TRUE)
+        if user.get('role') != 'admin':
+            return _err(403, 'Недостаточно прав')
+        target_id = int(rid)
+        if user.get('id') == target_id:
+            return _err(403, 'Нельзя архивировать собственный аккаунт')
+        cur.execute(f"SELECT id, name, role FROM {SCHEMA}.users WHERE id = {target_id}")
+        target = cur.fetchone()
+        if not target:
+            return _err(404, 'Пользователь не найден')
+        if dict(target).get('role') == 'admin':
+            return _err(403, 'Нельзя архивировать администратора')
+
+        # Передача объектов, заявок и CRM-сделок
+        to_user_id = body.get('to_user_id')
+        listings_count = 0
+        leads_count = 0
+        deals_count = 0
+        if to_user_id:
+            to_id = int(to_user_id)
+            cur.execute(f"SELECT id FROM {SCHEMA}.users WHERE id = {to_id} AND is_active = TRUE AND is_archived = FALSE")
+            if not cur.fetchone():
+                return _err(400, 'Получатель не найден или неактивен')
+            cur.execute(f"UPDATE {SCHEMA}.listings SET broker_id = {to_id} WHERE broker_id = {target_id}")
+            listings_count += cur.rowcount
+            cur.execute(f"UPDATE {SCHEMA}.listings SET owner_user_id = {to_id} WHERE owner_user_id = {target_id}")
+            listings_count += cur.rowcount
+            cur.execute(f"UPDATE {SCHEMA}.leads SET broker_id = {to_id} WHERE broker_id = {target_id}")
+            leads_count = cur.rowcount
+            # Передаём CRM-сделки
+            try:
+                cur.execute(f"UPDATE {SCHEMA}.crm_deals SET broker_id = {to_id} WHERE broker_id = {target_id}")
+                deals_count = cur.rowcount
+            except Exception:
+                pass
+            # Лог
+            from_name = _safe(dict(target).get('name') or '', 150)
+            cur.execute(f"SELECT name FROM {SCHEMA}.users WHERE id = {to_id}")
+            to_name = _safe((cur.fetchone() or {}).get('name') or '', 150)
+            by_id = user.get('id')
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.transfer_log "
+                f"(from_user_id, from_user_name, to_user_id, to_user_name, transferred_by, listings_count, leads_count, note) "
+                f"VALUES ({target_id}, '{from_name}', {to_id}, '{to_name}', {by_id}, {listings_count}, {leads_count}, 'archive')"
+            )
+
+        cur.execute(
+            f"UPDATE {SCHEMA}.users SET is_active = FALSE, is_archived = TRUE, "
+            f"archived_at = NOW(), updated_at = NOW() WHERE id = {target_id}"
+        )
+        cur.execute(f"DELETE FROM {SCHEMA}.sessions WHERE user_id = {target_id}")
+        conn.commit()
+        return _ok({'success': True, 'action': 'archived',
+                    'listings_transferred': listings_count, 'leads_transferred': leads_count,
+                    'deals_transferred': deals_count})
 
     if method == 'PUT' and rid and action == 'grant_access':
         # Выдать доступ к личному кабинету: активировать аккаунт + отправить пароль в MAX
@@ -3295,6 +3353,11 @@ def _users(cur, conn, method, rid, event, user):
             # Передаём заявки
             cur.execute(f"UPDATE {SCHEMA}.leads SET broker_id = {to_id} WHERE broker_id = {target_id}")
             leads_count = cur.rowcount
+            # Передаём CRM-сделки
+            try:
+                cur.execute(f"UPDATE {SCHEMA}.crm_deals SET broker_id = {to_id} WHERE broker_id = {target_id}")
+            except Exception:
+                pass
             # Записываем лог передачи
             from_name = _safe(dict(target).get('name') or '', 150)
             cur.execute(
@@ -3357,7 +3420,7 @@ def _send_access_credentials(max_user_id, email, password, name, conn):
 
 
 def _user_profile(cur, method, rid, user):
-    """Профиль пользователя: его объекты, заявки, статистика. Только для admin/director/office_manager."""
+    """Профиль пользователя: объекты, заявки, CRM-сделки, статистика."""
     ALLOWED = ('admin', 'director', 'office_manager', 'manager')
     if user.get('role') not in ALLOWED:
         return _err(403, 'Недостаточно прав')
@@ -3366,7 +3429,8 @@ def _user_profile(cur, method, rid, user):
     uid = int(rid)
 
     cur.execute(
-        f"SELECT id, email, name, phone, max_phone, max_user_id, role, avatar, is_active, created_at "
+        f"SELECT id, email, name, phone, max_phone, max_user_id, role, avatar, "
+        f"is_active, is_archived, archived_at, created_at "
         f"FROM {SCHEMA}.users WHERE id = {uid}"
     )
     u = cur.fetchone()
@@ -3392,21 +3456,37 @@ def _user_profile(cur, method, rid, user):
     """)
     leads = [dict(r) for r in cur.fetchall()]
 
+    # CRM-сделки брокера
+    deals = []
+    try:
+        cur.execute(f"""
+            SELECT id, name, status, amount, created_at
+            FROM {SCHEMA}.crm_deals
+            WHERE broker_id = {uid}
+            ORDER BY created_at DESC LIMIT 50
+        """)
+        deals = [dict(r) for r in cur.fetchall()]
+    except Exception:
+        pass
+
     # Счётчики
-    cur.execute(f"SELECT COUNT(*) as cnt FROM {SCHEMA}.listings WHERE broker_id = {uid} AND status = 'active'")
+    cur.execute(f"SELECT COUNT(*) as cnt FROM {SCHEMA}.listings WHERE (broker_id = {uid} OR owner_user_id = {uid}) AND status = 'active'")
     active_listings = (cur.fetchone() or {}).get('cnt') or 0
     cur.execute(f"SELECT COUNT(*) as cnt FROM {SCHEMA}.leads WHERE broker_id = {uid} AND status = 'new'")
     new_leads = (cur.fetchone() or {}).get('cnt') or 0
+    deals_count = len(deals)
 
     return _ok({
         'user': dict(u),
         'listings': listings,
         'leads': leads,
+        'deals': deals,
         'stats': {
             'active_listings': int(active_listings),
             'new_leads': int(new_leads),
             'total_listings': len(listings),
             'total_leads': len(leads),
+            'total_deals': deals_count,
         }
     })
 

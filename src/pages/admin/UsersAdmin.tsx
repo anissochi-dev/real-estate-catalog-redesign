@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { U } from './users/usersTypes';
 import UsersList from './users/UsersList';
 import UserEditModal from './users/UserEditModal';
-import UserDeleteModal from './users/UserDeleteModal';
+import UserProfileModal from './users/UserProfileModal';
 
 type EditingUser = Partial<U> & { password?: string };
 
@@ -18,16 +18,14 @@ export default function UsersAdmin() {
   const [roleChanging, setRoleChanging] = useState<number | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [lastCreated, setLastCreated] = useState<{ email: string; password: string; name: string } | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<U | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [toUserId, setToUserId] = useState<number | null>(null);
+  const [profileUser, setProfileUser] = useState<U | null>(null);
   const [accessToggling, setAccessToggling] = useState<number | null>(null);
   const [tab, setTab] = useState<'staff' | 'clients'>('staff');
 
   const staffUsers = users.filter(u => u.role !== 'client');
   const clientUsers = users.filter(u => u.role === 'client');
   const visibleUsers = tab === 'staff' ? staffUsers : clientUsers;
-  const pendingClients = clientUsers.filter(u => !u.is_active).length;
+  const pendingClients = clientUsers.filter(u => !u.is_active && !u.is_archived).length;
 
   const handleGrantAccess = async (u: U) => {
     setAccessToggling(u.id);
@@ -35,7 +33,7 @@ export default function UsersAdmin() {
       const res = await adminApi.grantAccess(u.id);
       setUsers(prev => prev.map(x => x.id === u.id ? { ...x, is_active: true } : x));
       if (res?.credentials_sent) {
-        // пароль отправлен в MAX — показываем подтверждение
+        // пароль отправлен в MAX
       }
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Ошибка выдачи доступа');
@@ -58,21 +56,6 @@ export default function UsersAdmin() {
   };
 
   const load = () => adminApi.listUsers().then(d => setUsers(d.users));
-
-  const handleDelete = async () => {
-    if (!deleteConfirm) return;
-    setDeleting(true);
-    try {
-      await adminApi.deleteUser(deleteConfirm.id, toUserId ?? undefined);
-      setUsers(prev => prev.filter(u => u.id !== deleteConfirm.id));
-      setDeleteConfirm(null);
-      setToUserId(null);
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Ошибка удаления');
-    } finally {
-      setDeleting(false);
-    }
-  };
 
   const handleRoleChange = async (userId: number, newRole: Role) => {
     setRoleChanging(userId);
@@ -199,8 +182,8 @@ export default function UsersAdmin() {
         roleChanging={roleChanging}
         accessToggling={accessToggling}
         copiedId={copiedId}
+        onOpenProfile={setProfileUser}
         onEdit={setEditing}
-        onDelete={setDeleteConfirm}
         onRoleChange={handleRoleChange}
         onGrantAccess={handleGrantAccess}
         onRevokeAccess={handleRevokeAccess}
@@ -218,15 +201,20 @@ export default function UsersAdmin() {
         />
       )}
 
-      {deleteConfirm && (
-        <UserDeleteModal
-          deleteConfirm={deleteConfirm}
+      {profileUser && (
+        <UserProfileModal
+          user={profileUser}
           users={users}
-          toUserId={toUserId}
-          deleting={deleting}
-          onSetToUserId={setToUserId}
-          onConfirm={handleDelete}
-          onCancel={() => { setDeleteConfirm(null); setToUserId(null); }}
+          isAdmin={isAdmin}
+          onClose={() => setProfileUser(null)}
+          onArchived={id => {
+            setUsers(prev => prev.map(u => u.id === id ? { ...u, is_active: false, is_archived: true } : u));
+            setProfileUser(null);
+          }}
+          onDeleted={id => {
+            setUsers(prev => prev.filter(u => u.id !== id));
+            setProfileUser(null);
+          }}
         />
       )}
     </div>

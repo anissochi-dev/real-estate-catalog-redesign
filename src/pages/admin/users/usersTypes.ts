@@ -10,7 +10,30 @@ export interface U {
   avatar: string | null;
   role: Role;
   is_active: boolean;
+  is_archived: boolean;
+  archived_at: string | null;
   created_at: string;
+}
+
+export interface UserProfileData {
+  user: U;
+  listings: {
+    id: number; title: string; category: string; deal: string;
+    price: number; area: number; address: string; status: string;
+    is_visible: boolean; image: string; created_at: string;
+  }[];
+  leads: {
+    id: number; name: string; phone: string; status: string;
+    lead_type: string; listing_id: number | null; created_at: string;
+  }[];
+  deals: {
+    id: number; name: string; status: string;
+    amount: number | null; created_at: string;
+  }[];
+  stats: {
+    active_listings: number; new_leads: number;
+    total_listings: number; total_leads: number; total_deals: number;
+  };
 }
 
 export const ROLES: { id: Role; label: string }[] = [
