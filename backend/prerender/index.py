@@ -118,7 +118,12 @@ def _resp(status, html, page_type='static'):
 
 def _html(title, desc, og_image='', canonical='', extra_meta='',
           is_404=False, h1='', body_text='', jsonld=''):
-    """Формирует полноценный HTML для поисковых ботов."""
+    """
+    Полноценный HTML для пользователей и поисковых ботов.
+    - Содержит мета-теги, JSON-LD, SEO-контент внутри #root
+    - Подключает JS-бандл — React запускается и оживляет страницу (hydration)
+    - Поисковики индексируют текст внутри #root без выполнения JS
+    """
     robots    = '<meta name="robots" content="noindex, nofollow">' if is_404 else '<meta name="robots" content="index, follow">'
     pre_code  = '<meta name="prerender-status-code" content="404">' if is_404 else ''
     og_img    = f'<meta property="og:image" content="{_esc(og_image)}">' if og_image else ''
@@ -127,9 +132,13 @@ def _html(title, desc, og_image='', canonical='', extra_meta='',
     jsonld_tag = f'<script type="application/ld+json">{jsonld}</script>' if jsonld else ''
     t = _esc(title)
     d = _esc(desc)
+    favicon = 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/favicon-1780486766400.png'
     return (
-        f'<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">'
-        f'<meta name="viewport" content="width=device-width, initial-scale=1">'
+        f'<!DOCTYPE html><html lang="ru"><head>'
+        f'<meta charset="UTF-8">'
+        f'<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">'
+        f'<meta name="theme-color" content="#1a3a6b">'
+        f'<link rel="icon" type="image/png" href="{favicon}">'
         f'<title>{t}</title>'
         f'<meta name="description" content="{d}">'
         f'{robots}{pre_code}{canon_tag}'
@@ -138,11 +147,28 @@ def _html(title, desc, og_image='', canonical='', extra_meta='',
         f'<meta property="og:title" content="{t}">'
         f'<meta property="og:description" content="{d}">'
         f'{og_url}{og_img}'
+        f'<meta name="twitter:card" content="summary_large_image">'
+        f'<meta name="twitter:title" content="{t}">'
+        f'<meta name="twitter:description" content="{d}">'
         f'{extra_meta}'
         f'{jsonld_tag}'
-        f'</head><body>'
+        f'<link rel="sitemap" type="application/xml" href="/sitemap.xml">'
+        f'<link rel="preconnect" href="https://cdn.poehali.dev">'
+        f'<link rel="preconnect" href="https://functions.poehali.dev">'
+        f'<link rel="preconnect" href="https://fonts.googleapis.com">'
+        f'<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+        f'<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media=\'all\'">'
+        f'<meta name="pp-name" value="real-estate-catalog-redesign">'
+        f'<script defer src="https://cdn.poehali.dev/intertnal/js/pp-min-2.js"></script>'
+        f'<script defer src="https://cdn.poehali.dev/intertnal/js/route-min.js"></script>'
+        f'<script defer src="https://cdn.poehali.dev/intertnal/js/telemetry-min.js"></script>'
+        f'</head>'
+        f'<body>'
+        f'<div id="root">'
         f'<h1>{_esc(h1 or title)}</h1>'
         f'{body_text}'
+        f'</div>'
+        f'<script type="module" src="/src/main.tsx"></script>'
         f'</body></html>'
     )
 
