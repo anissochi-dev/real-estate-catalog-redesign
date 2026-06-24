@@ -75,6 +75,10 @@ export default function LoginPage({ onSuccess, onBack }: Props) {
               {loading ? 'Подождите...' : 'Войти'}
             </button>
           </form>
+
+          <p className="text-xs text-muted-foreground text-center mt-4">
+            Логин и пароль для собственников высланы в мессенджер Макс
+          </p>
         </div>
       </div>
     </div>
