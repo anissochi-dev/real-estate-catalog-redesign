@@ -2835,6 +2835,7 @@ def _listings(cur, conn, method, rid, event, user):
             f"UPDATE {SCHEMA}.seo_artifacts SET urls_count = 0 WHERE kind = 'sitemap'"
         )
         _auto_seo(cur, new_id)
+        _attach_photos_to_listing(cur, new_id, body.get('images', ''), body.get('image', ''))
         conn.commit()
         _trigger_faq_async(new_id, cur)
         _notify_phone_subscribers(new_id, body, cur)
@@ -2996,6 +2997,9 @@ def _listings(cur, conn, method, rid, event, user):
         # Авто-генерация seo_title/seo_description если пустые и изменились ключевые поля
         if any(k in body for k in ('title', 'category', 'deal', 'area', 'price', 'address')):
             _auto_seo(cur, int(rid))
+        # Прикрепляем фото к объекту в s3_photo_refs
+        if 'images' in body or 'image' in body:
+            _attach_photos_to_listing(cur, int(rid), body.get('images', ''), body.get('image', ''))
         conn.commit()
         # Перегенерируем FAQ если изменилось описание, название, категория или сделка
         if any(k in body for k in ('title', 'description', 'category', 'deal', 'price', 'area')):
@@ -3512,6 +3516,35 @@ def _user_profile(cur, method, rid, user):
             'total_deals': deals_count,
         }
     })
+
+
+def _attach_photos_to_listing(cur, listing_id: int, images_str: str, image_str: str):
+    """Помечает фото объекта в s3_photo_refs как прикреплённые (is_orphan=FALSE)."""
+    import re as _re
+    aws_key = os.environ.get('AWS_ACCESS_KEY_ID', '')
+    cdn_prefix = f'https://cdn.poehali.dev/projects/{aws_key}/bucket/'
+    all_urls = _re.split(r'[|,]', (images_str or '') + '|' + (image_str or ''))
+    keys = []
+    for url in all_urls:
+        url = url.strip()
+        if url.startswith(cdn_prefix):
+            key = url[len(cdn_prefix):]
+            if key.startswith('photos/'):
+                keys.append(key)
+    if not keys:
+        return
+    escaped = [k for k in keys if "'" not in k]
+    if not escaped:
+        return
+    keys_sql = ', '.join(f"'{k}'" for k in escaped)
+    try:
+        cur.execute(
+            f"UPDATE {SCHEMA}.s3_photo_refs "
+            f"SET is_orphan = FALSE, listing_id = {int(listing_id)}, attached_at = NOW() "
+            f"WHERE s3_key IN ({keys_sql})"
+        )
+    except Exception as e:
+        print(f'[admin] _attach_photos_to_listing error: {e}')
 
 
 def _trigger_prerender_for_listing(listing_id: int, slug: str = ''):

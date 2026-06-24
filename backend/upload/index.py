@@ -360,6 +360,17 @@ def handler(event, context):
                         wm_applied = True
                         url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{wm_key}"
                         original_url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{orig_key}"
+                        # Регистрируем оба ключа как сиротские — прикрепятся при сохранении объекта
+                        for _k, _u in [(wm_key, url), (orig_key, original_url)]:
+                            try:
+                                cur.execute(
+                                    f"INSERT INTO {SCHEMA}.s3_photo_refs (s3_key, cdn_url, is_orphan) "
+                                    f"VALUES (%s, %s, TRUE) ON CONFLICT (s3_key) DO NOTHING",
+                                    (_k, _u)
+                                )
+                            except Exception:
+                                pass
+                        conn.commit()
                         return _ok({
                             'url': url,
                             'original_url': original_url,
@@ -372,6 +383,16 @@ def handler(event, context):
                 key = f"{folder}/{token12}.{ext}"
                 s3.put_object(Bucket='files', Key=key, Body=data, ContentType=content_type)
                 url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{key}"
+                # Регистрируем как сиротский — прикрепится при сохранении объекта
+                try:
+                    cur.execute(
+                        f"INSERT INTO {SCHEMA}.s3_photo_refs (s3_key, cdn_url, is_orphan) "
+                        f"VALUES (%s, %s, TRUE) ON CONFLICT (s3_key) DO NOTHING",
+                        (key, url)
+                    )
+                    conn.commit()
+                except Exception:
+                    pass
                 return _ok({'url': url, 'original_url': url, 'watermarked': False, 'size': len(data)})
     finally:
         conn.close()
