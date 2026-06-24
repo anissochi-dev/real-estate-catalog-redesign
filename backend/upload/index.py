@@ -151,7 +151,7 @@ def _apply_watermark(image_bytes, settings):
 
         base_img.paste(wm, xy, wm)
         out = io.BytesIO()
-        base_img.convert('RGB').save(out, format='JPEG', quality=88)
+        base_img.convert('RGB').save(out, format='WEBP', quality=82, method=4)
         return out.getvalue()
     except Exception:
         return image_bytes
@@ -312,8 +312,8 @@ def handler(event, context):
                     wm_data = _apply_watermark(data, dict(wm_row))
                     if wm_data and wm_data != data:
                         # Сохраняем версию с водяным знаком как основной файл
-                        wm_key = f"{folder}/{token12}_wm.jpg"
-                        s3.put_object(Bucket='files', Key=wm_key, Body=wm_data, ContentType='image/jpeg')
+                        wm_key = f"{folder}/{token12}_wm.webp"
+                        s3.put_object(Bucket='files', Key=wm_key, Body=wm_data, ContentType='image/webp')
                         # Сохраняем оригинал (сжатый, без ВЗ) для скачивания
                         orig_key = f"{folder}/{token12}.{original_ext}"
                         s3.put_object(Bucket='files', Key=orig_key, Body=original_data, ContentType=original_ct)
