@@ -19,6 +19,9 @@ from psycopg2.extras import RealDictCursor
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
 
+# Кеш водяного знака в памяти функции (url → bytes)
+_WM_CACHE: dict = {}
+
 
 def _ok(body, status=200):
     return {
@@ -118,8 +121,13 @@ def _apply_watermark(image_bytes, settings):
 
     try:
         import urllib.request
-        wm_resp = urllib.request.urlopen(settings['watermark_url'], timeout=10)
-        wm_bytes = wm_resp.read()
+        wm_url = settings['watermark_url']
+        if wm_url in _WM_CACHE:
+            wm_bytes = _WM_CACHE[wm_url]
+        else:
+            wm_resp = urllib.request.urlopen(wm_url, timeout=10)
+            wm_bytes = wm_resp.read()
+            _WM_CACHE[wm_url] = wm_bytes
 
         base_img = Image.open(io.BytesIO(image_bytes)).convert('RGBA')
         # Масштабируем до 1920px если не было сделано раньше
