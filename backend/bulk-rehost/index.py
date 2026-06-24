@@ -407,6 +407,126 @@ def handler(event: dict, context) -> dict:
                     ),
                 })
 
+            # ── Статус пересжатия (сколько без thumb) ─────────────────────
+            elif action == 'recompress_status':
+                cur.execute(
+                    f"SELECT COUNT(*) as remaining FROM {SCHEMA}.listings "
+                    f"WHERE image LIKE '%cdn.poehali.dev%' "
+                    f"AND (image_thumb IS NULL OR image_thumb = '') "
+                    f"AND image IS NOT NULL AND image != ''"
+                )
+                row = cur.fetchone()
+                cur.execute(f"SELECT COUNT(*) as total FROM {SCHEMA}.listings")
+                total_row = cur.fetchone()
+                return _ok({
+                    'remaining': row['remaining'],
+                    'total': total_row['total'],
+                })
+
+            # ── Пересжатие своих фото + генерация thumb 800px ─────────────
+            elif action == 'recompress_batch':
+                offset = int(params.get('offset') or body.get('offset') or 0)
+                batch_size = min(int(params.get('batch_size') or body.get('batch_size') or 3), 5)
+                THUMB_SIDE = 800
+                THUMB_QUALITY = 70
+
+                cur.execute(
+                    f"SELECT id, image, images FROM {SCHEMA}.listings "
+                    f"WHERE image LIKE '%cdn.poehali.dev%' "
+                    f"AND (image_thumb IS NULL OR image_thumb = '') "
+                    f"AND image IS NOT NULL AND image != '' "
+                    f"ORDER BY id ASC "
+                    f"LIMIT {batch_size} OFFSET {offset}"
+                )
+                listings = cur.fetchall()
+
+                if not listings:
+                    return _ok({'done': True, 'processed': 0, 'ok': 0, 'errors': 0, 'remaining': 0, 'next_offset': offset})
+
+                s3_client = _s3()
+                results = []
+                total_ok = 0
+                total_errors = 0
+
+                for listing in listings:
+                    lid = listing['id']
+                    main_url = (listing.get('image') or '').strip()
+                    if not main_url or 'cdn.poehali.dev' not in main_url:
+                        results.append({'id': lid, 'skipped': True})
+                        continue
+                    try:
+                        raw = _fetch_image(main_url)
+                        from PIL import Image as _PI
+                        img = _PI.open(io.BytesIO(raw))
+                        w, h = img.size
+                        if max(w, h) > MAX_SIDE:
+                            scale = MAX_SIDE / max(w, h)
+                            img = img.resize((int(w * scale), int(h * scale)), _PI.LANCZOS)
+                        img = img.convert('RGB')
+
+                        token = secrets.token_urlsafe(10)
+
+                        # Пересжатый основной файл
+                        buf_main = io.BytesIO()
+                        img.save(buf_main, format='WEBP', quality=WEBP_QUALITY, method=4)
+                        main_key = f"photos/{token}.webp"
+                        s3_client.put_object(Bucket=BUCKET, Key=main_key, Body=buf_main.getvalue(),
+                                             ContentType='image/webp', CacheControl='public, max-age=31536000')
+                        new_main_url = _cdn_url(main_key)
+
+                        # Thumb 800px
+                        tw, th = img.size
+                        if max(tw, th) > THUMB_SIDE:
+                            t_scale = THUMB_SIDE / max(tw, th)
+                            thumb_img = img.resize((int(tw * t_scale), int(th * t_scale)), _PI.LANCZOS)
+                        else:
+                            thumb_img = img
+                        buf_thumb = io.BytesIO()
+                        thumb_img.save(buf_thumb, format='WEBP', quality=THUMB_QUALITY, method=4)
+                        thumb_key = f"photos/{token}_thumb.webp"
+                        s3_client.put_object(Bucket=BUCKET, Key=thumb_key, Body=buf_thumb.getvalue(),
+                                             ContentType='image/webp', CacheControl='public, max-age=31536000')
+                        thumb_url = _cdn_url(thumb_key)
+
+                        # Обновляем images[0]
+                        orig_images = (listing.get('images') or '').strip()
+                        all_urls = _parse_images(orig_images) or [main_url]
+                        all_urls[0] = new_main_url
+                        new_images_str = '|'.join(all_urls)
+
+                        cur.execute(
+                            f"UPDATE {SCHEMA}.listings "
+                            f"SET image = '{new_main_url.replace(chr(39), chr(39)*2)}', "
+                            f"images = '{new_images_str.replace(chr(39), chr(39)*2)}', "
+                            f"image_thumb = '{thumb_url.replace(chr(39), chr(39)*2)}', "
+                            f"updated_at = NOW() WHERE id = {lid}"
+                        )
+                        total_ok += 1
+                        results.append({'id': lid, 'ok': True})
+                    except Exception as e:
+                        total_errors += 1
+                        results.append({'id': lid, 'error': str(e)[:120]})
+
+                conn.commit()
+
+                cur.execute(
+                    f"SELECT COUNT(*) as remaining FROM {SCHEMA}.listings "
+                    f"WHERE image LIKE '%cdn.poehali.dev%' "
+                    f"AND (image_thumb IS NULL OR image_thumb = '') "
+                    f"AND image IS NOT NULL AND image != ''"
+                )
+                remaining = cur.fetchone()['remaining']
+
+                return _ok({
+                    'done': remaining == 0,
+                    'processed': len(listings),
+                    'ok': total_ok,
+                    'errors': total_errors,
+                    'remaining': remaining,
+                    'next_offset': offset + batch_size,
+                    'results': results,
+                })
+
             # ── Удаление водяного знака через Яндекс Vision ────────────────
             elif action == 'remove_watermark':
                 url = (body.get('url') or '').strip()

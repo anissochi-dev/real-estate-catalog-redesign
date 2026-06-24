@@ -78,20 +78,13 @@ export default function PhotoOptimizeTab() {
   const loadRecompressStatus = async () => {
     setRecompressLoading(true);
     try {
-      const d = await rehostReq({ action: 'recompress_batch', offset: 0, batch_size: 0 });
-      setRecompressStatus({ remaining: d.remaining ?? 0 });
-      setRecompressInitial(d.remaining ?? 0);
+      const d = await rehostReq({ action: 'recompress_status' });
+      const remaining = d.remaining ?? 0;
+      setRecompressStatus({ remaining });
+      setRecompressInitial(remaining);
+      if (remaining === 0) setRecompressDone(true);
     } catch (e) {
-      // batch_size=0 может вернуть done=true с remaining
-      try {
-        const d2 = await rehostReq({ action: 'recompress_batch', offset: 0, batch_size: 1 });
-        const remaining = d2.remaining ?? 0;
-        setRecompressStatus({ remaining });
-        setRecompressInitial(remaining + (d2.ok ?? 0));
-        if (d2.done && remaining === 0) setRecompressDone(true);
-      } catch (e2) {
-        setRecompressLog(l => [...l, `Ошибка: ${e2 instanceof Error ? e2.message : 'неизвестная'}`]);
-      }
+      setRecompressLog(l => [...l, `Ошибка: ${e instanceof Error ? e.message : 'неизвестная'}`]);
     } finally {
       setRecompressLoading(false);
     }
