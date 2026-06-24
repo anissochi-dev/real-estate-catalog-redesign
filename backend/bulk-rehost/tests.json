@@ -5,6 +5,12 @@
       "method": "GET",
       "path": "/?action=status",
       "expectedStatus": 401
+    },
+    {
+      "name": "recompress_batch без авторизации — 401",
+      "method": "GET",
+      "path": "/?action=recompress_batch&offset=0&batch_size=1",
+      "expectedStatus": 401
     }
   ]
 }
