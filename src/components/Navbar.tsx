@@ -54,7 +54,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
               className="flex items-center gap-2 group shrink-0"
             >
               {logoUrl ? (
-                <img src={logoUrl} alt={brandName} width={36} height={36} className="w-8 h-8 md:w-9 md:h-9 rounded-lg object-contain bg-white" />
+                <img src={logoUrl} alt={brandName} width={36} height={36} loading="eager" fetchPriority="high" className="w-8 h-8 md:w-9 md:h-9 rounded-lg object-contain bg-white" />
               ) : (
                 <div className="w-8 h-8 md:w-9 md:h-9 rounded-lg btn-blue flex items-center justify-center">
                   <Icon name="Building" size={18} className="text-white" />

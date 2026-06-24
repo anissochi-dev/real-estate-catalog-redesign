@@ -117,7 +117,7 @@ export default function PropertyMediaGallery({
             <VideoEmbed url={item.videoUrl!} />
           ) : mainImg !== null && mainImg !== undefined ? (
             <div className="cursor-zoom-in group w-full h-full" onClick={() => setLightbox(true)}>
-              <img src={mainImg} alt={item.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+              <img src={mainImg} alt={item.title} loading="eager" fetchPriority="high" decoding="sync" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
               <div className="absolute bottom-3 right-3 bg-black/50 text-white rounded-lg px-2 py-1 text-xs flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <Icon name="ZoomIn" size={12} /> Увеличить
               </div>
