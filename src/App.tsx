@@ -1,11 +1,8 @@
 import React, { useEffect, useState, useMemo, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LoginPage, lazyWithRetry } from './app/lazyPages';
+import { lazyWithRetry } from './app/lazyPages';
 
-// Админка грузится лениво с автоматическим retry при устаревшем хеше чанка.
-const AdminPage = lazyWithRetry(() => import('./pages/AdminPage') as Promise<{ default: React.ComponentType<Record<string, unknown>> }>);
-
-// Prefetch AdminPage чанка в фоне — только если в браузере есть токен
+// Префетч AdminPage чанка в фоне — только если в браузере есть токен
 // (т.е. это залогиненный сотрудник). Запускается через 3с после монтирования,
 // когда LCP уже готов и основной трафик утих. Обычный посетитель не скачивает
 // ни байта — у него токена нет.
@@ -20,8 +17,13 @@ function usePrefetchAdmin() {
     return () => clearTimeout(id);
   }, []);
 }
+
 import ChunkErrorBoundary from './app/ChunkErrorBoundary';
 import AppRoutes from './app/AppRoutes';
+import AppViewManager, { ADMIN_ROLES } from './app/AppViewManager';
+import { useListings } from './app/useListings';
+import { useCrons } from './app/useCrons';
+import { useConsentBanner } from './app/useConsentBanner';
 import {
   type Property,
   type Page,
@@ -38,11 +40,10 @@ import Footer from './components/Footer';
 import CompareBar from './components/CompareBar';
 import AnalyticsLoader from './components/AnalyticsLoader';
 import ScrollToTop from './components/ScrollToTop';
-import ConsentBanner, { hasConsent, checkConsentByIp } from './components/ConsentBanner';
+import ConsentBanner from './components/ConsentBanner';
 import SeoHead from './components/SeoHead';
 import SchemaOrg, { makeOrganizationSchema, makeWebSiteSchema } from './components/SchemaOrg';
 import { useSettings } from './contexts/SettingsContext';
-import { fetchListings } from './lib/api';
 import { useAuth } from './contexts/AuthContext';
 
 export type { PropertyType, DealType, Property, Page, AppView } from './app/appTypes';
@@ -52,14 +53,18 @@ const SHOW_CONSENT_BANNER = true;
 
 export default function App() {
   usePrefetchAdmin();
+  useCrons();
+
   const { user, loading: authLoading } = useAuth();
   const { settings } = useSettings();
   const location = useLocation();
   const navigate = useNavigate();
+
   const [view, setViewState] = useState<AppView>(() => loadInitialView());
   const [adminInitialSection, setAdminInitialSection] = useState<string | undefined>();
-  const [consentGiven, setConsentGiven] = useState<boolean>(() => hasConsent());
-  const [consentVisible, setConsentVisible] = useState(false);
+
+  const { consentGiven, setConsentGiven, consentVisible } = useConsentBanner();
+
   // Баннер показываем только когда настройки загрузились и есть хотя бы один юр. документ —
   // иначе он мелькает пустым до загрузки настроек («глюк»).
   const hasLegalDocs = Boolean(
@@ -67,57 +72,6 @@ export default function App() {
     || (settings.legal_personal_data || '').trim()
     || (settings.legal_marketing_consent || '').trim()
   );
-
-  useEffect(() => {
-    // Если локально уже принято — ничего делать не надо
-    if (hasConsent()) return;
-
-    let cancelled = false;
-    let shown = false;
-    const show = () => {
-      if (shown || cancelled) return;
-      shown = true;
-      setConsentVisible(true);
-    };
-
-    // Сначала тихо спрашиваем сервер по IP (запрос ~100-300ms).
-    // Если IP уже есть в базе за последний год — сохраняем локально и не показываем.
-    // Если нет — запускаем обычную логику показа баннера.
-    checkConsentByIp(() => {
-      if (cancelled) return;
-      setConsentGiven(true); // скрываем баннер немедленно
-    }).finally(() => {
-      if (cancelled || hasConsent()) return;
-
-      // Обычная логика показа после проверки сервера
-      let pageLoadedAt = 0;
-      const onPageLoad = () => { pageLoadedAt = Date.now(); };
-      if (document.readyState === 'complete') { pageLoadedAt = Date.now(); }
-      else window.addEventListener('load', onPageLoad, { once: true });
-
-      const events = ['touchstart', 'keydown', 'click', 'pointerdown'] as const;
-      const onInteract = () => {
-        if (Date.now() - pageLoadedAt < 4000) return;
-        events.forEach(e => window.removeEventListener(e, onInteract));
-        show();
-      };
-      events.forEach(e => window.addEventListener(e, onInteract, { passive: true }));
-      // Страховка: показать через 5 сек (после завершения Lighthouse-теста)
-      const fallback = setTimeout(show, 5000);
-      // Сохраняем cleanup чтобы отработал при размонтировании
-      (window as Window & { __consentCleanup?: () => void }).__consentCleanup = () => {
-        events.forEach(e => window.removeEventListener(e, onInteract));
-        clearTimeout(fallback);
-      };
-    });
-
-    return () => {
-      cancelled = true;
-      try {
-        (window as Window & { __consentCleanup?: () => void }).__consentCleanup?.();
-      } catch { /* ignore */ }
-    };
-  }, []);
 
   const setView = (v: AppView) => {
     setViewState(v);
@@ -128,12 +82,11 @@ export default function App() {
       // ignore
     }
   };
+
   const [favorites, setFavorites] = useState<number[]>([]);
   const [compareList, setCompareList] = useState<number[]>([]);
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [allLoaded, setAllLoaded] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+
+  const { properties, setProperties: _setProperties, allLoaded, setAllLoaded: _setAllLoaded, loading, error } = useListings();
 
   const currentPage: Page = pageFromPath(location.pathname);
   const setCurrentPage = (p: Page) => navigate(PATH_BY_PAGE[p]);
@@ -149,179 +102,27 @@ export default function App() {
     } catch { /* ignore */ }
   }, [navigate]);
 
+  // Авто-переход: как только user появился в контексте и мы на экране логина — редиректим
   useEffect(() => {
-    const fireCron = (url: string, opts?: RequestInit) => {
-      const ac = new AbortController();
-      setTimeout(() => ac.abort(), 8000);
-      fetch(url, { ...opts, signal: ac.signal, keepalive: false }).catch(() => {});
-    };
-    const runCrons = () => {
-      const SEO_CRON_URL = 'https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d';
-      const NEWS_CRON_URL = 'https://functions.poehali.dev/984cad3a-0783-4408-a614-52ed36f8c77f';
-      const THROTTLE_MS = 60 * 60 * 1000;
-      try {
-        const seoLast = parseInt(localStorage.getItem('seo_cron_last_ping') || '0', 10);
-        if (Date.now() - seoLast > THROTTLE_MS) {
-          localStorage.setItem('seo_cron_last_ping', String(Date.now()));
-          fireCron(SEO_CRON_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ping' }) });
-        }
-        const newsLast = parseInt(localStorage.getItem('news_cron_last_ping') || '0', 10);
-        if (Date.now() - newsLast > 10 * 60 * 1000) {
-          localStorage.setItem('news_cron_last_ping', String(Date.now()));
-          fireCron(`${NEWS_CRON_URL}?action=ping_cron`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-        }
-        const retrainLast = parseInt(localStorage.getItem('retrain_cron_last_ping') || '0', 10);
-        if (Date.now() - retrainLast > THROTTLE_MS) {
-          localStorage.setItem('retrain_cron_last_ping', String(Date.now()));
-          fireCron('https://functions.poehali.dev/e2f1d357-fb83-4fbb-8d8b-6fb063357afc?action=cron');
-        }
-        const faqToken = localStorage.getItem('biznest_token') || '';
-        if (faqToken) {
-          const faqLast = parseInt(localStorage.getItem('faq_batch_cron_last_ping') || '0', 10);
-          if (Date.now() - faqLast > THROTTLE_MS) {
-            localStorage.setItem('faq_batch_cron_last_ping', String(Date.now()));
-            fireCron('https://functions.poehali.dev/282b9c5f-29fa-41ea-bc42-0793bdf8950d', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Auth-Token': faqToken },
-              body: JSON.stringify({ action: 'batch', limit: 5 }),
-            });
-          }
-        }
-      } catch { /* ignore */ }
-    };
-
-    const schedule = () => {
-      if ('requestIdleCallback' in window) {
-        (window as Window & { requestIdleCallback: (cb: () => void, opts?: { timeout: number }) => void })
-          .requestIdleCallback(runCrons, { timeout: 10000 });
-      } else {
-        setTimeout(runCrons, 5000);
-      }
-    };
-
-    if (document.readyState === 'complete') {
-      setTimeout(schedule, 3000);
-    } else {
-      const onLoad = () => setTimeout(schedule, 3000);
-      window.addEventListener('load', onLoad, { once: true });
-      return () => window.removeEventListener('load', onLoad);
+    if (view === 'login' && user && !authLoading) {
+      setView(ADMIN_ROLES.includes(user.role) ? 'admin' : 'site');
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, authLoading]);
 
+  // Флаг «в админке» для восстановления режима при F5.
+  // Ставим когда реально показана админка (вошёл сотрудник с ролью).
+  // Снимаем только когда явно вышли или сессия истекла — НЕ снимаем пока идёт загрузка (authLoading),
+  // иначе F5 во время verify стирает ключ и при следующей перезагрузке открывается сайт.
   useEffect(() => {
-    setLoading(true);
-
-    type PrefetchData = {
-      listings: Property[]; total: number;
-      settings: Record<string, unknown>; stats: unknown; leadsCount: number;
-    };
-    const w = window as Window & {
-      __PREFETCH__?: PrefetchData;
-      __PREFETCH_PROMISE__?: Promise<void>;
-      __PREFETCH_RESOLVE__?: (d: PrefetchData) => void;
-    };
-
-    function applyListings(listings: Property[], total: number) {
-      setProperties(listings);
-      setError(null);
-      setLoading(false);
-      const lcpItem = listings[0];
-      const lcpSrc = lcpItem?.image;
-      if (lcpSrc && !document.querySelector(`link[rel="preload"][href="${lcpSrc}"]`)) {
-        const link = document.createElement('link');
-        link.rel = 'preload'; link.as = 'image';
-        link.href = lcpSrc;
-        link.setAttribute('fetchpriority', 'high');
-        if (lcpItem?.image_thumb) {
-          link.setAttribute('imagesrcset', `${lcpItem.image_thumb} 800w, ${lcpSrc} 1920w`);
-          link.setAttribute('imagesizes', '(max-width: 640px) calc(100vw - 32px), (max-width: 768px) calc(50vw - 24px), (max-width: 1024px) calc(33vw - 24px), 300px');
-        }
-        document.head.appendChild(link);
-      }
-      // На главной НЕ догружаем все объекты — только когда пользователь
-      // перейдёт на каталог/категорию/избранное/сравнение. Это исключает
-      // мигание объектов и экономит трафик.
-      const onHome = window.location.pathname === '/';
-      if (total > listings.length && !onHome) {
-        const loadAll = () => setTimeout(() => fetchListings()
-          .then(({ listings: all }) => { setProperties(all); setAllLoaded(true); })
-          .catch(() => setAllLoaded(true)), 2000);
-        if (document.readyState === 'complete') {
-          loadAll();
-        } else {
-          window.addEventListener('load', loadAll, { once: true });
-        }
-      } else {
-        // На главной считаем что загрузка «завершена» (показываем что есть).
-        // Полная подгрузка триггерится отдельным эффектом по смене пути.
-        setAllLoaded(onHome ? false : true);
-      }
-    }
-
-    // Prefetch уже завершился до монтирования React — рендерим мгновенно
-    if (w.__PREFETCH__) {
-      applyListings(w.__PREFETCH__.listings, w.__PREFETCH__.total);
-      return;
-    }
-
-    // Prefetch в процессе — подписываемся, не дублируем запрос
-    if (w.__PREFETCH_PROMISE__) {
-      let done = false;
-      w.__PREFETCH_RESOLVE__ = (d: PrefetchData) => { done = true; applyListings(d.listings, d.total); };
-      const guard = setTimeout(() => {
-        if (!done) fetchListings(8, 0)
-          .then(({ listings, total }) => applyListings(listings, total))
-          .catch(() => { setError('Не удалось загрузить объекты.'); setLoading(false); });
-      }, 2000);
-      return () => clearTimeout(guard);
-    }
-
-    // Нет prefetch (старый браузер) — обычный fetch
-    fetchListings(8, 0)
-      .then(({ listings, total }) => applyListings(listings, total))
-      .catch(err => { console.error(err); setError('Не удалось загрузить объекты.'); setLoading(false); });
-  }, []);
-
-  // Страховка от «вечного колеса»: если через 3 сек данные так и не пришли
-  // (зависла prefetch-гонка в index.html), делаем прямой запрос и снимаем загрузку.
-  useEffect(() => {
-    if (!loading) return;
-    const t = setTimeout(() => {
-      fetchListings(8, 0)
-        .then(({ listings }) => { setProperties(prev => (prev.length ? prev : listings)); })
-        .catch(() => {})
-        .finally(() => setLoading(false));
-    }, 3000);
-    return () => clearTimeout(t);
-  }, [loading]);
-
-  // Ленивая догрузка всех объектов: триггерится при переходе со «/» на
-  // любую страницу, где нужен полный список (каталог, категории, избранное,
-  // сравнение, поиск). На странице одного объекта догрузка не нужна — данные
-  // подтягиваются отдельным fetchListingById.
-  useEffect(() => {
-    if (allLoaded) return;
-    const path = location.pathname;
-    const needsFullList = path === '/catalog'
-      || path.startsWith('/catalog/')
-      || path === '/favorites'
-      || path === '/compare'
-      || path === '/search'
-      || path === '/map'
-      || path === '/network-tenants'
-      || path.startsWith('/district/')
-      || path.startsWith('/category/');
-    if (!needsFullList) return;
-    let cancelled = false;
-    fetchListings()
-      .then(({ listings }) => {
-        if (cancelled) return;
-        setProperties(listings);
-        setAllLoaded(true);
-      })
-      .catch(() => { if (!cancelled) setAllLoaded(true); });
-    return () => { cancelled = true; };
-  }, [location.pathname, allLoaded]);
+    try {
+      if (authLoading) return;
+      const inAdmin = view === 'admin' && !!user && ADMIN_ROLES.includes(user.role);
+      if (inAdmin) localStorage.setItem(IN_ADMIN_KEY, '1');
+      else localStorage.removeItem(IN_ADMIN_KEY);
+    } catch { /* ignore */ }
+     
+  }, [view, user, authLoading]);
 
   const toggleFavorite = (id: number) => {
     setFavorites(prev => (prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]));
@@ -346,69 +147,26 @@ export default function App() {
     [properties, favorites],
   );
 
-  const ADMIN_ROLES = ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'];
+  const pageFallback = (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="w-8 h-8 rounded-full border-4 border-brand-blue/20 border-t-brand-blue animate-spin" />
+    </div>
+  );
 
-  // Авто-переход: как только user появился в контексте и мы на экране логина — редиректим
-  useEffect(() => {
-    if (view === 'login' && user && !authLoading) {
-      setView(ADMIN_ROLES.includes(user.role) ? 'admin' : 'site');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, authLoading]);
+  // login / admin views
+  const managedView = (
+    <AppViewManager
+      view={view}
+      user={user}
+      authLoading={authLoading}
+      adminInitialSection={adminInitialSection}
+      onSetView={setView}
+      onSetAdminInitialSection={setAdminInitialSection}
+    />
+  );
 
-  // Флаг «в админке» для восстановления режима при F5.
-  // Ставим когда реально показана админка (вошёл сотрудник с ролью).
-  // Снимаем только когда явно вышли или сессия истекла — НЕ снимаем пока идёт загрузка (authLoading),
-  // иначе F5 во время verify стирает ключ и при следующей перезагрузке открывается сайт.
-  useEffect(() => {
-    try {
-      if (authLoading) return; // ждём окончания verify — не трогаем ключ
-      const inAdmin = view === 'admin' && !!user && ADMIN_ROLES.includes(user.role);
-      if (inAdmin) localStorage.setItem(IN_ADMIN_KEY, '1');
-      else localStorage.removeItem(IN_ADMIN_KEY);
-    } catch { /* ignore */ }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, user, authLoading]);
-
-  const pageFallback = <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 rounded-full border-4 border-brand-blue/20 border-t-brand-blue animate-spin" /></div>;
-
-  if (view === 'login') {
-    return (
-      <Suspense fallback={pageFallback}>
-        <SeoHead title="Вход для сотрудников" noindex />
-        <LoginPage onSuccess={() => { /* переход сработает через useEffect выше */ }} onBack={() => setView('site')} />
-      </Suspense>
-    );
-  }
-
-  if (view === 'admin') {
-    if (authLoading) {
-      return pageFallback;
-    }
-    if (!user) {
-      return (
-        <Suspense fallback={pageFallback}>
-          <SeoHead title="Вход для сотрудников" noindex />
-          <LoginPage onSuccess={() => setView(user && ADMIN_ROLES.includes((user as { role: string }).role) ? 'admin' : 'site')} onBack={() => setView('site')} />
-        </Suspense>
-      );
-    }
-    if (!ADMIN_ROLES.includes(user.role)) {
-      return (
-        <Suspense fallback={pageFallback}>
-          <SeoHead title="Вход для сотрудников" noindex />
-          <LoginPage onSuccess={() => setView('admin')} onBack={() => setView('site')} />
-        </Suspense>
-      );
-    }
-    return (
-      <ChunkErrorBoundary>
-        <Suspense fallback={pageFallback}>
-          <SeoHead title="Админ-панель" noindex />
-          <AdminPage onExit={() => { setView('site'); setAdminInitialSection(undefined); }} initialSection={adminInitialSection as string | undefined} />
-        </Suspense>
-      </ChunkErrorBoundary>
-    );
+  if (view === 'login' || view === 'admin') {
+    return managedView;
   }
 
   if (error) {
@@ -465,7 +223,7 @@ export default function App() {
 
       <main>
         <ChunkErrorBoundary>
-          <Suspense fallback={<div style={{minHeight: 'calc(100vh - 64px)'}} />}>
+          <Suspense fallback={<div style={{ minHeight: 'calc(100vh - 64px)' }} />}>
             <AppRoutes
               properties={properties}
               favorites={favorites}
@@ -498,7 +256,6 @@ export default function App() {
         && !location.pathname.startsWith('/login') && (
         <ConsentBanner onAccept={() => setConsentGiven(true)} />
       )}
-
     </div>
   );
 }
