@@ -199,6 +199,8 @@ export const adminApi = {
     req(`${ADMIN_URL}?resource=users&id=${id}`, { method: 'DELETE', body: JSON.stringify(toUserId ? { to_user_id: toUserId } : {}) }),
   archiveUser: (id: number, toUserId?: number) =>
     req(`${ADMIN_URL}?resource=users&id=${id}&action=archive`, { method: 'PUT', body: JSON.stringify(toUserId ? { to_user_id: toUserId } : {}) }),
+  unarchiveUser: (id: number) =>
+    req(`${ADMIN_URL}?resource=users&id=${id}&action=unarchive`, { method: 'PUT', body: '{}' }),
   grantAccess: (id: number) =>
     req(`${ADMIN_URL}?resource=users&id=${id}&action=grant_access`, { method: 'PUT', body: '{}' }),
   revokeAccess: (id: number) =>

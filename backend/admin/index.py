@@ -3005,14 +3005,21 @@ def _listings(cur, conn, method, rid, event, user):
                                     'address', 'district', 'condition', 'ceiling_height',
                                     'electricity_kw', 'purpose', 'is_visible', 'status')):
             _trigger_reindex_async(int(rid))
-        # IndexNow: уведомляем при публикации (статус → active)
+        # IndexNow + prerender при публикации (статус → active)
         if body.get('status') == 'active':
             cur2 = conn.cursor(cursor_factory=RealDictCursor)
             cur2.execute(f"SELECT slug FROM {SCHEMA}.listings WHERE id = {int(rid)} LIMIT 1")
             row = cur2.fetchone()
             cur2.close()
-            if row:
-                _notify_indexnow(dict(row).get('slug') or '')
+            listing_slug = dict(row).get('slug') or '' if row else ''
+            if listing_slug:
+                _notify_indexnow(listing_slug)
+            import threading as _threading
+            _threading.Thread(
+                target=_trigger_prerender_for_listing,
+                args=(int(rid), listing_slug),
+                daemon=True
+            ).start()
         return _ok({'success': True})
 
     if method == 'DELETE' and rid:
@@ -3193,6 +3200,22 @@ def _users(cur, conn, method, rid, event, user):
 
     params = event.get('queryStringParameters') or {}
     action = params.get('action', '')
+
+    if method == 'PUT' and rid and action == 'unarchive':
+        # Разархивировать пользователя — восстановить доступ
+        if user.get('role') != 'admin':
+            return _err(403, 'Недостаточно прав')
+        target_id = int(rid)
+        cur.execute(f"SELECT id, role FROM {SCHEMA}.users WHERE id = {target_id} AND is_archived = TRUE")
+        target = cur.fetchone()
+        if not target:
+            return _err(404, 'Архивированный пользователь не найден')
+        cur.execute(
+            f"UPDATE {SCHEMA}.users SET is_archived = FALSE, archived_at = NULL, "
+            f"is_active = TRUE, updated_at = NOW() WHERE id = {target_id}"
+        )
+        conn.commit()
+        return _ok({'success': True, 'action': 'unarchived'})
 
     if method == 'PUT' and rid and action == 'archive':
         # Архивировать пользователя (is_active=FALSE, is_archived=TRUE)
@@ -3491,6 +3514,20 @@ def _user_profile(cur, method, rid, user):
     })
 
 
+def _trigger_prerender_for_listing(listing_id: int, slug: str = ''):
+    """Прогревает prerender-кэш для страницы объекта сразу после публикации."""
+    import urllib.request as _ureq
+    PRERENDER_URL = 'https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff'
+    path = f'/object/{slug}' if slug else f'/object/id-{listing_id}'
+    try:
+        url = f'{PRERENDER_URL}/?path={urllib.parse.quote(path)}'
+        req = _ureq.Request(url, headers={'User-Agent': 'prerender-trigger/1.0'})
+        _ureq.urlopen(req, timeout=20)
+        print(f'[admin] prerender warmed: {path}')
+    except Exception as e:
+        print(f'[admin] prerender trigger error: {e}')
+
+
 def _moderation(cur, conn, method, rid, event, user):
     """Модерация объектов собственников. Доступна admin, director, office_manager."""
     ALLOWED = ('admin', 'director', 'office_manager')
@@ -3529,7 +3566,19 @@ def _moderation(cur, conn, method, rid, event, user):
                 f"UPDATE {SCHEMA}.listings SET status = 'active', is_visible = TRUE, "
                 f"moderation_comment = NULL, updated_at = NOW() WHERE id = {lid}"
             )
+            # Получаем slug для SEO-тригера
+            cur.execute(f"SELECT slug FROM {SCHEMA}.listings WHERE id = {lid} LIMIT 1")
+            slug_row = cur.fetchone()
+            listing_slug = (slug_row or {}).get('slug') or ''
             conn.commit()
+
+            # SEO: прогреваем prerender для опубликованного объекта
+            import threading as _threading
+            _threading.Thread(
+                target=_trigger_prerender_for_listing,
+                args=(lid, listing_slug),
+                daemon=True
+            ).start()
 
             # Уведомляем собственника что объект опубликован (без пароля — доступ отдельно)
             if listing.get('owner_user_id'):

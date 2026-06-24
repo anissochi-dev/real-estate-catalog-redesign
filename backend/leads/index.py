@@ -204,6 +204,12 @@ def handler(event: dict, context) -> dict:
                 _max_autoreply(name, phone, lead_id, dsn)
             except Exception:
                 pass
+            # Уведомляем собственника объекта если заявка привязана к объекту
+            if lid:
+                try:
+                    _notify_owner_new_lead(name, phone, message, lid, lead_id, dsn)
+                except Exception:
+                    pass
         threading.Thread(target=_send_notifications, daemon=True).start()
 
     return {
@@ -396,6 +402,70 @@ def _max_autoreply(name: str, phone: str, lead_id: int, dsn: str):
             pass
     except Exception:
         pass
+
+
+def _notify_owner_new_lead(visitor_name: str, visitor_phone: str, message, listing_id: int, lead_id: int, dsn: str):
+    """
+    Уведомляет собственника объекта о новой заявке через MAX.
+    Срабатывает только если у объекта есть owner_user_id с активным аккаунтом и max_user_id.
+    """
+    import urllib.request
+
+    SCHEMA = 't_p71821556_real_estate_catalog_'
+    conn2 = psycopg2.connect(dsn)
+    try:
+        with conn2.cursor() as cur:
+            # Проверяем объект и находим собственника
+            cur.execute(
+                f"SELECT l.title, l.owner_user_id, u.max_user_id, u.is_active "
+                f"FROM {SCHEMA}.listings l "
+                f"LEFT JOIN {SCHEMA}.users u ON u.id = l.owner_user_id "
+                f"WHERE l.id = {int(listing_id)} AND l.status = 'active' "
+                f"LIMIT 1"
+            )
+            row = cur.fetchone()
+            if not row:
+                return
+            listing_title, owner_user_id, owner_max_id, owner_active = row
+            if not owner_user_id or not owner_max_id or not owner_active:
+                return
+            owner_max_id = (owner_max_id or '').strip()
+            if not owner_max_id:
+                return
+
+            # Берём токен бота
+            cur.execute(
+                f"SELECT notify_max_enabled, notify_max_bot_token "
+                f"FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
+            )
+            srow = cur.fetchone()
+            if not srow or not srow[0] or not (srow[1] or '').strip():
+                return
+            bot_token = srow[1].strip()
+
+        title_short = (listing_title or '')[:60]
+        text = (
+            f'🔔 Новая заявка по вашему объекту!\n\n'
+            f'📍 {title_short}\n\n'
+            f'👤 {visitor_name}\n'
+            f'📞 {visitor_phone}'
+        )
+        if message:
+            text += f'\n💬 {str(message)[:200]}'
+        text += f'\n\n🆔 Заявка #{lead_id}'
+
+        payload = json.dumps({'text': text}, ensure_ascii=False).encode('utf-8')
+        req = urllib.request.Request(
+            f'https://botapi.max.ru/messages?user_id={owner_max_id}',
+            data=payload,
+            headers={'Authorization': bot_token, 'Content-Type': 'application/json'},
+            method='POST',
+        )
+        urllib.request.urlopen(req, timeout=8)
+    except Exception as e:
+        print(f'[leads] _notify_owner_new_lead error: {e}')
+    finally:
+        conn2.close()
 
 
 def _err(code: int, msg: str) -> dict:

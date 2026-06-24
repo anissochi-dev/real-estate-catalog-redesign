@@ -211,6 +211,10 @@ export default function UsersAdmin() {
             setUsers(prev => prev.map(u => u.id === id ? { ...u, is_active: false, is_archived: true } : u));
             setProfileUser(null);
           }}
+          onUnarchived={id => {
+            setUsers(prev => prev.map(u => u.id === id ? { ...u, is_active: true, is_archived: false, archived_at: null } : u));
+            setProfileUser(null);
+          }}
           onDeleted={id => {
             setUsers(prev => prev.filter(u => u.id !== id));
             setProfileUser(null);

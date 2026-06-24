@@ -21,10 +21,11 @@ function fmt(iso: string) {
 
 interface UserProfileModalProps {
   user: U;
-  users: U[];                       // весь список — для выбора получателя
+  users: U[];
   isAdmin: boolean;
   onClose: () => void;
   onArchived: (userId: number) => void;
+  onUnarchived: (userId: number) => void;
   onDeleted: (userId: number) => void;
 }
 
@@ -36,6 +37,7 @@ export default function UserProfileModal({
   isAdmin,
   onClose,
   onArchived,
+  onUnarchived,
   onDeleted,
 }: UserProfileModalProps) {
   const [profile, setProfile] = useState<UserProfileData | null>(null);
@@ -57,6 +59,19 @@ export default function UserProfileModal({
   );
 
   const hasData = profile && (profile.stats.total_listings > 0 || profile.stats.total_leads > 0 || profile.stats.total_deals > 0);
+
+  const handleUnarchive = async () => {
+    setProcessing(true);
+    try {
+      await adminApi.unarchiveUser(targetUser.id);
+      onUnarchived(targetUser.id);
+      onClose();
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Ошибка');
+    } finally {
+      setProcessing(false);
+    }
+  };
 
   const handleConfirmAction = async () => {
     if (!action) return;
@@ -239,6 +254,24 @@ export default function UserProfileModal({
             <div className="text-center py-10 text-muted-foreground text-sm">Не удалось загрузить данные</div>
           )}
         </div>
+
+        {/* Разархивирование */}
+        {isAdmin && targetUser.is_archived && (
+          <div className="p-5 border-t border-border shrink-0">
+            <div className="flex items-start gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 mb-3">
+              <Icon name="Archive" size={15} className="shrink-0 mt-0.5 text-gray-400" />
+              Пользователь в архиве с {targetUser.archived_at ? fmt(targetUser.archived_at) : '—'}. Восстановите чтобы вернуть доступ.
+            </div>
+            <button
+              onClick={handleUnarchive}
+              disabled={processing}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-brand-blue text-white text-sm font-semibold hover:bg-brand-blue/90 disabled:opacity-50 transition-colors"
+            >
+              {processing ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="ArchiveRestore" size={14} />}
+              Восстановить из архива
+            </button>
+          </div>
+        )}
 
         {/* Действия */}
         {isAdmin && !targetUser.is_archived && (

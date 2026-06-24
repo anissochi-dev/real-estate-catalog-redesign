@@ -91,6 +91,16 @@ export default function ListingEditorHeader({
         ))}
       </div>
 
+      {/* Баннер объекта на модерации */}
+      {editing.status === 'moderation' && (
+        <div className="px-5 pt-3 flex-shrink-0">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-sm text-amber-800 flex items-center gap-2">
+            <Icon name="Clock" size={15} className="flex-shrink-0 text-amber-500" />
+            <span>Объект от собственника — на модерации. Отредактируйте и нажмите <b>«Сохранить и опубликовать»</b> чтобы опубликовать.</span>
+          </div>
+        </div>
+      )}
+
       {/* Баннер ошибок */}
       {hasErrors && (
         <div className="px-5 pt-3 flex-shrink-0">

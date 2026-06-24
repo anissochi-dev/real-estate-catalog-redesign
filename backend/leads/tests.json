@@ -1,16 +1,16 @@
 {
   "tests": [
     {
-      "name": "Создание заявки",
+      "name": "Заявка без капчи — 403",
       "method": "POST",
       "path": "/",
       "body": {"name": "Иван Тест", "phone": "+79001234567", "message": "Интересует объект", "listing_id": 1},
-      "expectedStatus": 200,
-      "expectedBody": {"success": true},
+      "expectedStatus": 403,
+      "expectedBody": {"error": "string"},
       "bodyMatcher": "partial"
     },
     {
-      "name": "Без обязательных полей",
+      "name": "Без обязательных полей — 400",
       "method": "POST",
       "path": "/",
       "body": {"name": ""},
