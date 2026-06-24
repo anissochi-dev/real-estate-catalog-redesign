@@ -14,6 +14,7 @@ interface NavbarProps {
   onLogin: () => void;
   onAdmin: () => void;
   onAdminLeads?: () => void;
+  onClientDashboard?: () => void;
 }
 
 const navItems = [
@@ -24,12 +25,13 @@ const navItems = [
   { id: 'favorites' as Page, label: 'Избранное', icon: 'Heart' },
 ];
 
-export default function Navbar({ currentPage, setCurrentPage, favoritesCount, compareCount, onLogin, onAdmin, onAdminLeads }: NavbarProps) {
+export default function Navbar({ currentPage, setCurrentPage, favoritesCount, compareCount, onLogin, onAdmin, onAdminLeads, onClientDashboard }: NavbarProps) {
   const { user } = useAuth();
   const { settings } = useSettings();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [ownerModalOpen, setOwnerModalOpen] = useState(false);
   const isStaff = user && ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'].includes(user.role);
+  const isClient = user && user.role === 'client';
   const brandName = settings.company_name || 'Бизнес. Маркетинг. Недвижимость.';
   const logoUrl = settings.logo_url;
 
@@ -117,6 +119,15 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
                   >
                     <Icon name="User" size={14} className="text-brand-blue flex-shrink-0" />
                     <span className="text-foreground font-medium">{user.name}</span>
+                  </button>
+                ) : isClient ? (
+                  <button
+                    onClick={onClientDashboard}
+                    title="Личный кабинет"
+                    className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted hover:bg-brand-blue/10 text-sm transition-colors"
+                  >
+                    <Icon name="LayoutDashboard" size={14} className="text-brand-blue flex-shrink-0" />
+                    <span className="text-foreground font-medium">Кабинет</span>
                   </button>
                 ) : (
                   <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted text-sm">
@@ -238,6 +249,15 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
                 >
                   <Icon name="Shield" size={18} />
                   Админ-панель
+                </button>
+              )}
+              {isClient && (
+                <button
+                  onClick={() => { onClientDashboard?.(); setDrawerOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-brand-blue hover:bg-brand-blue/10 transition"
+                >
+                  <Icon name="LayoutDashboard" size={18} />
+                  Личный кабинет
                 </button>
               )}
             </>

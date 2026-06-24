@@ -1,5 +1,6 @@
 const AUTH_URL = 'https://functions.poehali.dev/e5d9d96a-a3ca-45cd-9ea3-3e2982b626f7';
 const ADMIN_URL = 'https://functions.poehali.dev/aeccc0fe-9c55-4933-b292-432cec9cc09d';
+export const OWNER_URL = 'https://functions.poehali.dev/b343cde2-4c90-4a07-8aca-05942c726b7c';
 
 /** Отправляет сведения о клиентской ошибке на бэкенд (для email-уведомления админам).
  * Тихо игнорирует любые сбои — не должен мешать работе сайта. */
@@ -194,8 +195,16 @@ export const adminApi = {
     req(`${ADMIN_URL}?resource=users`, { method: 'POST', body: JSON.stringify(data) }),
   updateUser: (id: number, data: Record<string, unknown>) =>
     req(`${ADMIN_URL}?resource=users&id=${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteUser: (id: number) =>
-    req(`${ADMIN_URL}?resource=users&id=${id}`, { method: 'DELETE' }),
+  deleteUser: (id: number, toUserId?: number) =>
+    req(`${ADMIN_URL}?resource=users&id=${id}`, { method: 'DELETE', body: JSON.stringify(toUserId ? { to_user_id: toUserId } : {}) }),
+  getUserProfile: (id: number) =>
+    req(`${ADMIN_URL}?resource=user_profile&id=${id}`),
+  listModeration: () =>
+    req(`${ADMIN_URL}?resource=moderation`),
+  approveModeration: (id: number) =>
+    req(`${ADMIN_URL}?resource=moderation&id=${id}`, { method: 'PUT', body: JSON.stringify({ action: 'approve' }) }),
+  rejectModeration: (id: number, comment: string) =>
+    req(`${ADMIN_URL}?resource=moderation&id=${id}`, { method: 'PUT', body: JSON.stringify({ action: 'reject', comment }) }),
 
   // listings
   listListings: (offset = 0, limit = 25, tab = 'active', myOnly = false) => req(`${ADMIN_URL}?resource=listings&limit=${limit}&offset=${offset}&tab=${tab}${myOnly ? '&my=1' : ''}`),

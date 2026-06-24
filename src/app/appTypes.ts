@@ -40,7 +40,7 @@ export interface Property {
 }
 
 export type Page = 'home' | 'catalog' | 'map' | 'favorites' | 'compare' | 'network-tenants' | 'news' | 'leads';
-export type AppView = 'site' | 'login' | 'admin';
+export type AppView = 'site' | 'login' | 'admin' | 'client';
 
 export const PATH_BY_PAGE: Record<Page, string> = {
   home: '/',
@@ -71,24 +71,25 @@ export const VIEW_KEY = 'biznest_view';
 // остаётся публичный путь вроде «/map» — вернуть админку, а не сайт.
 export const IN_ADMIN_KEY = 'biznest_in_admin';
 
+export const IN_CLIENT_KEY = 'biznest_in_client';
+
 export function loadInitialView(): AppView {
   try {
-    // 1. Если сотрудник работал в админке — восстанавливаем её ПЕРВЫМ ДЕЛОМ,
-    //    независимо от текущего пути. Путь в адресной строке мог остаться любым
-    //    (/, /catalog, /map и т.д.) — это не значит что нужен сайт.
+    // 1. Если сотрудник работал в админке — восстанавливаем её ПЕРВЫМ ДЕЛОМ
     if (localStorage.getItem(IN_ADMIN_KEY) === '1') return 'admin';
+
+    // 2. Если клиент-собственник работал в кабинете — восстанавливаем
+    if (localStorage.getItem(IN_CLIENT_KEY) === '1') return 'client';
 
     const path = window.location.pathname;
 
-    // 2. Публичные страницы — открываем как сайт только если сотрудник
-    //    НЕ работал в админке (IN_ADMIN_KEY уже проверен выше).
-    //    Нужно чтобы ссылки "открыть на сайте" из новой вкладки работали корректно.
+    // 3. Публичные страницы — открываем как сайт
     const publicPaths = ['/object', '/catalog', '/map', '/favorites', '/compare', '/network-tenants', '/news', '/leads', '/declined'];
     if (path === '/' || publicPaths.some(p => path.startsWith(p))) return 'site';
 
-    // 3. Если в localStorage сохранён admin/login — восстанавливаем его.
+    // 4. Если в localStorage сохранён вид — восстанавливаем его.
     const v = localStorage.getItem(VIEW_KEY);
-    if (v === 'admin' || v === 'login') return v;
+    if (v === 'admin' || v === 'login' || v === 'client') return v;
     if (v === 'site') return v;
   } catch {
     // ignore localStorage errors

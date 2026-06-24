@@ -105,7 +105,7 @@ export function useAdminPolling(section: AdminSection) {
         tasks.push(
           adminApi.listListings(0, 1, 'moderation')
             .then(d => {
-              setNewModerationCount(section === 'listings' ? 0 : (d.counts?.moderation ?? 0));
+              setNewModerationCount(section === 'moderation' ? 0 : (d.counts?.moderation ?? 0));
             })
             .catch(() => {})
         );

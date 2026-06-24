@@ -74,13 +74,13 @@ export default function AdminSidebar({
       <nav className={`flex-1 overflow-y-auto space-y-1 ${collapsed ? 'p-2' : 'p-3'}`}>
         {sortedItems.map(item => {
           const badge =
-            item.id === 'marketing'  && socialPending > 0       ? socialPending
-            : item.id === 'leads'    && newLeadsCount > 0        ? newLeadsCount
-            : item.id === 'listings' && newModerationCount > 0   ? newModerationCount
+            item.id === 'marketing'   && socialPending > 0       ? socialPending
+            : item.id === 'leads'     && newLeadsCount > 0        ? newLeadsCount
+            : item.id === 'moderation' && newModerationCount > 0  ? newModerationCount
             : 0;
           const badgeColor =
-            item.id === 'leads'      ? 'bg-red-500'
-            : item.id === 'listings' ? 'bg-amber-500'
+            item.id === 'leads'       ? 'bg-red-500'
+            : item.id === 'moderation' ? 'bg-amber-500'
             : 'bg-amber-500';
           const isActive = section === item.id;
           return (
@@ -90,8 +90,8 @@ export default function AdminSidebar({
               onClick={() => {
                 setSection(item.id);
                 setSidebarOpen(false);
-                if (item.id === 'leads')    setNewLeadsCount(0);
-                if (item.id === 'listings') setNewModerationCount(0);
+                if (item.id === 'leads')       setNewLeadsCount(0);
+                if (item.id === 'moderation') setNewModerationCount(0);
               }}
               className={`relative w-full flex items-center rounded-xl text-sm transition ${
                 collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'
@@ -110,7 +110,7 @@ export default function AdminSidebar({
                 {item.id === 'leads' && newLeadsCount > 0 && collapsed && (
                   <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full animate-ping opacity-75" />
                 )}
-                {item.id === 'listings' && newModerationCount > 0 && collapsed && (
+                {item.id === 'moderation' && newModerationCount > 0 && collapsed && (
                   <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-500 rounded-full animate-ping opacity-75" />
                 )}
               </span>

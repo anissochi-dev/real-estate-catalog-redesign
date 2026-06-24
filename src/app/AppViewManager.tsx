@@ -3,6 +3,7 @@ import { LoginPage, lazyWithRetry } from './lazyPages';
 import ChunkErrorBoundary from './ChunkErrorBoundary';
 import SeoHead from '../components/SeoHead';
 import { type AppView } from './appTypes';
+import ClientDashboard from '../pages/client/ClientDashboard';
 
 const AdminPage = lazyWithRetry(() => import('../pages/AdminPage') as Promise<{ default: React.ComponentType<Record<string, unknown>> }>);
 
@@ -40,6 +41,27 @@ export default function AppViewManager({
           onBack={() => onSetView('site')}
         />
       </Suspense>
+    );
+  }
+
+  if (view === 'client') {
+    if (authLoading) return pageFallback;
+    if (!user || user.role !== 'client') {
+      return (
+        <Suspense fallback={pageFallback}>
+          <SeoHead title="Личный кабинет" noindex />
+          <LoginPage
+            onSuccess={() => { /* переход через useEffect */ }}
+            onBack={() => onSetView('site')}
+          />
+        </Suspense>
+      );
+    }
+    return (
+      <ChunkErrorBoundary>
+        <SeoHead title="Личный кабинет" noindex />
+        <ClientDashboard onExit={() => onSetView('site')} />
+      </ChunkErrorBoundary>
     );
   }
 

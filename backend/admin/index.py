@@ -408,6 +408,10 @@ def handler(event, context):
                 return _vb_learn_sources(cur, conn, method, rid, event, user)
             if resource == 'site_health':
                 return _site_health(cur, conn, method, action, event, user)
+            if resource == 'user_profile':
+                return _user_profile(cur, method, rid, user)
+            if resource == 'moderation':
+                return _moderation(cur, conn, method, rid, event, user)
 
             return _err(400, 'Неизвестный ресурс')
     finally:
@@ -3227,25 +3231,250 @@ def _users(cur, conn, method, rid, event, user):
 
     if method == 'DELETE' and rid:
         target_id = int(rid)
-        # Нельзя удалить самого себя
         if user.get('id') == target_id:
             return _err(403, 'Нельзя удалить собственный аккаунт')
-        # Проверяем что удаляемый пользователь существует
-        cur.execute(f"SELECT id, role FROM {SCHEMA}.users WHERE id = {target_id}")
+        cur.execute(f"SELECT id, name, role FROM {SCHEMA}.users WHERE id = {target_id}")
         target = cur.fetchone()
         if not target:
             return _err(404, 'Пользователь не найден')
-        # Только admin может удалять пользователей
         if user.get('role') != 'admin':
             return _err(403, 'Недостаточно прав')
-        # Запрещаем удалять других администраторов (защита от случайного удаления)
         if dict(target).get('role') == 'admin':
             return _err(403, 'Нельзя удалить администратора')
+
+        # Передача объектов и заявок другому пользователю
+        to_user_id = body.get('to_user_id')
+        listings_count = 0
+        leads_count = 0
+        if to_user_id:
+            to_id = int(to_user_id)
+            cur.execute(f"SELECT id FROM {SCHEMA}.users WHERE id = {to_id} AND is_active = TRUE")
+            if not cur.fetchone():
+                return _err(400, 'Получатель не найден или неактивен')
+            # Передаём broker_id у объектов
+            cur.execute(f"UPDATE {SCHEMA}.listings SET broker_id = {to_id} WHERE broker_id = {target_id}")
+            listings_count += cur.rowcount
+            # Передаём owner_user_id у объектов клиента
+            cur.execute(f"UPDATE {SCHEMA}.listings SET owner_user_id = {to_id} WHERE owner_user_id = {target_id}")
+            listings_count += cur.rowcount
+            # Передаём заявки
+            cur.execute(f"UPDATE {SCHEMA}.leads SET broker_id = {to_id} WHERE broker_id = {target_id}")
+            leads_count = cur.rowcount
+            # Записываем лог передачи
+            from_name = _safe(dict(target).get('name') or '', 150)
+            cur.execute(
+                f"SELECT name FROM {SCHEMA}.users WHERE id = {to_id}"
+            )
+            to_name = _safe((cur.fetchone() or {}).get('name') or '', 150)
+            by_id = user.get('id')
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.transfer_log "
+                f"(from_user_id, from_user_name, to_user_id, to_user_name, transferred_by, listings_count, leads_count) "
+                f"VALUES ({target_id}, '{from_name}', {to_id}, '{to_name}', {by_id}, {listings_count}, {leads_count})"
+            )
+
+        cur.execute(f"UPDATE {SCHEMA}.listings SET broker_id = NULL WHERE broker_id = {target_id}")
+        cur.execute(f"UPDATE {SCHEMA}.listings SET owner_user_id = NULL WHERE owner_user_id = {target_id}")
+        cur.execute(f"DELETE FROM {SCHEMA}.sessions WHERE user_id = {target_id}")
         cur.execute(f"DELETE FROM {SCHEMA}.users WHERE id = {target_id}")
         conn.commit()
-        return _ok({'success': True})
+        return _ok({'success': True, 'listings_transferred': listings_count, 'leads_transferred': leads_count})
 
     return _err(400, 'Bad request')
+
+
+def _user_profile(cur, method, rid, user):
+    """Профиль пользователя: его объекты, заявки, статистика. Только для admin/director/office_manager."""
+    ALLOWED = ('admin', 'director', 'office_manager', 'manager')
+    if user.get('role') not in ALLOWED:
+        return _err(403, 'Недостаточно прав')
+    if not rid:
+        return _err(400, 'Укажите id пользователя')
+    uid = int(rid)
+
+    cur.execute(
+        f"SELECT id, email, name, phone, max_phone, max_user_id, role, avatar, is_active, created_at "
+        f"FROM {SCHEMA}.users WHERE id = {uid}"
+    )
+    u = cur.fetchone()
+    if not u:
+        return _err(404, 'Пользователь не найден')
+
+    # Объекты: broker_id (сотрудник) или owner_user_id (клиент)
+    cur.execute(f"""
+        SELECT id, title, category, deal, price, area, address, status, is_visible,
+               image, created_at, broker_id, owner_user_id
+        FROM {SCHEMA}.listings
+        WHERE broker_id = {uid} OR owner_user_id = {uid}
+        ORDER BY created_at DESC LIMIT 50
+    """)
+    listings = [dict(r) for r in cur.fetchall()]
+
+    # Заявки брокера
+    cur.execute(f"""
+        SELECT id, name, phone, status, lead_type, listing_id, created_at
+        FROM {SCHEMA}.leads
+        WHERE broker_id = {uid}
+        ORDER BY created_at DESC LIMIT 50
+    """)
+    leads = [dict(r) for r in cur.fetchall()]
+
+    # Счётчики
+    cur.execute(f"SELECT COUNT(*) as cnt FROM {SCHEMA}.listings WHERE broker_id = {uid} AND status = 'active'")
+    active_listings = (cur.fetchone() or {}).get('cnt') or 0
+    cur.execute(f"SELECT COUNT(*) as cnt FROM {SCHEMA}.leads WHERE broker_id = {uid} AND status = 'new'")
+    new_leads = (cur.fetchone() or {}).get('cnt') or 0
+
+    return _ok({
+        'user': dict(u),
+        'listings': listings,
+        'leads': leads,
+        'stats': {
+            'active_listings': int(active_listings),
+            'new_leads': int(new_leads),
+            'total_listings': len(listings),
+            'total_leads': len(leads),
+        }
+    })
+
+
+def _moderation(cur, conn, method, rid, event, user):
+    """Модерация объектов собственников. Доступна admin, director, office_manager."""
+    ALLOWED = ('admin', 'director', 'office_manager')
+    if user.get('role') not in ALLOWED:
+        return _err(403, 'Доступ только для admin/director/office_manager')
+
+    if method == 'GET':
+        cur.execute(f"""
+            SELECT l.id, l.title, l.category, l.deal, l.price, l.area, l.address,
+                   l.status, l.image, l.owner_name, l.owner_phone,
+                   l.moderation_comment, l.created_at,
+                   u.id as owner_user_id, u.name as owner_user_name, u.email as owner_user_email
+            FROM {SCHEMA}.listings l
+            LEFT JOIN {SCHEMA}.users u ON u.id = l.owner_user_id
+            WHERE l.status = 'moderation'
+            ORDER BY l.created_at DESC
+        """)
+        items = [dict(r) for r in cur.fetchall()]
+        return _ok({'items': items, 'total': len(items)})
+
+    if method == 'PUT' and rid:
+        body = json.loads(event.get('body') or '{}')
+        action = (body.get('action') or '').strip()
+        lid = int(rid)
+
+        cur.execute(f"SELECT id, owner_user_id, owner_name, owner_phone FROM {SCHEMA}.listings WHERE id = {lid} AND status = 'moderation'")
+        listing = cur.fetchone()
+        if not listing:
+            return _err(404, 'Объект не найден или уже обработан')
+        listing = dict(listing)
+
+        if action == 'approve':
+            # Одобряем: делаем видимым, меняем статус
+            cur.execute(
+                f"UPDATE {SCHEMA}.listings SET status = 'active', is_visible = TRUE, "
+                f"moderation_comment = NULL, updated_at = NOW() WHERE id = {lid}"
+            )
+
+            # Активируем аккаунт клиента и получаем временный пароль для отправки
+            tmp_password = None
+            if listing.get('owner_user_id'):
+                oid = listing['owner_user_id']
+                cur.execute(f"SELECT is_active, max_phone FROM {SCHEMA}.users WHERE id = {oid}")
+                urow = cur.fetchone()
+                if urow and not dict(urow).get('is_active'):
+                    tmp_password = dict(urow).get('max_phone')  # хранили пароль здесь
+                    cur.execute(
+                        f"UPDATE {SCHEMA}.users SET is_active = TRUE, max_phone = NULL WHERE id = {oid}"
+                    )
+
+            conn.commit()
+
+            # Если у объекта есть owner_user_id — отправляем уведомление в MAX
+            if listing.get('owner_user_id'):
+                _notify_owner_moderation(
+                    listing['owner_user_id'], lid, 'approved',
+                    listing.get('owner_name') or '', None, conn,
+                    tmp_password=tmp_password
+                )
+            return _ok({'success': True, 'action': 'approved'})
+
+        if action == 'reject':
+            comment = _safe(body.get('comment') or '', 500)
+            cur.execute(
+                f"UPDATE {SCHEMA}.listings SET status = 'rejected', is_visible = FALSE, "
+                f"moderation_comment = {_str_or_null(comment, 500)}, updated_at = NOW() WHERE id = {lid}"
+            )
+            conn.commit()
+            if listing.get('owner_user_id'):
+                _notify_owner_moderation(
+                    listing['owner_user_id'], lid, 'rejected',
+                    listing.get('owner_name') or '', comment, conn
+                )
+            return _ok({'success': True, 'action': 'rejected'})
+
+        return _err(400, 'action должен быть approve или reject')
+
+    return _err(400, 'Bad request')
+
+
+def _notify_owner_moderation(owner_user_id, listing_id, result, owner_name, comment, conn, tmp_password=None):
+    """Отправляет собственнику уведомление о результате модерации через MAX."""
+    import urllib.request as _ureq
+    try:
+        with conn.cursor() as cur2:
+            cur2.execute(
+                f"SELECT notify_max_enabled, notify_max_bot_token FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
+            )
+            srow = cur2.fetchone()
+            if not srow:
+                return
+            enabled, bot_token = srow[0], srow[1]
+            if not enabled or not (bot_token or '').strip():
+                return
+            # max_user_id собственника
+            cur2.execute(f"SELECT max_user_id FROM {SCHEMA}.users WHERE id = {owner_user_id}")
+            urow = cur2.fetchone()
+            if not urow or not urow[0]:
+                return
+            max_user_id = urow[0].strip()
+
+        if result == 'approved':
+            text = (
+                f'✅ Ваш объект #{listing_id} опубликован!\n\n'
+                f'Он теперь виден на сайте. '
+            )
+            if tmp_password:
+                cur2 = conn.cursor()
+                cur2.execute(f"SELECT email FROM {SCHEMA}.users WHERE id = {owner_user_id}")
+                erow = cur2.fetchone()
+                login_email = erow[0] if erow else ''
+                text += (
+                    f'\n\n🔑 Ваши данные для входа в личный кабинет:\n'
+                    f'Логин: {login_email}\n'
+                    f'Пароль: {tmp_password}\n\n'
+                    f'В личном кабинете вы можете отслеживать просмотры и заявки по вашим объектам.'
+                )
+            else:
+                text += 'В личном кабинете вы можете отслеживать просмотры и заявки по объекту.'
+        else:
+            text = (
+                f'❌ Ваш объект #{listing_id} не прошёл проверку.\n'
+            )
+            if comment:
+                text += f'\nПричина: {comment}\n'
+            text += '\nСвяжитесь с нами для уточнений.'
+
+        payload = json.dumps({'text': text}, ensure_ascii=False).encode('utf-8')
+        req = _ureq.Request(
+            f'https://botapi.max.ru/messages?user_id={max_user_id}',
+            data=payload,
+            headers={'Authorization': bot_token.strip(), 'Content-Type': 'application/json'},
+            method='POST',
+        )
+        _ureq.urlopen(req, timeout=8)
+    except Exception as e:
+        print(f'[admin] _notify_owner_moderation error: {e}')
 
 
 def _pages(cur, conn, method, rid, event, user):

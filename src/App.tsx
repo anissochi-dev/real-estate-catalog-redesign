@@ -32,6 +32,7 @@ import {
   pageFromPath,
   VIEW_KEY,
   IN_ADMIN_KEY,
+  IN_CLIENT_KEY,
   loadInitialView,
 } from './app/appTypes';
 
@@ -77,6 +78,7 @@ export default function App() {
     setViewState(v);
     try {
       if (v === 'admin') localStorage.setItem(VIEW_KEY, 'admin');
+      else if (v === 'client') localStorage.setItem(VIEW_KEY, 'client');
       else localStorage.removeItem(VIEW_KEY);
     } catch {
       // ignore
@@ -102,24 +104,26 @@ export default function App() {
     } catch { /* ignore */ }
   }, [navigate]);
 
-  // Авто-переход: как только user появился в контексте и мы на экране логина — редиректим
+  // Авто-переход: как только user появился в контексте и мы на экране логина
   useEffect(() => {
     if (view === 'login' && user && !authLoading) {
-      setView(ADMIN_ROLES.includes(user.role) ? 'admin' : 'site');
+      if (ADMIN_ROLES.includes(user.role)) setView('admin');
+      else if (user.role === 'client') setView('client');
+      else setView('site');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, authLoading]);
 
-  // Флаг «в админке» для восстановления режима при F5.
-  // Ставим когда реально показана админка (вошёл сотрудник с ролью).
-  // Снимаем только когда явно вышли или сессия истекла — НЕ снимаем пока идёт загрузка (authLoading),
-  // иначе F5 во время verify стирает ключ и при следующей перезагрузке открывается сайт.
+  // Флаги восстановления вида при F5
   useEffect(() => {
     try {
       if (authLoading) return;
       const inAdmin = view === 'admin' && !!user && ADMIN_ROLES.includes(user.role);
       if (inAdmin) localStorage.setItem(IN_ADMIN_KEY, '1');
       else localStorage.removeItem(IN_ADMIN_KEY);
+      const inClient = view === 'client' && !!user && user.role === 'client';
+      if (inClient) localStorage.setItem(IN_CLIENT_KEY, '1');
+      else localStorage.removeItem(IN_CLIENT_KEY);
     } catch { /* ignore */ }
      
   }, [view, user, authLoading]);
@@ -165,7 +169,7 @@ export default function App() {
     />
   );
 
-  if (view === 'login' || view === 'admin') {
+  if (view === 'login' || view === 'admin' || view === 'client') {
     return managedView;
   }
 
@@ -219,6 +223,7 @@ export default function App() {
         onLogin={() => setView('login')}
         onAdmin={() => setView('admin')}
         onAdminLeads={() => { setAdminInitialSection('leads'); setView('admin'); }}
+        onClientDashboard={() => setView('client')}
       />
 
       <main>

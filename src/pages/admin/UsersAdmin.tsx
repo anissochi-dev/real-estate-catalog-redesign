@@ -50,6 +50,7 @@ export default function UsersAdmin() {
   const [lastCreated, setLastCreated] = useState<{ email: string; password: string; name: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<U | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [toUserId, setToUserId] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = () => adminApi.listUsers().then(d => setUsers(d.users));
@@ -58,9 +59,10 @@ export default function UsersAdmin() {
     if (!deleteConfirm) return;
     setDeleting(true);
     try {
-      await adminApi.deleteUser(deleteConfirm.id);
+      await adminApi.deleteUser(deleteConfirm.id, toUserId ?? undefined);
       setUsers(prev => prev.filter(u => u.id !== deleteConfirm.id));
       setDeleteConfirm(null);
+      setToUserId(null);
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Ошибка удаления');
     } finally {
@@ -442,7 +444,8 @@ export default function UsersAdmin() {
       {/* Модальное окно подтверждения удаления */}
       {deleteConfirm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full shadow-xl p-6 space-y-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-xl p-6 space-y-4">
+            {/* Заголовок */}
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
                 <Icon name="Trash2" size={20} className="text-red-600" />
@@ -452,6 +455,8 @@ export default function UsersAdmin() {
                 <div className="text-sm text-muted-foreground mt-0.5">Это действие необратимо</div>
               </div>
             </div>
+
+            {/* Карточка удаляемого */}
             <div className="bg-muted rounded-xl px-4 py-3 text-sm space-y-1">
               <div className="font-semibold">{deleteConfirm.name}</div>
               <div className="text-muted-foreground flex items-center gap-1">
@@ -464,9 +469,32 @@ export default function UsersAdmin() {
                 </span>
               </div>
             </div>
+
+            {/* Передача объектов и заявок */}
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Передать объекты и заявки другому сотруднику</div>
+              <div className="text-xs text-muted-foreground">Необязательно — если не выбрать, данные останутся без ответственного</div>
+              <select
+                value={toUserId ?? ''}
+                onChange={e => setToUserId(e.target.value ? Number(e.target.value) : null)}
+                className="w-full border border-border rounded-xl px-3 py-2 text-sm outline-none focus:border-brand-blue"
+              >
+                <option value="">— Не передавать —</option>
+                {users
+                  .filter(u => u.id !== deleteConfirm.id && u.role !== 'client' && u.is_active)
+                  .map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({ROLES.find(r => r.id === u.role)?.label ?? u.role})
+                    </option>
+                  ))
+                }
+              </select>
+            </div>
+
+            {/* Кнопки */}
             <div className="flex gap-3 justify-end pt-1">
               <button
-                onClick={() => setDeleteConfirm(null)}
+                onClick={() => { setDeleteConfirm(null); setToUserId(null); }}
                 disabled={deleting}
                 className="px-4 py-2 rounded-xl text-sm border border-border hover:bg-muted disabled:opacity-50"
               >

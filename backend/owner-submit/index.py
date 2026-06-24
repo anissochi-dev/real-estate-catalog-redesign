@@ -430,6 +430,61 @@ def handler(event: dict, context) -> dict:
                         (owner_phone, norm_phone, owner_name, owner_email)
                     )
 
+            # ── Upsert клиентского аккаунта (role=client) ────────────────────
+            # Ищем по email, если указан, иначе по телефону (нормализованному).
+            # Аккаунт создаётся неактивным (is_active=FALSE) — активируется
+            # после одобрения модератором.
+            owner_user_id = None
+            if owner_email:
+                cur.execute(
+                    f"SELECT id FROM {SCHEMA}.users WHERE email = %s LIMIT 1",
+                    (owner_email.lower(),)
+                )
+                existing_user = cur.fetchone()
+            else:
+                # Ищем по телефону (в поле phone)
+                cur.execute(
+                    f"SELECT id FROM {SCHEMA}.users WHERE phone = %s AND role = 'client' LIMIT 1",
+                    (norm_phone,)
+                )
+                existing_user = cur.fetchone()
+
+            if existing_user:
+                owner_user_id = existing_user['id']
+            else:
+                # Создаём новый аккаунт клиента
+                import secrets as _secrets
+                import hashlib as _hashlib
+                # Временный пароль — будет отправлен в MAX после одобрения
+                tmp_password = _secrets.token_urlsafe(10)
+                pw_hash = _hashlib.sha256(tmp_password.encode()).hexdigest()
+                # Email: если не указан — генерируем placeholder
+                reg_email = (owner_email or '').lower() or f"owner_{norm_phone}@noemail.local"
+                reg_name = owner_name[:150]
+                cur.execute(
+                    f"INSERT INTO {SCHEMA}.users "
+                    f"(email, password_hash, name, phone, role, is_active) "
+                    f"VALUES (%s, %s, %s, %s, 'client', FALSE) "
+                    f"ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name "
+                    f"RETURNING id",
+                    (reg_email, pw_hash, reg_name, norm_phone)
+                )
+                owner_user_id = cur.fetchone()['id']
+                # Сохраняем пароль во временном поле max_user_id для последующей отправки
+                # (используем отдельное поле, чтобы не смешивать с реальным max_user_id)
+                # После отправки через MAX — поле очищается
+                cur.execute(
+                    f"UPDATE {SCHEMA}.users SET max_phone = %s WHERE id = %s",
+                    (tmp_password, owner_user_id)
+                )
+
+            # Привязываем объект к клиенту
+            if owner_user_id:
+                cur.execute(
+                    f"UPDATE {SCHEMA}.listings SET owner_user_id = %s WHERE id = %s",
+                    (owner_user_id, listing_id)
+                )
+
             conn.commit()
 
         # Уведомляем сотрудников через MAX асинхронно
