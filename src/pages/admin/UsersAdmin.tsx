@@ -51,7 +51,26 @@ export default function UsersAdmin() {
   const [deleteConfirm, setDeleteConfirm] = useState<U | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [toUserId, setToUserId] = useState<number | null>(null);
+  const [accessToggling, setAccessToggling] = useState<number | null>(null);
+  const [tab, setTab] = useState<'staff' | 'clients'>('staff');
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const staffUsers = users.filter(u => u.role !== 'client');
+  const clientUsers = users.filter(u => u.role === 'client');
+  const visibleUsers = tab === 'staff' ? staffUsers : clientUsers;
+  const pendingClients = clientUsers.filter(u => !u.is_active).length;
+
+  const handleToggleAccess = async (u: U) => {
+    setAccessToggling(u.id);
+    try {
+      await adminApi.updateUser(u.id, { is_active: !u.is_active });
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, is_active: !u.is_active } : x));
+    } catch {
+      alert('Ошибка изменения доступа');
+    } finally {
+      setAccessToggling(null);
+    }
+  };
 
   const load = () => adminApi.listUsers().then(d => setUsers(d.users));
 
@@ -141,13 +160,42 @@ export default function UsersAdmin() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <div className="text-sm text-muted-foreground">Всего: {users.length}</div>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        {/* Вкладки */}
+        <div className="flex bg-muted rounded-xl p-1 gap-1">
+          <button
+            onClick={() => setTab('staff')}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${tab === 'staff' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            Сотрудники
+            <span className="ml-1.5 text-xs text-muted-foreground">({staffUsers.length})</span>
+          </button>
+          <button
+            onClick={() => setTab('clients')}
+            className={`relative px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${tab === 'clients' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            Собственники
+            <span className="ml-1.5 text-xs text-muted-foreground">({clientUsers.length})</span>
+            {pendingClients > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center">
+                {pendingClients}
+              </span>
+            )}
+          </button>
+        </div>
         <button onClick={() => { setLastCreated(null); setEditing({ role: 'broker', is_active: true }); }}
           className="btn-blue text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2">
           <Icon name="UserPlus" size={16} /> Добавить
         </button>
       </div>
+
+      {/* Подсказка для вкладки собственников */}
+      {tab === 'clients' && pendingClients > 0 && (
+        <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
+          <Icon name="Clock" size={16} className="shrink-0 mt-0.5 text-amber-500" />
+          <span><b>{pendingClients}</b> собственник{pendingClients > 1 ? 'а' : ''} ожидает доступа к личному кабинету. Доступ открывается автоматически после одобрения объекта, или вручную кнопкой ниже.</span>
+        </div>
+      )}
 
       {lastCreated && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
@@ -172,7 +220,7 @@ export default function UsersAdmin() {
       <>
       {/* Мобильный вид */}
       <div className="sm:hidden bg-white rounded-2xl shadow-sm divide-y divide-border">
-        {users.map(u => (
+        {visibleUsers.map(u => (
           <div key={u.id} className="px-4 py-3 flex items-center gap-3">
             <div className="shrink-0">
               {u.avatar ? (
@@ -187,6 +235,16 @@ export default function UsersAdmin() {
               <div className="flex items-center justify-between gap-2">
                 <div className="font-semibold text-sm truncate">{u.name}</div>
                 <div className="flex items-center gap-2 shrink-0">
+                  {u.role === 'client' && isAdmin && (
+                    <button
+                      onClick={() => handleToggleAccess(u)}
+                      disabled={accessToggling === u.id}
+                      title={u.is_active ? 'Закрыть доступ к кабинету' : 'Дать доступ к кабинету'}
+                      className={u.is_active ? 'text-emerald-600 hover:text-red-500' : 'text-amber-500 hover:text-emerald-600'}
+                    >
+                      <Icon name={accessToggling === u.id ? 'Loader2' : u.is_active ? 'ShieldCheck' : 'ShieldOff'} size={16} className={accessToggling === u.id ? 'animate-spin' : ''} />
+                    </button>
+                  )}
                   <button onClick={() => setEditing(u)} className="text-brand-blue">
                     <Icon name="Pencil" size={16} />
                   </button>
@@ -242,7 +300,7 @@ export default function UsersAdmin() {
             </tr>
           </thead>
           <tbody>
-            {users.map(u => (
+            {visibleUsers.map(u => (
               <tr key={u.id} className="border-t border-border hover:bg-muted/30">
                 <td className="px-4 py-3">
                   {u.avatar ? (
@@ -300,13 +358,25 @@ export default function UsersAdmin() {
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-2">
-                    <button
-                      onClick={() => copyInvite(u.email, '••••••', u.name, u.id)}
-                      title="Скопировать приглашение (без пароля)"
-                      className="text-muted-foreground hover:text-emerald-600 transition-colors"
-                    >
-                      <Icon name={copiedId === u.id ? 'Check' : 'Copy'} size={15} />
-                    </button>
+                    {u.role === 'client' && isAdmin ? (
+                      <button
+                        onClick={() => handleToggleAccess(u)}
+                        disabled={accessToggling === u.id}
+                        title={u.is_active ? 'Закрыть доступ к кабинету' : 'Дать доступ к кабинету'}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${u.is_active ? 'bg-emerald-50 text-emerald-700 hover:bg-red-50 hover:text-red-600' : 'bg-amber-50 text-amber-700 hover:bg-emerald-50 hover:text-emerald-700'}`}
+                      >
+                        <Icon name={accessToggling === u.id ? 'Loader2' : u.is_active ? 'ShieldCheck' : 'ShieldOff'} size={13} className={accessToggling === u.id ? 'animate-spin' : ''} />
+                        {u.is_active ? 'Доступ открыт' : 'Дать доступ'}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => copyInvite(u.email, '••••••', u.name, u.id)}
+                        title="Скопировать приглашение (без пароля)"
+                        className="text-muted-foreground hover:text-emerald-600 transition-colors"
+                      >
+                        <Icon name={copiedId === u.id ? 'Check' : 'Copy'} size={15} />
+                      </button>
+                    )}
                     <button onClick={() => setEditing(u)} className="text-brand-blue hover:text-brand-blue/70">
                       <Icon name="Pencil" size={16} />
                     </button>
@@ -323,6 +393,14 @@ export default function UsersAdmin() {
                 </td>
               </tr>
             ))}
+          {visibleUsers.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground text-sm">
+                  <Icon name="Users" size={32} className="mx-auto mb-2 text-muted-foreground/40" />
+                  {tab === 'clients' ? 'Собственников пока нет — они появятся после подачи объекта через форму на сайте' : 'Нет сотрудников'}
+                </td>
+              </tr>
+          )}
           </tbody>
         </table>
       </div>
