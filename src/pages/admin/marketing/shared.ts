@@ -11,6 +11,7 @@ export interface MarketingStats {
     total_deals: number;
     total_commission?: number;
     won_deals?: number;
+    qr_scans?: number;
   };
   leads_by_source: { source: string; cnt: number }[];
   leads_by_status: { status: string; cnt: number }[];
@@ -20,6 +21,19 @@ export interface MarketingStats {
   top_listings: { id: number; title: string; category: string; deal: string; views_site: number; price: number; district?: string; leads_count?: number; days_on_market?: number }[];
   listings_stats: { category: string; deal: string; cnt: number; total_views: number; avg_views: number }[];
   deals_by_source: { source: string; cnt: number; total_amount: number; total_commission?: number }[];
+  qr_by_listing?: QrListingRow[];
+}
+
+export interface QrListingRow {
+  listing_id: number;
+  title: string | null;
+  slug: string | null;
+  category: string | null;
+  deal: string | null;
+  price: number | null;
+  district: string | null;
+  scans: number;
+  last_scan: string | null;
 }
 
 export interface PriceResult {

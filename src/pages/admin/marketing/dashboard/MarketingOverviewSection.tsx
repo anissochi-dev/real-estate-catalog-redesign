@@ -1,7 +1,72 @@
+import { useState } from 'react';
 import Icon from '@/components/ui/icon';
-import { MarketingStats, SOURCE_COLORS, STATUS_LABELS, fmtMoney } from '../shared';
+import { MarketingStats, QrListingRow, SOURCE_COLORS, STATUS_LABELS, CATEGORY_LABELS, fmtMoney } from '../shared';
 
 interface BudgetItem { id: number; title: string }
+
+function fmtDate(s: string | null): string {
+  if (!s) return '—';
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleString('ru', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function QrModal({ rows, period, onClose }: { rows: QrListingRow[]; period: string; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Icon name="QrCode" size={18} className="text-brand-blue" />
+            <span className="font-semibold">Переходы по QR-коду — {period}</span>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-muted">
+            <Icon name="X" size={18} />
+          </button>
+        </div>
+        <div className="overflow-y-auto p-4">
+          {rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">Переходов по QR-коду за этот период пока нет</p>
+          ) : (
+            <div className="space-y-2">
+              {rows.map(r => (
+                <a
+                  key={r.listing_id}
+                  href={r.slug ? `/object/${r.slug}` : `/object/${r.listing_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-muted/40 transition"
+                >
+                  <div className="w-9 h-9 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center flex-shrink-0">
+                    <Icon name="QrCode" size={17} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium truncate">{r.title || `Объект #${r.listing_id}`}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
+                      {r.category && <span>{CATEGORY_LABELS[r.category] || r.category}</span>}
+                      {r.district && <span>· {r.district}</span>}
+                      <span>· последний: {fmtDate(r.last_scan)}</span>
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-lg font-bold text-brand-blue leading-none">{r.scans}</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">переходов</div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function MiniBar({ value, max, cls = 'bg-brand-blue' }: { value: number; max: number; cls?: string }) {
   return (
@@ -11,8 +76,8 @@ function MiniBar({ value, max, cls = 'bg-brand-blue' }: { value: number; max: nu
   );
 }
 
-function KpiCard({ icon, label, value, sub, color = 'blue', trend }: {
-  icon: string; label: string; value: string | number; sub?: string; color?: string; trend?: number;
+function KpiCard({ icon, label, value, sub, color = 'blue', trend, onClick }: {
+  icon: string; label: string; value: string | number; sub?: string; color?: string; trend?: number; onClick?: () => void;
 }) {
   const colorMap: Record<string, string> = {
     blue:   'bg-brand-blue/10 text-brand-blue',
@@ -22,7 +87,10 @@ function KpiCard({ icon, label, value, sub, color = 'blue', trend }: {
     rose:   'bg-rose-100 text-rose-600',
   };
   return (
-    <div className="bg-white rounded-2xl border border-border p-4 flex items-start gap-3">
+    <div
+      onClick={onClick}
+      className={`bg-white rounded-2xl border border-border p-4 flex items-start gap-3 ${onClick ? 'cursor-pointer hover:border-brand-blue hover:shadow-sm transition' : ''}`}
+    >
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${colorMap[color]}`}>
         <Icon name={icon} size={19} />
       </div>
@@ -65,8 +133,16 @@ interface Props {
 export default function MarketingOverviewSection({
   stats, totalViews, maxSource, maxStatus, highPriority, onGoToBudget,
 }: Props) {
+  const [qrOpen, setQrOpen] = useState(false);
+  const qrRows = stats.qr_by_listing ?? [];
+  const qrTotal = stats.totals.qr_scans ?? 0;
+
   return (
     <div className="space-y-4">
+
+      {qrOpen && (
+        <QrModal rows={qrRows} period={stats.period || ''} onClose={() => setQrOpen(false)} />
+      )}
 
       {/* Предупреждение если есть срочные объекты */}
       {highPriority.length > 0 && (
@@ -90,7 +166,7 @@ export default function MarketingOverviewSection({
       )}
 
       {/* KPI */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
         <KpiCard
           icon="Inbox" label="Заявок" color="blue"
           value={stats.totals.total_leads}
@@ -99,6 +175,12 @@ export default function MarketingOverviewSection({
         <KpiCard
           icon="Eye" label="Просмотров" color="purple"
           value={totalViews.toLocaleString('ru')}
+        />
+        <KpiCard
+          icon="QrCode" label="Переходов по QR" color="rose"
+          value={qrTotal.toLocaleString('ru')}
+          sub={qrTotal > 0 ? 'смотреть объекты →' : undefined}
+          onClick={() => setQrOpen(true)}
         />
         <KpiCard
           icon="Building2" label="Объектов" color="green"

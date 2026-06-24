@@ -1577,10 +1577,13 @@ def _site_health(cur, conn, method, action, event, user):
     # ── МАРКЕТИНГОВАЯ АНАЛИТИКА ──────────────────────────────────────────────
     if action == 'marketing_stats':
         # Фильтр по периоду: 7 / 30 / 90 дней или 'all'
-        period_raw = params.get('period', '30')
+        qp = event.get('queryStringParameters') or {}
+        period_raw = qp.get('period', '30')
         period_days = int(period_raw) if period_raw in ('7', '30', '90') else None
         period_cond = f"AND created_at >= NOW() - INTERVAL '{period_days} days'" if period_days else ''
         period_label = f'{period_days} дней' if period_days else 'всё время'
+        # Условие периода для listing_stats (колонка recorded_at)
+        stats_period_cond = f"AND recorded_at >= NOW() - INTERVAL '{period_days} days'" if period_days else ''
 
         # 1. Лиды по источникам (с учётом периода)
         cur.execute(f"""
@@ -1695,6 +1698,30 @@ def _site_health(cur, conn, method, action, event, user):
         """)
         totals = dict(cur.fetchone())
 
+        # 10. QR-переходы: общий счётчик за период
+        cur.execute(f"""
+            SELECT COALESCE(SUM(count), 0) AS total
+            FROM {SCHEMA}.listing_stats
+            WHERE event_type = 'qr_scan' {stats_period_cond}
+        """)
+        qr_total = int((cur.fetchone() or {}).get('total') or 0)
+        totals['qr_scans'] = qr_total
+
+        # 11. QR-переходы по объектам (для кликабельного списка)
+        cur.execute(f"""
+            SELECT s.listing_id,
+                   l.title, l.slug, l.category, l.deal, l.price, l.district,
+                   SUM(s.count)::int AS scans,
+                   MAX(s.recorded_at) AS last_scan
+            FROM {SCHEMA}.listing_stats s
+            LEFT JOIN {SCHEMA}.listings l ON l.id = s.listing_id
+            WHERE s.event_type = 'qr_scan' {stats_period_cond}
+            GROUP BY s.listing_id, l.title, l.slug, l.category, l.deal, l.price, l.district
+            ORDER BY scans DESC
+            LIMIT 100
+        """)
+        qr_by_listing = [dict(r) for r in cur.fetchall()]
+
         return _ok({
             'period': period_label,
             'period_days': period_days,
@@ -1707,6 +1734,7 @@ def _site_health(cur, conn, method, action, event, user):
             'top_listings': top_listings,
             'listings_stats': listings_stats,
             'deals_by_source': deals_by_source,
+            'qr_by_listing': qr_by_listing,
         })
 
     # ── ДЕЙСТВИЯ ОБСЛУЖИВАНИЯ ────────────────────────────────────────────────

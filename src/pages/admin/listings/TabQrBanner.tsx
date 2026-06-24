@@ -157,7 +157,8 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
 
   // ── QR ────────────────────────────────────────────────────────────────────
   const generateQr = useCallback(async () => {
-    const url = publicUrl || `${window.location.origin}/object/${listing.id}`;
+    const base = publicUrl || `${window.location.origin}/object/${listing.id}`;
+    const url = `${base}${base.includes('?') ? '&' : '?'}from=qr`;
     try {
       const dataUrl = await QRCode.toDataURL(url, { width: 300, margin: 1, color: { dark: textColor, light: '#00000000' } });
       setQrDataUrl(dataUrl);

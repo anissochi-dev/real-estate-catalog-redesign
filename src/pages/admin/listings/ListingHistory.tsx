@@ -130,7 +130,7 @@ const EVENT_LABELS_FALLBACK: Record<string, string> = {
   view_avito: 'Просмотры', view_cian: 'Просмотры', view_yandex: 'Просмотры',
   view_domclick: 'Просмотры', view_xml: 'Просмотры', view_site: 'Просмотры сайта',
   view_other: 'Просмотры', call: 'Звонки', lead: 'Заявки',
-  favorite: 'В избранном', manual: 'Прочее',
+  favorite: 'В избранном', manual: 'Прочее', qr_scan: 'Переходы по QR-коду',
 };
 
 function fmtDt(s: string) {

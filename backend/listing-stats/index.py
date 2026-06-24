@@ -35,6 +35,7 @@ EVENT_LABELS = {
     'view_domclick': 'Просмотр Домклик',
     'view_xml': 'Просмотр XML',
     'view_other': 'Просмотр (другое)',
+    'qr_scan': 'Переход по QR-коду',
     'call': 'Звонок',
     'lead': 'Заявка',
     'favorite': 'В избранном',
@@ -93,6 +94,15 @@ def handler(event: dict, context) -> dict:
                     cur.execute(
                         f"INSERT INTO {SCHEMA}.listing_stats (listing_id, event_type, source, count) VALUES (%s, %s, %s, %s)",
                         (listing_id, 'view_site', 'site', 1)
+                    )
+                    conn.commit()
+                    return _ok({'ok': True})
+
+                # qr_scan — публичный: фиксируем переход по QR-коду на объект
+                if event_type == 'qr_scan':
+                    cur.execute(
+                        f"INSERT INTO {SCHEMA}.listing_stats (listing_id, event_type, source, count) VALUES (%s, %s, %s, %s)",
+                        (listing_id, 'qr_scan', 'qr', 1)
                     )
                     conn.commit()
                     return _ok({'ok': True})
