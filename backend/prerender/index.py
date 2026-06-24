@@ -2,7 +2,7 @@
 Prerender для поисковых ботов: возвращает HTML с мета-тегами, JSON-LD
 и текстовым контентом из БД для каждого типа страниц.
 
-Вызывается Edge-функцией (netlify/edge-functions/bot-render.ts) по параметру ?path=<pathname>.
+Вызывается слоем-перехватчиком ботов по параметру ?path=<pathname>.
 """
 import json
 import os
@@ -754,7 +754,7 @@ def handler(event: dict, context):
     """
     Prerender для поисковых ботов: возвращает HTML с мета-тегами, JSON-LD
     и текстовым контентом из БД.
-    Вызывается Edge-функцией (netlify/edge-functions/bot-render.ts).
+    Вызывается слоем-перехватчиком ботов по параметру ?path=<pathname>.
     """
     method = event.get('httpMethod', 'GET')
     if method == 'OPTIONS':
