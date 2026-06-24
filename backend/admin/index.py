@@ -3225,6 +3225,26 @@ def _users(cur, conn, method, rid, event, user):
         conn.commit()
         return _ok({'id': cur.fetchone()['id'], 'success': True})
 
+    if method == 'DELETE' and rid:
+        target_id = int(rid)
+        # Нельзя удалить самого себя
+        if user.get('id') == target_id:
+            return _err(403, 'Нельзя удалить собственный аккаунт')
+        # Проверяем что удаляемый пользователь существует
+        cur.execute(f"SELECT id, role FROM {SCHEMA}.users WHERE id = {target_id}")
+        target = cur.fetchone()
+        if not target:
+            return _err(404, 'Пользователь не найден')
+        # Только admin может удалять пользователей
+        if user.get('role') != 'admin':
+            return _err(403, 'Недостаточно прав')
+        # Запрещаем удалять других администраторов (защита от случайного удаления)
+        if dict(target).get('role') == 'admin':
+            return _err(403, 'Нельзя удалить администратора')
+        cur.execute(f"DELETE FROM {SCHEMA}.users WHERE id = {target_id}")
+        conn.commit()
+        return _ok({'success': True})
+
     return _err(400, 'Bad request')
 
 

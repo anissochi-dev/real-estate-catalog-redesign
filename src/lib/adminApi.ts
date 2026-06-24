@@ -190,8 +190,12 @@ export const authApi = {
 export const adminApi = {
   // users
   listUsers: () => req(`${ADMIN_URL}?resource=users`),
+  createUser: (data: Record<string, unknown>) =>
+    req(`${ADMIN_URL}?resource=users`, { method: 'POST', body: JSON.stringify(data) }),
   updateUser: (id: number, data: Record<string, unknown>) =>
     req(`${ADMIN_URL}?resource=users&id=${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteUser: (id: number) =>
+    req(`${ADMIN_URL}?resource=users&id=${id}`, { method: 'DELETE' }),
 
   // listings
   listListings: (offset = 0, limit = 25, tab = 'active', myOnly = false) => req(`${ADMIN_URL}?resource=listings&limit=${limit}&offset=${offset}&tab=${tab}${myOnly ? '&my=1' : ''}`),
