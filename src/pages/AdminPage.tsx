@@ -18,8 +18,6 @@ import VBKnowledgeAdmin from './admin/VBKnowledgeAdmin';
 import SeoHubAdmin from './admin/SeoHubAdmin';
 import DistrictsAdmin from './admin/DistrictsAdmin';
 import MarketingAdmin from './admin/MarketingAdmin';
-import ModerationTab from './admin/ModerationTab';
-
 
 interface Props {
   onExit: () => void;
@@ -77,7 +75,6 @@ export default function AdminPage({ onExit, initialSection }: Props) {
       {section === 'seo' && <SeoHubAdmin />}
       {section === 'vb-knowledge' && <VBKnowledgeAdmin />}
       {section === 'marketing' && <MarketingAdmin />}
-      {section === 'moderation' && <ModerationTab />}
 
     </AdminLayout>
   );
