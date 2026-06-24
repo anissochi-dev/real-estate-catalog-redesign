@@ -54,35 +54,35 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   const newsLimit = settings.home_news_limit ?? 10;
   const showNewsOnHome = settings.show_news_on_home;
 
+  // Загружаем статистику — только если prefetch не принёс данные
   useEffect(() => {
     const cached = (window as Window & { __PREFETCH__?: Pf }).__PREFETCH__;
-    const requests: Promise<void>[] = [];
-
-    // stats + leadsCount — один запрос вместо двух
-    if (!cached?.stats || !cached?.leadsCount) {
-      requests.push(
-        fetch(`${LISTINGS_URL}?resource=public_home_data`)
-          .then(r => r.json())
-          .then(d => {
-            if (d.stats) setStats({ total: d.stats.total || 0, main_city: d.stats.main_city || 'Краснодар', by_category: d.stats.by_category || {}, by_deal: d.stats.by_deal || {} });
-            if (typeof d.leads_count === 'number') setLeadsCount(d.leads_count);
-          })
-          .catch(() => undefined),
-      );
-    }
-
-    // Новости — отдельный URL
-    if (showNewsOnHome !== false) {
-      requests.push(
-        fetch(`${NEWS_URL}?action=list&limit=${newsLimit}`)
-          .then(r => r.json())
-          .then(d => setLatestNews(d.news || []))
-          .catch(() => undefined),
-      );
-    }
-
-    if (requests.length > 0) Promise.all(requests);
+    if (cached?.stats && cached?.leadsCount) return;
+    fetch(`${LISTINGS_URL}?resource=public_home_data`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.stats) setStats({ total: d.stats.total || 0, main_city: d.stats.main_city || 'Краснодар', by_category: d.stats.by_category || {}, by_deal: d.stats.by_deal || {} });
+        if (typeof d.leads_count === 'number') setLeadsCount(d.leads_count);
+      })
+      .catch(() => undefined);
   }, []);
+
+  // Новости — некритичны для первого экрана, грузим в простое браузера
+  useEffect(() => {
+    if (showNewsOnHome === false) return;
+    const load = () => {
+      fetch(`${NEWS_URL}?action=list&limit=${newsLimit}`)
+        .then(r => r.json())
+        .then(d => setLatestNews(d.news || []))
+        .catch(() => undefined);
+    };
+    if ('requestIdleCallback' in window) {
+      const id = requestIdleCallback(load, { timeout: 2000 });
+      return () => cancelIdleCallback(id);
+    }
+    const t = setTimeout(load, 500);
+    return () => clearTimeout(t);
+  }, [showNewsOnHome, newsLimit]);
 
   // Реальное число объектов по категории — из API, с фолбэком на текущий пропс properties
   const categoryCount = (type: string): number => {

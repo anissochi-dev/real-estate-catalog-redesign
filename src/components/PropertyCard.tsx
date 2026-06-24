@@ -205,6 +205,7 @@ export default function PropertyCard({
           {cover ? (
             <img
               src={cover}
+              srcSet={property.image_thumb ? `${property.image_thumb} 800w, ${cover} 1920w` : undefined}
               alt={property.title}
               width={400}
               height={300}

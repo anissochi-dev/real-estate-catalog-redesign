@@ -225,11 +225,17 @@ export default function App() {
       setProperties(listings);
       setError(null);
       setLoading(false);
-      const lcpSrc = listings[0]?.image;
+      const lcpItem = listings[0];
+      const lcpSrc = lcpItem?.image;
       if (lcpSrc && !document.querySelector(`link[rel="preload"][href="${lcpSrc}"]`)) {
         const link = document.createElement('link');
         link.rel = 'preload'; link.as = 'image';
-        link.href = lcpSrc; link.setAttribute('fetchpriority', 'high');
+        link.href = lcpSrc;
+        link.setAttribute('fetchpriority', 'high');
+        if (lcpItem?.image_thumb) {
+          link.setAttribute('imagesrcset', `${lcpItem.image_thumb} 800w, ${lcpSrc} 1920w`);
+          link.setAttribute('imagesizes', '(max-width: 640px) calc(100vw - 32px), (max-width: 768px) calc(50vw - 24px), (max-width: 1024px) calc(33vw - 24px), 300px');
+        }
         document.head.appendChild(link);
       }
       // На главной НЕ догружаем все объекты — только когда пользователь

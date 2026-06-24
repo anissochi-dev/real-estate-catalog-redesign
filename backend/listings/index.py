@@ -217,7 +217,7 @@ def handler(event: dict, context) -> dict:
                     "FROM t_p71821556_real_estate_catalog_.settings ORDER BY id ASC LIMIT 1"
                 )
                 row = cur.fetchone()
-                return _ok({'settings': dict(row) if row else {}}, cache='public, max-age=300, stale-while-revalidate=60')
+                return _ok({'settings': dict(row) if row else {}}, cache='public, max-age=600, stale-while-revalidate=300, stale-if-error=86400')
 
             if params.get('resource') == 'districts':
                 city_f = (params.get('city') or '').strip()[:100]
@@ -595,7 +595,7 @@ def handler(event: dict, context) -> dict:
                         'by_deal': by_deal,
                     },
                     'leads_count': leads_total,
-                }, cache='public, max-age=300, stale-while-revalidate=60')
+                }, cache='public, max-age=600, stale-while-revalidate=300, stale-if-error=86400')
 
             if params.get('resource') == 'similar' and params.get('id'):
                 try:
@@ -738,7 +738,7 @@ def handler(event: dict, context) -> dict:
                 cached = _cache_get(cache_key)
                 if cached:
                     conn.close()
-                    return _ok(cached, cache='public, max-age=180, stale-while-revalidate=60')
+                    return _ok(cached, cache='public, max-age=600, stale-while-revalidate=300, stale-if-error=86400')
 
             # Один запрос: COUNT(*) OVER() + данные — без второго round-trip к БД
             pagination = ""
@@ -770,7 +770,7 @@ def handler(event: dict, context) -> dict:
             result = {'listings': items, 'total': total}
             if cache_key:
                 _cache_set(cache_key, result)
-            return _ok(result, cache='public, max-age=180, stale-while-revalidate=60')
+            return _ok(result, cache='public, max-age=600, stale-while-revalidate=300, stale-if-error=86400')
     finally:
         conn.close()
 
@@ -844,7 +844,7 @@ def _serialize(row: dict) -> dict:
     return row
 
 
-def _ok(body: dict, cache: str = 'public, max-age=60, stale-while-revalidate=30') -> dict:
+def _ok(body: dict, cache: str = 'public, max-age=60, stale-while-revalidate=30, stale-if-error=86400') -> dict:
     return {
         'statusCode': 200,
         'headers': {

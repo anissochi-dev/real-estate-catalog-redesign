@@ -14,6 +14,7 @@ export interface Property {
   payback?: number;
   profit?: number;
   image: string;
+  image_thumb?: string;
   tags: string[];
   description: string;
   floor?: number;
