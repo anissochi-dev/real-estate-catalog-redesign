@@ -39,6 +39,13 @@ export function Badge({ value, check }: { value: string; check: CheckState }) {
   );
 }
 
+const PRERENDER_URL = 'https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff';
+const SITE_URL = 'https://bmn.su';
+
+// Страницы которые всегда генерируем + пропускаем
+const PRERENDER_STATIC = ['/', '/catalog', '/news', '/map', '/network-tenants', '/leads'];
+const PRERENDER_SKIP = new Set(['/favorites', '/compare', '/declined', '/login']);
+
 export default function SeoTechnicalTab() {
   const { reload } = useSettings();
   const { refreshToken } = useAuth();
@@ -51,6 +58,14 @@ export default function SeoTechnicalTab() {
   const [seoLoading, setSeoLoading] = useState(false);
   const [seoErr, setSeoErr] = useState('');
   const [rebuilding, setRebuilding] = useState(false);
+
+  // Prerender state
+  const [prerenderRunning, setPrerenderRunning] = useState(false);
+  const [prerenderLog, setPrerenderLog] = useState<string[]>([]);
+  const [prerenderDone, setPrerenderDone] = useState(0);
+  const [prerenderErrors, setPrerenderErrors] = useState(0);
+  const [prerenderTotal, setPrerenderTotal] = useState(0);
+  const [prerenderFinished, setPrerenderFinished] = useState(false);
 
   useEffect(() => {
     adminApi.getSettings().then(d => setS(d.settings || {}));
@@ -98,6 +113,68 @@ export default function SeoTechnicalTab() {
     setSaved(true);
     await reload();
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const runPrerender = async () => {
+    setPrerenderRunning(true);
+    setPrerenderLog([]);
+    setPrerenderDone(0);
+    setPrerenderErrors(0);
+    setPrerenderFinished(false);
+
+    // Собираем пути из sitemap
+    const paths: string[] = [...PRERENDER_STATIC];
+    try {
+      const r = await fetch(`${SITE_URL}/sitemap.xml`);
+      const xml = await r.text();
+      const matches = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)];
+      const sitemapPaths = matches
+        .map(m => { try { return new URL(m[1].trim()).pathname.replace(/\/$/, '') || '/'; } catch { return null; } })
+        .filter((p): p is string => !!p && !PRERENDER_SKIP.has(p));
+      for (const p of sitemapPaths) {
+        if (!paths.includes(p)) paths.push(p);
+      }
+    } catch {
+      setPrerenderLog(l => [...l, '⚠ Не удалось загрузить sitemap, работаем только со статическими страницами']);
+    }
+
+    setPrerenderTotal(paths.length);
+    setPrerenderLog(l => [...l, `Всего страниц: ${paths.length}`]);
+
+    // Обрабатываем батчами по 4 параллельно
+    const BATCH = 4;
+    let done = 0, errors = 0;
+
+    for (let i = 0; i < paths.length; i += BATCH) {
+      const batch = paths.slice(i, i + BATCH);
+      await Promise.all(batch.map(async p => {
+        try {
+          const res = await fetch(`${PRERENDER_URL}/?path=${encodeURIComponent(p)}`, {
+            signal: AbortSignal.timeout(15000),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const html = await res.text();
+          if (!html.includes('</html>')) throw new Error('Неполный HTML');
+          done++;
+          setPrerenderDone(d => d + 1);
+          setPrerenderLog(l => [...l, `✓ ${p} (${(html.length / 1024).toFixed(1)} КБ)`]);
+        } catch (e) {
+          errors++;
+          setPrerenderErrors(er => er + 1);
+          setPrerenderLog(l => [...l, `✗ ${p}: ${e instanceof Error ? e.message : 'ошибка'}`]);
+        }
+      }));
+      // Небольшая пауза между батчами
+      if (i + BATCH < paths.length) await new Promise(r => setTimeout(r, 300));
+    }
+
+    setPrerenderFinished(true);
+    setPrerenderRunning(false);
+    if (errors === 0) {
+      toast.success(`Prerender завершён: ${done} страниц проверено, все ОК`);
+    } else {
+      toast.warning(`Prerender завершён: ${done} ОК, ${errors} ошибок`);
+    }
   };
 
   const checkYm = (ymId: string): CheckState => {
@@ -237,6 +314,69 @@ export default function SeoTechnicalTab() {
         </div>
 
 
+      </div>
+
+      {/* Prerender для поисковых ботов */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="font-display font-700 text-lg flex items-center gap-2">
+          <Icon name="Bot" size={18} className="text-brand-blue" /> Индексация для поисковых ботов
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Генерирует HTML-страницы с мета-тегами, заголовками и структурированными данными для Яндекса и Google.
+          Запускайте после добавления новых объектов или изменения описаний.
+        </p>
+
+        {/* Прогресс */}
+        {(prerenderRunning || prerenderFinished) && prerenderTotal > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium">Прогресс</span>
+              <span className="text-muted-foreground">{prerenderDone + prerenderErrors} / {prerenderTotal}</span>
+            </div>
+            <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+              <div
+                className="h-full bg-brand-blue rounded-full transition-all duration-300"
+                style={{ width: `${Math.round(((prerenderDone + prerenderErrors) / prerenderTotal) * 100)}%` }}
+              />
+            </div>
+            <div className="flex gap-4 text-xs text-muted-foreground">
+              <span className="text-emerald-700 font-medium">✓ {prerenderDone} ОК</span>
+              {prerenderErrors > 0 && <span className="text-red-600 font-medium">✗ {prerenderErrors} ошибок</span>}
+            </div>
+          </div>
+        )}
+
+        {/* Кнопка */}
+        <button
+          onClick={runPrerender}
+          disabled={prerenderRunning}
+          className="flex items-center gap-2 px-5 py-2.5 bg-brand-blue text-white rounded-xl text-sm font-semibold hover:bg-brand-blue/90 disabled:opacity-60"
+        >
+          <Icon name={prerenderRunning ? 'Loader2' : 'RefreshCw'} size={16} className={prerenderRunning ? 'animate-spin' : ''} />
+          {prerenderRunning
+            ? `Генерирую... ${prerenderDone + prerenderErrors} / ${prerenderTotal}`
+            : prerenderFinished
+              ? 'Запустить ещё раз'
+              : 'Сгенерировать HTML для ботов'}
+        </button>
+
+        {prerenderFinished && prerenderErrors === 0 && (
+          <div className="flex items-center gap-2 text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-sm font-medium">
+            <Icon name="CheckCircle2" size={16} />
+            Готово — {prerenderDone} страниц доступны для поисковых ботов
+          </div>
+        )}
+
+        {/* Лог */}
+        {prerenderLog.length > 0 && (
+          <div className="bg-muted rounded-xl p-3 max-h-48 overflow-y-auto space-y-0.5">
+            {prerenderLog.map((line, i) => (
+              <div key={i} className={`text-xs font-mono ${line.startsWith('✗') ? 'text-red-600' : line.startsWith('✓') ? 'text-emerald-700' : 'text-muted-foreground'}`}>
+                {line}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Яндекс.Метрика */}
