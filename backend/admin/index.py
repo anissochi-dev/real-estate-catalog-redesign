@@ -3003,7 +3003,7 @@ def _listings(cur, conn, method, rid, event, user):
             _trigger_reindex_async(int(rid))
         # IndexNow: уведомляем при публикации (статус → active)
         if body.get('status') == 'active':
-            cur2 = conn.cursor()
+            cur2 = conn.cursor(cursor_factory=RealDictCursor)
             cur2.execute(f"SELECT slug FROM {SCHEMA}.listings WHERE id = {int(rid)} LIMIT 1")
             row = cur2.fetchone()
             cur2.close()
