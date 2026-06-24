@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "name": "Ручной запуск крона — возвращает JSON с результатами",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": { "ok": true },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

@@ -153,6 +153,7 @@ def _html(title, desc, og_image='', canonical='', extra_meta='',
         f'{extra_meta}'
         f'{jsonld_tag}'
         f'<meta name="yandex-verification" content="7099028f3e2220eb">'
+        f'<meta name="google-site-verification" content="_wn0FH8jA1kMdfoNQIVxcMJ2KGd0C2hl2Bgc8nkMOGI">'
         f'<meta name="mailru-domain" content="6dS7udsVWBpJx77O">'
         f'<link rel="sitemap" type="application/xml" href="/sitemap.xml">'
         f'<link rel="preconnect" href="https://cdn.poehali.dev">'

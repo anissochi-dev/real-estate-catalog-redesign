@@ -320,12 +320,18 @@ export default function SeoTechnicalTab() {
 
       {/* Prerender для поисковых ботов */}
       <div className="bg-white rounded-2xl p-6 shadow-sm space-y-4">
-        <div className="font-display font-700 text-lg flex items-center gap-2">
-          <Icon name="Bot" size={18} className="text-brand-blue" /> Индексация для поисковых ботов
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="font-display font-700 text-lg flex items-center gap-2">
+            <Icon name="Bot" size={18} className="text-brand-blue" /> Индексация для поисковых ботов
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1">
+            <Icon name="Clock" size={12} />
+            Автозапуск каждый день в 01:00 МСК
+          </div>
         </div>
         <p className="text-sm text-muted-foreground">
-          Генерирует HTML-страницы с мета-тегами, заголовками и структурированными данными для Яндекса и Google.
-          Запускайте после добавления новых объектов или изменения описаний.
+          Прогревает HTML-кеш для всех страниц — Яндекс и Google видят готовый контент без JavaScript.
+          Запускается автоматически каждую ночь. Можно запустить вручную после добавления новых объектов.
         </p>
 
         {/* Прогресс */}
