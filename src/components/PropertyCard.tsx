@@ -19,6 +19,7 @@ interface PropertyCardProps {
   onToggleCompare: (id: number) => void;
   style?: React.CSSProperties;
   index?: number;
+  variant?: 'default' | 'home';
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -145,8 +146,9 @@ function getCoverImage(property: PropertyCardProps['property']): string | null {
 }
 
 export default function PropertyCard({
-  property, isFavorite, isCompare, onToggleFavorite, onToggleCompare, style, index = 99,
+  property, isFavorite, isCompare, onToggleFavorite, onToggleCompare, style, index = 99, variant = 'default',
 }: PropertyCardProps) {
+  const isHome = variant === 'home';
   const href = `/object/${listingSlug(property.title, property.id)}`;
   const navigate = useNavigate();
   const { hint, rootRef } = usePredictHint(property.id);
@@ -189,11 +191,11 @@ export default function PropertyCard({
         ref={rootRef}
         onMouseEnter={handlePrefetch}
         onTouchStart={handlePrefetch}
-        className="property-card group bg-white rounded-2xl overflow-hidden border border-border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up grid grid-cols-1 sm:grid-cols-[240px_1fr]"
+        className={`property-card group bg-white rounded-2xl overflow-hidden border border-border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up grid grid-cols-1 ${isHome ? 'sm:grid-cols-[300px_1fr]' : 'sm:grid-cols-[240px_1fr]'}`}
         style={style}
       >
         {/* ── Левая колонка: фото ── */}
-        <div className="relative min-h-[200px] sm:min-h-[220px] overflow-hidden bg-muted">
+        <div className={`relative overflow-hidden bg-muted ${isHome ? 'min-h-[200px] sm:aspect-[4/3] sm:min-h-0' : 'min-h-[200px] sm:min-h-[220px]'}`}>
           {cover ? (
             <img
               src={cover}
@@ -265,14 +267,21 @@ export default function PropertyCard({
 
           {/* Верхний блок */}
           <div className="space-y-1.5 min-w-0">
-            {/* Тип объекта — только здесь, плашка с фото убрана */}
-            <span className="inline-flex items-center text-[11px] font-semibold text-foreground/55 bg-muted px-2.5 py-0.5 rounded-full">
-              {TYPE_LABELS[property.type] || property.type}
-            </span>
+            {/* Тип объекта */}
+            {isHome ? (
+              <span className="inline-flex items-center gap-1.5 text-[13px] font-bold text-foreground bg-muted border border-border px-3 py-1 rounded-full">
+                <Icon name="Building2" size={14} className="text-brand-blue" />
+                {TYPE_LABELS[property.type] || property.type}
+              </span>
+            ) : (
+              <span className="inline-flex items-center text-[11px] font-semibold text-foreground/55 bg-muted px-2.5 py-0.5 rounded-full">
+                {TYPE_LABELS[property.type] || property.type}
+              </span>
+            )}
 
             {/* Название */}
             <Link to={href}>
-              <h3 className="font-display font-700 text-[14px] sm:text-[15px] text-foreground leading-snug line-clamp-2 group-hover:text-brand-blue transition-colors">
+              <h3 className={`font-display font-800 text-foreground leading-snug line-clamp-2 group-hover:text-brand-blue transition-colors ${isHome ? 'text-[18px] sm:text-[20px]' : 'font-700 text-[14px] sm:text-[15px]'}`}>
                 {property.title}
               </h3>
             </Link>
@@ -339,7 +348,7 @@ export default function PropertyCard({
           {/* Цена + кнопка */}
           <div className="flex items-end justify-between gap-3 flex-wrap border-t border-border/60 pt-3">
             <div>
-              <div className="font-display font-900 text-[20px] sm:text-[22px] text-foreground leading-none tracking-tight">
+              <div className={`font-display font-900 leading-none tracking-tight text-foreground ${isHome ? 'text-[24px] sm:text-[28px]' : 'text-[20px] sm:text-[22px]'}`}>
                 {property.price.toLocaleString('ru')} ₽{property.deal === 'rent' ? '/мес' : ''}
               </div>
               {ppm2 && (

@@ -43,6 +43,7 @@ export default function HomeNewListings({
               onToggleFavorite={onToggleFavorite}
               onToggleCompare={onToggleCompare}
               index={i}
+              variant="home"
             />
           ))}
           {newObjects.length < homeLimit && Array.from({ length: homeLimit - newObjects.length }).map((_, i) => (
