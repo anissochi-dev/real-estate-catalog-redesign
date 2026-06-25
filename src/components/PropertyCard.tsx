@@ -274,13 +274,6 @@ export default function PropertyCard({
 
           {/* Верхний блок */}
           <div className="space-y-1.5 min-w-0">
-            {/* Тип объекта — только в home-варианте отдельным тегом, в default он в строке характеристик */}
-            {isHome && (
-              <span className="inline-flex items-center gap-1.5 text-[13px] font-bold text-foreground bg-muted border border-border px-3 py-1 rounded-full">
-                <Icon name={TYPE_ICONS[property.type] || 'Building2'} size={14} className="text-brand-blue" />
-                {TYPE_LABELS[property.type] || property.type}
-              </span>
-            )}
 
             {/* Название */}
             <Link to={href}>
@@ -312,12 +305,13 @@ export default function PropertyCard({
           </div>
 
           {/* Характеристики */}
-          <div className="flex flex-wrap gap-x-4 gap-y-1.5 bg-muted/50 rounded-xl px-3 py-2">
-            {/* Иконка категории */}
+          <div className="flex flex-wrap gap-x-3 gap-y-1.5 bg-muted/50 rounded-xl px-3 py-2 items-center">
+            {/* Категория с иконкой */}
             <div className="flex items-center gap-1.5 text-[12px] font-semibold text-brand-blue">
               <Icon name={TYPE_ICONS[property.type] || 'Building2'} size={12} className="text-brand-blue" />
               {TYPE_LABELS[property.type] || property.type}
             </div>
+            <span className="text-border text-[10px]">|</span>
             <div className="flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
               <Icon name="Maximize" size={12} className="text-brand-blue/50" />
               {property.area} м²
@@ -354,19 +348,19 @@ export default function PropertyCard({
           </div>
 
           {/* Цена + кнопка */}
-          <div className="flex items-end justify-between gap-3 flex-wrap border-t border-border/60 pt-3">
-            <div>
+          <div className="flex items-center justify-between gap-3 flex-wrap border-t border-border/60 pt-3">
+            <div className="flex items-baseline gap-3 flex-wrap min-w-0">
               <div className={`font-display font-900 leading-none tracking-tight text-foreground ${isHome ? 'text-[24px] sm:text-[28px]' : 'text-[20px] sm:text-[22px]'}`}>
                 {property.price.toLocaleString('ru')} ₽{property.deal === 'rent' ? '/мес' : ''}
               </div>
               {ppm2 && (
-                <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
+                <div className="text-[12px] text-muted-foreground font-medium flex items-center gap-1">
                   <Icon name="Scaling" size={10} className="text-muted-foreground/50" />
                   {ppm2.toLocaleString('ru')} ₽/м²
                 </div>
               )}
             </div>
-            {property.ownerPhone ? (
+            {property.ownerPhone && (
               <a
                 href={`tel:${property.ownerPhone}`}
                 onClick={e => e.stopPropagation()}
@@ -374,13 +368,6 @@ export default function PropertyCard({
               >
                 <Icon name="Phone" size={13} /> Позвонить
               </a>
-            ) : (
-              <Link
-                to={href}
-                className="bg-brand-blue/10 text-brand-blue text-[12px] font-bold font-display px-4 py-2 rounded-xl inline-flex items-center gap-1.5 flex-shrink-0 hover:bg-brand-blue/20 transition-colors"
-              >
-                <Icon name="Phone" size={13} /> Узнать телефон
-              </Link>
             )}
           </div>
 
