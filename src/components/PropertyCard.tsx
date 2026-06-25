@@ -65,10 +65,8 @@ interface PredictHint {
 }
 
 const predictCache = new Map<number, PredictHint | null>();
-// Подписчики: id → список колбэков (может быть несколько карточек с одним id)
 const predictListeners = new Map<number, Array<(h: PredictHint | null) => void>>();
 
-// Батч-очередь: собираем id в течение BATCH_DELAY мс, затем один запрос
 let batchQueue: number[] = [];
 let batchTimer: ReturnType<typeof setTimeout> | null = null;
 const BATCH_DELAY = 80;
@@ -135,8 +133,6 @@ function usePredictHint(listingId: number) {
 }
 
 function getCoverImage(property: PropertyCardProps['property']): string | null {
-  // В карточке всегда показываем ТОЛЬКО обложку. Доп. фото грузятся
-  // на странице объекта. Это экономит трафик и ускоряет загрузку списков.
   if (property.image) return property.image;
   const raw = (property as { images?: string | string[] }).images;
   if (Array.isArray(raw) && raw[0]) return raw[0];
@@ -179,8 +175,6 @@ export default function PropertyCard({
   }, [property.createdAt]);
   const showNew = property.isNew || isAutoNew;
 
-  // Предзагрузка страницы объекта и его данных при наведении/касании —
-  // к моменту клика всё уже готово, карточка открывается мгновенно.
   const prefetched = useRef(false);
   const handlePrefetch = () => {
     if (prefetched.current) return;
@@ -195,13 +189,11 @@ export default function PropertyCard({
         ref={rootRef}
         onMouseEnter={handlePrefetch}
         onTouchStart={handlePrefetch}
-        className="property-card group bg-white rounded-2xl overflow-hidden border border-border shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up flex flex-col"
+        className="property-card group bg-white rounded-2xl overflow-hidden border border-border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up grid grid-cols-1 sm:grid-cols-[240px_1fr]"
         style={style}
       >
-        {/* ── Обложка (только 1 фото) ── */}
-        <div className="relative aspect-[4/3] overflow-hidden bg-muted">
-
-          {/* Только обложка — доп. фото загружаются на странице объекта */}
+        {/* ── Левая колонка: фото ── */}
+        <div className="relative min-h-[200px] sm:min-h-[220px] overflow-hidden bg-muted">
           {cover ? (
             <img
               src={cover}
@@ -209,7 +201,7 @@ export default function PropertyCard({
               alt={property.title}
               width={400}
               height={300}
-              sizes="(max-width: 640px) calc(100vw - 32px), (max-width: 768px) calc(50vw - 24px), (max-width: 1024px) calc(33vw - 24px), 300px"
+              sizes="(max-width: 640px) calc(100vw - 32px), 240px"
               loading={index < 4 ? 'eager' : 'lazy'}
               fetchpriority={index === 0 ? 'high' : index < 4 ? 'auto' : 'low'}
               decoding={index === 0 ? 'sync' : 'async'}
@@ -222,194 +214,158 @@ export default function PropertyCard({
           )}
 
           {/* Градиент снизу */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/5 to-transparent pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
 
-          {/* Клик по фото открывает страницу объекта */}
+          {/* Клик по фото */}
           <Link to={href} className="absolute inset-0 z-[1]" aria-label={property.title} />
 
-          {/* ── Бейджи сверху-слева — поверх ссылки ── */}
+          {/* Бейджи сверху-слева */}
           <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1 z-[5] pointer-events-none">
             <span className={`text-[11px] font-bold font-display px-2.5 py-1 rounded-full shadow ${DEAL_COLORS[property.deal] ?? 'bg-white/90 text-brand-blue'}`}>
               {DEAL_LABELS[property.deal]}
             </span>
             {property.isUrgent && (
-              <span className="text-[11px] font-bold font-display px-2.5 py-1 rounded-full bg-red-500 text-white shadow flex items-center gap-1">
-                ⚡ Срочно
-              </span>
+              <span className="text-[11px] font-bold font-display px-2.5 py-1 rounded-full bg-red-500 text-white shadow">⚡ Срочно</span>
             )}
             {property.isHot && (
-              <span className="text-[11px] font-bold font-display px-2.5 py-1 rounded-full bg-orange-500 text-white shadow flex items-center gap-1">
-                🔥 Горячее
-              </span>
+              <span className="text-[11px] font-bold font-display px-2.5 py-1 rounded-full bg-orange-500 text-white shadow">🔥 Горячее</span>
             )}
             {property.isExclusive && (
-              <span className="text-[11px] font-bold font-display px-2.5 py-1 rounded-full bg-amber-400 text-white shadow flex items-center gap-1">
-                ⭐ Эксклюзив
-              </span>
+              <span className="text-[11px] font-bold font-display px-2.5 py-1 rounded-full bg-amber-400 text-white shadow">⭐ Эксклюзив</span>
             )}
             {showNew && (
-              <span className="text-[11px] font-bold font-display px-2.5 py-1 rounded-full bg-emerald-500 text-white shadow">
-                Новое
-              </span>
+              <span className="text-[11px] font-bold font-display px-2.5 py-1 rounded-full bg-emerald-500 text-white shadow">Новое</span>
             )}
           </div>
 
-
-
-          {/* Избранное / сравнение — на тач-устройствах всегда видимы, на десктопе на hover */}
-          <div className="absolute right-2 top-10 flex flex-col gap-1.5 z-[5] opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+          {/* Избранное / сравнение */}
+          <div className="absolute right-2 top-2 flex flex-col gap-1.5 z-[5] opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
             <button type="button" onClick={e => { e.preventDefault(); onToggleFavorite(property.id); }}
               aria-label="В избранное"
-              className={`w-9 h-9 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shadow-md backdrop-blur-sm transition-all ${isFavorite ? 'bg-red-500 text-white' : 'bg-white/90 text-slate-400 hover:text-red-500'}`}>
-              <Icon name="Heart" size={14} className={isFavorite ? 'fill-current' : ''} />
+              className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md backdrop-blur-sm transition-all ${isFavorite ? 'bg-red-500 text-white' : 'bg-white/90 text-slate-400 hover:text-red-500'}`}>
+              <Icon name="Heart" size={13} className={isFavorite ? 'fill-current' : ''} />
             </button>
             <button type="button" onClick={e => { e.preventDefault(); onToggleCompare(property.id); }}
               aria-label="К сравнению"
-              className={`w-9 h-9 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shadow-md backdrop-blur-sm transition-all ${isCompare ? 'bg-brand-orange text-white' : 'bg-white/90 text-slate-400 hover:text-brand-orange'}`}>
-              <Icon name="GitCompare" size={14} />
+              className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md backdrop-blur-sm transition-all ${isCompare ? 'bg-brand-orange text-white' : 'bg-white/90 text-slate-400 hover:text-brand-orange'}`}>
+              <Icon name="GitCompare" size={13} />
             </button>
           </div>
 
-          {/* Тип объекта — нижний левый угол */}
-          <div className="absolute left-2.5 bottom-2.5 z-10">
-            <span className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-black/55 text-white backdrop-blur-sm">
-              {TYPE_LABELS[property.type] || property.type}
-            </span>
-          </div>
-        </div>
-
-        {/* ── Цена + ID ── */}
-        <div className="px-3 pt-2.5 pb-2.5 bg-brand-blue/[0.04] border-b border-brand-blue/10">
-          <div className="flex items-start justify-between gap-1 min-w-0">
-            <div className="font-display font-900 text-base sm:text-[18px] text-brand-blue leading-none tracking-tight truncate">
-              {property.price.toLocaleString('ru')} ₽{property.deal === 'rent' ? '/мес' : ''}
-            </div>
-            <span className="text-[10px] font-mono text-slate-400 shrink-0 mt-0.5 select-none whitespace-nowrap">
+          {/* ID — нижний правый угол фото */}
+          <div className="absolute right-2.5 bottom-2.5 z-[5] pointer-events-none">
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/50 text-white/80 backdrop-blur-sm">
               #{publicId}
             </span>
           </div>
-          {ppm2 && (
-            <div className="text-[11px] text-muted-foreground mt-0.5 font-medium flex items-center gap-1">
-              <Icon name="Scaling" size={10} className="text-muted-foreground/60" />
-              {ppm2.toLocaleString('ru')} ₽/м²
-            </div>
-          )}
         </div>
 
-        {/* ── Контент ── */}
-        <div className="px-3 pt-2 pb-2.5 flex flex-col flex-1 gap-1.5 min-w-0 overflow-hidden">
+        {/* ── Правая колонка: контент ── */}
+        <div className="flex flex-col justify-between p-4 gap-3 min-w-0">
 
-          {/* Название */}
-          <Link to={href}>
-            <h3 className="font-display font-700 text-[13px] text-foreground leading-snug line-clamp-2 group-hover:text-brand-blue transition-colors">
-              {property.title}
-            </h3>
-          </Link>
+          {/* Верхний блок */}
+          <div className="space-y-1.5 min-w-0">
+            {/* Тип объекта — только здесь, плашка с фото убрана */}
+            <span className="inline-flex items-center text-[11px] font-semibold text-foreground/55 bg-muted px-2.5 py-0.5 rounded-full">
+              {TYPE_LABELS[property.type] || property.type}
+            </span>
 
-          {/* Ключевые параметры */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1 text-[12px] font-semibold text-foreground">
-              <Icon name="Maximize" size={11} className="text-brand-blue/60" />
+            {/* Название */}
+            <Link to={href}>
+              <h3 className="font-display font-700 text-[14px] sm:text-[15px] text-foreground leading-snug line-clamp-2 group-hover:text-brand-blue transition-colors">
+                {property.title}
+              </h3>
+            </Link>
+
+            {/* Адрес */}
+            {addressLine ? (
+              <button
+                type="button"
+                onClick={() => setMapOpen(true)}
+                className="flex items-start gap-1 text-[12px] text-muted-foreground hover:text-brand-blue transition-colors text-left w-full min-w-0 group/addr"
+              >
+                <Icon name="MapPin" size={11} className="flex-shrink-0 text-brand-blue/40 group-hover/addr:text-brand-blue mt-0.5 transition-colors" />
+                <span className="truncate min-w-0">{addressLine}</span>
+              </button>
+            ) : property.district ? (
+              <button
+                type="button"
+                onClick={e => { e.preventDefault(); e.stopPropagation(); navigate(`/catalog?search=${encodeURIComponent(property.district || '')}`); }}
+                className="inline-flex items-center gap-1 text-[12px] text-muted-foreground hover:text-brand-blue transition-colors"
+              >
+                <Icon name="MapPin" size={11} className="text-brand-blue/40" />
+                {property.district}
+              </button>
+            ) : null}
+          </div>
+
+          {/* Характеристики */}
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5 bg-muted/50 rounded-xl px-3 py-2">
+            <div className="flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
+              <Icon name="Maximize" size={12} className="text-brand-blue/50" />
               {property.area} м²
             </div>
             {property.floor ? (
-              <div className="flex items-center gap-1 text-[12px] font-semibold text-foreground">
-                <Icon name="Layers" size={11} className="text-brand-blue/60" />
+              <div className="flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
+                <Icon name="Layers" size={12} className="text-brand-blue/50" />
                 {property.floor}{property.totalFloors ? `/${property.totalFloors}` : ''} эт.
               </div>
             ) : property.payback ? (
-              <div className="flex items-center gap-1 text-[12px] font-semibold text-emerald-700">
-                <Icon name="TrendingUp" size={11} className="text-emerald-600" />
-                {property.payback} мес
+              <div className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-700">
+                <Icon name="TrendingUp" size={12} className="text-emerald-500" />
+                Окуп. {property.payback} мес
               </div>
             ) : null}
             {(() => {
-              // Логика блока дохода:
-              // - аренда → не показываем (цена и так за месяц)
-              // - готовый бизнес (deal=business) + profit → "Доход: +X тыс/мес"
-              // - продажа/ГАБ с реальным арендатором (tenantName или monthlyRent) → "Сдан в аренду: +X тыс/мес"
-              // - просто profit без арендатора → "+X тыс/мес" (прогноз, синий)
               if (property.deal === 'rent') return null;
               const income = property.monthlyRent || property.profit || 0;
               if (!income) return null;
               const hasTenant = !!property.tenantName || !!property.monthlyRent;
               const isBusiness = property.deal === 'business';
-              const label = isBusiness
-                ? 'Доход'
-                : hasTenant
-                  ? 'Сдан'
-                  : 'Прогноз';
+              const label = isBusiness ? 'Доход' : hasTenant ? 'Сдан' : 'Прогноз';
               const isFact = hasTenant || isBusiness;
-              const color = isFact ? 'text-emerald-700' : 'text-blue-700';
-              const iconColor = isFact ? 'text-emerald-600' : 'text-blue-600';
-              const icon = isFact ? 'CheckCircle2' : 'TrendingUp';
               return (
                 <div
-                  className={`flex items-center gap-1 text-[12px] font-semibold ${color}`}
+                  className={`flex items-center gap-1.5 text-[12px] font-semibold ${isFact ? 'text-emerald-700' : 'text-blue-700'}`}
                   title={hasTenant && property.tenantName ? `Арендатор: ${property.tenantName}` : ''}
                 >
-                  <Icon name={icon} size={11} className={iconColor} />
-                  <span className="opacity-80">{label}:</span>
-                  <span>+{(income / 1000).toFixed(0)} тыс/мес</span>
+                  <Icon name={isFact ? 'CheckCircle2' : 'TrendingUp'} size={12} className={isFact ? 'text-emerald-500' : 'text-blue-500'} />
+                  {label}: +{(income / 1000).toFixed(0)} тыс/мес
                 </div>
               );
             })()}
           </div>
 
-          {/* Район — показываем только если нет адреса (иначе район уже есть в строке адреса) */}
-          {property.district && !addressLine && (
-            <button
-              type="button"
-              onClick={e => { e.preventDefault(); e.stopPropagation(); navigate(`/catalog?search=${encodeURIComponent(property.district || '')}`); }}
-              className="inline-flex items-center gap-1 text-[10px] text-brand-blue/70 hover:text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 px-1.5 py-0.5 rounded-md transition-colors font-medium"
-            >
-              <Icon name="MapPin" size={9} />
-              {property.district}
-            </button>
-          )}
-
-          {/* Адрес (включает район) */}
-          {addressLine && (() => {
-            const longDistrict = (property.district || '').length > 25 && !!property.address;
-            return (
-              <button
-                type="button"
-                onClick={() => setMapOpen(true)}
-                className="flex items-start gap-1 text-[11px] text-muted-foreground hover:text-brand-blue transition-colors text-left w-full min-w-0 group/addr"
-              >
-                <Icon name="MapPin" size={10} className="flex-shrink-0 text-brand-blue/50 group-hover/addr:text-brand-blue transition-colors mt-0.5" />
-                {longDistrict ? (
-                  <span className="min-w-0">
-                    <span className="block truncate">{property.district}</span>
-                    <span className="block truncate text-muted-foreground/70">{property.address}</span>
-                  </span>
-                ) : (
-                  <span className="truncate min-w-0">{addressLine}</span>
-                )}
-              </button>
-            );
-          })()}
-
-          {/* Оценка рынка (ниже рынка / выше рынка) скрыта в общем списке карточек */}
-          {/*
-          {assessCls && hint?.price_assessment && (
-            <div className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border w-fit ${assessCls}`}>
-              <Icon name="BarChart2" size={10} />
-              {hint.price_assessment.label}
-              {hint.price_assessment.delta_pct !== 0 && (
-                <span className="opacity-75">{hint.price_assessment.delta_pct > 0 ? ' +' : ' '}{hint.price_assessment.delta_pct}%</span>
+          {/* Цена + кнопка */}
+          <div className="flex items-end justify-between gap-3 flex-wrap border-t border-border/60 pt-3">
+            <div>
+              <div className="font-display font-900 text-[20px] sm:text-[22px] text-foreground leading-none tracking-tight">
+                {property.price.toLocaleString('ru')} ₽{property.deal === 'rent' ? '/мес' : ''}
+              </div>
+              {ppm2 && (
+                <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
+                  <Icon name="Scaling" size={10} className="text-muted-foreground/50" />
+                  {ppm2.toLocaleString('ru')} ₽/м²
+                </div>
+              )}
+              {assessCls && hint?.price_assessment && (
+                <div className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border mt-1.5 ${assessCls}`}>
+                  <Icon name="BarChart2" size={10} />
+                  {hint.price_assessment.label}
+                  {hint.price_assessment.delta_pct !== 0 && (
+                    <span className="opacity-75">{hint.price_assessment.delta_pct > 0 ? ' +' : ' '}{hint.price_assessment.delta_pct}%</span>
+                  )}
+                </div>
               )}
             </div>
-          )}
-          */}
-
-          {/* Футер */}
-          <div className="mt-auto flex items-center justify-end gap-2 pt-1.5 border-t border-border/50">
-            <Link to={href}
-              className="btn-orange text-white text-[11px] font-bold font-display px-3 py-1.5 rounded-lg inline-flex items-center gap-1 flex-shrink-0">
-              Подробнее <Icon name="ArrowRight" size={11} />
+            <Link
+              to={href}
+              className="btn-orange text-white text-[12px] font-bold font-display px-4 py-2 rounded-xl inline-flex items-center gap-1.5 flex-shrink-0 shadow-sm"
+            >
+              Подробнее <Icon name="ArrowRight" size={12} />
             </Link>
           </div>
+
         </div>
       </div>
 
@@ -453,17 +409,18 @@ export default function PropertyCard({
                 height="300px"
               />
             ) : (
-              <div className="h-[300px] flex flex-col items-center justify-center text-muted-foreground gap-2">
-                <Icon name="MapPin" size={32} />
-                <div className="text-sm font-medium">{addressLine}</div>
-                <a
-                  href={`https://yandex.ru/maps/?text=${encodeURIComponent(mapQuery)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-brand-blue hover:underline"
-                >
-                  Открыть в Яндекс.Картах →
-                </a>
+              <div className="h-[200px] flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                <Icon name="MapPin" size={32} className="text-brand-blue/40" />
+                <div className="text-sm text-center px-4">
+                  <a
+                    href={`https://yandex.ru/maps/?text=${encodeURIComponent(mapQuery)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-brand-blue hover:underline font-medium"
+                  >
+                    Открыть в Яндекс.Картах →
+                  </a>
+                </div>
               </div>
             )}
           </div>
