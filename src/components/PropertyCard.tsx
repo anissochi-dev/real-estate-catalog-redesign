@@ -29,6 +29,13 @@ const TYPE_LABELS: Record<string, string> = {
   free_purpose: 'Своб. назнач.', car_service: 'Автосервис',
 };
 
+const TYPE_ICONS: Record<string, string> = {
+  office: 'BriefcaseBusiness', retail: 'ShoppingBag', warehouse: 'Warehouse',
+  restaurant: 'UtensilsCrossed', business: 'TrendingUp', production: 'Factory',
+  hotel: 'Hotel', gab: 'KeyRound', land: 'Sprout', building: 'Building2',
+  free_purpose: 'LayoutDashboard', car_service: 'Car',
+};
+
 const DEAL_LABELS: Record<string, string> = {
   sale: 'Продажа', rent: 'Аренда', business: 'Бизнес',
 };
@@ -267,14 +274,10 @@ export default function PropertyCard({
 
           {/* Верхний блок */}
           <div className="space-y-1.5 min-w-0">
-            {/* Тип объекта */}
-            {isHome ? (
+            {/* Тип объекта — только в home-варианте отдельным тегом, в default он в строке характеристик */}
+            {isHome && (
               <span className="inline-flex items-center gap-1.5 text-[13px] font-bold text-foreground bg-muted border border-border px-3 py-1 rounded-full">
-                <Icon name="Building2" size={14} className="text-brand-blue" />
-                {TYPE_LABELS[property.type] || property.type}
-              </span>
-            ) : (
-              <span className="inline-flex items-center text-[11px] font-semibold text-foreground/55 bg-muted px-2.5 py-0.5 rounded-full">
+                <Icon name={TYPE_ICONS[property.type] || 'Building2'} size={14} className="text-brand-blue" />
                 {TYPE_LABELS[property.type] || property.type}
               </span>
             )}
@@ -310,6 +313,11 @@ export default function PropertyCard({
 
           {/* Характеристики */}
           <div className="flex flex-wrap gap-x-4 gap-y-1.5 bg-muted/50 rounded-xl px-3 py-2">
+            {/* Иконка категории */}
+            <div className="flex items-center gap-1.5 text-[12px] font-semibold text-brand-blue">
+              <Icon name={TYPE_ICONS[property.type] || 'Building2'} size={12} className="text-brand-blue" />
+              {TYPE_LABELS[property.type] || property.type}
+            </div>
             <div className="flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
               <Icon name="Maximize" size={12} className="text-brand-blue/50" />
               {property.area} м²
@@ -357,22 +365,23 @@ export default function PropertyCard({
                   {ppm2.toLocaleString('ru')} ₽/м²
                 </div>
               )}
-              {assessCls && hint?.price_assessment && (
-                <div className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border mt-1.5 ${assessCls}`}>
-                  <Icon name="BarChart2" size={10} />
-                  {hint.price_assessment.label}
-                  {hint.price_assessment.delta_pct !== 0 && (
-                    <span className="opacity-75">{hint.price_assessment.delta_pct > 0 ? ' +' : ' '}{hint.price_assessment.delta_pct}%</span>
-                  )}
-                </div>
-              )}
             </div>
-            <Link
-              to={href}
-              className="btn-orange text-white text-[12px] font-bold font-display px-4 py-2 rounded-xl inline-flex items-center gap-1.5 flex-shrink-0 shadow-sm"
-            >
-              Подробнее <Icon name="ArrowRight" size={12} />
-            </Link>
+            {property.ownerPhone ? (
+              <a
+                href={`tel:${property.ownerPhone}`}
+                onClick={e => e.stopPropagation()}
+                className="bg-brand-blue text-white text-[12px] font-bold font-display px-4 py-2 rounded-xl inline-flex items-center gap-1.5 flex-shrink-0 shadow-sm hover:bg-brand-blue/90 transition-colors"
+              >
+                <Icon name="Phone" size={13} /> Позвонить
+              </a>
+            ) : (
+              <Link
+                to={href}
+                className="bg-brand-blue/10 text-brand-blue text-[12px] font-bold font-display px-4 py-2 rounded-xl inline-flex items-center gap-1.5 flex-shrink-0 hover:bg-brand-blue/20 transition-colors"
+              >
+                <Icon name="Phone" size={13} /> Узнать телефон
+              </Link>
+            )}
           </div>
 
         </div>

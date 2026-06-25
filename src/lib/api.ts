@@ -39,6 +39,8 @@ interface ApiListing {
   updated_at?: string | null;
   created_at?: string | null;
   last_edited_at?: string | null;
+  owner_phone?: string | null;
+  image_thumb?: string | null;
 }
 
 function toNum(v: unknown): number {
@@ -84,6 +86,8 @@ function mapListing(item: ApiListing): Property {
     updatedAt: item.updated_at ?? undefined,
     createdAt: item.created_at ?? undefined,
     lastEditedAt: item.last_edited_at ?? undefined,
+    ownerPhone: item.owner_phone || undefined,
+    image_thumb: item.image_thumb || undefined,
   };
 }
 

@@ -37,6 +37,8 @@ export interface Property {
   updatedAt?: string;
   createdAt?: string;
   lastEditedAt?: string;
+  ownerPhone?: string;
+  image_thumb?: string;
 }
 
 export type Page = 'home' | 'catalog' | 'map' | 'favorites' | 'compare' | 'network-tenants' | 'news' | 'leads';

@@ -751,10 +751,11 @@ def handler(event: dict, context) -> dict:
             cols = (
                 "id, title, LEFT(description, 200) AS description, category, deal, price, price_per_m2, area, "
                 "payback, profit, floor, total_floors, address, district, lat, lng, "
-                "image, tags, is_hot, is_new, is_exclusive, is_urgent, public_code, "
+                "image, image_thumb, tags, is_hot, is_new, is_exclusive, is_urgent, public_code, "
                 "tenant_name, monthly_rent, yearly_rent, purpose, finishing, "
                 "ceiling_height, electricity_kw, utilities, road_line, "
-                "updated_at, created_at, last_edited_at"
+                "updated_at, created_at, last_edited_at, "
+                "COALESCE(owner_phone, '') AS owner_phone"
             )
 
             sql = (
