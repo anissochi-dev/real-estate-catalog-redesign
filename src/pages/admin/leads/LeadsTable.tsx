@@ -240,8 +240,12 @@ export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, se
                     {(l.budget ?? 0) > 0 || (l.budget_to ?? 0) > 0 ? (
                       <div className="flex flex-col gap-0.5">
                         <span className="font-semibold text-foreground text-[13px]">
-                          {(l.budget ?? 0) > 0 ? l.budget!.toLocaleString('ru') : '—'}
-                          {(l.budget_to ?? 0) > 0 ? ` – ${l.budget_to!.toLocaleString('ru')}` : ''} ₽
+                          {(l.budget ?? 0) > 0 && (l.budget_to ?? 0) > 0
+                            ? `${l.budget!.toLocaleString('ru')} – ${l.budget_to!.toLocaleString('ru')} ₽`
+                            : (l.budget ?? 0) > 0
+                              ? `от ${l.budget!.toLocaleString('ru')} ₽`
+                              : `до ${l.budget_to!.toLocaleString('ru')} ₽`
+                          }
                         </span>
                         {((l.budget_per_sqm_from ?? 0) > 0 || (l.budget_per_sqm_to ?? 0) > 0) && (
                           <span className="text-[11px] text-muted-foreground">
