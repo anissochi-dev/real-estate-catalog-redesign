@@ -296,7 +296,7 @@ export default function PropertyCard({
         </div>
 
         {/* ── Правая колонка: контент ── */}
-        <div className="flex flex-col justify-between p-4 gap-3 min-w-0">
+        <div className="flex flex-col justify-between p-4 gap-3 min-w-0 flex-1">
 
           {/* Верхний блок */}
           <div className="space-y-1.5 min-w-0">
@@ -373,15 +373,17 @@ export default function PropertyCard({
 
           {/* Цена */}
           <div className="border-t border-border/60 pt-3">
-            <div className={`font-display font-900 leading-none tracking-tight text-foreground ${isHome ? 'text-[24px] sm:text-[28px]' : 'text-[20px] sm:text-[22px]'}`}>
-              {property.price.toLocaleString('ru')} ₽{property.deal === 'rent' ? '/мес' : ''}
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <span className={`font-display font-900 leading-none tracking-tight text-foreground ${isHome ? 'text-[24px] sm:text-[28px]' : 'text-[20px] sm:text-[22px]'}`}>
+                {property.price.toLocaleString('ru')} ₽{property.deal === 'rent' ? '/мес' : ''}
+              </span>
+              {ppm2 && (
+                <span className="text-[11px] text-muted-foreground flex items-center gap-0.5 whitespace-nowrap">
+                  <Icon name="Scaling" size={10} className="text-muted-foreground/50" />
+                  {ppm2.toLocaleString('ru')} ₽/м²
+                </span>
+              )}
             </div>
-            {ppm2 && (
-              <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
-                <Icon name="Scaling" size={10} className="text-muted-foreground/50" />
-                {ppm2.toLocaleString('ru')} ₽/м²
-              </div>
-            )}
           </div>
 
           {/* Кнопка показа номера */}
