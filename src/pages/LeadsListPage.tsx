@@ -245,7 +245,7 @@ export default function LeadsListPage() {
   useEffect(() => { load(); }, [aiIds]);
 
   useEffect(() => {
-    fetchDistricts().then(list => setDistricts(list.filter(d => !d.is_okrug && d.is_active))).catch(() => {});
+    fetchDistricts().then(list => setDistricts(list.filter(d => !d.is_okrug))).catch(() => {});
   }, []);
 
   const leads = allLeads.slice(0, visibleCount);
