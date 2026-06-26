@@ -181,7 +181,10 @@ function LeadCard({ lead, districts, onContact }: { lead: PublicLead; districts:
 
       {/* Футер */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div />
+        <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
+          <Icon name="Clock" size={13} />
+          {dateLabel} {displayDate}
+        </div>
         <button
           onClick={onContact}
           className="btn-blue text-white px-5 py-2 rounded-full font-semibold text-sm inline-flex items-center gap-2 hover:opacity-90 transition-opacity"
