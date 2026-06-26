@@ -64,7 +64,7 @@ export default function CatalogResults({
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" role="list">
             {pageItems.map((property, i) => (
               <PropertyCard
                 key={property.id}
@@ -74,7 +74,7 @@ export default function CatalogResults({
                 onToggleFavorite={onToggleFavorite}
                 onToggleCompare={onToggleCompare}
                 index={i}
-                style={{ animationDelay: `${i * 0.03}s`, opacity: 0 }}
+                style={{ animationDelay: `${i * 0.03}s` }}
               />
             ))}
           </div>

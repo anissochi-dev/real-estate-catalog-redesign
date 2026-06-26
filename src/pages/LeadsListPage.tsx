@@ -114,7 +114,7 @@ function LeadCard({ lead, districts, onContact }: { lead: PublicLead; districts:
   const cardTitle = titleParts.length > 0 ? titleParts.join(' · ') : null;
 
   return (
-    <article className="bg-white rounded-2xl border border-border shadow-sm hover:shadow-md hover:border-brand-blue/25 transition-all duration-200 p-6">
+    <article role="listitem" className="bg-white rounded-2xl border border-border shadow-sm hover:shadow-md hover:border-brand-blue/25 transition-all duration-200 p-6">
       {/* Шапка: аватар + название */}
       <div className="flex items-center gap-3 mb-4">
         <div
@@ -201,6 +201,7 @@ function LeadCard({ lead, districts, onContact }: { lead: PublicLead; districts:
         </div>
         <button
           onClick={onContact}
+          aria-label={`Связаться по заявке №${lead.id}`}
           className="btn-blue text-white px-5 py-2 rounded-full font-semibold text-sm inline-flex items-center gap-2 hover:opacity-90 transition-opacity"
         >
           <Icon name="Phone" size={14} />
@@ -432,7 +433,7 @@ export default function LeadsListPage() {
           </div>
         ) : (
           <>
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4" role="list">
               {leads.map(lead => (
                 <LeadCard key={lead.id} lead={lead} districts={districts} onContact={() => openContact(lead)} />
               ))}

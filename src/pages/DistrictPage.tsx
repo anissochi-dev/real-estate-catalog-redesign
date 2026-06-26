@@ -198,7 +198,7 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4" role="list">
               {pageItems.map((property, i) => (
                 <PropertyCard
                   key={property.id}
@@ -208,7 +208,7 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
                   onToggleFavorite={onToggleFavorite}
                   onToggleCompare={onToggleCompare}
                   index={i}
-                  style={{ animationDelay: `${i * 0.03}s`, opacity: 0 }}
+                  style={{ animationDelay: `${i * 0.03}s` }}
                 />
               ))}
             </div>

@@ -99,10 +99,11 @@ export function NewsListPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" role="list">
             {news.filter(n => !!n.slug).map(n => (
               <article
                 key={n.id}
+                role="listitem"
                 className="bg-white rounded-2xl overflow-hidden border border-border hover:shadow-lg hover:-translate-y-1 transition-all duration-200 group"
               >
                 <Link to={`/news/${n.slug}`} className="block">

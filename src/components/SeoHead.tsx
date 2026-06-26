@@ -33,7 +33,7 @@ interface SeoHeadProps {
 const cache = new Map<string, RemoteSeo | null>();
 const inflight = new Map<string, Promise<RemoteSeo | null>>();
 
-async function fetchPageSeo(path: string): Promise<RemoteSeo | null> {
+async function fetchPageSeo(path: string, signal?: AbortSignal): Promise<RemoteSeo | null> {
   if (cache.has(path)) return cache.get(path) || null;
   if (inflight.has(path)) return inflight.get(path)!;
   const p = (async () => {
@@ -42,13 +42,15 @@ async function fetchPageSeo(path: string): Promise<RemoteSeo | null> {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'get_page_seo', path }),
+        signal,
       });
       if (!r.ok) return null;
       const d = await r.json();
       const page: RemoteSeo | null = d?.page || null;
       cache.set(path, page);
       return page;
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return null;
       cache.set(path, null);
       return null;
     } finally {
@@ -96,11 +98,11 @@ export default function SeoHead({
   const [remote, setRemote] = useState<RemoteSeo | null>(() => cache.get(effectivePath) || null);
 
   useEffect(() => {
-    let alive = true;
-    fetchPageSeo(effectivePath).then(r => {
-      if (alive) setRemote(r);
+    const controller = new AbortController();
+    fetchPageSeo(effectivePath, controller.signal).then(r => {
+      if (!controller.signal.aborted) setRemote(r);
     });
-    return () => { alive = false; };
+    return () => controller.abort();
   }, [effectivePath]);
 
   useEffect(() => {
@@ -151,11 +153,11 @@ export function useSeoH1(fallback: string, path?: string): string {
     return c?.h1 || fallback;
   });
   useEffect(() => {
-    let alive = true;
-    fetchPageSeo(effectivePath).then(r => {
-      if (alive && r?.h1) setH1(r.h1);
+    const controller = new AbortController();
+    fetchPageSeo(effectivePath, controller.signal).then(r => {
+      if (!controller.signal.aborted && r?.h1) setH1(r.h1);
     });
-    return () => { alive = false; };
+    return () => controller.abort();
   }, [effectivePath, fallback]);
   return h1;
 }
