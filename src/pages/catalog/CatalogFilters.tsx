@@ -102,7 +102,7 @@ export default function CatalogFilters({
           {/* Кнопка фильтров справа */}
           <button
             onClick={onToggleFilters}
-            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 my-1.5 rounded-lg text-xs font-semibold transition-all border
+            className={`lg:hidden flex-shrink-0 flex items-center gap-1.5 px-3 py-2 my-1.5 rounded-lg text-xs font-semibold transition-all border
               ${showFilters || hasActiveFilters
                 ? 'border-brand-orange bg-brand-orange text-white'
                 : 'border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white'
@@ -118,9 +118,8 @@ export default function CatalogFilters({
           </button>
         </div>
 
-        {/* Раскрытые фильтры — на ПК всегда видны, на мобильном скрываем когда открыта карта */}
-        {showFilters && (
-          <div className={`pb-4 pt-1 border-t border-border animate-fade-in ${showMap ? 'hidden lg:block' : ''}`}>
+        {/* Раскрытые фильтры — на ПК всегда видны, на мобильном управляется showFilters */}
+        <div className={`pb-4 pt-1 border-t border-border ${!showFilters ? 'hidden lg:block' : ''} ${showMap ? 'hidden lg:block' : ''}`}>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-3">
 
               {/* Тип объекта */}
@@ -189,7 +188,6 @@ export default function CatalogFilters({
               </button>
             )}
           </div>
-        )}
       </div>
     </div>
   );

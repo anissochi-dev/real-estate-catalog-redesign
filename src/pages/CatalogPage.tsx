@@ -35,7 +35,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
   const [dealFilter, setDealFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024);
   const [minArea, setMinArea] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [districtFilter, setDistrictFilter] = useState('all');
