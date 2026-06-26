@@ -41,11 +41,11 @@ export default function LeadsListPage() {
   const [captcha, setCaptcha] = useState<CaptchaResult | null>(null);
   const [captchaKey, setCaptchaKey] = useState(0);
 
-  const load = () => {
+  const load = (ids: number[] | null) => {
     setLoading(true);
     setError('');
     setPage(1);
-    fetchPublicLeads({ page: 1, limit: LOAD_STEP, ids: aiIds || undefined, sort: 'newest' })
+    fetchPublicLeads({ page: 1, limit: LOAD_STEP, ids: ids || undefined, sort: 'newest' })
       .then(r => {
         setAllLeads(r.leads);
         setTotal(r.total);
@@ -69,8 +69,8 @@ export default function LeadsListPage() {
       .finally(() => setLoadingMore(false));
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, [aiIds]);
+   
+  useEffect(() => { load(null); }, []);
 
   useEffect(() => {
     fetchDistricts().then(list => setDistricts(list.filter(d => !d.is_okrug))).catch(() => {});
@@ -102,11 +102,14 @@ export default function LeadsListPage() {
       const r = await aiSearchLeads(q);
       if (!r.ids.length) {
         toast.info('ВБ ничего не нашёл — попробуйте переформулировать');
-        setAiIds(null); setAiReasoning('');
+        setAiIds(null);
+        setAiReasoning('');
+        load(null);
         return;
       }
       setAiIds(r.ids);
       setAiReasoning(r.reasoning || '');
+      load(r.ids);
       toast.success(`Найдено ${r.ids.length} подходящих заявок`);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Не удалось выполнить ИИ-поиск');
@@ -115,7 +118,12 @@ export default function LeadsListPage() {
     }
   };
 
-  const resetAi = () => { setAiIds(null); setAiReasoning(''); setAiQuery(''); };
+  const resetAi = () => {
+    setAiIds(null);
+    setAiReasoning('');
+    setAiQuery('');
+    load(null);
+  };
 
   const openContact = (lead: PublicLead) => {
     setContactLead(lead);
