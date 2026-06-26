@@ -152,6 +152,7 @@ export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, se
                         {initials(l.name)}
                       </div>
                       <div className="min-w-0">
+                        <div className="text-[11px] text-muted-foreground/70 mb-0.5">#{l.id}</div>
                         <div className="font-semibold text-foreground truncate max-w-[140px]">
                           {highlight(l.name, search)}
                         </div>
