@@ -11,6 +11,7 @@ import { getSiteUrl } from '@/lib/siteUrl';
 import DistrictHero from './district/DistrictHero';
 import DistrictStatsBar from './district/DistrictStatsBar';
 import DistrictSeoBlock from './district/DistrictSeoBlock';
+import SeoHead from '@/components/SeoHead';
 
 const DISTRICT_SEO_URL = 'https://functions.poehali.dev/4f6d05ce-e38c-4e10-8a8b-f282e1ed2ddd';
 const PAGE_SIZE = 12;
@@ -54,35 +55,20 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
 
   const placeLabel = isOkrug ? 'округ' : 'район';
 
-  // SEO meta
-  useEffect(() => {
-    if (!districtName) return;
-    const company = settings.company_name || '';
-    const placeName = districtData?.name || districtName;
-    const title = isOkrug
-      ? `Коммерческая недвижимость — ${placeName}, ${city}${company ? ` | ${company}` : ''}`
-      : `Коммерческая недвижимость — район ${placeName}, ${city}${company ? ` | ${company}` : ''}`;
-    document.title = title;
-    const desc = isOkrug
-      ? `Аренда и продажа коммерческой недвижимости в ${placeName} (${city}). Офисы, склады, торговые помещения и другие объекты во всех районах округа.`
-      : `Аренда и продажа коммерческой недвижимости в районе ${placeName}, ${city}. Офисы, склады, торговые помещения и другие объекты.`;
-    const setMeta = (sel: string, attr: string, val: string) => {
-      let el = document.querySelector(sel);
-      if (!el) { el = document.createElement('meta'); document.head.appendChild(el); }
-      el.setAttribute(attr, val);
-    };
-    setMeta('meta[name="description"]', 'content', desc);
-    setMeta('meta[property="og:title"]', 'content', title);
-    setMeta('meta[property="og:description"]', 'content', desc);
-    setMeta('meta[property="og:type"]', 'content', 'website');
-    const siteOrigin = (settings.site_url || '').replace(/\/$/, '') || window.location.origin;
-    setMeta('meta[property="og:url"]', 'content', siteOrigin + window.location.pathname);
-    // canonical
-    let canon = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
-    if (!canon) { canon = document.createElement('link'); canon.rel = 'canonical'; document.head.appendChild(canon); }
-    canon.href = siteOrigin + window.location.pathname;
-    return () => { document.title = company; };
-  }, [districtName, city, settings.company_name, settings.site_url, isOkrug, districtData]);
+  const placeName = districtData?.name || districtName;
+  const seoTitle = districtName
+    ? (isOkrug
+        ? `Коммерческая недвижимость в ${placeName}, ${city}`
+        : `Коммерческая недвижимость в районе ${placeName}, ${city}`)
+    : '';
+  const seoDescription = districtName
+    ? (isOkrug
+        ? `Аренда и продажа коммерческой недвижимости в ${placeName} (${city}). Офисы, склады, торговые площади и другие объекты во всех районах округа.`
+        : `Аренда и продажа коммерческой недвижимости в районе ${placeName}, ${city}. Офисы, склады, торговые площади и другие объекты.`)
+    : '';
+  const seoKeywords = districtName
+    ? `коммерческая недвижимость ${placeName}, аренда ${placeName}, ${placeName} ${city}, офис ${placeName}, склад ${placeName}`
+    : '';
 
   // Загружаем AI-текст
   useEffect(() => {
@@ -151,6 +137,15 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
 
   return (
     <div className="min-h-screen bg-background">
+      {seoTitle && (
+        <SeoHead
+          path={`/district/${district}`}
+          title={seoTitle}
+          description={seoDescription}
+          h1={seoTitle}
+          keywords={seoKeywords}
+        />
+      )}
       <SchemaOrg schema={breadcrumbSchema} id={`district-bc-${district}`} />
       <SchemaOrg schema={itemListSchema} id={`district-list-${district}`} />
 
