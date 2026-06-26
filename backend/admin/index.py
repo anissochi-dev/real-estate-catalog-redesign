@@ -3125,13 +3125,14 @@ def _leads(cur, conn, method, rid, action, event, user):
             return _err(400, 'Имя и телефон обязательны')
         cur.execute(
             f"INSERT INTO {SCHEMA}.leads (name, phone, email, message, listing_id, status, source, "
-            f"is_network_tenant, budget, show_on_main, company, lead_type, "
+            f"is_network_tenant, budget, budget_to, show_on_main, company, lead_type, "
             f"area_from, area_to, property_type, property_category, utilities) VALUES ("
             f"'{name}', '{phone}', {_str_or_null(body.get('email'), 100)}, "
             f"{_str_or_null(body.get('message'), 2000)}, {_int_or_null(body.get('listing_id'))}, "
             f"{_str_or_null(body.get('status') or 'new', 20)}, "
             f"{_str_or_null(body.get('source') or 'admin', 50)}, "
             f"{_bool(body.get('is_network_tenant'))}, {_int_or_null(body.get('budget'))}, "
+            f"{_int_or_null(body.get('budget_to'))}, "
             f"{_bool(body.get('show_on_main', True))}, {_str_or_null(body.get('company'), 200)}, "
             f"{_str_or_null(body.get('lead_type') or 'view', 20)}, "
             f"{_int_or_null(body.get('area_from'))}, {_int_or_null(body.get('area_to'))}, "
@@ -3148,7 +3149,7 @@ def _leads(cur, conn, method, rid, action, event, user):
                           ('property_type', 50), ('property_category', 50), ('utilities', 500)]:
             if f in body:
                 fields.append(f"{f} = {_str_or_null(body[f], length)}")
-        for f in ('assigned_to', 'listing_id', 'budget', 'broker_id', 'area_from', 'area_to'):
+        for f in ('assigned_to', 'listing_id', 'budget', 'budget_to', 'broker_id', 'area_from', 'area_to'):
             if f in body:
                 fields.append(f"{f} = {_int_or_null(body[f])}")
         for f in ('is_network_tenant', 'show_on_main'):

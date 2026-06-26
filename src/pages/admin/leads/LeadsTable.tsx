@@ -245,7 +245,14 @@ export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, se
                   <td className="px-4 py-3 whitespace-nowrap">
                     {l.budget != null && l.budget > 0 ? (
                       <span className="font-semibold text-foreground text-[13px]">
-                        {l.budget.toLocaleString('ru')} ₽
+                        {l.budget.toLocaleString('ru')}
+                        {l.budget_to != null && l.budget_to > 0 ? (
+                          <> — {l.budget_to.toLocaleString('ru')}</>
+                        ) : null} ₽
+                      </span>
+                    ) : l.budget_to != null && l.budget_to > 0 ? (
+                      <span className="font-semibold text-foreground text-[13px]">
+                        до {l.budget_to.toLocaleString('ru')} ₽
                       </span>
                     ) : (
                       <span className="text-muted-foreground text-[12px]">—</span>

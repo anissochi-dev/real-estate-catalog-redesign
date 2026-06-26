@@ -10,6 +10,7 @@ export interface Lead {
   lead_type: string | null;
   created_at: string;
   budget: number | null;
+  budget_to?: number | null;
   company: string | null;
   is_network_tenant: boolean;
   show_on_main: boolean;
@@ -61,7 +62,6 @@ export const SOURCE_LABELS: Record<string, string> = {
 export const PROPERTY_TYPES_LEAD = [
   { value: 'sale', label: 'Покупка' },
   { value: 'rent', label: 'Аренда' },
-  { value: 'business', label: 'Готовый бизнес' },
 ];
 
 export const PROPERTY_CATEGORIES_LEAD = [
@@ -82,5 +82,5 @@ export const PROPERTY_CATEGORIES_LEAD = [
 export const empty: Partial<Lead> = {
   name: '', phone: '', email: '', message: '', status: 'new',
   is_network_tenant: false, show_on_main: true, budget: null, company: '',
-  area_from: null, area_to: null, property_type: null, property_category: null, utilities: null,
+  budget_to: null, area_from: null, area_to: null, property_type: null, property_category: null, utilities: null,
 };

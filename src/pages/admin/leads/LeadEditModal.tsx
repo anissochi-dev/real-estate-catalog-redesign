@@ -93,10 +93,6 @@ export default function LeadEditModal({
             value={editing.email || ''} onChange={e => setEditing({ ...editing, email: e.target.value })} />
           <input className="w-full px-3 py-2 border rounded-lg" placeholder="Компания (для сетевых)"
             value={editing.company || ''} onChange={e => setEditing({ ...editing, company: e.target.value })} />
-          <input type="number" className="w-full px-3 py-2 border rounded-lg" placeholder="Бюджет, ₽"
-            value={editing.budget ?? ''}
-            onChange={e => setEditing({ ...editing, budget: e.target.value === '' ? null : +e.target.value })} />
-
           {/* Тип сделки и категория объекта */}
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -116,6 +112,22 @@ export default function LeadEditModal({
                 <option value="">— Любая —</option>
                 {PROPERTY_CATEGORIES_LEAD.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
+            </div>
+          </div>
+
+          {/* Бюджет от/до */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Бюджет от, ₽</label>
+              <input type="number" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="1 000 000"
+                value={editing.budget ?? ''}
+                onChange={e => setEditing({ ...editing, budget: e.target.value === '' ? null : +e.target.value })} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Бюджет до, ₽</label>
+              <input type="number" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="5 000 000"
+                value={editing.budget_to ?? ''}
+                onChange={e => setEditing({ ...editing, budget_to: e.target.value === '' ? null : +e.target.value })} />
             </div>
           </div>
 
