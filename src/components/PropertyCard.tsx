@@ -198,7 +198,8 @@ export default function PropertyCard({
         ref={rootRef}
         onMouseEnter={handlePrefetch}
         onTouchStart={handlePrefetch}
-        className={`property-card group bg-white rounded-2xl overflow-hidden border border-border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up flex flex-col ${isHome ? 'sm:grid sm:grid-cols-[300px_1fr]' : ''}`}
+        onClick={() => navigate(href)}
+        className={`property-card group bg-white rounded-2xl overflow-hidden border border-border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up flex flex-col cursor-pointer ${isHome ? 'sm:grid sm:grid-cols-[300px_1fr]' : ''}`}
         style={style}
       >
         {/* ── Левая колонка: фото ── */}
@@ -261,15 +262,6 @@ export default function PropertyCard({
             </button>
           </div>
 
-          {/* Категория — нижний левый угол фото */}
-          {(TYPE_LABELS[property.type] || property.type) && (
-            <div className="absolute left-2.5 bottom-2.5 z-[6] pointer-events-none">
-              <span className="text-[11px] font-bold font-display px-2.5 py-1 rounded-full bg-black/65 text-white backdrop-blur-sm uppercase tracking-wide">
-                {TYPE_LABELS[property.type] || property.type}
-              </span>
-            </div>
-          )}
-
           {/* ID — нижний правый угол фото */}
           <div className="absolute right-2.5 bottom-2.5 z-[5] pointer-events-none">
             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/50 text-white/80 backdrop-blur-sm">
@@ -285,26 +277,24 @@ export default function PropertyCard({
           <div className="space-y-1.5 min-w-0">
 
             {/* Название */}
-            <Link to={href}>
-              <h3 className={`font-display font-800 text-foreground leading-snug line-clamp-2 group-hover:text-brand-blue transition-colors ${isHome ? 'text-[18px] sm:text-[20px]' : 'font-700 text-[14px] sm:text-[15px]'}`}>
-                {property.title}
-              </h3>
-            </Link>
+            <h3 className={`font-display font-800 text-foreground leading-snug line-clamp-2 group-hover:text-brand-blue transition-colors ${isHome ? 'text-[18px] sm:text-[20px]' : 'font-700 text-[14px] sm:text-[15px]'}`}>
+              {property.title}
+            </h3>
 
-            {/* Адрес */}
+            {/* Адрес — полный */}
             {addressLine ? (
               <button
                 type="button"
-                onClick={() => setMapOpen(true)}
-                className="flex items-start gap-1 text-[12px] text-muted-foreground hover:text-brand-blue transition-colors text-left w-full min-w-0 group/addr"
+                onClick={e => { e.stopPropagation(); setMapOpen(true); }}
+                className="flex items-start gap-1 text-[12px] text-muted-foreground hover:text-brand-blue transition-colors text-left w-full group/addr"
               >
                 <Icon name="MapPin" size={11} className="flex-shrink-0 text-brand-blue/40 group-hover/addr:text-brand-blue mt-0.5 transition-colors" />
-                <span className="truncate min-w-0">{addressLine}</span>
+                <span className="break-words">{addressLine}</span>
               </button>
             ) : property.district ? (
               <button
                 type="button"
-                onClick={e => { e.preventDefault(); e.stopPropagation(); navigate(`/catalog?search=${encodeURIComponent(property.district || '')}`); }}
+                onClick={e => { e.stopPropagation(); navigate(`/catalog?search=${encodeURIComponent(property.district || '')}`); }}
                 className="inline-flex items-center gap-1 text-[12px] text-muted-foreground hover:text-brand-blue transition-colors"
               >
                 <Icon name="MapPin" size={11} className="text-brand-blue/40" />
@@ -356,36 +346,37 @@ export default function PropertyCard({
             })()}
           </div>
 
-          {/* Цена + кнопка */}
-          <div className="flex items-end justify-between gap-3 flex-wrap border-t border-border/60 pt-3">
-            <div>
-              <div className={`font-display font-900 leading-none tracking-tight text-foreground ${isHome ? 'text-[24px] sm:text-[28px]' : 'text-[20px] sm:text-[22px]'}`}>
-                {property.price.toLocaleString('ru')} ₽{property.deal === 'rent' ? '/мес' : ''}
-              </div>
-              {ppm2 && (
-                <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
-                  <Icon name="Scaling" size={10} className="text-muted-foreground/50" />
-                  {ppm2.toLocaleString('ru')} ₽/м²
-                </div>
-              )}
+          {/* Цена */}
+          <div className="border-t border-border/60 pt-3">
+            <div className={`font-display font-900 leading-none tracking-tight text-foreground ${isHome ? 'text-[24px] sm:text-[28px]' : 'text-[20px] sm:text-[22px]'}`}>
+              {property.price.toLocaleString('ru')} ₽{property.deal === 'rent' ? '/мес' : ''}
             </div>
-            {isHome && property.ownerPhone ? (
-              <a
-                href={`tel:${property.ownerPhone}`}
-                onClick={e => e.stopPropagation()}
-                className="bg-brand-blue text-white text-[12px] font-bold font-display px-4 py-2 rounded-xl inline-flex items-center gap-1.5 flex-shrink-0 shadow-sm hover:bg-brand-blue/90 transition-colors"
-              >
-                <Icon name="Phone" size={13} /> Позвонить
-              </a>
-            ) : (
-              <Link
-                to={href}
-                className="btn-orange text-white text-[12px] font-bold font-display px-4 py-2 rounded-xl inline-flex items-center gap-1.5 flex-shrink-0 shadow-sm"
-              >
-                Подробнее <Icon name="ArrowRight" size={12} />
-              </Link>
+            {ppm2 && (
+              <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
+                <Icon name="Scaling" size={10} className="text-muted-foreground/50" />
+                {ppm2.toLocaleString('ru')} ₽/м²
+              </div>
             )}
           </div>
+
+          {/* Кнопка Позвонить — всю ширину */}
+          {property.ownerPhone ? (
+            <a
+              href={`tel:${property.ownerPhone}`}
+              onClick={e => e.stopPropagation()}
+              className="w-full bg-brand-blue text-white text-[13px] font-bold font-display py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-sm hover:bg-brand-blue/90 transition-colors"
+            >
+              <Icon name="Phone" size={14} /> Позвонить
+            </a>
+          ) : (
+            <a
+              href={href}
+              onClick={e => e.stopPropagation()}
+              className="w-full btn-orange text-white text-[13px] font-bold font-display py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-sm"
+            >
+              Подробнее <Icon name="ArrowRight" size={13} />
+            </a>
+          )}
 
         </div>
       </div>
