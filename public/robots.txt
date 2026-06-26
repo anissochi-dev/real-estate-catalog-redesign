@@ -7,6 +7,9 @@ Disallow: /auth
 Disallow: /signin
 Disallow: /api/
 Disallow: /private/
+Disallow: /map
+Disallow: /favorites
+Disallow: /compare
 
 User-agent: Yandex
 Allow: /
@@ -16,6 +19,9 @@ Disallow: /login
 Disallow: /auth
 Disallow: /signin
 Disallow: /api/
+Disallow: /map
+Disallow: /favorites
+Disallow: /compare
 Clean-param: utm_source&utm_medium&utm_campaign&utm_term&utm_content
 
 User-agent: Googlebot
@@ -26,6 +32,29 @@ Disallow: /login
 Disallow: /auth
 Disallow: /signin
 Disallow: /api/
+Disallow: /map
+Disallow: /favorites
+Disallow: /compare
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: Bingbot
+Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /map
+Disallow: /favorites
+Disallow: /compare
 
 Sitemap: https://bmn.su/sitemap.xml
 

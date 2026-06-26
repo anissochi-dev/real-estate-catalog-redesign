@@ -96,7 +96,8 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
       .finally(() => setFaqLoading(false));
   }, [item?.id]);
 
-  const mainImage = item ? ((item.images && item.images[0]) || item.image || undefined) : undefined;
+  const FALLBACK_OG = 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/og-image-1779575751349.png';
+  const mainImage = item ? ((item.images && item.images[0]) || item.image || FALLBACK_OG) : undefined;
   const seoTitle = item ? (item.seoTitle || `${item.title} — ${item.city || 'Краснодар'}`) : undefined;
   const seoDesc = item ? (item.seoDescription || (item.description || '')).slice(0, 160) : undefined;
 

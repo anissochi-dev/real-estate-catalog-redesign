@@ -158,6 +158,7 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
           description={seoDescription}
           h1={seoTitle}
           keywords={seoKeywords}
+          ogImage="https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/og-image-1779575751349.png"
         />
       )}
       <SchemaOrg schema={breadcrumbSchema} id={`district-bc-${district}`} />

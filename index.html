@@ -53,11 +53,33 @@
       "image": "https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/og-image-1779575751349.png",
       "description": "Каталог коммерческой недвижимости и готового бизнеса в Краснодаре с 2007 года. Офисы, торговые площади, склады, рестораны, производства.",
       "foundingDate": "2007",
-      "areaServed": "Краснодар и Краснодарский край",
+      "areaServed": [
+        { "@type": "City", "name": "Краснодар" },
+        { "@type": "State", "name": "Краснодарский край" }
+      ],
       "address": {
         "@type": "PostalAddress",
         "addressLocality": "Краснодар",
         "addressCountry": "RU"
+      }
+    }
+    </script>
+
+    <!-- WebSite Schema с SearchAction — позволяет Google показывать поисковую строку в SERP -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Бизнес. Маркетинг. Недвижимость.",
+      "url": "https://bmn.su/",
+      "inLanguage": "ru-RU",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": "https://bmn.su/catalog?search={search_term_string}"
+        },
+        "query-input": "required name=search_term_string"
       }
     }
     </script>
