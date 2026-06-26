@@ -12,7 +12,7 @@ import { getSiteUrl } from '@/lib/siteUrl';
 import { formatPrice } from '@/components/PropertyCard';
 import CatalogHero from './catalog/CatalogHero';
 import CatalogFilters from './catalog/CatalogFilters';
-import CatalogMapSection from './catalog/CatalogMapSection';
+import CatalogMap from './catalog/CatalogMap';
 import CatalogResults from './catalog/CatalogResults';
 import { buildCatalogH1 } from './catalog/catalogH1';
 
@@ -189,52 +189,48 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
         onSubscribe={() => setShowSubscribe(true)}
       />
 
-      {/* Карта: при открытых фильтрах — side-by-side, иначе на всю ширину */}
-      {showMap && (
-        <CatalogMapSection
-          showFilters={showFilters}
-          mapFullscreen={mapFullscreen}
-          mapPoints={mapPoints}
-          mapSelected={mapSelected}
-          city={settings.main_city || 'Краснодар'}
-          typeFilter={typeFilter}
-          districtFilter={districtFilter}
-          minArea={minArea}
-          maxPrice={maxPrice}
-          sortBy={sortBy}
-          districts={districts}
-          setTypeFilter={setTypeFilter}
-          setDistrictFilter={setDistrictFilter}
-          setMinArea={setMinArea}
-          setMaxPrice={setMaxPrice}
-          setSortBy={setSortBy}
-          setDealFilter={setDealFilter}
-          setMapFullscreen={setMapFullscreen}
-          onCloseMap={() => { setShowMap(false); setMapSelected(null); }}
-          onPointClick={handleMapPointClick}
-          onDeselectPoint={() => setMapSelected(null)}
-        />
-      )}
-
       <AIMatchModal open={aiOpen} onClose={() => setAiOpen(false)} initialPrompt={aiQuery} autoSubmit={!!aiQuery.trim()} />
 
-      <CatalogResults
-        h1={h1}
-        filtered={filtered}
-        pageItems={pageItems}
-        favorites={favorites}
-        compareList={compareList}
-        visibleCount={visibleCount}
-        hasMore={hasMore}
-        allLoaded={allLoaded}
-        dealFilter={dealFilter}
-        typeFilter={typeFilter}
-        catalogBreadcrumbSchema={catalogBreadcrumbSchema}
-        loadStep={LOAD_STEP}
-        onToggleFavorite={onToggleFavorite}
-        onToggleCompare={onToggleCompare}
-        onLoadMore={() => setVisibleCount(v => v + LOAD_STEP)}
-      />
+      {/* Split-лэйаут: слева список, справа sticky карта */}
+      <div className="flex min-h-0">
+        {/* Левая колонка — результаты */}
+        <div className="flex-1 min-w-0">
+          <CatalogResults
+            h1={h1}
+            filtered={filtered}
+            pageItems={pageItems}
+            favorites={favorites}
+            compareList={compareList}
+            visibleCount={visibleCount}
+            hasMore={hasMore}
+            allLoaded={allLoaded}
+            dealFilter={dealFilter}
+            typeFilter={typeFilter}
+            catalogBreadcrumbSchema={catalogBreadcrumbSchema}
+            loadStep={LOAD_STEP}
+            onToggleFavorite={onToggleFavorite}
+            onToggleCompare={onToggleCompare}
+            onLoadMore={() => setVisibleCount(v => v + LOAD_STEP)}
+          />
+        </div>
+
+        {/* Правая колонка — карта sticky (только десктоп) */}
+        <div className="hidden lg:block w-[480px] xl:w-[560px] shrink-0">
+          <div className="sticky top-0 h-screen">
+            <CatalogMap
+              mapPoints={mapPoints}
+              mapSelected={mapSelected}
+              city={settings.main_city || 'Краснодар'}
+              fullscreen={mapFullscreen}
+              onClose={() => setMapSelected(null)}
+              onPointClick={handleMapPointClick}
+              onDeselectPoint={() => setMapSelected(null)}
+              onFullscreenChange={setMapFullscreen}
+              height="100%"
+            />
+          </div>
+        </div>
+      </div>
 
       {/* Модальное окно подписки */}
       <MaxSubscribeWidget
