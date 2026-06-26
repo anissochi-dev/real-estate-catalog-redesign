@@ -262,11 +262,13 @@ export default function PropertyCard({
           </div>
 
           {/* Категория — нижний левый угол фото */}
-          <div className="absolute left-2.5 bottom-2.5 z-[5] pointer-events-none">
-            <span className="text-[11px] font-bold font-display px-2.5 py-1 rounded-full bg-black/60 text-white backdrop-blur-sm uppercase tracking-wide">
-              {TYPE_LABELS[property.type] || property.type}
-            </span>
-          </div>
+          {(TYPE_LABELS[property.type] || property.type) && (
+            <div className="absolute left-2.5 bottom-2.5 z-[6] pointer-events-none">
+              <span className="text-[11px] font-bold font-display px-2.5 py-1 rounded-full bg-black/65 text-white backdrop-blur-sm uppercase tracking-wide">
+                {TYPE_LABELS[property.type] || property.type}
+              </span>
+            </div>
+          )}
 
           {/* ID — нижний правый угол фото */}
           <div className="absolute right-2.5 bottom-2.5 z-[5] pointer-events-none">
