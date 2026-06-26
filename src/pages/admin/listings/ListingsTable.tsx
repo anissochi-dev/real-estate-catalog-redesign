@@ -2,7 +2,6 @@ import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
 import { Listing, DEALS, fmtDate, perM2, splitImages } from './types';
 import { fmtListingId } from '@/lib/formatPrice';
-import ListingInlineActions from './ListingInlineActions';
 
 
 
@@ -100,26 +99,13 @@ export default function ListingsTable({
         return (
           <div key={it.id} className="space-y-0">
 
-            {/* ── Полоса действий НАД карточкой (при выборе) ── */}
-            {isSelected && onBulk && onBulkDelete && (
-              <div className="rounded-t-2xl overflow-visible">
-                <ListingInlineActions
-                  listingId={it.id}
-                  onBulk={onBulk}
-                  onBulkDelete={onBulkDelete}
-                  bulkLoading={bulkLoading}
-                  isAdmin={isAdmin}
-                />
-              </div>
-            )}
-
             {/* ── Сама карточка ── */}
           <div
             className={[
               'group bg-white border overflow-hidden shadow-sm transition-all duration-150',
-              isSelected ? 'rounded-b-2xl rounded-t-none' : 'rounded-2xl',
+              'rounded-2xl',
               'hover:shadow-md hover:border-brand-blue/30',
-              isSelected ? 'border-brand-blue/50 border-t-0' : 'border-border',
+              isSelected ? 'border-brand-blue/50' : 'border-border',
               isHidden ? 'opacity-70' : '',
               isArchived ? 'opacity-60' : '',
             ].filter(Boolean).join(' ')}
