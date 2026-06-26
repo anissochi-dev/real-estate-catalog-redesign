@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import { fireLeadConversion } from '@/lib/analytics';
+import SeoHead, { useSeoH1 } from '@/components/SeoHead';
 
 const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
 const LEADS_URL = 'https://functions.poehali.dev/45673fe4-a39d-4193-b529-174d4c8c8f97';
@@ -17,6 +18,7 @@ interface T {
 }
 
 export default function NetworkTenantsPage() {
+  const h1 = useSeoH1('Сетевые арендаторы');
   const [items, setItems] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [offer, setOffer] = useState<T | null>(null);
@@ -53,9 +55,13 @@ export default function NetworkTenantsPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <SeoHead
+        path="/network-tenants"
+        h1={h1}
+      />
       <section className="bg-gradient-to-r from-brand-blue to-brand-blue-dark text-white py-14">
         <div className="container mx-auto px-4">
-          <h1 className="font-display font-900 text-3xl md:text-5xl mb-3">Заявки на аренду/покупку</h1>
+          <h1 className="font-display font-900 text-3xl md:text-5xl mb-3">{h1}</h1>
           <p className="text-white/80 max-w-2xl">
             Федеральные, региональные сети, местные компании и частные лица, готовые арендовать или купить ваш объект недвижимости, офис, гостиницу, склад, магазин, базу, готовый бизнес, готовый арендный бизнес, общепит.
             Подходящий объект — отправьте предложение в один клик.

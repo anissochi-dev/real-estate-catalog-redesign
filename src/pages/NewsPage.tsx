@@ -5,7 +5,7 @@ import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
 import SchemaOrg, { makeNewsArticleSchema, makeItemListSchema, makeBreadcrumbSchema } from '@/components/SchemaOrg';
 import { getSiteUrl } from '@/lib/siteUrl';
-import SeoHead from '@/components/SeoHead';
+import SeoHead, { useSeoH1 } from '@/components/SeoHead';
 
 interface NewsItem {
   id: number;
@@ -34,6 +34,7 @@ function fmtDate(s?: string | null) {
 export function NewsListPage() {
   const navigate = useNavigate();
   const { settings } = useSettings();
+  const h1 = useSeoH1('Новости рынка недвижимости');
   const [news, setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -47,10 +48,6 @@ export function NewsListPage() {
       .then(d => { setNews(d.news || []); setTotal(d.total || 0); })
       .finally(() => setLoading(false));
   }, [page]);
-
-  useEffect(() => {
-    document.title = `Новости коммерческой недвижимости | ${settings.company_name || 'BIZNEST'}`;
-  }, [settings.company_name]);
 
   const siteUrl = getSiteUrl(settings.site_url);
 
@@ -73,10 +70,11 @@ export function NewsListPage() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
+      <SeoHead path="/news" h1={h1} />
       {newsListSchema && <SchemaOrg schema={newsListSchema} id="news-list" />}
       <SchemaOrg schema={newsBcSchema} id="news-list-bc" />
       <div className="mb-8">
-        <h1 className="font-display font-800 text-3xl text-foreground mb-1">Новости коммерческой недвижимости</h1>
+        <h1 className="font-display font-800 text-3xl text-foreground mb-1">{h1}</h1>
         <h2 className="font-display font-600 text-lg text-brand-blue mb-2">Аналитика и обзоры рынка Краснодара и Краснодарского края</h2>
         <p className="text-muted-foreground">Актуальные новости рынка, аналитика и обзоры Краснодара и Краснодарского края</p>
       </div>
