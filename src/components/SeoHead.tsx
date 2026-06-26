@@ -30,11 +30,23 @@ interface SeoHeadProps {
   ogImage?: string;
 }
 
-const cache = new Map<string, RemoteSeo | null>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 минут
+const cache = new Map<string, { data: RemoteSeo | null; ts: number }>();
 const inflight = new Map<string, Promise<RemoteSeo | null>>();
 
+function cacheGet(path: string): RemoteSeo | null | undefined {
+  const entry = cache.get(path);
+  if (!entry) return undefined;
+  if (Date.now() - entry.ts > CACHE_TTL) { cache.delete(path); return undefined; }
+  return entry.data;
+}
+function cacheSet(path: string, data: RemoteSeo | null) {
+  cache.set(path, { data, ts: Date.now() });
+}
+
 async function fetchPageSeo(path: string, signal?: AbortSignal): Promise<RemoteSeo | null> {
-  if (cache.has(path)) return cache.get(path) || null;
+  const cached = cacheGet(path);
+  if (cached !== undefined) return cached;
   if (inflight.has(path)) return inflight.get(path)!;
   const p = (async () => {
     try {
@@ -47,11 +59,11 @@ async function fetchPageSeo(path: string, signal?: AbortSignal): Promise<RemoteS
       if (!r.ok) return null;
       const d = await r.json();
       const page: RemoteSeo | null = d?.page || null;
-      cache.set(path, page);
+      cacheSet(path, page);
       return page;
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return null;
-      cache.set(path, null);
+      cacheSet(path, null);
       return null;
     } finally {
       inflight.delete(path);
@@ -95,7 +107,7 @@ export default function SeoHead({
   const { settings } = useSettings();
   const siteOrigin = (settings.site_url || '').replace(/\/$/, '');
   const effectivePath = path || location.pathname || '/';
-  const [remote, setRemote] = useState<RemoteSeo | null>(() => cache.get(effectivePath) || null);
+  const [remote, setRemote] = useState<RemoteSeo | null>(() => cacheGet(effectivePath) ?? null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -148,10 +160,7 @@ export default function SeoHead({
 export function useSeoH1(fallback: string, path?: string): string {
   const location = useLocation();
   const effectivePath = path || location.pathname || '/';
-  const [h1, setH1] = useState<string>(() => {
-    const c = cache.get(effectivePath);
-    return c?.h1 || fallback;
-  });
+  const [h1, setH1] = useState<string>(() => cacheGet(effectivePath)?.h1 || fallback);
   useEffect(() => {
     const controller = new AbortController();
     fetchPageSeo(effectivePath, controller.signal).then(r => {

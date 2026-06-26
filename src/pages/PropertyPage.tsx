@@ -143,7 +143,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   };
 
   const siteUrl = getSiteUrl(settings.site_url);
-  const pageUrl = typeof window !== 'undefined' ? window.location.href : `${siteUrl}/object/${slug}`;
+  const pageUrl = `${siteUrl}/object/${slug}`;
 
   const productSchema = makeRealEstateSchema({
     title: item.title,

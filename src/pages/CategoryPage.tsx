@@ -163,6 +163,7 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
         h1={meta.h1}
         title={`${meta.h1} | ${settings.company_name || 'БМН'}`}
         description={meta.description}
+        ogImage="https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/og-image-1779575751349.png"
       />
       <SchemaOrg schema={itemListSchema} id={`category-${type}`} />
       <SchemaOrg schema={breadcrumbSchema} id={`category-bc-${type}`} />
