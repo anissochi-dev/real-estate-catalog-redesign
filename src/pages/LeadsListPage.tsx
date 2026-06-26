@@ -181,15 +181,7 @@ function LeadCard({ lead, districts, onContact }: { lead: PublicLead; districts:
 
       {/* Футер */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
-          <Icon name="Clock" size={13} />
-          {dateLabel} {displayDate}
-          {isUpdated && (
-            <span className="ml-1 bg-amber-50 text-amber-600 text-[11px] font-semibold px-1.5 py-0.5 rounded-full">
-              изменено
-            </span>
-          )}
-        </div>
+        <div />
         <button
           onClick={onContact}
           className="btn-blue text-white px-5 py-2 rounded-full font-semibold text-sm inline-flex items-center gap-2 hover:opacity-90 transition-opacity"
