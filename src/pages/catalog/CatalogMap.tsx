@@ -78,13 +78,13 @@ export default function CatalogMap({
         {/* Кнопки управления — единая группа-пилюля */}
         <div className="absolute top-3 right-3 z-10 flex items-center bg-white/95 backdrop-blur-sm rounded-xl shadow-md overflow-hidden border border-border/40">
 
-          {/* Закрыть карту */}
+          {/* Закрыть карту — только на мобильном */}
           <button
             onClick={() => {
               if (document.fullscreenElement) document.exitFullscreen();
               onClose();
             }}
-            className="flex items-center gap-1.5 px-2.5 h-8 text-xs font-semibold text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-all"
+            className="lg:hidden flex items-center gap-1.5 px-2.5 h-8 text-xs font-semibold text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-all"
           >
             <Icon name="X" size={13} />
             Скрыть
