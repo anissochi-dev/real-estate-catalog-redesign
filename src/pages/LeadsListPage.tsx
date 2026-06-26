@@ -91,7 +91,7 @@ const CATEGORY_ICONS: Record<string, string> = {
 function LeadCard({ lead, districts, onContact }: { lead: PublicLead; districts: District[]; onContact: () => void }) {
   const displayName = lead.name || `Клиент #${lead.id}`;
   const color = avatarColor(displayName);
-  const typeLabel = lead.property_type === 'sale' ? 'Покупка' : lead.property_type === 'rent' ? 'Аренда' : null;
+  const typeLabel = lead.property_type === 'sale' ? 'Продажа' : lead.property_type === 'rent' ? 'Аренда' : null;
   const typeSale = lead.property_type === 'sale';
   const cat = lead.property_category || lead.request_category;
   const catLabel = cat ? CATEGORY_LABELS[cat] || cat : null;
@@ -105,9 +105,17 @@ function LeadCard({ lead, districts, onContact }: { lead: PublicLead; districts:
     .map(id => districts.find(d => d.id === id)?.name)
     .filter(Boolean) as string[];
 
+  const titleParts: string[] = [];
+  if (typeLabel) titleParts.push(typeLabel);
+  if (catLabel) titleParts.push(catLabel);
+  if (districtNames.length > 0) titleParts.push(districtNames[0]);
+  if (areaStr && areaStr !== 'Не указана') titleParts.push(areaStr);
+  if (budgetStr && budgetStr !== 'Договорная') titleParts.push(budgetStr);
+  const cardTitle = titleParts.length > 0 ? titleParts.join(' · ') : null;
+
   return (
     <article className="bg-white rounded-2xl border border-border shadow-sm hover:shadow-md hover:border-brand-blue/25 transition-all duration-200 p-6">
-      {/* Шапка: аватар + имя */}
+      {/* Шапка: аватар + название */}
       <div className="flex items-center gap-3 mb-4">
         <div
           className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shrink-0"
@@ -116,7 +124,10 @@ function LeadCard({ lead, districts, onContact }: { lead: PublicLead; districts:
           <Icon name="User" size={20} />
         </div>
         <div className="min-w-0">
-          <div className="font-bold text-[17px] text-foreground leading-tight">Заявка #{lead.id}</div>
+          <div className="font-bold text-[17px] text-foreground leading-tight">
+            {cardTitle || `Заявка #${lead.id}`}
+          </div>
+          <div className="text-xs text-muted-foreground mt-0.5">№{lead.id}</div>
           {lead.is_network_tenant && (
             <div className="truncate">
               {lead.company && <span className="text-[15px] font-semibold text-red-600">{lead.company} </span>}

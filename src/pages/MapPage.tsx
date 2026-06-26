@@ -6,7 +6,7 @@ import Icon from '@/components/ui/icon';
 import YandexMap from '@/components/YandexMap';
 import { listingSlug } from '@/lib/slug';
 import { useSettings } from '@/contexts/SettingsContext';
-import { useSeoH1 } from '@/components/SeoHead';
+import SeoHead, { useSeoH1 } from '@/components/SeoHead';
 
 interface MapPageProps {
   properties: Property[];
@@ -116,6 +116,7 @@ export default function MapPage({
 
   return (
     <div className="flex flex-col" style={{ minHeight: 'calc(100vh - 64px)' }}>
+      <SeoHead path="/map" h1={h1} noindex />
       <h1 className="sr-only">{h1}</h1>
       {/* Top filter bar */}
       <div className="bg-white border-b border-border px-3 sm:px-4 py-2 sm:py-3 flex gap-1.5 sm:gap-2 overflow-x-auto flex-shrink-0">
