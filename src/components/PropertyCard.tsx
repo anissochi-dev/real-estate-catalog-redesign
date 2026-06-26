@@ -198,11 +198,11 @@ export default function PropertyCard({
         ref={rootRef}
         onMouseEnter={handlePrefetch}
         onTouchStart={handlePrefetch}
-        className={`property-card group bg-white rounded-2xl overflow-hidden border border-border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up grid grid-cols-1 ${isHome ? 'sm:grid-cols-[300px_1fr]' : 'sm:grid-cols-[240px_1fr]'}`}
+        className={`property-card group bg-white rounded-2xl overflow-hidden border border-border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up flex flex-col ${isHome ? 'sm:grid sm:grid-cols-[300px_1fr]' : ''}`}
         style={style}
       >
         {/* ── Левая колонка: фото ── */}
-        <div className={`relative overflow-hidden bg-muted ${isHome ? 'min-h-[200px] sm:aspect-[4/3] sm:min-h-0' : 'min-h-[200px] sm:min-h-[220px]'}`}>
+        <div className="relative overflow-hidden bg-muted aspect-[4/3]">
           {cover ? (
             <img
               src={cover}
@@ -259,6 +259,13 @@ export default function PropertyCard({
               className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md backdrop-blur-sm transition-all ${isCompare ? 'bg-brand-orange text-white' : 'bg-white/90 text-slate-400 hover:text-brand-orange'}`}>
               <Icon name="GitCompare" size={13} />
             </button>
+          </div>
+
+          {/* Категория — нижний левый угол фото */}
+          <div className="absolute left-2.5 bottom-2.5 z-[5] pointer-events-none">
+            <span className="text-[11px] font-bold font-display px-2.5 py-1 rounded-full bg-black/60 text-white backdrop-blur-sm uppercase tracking-wide">
+              {TYPE_LABELS[property.type] || property.type}
+            </span>
           </div>
 
           {/* ID — нижний правый угол фото */}
@@ -348,19 +355,19 @@ export default function PropertyCard({
           </div>
 
           {/* Цена + кнопка */}
-          <div className="flex items-center justify-between gap-3 flex-wrap border-t border-border/60 pt-3">
-            <div className="flex items-baseline gap-3 flex-wrap min-w-0">
+          <div className="flex items-end justify-between gap-3 flex-wrap border-t border-border/60 pt-3">
+            <div>
               <div className={`font-display font-900 leading-none tracking-tight text-foreground ${isHome ? 'text-[24px] sm:text-[28px]' : 'text-[20px] sm:text-[22px]'}`}>
                 {property.price.toLocaleString('ru')} ₽{property.deal === 'rent' ? '/мес' : ''}
               </div>
               {ppm2 && (
-                <div className="text-[12px] text-muted-foreground font-medium flex items-center gap-1">
+                <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
                   <Icon name="Scaling" size={10} className="text-muted-foreground/50" />
                   {ppm2.toLocaleString('ru')} ₽/м²
                 </div>
               )}
             </div>
-            {property.ownerPhone && (
+            {isHome && property.ownerPhone ? (
               <a
                 href={`tel:${property.ownerPhone}`}
                 onClick={e => e.stopPropagation()}
@@ -368,6 +375,13 @@ export default function PropertyCard({
               >
                 <Icon name="Phone" size={13} /> Позвонить
               </a>
+            ) : (
+              <Link
+                to={href}
+                className="btn-orange text-white text-[12px] font-bold font-display px-4 py-2 rounded-xl inline-flex items-center gap-1.5 flex-shrink-0 shadow-sm"
+              >
+                Подробнее <Icon name="ArrowRight" size={12} />
+              </Link>
             )}
           </div>
 
