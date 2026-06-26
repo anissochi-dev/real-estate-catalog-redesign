@@ -759,7 +759,7 @@ def handler(event: dict, context) -> dict:
                 "l.tenant_name, l.monthly_rent, l.yearly_rent, l.purpose, l.finishing, "
                 "l.ceiling_height, l.electricity_kw, l.utilities, l.road_line, "
                 "l.updated_at, l.created_at, l.last_edited_at, "
-                "COALESCE(l.owner_phone, '') AS owner_phone, "
+                "l.owner_phone, "
                 "u.phone AS broker_phone"
             )
 
