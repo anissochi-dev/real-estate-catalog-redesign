@@ -12,7 +12,6 @@ SITE_URL = 'https://bmn.su'
 STATIC_PAGES = [
     ('/', '1.0', 'daily'),
     ('/catalog', '0.9', 'daily'),
-    ('/map', '0.7', 'weekly'),
     ('/news', '0.8', 'daily'),
     ('/network-tenants', '0.6', 'weekly'),
     ('/leads', '0.5', 'weekly'),
@@ -25,12 +24,19 @@ CATEGORIES = [
 ]
 
 
-def _url(loc, lastmod='', changefreq='weekly', priority='0.7'):
+def _url(loc, lastmod='', changefreq='weekly', priority='0.7', image_url=None, image_title=None):
     parts = [f'  <url>', f'    <loc>{loc}</loc>']
     if lastmod:
         parts.append(f'    <lastmod>{lastmod}</lastmod>')
     parts.append(f'    <changefreq>{changefreq}</changefreq>')
     parts.append(f'    <priority>{priority}</priority>')
+    if image_url:
+        parts.append(f'    <image:image>')
+        parts.append(f'      <image:loc>{image_url}</image:loc>')
+        if image_title:
+            title_safe = image_title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            parts.append(f'      <image:title>{title_safe}</image:title>')
+        parts.append(f'    </image:image>')
     parts.append(f'  </url>')
     return '\n'.join(parts)
 
@@ -64,27 +70,42 @@ def handler(event: dict, context):
         conn = psycopg2.connect(dsn)
         cur  = conn.cursor(cursor_factory=RealDictCursor)
 
-        # Активные объекты
+        # Активные объекты (с image sitemap)
         cur.execute(f"""
-            SELECT slug, id, updated_at
+            SELECT slug, id, updated_at, title, images
             FROM {SCHEMA}.listings
             WHERE status = 'active' AND is_visible = TRUE
             ORDER BY updated_at DESC NULLS LAST
         """)
         for row in cur.fetchall():
+            import json as _json
             d       = dict(row)
             slug    = d.get('slug') or f"object-{d['id']}"
             lastmod = str(d.get('updated_at') or today)[:10]
-            urls.append(_url(f'{SITE_URL}/object/{slug}', lastmod, 'weekly', '0.8'))
+            img_url = None
+            raw_images = d.get('images')
+            if raw_images:
+                try:
+                    imgs = _json.loads(raw_images) if isinstance(raw_images, str) else raw_images
+                    if isinstance(imgs, list) and imgs:
+                        img_url = imgs[0]
+                except Exception:
+                    pass
+            urls.append(_url(
+                f'{SITE_URL}/object/{slug}', lastmod, 'weekly', '0.8',
+                image_url=img_url, image_title=d.get('title') or None,
+            ))
 
-        # Районы
+        # Районы — только активные с объектами
         cur.execute(f"""
-            SELECT d.slug, COUNT(l.id) as cnt
+            SELECT DISTINCT d.slug
             FROM {SCHEMA}.districts d
-            LEFT JOIN {SCHEMA}.listings l
-                ON l.district = d.name AND l.status = 'active' AND l.is_visible = TRUE
-            GROUP BY d.slug
-            HAVING COUNT(l.id) > 0
+            JOIN {SCHEMA}.listings l ON l.district = d.name
+            WHERE l.status = 'active'
+              AND l.is_visible = TRUE
+              AND d.slug IS NOT NULL
+              AND d.slug != ''
+              AND d.is_active = TRUE
         """)
         for row in cur.fetchall():
             d = dict(row)
@@ -93,7 +114,7 @@ def handler(event: dict, context):
 
         # Новости
         cur.execute(f"""
-            SELECT slug, published_at
+            SELECT slug, published_at, title, image_url
             FROM {SCHEMA}.news
             WHERE is_published = TRUE
             ORDER BY published_at DESC NULLS LAST
@@ -101,14 +122,19 @@ def handler(event: dict, context):
         for row in cur.fetchall():
             d       = dict(row)
             lastmod = str(d.get('published_at') or today)[:10]
-            urls.append(_url(f'{SITE_URL}/news/{d["slug"]}', lastmod, 'monthly', '0.6'))
+            urls.append(_url(
+                f'{SITE_URL}/news/{d["slug"]}', lastmod, 'monthly', '0.6',
+                image_url=d.get('image_url') or None,
+                image_title=d.get('title') or None,
+            ))
 
         cur.close()
         conn.close()
 
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n'
+        '        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n'
         + '\n'.join(urls) +
         '\n</urlset>'
     )

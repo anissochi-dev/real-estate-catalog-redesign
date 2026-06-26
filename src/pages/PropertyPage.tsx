@@ -96,37 +96,9 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
       .finally(() => setFaqLoading(false));
   }, [item?.id]);
 
-  useEffect(() => {
-    if (!item) return;
-    const rawTitle = item.seoTitle || `${item.title} — ${item.city || 'Краснодар'} | ${settings.company_name || 'Бизнес. Маркетинг. Недвижимость.'}`;
-    const title = rawTitle.length > 68 ? rawTitle.slice(0, 67).trimEnd() + '…' : rawTitle;
-    document.title = title;
-    const desc = (item.seoDescription || (item.description || '')).slice(0, 160);
-    const setMeta = (selector: string, create: () => HTMLMetaElement, content: string) => {
-      let el = document.querySelector(selector) as HTMLMetaElement | null;
-      if (!el) { el = create(); document.head.appendChild(el); }
-      el.content = content;
-    };
-    setMeta('meta[name="description"]', () => Object.assign(document.createElement('meta'), { name: 'description' }), desc);
-    setMeta('meta[property="og:title"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:title'); return m; }, title);
-    setMeta('meta[property="og:description"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:description'); return m; }, desc);
-    setMeta('meta[property="og:type"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:type'); return m; }, 'website');
-    setMeta('meta[property="og:site_name"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:site_name'); return m; }, settings.company_name || 'Бизнес. Маркетинг. Недвижимость.');
-    const siteOriginForOg = (settings.site_url || '').replace(/\/$/, '') || window.location.origin;
-    setMeta('meta[property="og:url"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:url'); return m; }, siteOriginForOg + window.location.pathname);
-    setMeta('meta[name="twitter:title"]', () => Object.assign(document.createElement('meta'), { name: 'twitter:title' }), title);
-    setMeta('meta[name="twitter:description"]', () => Object.assign(document.createElement('meta'), { name: 'twitter:description' }), desc);
-    const mainImage = (item.images && item.images[0]) || item.image;
-    if (mainImage) {
-      setMeta('meta[property="og:image"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:image'); return m; }, mainImage);
-      setMeta('meta[property="vk:image"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'vk:image'); return m; }, mainImage);
-      setMeta('meta[name="twitter:image"]', () => Object.assign(document.createElement('meta'), { name: 'twitter:image' }), mainImage);
-    }
-    let canon = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
-    if (!canon) { canon = document.createElement('link'); canon.rel = 'canonical'; document.head.appendChild(canon); }
-    const siteOrigin = (settings.site_url || '').replace(/\/$/, '') || window.location.origin;
-    canon.href = siteOrigin + window.location.pathname;
-  }, [item, settings.company_name, settings.site_url]);
+  const mainImage = item ? ((item.images && item.images[0]) || item.image || undefined) : undefined;
+  const seoTitle = item ? (item.seoTitle || `${item.title} — ${item.city || 'Краснодар'}`) : undefined;
+  const seoDesc = item ? (item.seoDescription || (item.description || '')).slice(0, 160) : undefined;
 
   if (loading) {
     return <div className="container mx-auto px-4 py-20 text-center text-muted-foreground">Загрузка объекта...</div>;
@@ -215,6 +187,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
 
   return (
     <article className="bg-background">
+      <SeoHead title={seoTitle} description={seoDesc} ogImage={mainImage} />
       <SchemaOrg schema={productSchema} id="property" />
       <SchemaOrg schema={breadcrumbSchema} id="breadcrumb" />
       {videoSchema && <SchemaOrg schema={videoSchema} id="video" />}

@@ -161,7 +161,7 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
       <SeoHead
         path={`/catalog/${type}`}
         h1={meta.h1}
-        title={meta.h1}
+        title={`${meta.h1} | ${settings.company_name || 'БМН'}`}
         description={meta.description}
       />
       <SchemaOrg schema={itemListSchema} id={`category-${type}`} />

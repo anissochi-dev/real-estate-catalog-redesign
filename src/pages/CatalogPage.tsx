@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Property } from '@/App';
 import MaxSubscribeWidget from '@/components/MaxSubscribeWidget';
-import { useSeoH1 } from '@/components/SeoHead';
+import SeoHead, { useSeoH1 } from '@/components/SeoHead';
 import AIMatchModal from '@/components/AIMatchModal';
 import { useSettings } from '@/contexts/SettingsContext';
 import { makeBreadcrumbSchema } from '@/components/SchemaOrg';
@@ -160,6 +160,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
 
   return (
     <div className="min-h-screen bg-background">
+      <SeoHead path="/catalog" h1={h1} />
 
       <CatalogHero
         aiQuery={aiQuery}
