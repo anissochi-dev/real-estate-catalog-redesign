@@ -211,12 +211,12 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
       <section className="py-6 bg-background">
         <div className="container mx-auto px-4">
           <h2 className="sr-only">Категории коммерческой недвижимости в Краснодаре</h2>
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2 md:gap-3">
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
             {CATEGORIES.map((cat, i) => (
               <Link
                 key={cat.type}
                 to={catalogCategoryUrl(cat.type)}
-                className={`group relative flex flex-col items-center gap-2 p-3 bg-white rounded-xl border border-border hover:border-transparent hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up stagger-${i + 1} overflow-hidden`}
+                className={`group relative flex flex-col items-center gap-2 p-3 bg-white rounded-xl border border-border hover:border-transparent hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up stagger-${i + 1} overflow-hidden flex-shrink-0 w-[88px]`}
               >
                 <div className={`absolute inset-0 bg-gradient-to-br ${cat.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
                 <div className={`relative w-10 h-10 rounded-xl bg-gradient-to-br ${cat.gradient} flex items-center justify-center shadow-md group-hover:scale-110 transition-all duration-300`}>
