@@ -91,7 +91,9 @@ function LeadCard({ lead, districts, onContact }: { lead: PublicLead; districts:
   const cat = lead.property_category || lead.request_category;
   const catLabel = cat ? CATEGORY_LABELS[cat] || cat : null;
   const catIcon = cat ? CATEGORY_ICONS[cat] || 'Tag' : 'Tag';
-  const updDate = fmtDate(lead.updated_at || lead.created_at);
+  const isUpdated = lead.updated_at && lead.updated_at !== lead.created_at;
+  const displayDate = fmtDate(isUpdated ? lead.updated_at! : lead.created_at);
+  const dateLabel = isUpdated ? 'Обновлено' : 'Добавлено';
   const budgetStr = fmtBudget(lead.budget, lead.budget_to);
   const areaStr = fmtArea(lead.area_from, lead.area_to);
   const districtNames = (lead.district_ids || [])
@@ -181,7 +183,12 @@ function LeadCard({ lead, districts, onContact }: { lead: PublicLead; districts:
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
           <Icon name="Clock" size={13} />
-          Обновлено {updDate}
+          {dateLabel} {displayDate}
+          {isUpdated && (
+            <span className="ml-1 bg-amber-50 text-amber-600 text-[11px] font-semibold px-1.5 py-0.5 rounded-full">
+              изменено
+            </span>
+          )}
         </div>
         <button
           onClick={onContact}
