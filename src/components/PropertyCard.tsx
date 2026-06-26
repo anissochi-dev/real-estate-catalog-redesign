@@ -351,25 +351,27 @@ export default function PropertyCard({
                 Окуп. {property.payback} мес
               </div>
             ) : null}
-            {(() => {
-              if (property.deal === 'rent') return null;
-              const income = property.monthlyRent || property.profit || 0;
-              if (!income) return null;
-              const hasTenant = !!property.tenantName || !!property.monthlyRent;
-              const isBusiness = property.deal === 'business';
-              const label = isBusiness ? 'Доход' : hasTenant ? 'Сдан' : 'Прогноз';
-              const isFact = hasTenant || isBusiness;
-              return (
-                <div
-                  className={`flex items-center gap-1.5 text-[12px] font-semibold ${isFact ? 'text-emerald-700' : 'text-blue-700'}`}
-                  title={hasTenant && property.tenantName ? `Арендатор: ${property.tenantName}` : ''}
-                >
-                  <Icon name={isFact ? 'CheckCircle2' : 'TrendingUp'} size={12} className={isFact ? 'text-emerald-500' : 'text-blue-500'} />
-                  {label}: +{(income / 1000).toFixed(0)} тыс/мес
-                </div>
-              );
-            })()}
           </div>
+
+          {/* Доходность — отдельная строка */}
+          {(() => {
+            const income = property.monthlyRent || property.profit || 0;
+            if (!income) return null;
+            const hasTenant = !!property.tenantName || !!property.monthlyRent;
+            const isBusiness = property.deal === 'business';
+            const isRent = property.deal === 'rent';
+            const label = isBusiness ? 'Доход' : isRent ? 'Ставка' : hasTenant ? 'Сдан' : 'Прогноз';
+            const isFact = hasTenant || isBusiness || isRent;
+            return (
+              <div
+                className={`flex items-center gap-1.5 text-[12px] font-semibold ${isFact ? 'text-emerald-700' : 'text-blue-700'}`}
+                title={hasTenant && property.tenantName ? `Арендатор: ${property.tenantName}` : ''}
+              >
+                <Icon name={isFact ? 'CheckCircle2' : 'TrendingUp'} size={13} className={isFact ? 'text-emerald-500' : 'text-blue-500'} />
+                {label}: +{(income / 1000).toFixed(0)} тыс/мес
+              </div>
+            );
+          })()}
 
           {/* Цена */}
           <div className="border-t border-border/60 pt-3">
