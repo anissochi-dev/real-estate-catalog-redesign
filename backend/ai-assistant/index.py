@@ -402,9 +402,15 @@ SYSTEM_PROMPTS = {
         '}'
     ),
     'search_leads': (
-        'Ты — поисковый помощник. На входе — запрос посетителя сайта и список заявок других '
-        'клиентов (что они ищут). Выбери до 10 заявок, наиболее подходящих под запрос — по теме, '
-        'бюджету, типу объекта, локации, целям. Ответь СТРОГО в формате JSON без markdown:\n'
+        'Ты — поисковый помощник по заявкам на коммерческую недвижимость. '
+        'На входе — запрос посетителя сайта и список заявок других клиентов. '
+        'Каждая заявка содержит: id, deal (аренда/покупка), category (тип объекта), '
+        'budget (бюджет), area (площадь), districts (районы), message (описание запроса), '
+        'и опционально: utilities (коммуникации), network_tenant (сетевая компания). '
+        'Выбери до 10 заявок, наиболее подходящих под запрос посетителя — '
+        'сопоставляй по типу сделки, категории объекта, бюджету, площади, районам, '
+        'содержанию запроса и наличию сетевого арендатора. '
+        'Ответь СТРОГО в формате JSON без markdown:\n'
         '{"ids": [id1, id2, ...], "reasoning": "1 предложение почему именно эти заявки"}'
     ),
     'agent': (
@@ -4512,25 +4518,68 @@ def handler(event, context):
             # Для search_leads — подтягиваем активные публичные заявки
             if is_search_leads:
                 cur.execute(
-                    f"SELECT id, name, message, budget, company, request_category, lead_type "
-                    f"FROM {SCHEMA}.leads "
-                    f"WHERE show_on_main = TRUE AND status IN ('new','in_progress') "
-                    f"ORDER BY created_at DESC LIMIT 80"
+                    f"SELECT l.id, l.name, l.message, l.budget, l.budget_to, "
+                    f"l.company, l.request_category, l.property_category, "
+                    f"l.lead_type, l.property_type, "
+                    f"l.area_from, l.area_to, l.utilities, "
+                    f"l.is_network_tenant, l.district_ids "
+                    f"FROM {SCHEMA}.leads l "
+                    f"WHERE l.show_on_main = TRUE AND l.status IN ('new','in_progress') "
+                    f"ORDER BY l.updated_at DESC NULLS LAST LIMIT 100"
                 )
                 leads_rows = cur.fetchall()
+                # Загружаем словарь районов для подстановки названий
+                cur.execute(f"SELECT id, name FROM {SCHEMA}.districts")
+                districts_map = {r['id']: r['name'] for r in cur.fetchall()}
                 leads_for_search = [dict(r) for r in leads_rows]
-                compact_leads = [
-                    {
+                compact_leads = []
+                for r in leads_for_search:
+                    district_names = [
+                        districts_map[did]
+                        for did in (r.get('district_ids') or [])
+                        if did in districts_map
+                    ]
+                    budget_from = r.get('budget')
+                    budget_to = r.get('budget_to')
+                    if budget_from and budget_to:
+                        budget_str = f'{budget_from:,} – {budget_to:,} ₽'
+                    elif budget_from:
+                        budget_str = f'от {budget_from:,} ₽'
+                    elif budget_to:
+                        budget_str = f'до {budget_to:,} ₽'
+                    else:
+                        budget_str = 'не указан'
+                    area_from = r.get('area_from')
+                    area_to = r.get('area_to')
+                    if area_from and area_to:
+                        area_str = f'{area_from} – {area_to} м²'
+                    elif area_from:
+                        area_str = f'от {area_from} м²'
+                    elif area_to:
+                        area_str = f'до {area_to} м²'
+                    else:
+                        area_str = 'не указана'
+                    deal_type = r.get('property_type') or r.get('lead_type') or ''
+                    if deal_type == 'rent':
+                        deal_type = 'аренда'
+                    elif deal_type == 'sale':
+                        deal_type = 'покупка'
+                    category = r.get('property_category') or r.get('request_category') or ''
+                    entry = {
                         'id': r['id'],
-                        'name': (r.get('name') or '')[:60],
-                        'message': (r.get('message') or '')[:300],
-                        'budget': r.get('budget'),
-                        'category': r.get('request_category') or '',
-                        'type': r.get('lead_type') or '',
+                        'deal': deal_type,
+                        'category': category,
+                        'budget': budget_str,
+                        'area': area_str,
+                        'districts': district_names,
+                        'message': (r.get('message') or '')[:400],
                     }
-                    for r in leads_for_search
-                ]
-                ctx_data = {'leads': compact_leads}
+                    if r.get('utilities'):
+                        entry['utilities'] = r['utilities']
+                    if r.get('is_network_tenant') and r.get('company'):
+                        entry['network_tenant'] = r['company']
+                    compact_leads.append(entry)
+                ctx_data = {'total': len(compact_leads), 'leads': compact_leads}
 
             sys_prompt = SYSTEM_PROMPTS[action]
 
