@@ -345,8 +345,9 @@ def handler(event: dict, context) -> dict:
                 total = int(cur.fetchone()['c'] or 0)
 
                 cur.execute(
-                    f"SELECT id, name, message, budget, company, request_category, lead_type, "
-                    f"created_at, updated_at "
+                    f"SELECT id, name, message, budget, budget_to, company, request_category, "
+                    f"lead_type, property_type, area_from, area_to, utilities, district_ids, "
+                    f"is_network_tenant, created_at, updated_at "
                     f"FROM t_p71821556_real_estate_catalog_.leads WHERE {where_sql} "
                     f"ORDER BY {order} LIMIT {limit} OFFSET {offset}"
                 )
@@ -359,6 +360,8 @@ def handler(event: dict, context) -> dict:
                                 d[k] = d[k].isoformat()
                             except Exception:
                                 d[k] = str(d[k])
+                    if d.get('district_ids') is None:
+                        d['district_ids'] = []
                     rows.append(d)
                 return _ok({
                     'leads': rows,

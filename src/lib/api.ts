@@ -387,10 +387,18 @@ export interface PublicLead {
   name: string;
   message: string;
   budget: number | null;
+  budget_to: number | null;
   company: string | null;
   request_category: string | null;
   lead_type: string | null;
+  property_type: string | null;
+  area_from: number | null;
+  area_to: number | null;
+  utilities: string | null;
+  district_ids: number[];
+  is_network_tenant: boolean;
   created_at: string;
+  updated_at: string | null;
 }
 
 /** Получить полный список публичных заявок. */

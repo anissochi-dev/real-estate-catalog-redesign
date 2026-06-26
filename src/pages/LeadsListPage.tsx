@@ -5,17 +5,31 @@ import Breadcrumbs from '@/components/Breadcrumbs';
 import SmartCaptcha, { CaptchaResult } from '@/components/SmartCaptcha';
 import { fetchPublicLeads, aiSearchLeads, sendLead, PublicLead } from '@/lib/api';
 import { useSeoH1 } from '@/components/SeoHead';
-import { useSettings } from '@/contexts/SettingsContext';
 import PublicPhoneInput from '@/components/PublicPhoneInput';
 
-function fmtBudget(b: number | null): string {
-  if (!b) return 'не указан';
-  if (b >= 1_000_000) return `${(b / 1_000_000).toFixed(1)} млн ₽`;
-  if (b >= 1_000) return `${Math.round(b / 1_000)} тыс ₽`;
-  return `${b} ₽`;
+function fmtBudget(from: number | null, to: number | null): string {
+  if (!from && !to) return 'Договорная';
+  if (from && to) {
+    const fmt = (v: number) => v >= 1_000_000
+      ? `${(v / 1_000_000).toFixed(v >= 10_000_000 ? 0 : 1)} млн ₽`
+      : `${Math.round(v / 1_000)} тыс ₽`;
+    return `${fmt(from)} – ${fmt(to)}`;
+  }
+  const v = from || to!;
+  const s = v >= 1_000_000
+    ? `${(v / 1_000_000).toFixed(v >= 10_000_000 ? 0 : 1)} млн ₽`
+    : `${Math.round(v / 1_000)} тыс ₽`;
+  return from ? `от ${s}` : `до ${s}`;
 }
 
-function fmtDate(s: string): string {
+function fmtArea(from: number | null, to: number | null): string {
+  if (!from && !to) return 'Не указана';
+  if (from && to) return `${from.toLocaleString('ru')} – ${to.toLocaleString('ru')} м²`;
+  if (from) return `от ${from.toLocaleString('ru')} м²`;
+  return `до ${to!.toLocaleString('ru')} м²`;
+}
+
+function fmtDate(s: string | null): string {
   if (!s) return '';
   try {
     return new Date(s).toLocaleDateString('ru', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -24,12 +38,27 @@ function fmtDate(s: string): string {
   }
 }
 
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+const AVATAR_COLORS = [
+  '#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#be185d',
+];
+function avatarColor(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+
 const CATEGORY_LABELS: Record<string, string> = {
   office: 'Офис',
-  retail: 'Магазин',
+  retail: 'Магазин / торговое',
   warehouse: 'Склад',
-  restaurant: 'Кафе/Ресторан',
-  hotel: 'Гостиница',
+  restaurant: 'Общепит',
+  hotel: 'Гостиница / Хостел',
   business: 'Готовый бизнес',
   gab: 'ГАБ',
   production: 'Производство',
@@ -39,10 +68,125 @@ const CATEGORY_LABELS: Record<string, string> = {
   car_service: 'Автосервис',
 };
 
+const CATEGORY_ICONS: Record<string, string> = {
+  office: 'Building2',
+  retail: 'ShoppingBag',
+  warehouse: 'Warehouse',
+  restaurant: 'UtensilsCrossed',
+  hotel: 'Hotel',
+  business: 'Briefcase',
+  gab: 'LayoutGrid',
+  production: 'Factory',
+  land: 'Map',
+  building: 'Building',
+  free_purpose: 'Layers',
+  car_service: 'Car',
+};
+
+function LeadCard({ lead, onContact }: { lead: PublicLead; onContact: () => void }) {
+  const displayName = lead.name || `Клиент #${lead.id}`;
+  const color = avatarColor(displayName);
+  const typeLabel = lead.property_type === 'sale' ? 'Покупка' : lead.property_type === 'rent' ? 'Аренда' : null;
+  const typeSale = lead.property_type === 'sale';
+  const catLabel = lead.request_category ? CATEGORY_LABELS[lead.request_category] || lead.request_category : null;
+  const catIcon = lead.request_category ? CATEGORY_ICONS[lead.request_category] || 'Tag' : 'Tag';
+  const updDate = fmtDate(lead.updated_at || lead.created_at);
+  const budgetStr = fmtBudget(lead.budget, lead.budget_to);
+  const areaStr = fmtArea(lead.area_from, lead.area_to);
+
+  return (
+    <article className="bg-white rounded-2xl border border-border shadow-sm hover:shadow-md hover:border-brand-blue/25 transition-all duration-200 p-6">
+      {/* Шапка: аватар + имя */}
+      <div className="flex items-center gap-3 mb-4">
+        <div
+          className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shrink-0"
+          style={{ background: color }}
+        >
+          {initials(displayName)}
+        </div>
+        <div className="min-w-0">
+          <div className="font-bold text-[17px] text-foreground leading-tight">{displayName}</div>
+          {(lead.company || lead.is_network_tenant) && (
+            <div className="text-sm text-muted-foreground truncate">
+              {lead.company}
+              {lead.is_network_tenant && (
+                <span className="ml-1 text-brand-blue font-medium">• Федеральная сеть</span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Бейджи: тип + категория + (районы если были бы названия — без ID) */}
+      <div className="flex flex-wrap gap-2 mb-3">
+        {typeLabel && (
+          <span className={`inline-flex items-center gap-1.5 text-[13px] font-semibold px-3 py-1 rounded-full ${
+            typeSale ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-700'
+          }`}>
+            <Icon name={typeSale ? 'TrendingUp' : 'Handshake'} size={13} />
+            {typeLabel}
+          </span>
+        )}
+        {catLabel && (
+          <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold px-3 py-1 rounded-full bg-slate-100 text-slate-700">
+            <Icon name={catIcon} size={13} />
+            {catLabel}
+          </span>
+        )}
+      </div>
+
+      {/* Параметры: бюджет, площадь, коммуникации */}
+      <div className="flex flex-wrap gap-x-5 gap-y-1.5 bg-slate-50 rounded-xl px-4 py-3 mb-4 text-sm">
+        <div className="flex items-center gap-2 text-foreground">
+          <Icon name="Wallet" size={14} className="text-muted-foreground" />
+          <span className="text-muted-foreground">Бюджет:</span>
+          <span className={`font-semibold ${budgetStr === 'Договорная' ? 'text-muted-foreground font-normal' : ''}`}>
+            {budgetStr}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 text-foreground">
+          <Icon name="Maximize2" size={14} className="text-muted-foreground" />
+          <span className="text-muted-foreground">Площадь:</span>
+          <span className={`font-semibold ${areaStr === 'Не указана' ? 'text-muted-foreground font-normal' : ''}`}>
+            {areaStr}
+          </span>
+        </div>
+        {lead.utilities && (
+          <div className="flex items-center gap-2 text-foreground">
+            <Icon name="Zap" size={14} className="text-muted-foreground" />
+            <span className="text-muted-foreground">Коммуникации:</span>
+            <span className="font-semibold">{lead.utilities}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Описание */}
+      {lead.message && (
+        <div className="text-[15px] leading-relaxed text-foreground/85 py-4 border-t border-b border-slate-100 mb-4">
+          {lead.message}
+        </div>
+      )}
+
+      {/* Футер */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
+          <Icon name="Clock" size={13} />
+          Обновлено {updDate}
+        </div>
+        <button
+          onClick={onContact}
+          className="btn-blue text-white px-5 py-2 rounded-full font-semibold text-sm inline-flex items-center gap-2 hover:opacity-90 transition-opacity"
+        >
+          <Icon name="Phone" size={14} />
+          Связаться
+        </button>
+      </div>
+    </article>
+  );
+}
+
 export default function LeadsListPage() {
   const h1 = useSeoH1('Заявки клиентов');
-  const { settings } = useSettings();
-  const PAGE_SIZE = 20;
   const LOAD_STEP = 20;
 
   const [allLeads, setAllLeads] = useState<PublicLead[]>([]);
@@ -51,13 +195,11 @@ export default function LeadsListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // ИИ-поиск (единственный фильтр на странице)
   const [aiQuery, setAiQuery] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiIds, setAiIds] = useState<number[] | null>(null);
   const [aiReasoning, setAiReasoning] = useState('');
 
-  // Контактная форма + капча
   const [contactLead, setContactLead] = useState<PublicLead | null>(null);
   const [contactForm, setContactForm] = useState({ name: '', phone: '', message: '' });
   const [contactSending, setContactSending] = useState(false);
@@ -68,12 +210,7 @@ export default function LeadsListPage() {
   const load = () => {
     setLoading(true);
     setError('');
-    fetchPublicLeads({
-      page: 1,
-      limit: 200,
-      ids: aiIds || undefined,
-      sort: 'newest',
-    })
+    fetchPublicLeads({ page: 1, limit: 200, ids: aiIds || undefined, sort: 'newest' })
       .then(r => {
         setAllLeads(r.leads);
         setTotal(r.total);
@@ -100,9 +237,8 @@ export default function LeadsListPage() {
     try {
       const r = await aiSearchLeads(q);
       if (!r.ids.length) {
-        toast.info('ВБ ничего не нашёл по этому запросу — попробуйте переформулировать');
-        setAiIds(null);
-        setAiReasoning('');
+        toast.info('ВБ ничего не нашёл — попробуйте переформулировать');
+        setAiIds(null); setAiReasoning('');
         return;
       }
       setAiIds(r.ids);
@@ -115,11 +251,7 @@ export default function LeadsListPage() {
     }
   };
 
-  const resetAi = () => {
-    setAiIds(null);
-    setAiReasoning('');
-    setAiQuery('');
-  };
+  const resetAi = () => { setAiIds(null); setAiReasoning(''); setAiQuery(''); };
 
   const openContact = (lead: PublicLead) => {
     setContactLead(lead);
@@ -133,18 +265,12 @@ export default function LeadsListPage() {
     setCaptchaKey(k => k + 1);
   };
 
-  const closeContact = () => {
-    setContactLead(null);
-    setCaptcha(null);
-  };
+  const closeContact = () => { setContactLead(null); setCaptcha(null); };
 
   const submitContact = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!contactLead) return;
-    if (!captcha?.passed) {
-      toast.error('Пожалуйста, пройдите проверку «не робот»');
-      return;
-    }
+    if (!captcha?.passed) { toast.error('Пожалуйста, пройдите проверку «не робот»'); return; }
     setContactSending(true);
     try {
       await sendLead({
@@ -163,12 +289,9 @@ export default function LeadsListPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-6">
+      <div className="container mx-auto px-4 py-6 max-w-3xl">
         <div className="mb-3">
-          <Breadcrumbs items={[
-            { label: 'Главная', to: '/' },
-            { label: 'Заявки клиентов' },
-          ]} />
+          <Breadcrumbs items={[{ label: 'Главная', to: '/' }, { label: 'Заявки клиентов' }]} />
         </div>
 
         <h1 className="font-display font-900 text-2xl md:text-3xl text-foreground mb-2">{h1}</h1>
@@ -176,10 +299,10 @@ export default function LeadsListPage() {
           Что ищут другие посетители — может быть, вам подойдёт похожая идея, или вы готовы стать арендатором.
         </p>
 
-        {/* ИИ-поиск ВБ — единственный поиск на странице */}
-        <div className="bg-gradient-to-br from-brand-blue/5 to-brand-orange/5 border border-brand-blue/15 rounded-2xl p-4 sm:p-5 mb-4">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-orange to-rose-500 flex items-center justify-center">
+        {/* ИИ-поиск */}
+        <div className="bg-gradient-to-br from-brand-blue/5 to-brand-orange/5 border border-brand-blue/15 rounded-2xl p-4 sm:p-5 mb-5">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-orange to-rose-500 flex items-center justify-center shrink-0">
               <Icon name="Sparkles" size={16} className="text-white" />
             </div>
             <div>
@@ -187,10 +310,7 @@ export default function LeadsListPage() {
               <div className="text-[11px] text-muted-foreground">Опишите задачу — ВБ найдёт похожие заявки</div>
             </div>
           </div>
-          <form
-            onSubmit={e => { e.preventDefault(); runAiSearch(); }}
-            className="flex flex-col sm:flex-row gap-2"
-          >
+          <form onSubmit={e => { e.preventDefault(); runAiSearch(); }} className="flex flex-col sm:flex-row gap-2">
             <input
               value={aiQuery}
               onChange={e => setAiQuery(e.target.value)}
@@ -210,12 +330,9 @@ export default function LeadsListPage() {
           {aiIds && (
             <div className="mt-2 flex items-start justify-between gap-2 text-xs">
               <div className="text-muted-foreground flex-1">
-                {aiReasoning ? <><b>ВБ:</b> {aiReasoning}</> : `Найдено ${aiIds.length} заявок по ИИ-поиску`}
+                {aiReasoning ? <><b>ВБ:</b> {aiReasoning}</> : `Найдено ${aiIds.length} заявок`}
               </div>
-              <button
-                onClick={resetAi}
-                className="text-brand-blue hover:underline shrink-0 inline-flex items-center gap-1 whitespace-nowrap"
-              >
+              <button onClick={resetAi} className="text-brand-blue hover:underline shrink-0 inline-flex items-center gap-1">
                 <Icon name="X" size={11} /> Показать все
               </button>
             </div>
@@ -223,18 +340,14 @@ export default function LeadsListPage() {
         </div>
 
         {/* Счётчик */}
-        <div className="flex items-center justify-between text-xs text-muted-foreground mb-3 px-1">
-          <span>
-            Всего заявок: <b className="text-foreground">{total}</b>
-            {aiIds && <span className="ml-2 text-brand-blue">· ИИ-выборка</span>}
-          </span>
-          <span className="hidden sm:inline">Сначала недавно отредактированные</span>
+        <div className="flex items-center justify-between text-xs text-muted-foreground mb-4 px-1">
+          <span>Всего заявок: <b className="text-foreground">{total}</b>{aiIds && <span className="ml-2 text-brand-blue">· ИИ-выборка</span>}</span>
+          <span className="hidden sm:inline">Сначала недавно обновлённые</span>
         </div>
 
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 mb-4 flex items-center gap-2">
-            <Icon name="AlertCircle" size={15} />
-            {error}
+            <Icon name="AlertCircle" size={15} /> {error}
           </div>
         )}
 
@@ -253,87 +366,14 @@ export default function LeadsListPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+            <div className="flex flex-col gap-4">
               {leads.map(lead => (
-                <article
-                  key={lead.id}
-                  className="bg-white border border-border rounded-2xl overflow-hidden flex flex-row md:flex-col hover:shadow-lg hover:border-brand-blue/20 md:hover:-translate-y-1 transition-all duration-200 group"
-                >
-                  {/* Десктоп: декоративный блок сверху (как у новостей) */}
-                  <div className="hidden md:flex relative h-36 bg-gradient-to-br from-brand-blue/10 to-brand-orange/10 shrink-0 items-center justify-center overflow-hidden">
-                    <div className="text-center px-4">
-                      <div className="text-4xl font-display font-900 text-brand-blue/20 leading-none mb-1">
-                        {fmtBudget(lead.budget)}
-                      </div>
-                      <div className="text-xs text-muted-foreground">бюджет заявки</div>
-                    </div>
-                    {lead.request_category && (
-                      <div className="absolute top-3 left-3">
-                        <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full bg-brand-blue text-white">
-                          {CATEGORY_LABELS[lead.request_category] || lead.request_category}
-                        </span>
-                      </div>
-                    )}
-                    <div className="absolute bottom-3 right-3 text-[10px] text-muted-foreground">
-                      {fmtDate(lead.created_at)}
-                    </div>
-                  </div>
-
-                  {/* Мобильный: цветная полоска слева */}
-                  <div className="md:hidden w-1.5 shrink-0 bg-gradient-to-b from-brand-blue to-brand-orange rounded-l-2xl" />
-
-                  {/* Контент */}
-                  <div className="flex flex-col gap-1.5 p-4 sm:p-5 flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="font-semibold text-sm text-foreground truncate group-hover:text-brand-blue transition-colors">
-                          {lead.name || `Клиент #${lead.id}`}
-                        </div>
-                        {lead.company && (
-                          <div className="text-xs text-muted-foreground truncate">{lead.company}</div>
-                        )}
-                      </div>
-                      {/* Дата — только на мобильном (на десктопе она в шапке карточки) */}
-                      <span className="md:hidden text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
-                        {fmtDate(lead.created_at)}
-                      </span>
-                    </div>
-
-                    {/* Категория — только на мобильном */}
-                    {lead.request_category && (
-                      <div className="md:hidden inline-flex items-center gap-1 self-start text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue">
-                        {CATEGORY_LABELS[lead.request_category] || lead.request_category}
-                      </div>
-                    )}
-
-                    {lead.message && (
-                      <p className="text-sm text-foreground/85 leading-relaxed whitespace-pre-wrap break-words">
-                        {lead.message}
-                      </p>
-                    )}
-
-                    <div className="flex items-center justify-between gap-2 mt-auto pt-2 border-t border-border/60">
-                      {/* Бюджет — только на мобильном */}
-                      <div className="md:hidden text-xs">
-                        <span className="text-muted-foreground">Бюджет:</span>{' '}
-                        <span className="font-semibold text-foreground">{fmtBudget(lead.budget)}</span>
-                      </div>
-                      <div className="hidden md:block" />
-                      <button
-                        onClick={() => openContact(lead)}
-                        className="btn-orange text-white text-xs font-bold font-display px-3 py-1.5 rounded-lg inline-flex items-center gap-1"
-                      >
-                        Связаться <Icon name="ArrowRight" size={11} />
-                      </button>
-                    </div>
-                  </div>
-                </article>
+                <LeadCard key={lead.id} lead={lead} onContact={() => openContact(lead)} />
               ))}
             </div>
 
-            {/* Показать ещё */}
             {hasMore && (
-              <div className="flex flex-col items-center gap-2 mt-10">
+              <div className="flex flex-col items-center gap-2 mt-8">
                 <button
                   onClick={() => setVisibleCount(v => v + LOAD_STEP)}
                   className="btn-orange text-white px-8 py-3 rounded-xl text-sm font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity shadow-sm"
@@ -341,9 +381,7 @@ export default function LeadsListPage() {
                   <Icon name="ChevronDown" size={16} />
                   Показать ещё {Math.min(LOAD_STEP, allLeads.length - visibleCount)} заявок
                 </button>
-                <div className="text-xs text-muted-foreground">
-                  Показано {visibleCount} из {allLeads.length}
-                </div>
+                <div className="text-xs text-muted-foreground">Показано {visibleCount} из {allLeads.length}</div>
               </div>
             )}
           </>
@@ -369,13 +407,8 @@ export default function LeadsListPage() {
                   <Icon name="CheckCircle2" size={28} className="text-emerald-600" />
                 </div>
                 <div className="font-display font-700 text-lg mb-1">Заявка отправлена</div>
-                <div className="text-sm text-muted-foreground mb-4">
-                  Мы свяжемся с вами в ближайшее время.
-                </div>
-                <button
-                  onClick={closeContact}
-                  className="btn-blue text-white px-5 py-2 rounded-xl font-semibold text-sm"
-                >
+                <div className="text-sm text-muted-foreground mb-4">Мы свяжемся с вами в ближайшее время.</div>
+                <button onClick={closeContact} className="btn-blue text-white px-5 py-2 rounded-xl font-semibold text-sm">
                   Закрыть
                 </button>
               </div>
@@ -384,8 +417,7 @@ export default function LeadsListPage() {
                 <div className="bg-muted/40 rounded-xl p-3 text-xs">
                   <div className="font-semibold mb-1">Заявка #{contactLead.id}</div>
                   <div className="text-muted-foreground whitespace-pre-wrap break-words">
-                    {(contactLead.message || '').slice(0, 200)}
-                    {(contactLead.message || '').length > 200 ? '…' : ''}
+                    {(contactLead.message || '').slice(0, 200)}{(contactLead.message || '').length > 200 ? '…' : ''}
                   </div>
                 </div>
                 <div>
@@ -401,14 +433,12 @@ export default function LeadsListPage() {
                 <div>
                   <label className="text-xs text-muted-foreground block mb-1">Телефон *</label>
                   <PublicPhoneInput
-                    required
                     value={contactForm.phone}
-                    onChange={v => setContactForm({ ...contactForm, phone: v })}
-                    className="w-full px-3 py-2 border rounded-xl text-sm"
+                    onChange={phone => setContactForm({ ...contactForm, phone })}
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground block mb-1">Сообщение</label>
+                  <label className="text-xs text-muted-foreground block mb-1">Комментарий</label>
                   <textarea
                     rows={3}
                     value={contactForm.message}
@@ -416,32 +446,14 @@ export default function LeadsListPage() {
                     className="w-full px-3 py-2 border rounded-xl text-sm resize-none"
                   />
                 </div>
-
-                {/* Капча — обязательна */}
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1.5">
-                    Проверка «не робот» *
-                  </label>
-                  <SmartCaptcha key={captchaKey} fieldCount={3} onVerify={setCaptcha} />
-                </div>
-
+                <SmartCaptcha key={captchaKey} onResult={setCaptcha} />
                 <button
                   type="submit"
-                  disabled={contactSending || !contactForm.name || !contactForm.phone || !captcha?.passed}
-                  className="w-full btn-blue text-white py-3 rounded-xl font-semibold text-sm inline-flex items-center justify-center gap-2 disabled:opacity-60"
+                  disabled={contactSending || !contactForm.name || !contactForm.phone}
+                  className="w-full btn-blue text-white py-2.5 rounded-xl font-semibold text-sm disabled:opacity-60 flex items-center justify-center gap-2"
                 >
-                  {contactSending && <Icon name="Loader2" size={14} className="animate-spin" />}
-                  {contactSending ? 'Отправка…' : 'Отправить'}
+                  {contactSending ? <><Icon name="Loader2" size={14} className="animate-spin" /> Отправляю…</> : 'Отправить заявку'}
                 </button>
-                {!captcha?.passed && (
-                  <div className="text-[11px] text-amber-600 text-center inline-flex items-center justify-center gap-1 w-full">
-                    <Icon name="AlertTriangle" size={11} />
-                    Пройдите проверку «не робот» чтобы отправить
-                  </div>
-                )}
-                <div className="text-[10px] text-muted-foreground text-center">
-                  Нажимая «Отправить», вы соглашаетесь на обработку персональных данных.
-                </div>
               </form>
             )}
           </div>
