@@ -1,7 +1,7 @@
 {
   "tests": [
     {
-      "name": "Sitemap returns XML",
+      "name": "Sitemap returns XML with correct content-type",
       "method": "GET",
       "path": "/",
       "expectedStatus": 200
