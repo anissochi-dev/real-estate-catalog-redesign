@@ -4,6 +4,7 @@ import PhonePickerInput from '@/components/admin/PhonePickerInput';
 import CharCount from '@/components/ui/CharCount';
 import { Lead, Listing, STATUSES, PROPERTY_TYPES_LEAD, PROPERTY_CATEGORIES_LEAD } from './leadsTypes';
 import SeoHeadingsBlock, { SeoHeadings } from '@/components/admin/SeoHeadingsBlock';
+import { District } from '../districts/DistrictsTypes';
 
 function generateLeadHeadings(lead: Partial<Lead>): SeoHeadings {
   const name = lead.name || 'Клиент';
@@ -28,6 +29,7 @@ interface Props {
   editing: Partial<Lead>;
   setEditing: (l: Partial<Lead> | null) => void;
   listings: Listing[];
+  districts: District[];
   listingSearch: string;
   setListingSearch: (v: string) => void;
   listingDropOpen: boolean;
@@ -36,7 +38,7 @@ interface Props {
 }
 
 export default function LeadEditModal({
-  editing, setEditing, listings,
+  editing, setEditing, listings, districts,
   listingSearch, setListingSearch,
   listingDropOpen, setListingDropOpen,
   onSave,
@@ -151,6 +153,38 @@ export default function LeadEditModal({
               value={editing.utilities || ''}
               onChange={e => setEditing({ ...editing, utilities: e.target.value || null })} />
           </div>
+
+          {/* Районы */}
+          {districts.length > 0 && (
+            <div>
+              <label className="text-xs text-muted-foreground mb-1.5 block">Желаемые районы</label>
+              <div className="flex flex-wrap gap-2">
+                {districts.map(d => {
+                  const selected = (editing.district_ids || []).includes(d.id);
+                  return (
+                    <button
+                      key={d.id}
+                      type="button"
+                      onClick={() => {
+                        const cur = editing.district_ids || [];
+                        setEditing({
+                          ...editing,
+                          district_ids: selected ? cur.filter(id => id !== d.id) : [...cur, d.id],
+                        });
+                      }}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                        selected
+                          ? 'bg-brand-blue text-white border-brand-blue'
+                          : 'bg-white text-foreground border-border hover:border-brand-blue'
+                      }`}
+                    >
+                      {d.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <CharCount as="textarea" rows={5} max={1500} warnAt={1300} placeholder="Текст запроса"
             value={editing.message || ''}

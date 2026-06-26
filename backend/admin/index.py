@@ -3123,11 +3123,13 @@ def _leads(cur, conn, method, rid, action, event, user):
         phone = _safe(body.get('phone') or '', 30)
         if not name or not phone:
             return _err(400, 'Имя и телефон обязательны')
+        raw_dids = body.get('district_ids')
+        district_ids_val = 'ARRAY[' + ','.join(str(int(x)) for x in raw_dids) + ']::integer[]' if raw_dids else "'{}'"
         cur.execute(
             f"INSERT INTO {SCHEMA}.leads (name, phone, email, message, listing_id, status, source, "
             f"is_network_tenant, budget, budget_to, show_on_main, company, lead_type, "
             f"area_from, area_to, property_type, property_category, utilities, "
-            f"budget_per_sqm_from, budget_per_sqm_to) VALUES ("
+            f"budget_per_sqm_from, budget_per_sqm_to, district_ids) VALUES ("
             f"'{name}', '{phone}', {_str_or_null(body.get('email'), 100)}, "
             f"{_str_or_null(body.get('message'), 2000)}, {_int_or_null(body.get('listing_id'))}, "
             f"{_str_or_null(body.get('status') or 'new', 20)}, "
@@ -3139,7 +3141,8 @@ def _leads(cur, conn, method, rid, action, event, user):
             f"{_int_or_null(body.get('area_from'))}, {_int_or_null(body.get('area_to'))}, "
             f"{_str_or_null(body.get('property_type'), 50)}, {_str_or_null(body.get('property_category'), 50)}, "
             f"{_str_or_null(body.get('utilities'), 500)}, "
-            f"{_int_or_null(body.get('budget_per_sqm_from'))}, {_int_or_null(body.get('budget_per_sqm_to'))}) RETURNING id"
+            f"{_int_or_null(body.get('budget_per_sqm_from'))}, {_int_or_null(body.get('budget_per_sqm_to'))}, "
+            f"{district_ids_val}) RETURNING id"
         )
         conn.commit()
         return _ok({'id': cur.fetchone()['id'], 'success': True})
@@ -3157,6 +3160,10 @@ def _leads(cur, conn, method, rid, action, event, user):
         for f in ('is_network_tenant', 'show_on_main'):
             if f in body:
                 fields.append(f"{f} = {_bool(body[f])}")
+        if 'district_ids' in body:
+            raw_dids = body['district_ids']
+            dids_val = 'ARRAY[' + ','.join(str(int(x)) for x in raw_dids) + ']::integer[]' if raw_dids else "'{}'"
+            fields.append(f"district_ids = {dids_val}")
         if not fields:
             return _err(400, 'Нет полей')
         # Помечаем заявку как «недавно отредактированную» — для сортировки на сайте

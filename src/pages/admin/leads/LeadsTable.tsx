@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import { Lead, STATUSES, SOURCE_LABELS, PROPERTY_TYPES_LEAD, PROPERTY_CATEGORIES_LEAD } from './leadsTypes';
 import { formatPhone } from '@/lib/phone';
+import { District } from '../districts/DistrictsTypes';
 
 interface Props {
   leads: Lead[];
@@ -11,6 +12,7 @@ interface Props {
   search?: string;
   currentUserId?: number;
   isBroker?: boolean;
+  districts?: District[];
 }
 
 const AVATAR_COLORS = [
@@ -61,7 +63,7 @@ const STATUS_STYLE: Record<string, { label: string; cls: string }> = {
 
 type SortKey = 'name' | 'date' | 'budget' | 'status';
 
-export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, search = '', currentUserId, isBroker = false }: Props) {
+export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, search = '', currentUserId, isBroker = false, districts = [] }: Props) {
   const [statusMenuId, setStatusMenuId] = useState<number | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -116,6 +118,7 @@ export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, se
                 Дата <SortIcon col="date" />
               </th>
               <th className="text-left px-4 py-3 font-semibold text-foreground/70 whitespace-nowrap">Тип / Категория</th>
+              <th className="text-left px-4 py-3 font-semibold text-foreground/70 whitespace-nowrap">Районы</th>
               <th className="text-left px-4 py-3 font-semibold text-foreground/70 whitespace-nowrap">Площадь, м²</th>
               <th className="text-left px-4 py-3 font-semibold text-foreground/70 min-w-[180px]">Требования</th>
               <th className="text-left px-4 py-3 font-semibold text-foreground/70 cursor-pointer hover:bg-muted/80 transition-colors whitespace-nowrap select-none" onClick={() => handleSort('budget')}>
@@ -201,6 +204,24 @@ export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, se
                         <span className="text-[12px] text-muted-foreground">—</span>
                       )}
                     </div>
+                  </td>
+
+                  {/* Районы */}
+                  <td className="px-4 py-3">
+                    {l.district_ids && l.district_ids.length > 0 ? (
+                      <div className="flex flex-col gap-1">
+                        {l.district_ids.map(id => {
+                          const d = districts.find(d => d.id === id);
+                          return d ? (
+                            <span key={id} className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 w-fit whitespace-nowrap">
+                              {d.name}
+                            </span>
+                          ) : null;
+                        })}
+                      </div>
+                    ) : (
+                      <span className="text-[12px] text-muted-foreground">—</span>
+                    )}
                   </td>
 
                   {/* Площадь */}

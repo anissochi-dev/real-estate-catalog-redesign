@@ -8,15 +8,17 @@ import LeadsTable from './leads/LeadsTable';
 import LeadDetail from './leads/LeadDetail';
 import LeadEditModal from './leads/LeadEditModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { District, buildUrl, buildHeaders } from './districts/DistrictsTypes';
 
 export default function LeadsAdmin() {
-  const { user } = useAuth();
+  const { user, refreshToken } = useAuth();
   const isBroker = user?.role === 'broker';
   // Брокер может видеть все лиды, но управлять только своими (leads: read+create, без update/delete)
   const canManageLead = (l: Lead) =>
     !isBroker || (l.broker_id != null && l.broker_id === user?.id);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [listings, setListings] = useState<Listing[]>([]);
+  const [districts, setDistricts] = useState<District[]>([]);
   const [active, setActive] = useState<Lead | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [comment, setComment] = useState('');
@@ -35,7 +37,17 @@ export default function LeadsAdmin() {
       })
       .catch(() => toast.error('Не удалось загрузить заявки'));
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    const tok = refreshToken();
+    fetch(buildUrl(), { headers: buildHeaders(tok) })
+      .then(r => r.json())
+      .then(d => {
+        const list: District[] = Array.isArray(d?.districts) ? d.districts : Array.isArray(d) ? d : [];
+        setDistricts(list.filter(d => !d.is_okrug && d.is_active));
+      })
+      .catch(() => {});
+  }, []);
 
   const openLead = async (l: Lead) => {
     setActive(l);
@@ -169,6 +181,7 @@ export default function LeadsAdmin() {
         search={search}
         isBroker={isBroker}
         currentUserId={user?.id}
+        districts={districts}
       />
 
       {/* Детали заявки — модалка */}
@@ -209,6 +222,7 @@ export default function LeadsAdmin() {
           editing={editing}
           setEditing={setEditing}
           listings={listings}
+          districts={districts}
           listingSearch={listingSearch}
           setListingSearch={setListingSearch}
           listingDropOpen={listingDropOpen}
