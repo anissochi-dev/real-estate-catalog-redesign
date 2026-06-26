@@ -97,6 +97,20 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
   const totalPages = Math.ceil(items.length / PAGE_SIZE);
   const pageItems = items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+  useEffect(() => {
+    const base = `${(settings.site_url || '').replace(/\/$/, '')}/district/${district}`;
+    const setLink = (rel: 'prev' | 'next', p: number) => {
+      const id = `link-district-${rel}`;
+      let el = document.getElementById(id) as HTMLLinkElement | null;
+      if (!el) { el = document.createElement('link'); el.id = id; el.rel = rel; document.head.appendChild(el); }
+      el.href = p === 1 ? base : `${base}?page=${p}`;
+    };
+    const removeLink = (rel: 'prev' | 'next') => { document.getElementById(`link-district-${rel}`)?.remove(); };
+    if (page > 1) setLink('prev', page - 1); else removeLink('prev');
+    if (page < totalPages) setLink('next', page + 1); else removeLink('next');
+    return () => { removeLink('prev'); removeLink('next'); };
+  }, [page, totalPages, district, settings.site_url]);
+
   const displayName = districtData?.name || districtName;
 
   const siteUrl = getSiteUrl(settings.site_url);

@@ -180,31 +180,9 @@ export function NewsArticlePage() {
       .finally(() => setLoading(false));
   }, [slug]);
 
-  useEffect(() => {
-    if (!article) return;
-    const rawTitle = `${article.title} | ${settings.company_name || 'Бизнес. Маркетинг. Недвижимость.'}`;
-    document.title = rawTitle.length > 68 ? rawTitle.slice(0, 67).trimEnd() + '…' : rawTitle;
-    const desc = (article.summary || article.content || '').slice(0, 160);
-    const setMeta = (sel: string, create: () => HTMLMetaElement, content: string) => {
-      let el = document.querySelector(sel) as HTMLMetaElement | null;
-      if (!el) { el = create(); document.head.appendChild(el); }
-      el.content = content;
-    };
-    setMeta('meta[name="description"]', () => Object.assign(document.createElement('meta'), { name: 'description' }), desc);
-    setMeta('meta[property="og:title"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:title'); return m; }, article.title);
-    setMeta('meta[property="og:description"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:description'); return m; }, desc);
-    setMeta('meta[property="og:type"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:type'); return m; }, 'article');
-    const siteOrigin = (settings.site_url || '').replace(/\/$/, '') || window.location.origin;
-    setMeta('meta[property="og:url"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:url'); return m; }, siteOrigin + window.location.pathname);
-    if (article.image_url) {
-      setMeta('meta[property="og:image"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:image'); return m; }, article.image_url!);
-    }
-    if (article.published_at) {
-      setMeta('meta[property="article:published_time"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'article:published_time'); return m; }, article.published_at!);
-      setMeta('meta[property="article:modified_time"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'article:modified_time'); return m; }, article.updated_at || article.published_at!);
-    }
-    setMeta('meta[property="article:author"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'article:author'); return m; }, settings.company_name || 'Бизнес. Маркетинг. Недвижимость.');
-  }, [article, settings.company_name, settings.site_url]);
+  const articleTitle = article ? article.title : undefined;
+  const articleDesc = article ? (article.summary || article.content || '').slice(0, 160) : undefined;
+  const articleImage = article?.image_url || undefined;
 
   if (loading) return (
     <div className="container mx-auto px-4 py-20 text-center text-muted-foreground">Загрузка...</div>
@@ -253,6 +231,7 @@ export function NewsArticlePage() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-3xl">
+      <SeoHead title={articleTitle} description={articleDesc} h1={h1} ogImage={articleImage} />
       <SchemaOrg schema={articleSchema} id={`article-${article.id}`} />
       <SchemaOrg schema={articleBcSchema} id={`article-bc-${article.id}`} />
       <button

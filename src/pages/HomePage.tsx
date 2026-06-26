@@ -189,7 +189,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
 
   return (
     <div>
-      {lcpImage && <SeoHead ogImage={lcpImage} />}
+      <SeoHead ogImage="https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/og-image-1779575751349.png" />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: orgLdJson }}

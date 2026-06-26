@@ -66,9 +66,7 @@ export default function PropertyMainContent({
       {/* Название */}
       <div className="bg-white rounded-2xl px-4 py-3 shadow-sm">
         <h1 className="font-display font-800 text-xl md:text-2xl text-foreground">{h1}</h1>
-        {item.seoH2 && (
-          <p className="text-sm text-muted-foreground mt-1 leading-snug">{h2}</p>
-        )}
+        <h2 className="text-sm text-muted-foreground mt-1 leading-snug">{h2}</h2>
       </div>
 
       {/* Адрес — отдельный блок между названием и параметрами */}
