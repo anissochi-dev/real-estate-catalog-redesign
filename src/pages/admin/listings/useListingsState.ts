@@ -145,12 +145,12 @@ export function useListingsState() {
     if (catFilter && it.category !== catFilter) return false;
     if (search) {
       const q = search.toLowerCase().replace(/^#/, '');
-      const qDigits = q.replace(/\D/g, '');
+      const qDigits = q.replace(/\D/g, '').replace(/^8/, '7');
       return (
         it.title?.toLowerCase().includes(q) ||
         it.address?.toLowerCase().includes(q) ||
         it.owner_name?.toLowerCase().includes(q) ||
-        (qDigits ? (it.owner_phone || '').replace(/\D/g, '').includes(qDigits) : false) ||
+        (qDigits ? (it.owner_phone || '').replace(/\D/g, '').replace(/^8/, '7').includes(qDigits) : false) ||
         String(`123${it.id}`).includes(q) ||
         String(it.id).includes(q)
       );

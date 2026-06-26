@@ -103,13 +103,17 @@ export default function LeadsAdmin() {
     // Поиск
     if (search.trim()) {
       const q = search.toLowerCase();
-      list = list.filter(l =>
-        (l.name || '').toLowerCase().includes(q) ||
-        (l.phone || '').replace(/\D/g, '').includes(q.replace(/\D/g, '')) ||
-        (l.message || '').toLowerCase().includes(q) ||
-        (l.email || '').toLowerCase().includes(q) ||
-        (l.company || '').toLowerCase().includes(q)
-      );
+      const qDigits = q.replace(/\D/g, '').replace(/^8/, '7');
+      list = list.filter(l => {
+        const phoneDigits = (l.phone || '').replace(/\D/g, '').replace(/^8/, '7');
+        return (
+          (l.name || '').toLowerCase().includes(q) ||
+          (qDigits && phoneDigits.includes(qDigits)) ||
+          (l.message || '').toLowerCase().includes(q) ||
+          (l.email || '').toLowerCase().includes(q) ||
+          (l.company || '').toLowerCase().includes(q)
+        );
+      });
     }
     return list;
   }, [leads, filter, search]);
