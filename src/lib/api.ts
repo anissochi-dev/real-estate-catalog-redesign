@@ -50,7 +50,7 @@ function toNum(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function mapListing(item: ApiListing): Property {
+export function mapApiListing(item: ApiListing): Property {
   return {
     id: item.id,
     title: item.title,
@@ -127,7 +127,7 @@ export async function fetchListings(limit?: number, offset?: number): Promise<{ 
   const res = await fetchWithRetry(url);
   if (!res.ok) throw new Error('Не удалось загрузить объекты');
   const data = await res.json();
-  return { listings: (data.listings || []).map(mapListing), total: data.total ?? 0 };
+  return { listings: (data.listings || []).map(mapApiListing), total: data.total ?? 0 };
 }
 
 export async function fetchSimilarListings(id: number): Promise<Property[]> {
@@ -135,7 +135,7 @@ export async function fetchSimilarListings(id: number): Promise<Property[]> {
     const res = await fetchWithTimeout(`${LISTINGS_URL}?resource=similar&id=${id}`);
     if (!res.ok) return [];
     const data = await res.json();
-    return (data.listings || []).map(mapListing);
+    return (data.listings || []).map(mapApiListing);
   } catch {
     return [];
   }

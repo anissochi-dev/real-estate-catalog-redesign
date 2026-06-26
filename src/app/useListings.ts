@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { type Property } from './appTypes';
-import { fetchListings } from '../lib/api';
+import { fetchListings, mapApiListing } from '../lib/api';
 
 type PrefetchData = {
   listings: Property[]; total: number;
@@ -61,13 +61,13 @@ export function useListings() {
     }
 
     if (w.__PREFETCH__) {
-      applyListings(w.__PREFETCH__.listings, w.__PREFETCH__.total);
+      applyListings(w.__PREFETCH__.listings.map(mapApiListing), w.__PREFETCH__.total);
       return;
     }
 
     if (w.__PREFETCH_PROMISE__) {
       let done = false;
-      w.__PREFETCH_RESOLVE__ = (d: PrefetchData) => { done = true; applyListings(d.listings, d.total); };
+      w.__PREFETCH_RESOLVE__ = (d: PrefetchData) => { done = true; applyListings(d.listings.map(mapApiListing), d.total); };
       const guard = setTimeout(() => {
         if (!done) fetchListings(8, 0)
           .then(({ listings, total }) => applyListings(listings, total))
