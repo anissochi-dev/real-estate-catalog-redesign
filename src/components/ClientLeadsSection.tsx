@@ -111,7 +111,10 @@ export default function ClientLeadsSection({ limit = 6 }: Props) {
                 )}
               </div>
               <div className="text-sm text-foreground flex-1 mb-4 whitespace-pre-wrap break-words">
-                {l.message || 'Без подробностей. Свяжитесь, чтобы уточнить.'}
+                {(() => {
+                  const text = l.message || 'Без подробностей. Свяжитесь, чтобы уточнить.';
+                  return text.length > 300 ? text.slice(0, 300) + '...' : text;
+                })()}
               </div>
               <button onClick={() => setOfferLead(l)}
                 className="btn-orange text-white px-4 py-2 rounded-xl text-sm font-semibold font-display inline-flex items-center justify-center gap-2">
