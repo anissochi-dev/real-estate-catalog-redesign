@@ -88,8 +88,9 @@ function LeadCard({ lead, districts, onContact }: { lead: PublicLead; districts:
   const color = avatarColor(displayName);
   const typeLabel = lead.property_type === 'sale' ? 'Покупка' : lead.property_type === 'rent' ? 'Аренда' : null;
   const typeSale = lead.property_type === 'sale';
-  const catLabel = lead.request_category ? CATEGORY_LABELS[lead.request_category] || lead.request_category : null;
-  const catIcon = lead.request_category ? CATEGORY_ICONS[lead.request_category] || 'Tag' : 'Tag';
+  const cat = lead.property_category || lead.request_category;
+  const catLabel = cat ? CATEGORY_LABELS[cat] || cat : null;
+  const catIcon = cat ? CATEGORY_ICONS[cat] || 'Tag' : 'Tag';
   const updDate = fmtDate(lead.updated_at || lead.created_at);
   const budgetStr = fmtBudget(lead.budget, lead.budget_to);
   const areaStr = fmtArea(lead.area_from, lead.area_to);

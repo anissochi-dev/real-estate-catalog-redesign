@@ -346,7 +346,7 @@ def handler(event: dict, context) -> dict:
 
                 cur.execute(
                     f"SELECT id, name, message, budget, budget_to, company, request_category, "
-                    f"lead_type, property_type, area_from, area_to, utilities, district_ids, "
+                    f"lead_type, property_type, property_category, area_from, area_to, utilities, district_ids, "
                     f"is_network_tenant, created_at, updated_at "
                     f"FROM t_p71821556_real_estate_catalog_.leads WHERE {where_sql} "
                     f"ORDER BY {order} LIMIT {limit} OFFSET {offset}"

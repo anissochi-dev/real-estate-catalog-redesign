@@ -390,6 +390,7 @@ export interface PublicLead {
   budget_to: number | null;
   company: string | null;
   request_category: string | null;
+  property_category: string | null;
   lead_type: string | null;
   property_type: string | null;
   area_from: number | null;
