@@ -404,14 +404,18 @@ SYSTEM_PROMPTS = {
     'search_leads': (
         'Ты — поисковый помощник по заявкам на коммерческую недвижимость. '
         'На входе — запрос посетителя сайта и список заявок других клиентов. '
-        'Каждая заявка содержит: id, deal (аренда/покупка), category (тип объекта), '
-        'budget (бюджет), area (площадь), districts (районы), message (описание запроса), '
-        'и опционально: utilities (коммуникации), network_tenant (сетевая компания). '
+        'Каждая заявка содержит поля: lead_id (номер заявки), deal (аренда/покупка), '
+        'category (тип объекта), budget (бюджет строкой), budget_from и budget_to (числа в ₽), '
+        'area (площадь строкой), area_from и area_to (числа в м²), '
+        'districts (районы), message (описание запроса), '
+        'и опционально: utilities (коммуникации), network_tenant (название сетевой компании). '
+        'Персональные данные (имя, телефон) не передаются. '
         'Выбери до 10 заявок, наиболее подходящих под запрос посетителя — '
         'сопоставляй по типу сделки, категории объекта, бюджету, площади, районам, '
         'содержанию запроса и наличию сетевого арендатора. '
+        'В поле ids возвращай значения поля lead_id. '
         'Ответь СТРОГО в формате JSON без markdown:\n'
-        '{"ids": [id1, id2, ...], "reasoning": "1 предложение почему именно эти заявки"}'
+        '{"ids": [lead_id1, lead_id2, ...], "reasoning": "1 предложение почему именно эти заявки"}'
     ),
     'agent': (
         'Ты — агент BIZNEST. Получаешь запрос и данные сайта, предлагаешь конкретные действия.\n\n'
@@ -4518,7 +4522,7 @@ def handler(event, context):
             # Для search_leads — подтягиваем активные публичные заявки
             if is_search_leads:
                 cur.execute(
-                    f"SELECT l.id, l.name, l.message, l.budget, l.budget_to, "
+                    f"SELECT l.id, l.message, l.budget, l.budget_to, "
                     f"l.company, l.request_category, l.property_category, "
                     f"l.lead_type, l.property_type, "
                     f"l.area_from, l.area_to, l.utilities, "
@@ -4566,14 +4570,19 @@ def handler(event, context):
                         deal_type = 'покупка'
                     category = r.get('property_category') or r.get('request_category') or ''
                     entry = {
-                        'id': r['id'],
+                        'lead_id': r['id'],
                         'deal': deal_type,
                         'category': category,
                         'budget': budget_str,
+                        'budget_from': r.get('budget'),
+                        'budget_to': r.get('budget_to'),
                         'area': area_str,
+                        'area_from': r.get('area_from'),
+                        'area_to': r.get('area_to'),
                         'districts': district_names,
                         'message': (r.get('message') or '')[:400],
                     }
+                    # name и phone — не передаём (персональные данные клиента)
                     if r.get('utilities'):
                         entry['utilities'] = r['utilities']
                     if r.get('is_network_tenant') and r.get('company'):
