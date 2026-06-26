@@ -208,7 +208,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
       <HomeStatsBar statsView={STATS_VIEW} />
 
       {/* Categories */}
-      <section className="py-6 bg-background">
+      <section className="py-6 bg-background hidden">
         <div className="container mx-auto px-4">
           <h2 className="sr-only">Категории коммерческой недвижимости в Краснодаре</h2>
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
