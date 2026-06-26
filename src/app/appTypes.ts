@@ -39,6 +39,7 @@ export interface Property {
   lastEditedAt?: string;
   ownerPhone?: string;
   image_thumb?: string;
+  brokerPhone?: string;
 }
 
 export type Page = 'home' | 'catalog' | 'map' | 'favorites' | 'compare' | 'network-tenants' | 'news' | 'leads';

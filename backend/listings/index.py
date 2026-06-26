@@ -657,10 +657,14 @@ def handler(event: dict, context) -> dict:
                     "SELECT l.*, "
                     "  COALESCE(NULLIF(pc.name, ''), l.owner_name) AS owner_name_final, "
                     "  COALESCE(pc.phone, l.owner_phone) AS owner_phone_final, "
-                    "  lv.name AS land_vri_name "
+                    "  lv.name AS land_vri_name, "
+                    "  u.phone AS broker_phone, "
+                    "  u.name AS broker_name, "
+                    "  u.avatar AS broker_avatar "
                     "FROM t_p71821556_real_estate_catalog_.listings l "
                     "LEFT JOIN t_p71821556_real_estate_catalog_.phone_contacts pc ON pc.id = l.owner_phone_contact_id "
                     "LEFT JOIN t_p71821556_real_estate_catalog_.land_vri lv ON lv.slug = l.land_vri "
+                    "LEFT JOIN t_p71821556_real_estate_catalog_.users u ON u.id = l.broker_id "
                     "WHERE l.id = "
                     + str(int(listing_id))
                     + " AND l.status = 'active'"
@@ -749,18 +753,20 @@ def handler(event: dict, context) -> dict:
             # Карточкам нужна только обложка `image`. Доп. фото и галерея
             # подтягиваются на странице объекта через fetchListingById.
             cols = (
-                "id, title, LEFT(description, 200) AS description, category, deal, price, price_per_m2, area, "
-                "payback, profit, floor, total_floors, address, district, lat, lng, "
-                "image, image_thumb, tags, is_hot, is_new, is_exclusive, is_urgent, public_code, "
-                "tenant_name, monthly_rent, yearly_rent, purpose, finishing, "
-                "ceiling_height, electricity_kw, utilities, road_line, "
-                "updated_at, created_at, last_edited_at, "
-                "COALESCE(owner_phone, '') AS owner_phone"
+                "l.id, l.title, LEFT(l.description, 200) AS description, l.category, l.deal, l.price, l.price_per_m2, l.area, "
+                "l.payback, l.profit, l.floor, l.total_floors, l.address, l.district, l.lat, l.lng, "
+                "l.image, l.image_thumb, l.tags, l.is_hot, l.is_new, l.is_exclusive, l.is_urgent, l.public_code, "
+                "l.tenant_name, l.monthly_rent, l.yearly_rent, l.purpose, l.finishing, "
+                "l.ceiling_height, l.electricity_kw, l.utilities, l.road_line, "
+                "l.updated_at, l.created_at, l.last_edited_at, "
+                "COALESCE(l.owner_phone, '') AS owner_phone, "
+                "u.phone AS broker_phone"
             )
 
             sql = (
                 f"SELECT {cols}, COUNT(*) OVER() AS _total_count "
-                f"FROM t_p71821556_real_estate_catalog_.listings "
+                f"FROM t_p71821556_real_estate_catalog_.listings l "
+                f"LEFT JOIN t_p71821556_real_estate_catalog_.users u ON u.id = l.broker_id "
                 f"WHERE {where_clause}{order_clause}{pagination}"
             )
             cur.execute(sql)

@@ -359,10 +359,10 @@ export default function PropertyCard({
             )}
           </div>
 
-          {/* Кнопка Позвонить — всю ширину */}
-          {property.ownerPhone ? (
+          {/* Кнопка Позвонить — всю ширину. Приоритет: телефон брокера → телефон собственника */}
+          {(property.brokerPhone || property.ownerPhone) ? (
             <a
-              href={`tel:${property.ownerPhone}`}
+              href={`tel:${property.brokerPhone || property.ownerPhone}`}
               onClick={e => e.stopPropagation()}
               className="w-full bg-brand-blue text-white text-[13px] font-bold font-display py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-sm hover:bg-brand-blue/90 transition-colors"
             >

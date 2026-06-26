@@ -270,22 +270,28 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
                   </div>
                 ) : null}
               </div>
-              {agents.filter(a => a.phone)[0] && (
-                <div className="px-3 py-3 border-t border-border flex items-center gap-2">
-                  <a href={`tel:${agents.filter(a => a.phone)[0].phone}`}
-                    className="flex-1 flex items-center justify-center gap-1.5 bg-brand-blue text-white text-xs font-bold px-3 py-2.5 rounded-xl min-w-0">
-                    <Icon name="Phone" size={14} className="flex-shrink-0" />
-                    <span className="truncate">Позвонить</span>
-                  </a>
-                  <button
-                    onClick={() => setMobileChatOpen(true)}
-                    className="flex-1 flex items-center justify-center gap-1.5 border-2 border-brand-blue text-brand-blue text-xs font-bold px-3 py-2.5 rounded-xl min-w-0 hover:bg-brand-blue/5 transition-colors"
-                  >
-                    <Icon name="MessageCircle" size={14} className="flex-shrink-0" />
-                    <span className="truncate">Написать</span>
-                  </button>
-                </div>
-              )}
+              {(() => {
+                const withPhone = agents.filter(a => a.phone);
+                const brokerAgent = item.brokerId ? withPhone.find(a => a.id === item.brokerId) : null;
+                const displayAgent = brokerAgent || withPhone[0];
+                if (!displayAgent) return null;
+                return (
+                  <div className="px-3 py-3 border-t border-border flex items-center gap-2">
+                    <a href={`tel:${displayAgent.phone}`}
+                      className="flex-1 flex items-center justify-center gap-1.5 bg-brand-blue text-white text-xs font-bold px-3 py-2.5 rounded-xl min-w-0">
+                      <Icon name="Phone" size={14} className="flex-shrink-0" />
+                      <span className="truncate">Позвонить</span>
+                    </a>
+                    <button
+                      onClick={() => setMobileChatOpen(true)}
+                      className="flex-1 flex items-center justify-center gap-1.5 border-2 border-brand-blue text-brand-blue text-xs font-bold px-3 py-2.5 rounded-xl min-w-0 hover:bg-brand-blue/5 transition-colors"
+                    >
+                      <Icon name="MessageCircle" size={14} className="flex-shrink-0" />
+                      <span className="truncate">Написать</span>
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
 
             <PropertyMainContent
@@ -304,7 +310,14 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
           </div>
           <PropertySidebar
             item={item}
-            agents={agents.filter(a => a.phone)}
+            agents={(() => {
+              const withPhone = agents.filter(a => a.phone);
+              if (item.brokerId) {
+                const broker = withPhone.find(a => a.id === item.brokerId);
+                return broker ? [broker] : withPhone.slice(0, 1);
+              }
+              return withPhone.slice(0, 1);
+            })()}
             sent={sent}
             sending={sending}
             form={form}

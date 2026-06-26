@@ -41,6 +41,7 @@ interface ApiListing {
   last_edited_at?: string | null;
   owner_phone?: string | null;
   image_thumb?: string | null;
+  broker_phone?: string | null;
 }
 
 function toNum(v: unknown): number {
@@ -88,6 +89,7 @@ function mapListing(item: ApiListing): Property {
     lastEditedAt: item.last_edited_at ?? undefined,
     ownerPhone: item.owner_phone || undefined,
     image_thumb: item.image_thumb || undefined,
+    brokerPhone: item.broker_phone || undefined,
   };
 }
 
@@ -155,6 +157,10 @@ export interface ListingDetail extends Property {
   videoType?: string;
   ownerName?: string;
   ownerPhone?: string;
+  brokerId?: number | null;
+  brokerPhone?: string | null;
+  brokerName?: string | null;
+  brokerAvatar?: string | null;
   seoTitle?: string;
   seoDescription?: string;
   rooms?: number | null;
@@ -216,6 +222,10 @@ export async function fetchListingById(id: number): Promise<ListingDetail | null
         videoType: it.video_type,
         ownerName: it.owner_name,
         ownerPhone: it.owner_phone,
+        brokerId: it.broker_id ?? null,
+        brokerPhone: it.broker_phone ?? null,
+        brokerName: it.broker_name ?? null,
+        brokerAvatar: it.broker_avatar ?? null,
         seoTitle: it.seo_title,
         seoDescription: it.seo_description,
         rooms: it.rooms ?? null,
