@@ -266,14 +266,11 @@ export function NewsArticlePage() {
       </button>
 
       <article>
-        <div className="mb-6 flex items-center justify-between flex-wrap gap-2">
-          <span className="text-xs px-2.5 py-1 rounded-full bg-brand-blue/10 text-brand-blue font-semibold">
-            {article.category || 'Аналитика'}
-          </span>
-          {h5text && (
+        {h5text && (
+          <div className="mb-4">
             <h5 className="text-xs text-muted-foreground font-normal">{h5text}</h5>
-          )}
-        </div>
+          </div>
+        )}
 
         <h1 className="font-display font-800 text-2xl md:text-3xl text-foreground mb-4 leading-tight">
           {h1}
