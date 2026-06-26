@@ -37,19 +37,8 @@ const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; gro
 
 export default function AdminLayout({ section, setSection, onExit, children }: Props) {
   const { user } = useAuth();
-  const [aiOpen,       setAiOpen]       = useState(false);
-  const [sidebarOpen,  setSidebarOpen]  = useState(false);
-  const [collapsed,    setCollapsed]    = useState<boolean>(() => {
-    try { return localStorage.getItem('biznest_admin_sidebar_collapsed') === '1'; } catch { return false; }
-  });
-
-  const toggleCollapsed = () => {
-    setCollapsed(c => {
-      const next = !c;
-      try { localStorage.setItem('biznest_admin_sidebar_collapsed', next ? '1' : '0'); } catch { /* ignore */ }
-      return next;
-    });
-  };
+  const [aiOpen,      setAiOpen]      = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const {
     socialPending,
@@ -96,8 +85,6 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
         sortedItems={sortedItems}
         section={section}
         setSection={setSection}
-        collapsed={collapsed}
-        toggleCollapsed={toggleCollapsed}
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
         onExit={onExit}
@@ -108,12 +95,10 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
         setNewModerationCount={setNewModerationCount}
       />
 
-      <main className="flex-1 min-w-0 overflow-y-auto h-screen">
+      <main className="flex-1 min-w-0 overflow-y-auto h-screen w-full">
         <AdminHeader
           section={section}
           items={items}
-          collapsed={collapsed}
-          toggleCollapsed={toggleCollapsed}
           setSidebarOpen={setSidebarOpen}
           onExit={onExit}
           onOpenAi={() => setAiOpen(true)}

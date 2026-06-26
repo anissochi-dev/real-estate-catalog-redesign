@@ -11,8 +11,6 @@ interface NavItem {
 interface Props {
   section: AdminSection;
   items: NavItem[];
-  collapsed: boolean;
-  toggleCollapsed: () => void;
   setSidebarOpen: (v: boolean) => void;
   onExit: () => void;
   onOpenAi: () => void;
@@ -30,7 +28,6 @@ const roleLabel: Record<string, string> = {
 
 export default function AdminHeader({
   section, items,
-  collapsed, toggleCollapsed,
   setSidebarOpen, onExit, onOpenAi,
 }: Props) {
   const { user, logout } = useAuth();
@@ -41,15 +38,12 @@ export default function AdminHeader({
   return (
     <header className="bg-white border-b border-border px-4 lg:px-8 py-4 flex items-center justify-between sticky top-0 z-30">
       <div className="flex items-center gap-3">
-        <button onClick={() => setSidebarOpen(true)} className="lg:hidden" title="Меню">
-          <Icon name="Menu" size={22} />
-        </button>
         <button
-          onClick={toggleCollapsed}
-          className="hidden lg:inline-flex p-1 rounded hover:bg-muted"
-          title={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
+          onClick={() => setSidebarOpen(true)}
+          className="p-1 rounded hover:bg-muted transition"
+          title="Меню"
         >
-          <Icon name={collapsed ? 'PanelLeftOpen' : 'PanelLeftClose'} size={20} />
+          <Icon name="Menu" size={22} />
         </button>
         <h1 className="font-display font-700 text-xl">
           {items.find(n => n.id === section)?.label || 'Админ-панель'}
@@ -67,22 +61,19 @@ export default function AdminHeader({
           </button>
         )}
 
-        {/* Меню пользователя — только на мобильном (на lg+ сайдбар уже показывает это) */}
-        <div className="relative lg:hidden">
+        {/* Меню пользователя */}
+        <div className="relative">
           <button
             onClick={() => setUserMenuOpen(v => !v)}
             aria-label="Меню пользователя"
             title={`${user.name} · ${roleLabel[user.role] || user.role}`}
-            className="w-10 h-10 rounded-full bg-brand-blue/10 text-brand-blue hover:bg-brand-blue/20 flex items-center justify-center transition relative"
+            className="w-10 h-10 rounded-full bg-brand-blue/10 text-brand-blue hover:bg-brand-blue/20 flex items-center justify-center transition"
           >
             <Icon name="User" size={18} />
           </button>
           {userMenuOpen && (
             <>
-              <div
-                className="fixed inset-0 z-40"
-                onClick={() => setUserMenuOpen(false)}
-              />
+              <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
               <div className="absolute right-0 top-full mt-2 z-50 min-w-[220px] bg-white border border-border rounded-xl shadow-xl overflow-hidden">
                 <div className="px-4 py-3 border-b border-border bg-muted/30">
                   <div className="font-semibold text-sm truncate">{user.name}</div>
