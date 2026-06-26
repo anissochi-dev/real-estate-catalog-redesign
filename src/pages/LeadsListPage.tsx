@@ -108,16 +108,13 @@ function LeadCard({ lead, districts, onContact }: { lead: PublicLead; districts:
           className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shrink-0"
           style={{ background: color }}
         >
-          {initials(displayName)}
+          <Icon name="User" size={20} />
         </div>
         <div className="min-w-0">
-          <div className="font-bold text-[17px] text-foreground leading-tight">{displayName}</div>
-          {(lead.company || lead.is_network_tenant) && (
+          <div className="font-bold text-[17px] text-foreground leading-tight">Заявка #{lead.id}</div>
+          {lead.is_network_tenant && (
             <div className="text-sm text-muted-foreground truncate">
-              {lead.company}
-              {lead.is_network_tenant && (
-                <span className="ml-1 text-brand-blue font-medium">• Федеральная сеть</span>
-              )}
+              <span className="text-brand-blue font-medium">Федеральная сеть</span>
             </div>
           )}
         </div>
