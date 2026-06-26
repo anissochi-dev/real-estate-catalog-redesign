@@ -1,11 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import SmartCaptcha, { CaptchaResult } from '@/components/SmartCaptcha';
 import { fetchPublicLeads, aiSearchLeads, sendLead, PublicLead, fetchDistricts, District } from '@/lib/api';
 import { useSeoH1 } from '@/components/SeoHead';
+import SeoHead from '@/components/SeoHead';
+import SchemaOrg, { makeBreadcrumbSchema, makeItemListSchema } from '@/components/SchemaOrg';
 import PublicPhoneInput from '@/components/PublicPhoneInput';
+
+const SITE_URL = 'https://bmn.su';
+const OG_IMAGE = 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/bucket/f8de2a72-faf3-4f8b-aaa2-0ee00c7e16dc.png';
 
 function fmtBudget(from: number | null, to: number | null): string {
   if (!from && !to) return 'Договорная';
@@ -198,6 +203,8 @@ function LeadCard({ lead, districts, onContact }: { lead: PublicLead; districts:
 export default function LeadsListPage() {
   const h1 = useSeoH1('Заявки клиентов');
   const LOAD_STEP = 20;
+  const SEO_TITLE = 'Заявки клиентов на коммерческую недвижимость в Краснодаре';
+  const SEO_DESC = 'Реальные заявки от арендаторов и покупателей коммерческой недвижимости в Краснодаре: офисы, склады, торговые площади, рестораны, гостиницы. Найдите арендатора или идею для бизнеса.';
 
   const [allLeads, setAllLeads] = useState<PublicLead[]>([]);
   const [visibleCount, setVisibleCount] = useState(LOAD_STEP);
@@ -243,6 +250,20 @@ export default function LeadsListPage() {
 
   const leads = allLeads.slice(0, visibleCount);
   const hasMore = visibleCount < allLeads.length;
+
+  const breadcrumbSchema = useMemo(() => makeBreadcrumbSchema([
+    { name: 'Главная', url: `${SITE_URL}/` },
+    { name: 'Заявки клиентов', url: `${SITE_URL}/leads` },
+  ]), []);
+
+  const itemListSchema = useMemo(() => makeItemListSchema(
+    allLeads.slice(0, 50).map(lead => ({
+      name: `Заявка #${lead.id}${lead.property_category ? ` — ${CATEGORY_LABELS[lead.property_category] || lead.property_category}` : ''}`,
+      url: `${SITE_URL}/leads`,
+      description: lead.message?.slice(0, 160) || undefined,
+    })),
+    'Заявки клиентов на коммерческую недвижимость'
+  ), [allLeads]);
 
   const runAiSearch = async () => {
     const q = aiQuery.trim();
@@ -304,15 +325,34 @@ export default function LeadsListPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <SeoHead
+        path="/leads"
+        title={SEO_TITLE}
+        description={SEO_DESC}
+        h1={h1}
+        keywords="заявки клиентов, аренда коммерческой недвижимости, покупка помещений, офис в аренду Краснодар, склад аренда, торговая площадь"
+        ogImage={OG_IMAGE}
+      />
+      <SchemaOrg schema={breadcrumbSchema} id="leads-bc" />
+      {allLeads.length > 0 && <SchemaOrg schema={itemListSchema} id="leads-list" />}
+
       <div className="container mx-auto px-4 py-6 max-w-3xl">
         <div className="mb-3">
           <Breadcrumbs items={[{ label: 'Главная', to: '/' }, { label: 'Заявки клиентов' }]} />
         </div>
 
         <h1 className="font-display font-900 text-2xl md:text-3xl text-foreground mb-2">{h1}</h1>
-        <p className="text-sm text-muted-foreground mb-5">
+        <p className="text-sm text-muted-foreground mb-3">
           Что ищут другие посетители — может быть, вам подойдёт похожая идея, или вы готовы стать арендатором.
         </p>
+
+        {/* SEO-блок */}
+        <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-5 text-sm text-muted-foreground leading-relaxed">
+          <h2 className="font-semibold text-foreground text-[15px] mb-1">Реальные запросы арендаторов и покупателей</h2>
+          Здесь собраны актуальные заявки от бизнеса, который ищет коммерческую недвижимость в Краснодаре и крае:
+          офисы, склады, торговые площади, рестораны, гостиницы, производственные помещения.
+          Если у вас есть подходящий объект — свяжитесь с автором заявки напрямую.
+        </div>
 
         {/* ИИ-поиск */}
         <div className="bg-gradient-to-br from-brand-blue/5 to-brand-orange/5 border border-brand-blue/15 rounded-2xl p-4 sm:p-5 mb-5">
@@ -321,7 +361,7 @@ export default function LeadsListPage() {
               <Icon name="Sparkles" size={16} className="text-white" />
             </div>
             <div>
-              <div className="font-semibold text-sm">ИИ-поиск Виртуального брокера</div>
+              <h3 className="font-semibold text-sm">ИИ-поиск Виртуального брокера</h3>
               <div className="text-[11px] text-muted-foreground">Опишите задачу — ВБ найдёт похожие заявки</div>
             </div>
           </div>
@@ -401,6 +441,53 @@ export default function LeadsListPage() {
             )}
           </>
         )}
+      </div>
+
+      {/* FAQ-блок */}
+      <SchemaOrg schema={{
+        '@context': 'https://schema.org',
+        '@type': 'FAQPage',
+        mainEntity: [
+          {
+            '@type': 'Question',
+            name: 'Как разместить заявку на аренду коммерческой недвижимости?',
+            acceptedAnswer: { '@type': 'Answer', text: 'Нажмите кнопку «Разместить объект» или обратитесь к нашим менеджерам. Заявка будет опубликована в течение одного рабочего дня.' },
+          },
+          {
+            '@type': 'Question',
+            name: 'Какую коммерческую недвижимость ищут в Краснодаре?',
+            acceptedAnswer: { '@type': 'Answer', text: 'Арендаторы ищут офисы, торговые площади, склады, рестораны, гостиницы и производственные помещения. Федеральные сети рассматривают объекты от 100 м² в проходимых локациях.' },
+          },
+          {
+            '@type': 'Question',
+            name: 'Как связаться с автором заявки?',
+            acceptedAnswer: { '@type': 'Answer', text: 'Нажмите кнопку «Связаться» под заявкой, оставьте свои контактные данные — менеджер передаст их заявителю и организует переговоры.' },
+          },
+          {
+            '@type': 'Question',
+            name: 'Бесплатно ли размещение заявки?',
+            acceptedAnswer: { '@type': 'Answer', text: 'Да, размещение заявки на аренду или покупку коммерческой недвижимости на нашем сайте бесплатно для арендаторов и покупателей.' },
+          },
+        ],
+      }} id="leads-faq" />
+      <div className="container mx-auto px-4 pb-10 max-w-3xl">
+        <h2 className="font-display font-700 text-xl text-foreground mb-4 mt-2">Частые вопросы</h2>
+        <div className="divide-y divide-slate-100 border border-slate-200 rounded-2xl overflow-hidden">
+          {[
+            { q: 'Как разместить заявку на аренду?', a: 'Нажмите «Разместить объект» или обратитесь к менеджерам. Заявка публикуется в течение одного рабочего дня.' },
+            { q: 'Какую недвижимость ищут в Краснодаре?', a: 'Офисы, торговые площади, склады, рестораны, гостиницы и производственные помещения. Федеральные сети рассматривают объекты от 100 м² в проходимых локациях.' },
+            { q: 'Как связаться с автором заявки?', a: 'Нажмите «Связаться» под заявкой, оставьте контакты — менеджер организует переговоры.' },
+            { q: 'Размещение заявки платное?', a: 'Нет, размещение заявки для арендаторов и покупателей полностью бесплатно.' },
+          ].map(({ q, a }) => (
+            <details key={q} className="group bg-white px-5 py-4 cursor-pointer select-none">
+              <summary className="font-semibold text-[15px] text-foreground list-none flex items-center justify-between gap-3">
+                {q}
+                <Icon name="ChevronDown" size={16} className="shrink-0 text-muted-foreground group-open:rotate-180 transition-transform" />
+              </summary>
+              <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{a}</p>
+            </details>
+          ))}
+        </div>
       </div>
 
       {/* Модалка контакта */}
