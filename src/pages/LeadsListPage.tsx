@@ -22,8 +22,9 @@ export default function LeadsListPage() {
   const SEO_DESC = 'Реальные заявки от арендаторов и покупателей коммерческой недвижимости в Краснодаре: офисы, склады, торговые площади, рестораны, гостиницы. Найдите арендатора или идею для бизнеса.';
 
   const [allLeads, setAllLeads] = useState<PublicLead[]>([]);
-  const [visibleCount, setVisibleCount] = useState(LOAD_STEP);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [districts, setDistricts] = useState<District[]>([]);
@@ -43,17 +44,29 @@ export default function LeadsListPage() {
   const load = () => {
     setLoading(true);
     setError('');
-    fetchPublicLeads({ page: 1, limit: 200, ids: aiIds || undefined, sort: 'newest' })
+    setPage(1);
+    fetchPublicLeads({ page: 1, limit: LOAD_STEP, ids: aiIds || undefined, sort: 'newest' })
       .then(r => {
         setAllLeads(r.leads);
         setTotal(r.total);
-        setVisibleCount(LOAD_STEP);
       })
       .catch((e: unknown) => {
         setError(e instanceof Error ? e.message : 'Не удалось загрузить заявки');
         setAllLeads([]);
       })
       .finally(() => setLoading(false));
+  };
+
+  const loadMore = () => {
+    const nextPage = page + 1;
+    setLoadingMore(true);
+    fetchPublicLeads({ page: nextPage, limit: LOAD_STEP, ids: aiIds || undefined, sort: 'newest' })
+      .then(r => {
+        setAllLeads(prev => [...prev, ...r.leads]);
+        setPage(nextPage);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingMore(false));
   };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -63,8 +76,8 @@ export default function LeadsListPage() {
     fetchDistricts().then(list => setDistricts(list.filter(d => !d.is_okrug))).catch(() => {});
   }, []);
 
-  const leads = allLeads.slice(0, visibleCount);
-  const hasMore = visibleCount < allLeads.length;
+  const leads = allLeads;
+  const hasMore = allLeads.length < total;
 
   const breadcrumbSchema = useMemo(() => makeBreadcrumbSchema([
     { name: 'Главная', url: `${SITE_URL}/` },
@@ -216,13 +229,14 @@ export default function LeadsListPage() {
             {hasMore && (
               <div className="flex flex-col items-center gap-2 mt-8">
                 <button
-                  onClick={() => setVisibleCount(v => v + LOAD_STEP)}
-                  className="btn-orange text-white px-8 py-3 rounded-xl text-sm font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity shadow-sm"
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  className="btn-orange text-white px-8 py-3 rounded-xl text-sm font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity shadow-sm disabled:opacity-60"
                 >
-                  <Icon name="ChevronDown" size={16} />
-                  Показать ещё {Math.min(LOAD_STEP, allLeads.length - visibleCount)} заявок
+                  <Icon name={loadingMore ? 'Loader2' : 'ChevronDown'} size={16} className={loadingMore ? 'animate-spin' : ''} />
+                  {loadingMore ? 'Загрузка…' : `Показать ещё ${Math.min(LOAD_STEP, total - allLeads.length)} заявок`}
                 </button>
-                <div className="text-xs text-muted-foreground">Показано {visibleCount} из {allLeads.length}</div>
+                <div className="text-xs text-muted-foreground">Показано {allLeads.length} из {total}</div>
               </div>
             )}
           </>
