@@ -115,20 +115,53 @@ export default function LeadEditModal({
             </div>
           </div>
 
-          {/* Бюджет от/до */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Бюджет от, ₽</label>
-              <input type="number" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="1 000 000"
+          {/* Бюджет от/до (полная стоимость) */}
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Бюджет, ₽</label>
+            <div className="grid grid-cols-2 gap-3">
+              <input type="number" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="от"
                 value={editing.budget ?? ''}
-                onChange={e => setEditing({ ...editing, budget: e.target.value === '' ? null : +e.target.value })} />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Бюджет до, ₽</label>
-              <input type="number" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="5 000 000"
+                onChange={e => {
+                  const v = e.target.value === '' ? null : +e.target.value;
+                  const psFrom = (v != null && editing.area_from) ? Math.round(v / editing.area_from) : editing.budget_per_sqm_from ?? null;
+                  setEditing({ ...editing, budget: v, budget_per_sqm_from: psFrom });
+                }} />
+              <input type="number" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="до"
                 value={editing.budget_to ?? ''}
-                onChange={e => setEditing({ ...editing, budget_to: e.target.value === '' ? null : +e.target.value })} />
+                onChange={e => {
+                  const v = e.target.value === '' ? null : +e.target.value;
+                  const psTo = (v != null && editing.area_to) ? Math.round(v / editing.area_to) : editing.budget_per_sqm_to ?? null;
+                  setEditing({ ...editing, budget_to: v, budget_per_sqm_to: psTo });
+                }} />
             </div>
+          </div>
+
+          {/* Стоимость за м² */}
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Стоимость за м², ₽</label>
+            <div className="grid grid-cols-2 gap-3">
+              <input type="number" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="от"
+                value={editing.budget_per_sqm_from ?? ''}
+                onChange={e => {
+                  const v = e.target.value === '' ? null : +e.target.value;
+                  const bFrom = (v != null && editing.area_from) ? Math.round(v * editing.area_from) : editing.budget ?? null;
+                  setEditing({ ...editing, budget_per_sqm_from: v, budget: bFrom });
+                }} />
+              <input type="number" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="до"
+                value={editing.budget_per_sqm_to ?? ''}
+                onChange={e => {
+                  const v = e.target.value === '' ? null : +e.target.value;
+                  const bTo = (v != null && editing.area_to) ? Math.round(v * editing.area_to) : editing.budget_to ?? null;
+                  setEditing({ ...editing, budget_per_sqm_to: v, budget_to: bTo });
+                }} />
+            </div>
+            {((editing.budget_per_sqm_from ?? 0) > 0 || (editing.budget_per_sqm_to ?? 0) > 0) && (editing.area_from ?? editing.area_to) && (
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Итого:{' '}
+                {editing.budget ? editing.budget.toLocaleString('ru') + ' ₽' : '—'}
+                {editing.budget_to ? ` — ${editing.budget_to.toLocaleString('ru')} ₽` : ''}
+              </p>
+            )}
           </div>
 
           {/* Площадь от/до */}

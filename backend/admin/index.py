@@ -3126,7 +3126,8 @@ def _leads(cur, conn, method, rid, action, event, user):
         cur.execute(
             f"INSERT INTO {SCHEMA}.leads (name, phone, email, message, listing_id, status, source, "
             f"is_network_tenant, budget, budget_to, show_on_main, company, lead_type, "
-            f"area_from, area_to, property_type, property_category, utilities) VALUES ("
+            f"area_from, area_to, property_type, property_category, utilities, "
+            f"budget_per_sqm_from, budget_per_sqm_to) VALUES ("
             f"'{name}', '{phone}', {_str_or_null(body.get('email'), 100)}, "
             f"{_str_or_null(body.get('message'), 2000)}, {_int_or_null(body.get('listing_id'))}, "
             f"{_str_or_null(body.get('status') or 'new', 20)}, "
@@ -3137,7 +3138,8 @@ def _leads(cur, conn, method, rid, action, event, user):
             f"{_str_or_null(body.get('lead_type') or 'view', 20)}, "
             f"{_int_or_null(body.get('area_from'))}, {_int_or_null(body.get('area_to'))}, "
             f"{_str_or_null(body.get('property_type'), 50)}, {_str_or_null(body.get('property_category'), 50)}, "
-            f"{_str_or_null(body.get('utilities'), 500)}) RETURNING id"
+            f"{_str_or_null(body.get('utilities'), 500)}, "
+            f"{_int_or_null(body.get('budget_per_sqm_from'))}, {_int_or_null(body.get('budget_per_sqm_to'))}) RETURNING id"
         )
         conn.commit()
         return _ok({'id': cur.fetchone()['id'], 'success': True})
@@ -3149,7 +3151,7 @@ def _leads(cur, conn, method, rid, action, event, user):
                           ('property_type', 50), ('property_category', 50), ('utilities', 500)]:
             if f in body:
                 fields.append(f"{f} = {_str_or_null(body[f], length)}")
-        for f in ('assigned_to', 'listing_id', 'budget', 'budget_to', 'broker_id', 'area_from', 'area_to'):
+        for f in ('assigned_to', 'listing_id', 'budget', 'budget_to', 'broker_id', 'area_from', 'area_to', 'budget_per_sqm_from', 'budget_per_sqm_to'):
             if f in body:
                 fields.append(f"{f} = {_int_or_null(body[f])}")
         for f in ('is_network_tenant', 'show_on_main'):

@@ -29,6 +29,8 @@ export interface Lead {
   property_type?: string | null;
   property_category?: string | null;
   utilities?: string | null;
+  budget_per_sqm_from?: number | null;
+  budget_per_sqm_to?: number | null;
 }
 
 export const LEAD_TYPES: [string, string, string][] = [
@@ -83,4 +85,5 @@ export const empty: Partial<Lead> = {
   name: '', phone: '', email: '', message: '', status: 'new',
   is_network_tenant: false, show_on_main: true, budget: null, company: '',
   budget_to: null, area_from: null, area_to: null, property_type: null, property_category: null, utilities: null,
+  budget_per_sqm_from: null, budget_per_sqm_to: null,
 };

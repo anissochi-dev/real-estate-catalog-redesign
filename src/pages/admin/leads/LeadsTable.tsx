@@ -115,7 +115,9 @@ export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, se
               <th className="text-left px-4 py-3 font-semibold text-foreground/70 cursor-pointer hover:bg-muted/80 transition-colors whitespace-nowrap select-none" onClick={() => handleSort('date')}>
                 Дата <SortIcon col="date" />
               </th>
-              <th className="text-left px-4 py-3 font-semibold text-foreground/70 min-w-[240px]">Требования</th>
+              <th className="text-left px-4 py-3 font-semibold text-foreground/70 whitespace-nowrap">Тип / Категория</th>
+              <th className="text-left px-4 py-3 font-semibold text-foreground/70 whitespace-nowrap">Площадь, м²</th>
+              <th className="text-left px-4 py-3 font-semibold text-foreground/70 min-w-[180px]">Требования</th>
               <th className="text-left px-4 py-3 font-semibold text-foreground/70 cursor-pointer hover:bg-muted/80 transition-colors whitespace-nowrap select-none" onClick={() => handleSort('budget')}>
                 Бюджет <SortIcon col="budget" />
               </th>
@@ -182,33 +184,46 @@ export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, se
                     </span>
                   </td>
 
+                  {/* Тип / Категория */}
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <div className="flex flex-col gap-1">
+                      {l.property_type ? (
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 w-fit">
+                          {PROPERTY_TYPES_LEAD.find(t => t.value === l.property_type)?.label || l.property_type}
+                        </span>
+                      ) : null}
+                      {l.property_category ? (
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 w-fit">
+                          {PROPERTY_CATEGORIES_LEAD.find(c => c.value === l.property_category)?.label || l.property_category}
+                        </span>
+                      ) : null}
+                      {!l.property_type && !l.property_category && (
+                        <span className="text-[12px] text-muted-foreground">—</span>
+                      )}
+                    </div>
+                  </td>
+
+                  {/* Площадь */}
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {l.area_from || l.area_to ? (
+                      <span className="text-[13px] font-semibold text-foreground">
+                        {l.area_from ? l.area_from.toLocaleString('ru') : '—'}
+                        {' – '}
+                        {l.area_to ? l.area_to.toLocaleString('ru') : '—'}
+                      </span>
+                    ) : (
+                      <span className="text-[12px] text-muted-foreground">—</span>
+                    )}
+                  </td>
+
                   {/* Требования */}
-                  <td className="px-4 py-3 max-w-[300px]">
-                    {/* Бейджи: тип, категория, площадь, коммуникации */}
-                    {(l.property_type || l.property_category || l.area_from || l.area_to || l.utilities) && (
-                      <div className="flex flex-wrap gap-1 mb-2">
-                        {l.property_type && (
-                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
-                            {PROPERTY_TYPES_LEAD.find(t => t.value === l.property_type)?.label || l.property_type}
-                          </span>
-                        )}
-                        {l.property_category && (
-                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-violet-50 text-violet-700">
-                            {PROPERTY_CATEGORIES_LEAD.find(c => c.value === l.property_category)?.label || l.property_category}
-                          </span>
-                        )}
-                        {(l.area_from || l.area_to) && (
-                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-muted text-foreground/70 flex items-center gap-1">
-                            <Icon name="Maximize" size={10} />
-                            {l.area_from ? `от ${l.area_from}` : ''}{l.area_from && l.area_to ? ' ' : ''}{l.area_to ? `до ${l.area_to}` : ''} м²
-                          </span>
-                        )}
-                        {l.utilities && (
-                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700" title={l.utilities}>
-                            <Icon name="Zap" size={10} className="inline mr-0.5" />
-                            {l.utilities.length > 25 ? l.utilities.slice(0, 25) + '…' : l.utilities}
-                          </span>
-                        )}
+                  <td className="px-4 py-3 max-w-[220px]">
+                    {l.utilities && (
+                      <div className="mb-1">
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 inline-flex items-center gap-1" title={l.utilities}>
+                          <Icon name="Zap" size={10} />
+                          {l.utilities.length > 22 ? l.utilities.slice(0, 22) + '…' : l.utilities}
+                        </span>
                       </div>
                     )}
                     {msg ? (
@@ -222,17 +237,19 @@ export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, se
 
                   {/* Бюджет */}
                   <td className="px-4 py-3 whitespace-nowrap">
-                    {l.budget != null && l.budget > 0 ? (
-                      <span className="font-semibold text-foreground text-[13px]">
-                        {l.budget.toLocaleString('ru')}
-                        {l.budget_to != null && l.budget_to > 0 ? (
-                          <> — {l.budget_to.toLocaleString('ru')}</>
-                        ) : null} ₽
-                      </span>
-                    ) : l.budget_to != null && l.budget_to > 0 ? (
-                      <span className="font-semibold text-foreground text-[13px]">
-                        до {l.budget_to.toLocaleString('ru')} ₽
-                      </span>
+                    {(l.budget ?? 0) > 0 || (l.budget_to ?? 0) > 0 ? (
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-semibold text-foreground text-[13px]">
+                          {(l.budget ?? 0) > 0 ? l.budget!.toLocaleString('ru') : '—'}
+                          {(l.budget_to ?? 0) > 0 ? ` – ${l.budget_to!.toLocaleString('ru')}` : ''} ₽
+                        </span>
+                        {((l.budget_per_sqm_from ?? 0) > 0 || (l.budget_per_sqm_to ?? 0) > 0) && (
+                          <span className="text-[11px] text-muted-foreground">
+                            {(l.budget_per_sqm_from ?? 0) > 0 ? l.budget_per_sqm_from!.toLocaleString('ru') : '—'}
+                            {(l.budget_per_sqm_to ?? 0) > 0 ? ` – ${l.budget_per_sqm_to!.toLocaleString('ru')}` : ''} ₽/м²
+                          </span>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-muted-foreground text-[12px]">—</span>
                     )}
