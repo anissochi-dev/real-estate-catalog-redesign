@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { Property } from '@/App';
 import PropertyCard from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
@@ -9,12 +10,12 @@ interface HomeNewListingsProps {
   compareList: number[];
   onToggleFavorite: (id: number) => void;
   onToggleCompare: (id: number) => void;
-  onSeeAll: () => void;
+  onSeeAll?: () => void;
 }
 
 export default function HomeNewListings({
   newObjects, homeLimit, favorites, compareList,
-  onToggleFavorite, onToggleCompare, onSeeAll,
+  onToggleFavorite, onToggleCompare,
 }: HomeNewListingsProps) {
   return (
     <section className="py-6 bg-muted/40">
@@ -24,13 +25,12 @@ export default function HomeNewListings({
             <Icon name="Building2" size={16} className="text-brand-blue" />
             <h2 className="font-display font-700 text-base text-foreground">Аренда и продажа коммерческой недвижимости в Краснодаре</h2>
           </div>
-          <button
-            onClick={onSeeAll}
-            aria-label="Смотреть все объекты каталога"
+          <Link
+            to="/catalog"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 sm:justify-start px-4 py-2.5 sm:px-0 sm:py-0 rounded-xl sm:rounded-none border border-brand-blue/30 sm:border-0 bg-brand-blue/5 sm:bg-transparent text-brand-blue font-semibold text-sm sm:hover:gap-3 transition-all duration-200 shrink-0"
           >
             Смотреть все объекты <Icon name="ArrowRight" size={14} />
-          </button>
+          </Link>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

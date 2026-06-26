@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { NEWS_URL } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -32,7 +32,6 @@ function fmtDate(s?: string | null) {
 }
 
 export function NewsListPage() {
-  const navigate = useNavigate();
   const { settings } = useSettings();
   const h1 = useSeoH1('Новости рынка недвижимости');
   const [news, setNews] = useState<NewsItem[]>([]);
@@ -104,35 +103,36 @@ export function NewsListPage() {
             {news.filter(n => !!n.slug).map(n => (
               <article
                 key={n.id}
-                onClick={() => navigate(`/news/${n.slug}`)}
-                className="bg-white rounded-2xl overflow-hidden border border-border hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer group"
+                className="bg-white rounded-2xl overflow-hidden border border-border hover:shadow-lg hover:-translate-y-1 transition-all duration-200 group"
               >
-                <div className="relative h-44 bg-gradient-to-br from-brand-blue/10 to-brand-blue/20 overflow-hidden">
-                  {n.image_url ? (
-                    <img src={n.image_url} alt={n.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Icon name="Newspaper" size={40} className="text-brand-blue/30" />
+                <Link to={`/news/${n.slug}`} className="block">
+                  <div className="relative h-44 bg-gradient-to-br from-brand-blue/10 to-brand-blue/20 overflow-hidden">
+                    {n.image_url ? (
+                      <img src={n.image_url} alt={n.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Icon name="Newspaper" size={40} className="text-brand-blue/30" />
+                      </div>
+                    )}
+                    <div className="absolute top-3 left-3">
+                      <span className="text-xs px-2 py-1 rounded-full bg-brand-blue text-white font-semibold">
+                        Аналитика
+                      </span>
                     </div>
-                  )}
-                  <div className="absolute top-3 left-3">
-                    <span className="text-xs px-2 py-1 rounded-full bg-brand-blue text-white font-semibold">
-                      Аналитика
-                    </span>
                   </div>
-                </div>
-                <div className="p-5">
-                  <h2 className="font-display font-700 text-sm leading-snug mb-2 line-clamp-2 group-hover:text-brand-blue transition-colors">
-                    {n.title}
-                  </h2>
-                  {n.summary && (
-                    <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{n.summary}</p>
-                  )}
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{fmtDate(n.published_at || n.created_at)}</span>
-                    {n.source_name && <span className="truncate ml-2 max-w-[100px]">{n.source_name}</span>}
+                  <div className="p-5">
+                    <h2 className="font-display font-700 text-sm leading-snug mb-2 line-clamp-2 group-hover:text-brand-blue transition-colors">
+                      {n.title}
+                    </h2>
+                    {n.summary && (
+                      <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{n.summary}</p>
+                    )}
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{fmtDate(n.published_at || n.created_at)}</span>
+                      {n.source_name && <span className="truncate ml-2 max-w-[100px]">{n.source_name}</span>}
+                    </div>
                   </div>
-                </div>
+                </Link>
               </article>
             ))}
           </div>

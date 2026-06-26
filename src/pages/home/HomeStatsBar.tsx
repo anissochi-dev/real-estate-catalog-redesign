@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import Icon from '@/components/ui/icon';
 
 interface StatView {
@@ -9,17 +10,17 @@ interface StatView {
 
 interface HomeStatsBarProps {
   statsView: StatView[];
-  onGoCatalog: () => void;
+  onGoCatalog?: () => void;
 }
 
-export default function HomeStatsBar({ statsView, onGoCatalog }: HomeStatsBarProps) {
+export default function HomeStatsBar({ statsView }: HomeStatsBarProps) {
   return (
     <section className="bg-white border-b border-border py-3">
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {statsView.map((stat, i) => {
             const clickable = stat.deal !== null;
-            const goCatalog = () => { onGoCatalog(); };
+            const href = stat.deal ? `/catalog?deal=${stat.deal}` : '/catalog';
             const inner = (
               <>
                 <div className="w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
@@ -37,10 +38,10 @@ export default function HomeStatsBar({ statsView, onGoCatalog }: HomeStatsBarPro
             const baseCls = `flex items-center gap-2.5 animate-fade-in-up stagger-${i + 1} text-left p-1.5`;
             if (clickable) {
               return (
-                <button key={stat.label} type="button" onClick={goCatalog}
-                  className={`${baseCls} hover:bg-muted/40 rounded-lg transition-colors cursor-pointer`}>
+                <Link key={stat.label} to={href}
+                  className={`${baseCls} hover:bg-muted/40 rounded-lg transition-colors`}>
                   {inner}
-                </button>
+                </Link>
               );
             }
             return (

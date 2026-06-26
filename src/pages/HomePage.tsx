@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Property, Page } from '@/App';
 import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -205,16 +205,17 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
       />
 
       {/* Stats — компактная горизонтальная панель */}
-      <HomeStatsBar statsView={STATS_VIEW} onGoCatalog={() => navigate('/catalog')} />
+      <HomeStatsBar statsView={STATS_VIEW} />
 
-      {/* Categories — скрыты */}
-      <section className="py-6 bg-background hidden">
+      {/* Categories */}
+      <section className="py-6 bg-background">
         <div className="container mx-auto px-4">
+          <h2 className="sr-only">Категории коммерческой недвижимости в Краснодаре</h2>
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2 md:gap-3">
             {CATEGORIES.map((cat, i) => (
-              <button
+              <Link
                 key={cat.type}
-                onClick={() => navigate(catalogCategoryUrl(cat.type))}
+                to={catalogCategoryUrl(cat.type)}
                 className={`group relative flex flex-col items-center gap-2 p-3 bg-white rounded-xl border border-border hover:border-transparent hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up stagger-${i + 1} overflow-hidden`}
               >
                 <div className={`absolute inset-0 bg-gradient-to-br ${cat.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
@@ -227,7 +228,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
                     {categoryCount(cat.type)}
                   </div>
                 </div>
-              </button>
+              </Link>
             ))}
           </div>
         </div>
@@ -241,7 +242,6 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
         compareList={compareList}
         onToggleFavorite={onToggleFavorite}
         onToggleCompare={onToggleCompare}
-        onSeeAll={() => onNavigate('catalog')}
       />
 
       {showLeads && (
@@ -255,8 +255,6 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
         <HomeNewsSection
           latestNews={latestNews}
           homeNewsLimit={homeNewsLimit}
-          onOpenNews={() => navigate('/news')}
-          onOpenArticle={(slug) => navigate(`/news/${slug}`)}
         />
       )}
 

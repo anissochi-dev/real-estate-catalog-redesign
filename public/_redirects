@@ -37,10 +37,10 @@
 /favorites/       /index.html    200
 /compare          /index.html    200
 /compare/         /index.html    200
-/network-tenants  /index.html    200
-/network-tenants/ /index.html    200
-/leads            /index.html    200
-/leads/           /index.html    200
+/network-tenants  https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff/?path=/network-tenants   200
+/network-tenants/ https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff/?path=/network-tenants   200
+/leads            https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff/?path=/leads              200
+/leads/           https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff/?path=/leads              200
 /declined         /index.html    200
 /declined/        /index.html    200
 
