@@ -1,12 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '@/components/ui/icon';
-import SmartCaptcha, { CaptchaResult } from '@/components/SmartCaptcha';
-import PublicPhoneInput from '@/components/PublicPhoneInput';
-import { fireLeadConversion } from '@/lib/analytics';
 
 const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
-const LEADS_URL = 'https://functions.poehali.dev/45673fe4-a39d-4193-b529-174d4c8c8f97';
 
 interface PubLead {
   id: number;
@@ -23,12 +19,6 @@ interface Props {
 
 export default function ClientLeadsSection({ limit = 6 }: Props) {
   const [leads, setLeads] = useState<PubLead[]>([]);
-  const [offerLead, setOfferLead] = useState<PubLead | null>(null);
-  const [form, setForm] = useState({ name: '', phone: '', message: '' });
-  const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [captcha, setCaptcha] = useState<CaptchaResult | null>(null);
-  const [captchaKey, setCaptchaKey] = useState(0);
 
   useEffect(() => {
     fetch(`${LISTINGS_URL}?resource=public_leads&limit=${limit}`)
@@ -36,36 +26,6 @@ export default function ClientLeadsSection({ limit = 6 }: Props) {
       .then(d => setLeads(d.leads || []))
       .catch(() => undefined);
   }, [limit]);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!offerLead || !captcha?.passed) return;
-    setSending(true);
-    try {
-      await fetch(LEADS_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: form.name,
-          phone: form.phone,
-          message: `Предложение объекта по заявке #${offerLead.id} от "${offerLead.name}". ${form.message}`,
-          source: 'offer-to-lead',
-          captcha_token: captcha?.token,
-        }),
-      });
-      setSent(true);
-      fireLeadConversion({ source: 'offer-to-lead' });
-      setTimeout(() => {
-        setOfferLead(null);
-        setSent(false);
-        setForm({ name: '', phone: '', message: '' });
-        setCaptcha(null);
-        setCaptchaKey(k => k + 1);
-      }, 1500);
-    } finally {
-      setSending(false);
-    }
-  };
 
   if (!leads.length) return null;
 
@@ -99,10 +59,10 @@ export default function ClientLeadsSection({ limit = 6 }: Props) {
             <div key={l.id} className="bg-muted/30 rounded-2xl p-5 border border-border hover:shadow-md transition flex flex-col">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center font-semibold">
-                    {l.name.charAt(0).toUpperCase()}
+                  <div className="w-9 h-9 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center font-semibold text-sm">
+                    <Icon name="User" size={16} />
                   </div>
-                  <h3 className="font-semibold text-base">{l.name}</h3>
+                  <h3 className="font-semibold text-sm text-muted-foreground">Заявка #{l.id}</h3>
                 </div>
                 {l.budget && (
                   <span className="text-xs font-semibold bg-brand-blue/10 text-brand-blue px-2 py-1 rounded-lg">
@@ -116,54 +76,18 @@ export default function ClientLeadsSection({ limit = 6 }: Props) {
                   return text.length > 300 ? text.slice(0, 300) + '...' : text;
                 })()}
               </div>
-              <button onClick={() => setOfferLead(l)}
-                className="btn-orange text-white px-4 py-2 rounded-xl text-sm font-semibold font-display inline-flex items-center justify-center gap-2">
-                <Icon name="HandHeart" size={16} />
-                Предложить свой объект
-              </button>
+              <Link
+                to={`/leads`}
+                className="btn-orange text-white px-4 py-2 rounded-xl text-sm font-semibold font-display inline-flex items-center justify-center gap-2"
+              >
+                <Icon name="ArrowRight" size={16} />
+                Подробнее о заявке
+              </Link>
             </div>
           ))}
         </div>
       </div>
 
-      {offerLead && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <div className="font-display font-700 text-lg">Предложить объект</div>
-              <button onClick={() => setOfferLead(null)}><Icon name="X" size={20} /></button>
-            </div>
-            {sent ? (
-              <div className="py-8 text-center">
-                <Icon name="CheckCircle2" size={48} className="mx-auto mb-3 text-emerald-500" />
-                <div className="font-semibold">Спасибо!</div>
-                <div className="text-sm text-muted-foreground mt-1">Менеджер свяжется с вами.</div>
-              </div>
-            ) : (
-              <form onSubmit={submit} className="space-y-3">
-                <div className="p-3 bg-muted/40 rounded-lg text-sm">
-                  <div className="font-semibold">{offerLead.name}</div>
-                  <div className="text-muted-foreground text-xs mt-1 line-clamp-2">{offerLead.message}</div>
-                </div>
-                <input required placeholder="Ваше имя" value={form.name}
-                  onChange={e => setForm({ ...form, name: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg" />
-                <PublicPhoneInput required value={form.phone}
-                  onChange={v => setForm({ ...form, phone: v })}
-                  className="w-full px-3 py-2 border rounded-lg" />
-                <textarea placeholder="Описание вашего объекта (адрес, площадь, цена)" rows={3}
-                  value={form.message} onChange={e => setForm({ ...form, message: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg" />
-                <SmartCaptcha key={captchaKey} fieldCount={3} onVerify={setCaptcha} />
-                <button type="submit" disabled={sending || !captcha?.passed}
-                  className="w-full btn-blue text-white py-3 rounded-xl font-semibold disabled:opacity-50">
-                  {sending ? 'Отправка...' : 'Отправить предложение'}
-                </button>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
     </section>
   );
 }
