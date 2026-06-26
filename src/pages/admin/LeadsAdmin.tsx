@@ -44,7 +44,7 @@ export default function LeadsAdmin() {
       .then(r => r.json())
       .then(d => {
         const list: District[] = Array.isArray(d?.districts) ? d.districts : Array.isArray(d) ? d : [];
-        setDistricts(list.filter(d => !d.is_okrug && d.is_active));
+        setDistricts(list.filter(d => !d.is_okrug));
       })
       .catch(() => {});
   }, []);
@@ -135,6 +135,9 @@ export default function LeadsAdmin() {
           String(areaFrom).includes(q.replace(/\s/g, '')) ||
           String(areaTo).includes(q.replace(/\s/g, ''))
         );
+        const districtMatch = (l.district_ids || []).some(id =>
+          (districts.find(d => d.id === id)?.name || '').toLowerCase().includes(q)
+        );
         return (
           (l.name || '').toLowerCase().includes(q) ||
           (qDigits && phoneDigits.includes(qDigits)) ||
@@ -145,12 +148,13 @@ export default function LeadsAdmin() {
           categoryLabel.includes(q) ||
           (l.utilities || '').toLowerCase().includes(q) ||
           budgetMatch ||
-          areaMatch
+          areaMatch ||
+          districtMatch
         );
       });
     }
     return list;
-  }, [leads, filter, search]);
+  }, [leads, filter, search, districts]);
 
   return (
     <div className="space-y-3">
