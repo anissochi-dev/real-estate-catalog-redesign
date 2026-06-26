@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import SmartCaptcha, { CaptchaResult } from '@/components/SmartCaptcha';
-import { fetchPublicLeads, aiSearchLeads, sendLead, PublicLead } from '@/lib/api';
+import { fetchPublicLeads, aiSearchLeads, sendLead, PublicLead, fetchDistricts, District } from '@/lib/api';
 import { useSeoH1 } from '@/components/SeoHead';
 import PublicPhoneInput from '@/components/PublicPhoneInput';
 
@@ -83,7 +83,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   car_service: 'Car',
 };
 
-function LeadCard({ lead, onContact }: { lead: PublicLead; onContact: () => void }) {
+function LeadCard({ lead, districts, onContact }: { lead: PublicLead; districts: District[]; onContact: () => void }) {
   const displayName = lead.name || `Клиент #${lead.id}`;
   const color = avatarColor(displayName);
   const typeLabel = lead.property_type === 'sale' ? 'Покупка' : lead.property_type === 'rent' ? 'Аренда' : null;
@@ -93,6 +93,9 @@ function LeadCard({ lead, onContact }: { lead: PublicLead; onContact: () => void
   const updDate = fmtDate(lead.updated_at || lead.created_at);
   const budgetStr = fmtBudget(lead.budget, lead.budget_to);
   const areaStr = fmtArea(lead.area_from, lead.area_to);
+  const districtNames = (lead.district_ids || [])
+    .map(id => districts.find(d => d.id === id)?.name)
+    .filter(Boolean) as string[];
 
   return (
     <article className="bg-white rounded-2xl border border-border shadow-sm hover:shadow-md hover:border-brand-blue/25 transition-all duration-200 p-6">
@@ -117,7 +120,7 @@ function LeadCard({ lead, onContact }: { lead: PublicLead; onContact: () => void
         </div>
       </div>
 
-      {/* Бейджи: тип + категория + (районы если были бы названия — без ID) */}
+      {/* Бейджи: тип + категория + районы */}
       <div className="flex flex-wrap gap-2 mb-3">
         {typeLabel && (
           <span className={`inline-flex items-center gap-1.5 text-[13px] font-semibold px-3 py-1 rounded-full ${
@@ -133,6 +136,12 @@ function LeadCard({ lead, onContact }: { lead: PublicLead; onContact: () => void
             {catLabel}
           </span>
         )}
+        {districtNames.map(name => (
+          <span key={name} className="inline-flex items-center gap-1.5 text-[13px] font-semibold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700">
+            <Icon name="MapPin" size={13} />
+            {name}
+          </span>
+        ))}
       </div>
 
       {/* Параметры: бюджет, площадь, коммуникации */}
@@ -194,6 +203,7 @@ export default function LeadsListPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [districts, setDistricts] = useState<District[]>([]);
 
   const [aiQuery, setAiQuery] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
@@ -225,6 +235,10 @@ export default function LeadsListPage() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [aiIds]);
+
+  useEffect(() => {
+    fetchDistricts().then(list => setDistricts(list.filter(d => !d.is_okrug && d.is_active))).catch(() => {});
+  }, []);
 
   const leads = allLeads.slice(0, visibleCount);
   const hasMore = visibleCount < allLeads.length;
@@ -368,7 +382,7 @@ export default function LeadsListPage() {
           <>
             <div className="flex flex-col gap-4">
               {leads.map(lead => (
-                <LeadCard key={lead.id} lead={lead} onContact={() => openContact(lead)} />
+                <LeadCard key={lead.id} lead={lead} districts={districts} onContact={() => openContact(lead)} />
               ))}
             </div>
 
