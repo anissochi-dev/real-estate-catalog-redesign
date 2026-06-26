@@ -23,6 +23,11 @@ export interface Lead {
   seo_h4?: string | null;
   seo_h5?: string | null;
   crm_deal_id?: number | null;
+  area_from?: number | null;
+  area_to?: number | null;
+  property_type?: string | null;
+  property_category?: string | null;
+  utilities?: string | null;
 }
 
 export const LEAD_TYPES: [string, string, string][] = [
@@ -53,7 +58,29 @@ export const SOURCE_LABELS: Record<string, string> = {
   'manual': 'Добавлен вручную',
 };
 
+export const PROPERTY_TYPES_LEAD = [
+  { value: 'sale', label: 'Покупка' },
+  { value: 'rent', label: 'Аренда' },
+  { value: 'business', label: 'Готовый бизнес' },
+];
+
+export const PROPERTY_CATEGORIES_LEAD = [
+  { value: 'office', label: 'Офис' },
+  { value: 'retail', label: 'Магазин/торговое' },
+  { value: 'warehouse', label: 'Склад' },
+  { value: 'restaurant', label: 'Общепит' },
+  { value: 'business', label: 'Готовый бизнес' },
+  { value: 'production', label: 'Производство' },
+  { value: 'hotel', label: 'Гостиница' },
+  { value: 'gab', label: 'ГАБ' },
+  { value: 'land', label: 'Земля' },
+  { value: 'building', label: 'Здание' },
+  { value: 'free_purpose', label: 'Своб. назнач.' },
+  { value: 'car_service', label: 'Автосервис' },
+];
+
 export const empty: Partial<Lead> = {
   name: '', phone: '', email: '', message: '', status: 'new',
   is_network_tenant: false, show_on_main: true, budget: null, company: '',
+  area_from: null, area_to: null, property_type: null, property_category: null, utilities: null,
 };

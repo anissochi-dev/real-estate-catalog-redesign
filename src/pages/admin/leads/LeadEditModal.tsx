@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import Icon from '@/components/ui/icon';
 import PhonePickerInput from '@/components/admin/PhonePickerInput';
 import CharCount from '@/components/ui/CharCount';
-import { Lead, Listing, STATUSES } from './leadsTypes';
+import { Lead, Listing, STATUSES, PROPERTY_TYPES_LEAD, PROPERTY_CATEGORIES_LEAD } from './leadsTypes';
 import SeoHeadingsBlock, { SeoHeadings } from '@/components/admin/SeoHeadingsBlock';
 
 function generateLeadHeadings(lead: Partial<Lead>): SeoHeadings {
@@ -96,6 +96,53 @@ export default function LeadEditModal({
           <input type="number" className="w-full px-3 py-2 border rounded-lg" placeholder="Бюджет, ₽"
             value={editing.budget ?? ''}
             onChange={e => setEditing({ ...editing, budget: e.target.value === '' ? null : +e.target.value })} />
+
+          {/* Тип сделки и категория объекта */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Тип сделки</label>
+              <select className="w-full px-3 py-2 border rounded-lg text-sm"
+                value={editing.property_type || ''}
+                onChange={e => setEditing({ ...editing, property_type: e.target.value || null })}>
+                <option value="">— Любой —</option>
+                {PROPERTY_TYPES_LEAD.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Категория объекта</label>
+              <select className="w-full px-3 py-2 border rounded-lg text-sm"
+                value={editing.property_category || ''}
+                onChange={e => setEditing({ ...editing, property_category: e.target.value || null })}>
+                <option value="">— Любая —</option>
+                {PROPERTY_CATEGORIES_LEAD.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Площадь от/до */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Площадь от, м²</label>
+              <input type="number" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="100"
+                value={editing.area_from ?? ''}
+                onChange={e => setEditing({ ...editing, area_from: e.target.value === '' ? null : +e.target.value })} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Площадь до, м²</label>
+              <input type="number" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="500"
+                value={editing.area_to ?? ''}
+                onChange={e => setEditing({ ...editing, area_to: e.target.value === '' ? null : +e.target.value })} />
+            </div>
+          </div>
+
+          {/* Коммуникации */}
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Коммуникации (эл. энергия, газ, вода и т.д.)</label>
+            <input className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Эл. энергия 15 кВт, газ, вода"
+              value={editing.utilities || ''}
+              onChange={e => setEditing({ ...editing, utilities: e.target.value || null })} />
+          </div>
+
           <CharCount as="textarea" rows={5} max={1500} warnAt={1300} placeholder="Текст запроса"
             value={editing.message || ''}
             onChange={e => setEditing({ ...editing, message: (e.target as HTMLTextAreaElement).value })} />

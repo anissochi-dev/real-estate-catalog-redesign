@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import Icon from '@/components/ui/icon';
-import { Lead, STATUSES, SOURCE_LABELS } from './leadsTypes';
+import { Lead, STATUSES, SOURCE_LABELS, PROPERTY_TYPES_LEAD, PROPERTY_CATEGORIES_LEAD } from './leadsTypes';
 import { formatPhone } from '@/lib/phone';
 
 interface Props {
@@ -195,6 +195,33 @@ export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, se
 
                   {/* Требования */}
                   <td className="px-4 py-3 max-w-[300px]" onClick={e => e.stopPropagation()}>
+                    {/* Бейджи: тип, категория, площадь, коммуникации */}
+                    {(l.property_type || l.property_category || l.area_from || l.area_to || l.utilities) && (
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {l.property_type && (
+                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
+                            {PROPERTY_TYPES_LEAD.find(t => t.value === l.property_type)?.label || l.property_type}
+                          </span>
+                        )}
+                        {l.property_category && (
+                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-violet-50 text-violet-700">
+                            {PROPERTY_CATEGORIES_LEAD.find(c => c.value === l.property_category)?.label || l.property_category}
+                          </span>
+                        )}
+                        {(l.area_from || l.area_to) && (
+                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-muted text-foreground/70 flex items-center gap-1">
+                            <Icon name="Maximize" size={10} />
+                            {l.area_from ? `от ${l.area_from}` : ''}{l.area_from && l.area_to ? ' ' : ''}{l.area_to ? `до ${l.area_to}` : ''} м²
+                          </span>
+                        )}
+                        {l.utilities && (
+                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700" title={l.utilities}>
+                            <Icon name="Zap" size={10} className="inline mr-0.5" />
+                            {l.utilities.length > 25 ? l.utilities.slice(0, 25) + '…' : l.utilities}
+                          </span>
+                        )}
+                      </div>
+                    )}
                     {msg ? (
                       <div>
                         <p className={`text-[13px] text-foreground/80 leading-relaxed ${isExpanded ? '' : 'line-clamp-2'}`}>
