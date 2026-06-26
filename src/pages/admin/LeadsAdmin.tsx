@@ -139,6 +139,7 @@ export default function LeadsAdmin() {
           (districts.find(d => d.id === id)?.name || '').toLowerCase().includes(q)
         );
         return (
+          String(l.id) === q.replace(/^#/, '').trim() ||
           (l.name || '').toLowerCase().includes(q) ||
           (qDigits && phoneDigits.includes(qDigits)) ||
           (l.message || '').toLowerCase().includes(q) ||

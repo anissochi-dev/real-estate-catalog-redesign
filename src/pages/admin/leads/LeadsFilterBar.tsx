@@ -55,7 +55,7 @@ export default function LeadsFilterBar({ leads, filter, setFilter, onAdd, search
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Поиск по имени, телефону, сообщению..."
+          placeholder="Поиск по №, имени, телефону, сообщению..."
           className="w-full pl-9 pr-9 py-2 text-sm bg-white border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue transition-colors"
         />
         {search && (
