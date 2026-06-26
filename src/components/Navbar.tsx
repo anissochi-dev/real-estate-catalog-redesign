@@ -22,7 +22,7 @@ const navItems = [
   { id: 'catalog' as Page, label: 'Каталог', icon: 'Building2' },
   { id: 'leads' as Page, label: 'Заявки', icon: 'FileText' },
   { id: 'news' as Page, label: 'Новости', icon: 'Newspaper' },
-  { id: 'favorites' as Page, label: 'Избранное', icon: 'Heart' },
+  { id: 'favorites' as Page, label: '', icon: 'Heart' },
 ];
 
 export default function Navbar({ currentPage, setCurrentPage, favoritesCount, compareCount, onLogin, onAdmin, onAdminLeads, onClientDashboard }: NavbarProps) {
@@ -92,6 +92,15 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
 
             {/* Right side — desktop */}
             <div className="flex items-center gap-2">
+              {/* Телефон */}
+              <a
+                href="tel:+79183352888"
+                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold text-foreground hover:text-brand-blue hover:bg-muted transition-all duration-200 shrink-0"
+              >
+                <Icon name="Phone" size={15} className="text-brand-blue" />
+                +7 (918) 33 52 888
+              </a>
+
               {/* Кнопка "Разместить объект" */}
               <button
                 onClick={() => setOwnerModalOpen(true)}
@@ -236,6 +245,13 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
 
         {/* Drawer footer */}
         <div className="shrink-0 p-3 border-t border-border space-y-1">
+          <a
+            href="tel:+79183352888"
+            className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-brand-blue hover:bg-brand-blue/10 transition"
+          >
+            <Icon name="Phone" size={18} />
+            +7 (918) 33 52 888
+          </a>
           {user ? (
             <>
               <div className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground">
