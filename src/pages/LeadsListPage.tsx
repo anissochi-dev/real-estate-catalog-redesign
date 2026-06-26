@@ -113,7 +113,7 @@ function LeadCard({ lead, districts, onContact }: { lead: PublicLead; districts:
         <div className="min-w-0">
           <div className="font-bold text-[17px] text-foreground leading-tight">Заявка #{lead.id}</div>
           {lead.is_network_tenant && (
-            <div className="text-sm text-muted-foreground truncate">
+            <div className="text-sm">
               <span className="text-brand-blue font-medium">Федеральная сеть</span>
             </div>
           )}
