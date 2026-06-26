@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { adminApi } from '@/lib/adminApi';
 import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
-import { Lead, Comment, Listing, STATUSES, empty } from './leads/leadsTypes';
+import { Lead, Comment, Listing, STATUSES, empty, PROPERTY_CATEGORIES_LEAD } from './leads/leadsTypes';
 import LeadsFilterBar from './leads/LeadsFilterBar';
 import LeadsTable from './leads/LeadsTable';
 import LeadDetail from './leads/LeadDetail';
@@ -104,14 +104,36 @@ export default function LeadsAdmin() {
     if (search.trim()) {
       const q = search.toLowerCase();
       const qDigits = q.replace(/\D/g, '').replace(/^8/, '7');
+      const qNum = parseFloat(q.replace(/\s/g, '').replace(',', '.'));
       list = list.filter(l => {
         const phoneDigits = (l.phone || '').replace(/\D/g, '').replace(/^8/, '7');
+        const typeLabel = l.property_type === 'sale' ? 'покупка' : l.property_type === 'rent' ? 'аренда' : '';
+        const categoryLabel = PROPERTY_CATEGORIES_LEAD.find(c => c.value === l.property_category)?.label.toLowerCase() || '';
+        const budgetFrom = l.budget ?? 0;
+        const budgetTo = l.budget_to ?? 0;
+        const areaFrom = l.area_from ?? 0;
+        const areaTo = l.area_to ?? 0;
+        const budgetMatch = !isNaN(qNum) && qNum > 0 && (
+          (budgetFrom > 0 && budgetFrom <= qNum && (budgetTo === 0 || qNum <= budgetTo)) ||
+          String(budgetFrom).includes(q.replace(/\s/g, '')) ||
+          String(budgetTo).includes(q.replace(/\s/g, ''))
+        );
+        const areaMatch = !isNaN(qNum) && qNum > 0 && (
+          (areaFrom > 0 && areaFrom <= qNum && (areaTo === 0 || qNum <= areaTo)) ||
+          String(areaFrom).includes(q.replace(/\s/g, '')) ||
+          String(areaTo).includes(q.replace(/\s/g, ''))
+        );
         return (
           (l.name || '').toLowerCase().includes(q) ||
           (qDigits && phoneDigits.includes(qDigits)) ||
           (l.message || '').toLowerCase().includes(q) ||
           (l.email || '').toLowerCase().includes(q) ||
-          (l.company || '').toLowerCase().includes(q)
+          (l.company || '').toLowerCase().includes(q) ||
+          typeLabel.includes(q) ||
+          categoryLabel.includes(q) ||
+          (l.utilities || '').toLowerCase().includes(q) ||
+          budgetMatch ||
+          areaMatch
         );
       });
     }
