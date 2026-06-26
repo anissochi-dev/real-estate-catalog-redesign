@@ -140,6 +140,31 @@ function usePredictHint(listingId: number) {
   return { hint, rootRef };
 }
 
+function PhoneRevealButton({ phone }: { phone: string | null }) {
+  const [revealed, setRevealed] = useState(false);
+  if (!phone) return null;
+  if (revealed) {
+    return (
+      <a
+        href={`tel:${phone}`}
+        onClick={e => e.stopPropagation()}
+        className="w-full bg-brand-blue text-white text-[13px] font-bold font-display py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-sm hover:bg-brand-blue/90 transition-colors"
+      >
+        <Icon name="Phone" size={14} /> {phone}
+      </a>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={e => { e.stopPropagation(); setRevealed(true); }}
+      className="w-full border-2 border-brand-blue text-brand-blue text-[13px] font-bold font-display py-2.5 rounded-xl flex items-center justify-center gap-2 hover:bg-brand-blue/5 transition-colors"
+    >
+      <Icon name="Phone" size={14} /> Показать номер
+    </button>
+  );
+}
+
 function getCoverImage(property: PropertyCardProps['property']): string | null {
   if (property.image) return property.image;
   const raw = (property as { images?: string | string[] }).images;
@@ -359,24 +384,8 @@ export default function PropertyCard({
             )}
           </div>
 
-          {/* Кнопка Позвонить — всю ширину. Приоритет: телефон брокера → телефон собственника */}
-          {(property.brokerPhone || property.ownerPhone) ? (
-            <a
-              href={`tel:${property.brokerPhone || property.ownerPhone}`}
-              onClick={e => e.stopPropagation()}
-              className="w-full bg-brand-blue text-white text-[13px] font-bold font-display py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-sm hover:bg-brand-blue/90 transition-colors"
-            >
-              <Icon name="Phone" size={14} /> Позвонить
-            </a>
-          ) : (
-            <a
-              href={href}
-              onClick={e => e.stopPropagation()}
-              className="w-full btn-orange text-white text-[13px] font-bold font-display py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-sm"
-            >
-              Подробнее <Icon name="ArrowRight" size={13} />
-            </a>
-          )}
+          {/* Кнопка показа номера */}
+          <PhoneRevealButton phone={property.brokerPhone || property.ownerPhone || null} />
 
         </div>
       </div>
