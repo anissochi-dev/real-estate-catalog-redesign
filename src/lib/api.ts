@@ -196,7 +196,7 @@ export async function fetchListingById(id: number): Promise<ListingDetail | null
       const data = await res.json();
       const it = data.listing;
       if (!it) return null;
-      const base = mapListing(it);
+      const base = mapApiListing(it);
       const imgs: string[] = (() => {
         if (Array.isArray(it.images)) return it.images;
         if (typeof it.images === 'string' && it.images) {
