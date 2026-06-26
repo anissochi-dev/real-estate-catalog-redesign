@@ -1,10 +1,75 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import PhonePickerInput from '@/components/admin/PhonePickerInput';
 import CharCount from '@/components/ui/CharCount';
 import { Lead, Listing, STATUSES, PROPERTY_TYPES_LEAD, PROPERTY_CATEGORIES_LEAD } from './leadsTypes';
 import SeoHeadingsBlock, { SeoHeadings } from '@/components/admin/SeoHeadingsBlock';
 import { District } from '../districts/DistrictsTypes';
+
+function DistrictDropdown({ districts, selected, onChange }: {
+  districts: District[];
+  selected: number[];
+  onChange: (ids: number[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const toggle = (id: number) =>
+    onChange(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id]);
+
+  const label = selected.length === 0
+    ? 'Выберите районы...'
+    : selected.length === 1
+      ? districts.find(d => d.id === selected[0])?.name || '1 район'
+      : `${selected.length} района(ов)`;
+
+  return (
+    <div ref={ref} className="relative">
+      <label className="text-xs text-muted-foreground mb-1 block">Желаемые районы</label>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-3 py-2 border rounded-lg text-sm bg-white hover:border-brand-blue transition-colors"
+      >
+        <span className={selected.length === 0 ? 'text-muted-foreground' : 'text-foreground'}>
+          {label}
+        </span>
+        <Icon name={open ? 'ChevronUp' : 'ChevronDown'} size={14} className="text-muted-foreground shrink-0" />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-border rounded-xl shadow-lg max-h-56 overflow-y-auto">
+          {selected.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-muted border-b border-border"
+            >
+              Очистить выбор
+            </button>
+          )}
+          {districts.map(d => (
+            <label key={d.id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selected.includes(d.id)}
+                onChange={() => toggle(d.id)}
+                className="accent-brand-blue"
+              />
+              <span className="text-sm">{d.name}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function generateLeadHeadings(lead: Partial<Lead>): SeoHeadings {
   const name = lead.name || 'Клиент';
@@ -156,34 +221,11 @@ export default function LeadEditModal({
 
           {/* Районы */}
           {districts.length > 0 && (
-            <div>
-              <label className="text-xs text-muted-foreground mb-1.5 block">Желаемые районы</label>
-              <div className="flex flex-wrap gap-2">
-                {districts.map(d => {
-                  const selected = (editing.district_ids || []).includes(d.id);
-                  return (
-                    <button
-                      key={d.id}
-                      type="button"
-                      onClick={() => {
-                        const cur = editing.district_ids || [];
-                        setEditing({
-                          ...editing,
-                          district_ids: selected ? cur.filter(id => id !== d.id) : [...cur, d.id],
-                        });
-                      }}
-                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                        selected
-                          ? 'bg-brand-blue text-white border-brand-blue'
-                          : 'bg-white text-foreground border-border hover:border-brand-blue'
-                      }`}
-                    >
-                      {d.name}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <DistrictDropdown
+              districts={districts}
+              selected={editing.district_ids || []}
+              onChange={ids => setEditing({ ...editing, district_ids: ids })}
+            />
           )}
 
           <CharCount as="textarea" rows={5} max={1500} warnAt={1300} placeholder="Текст запроса"
