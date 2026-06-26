@@ -103,7 +103,7 @@ export function NewsListPage() {
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {news.map(n => (
+            {news.filter(n => !!n.slug).map(n => (
               <article
                 key={n.id}
                 onClick={() => navigate(`/news/${n.slug}`)}
