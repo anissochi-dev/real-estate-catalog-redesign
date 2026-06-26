@@ -276,12 +276,12 @@ export default function PropertyCard({
 
           {/* Избранное / сравнение */}
           <div className="absolute right-2 top-2 flex flex-col gap-1.5 z-[5] opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-            <button type="button" onClick={e => { e.preventDefault(); onToggleFavorite(property.id); }}
+            <button type="button" onClick={e => { e.preventDefault(); e.stopPropagation(); onToggleFavorite(property.id); }}
               aria-label="В избранное"
               className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md backdrop-blur-sm transition-all ${isFavorite ? 'bg-red-500 text-white' : 'bg-white/90 text-slate-400 hover:text-red-500'}`}>
               <Icon name="Heart" size={13} className={isFavorite ? 'fill-current' : ''} />
             </button>
-            <button type="button" onClick={e => { e.preventDefault(); onToggleCompare(property.id); }}
+            <button type="button" onClick={e => { e.preventDefault(); e.stopPropagation(); onToggleCompare(property.id); }}
               aria-label="К сравнению"
               className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md backdrop-blur-sm transition-all ${isCompare ? 'bg-brand-orange text-white' : 'bg-white/90 text-slate-400 hover:text-brand-orange'}`}>
               <Icon name="GitCompare" size={13} />
