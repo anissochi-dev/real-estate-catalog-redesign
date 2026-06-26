@@ -63,21 +63,11 @@ type SortKey = 'name' | 'date' | 'budget' | 'status';
 
 export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, search = '', currentUserId, isBroker = false }: Props) {
   const [statusMenuId, setStatusMenuId] = useState<number | null>(null);
-  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const canManageLead = (l: Lead) =>
     !isBroker || (l.broker_id != null && l.broker_id === currentUserId);
-
-  const toggleExpand = (id: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setExpandedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) { next.delete(id); } else { next.add(id); }
-      return next;
-    });
-  };
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -139,7 +129,6 @@ export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, se
             {sorted.map(l => {
               const canManage = canManageLead(l);
               const st = STATUS_STYLE[l.status];
-              const isExpanded = expandedIds.has(l.id);
               const msg = l.message || '';
 
               return (
@@ -194,7 +183,7 @@ export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, se
                   </td>
 
                   {/* Требования */}
-                  <td className="px-4 py-3 max-w-[300px]" onClick={e => e.stopPropagation()}>
+                  <td className="px-4 py-3 max-w-[300px]">
                     {/* Бейджи: тип, категория, площадь, коммуникации */}
                     {(l.property_type || l.property_category || l.area_from || l.area_to || l.utilities) && (
                       <div className="flex flex-wrap gap-1 mb-2">
@@ -223,19 +212,9 @@ export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, se
                       </div>
                     )}
                     {msg ? (
-                      <div>
-                        <p className={`text-[13px] text-foreground/80 leading-relaxed ${isExpanded ? '' : 'line-clamp-2'}`}>
-                          {highlight(msg, search)}
-                        </p>
-                        {msg.length > 100 && (
-                          <button
-                            className="text-[12px] text-brand-blue font-medium mt-1 hover:underline"
-                            onClick={e => toggleExpand(l.id, e)}
-                          >
-                            {isExpanded ? 'Свернуть' : 'Развернуть'}
-                          </button>
-                        )}
-                      </div>
+                      <p className="text-[13px] text-foreground/80 leading-relaxed line-clamp-2">
+                        {highlight(msg, search)}
+                      </p>
                     ) : (
                       <span className="text-[12px] text-muted-foreground italic">Без описания</span>
                     )}
