@@ -13,6 +13,7 @@ import { CATEGORY_META, CATEGORY_SEO_URL, CatSort } from './category/categoryMet
 import CategoryHero from './category/CategoryHero';
 import CategoryToolbar from './category/CategoryToolbar';
 import CategorySeoBlock from './category/CategorySeoBlock';
+import SeoHead from '@/components/SeoHead';
 
 interface Props {
   properties: Property[];
@@ -46,31 +47,6 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
   useEffect(() => { fetchDistricts().then(setDistricts); }, []);
 
   const meta = type ? CATEGORY_META[type] : null;
-
-  useEffect(() => {
-    if (!meta) return;
-    const company = settings.company_name || 'BIZNEST';
-    const title = `${meta.h1} | ${company}`;
-    document.title = title;
-
-    const setMeta = (sel: string, attr: string, val: string) => {
-      let el = document.querySelector(sel);
-      if (!el) { el = document.createElement('meta'); document.head.appendChild(el); }
-      el.setAttribute(attr, val);
-    };
-
-    setMeta('meta[name="description"]', 'content', meta.description);
-    setMeta('meta[property="og:title"]', 'content', title);
-    setMeta('meta[property="og:description"]', 'content', meta.description);
-    setMeta('meta[property="og:type"]', 'content', 'website');
-    setMeta('meta[property="og:url"]', 'content', `${settings.site_url || ''}${window.location.pathname}`);
-    setMeta('meta[name="twitter:title"]', 'content', title);
-    setMeta('meta[name="twitter:description"]', 'content', meta.description);
-
-    return () => {
-      document.title = company;
-    };
-  }, [meta, settings.company_name, settings.site_url]);
 
   // Загружаем AI SEO-текст — один раз при заходе на категорию.
   // Текст кешируется на сервере, поэтому GPT вызывается только при первом посещении.
@@ -182,6 +158,12 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
 
   return (
     <div className="min-h-screen bg-background">
+      <SeoHead
+        path={`/catalog/${type}`}
+        h1={meta.h1}
+        title={meta.h1}
+        description={meta.description}
+      />
       <SchemaOrg schema={itemListSchema} id={`category-${type}`} />
       <SchemaOrg schema={breadcrumbSchema} id={`category-bc-${type}`} />
 
