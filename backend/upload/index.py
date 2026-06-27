@@ -290,12 +290,13 @@ def handler(event, context):
                 'webp': 'image/webp', 'gif': 'image/gif', 'svg': 'image/svg+xml',
             }.get(ext, 'image/jpeg')
 
-            # Конвертируем фото в WebP + масштабируем до 1920px
+            # Конвертируем фото в WebP + масштабируем до 1920px + генерируем thumb 400px
+            thumb_data = None  # будет заполнен если kind=photo
             if kind == 'photo' and ext in ('jpg', 'jpeg', 'png', 'webp'):
                 try:
                     from PIL import Image as PilImage
                     img = PilImage.open(io.BytesIO(data))
-                    # Масштабируем если больше 1920px
+                    # Масштабируем основное фото если больше 1920px
                     max_side = 1920
                     w, h = img.size
                     if max(w, h) > max_side:
@@ -305,23 +306,34 @@ def handler(event, context):
                         img = img.convert('RGBA')
                     else:
                         img = img.convert('RGB')
-                    # Пробуем WebP
+                    # Основное фото — WebP quality=82
                     buf_webp = io.BytesIO()
                     img.save(buf_webp, format='WEBP', quality=82, method=4)
                     webp_data = buf_webp.getvalue()
                     if len(webp_data) < len(data):
-                        # WebP лучше — берём его
                         data = webp_data
                         ext = 'webp'
                         content_type = 'image/webp'
                     else:
-                        # WebP не выиграл — сохраняем масштабированный JPEG
                         buf_jpg = io.BytesIO()
                         img.convert('RGB').save(buf_jpg, format='JPEG', quality=85, optimize=True)
                         jpg_data = buf_jpg.getvalue()
                         if len(jpg_data) < len(data):
                             data = jpg_data
-                        # ext остаётся jpg, масштабирование применено
+
+                    # Thumb 400px — для списков (каталог, главная, районы, категории)
+                    THUMB_SIDE = 400
+                    tw, th = img.size
+                    if max(tw, th) > THUMB_SIDE:
+                        t_scale = THUMB_SIDE / max(tw, th)
+                        thumb_img = img.resize(
+                            (int(tw * t_scale), int(th * t_scale)), PilImage.LANCZOS
+                        )
+                    else:
+                        thumb_img = img
+                    buf_thumb = io.BytesIO()
+                    thumb_img.save(buf_thumb, format='WEBP', quality=72, method=4)
+                    thumb_data = buf_thumb.getvalue()
                 except Exception:
                     pass  # если Pillow не смог — грузим оригинал
 
@@ -340,6 +352,27 @@ def handler(event, context):
             original_ct = content_type
             wm_applied = False
 
+            # Сохраняем thumb 400px в S3 (всегда для kind=photo)
+            thumb_url = None
+            if thumb_data:
+                thumb_key = f"{folder}/{token12}_thumb.webp"
+                try:
+                    s3.put_object(
+                        Bucket='files', Key=thumb_key, Body=thumb_data,
+                        ContentType='image/webp', CacheControl='public, max-age=31536000'
+                    )
+                    thumb_url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{thumb_key}"
+                    try:
+                        cur.execute(
+                            f"INSERT INTO {SCHEMA}.s3_photo_refs (s3_key, cdn_url, is_orphan) "
+                            f"VALUES (%s, %s, TRUE) ON CONFLICT (s3_key) DO NOTHING",
+                            (thumb_key, thumb_url)
+                        )
+                    except Exception:
+                        pass
+                except Exception:
+                    thumb_url = None
+
             # Если фото и нужен водяной знак — накладываем + сохраняем ОТДЕЛЬНО оригинал
             if kind == 'photo' and apply_wm and ext in ('jpg', 'jpeg', 'png', 'webp'):
                 cur.execute(
@@ -350,17 +383,14 @@ def handler(event, context):
                 if wm_row and wm_row.get('watermark_enabled') and wm_row.get('watermark_url'):
                     wm_data = _apply_watermark(data, dict(wm_row))
                     if wm_data and wm_data != data:
-                        # Сохраняем версию с водяным знаком как основной файл
                         wm_key = f"{folder}/{token12}_wm.webp"
                         s3.put_object(Bucket='files', Key=wm_key, Body=wm_data, ContentType='image/webp')
-                        # Сохраняем оригинал (сжатый, без ВЗ) для скачивания
                         orig_key = f"{folder}/{token12}.{original_ext}"
                         s3.put_object(Bucket='files', Key=orig_key, Body=original_data, ContentType=original_ct)
 
                         wm_applied = True
                         url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{wm_key}"
                         original_url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{orig_key}"
-                        # Регистрируем оба ключа как сиротские — прикрепятся при сохранении объекта
                         for _k, _u in [(wm_key, url), (orig_key, original_url)]:
                             try:
                                 cur.execute(
@@ -374,6 +404,7 @@ def handler(event, context):
                         return _ok({
                             'url': url,
                             'original_url': original_url,
+                            'thumb_url': thumb_url,
                             'watermarked': True,
                             'size': len(wm_data),
                         })
@@ -383,7 +414,6 @@ def handler(event, context):
                 key = f"{folder}/{token12}.{ext}"
                 s3.put_object(Bucket='files', Key=key, Body=data, ContentType=content_type)
                 url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{key}"
-                # Регистрируем как сиротский — прикрепится при сохранении объекта
                 try:
                     cur.execute(
                         f"INSERT INTO {SCHEMA}.s3_photo_refs (s3_key, cdn_url, is_orphan) "
@@ -393,6 +423,12 @@ def handler(event, context):
                     conn.commit()
                 except Exception:
                     pass
-                return _ok({'url': url, 'original_url': url, 'watermarked': False, 'size': len(data)})
+                return _ok({
+                    'url': url,
+                    'original_url': url,
+                    'thumb_url': thumb_url,
+                    'watermarked': False,
+                    'size': len(data),
+                })
     finally:
         conn.close()

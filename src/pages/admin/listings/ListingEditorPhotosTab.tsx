@@ -73,6 +73,7 @@ export default function ListingEditorPhotosTab({ editing, setEditing, photos, se
         <ImageUploader
           value={photos}
           onChange={p => { setPhotos(p); setErrors(v => ({ ...v, photos: false })); }}
+          onThumbChange={thumbUrl => setEditing({ ...editing, image_thumb: thumbUrl })}
           folder="photos"
           multiple
           applyWatermark={!!editing.use_watermark}

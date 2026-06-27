@@ -443,6 +443,7 @@ export interface UploadResult {
   url: string;
   originalUrl: string;
   watermarked: boolean;
+  thumbUrl?: string;
 }
 
 /** Расширенная загрузка — возвращает url (с ВЗ), original_url (без ВЗ), watermarked.
@@ -485,6 +486,7 @@ export async function uploadFileEx(
         url: data.url as string,
         originalUrl: (data.original_url as string) || (data.url as string),
         watermarked: !!data.watermarked,
+        thumbUrl: (data.thumb_url as string) || undefined,
       };
     }
     if (RETRYABLE.has(res.status)) {

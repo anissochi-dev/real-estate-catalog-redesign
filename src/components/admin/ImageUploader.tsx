@@ -12,6 +12,7 @@ const MAX_FILES = 30;
 interface Props {
   value: string[];
   onChange: (urls: string[]) => void;
+  onThumbChange?: (thumbUrl: string) => void;
   folder?: 'photos' | 'logo' | 'watermark';
   multiple?: boolean;
   className?: string;
@@ -63,6 +64,7 @@ async function compressImage(file: File): Promise<File> {
 export default function ImageUploader({
   value,
   onChange,
+  onThumbChange,
   folder = 'photos',
   multiple = true,
   className = '',
@@ -189,6 +191,7 @@ export default function ImageUploader({
     // Это исключает stale closure: мы не читаем value внутри цикла.
     const uploaded: string[] = [];
     const failed: string[] = [];
+    let firstThumbUrl: string | undefined;
 
     for (const f of arr) {
       try {
@@ -196,6 +199,8 @@ export default function ImageUploader({
         const needWm = !!(applyWatermark && settings.watermark_enabled && settings.watermark_url);
         const r = await uploadFileEx(compressed, folder, needWm);
         uploaded.push(r.url);
+        // Сохраняем thumb первого загруженного фото (обложка списков)
+        if (!firstThumbUrl && r.thumbUrl) firstThumbUrl = r.thumbUrl;
       } catch {
         failed.push(f.name);
       }
@@ -205,9 +210,12 @@ export default function ImageUploader({
     setUploading(false);
 
     if (uploaded.length > 0) {
-      // Читаем актуальный список через ref — он обновлялся через useEffect
       const base = multiple ? valueRef.current : [];
       onChange(multiple ? [...base, ...uploaded] : uploaded.slice(0, 1));
+      // Если это первая загрузка фото (список был пуст) — сохраняем thumb
+      if (firstThumbUrl && onThumbChange && base.length === 0) {
+        onThumbChange(firstThumbUrl);
+      }
     }
     if (failed.length > 0) {
       toast.error(
