@@ -2361,53 +2361,72 @@ def _handle_reverse(params: dict) -> dict:
     except (TypeError, ValueError):
         return _err('Укажите lat и lng', 400)
 
-    dadata_key = os.environ.get('DADATA_API_KEY', '')
-    dadata_secret = os.environ.get('DADATA_SECRET_KEY', '')
-    if not dadata_key:
-        return _err('DADATA_API_KEY не настроен', 500)
+    api_key = os.environ.get('YANDEX_GEOCODER_KEY', '')
+    if not api_key:
+        return _err('YANDEX_GEOCODER_KEY не настроен', 500)
 
-    # DaData reverse geocoding: координаты → адрес
-    payload = json.dumps({'lat': lat, 'lon': lng, 'count': 1}).encode('utf-8')
-    req = urllib.request.Request(
-        'https://suggestions.dadata.ru/suggestions/api/4_1/rs/geolocate/address',
-        data=payload,
-        headers={
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': f'Token {dadata_key}',
-            'X-Secret': dadata_secret,
-        },
-        method='POST',
+    # Яндекс HTTP Geocoder: координаты передаются как lon,lat
+    url = (
+        f'https://geocode-maps.yandex.ru/1.x/'
+        f'?apikey={api_key}'
+        f'&geocode={lng},{lat}'
+        f'&format=json&results=1&lang=ru_RU'
+        f'&kind=house'
     )
+    req = urllib.request.Request(url, headers={
+        'User-Agent': 'Mozilla/5.0 (compatible; YandexGeoBot/1.0)',
+        'Referer': 'https://yandex.ru/maps/',
+        'Accept': 'application/json',
+    })
     with urllib.request.urlopen(req, timeout=10) as resp:
-        data = json.loads(resp.read().decode('utf-8'))
+        status = resp.status
+        raw = resp.read().decode('utf-8')
 
-    suggestions = data.get('suggestions', [])
-    if not suggestions:
+    print(f'[reverse] Яндекс status={status} lat={lat} lng={lng}')
+    if status == 403:
+        return _err('Яндекс: 403 — проверьте ключ YANDEX_GEOCODER_KEY', 403)
+    if status != 200:
+        return _err(f'Яндекс ответил {status}', status)
+
+    data = json.loads(raw)
+    members = (
+        data.get('response', {})
+            .get('GeoObjectCollection', {})
+            .get('featureMember', [])
+    )
+    if not members:
         return _ok({'found': False, 'address': '', 'street': '', 'house': '', 'settlement': '', 'district': ''})
 
-    s = suggestions[0]
-    d = s.get('data', {}) or {}
-    value = s.get('value', '')
+    obj = members[0].get('GeoObject', {})
+    meta = obj.get('metaDataProperty', {}).get('GeocoderMetaData', {})
+    addr_obj = meta.get('Address', {})
+    components = addr_obj.get('Components', [])
+    formatted = addr_obj.get('formatted', '')
+
+    print(f'[reverse] компоненты: {[(c.get("kind"), c.get("name")) for c in components]}')
 
     # Убираем федеральные уровни
     for prefix in ['Россия, ', 'Краснодарский край, ']:
-        if value.startswith(prefix):
-            value = value[len(prefix):]
-    value = re.sub(r'^[А-ЯЁа-яё\s-]+ (район|р-н), ', '', value)
+        if formatted.startswith(prefix):
+            formatted = formatted[len(prefix):]
+    formatted = re.sub(r'^[А-ЯЁа-яё\s-]+ (район|р-н), ', '', formatted)
 
-    street_type = d.get('street_type_full', '') or d.get('street_type', '')
-    street_name = d.get('street', '')
-    street = f'{street_type} {street_name}'.strip() if street_name else ''
-    house = d.get('house', '')
-    settlement = d.get('settlement_with_type') or d.get('settlement') or ''
-    district = d.get('city_district_with_type') or d.get('city_district') or ''
+    street = next((c['name'] for c in components if c.get('kind') == 'street'), '')
+    house = next((c['name'] for c in components if c.get('kind') == 'house'), '')
+    # Населённый пункт отличный от основного города
+    MAIN_CITIES = {'Краснодар', 'Сочи', 'Анапа', 'Геленджик', 'Новороссийск', 'Армавир'}
+    locality = next((c['name'] for c in components if c.get('kind') == 'locality'), '')
+    settlement = locality if locality and locality not in MAIN_CITIES else ''
+    dists = [c['name'] for c in components if c.get('kind') == 'district']
+    district = (
+        next((n for n in dists if re.search(r'микрорайон|мкр|квартал|жилмассив', n, re.I)), None)
+        or (dists[-1] if dists else '')
+    )
 
-    # Итоговый адрес: посёлок + улица + дом
     built = ', '.join(filter(None, [settlement, street, house]))
-    final_address = built or value
+    final_address = built or formatted
 
-    print(f'[reverse] lat={lat} lng={lng} → "{final_address}" district="{district}"')
+    print(f'[reverse] → "{final_address}" district="{district}"')
 
     return _ok({
         'found': True,
