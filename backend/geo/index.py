@@ -115,24 +115,37 @@ def _handle_suggest(event: dict, cur) -> dict:
     api_key = os.environ.get('DADATA_API_KEY', '')
     secret_key = os.environ.get('DADATA_SECRET_KEY', '')
 
-    payload = json.dumps({
-        'query': f'{city}, {query}', 'count': 8,
+    # Ищем сначала в черте города, потом по всему региону — объединяем результаты
+    payload_city = json.dumps({
+        'query': f'{city}, {query}', 'count': 6,
         'locations': [{'city': city}], 'restrict_value': False,
     }).encode('utf-8')
+    payload_region = json.dumps({
+        'query': query, 'count': 4,
+        'locations': [{'region': 'Краснодарский край'}], 'restrict_value': False,
+    }).encode('utf-8')
 
-    req = urllib.request.Request(
-        'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address',
-        data=payload,
-        headers={'Content-Type': 'application/json', 'Accept': 'application/json',
-                 'Authorization': f'Token {api_key}', 'X-Secret': secret_key},
-        method='POST',
-    )
-    with urllib.request.urlopen(req, timeout=10) as resp:
-        data = json.loads(resp.read().decode('utf-8'))
+    def _dadata_suggest(payload_bytes):
+        req = urllib.request.Request(
+            'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address',
+            data=payload_bytes,
+            headers={'Content-Type': 'application/json', 'Accept': 'application/json',
+                     'Authorization': f'Token {api_key}', 'X-Secret': secret_key},
+            method='POST',
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read().decode('utf-8')).get('suggestions', [])
+
+    city_results = _dadata_suggest(payload_city)
+    region_results = _dadata_suggest(payload_region)
+
+    # Объединяем: сначала городские, потом региональные без дублей
+    seen_values = {s.get('value') for s in city_results}
+    combined = city_results + [s for s in region_results if s.get('value') not in seen_values]
 
     rules = _load_street_rules(cur)
     suggestions = []
-    for s in data.get('suggestions', []):
+    for s in combined:
         value = s.get('value', '')
         d = s.get('data', {})
         street = d.get('street', '') or ''
@@ -2371,7 +2384,6 @@ def _handle_reverse(params: dict) -> dict:
         f'?apikey={api_key}'
         f'&geocode={lng},{lat}'
         f'&format=json&results=1&lang=ru_RU'
-        f'&kind=house'
     )
     req = urllib.request.Request(url, headers={
         'User-Agent': 'Mozilla/5.0 (compatible; YandexGeoBot/1.0)',
@@ -2395,6 +2407,7 @@ def _handle_reverse(params: dict) -> dict:
             .get('featureMember', [])
     )
     if not members:
+        print(f'[reverse] пустой ответ Яндекса для lat={lat} lng={lng}, raw_snippet={raw[:300]}')
         return _ok({'found': False, 'address': '', 'street': '', 'house': '', 'settlement': '', 'district': ''})
 
     obj = members[0].get('GeoObject', {})
@@ -2413,10 +2426,15 @@ def _handle_reverse(params: dict) -> dict:
 
     street = next((c['name'] for c in components if c.get('kind') == 'street'), '')
     house = next((c['name'] for c in components if c.get('kind') == 'house'), '')
-    # Населённый пункт отличный от основного города
+    # Населённый пункт: берём все locality, последний — самый конкретный (посёлок/станица внутри города)
     MAIN_CITIES = {'Краснодар', 'Сочи', 'Анапа', 'Геленджик', 'Новороссийск', 'Армавир'}
-    locality = next((c['name'] for c in components if c.get('kind') == 'locality'), '')
-    settlement = locality if locality and locality not in MAIN_CITIES else ''
+    localities = [c['name'] for c in components if c.get('kind') == 'locality']
+    # Если несколько locality — последний это посёлок/КП внутри города
+    settlement = ''
+    if len(localities) >= 2:
+        settlement = localities[-1]
+    elif len(localities) == 1 and localities[0] not in MAIN_CITIES:
+        settlement = localities[0]
     dists = [c['name'] for c in components if c.get('kind') == 'district']
     district = (
         next((n for n in dists if re.search(r'микрорайон|мкр|квартал|жилмассив', n, re.I)), None)

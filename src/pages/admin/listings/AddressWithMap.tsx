@@ -264,11 +264,13 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
       const meta = obj.properties?.get?.('metaDataProperty')?.GeocoderMetaData;
       const comps: { kind: string; name: string }[] = meta?.Address?.Components || [];
       // Населённый пункт внутри города (посёлок, станица, хутор и т.д.)
-      const localityComp = comps.find(p => p.kind === 'locality');
-      const cityComp = comps.find(p => p.kind === 'province' && /город/i.test(p.name));
-      // Если locality отличается от основного города — это посёлок/станица
-      if (localityComp && localityComp.name !== currentCity && localityComp.name !== cityComp?.name) {
-        settlement = localityComp.name;
+      const MAIN_CITIES = new Set(['Краснодар', 'Сочи', 'Анапа', 'Геленджик', 'Новороссийск', 'Армавир']);
+      const localities = comps.filter(p => p.kind === 'locality').map(p => p.name);
+      // Если несколько locality — последний самый конкретный (посёлок/КП внутри города)
+      if (localities.length >= 2) {
+        settlement = localities[localities.length - 1];
+      } else if (localities.length === 1 && !MAIN_CITIES.has(localities[0])) {
+        settlement = localities[0];
       }
       const dists = comps.filter(p => p.kind === 'district').map(p => p.name);
       microdistrict = dists.find(n => /микрорайон|мкр|квартал|жилмассив/i.test(n))
