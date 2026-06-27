@@ -142,16 +142,19 @@ def _handle_suggest(event: dict, cur) -> dict:
         district = _find_district(street, house_num, rules) or ''
 
         short = value
-        for prefix in ['Россия, ', 'Краснодарский край, ', f'г {city}, ', f'г. {city}, ', f'{city}, ']:
+        # 1. Убираем федеральный/региональный уровень
+        for prefix in ['Россия, ', 'Краснодарский край, ']:
             while short.startswith(prefix):
                 short = short[len(prefix):]
-        # Если после обрезки начинается населённый пункт (п., пгт., с., ст., х., мкр.) —
-        # оставляем его как часть адреса, не обрезаем
-        settlement_prefixes = ('п. ', 'пгт. ', 'с. ', 'ст. ', 'х. ', 'мкр. ', 'пос. ', 'снт. ')
-        # Дополнительно убираем «городской округ Краснодар, » если он остался
-        for okrug_prefix in [f'городской округ {city}, ', f'г.о. {city}, ']:
+        # 2. Убираем «городской округ Краснодар, » и «г Краснодар, »
+        for okrug_prefix in [f'городской округ {city}, ', f'г.о. {city}, ', f'г {city}, ', f'г. {city}, ', f'{city}, ']:
             if short.startswith(okrug_prefix):
                 short = short[len(okrug_prefix):]
+                break
+        # 3. Убираем «<Район> район, » / «<Район> р-н, » — НО сохраняем населённый пункт после него
+        # Пример: «Динской район, ст. Динская, ул. ...» → «ст. Динская, ул. ...»
+        #          «Павловский район, г. Павловская, ул. ...» → «г. Павловская, ул. ...»
+        short = re.sub(r'^[А-ЯЁа-яё\s\-]+ (район|р-н), ', '', short)
 
         suggestions.append({
             'value': short, 'full': value,
