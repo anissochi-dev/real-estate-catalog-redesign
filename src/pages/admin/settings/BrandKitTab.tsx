@@ -89,19 +89,19 @@ export default function BrandKitTab({ s, setS, saved, save }: Props) {
 
         <div>
           <label className="text-sm font-semibold block mb-1">Favicon (вкладка браузера)</label>
-          <ImageUploader value={s.favicon_url || ''} onChange={v => setS({ ...s, favicon_url: v })} />
+          <ImageUploader value={s.favicon_url ? [s.favicon_url] : []} multiple={false} onChange={v => setS({ ...s, favicon_url: v[0] || '' })} />
           <div className="text-xs text-muted-foreground mt-1">PNG 32×32 или 64×64. Показывается во вкладке браузера.</div>
         </div>
 
         <div>
           <label className="text-sm font-semibold block mb-1">Apple Touch Icon</label>
-          <ImageUploader value={s.apple_touch_icon_url || ''} onChange={v => setS({ ...s, apple_touch_icon_url: v })} />
+          <ImageUploader value={s.apple_touch_icon_url ? [s.apple_touch_icon_url] : []} multiple={false} onChange={v => setS({ ...s, apple_touch_icon_url: v[0] || '' })} />
           <div className="text-xs text-muted-foreground mt-1">PNG 180×180. Иконка при добавлении сайта на главный экран iPhone/iPad.</div>
         </div>
 
         <div>
           <label className="text-sm font-semibold block mb-1">Open Graph картинка (превью при репосте)</label>
-          <ImageUploader value={s.og_image_url || ''} onChange={v => setS({ ...s, og_image_url: v })} />
+          <ImageUploader value={s.og_image_url ? [s.og_image_url] : []} multiple={false} onChange={v => setS({ ...s, og_image_url: v[0] || '' })} />
           <div className="text-xs text-muted-foreground mt-1">1200×630 px. Показывается при шаринге ссылки в соцсетях и мессенджерах.</div>
         </div>
       </div>
