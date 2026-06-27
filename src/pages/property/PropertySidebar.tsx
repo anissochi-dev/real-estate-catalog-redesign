@@ -17,15 +17,17 @@ export default function PropertySidebar({ item, agents }: Props) {
           <div className="text-xs text-muted-foreground mb-1 font-medium uppercase tracking-wide">
             {DEAL_LABELS[item.deal] || item.deal}
           </div>
-          <div className="font-display font-900 text-3xl text-brand-blue leading-none tracking-tight">
-            {item.price.toLocaleString('ru')} ₽{item.deal === 'rent' ? '/мес' : ''}
-          </div>
-          {item.pricePerM2 ? (
-            <div className="flex items-center gap-1.5 mt-2">
-              <Icon name="Scaling" size={12} className="text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">{item.pricePerM2.toLocaleString('ru')} ₽/м²</span>
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <div className="font-display font-900 text-3xl text-brand-blue leading-none tracking-tight">
+              {item.price.toLocaleString('ru')} ₽{item.deal === 'rent' ? '/мес' : ''}
             </div>
-          ) : null}
+            {item.pricePerM2 ? (
+              <div className="flex items-center gap-1 shrink-0">
+                <Icon name="Scaling" size={12} className="text-muted-foreground" />
+                <span className="text-sm text-muted-foreground whitespace-nowrap">{item.pricePerM2.toLocaleString('ru')} ₽/м²</span>
+              </div>
+            ) : null}
+          </div>
         </div>
         <div className="px-5 py-2.5 bg-muted/40 border-t border-border flex items-center gap-2">
           <Icon name="Hash" size={12} className="text-muted-foreground" />
