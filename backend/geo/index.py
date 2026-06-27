@@ -103,143 +103,159 @@ def _find_district(street: str, house_num, rules: list) -> str | None:
 
 # ── action=suggest ────────────────────────────────────────────────────────────
 
+MAIN_CITIES = {'Краснодар', 'Сочи', 'Анапа', 'Геленджик', 'Новороссийск', 'Армавир',
+               'Краснодар г', 'Сочи г', 'Анапа г'}
+
+
+def _yandex_geocode_suggest(query: str, api_key: str, results: int = 8) -> list:
+    """
+    Поиск адресов через Яндекс HTTP Геокодер по всему Краснодарскому краю.
+    Возвращает список dict: { value, full, lat, lon, district, street, house, settlement }
+    """
+    import urllib.parse as _up
+    yq = _up.quote(f'Краснодарский край, {query}')
+    url = (
+        f'https://geocode-maps.yandex.ru/1.x/?apikey={api_key}'
+        f'&geocode={yq}&format=json&results={results}&lang=ru_RU'
+        # bbox Краснодарского края — чтобы не выходить за регион
+        f'&ll=38.9753,45.0355&spn=5.0,4.0'
+    )
+    req = urllib.request.Request(url, headers={
+        'User-Agent': 'Mozilla/5.0 (compatible)',
+        'Referer': 'https://yandex.ru/maps/',
+        'Accept': 'application/json',
+    })
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        data = json.loads(resp.read().decode('utf-8'))
+
+    members = data.get('response', {}).get('GeoObjectCollection', {}).get('featureMember', [])
+    results_list = []
+    for m in members:
+        obj = m.get('GeoObject', {})
+        meta = obj.get('metaDataProperty', {}).get('GeocoderMetaData', {})
+        addr_obj = meta.get('Address', {})
+        comps = addr_obj.get('Components', [])
+        formatted = addr_obj.get('formatted', '')
+
+        # Пропускаем объекты не из Краснодарского края
+        provinces = [c['name'] for c in comps if c.get('kind') == 'province']
+        if 'Краснодарский край' not in provinces:
+            continue
+
+        pos = obj.get('Point', {}).get('pos', '')
+        if not pos:
+            continue
+        lon_s, lat_s = pos.split()
+
+        # Компоненты адреса
+        street = next((c['name'] for c in comps if c.get('kind') == 'street'), '')
+        house  = next((c['name'] for c in comps if c.get('kind') == 'house'), '')
+        locs   = [c['name'] for c in comps if c.get('kind') == 'locality']
+        # settlement — последний locality если он не совпадает с основным городом
+        settlement = ''
+        if len(locs) >= 2:
+            settlement = locs[-1]
+        elif len(locs) == 1 and locs[0] not in MAIN_CITIES:
+            settlement = locs[0]
+
+        # Район из district-компонентов
+        dists = [c['name'] for c in comps if c.get('kind') == 'district']
+        district = (
+            next((n for n in dists if re.search(r'микрорайон|мкр|квартал|жилмассив', n, re.I)), None)
+            or (dists[-1] if dists else '')
+        )
+
+        # Чистый адрес для отображения: убираем федеральные/региональные уровни
+        short = formatted
+        for pfx in ['Россия, ', 'Краснодарский край, ']:
+            if short.startswith(pfx):
+                short = short[len(pfx):]
+        # Убираем «городской округ X, » / «г X, » / «X, »
+        short = re.sub(r'^городской округ [^,]+, ', '', short)
+        short = re.sub(r'^г\.?\s?о\.?\s+[^,]+, ', '', short)
+        short = re.sub(r'^г\.?\s+[^,]+, ', '', short)
+        # Убираем «<Район> район/р-н, » — но сохраняем населённый пункт
+        short = re.sub(r'^[А-ЯЁа-яё\s-]+ (район|р-н), ', '', short)
+
+        # Итоговое значение — собранный короткий адрес или очищенный formatted
+        built = ', '.join(filter(None, [settlement, street, house]))
+        value = built or short
+
+        results_list.append({
+            'value': value,
+            'full': formatted,
+            'lat': float(lat_s),
+            'lon': float(lon_s),
+            'district': district,
+            'street': street,
+            'house': house,
+            'settlement': settlement,
+        })
+
+    return results_list
+
+
 def _handle_suggest(event: dict, cur) -> dict:
+    """
+    Подсказки адресов через Яндекс Геокодер по Краснодарскому краю.
+    GET ?query=Красная 1&city=Краснодар
+    """
     params = event.get('queryStringParameters') or {}
     query = params.get('query', '').strip()
-    city = params.get('city', 'Краснодар').strip()
+    city  = params.get('city', 'Краснодар').strip()
 
     if not query:
         return {'statusCode': 200, 'headers': {**CORS, 'Content-Type': 'application/json'},
                 'body': json.dumps([], ensure_ascii=False)}
 
-    api_key = os.environ.get('DADATA_API_KEY', '')
-    secret_key = os.environ.get('DADATA_SECRET_KEY', '')
+    api_key = os.environ.get('YANDEX_GEOCODER_KEY', '')
+    if not api_key:
+        return {'statusCode': 200, 'headers': {**CORS, 'Content-Type': 'application/json'},
+                'body': json.dumps([], ensure_ascii=False)}
 
-    # Ищем сначала в черте города, потом в городском округе (включает пригороды/посёлки)
-    payload_city = json.dumps({
-        'query': f'{city}, {query}', 'count': 6,
-        'locations': [{'city': city}], 'restrict_value': False,
-    }).encode('utf-8')
-    # Расширенный поиск БЕЗ locations — единственный способ найти п. Южный,
-    # ст. Елизаветинская и другие пригороды вне черты города
-    payload_okrug = json.dumps({
-        'query': f'Краснодарский край, {city}, {query}',
-        'count': 4,
-        'restrict_value': False,
-        # Без поля locations — DaData ищет по всей базе
-    }).encode('utf-8')
+    try:
+        raw = _yandex_geocode_suggest(query, api_key, results=8)
+    except Exception as e:
+        print(f'[suggest] Яндекс error: {e}')
+        return {'statusCode': 200, 'headers': {**CORS, 'Content-Type': 'application/json'},
+                'body': json.dumps([], ensure_ascii=False)}
 
-    def _dadata_suggest(payload_bytes):
-        req = urllib.request.Request(
-            'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address',
-            data=payload_bytes,
-            headers={'Content-Type': 'application/json', 'Accept': 'application/json',
-                     'Authorization': f'Token {api_key}', 'X-Secret': secret_key},
-            method='POST',
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read().decode('utf-8')).get('suggestions', [])
+    # Сортируем: сначала результаты из выбранного города, потом остальной край
+    def _is_from_city(s):
+        full = s.get('full', '')
+        val  = s.get('value', '')
+        return (f', {city},' in full or full.endswith(f', {city}')
+                or val.startswith(f'{city},') or f'округ {city},' in full
+                or (not s.get('settlement') and city in full))
+    raw.sort(key=lambda s: (0 if _is_from_city(s) else 1))
 
-    city_results = _dadata_suggest(payload_city)
-    okrug_results = _dadata_suggest(payload_okrug)
-
-    # Дополнительно: Яндекс геокодер для пригородов (п. Южный и т.д.)
-    yandex_results = []
-    yandex_key = os.environ.get('YANDEX_GEOCODER_KEY', '')
-    # Запускаем Яндекс если в запросе есть признак пригорода (посёлок, станица, хутор и т.д.)
-    _suburb_hint = bool(re.search(r'южн|елизавет|старокорсун|новознамен|лазурн|пашковск|дачн|пос\.|п\.|ст-ца|ст\.|хут|станиц|поселок|посёлок', query, re.I))
-    if yandex_key and (_suburb_hint or not city_results):
-        try:
-            import urllib.parse as _up
-            # Для пригородов ищем без привязки к городу — только Краснодарский край
-            yq = _up.quote(f'Краснодарский край, {query}')
-            yurl = (
-                f'https://geocode-maps.yandex.ru/1.x/?apikey={yandex_key}'
-                f'&geocode={yq}&format=json&results=5&lang=ru_RU'
-                f'&ll=38.9753,45.0355&spn=2.0,2.0'
-            )
-            yreq = urllib.request.Request(yurl, headers={
-                'User-Agent': 'Mozilla/5.0', 'Referer': 'https://yandex.ru/maps/',
-            })
-            with urllib.request.urlopen(yreq, timeout=8) as yr:
-                ydata = json.loads(yr.read().decode('utf-8'))
-            members = ydata.get('response', {}).get('GeoObjectCollection', {}).get('featureMember', [])
-            for m in members:
-                obj = m.get('GeoObject', {})
-                meta = obj.get('metaDataProperty', {}).get('GeocoderMetaData', {})
-                addr = meta.get('Address', {})
-                comps = addr.get('Components', [])
-                formatted = addr.get('formatted', '')
-                # Убираем федеральные уровни
-                for pfx in ['Россия, ', 'Краснодарский край, ']:
-                    if formatted.startswith(pfx):
-                        formatted = formatted[len(pfx):]
-                formatted = re.sub(r'^[А-ЯЁа-яё\s-]+ (район|р-н), ', '', formatted)
-                pos = obj.get('Point', {}).get('pos', '')
-                if not pos:
-                    continue
-                lon_s, lat_s = pos.split()
-                street = next((c['name'] for c in comps if c.get('kind') == 'street'), '')
-                house = next((c['name'] for c in comps if c.get('kind') == 'house'), '')
-                MAIN = {'Краснодар', 'Сочи', 'Анапа', 'Геленджик', 'Новороссийск', 'Армавир'}
-                locs = [c['name'] for c in comps if c.get('kind') == 'locality']
-                settlement = locs[-1] if len(locs) >= 2 else (locs[0] if locs and locs[0] not in MAIN else '')
-                short_addr = ', '.join(filter(None, [settlement, street, house])) or formatted
-                if short_addr and short_addr not in {s.get('value') for s in city_results + okrug_results}:
-                    yandex_results.append({
-                        'value': short_addr, 'full': formatted,
-                        'lat': float(lat_s), 'lon': float(lon_s),
-                        'district': '',
-                        '_from_yandex': True,
-                    })
-        except Exception as e:
-            print(f'[suggest] yandex fallback error: {e}')
-
-    # Объединяем: сначала городские DaData, потом из округа, потом Яндекс
-    seen_values = {s.get('value') for s in city_results}
-    combined = city_results
-    for s in okrug_results + yandex_results:
-        if s.get('value') not in seen_values:
-            seen_values.add(s.get('value'))
-            combined.append(s)
-
+    # Подставляем район из нашего справочника улиц если Яндекс не дал
     rules = _load_street_rules(cur)
     suggestions = []
-    for s in combined:
-        value = s.get('value', '')
-        d = s.get('data', {})
-        street = d.get('street', '') or ''
-        house_str = d.get('house', '') or ''
-        m = re.match(r'(\d+)', house_str)
-        house_num = int(m.group(1)) if m else None
-        district = _find_district(street, house_num, rules) or ''
+    seen = set()
+    for s in raw:
+        val = s['value']
+        if val in seen:
+            continue
+        seen.add(val)
 
-        short = value
-        # 1. Убираем федеральный/региональный уровень
-        for prefix in ['Россия, ', 'Краснодарский край, ']:
-            while short.startswith(prefix):
-                short = short[len(prefix):]
-        # 2. Убираем «городской округ Краснодар, » и «г Краснодар, »
-        for okrug_prefix in [f'городской округ {city}, ', f'г.о. {city}, ', f'г {city}, ', f'г. {city}, ', f'{city}, ']:
-            if short.startswith(okrug_prefix):
-                short = short[len(okrug_prefix):]
-                break
-        # 3. Убираем «<Район> район, » / «<Район> р-н, » — НО сохраняем населённый пункт после него
-        # Пример: «Динской район, ст. Динская, ул. ...» → «ст. Динская, ул. ...»
-        #          «Павловский район, г. Павловская, ул. ...» → «г. Павловская, ул. ...»
-        short = re.sub(r'^[А-ЯЁа-яё\s\-]+ (район|р-н), ', '', short)
+        district = s.get('district', '')
+        if not district:
+            street_name = s.get('street', '')
+            house_str   = s.get('house', '')
+            m = re.match(r'(\d+)', house_str)
+            house_num = int(m.group(1)) if m else None
+            district = _find_district(street_name, house_num, rules) or ''
 
-        # Координаты: из DaData data или из Яндекс-результата напрямую
-        lat_val = float(d['geo_lat']) if d.get('geo_lat') else s.get('lat')
-        lon_val = float(d['geo_lon']) if d.get('geo_lon') else s.get('lon')
-        # Для Яндекс-результатов district уже проставлен, для DaData ищем по справочнику
-        dist_val = s.get('district') if s.get('_from_yandex') else district
         suggestions.append({
-            'value': short, 'full': s.get('full', value),
-            'lat': lat_val, 'lon': lon_val,
-            'district': dist_val,
+            'value':    val,
+            'full':     s.get('full', val),
+            'lat':      s.get('lat'),
+            'lon':      s.get('lon'),
+            'district': district,
         })
 
+    print(f'[suggest] query="{query}" city="{city}" → {len(suggestions)} результатов')
     return {'statusCode': 200, 'headers': {**CORS, 'Content-Type': 'application/json'},
             'body': json.dumps(suggestions, ensure_ascii=False)}
 
