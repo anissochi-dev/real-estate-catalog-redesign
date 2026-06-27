@@ -181,22 +181,15 @@ export default function YandexMap({
 
     placemarkMapRef.current.clear();
     valid.forEach(p => {
-      const openUrl = p.url || '';
       const placemark = new window.ymaps.Placemark(
         [p.lat, p.lng],
-        {
-          balloonContentHeader: p.title || '',
-          balloonContentBody: `<div style="font-size:13px;color:#555;margin-bottom:6px">${p.caption || ''}</div>${openUrl ? `<a href="${openUrl}" style="display:inline-block;background:#1a56db;color:#fff;padding:4px 12px;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;margin-top:2px">Открыть →</a>` : ''}`,
-          hintContent: p.title || '',
-        },
-        { preset: presetFor(p.type, p.isHot), balloonCloseButton: true, hideIconOnBalloonOpen: false }
+        { hintContent: p.title || '' },
+        { preset: presetFor(p.type, p.isHot), balloonAutoPan: false }
       );
-      if (onPointClick || p.url) {
-        placemark.events.add('click', () => {
-          if (onPointClick) onPointClick(p);
-          else if (p.url) window.location.assign(p.url);
-        });
-      }
+      placemark.events.add('click', (e: { preventDefault: () => void }) => {
+        e.preventDefault();
+        if (onPointClick) onPointClick(p);
+      });
       map.geoObjects.add(placemark);
       placemarkMapRef.current.set(p.id, placemark);
     });
