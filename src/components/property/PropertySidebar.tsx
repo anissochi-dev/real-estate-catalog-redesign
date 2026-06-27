@@ -51,18 +51,20 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
             <div className="text-[10px] text-muted-foreground mb-0.5 font-medium uppercase tracking-wide">
               {DEAL_LABELS[item.deal] || item.deal}
             </div>
-            <h5 className="font-display font-900 text-2xl text-brand-blue leading-none tracking-tight">
-              {item.seoH5
-                ? <><span className="sr-only">{item.seoH5} — </span>{item.price.toLocaleString('ru')} ₽{item.deal === 'rent' ? '/мес' : ''}</>
-                : <>{item.price.toLocaleString('ru')} ₽{item.deal === 'rent' ? '/мес' : ''}</>
-              }
-            </h5>
-            {item.pricePerM2 ? (
-              <div className="flex items-center gap-1 mt-1.5">
-                <Icon name="Scaling" size={11} className="text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">{item.pricePerM2.toLocaleString('ru')} ₽/м²</span>
-              </div>
-            ) : null}
+            <div className="flex items-baseline justify-between gap-2">
+              <h5 className="font-display font-900 text-2xl text-brand-blue leading-none tracking-tight">
+                {item.seoH5
+                  ? <><span className="sr-only">{item.seoH5} — </span>{item.price.toLocaleString('ru')} ₽{item.deal === 'rent' ? '/мес' : ''}</>
+                  : <>{item.price.toLocaleString('ru')} ₽{item.deal === 'rent' ? '/мес' : ''}</>
+                }
+              </h5>
+              {item.pricePerM2 ? (
+                <div className="flex items-center gap-1 shrink-0">
+                  <Icon name="Scaling" size={11} className="text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">{item.pricePerM2.toLocaleString('ru')} ₽/м²</span>
+                </div>
+              ) : null}
+            </div>
           </div>
           <div className="px-4 py-1.5 bg-muted/40 border-t border-border flex items-center gap-1.5">
             <Icon name="Hash" size={11} className="text-muted-foreground" />
