@@ -10,6 +10,11 @@ interface MapPoint {
   url?: string;
   type?: string;
   isHot?: boolean;
+  image?: string;
+  address?: string;
+  area?: number;
+  price?: number;
+  deal?: string;
 }
 
 // Соответствие типа объекта → preset иконки Yandex Maps (со значком категории).
@@ -180,16 +185,64 @@ export default function YandexMap({
       .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng) && p.lat !== 0 && p.lng !== 0);
 
     placemarkMapRef.current.clear();
+
+    // Уникальный префикс для обработчиков кликов по balloon
+    const cbKey = `_ymapsCb_${Date.now()}`;
+
     valid.forEach(p => {
+      const fmtPrice = (price?: number, deal?: string) => {
+        if (!price) return '';
+        if (deal === 'rent') {
+          return price >= 1000000
+            ? `${(price / 1000000).toFixed(price % 1000000 === 0 ? 0 : 1)} млн ₽/мес`
+            : `${Math.round(price / 1000)} тыс ₽/мес`;
+        }
+        return price >= 1000000
+          ? `${(price / 1000000).toFixed(price % 1000000 === 0 ? 0 : 1)} млн ₽`
+          : `${Math.round(price / 1000)} тыс ₽`;
+      };
+
+      const priceStr = fmtPrice(p.price, p.deal);
+      const areaStr = p.area ? `${p.area} м²` : '';
+      const cbName = `${cbKey}_${p.id}`;
+
+      // Регистрируем глобальный колбэк для клика по ссылке внутри balloon
+      if (p.url) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any)[cbName] = () => { window.location.assign(p.url!); };
+      }
+
+      const balloonBody = `
+        <div onclick="if(window['${cbName}'])window['${cbName}']()" style="display:flex;gap:10px;align-items:flex-start;cursor:${p.url ? 'pointer' : 'default'};min-width:220px;max-width:280px">
+          ${p.image ? `<img src="${p.image}" style="width:64px;height:64px;border-radius:10px;object-fit:cover;flex-shrink:0" alt=""/>` : ''}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;color:#111;line-height:1.3;margin-bottom:4px">${p.title || ''}</div>
+            ${p.address ? `<div style="font-size:11px;color:#888;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.address}</div>` : ''}
+            <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap">
+              ${priceStr ? `<span style="font-size:16px;font-weight:700;color:#1a56db">${priceStr}</span>` : ''}
+              ${areaStr ? `<span style="font-size:11px;color:#888">· ${areaStr}</span>` : ''}
+            </div>
+          </div>
+        </div>`;
+
       const placemark = new window.ymaps.Placemark(
         [p.lat, p.lng],
-        { hintContent: p.title || '' },
-        { preset: presetFor(p.type, p.isHot), balloonAutoPan: false }
+        {
+          balloonContent: balloonBody,
+          hintContent: p.title || '',
+        },
+        {
+          preset: presetFor(p.type, p.isHot),
+          balloonAutoPan: true,
+          balloonCloseButton: true,
+          hideIconOnBalloonOpen: false,
+        }
       );
-      placemark.events.add('click', (e: { preventDefault: () => void }) => {
-        e.preventDefault();
+
+      placemark.events.add('click', () => {
         if (onPointClick) onPointClick(p);
       });
+
       map.geoObjects.add(placemark);
       placemarkMapRef.current.set(p.id, placemark);
     });
