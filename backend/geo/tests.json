@@ -19,6 +19,20 @@
       "method": "GET",
       "path": "/?action=unknown",
       "expectedStatus": 400
+    },
+    {
+      "name": "reverse — без координат",
+      "method": "GET",
+      "path": "/?action=reverse",
+      "expectedStatus": 400
+    },
+    {
+      "name": "reverse — центр Краснодара",
+      "method": "GET",
+      "path": "/?action=reverse&lat=45.0355&lng=38.9753",
+      "expectedStatus": 200,
+      "expectedBody": {"found": true},
+      "bodyMatcher": "partial"
     }
   ]
 }

@@ -403,6 +403,11 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
         mapRef={mapRef}
         onMapReady={setMapReady}
         parseYmapsGeoObject={parseYmapsGeoObject}
+        parseReverseResult={(data, coords) => {
+          const cur = editingRef.current;
+          setEditing({ ...cur, address: data.address, district: data.district || cur.district || '', lat: coords[0], lng: coords[1] });
+          setStreetInput(data.address);
+        }}
       />
 
       {mapReady && null}

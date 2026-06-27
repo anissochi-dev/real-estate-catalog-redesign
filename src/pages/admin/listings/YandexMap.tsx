@@ -4,6 +4,17 @@ import Icon from '@/components/ui/icon';
 import { loadYmaps, cityCenter } from './cadastreTypes';
 import type { Listing } from './types';
 
+interface ReverseResult {
+  found: boolean;
+  address: string;
+  street: string;
+  house: string;
+  settlement: string;
+  district: string;
+  lat: number;
+  lon: number;
+}
+
 interface Props {
   editing: Partial<Listing>;
   setEditing: (l: Partial<Listing>) => void;
@@ -11,12 +22,12 @@ interface Props {
   apiKey: string;
   setStreetInput: (v: string) => void;
   onCoordsManualChange?: (manual: boolean) => void;
-  // Пробрасываем refs наружу, чтобы AddressWithMap мог управлять маркером
   ymapInstance: React.MutableRefObject<any>;
   markerRef: React.MutableRefObject<any>;
   mapRef: React.RefObject<HTMLDivElement>;
   onMapReady: (ready: boolean) => void;
   parseYmapsGeoObject: (obj: any, coords: [number, number], streetOverride?: string) => void;
+  parseReverseResult: (data: ReverseResult, coords: [number, number]) => void;
 }
 
 export default function YandexMap({
@@ -28,7 +39,7 @@ export default function YandexMap({
   markerRef,
   mapRef,
   onMapReady,
-  parseYmapsGeoObject,
+  parseReverseResult,
 }: Props) {
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState(false);
@@ -36,19 +47,13 @@ export default function YandexMap({
   editingRef.current = editing;
 
   function reverseGeocode(lat: number, lng: number) {
-    console.log('[map] reverseGeocode', lat, lng, 'ymaps?', !!window.ymaps, 'geocode?', typeof window.ymaps?.geocode);
-    if (!window.ymaps || typeof window.ymaps.geocode !== 'function') {
-      console.warn('[map] ymaps не готов — геокодирование пропущено');
-      return;
-    }
-    window.ymaps.geocode([lat, lng], { results: 1 })
-      .then((res: any) => {
-        const obj = res?.geoObjects?.get(0);
-        console.log('[map] geocode result:', obj ? obj.getAddressLine?.() : 'NULL');
-        if (!obj) return;
-        parseYmapsGeoObject(obj, [lat, lng]);
+    fetch(`https://functions.poehali.dev/9b2f9622-9d12-4809-a614-023af6958251?action=reverse&lat=${lat}&lng=${lng}`)
+      .then(r => r.json())
+      .then((data: any) => {
+        if (!data.found) return;
+        parseReverseResult(data, [lat, lng]);
       })
-      .catch((err: any) => console.error('[map] geocode error:', err));
+      .catch(() => undefined);
   }
 
   /* Инициализация карты */

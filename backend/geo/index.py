@@ -2347,6 +2347,80 @@ def _handle_by_cadastre(event: dict) -> dict:
     return _ok({'found': False, 'cadastral_number': query})
 
 
+# ── action=reverse ───────────────────────────────────────────────────────────
+
+def _handle_reverse(params: dict) -> dict:
+    """
+    Обратное геокодирование: координаты → адрес через Яндекс HTTP Geocoder.
+    GET ?lat=45.065&lng=38.918
+    → { address, street, house, settlement, district, lat, lon }
+    """
+    try:
+        lat = float(params.get('lat') or params.get('latitude') or '')
+        lng = float(params.get('lng') or params.get('longitude') or params.get('lon') or '')
+    except (TypeError, ValueError):
+        return _err('Укажите lat и lng', 400)
+
+    dadata_key = os.environ.get('DADATA_API_KEY', '')
+    dadata_secret = os.environ.get('DADATA_SECRET_KEY', '')
+    if not dadata_key:
+        return _err('DADATA_API_KEY не настроен', 500)
+
+    # DaData reverse geocoding: координаты → адрес
+    payload = json.dumps({'lat': lat, 'lon': lng, 'count': 1}).encode('utf-8')
+    req = urllib.request.Request(
+        'https://suggestions.dadata.ru/suggestions/api/4_1/rs/geolocate/address',
+        data=payload,
+        headers={
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': f'Token {dadata_key}',
+            'X-Secret': dadata_secret,
+        },
+        method='POST',
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        data = json.loads(resp.read().decode('utf-8'))
+
+    suggestions = data.get('suggestions', [])
+    if not suggestions:
+        return _ok({'found': False, 'address': '', 'street': '', 'house': '', 'settlement': '', 'district': ''})
+
+    s = suggestions[0]
+    d = s.get('data', {}) or {}
+    value = s.get('value', '')
+
+    # Убираем федеральные уровни
+    for prefix in ['Россия, ', 'Краснодарский край, ']:
+        if value.startswith(prefix):
+            value = value[len(prefix):]
+    value = re.sub(r'^[А-ЯЁа-яё\s-]+ (район|р-н), ', '', value)
+
+    street_type = d.get('street_type_full', '') or d.get('street_type', '')
+    street_name = d.get('street', '')
+    street = f'{street_type} {street_name}'.strip() if street_name else ''
+    house = d.get('house', '')
+    settlement = d.get('settlement_with_type') or d.get('settlement') or ''
+    district = d.get('city_district_with_type') or d.get('city_district') or ''
+
+    # Итоговый адрес: посёлок + улица + дом
+    built = ', '.join(filter(None, [settlement, street, house]))
+    final_address = built or value
+
+    print(f'[reverse] lat={lat} lng={lng} → "{final_address}" district="{district}"')
+
+    return _ok({
+        'found': True,
+        'address': final_address,
+        'street': street,
+        'house': house,
+        'settlement': settlement,
+        'district': district,
+        'lat': lat,
+        'lon': lng,
+    })
+
+
 # ── EGRN (перенесено из функции egrn) ────────────────────────────────────────
 
 _EGRN_BASE = 'https://service.api-assist.com'
@@ -2427,6 +2501,10 @@ def handler(event: dict, context) -> dict:
     action = params.get('action') or body.get('action') or (
         'suggest' if event.get('httpMethod') == 'GET' else 'fix'
     )
+
+    # Обратное геокодирование — не требует БД
+    if action == 'reverse':
+        return _handle_reverse(params)
 
     # Кадастровые запросы не требуют БД — обрабатываем отдельно
     if action == 'cadastre_by_address':
