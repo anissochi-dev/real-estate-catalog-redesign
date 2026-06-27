@@ -142,9 +142,16 @@ def _handle_suggest(event: dict, cur) -> dict:
         district = _find_district(street, house_num, rules) or ''
 
         short = value
-        for prefix in ['Россия, ', 'Краснодарский край, ', f'г {city}, ', f'{city}, ']:
+        for prefix in ['Россия, ', 'Краснодарский край, ', f'г {city}, ', f'г. {city}, ', f'{city}, ']:
             while short.startswith(prefix):
                 short = short[len(prefix):]
+        # Если после обрезки начинается населённый пункт (п., пгт., с., ст., х., мкр.) —
+        # оставляем его как часть адреса, не обрезаем
+        settlement_prefixes = ('п. ', 'пгт. ', 'с. ', 'ст. ', 'х. ', 'мкр. ', 'пос. ', 'снт. ')
+        # Дополнительно убираем «городской округ Краснодар, » если он остался
+        for okrug_prefix in [f'городской округ {city}, ', f'г.о. {city}, ']:
+            if short.startswith(okrug_prefix):
+                short = short[len(okrug_prefix):]
 
         suggestions.append({
             'value': short, 'full': value,
