@@ -219,10 +219,17 @@ export default function YandexMap({
       try {
         const isHL = id === highlightedId;
         pm.options.set('zIndex', isHL ? 1000 : 0);
-        pm.options.set('iconOffset', isHL ? [0, -8] : [0, 0]);
+        pm.options.set('iconOffset', isHL ? [0, -10] : [0, 0]);
+        // Меняем preset: при hover — жёлтая звезда (выделяется на любом фоне)
+        const origPoint = points.find(p => p.id === id);
+        if (isHL) {
+          pm.options.set('preset', 'islands#yellowStarIcon');
+        } else {
+          pm.options.set('preset', presetFor(origPoint?.type, origPoint?.isHot));
+        }
       } catch { /* ignore */ }
     });
-  }, [highlightedId, mapReady]);
+  }, [highlightedId, mapReady, points]);
 
   // Ресайз карты при смене fullscreen (нативный Fullscreen API)
   useEffect(() => {
