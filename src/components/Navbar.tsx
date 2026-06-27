@@ -22,7 +22,7 @@ const navItems = [
   { id: 'catalog' as Page, label: 'Каталог', icon: 'Building2' },
   { id: 'leads' as Page, label: 'Заявки', icon: 'FileText' },
   { id: 'news' as Page, label: 'Новости', icon: 'Newspaper' },
-  { id: 'favorites' as Page, label: '', icon: 'Heart' },
+  { id: 'favorites' as Page, label: '', icon: 'Heart', ariaLabel: 'Избранное' },
 ];
 
 export default function Navbar({ currentPage, setCurrentPage, favoritesCount, compareCount, onLogin, onAdmin, onAdminLeads, onClientDashboard }: NavbarProps) {
@@ -73,6 +73,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
                   onClick={() => handleNav(item.id)}
                   onMouseEnter={() => prefetchPage(item.id)}
                   onFocus={() => prefetchPage(item.id)}
+                  aria-label={'ariaLabel' in item ? (item as { ariaLabel: string }).ariaLabel : item.label}
                   className={`relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200
                     ${currentPage === item.id
                       ? 'bg-brand-blue text-white'
