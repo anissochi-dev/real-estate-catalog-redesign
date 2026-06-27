@@ -58,7 +58,7 @@ export default function CatalogFilters({
   const activeCount = [dealFilter !== 'all', typeFilter !== 'all', !!minArea, !!maxPrice, districtFilter !== 'all'].filter(Boolean).length;
 
   return (
-    <div className="bg-white border-b border-border sticky top-16 z-30">
+    <div className="bg-white border-b border-border z-30">
       <div className="container mx-auto px-4">
 
         {/* Табы тип сделки */}
