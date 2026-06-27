@@ -147,7 +147,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
     [filtered],
   );
 
-  const LOAD_STEP = 21;
+  const LOAD_STEP = 20;
   const [visibleCount, setVisibleCount] = useState(LOAD_STEP);
 
   // Сброс при смене фильтров/поиска
