@@ -216,7 +216,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
         </div>
 
         {/* Правая колонка — карта sticky (только десктоп) */}
-        <div className="hidden lg:block w-[480px] xl:w-[560px] shrink-0">
+        <div className="hidden lg:block w-1/2 shrink-0">
           <div className="sticky top-0 h-screen">
             <CatalogMap
               mapPoints={mapPoints}
