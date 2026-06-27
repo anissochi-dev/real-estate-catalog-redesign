@@ -228,7 +228,7 @@ export default function LeadsListPage() {
           </div>
         ) : (
           <>
-            <ul className="grid grid-cols-1 md:grid-cols-2 gap-4 list-none p-0 m-0">
+            <ul className="flex flex-col gap-4 list-none p-0 m-0">
               {leads.map(lead => (
                 <li key={lead.id}>
                   <LeadCard lead={lead} districts={districts} onContact={() => openContact(lead)} />
