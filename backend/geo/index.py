@@ -115,26 +115,10 @@ def _handle_suggest(event: dict, cur) -> dict:
     api_key = os.environ.get('DADATA_API_KEY', '')
     secret_key = os.environ.get('DADATA_SECRET_KEY', '')
 
-    # Если запрос начинается с обозначения населённого пункта — ищем по краю, а не по городу
-    settlement_starts = ('п.', 'пгт.', 'с.', 'ст.', 'х.', 'пос.', 'снт.', 'г.', 'аул')
-    query_lower = query.lower().strip()
-    is_settlement_query = any(query_lower.startswith(s) for s in settlement_starts)
-
-    if is_settlement_query:
-        # Населённый пункт — ищем по всему Краснодарскому краю без привязки к городу
-        search_query = f'Краснодарский край, {query}'
-        payload = json.dumps({
-            'query': search_query, 'count': 8,
-            'locations': [{'region': 'Краснодарский край'}],
-            'restrict_value': False,
-        }).encode('utf-8')
-    else:
-        search_query = f'{city}, {query}'
-        payload = json.dumps({
-            'query': search_query, 'count': 8,
-            'locations': [{'city': city}],
-            'restrict_value': False,
-        }).encode('utf-8')
+    payload = json.dumps({
+        'query': f'{city}, {query}', 'count': 8,
+        'locations': [{'city': city}], 'restrict_value': False,
+    }).encode('utf-8')
 
     req = urllib.request.Request(
         'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address',
@@ -145,8 +129,6 @@ def _handle_suggest(event: dict, cur) -> dict:
     )
     with urllib.request.urlopen(req, timeout=10) as resp:
         data = json.loads(resp.read().decode('utf-8'))
-
-    print(f'[suggest] query={search_query!r} is_settlement={is_settlement_query} results={len(data.get("suggestions", []))} raw={json.dumps(data.get("suggestions", [])[:2], ensure_ascii=False)}')
 
     rules = _load_street_rules(cur)
     suggestions = []
