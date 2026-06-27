@@ -172,7 +172,7 @@ export default function LeadsListPage() {
       <SchemaOrg schema={breadcrumbSchema} id="leads-bc" />
       {allLeads.length > 0 && <SchemaOrg schema={itemListSchema} id="leads-list" />}
 
-      <div className="container mx-auto px-4 py-6 max-w-3xl">
+      <div className="container mx-auto px-4 py-6 max-w-5xl">
         <div className="mb-3">
           <Breadcrumbs items={[{ label: 'Главная', to: '/' }, { label: 'Заявки клиентов' }]} />
         </div>
@@ -228,7 +228,7 @@ export default function LeadsListPage() {
           </div>
         ) : (
           <>
-            <ul className="flex flex-col gap-4 list-none p-0 m-0">
+            <ul className="grid grid-cols-1 md:grid-cols-2 gap-4 list-none p-0 m-0">
               {leads.map(lead => (
                 <li key={lead.id}>
                   <LeadCard lead={lead} districts={districts} onContact={() => openContact(lead)} />
