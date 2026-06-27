@@ -95,31 +95,35 @@ export default function CatalogMap({
         {mapSelected && (
           <div className="absolute bottom-4 left-3 right-3 z-10 max-w-sm">
             <div
-              className="bg-white rounded-2xl shadow-xl border border-border flex gap-3 items-center p-3 cursor-pointer hover:shadow-2xl hover:border-brand-blue/40 transition-all duration-200"
+              className="bg-white rounded-2xl shadow-xl border border-border flex gap-3 items-start p-3 cursor-pointer hover:shadow-2xl hover:border-brand-blue/40 transition-all duration-200"
               onClick={() => navigate(`/object/${listingSlug(mapSelected.title, mapSelected.id)}`)}
             >
               {mapSelected.image && (
                 <img
                   src={mapSelected.image}
                   alt={mapSelected.title}
-                  className="w-14 h-14 rounded-xl object-cover shrink-0"
+                  className="w-16 h-16 rounded-xl object-cover shrink-0"
                 />
               )}
-              <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-semibold text-foreground line-clamp-2 leading-snug mb-0.5">
+              <div className="flex-1 min-w-0 pt-0.5">
+                <div className="text-[13px] font-bold text-foreground line-clamp-2 leading-snug mb-1">
                   {mapSelected.title}
                 </div>
                 <div className="text-[11px] text-muted-foreground truncate mb-1">
-                  {mapSelected.address || mapSelected.district || ''}
+                  {[mapSelected.address, mapSelected.district].filter(Boolean).join(', ') || ''}
                 </div>
-                <div className="text-[15px] font-display font-700 text-brand-blue leading-none">
-                  {formatPrice(mapSelected.price, mapSelected.deal)}
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-[16px] font-display font-700 text-brand-blue leading-none">
+                    {formatPrice(mapSelected.price, mapSelected.deal)}
+                  </span>
+                  {mapSelected.area > 0 && (
+                    <span className="text-[11px] text-muted-foreground">· {mapSelected.area} м²</span>
+                  )}
                 </div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">Нажмите, чтобы открыть →</div>
               </div>
               <button
                 onClick={e => { e.stopPropagation(); onDeselectPoint(); }}
-                className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full hover:bg-muted transition-colors text-muted-foreground"
+                className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full hover:bg-muted transition-colors text-muted-foreground mt-0.5"
                 aria-label="Закрыть"
               >
                 <Icon name="X" size={13} />
