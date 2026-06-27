@@ -128,9 +128,18 @@ export default function ClientLeadsSection({ limit = 6 }: Props) {
   const [leads, setLeads] = useState<PublicLead[]>([]);
 
   useEffect(() => {
-    fetchPublicLeads({ limit, sort: 'newest' })
-      .then(r => setLeads(r.leads))
-      .catch(() => undefined);
+    // Откладываем запрос до завершения LCP — не конкурируем с критическими ресурсами
+    const load = () => {
+      fetchPublicLeads({ limit, sort: 'newest' })
+        .then(r => setLeads(r.leads))
+        .catch(() => undefined);
+    };
+    if ('requestIdleCallback' in window) {
+      const id = requestIdleCallback(load, { timeout: 3000 });
+      return () => cancelIdleCallback(id);
+    }
+    const t = setTimeout(load, 1500);
+    return () => clearTimeout(t);
   }, [limit]);
 
   if (!leads.length) return null;

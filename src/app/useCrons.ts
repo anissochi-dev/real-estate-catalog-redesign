@@ -58,9 +58,9 @@ export function useCrons() {
     };
 
     if (document.readyState === 'complete') {
-      setTimeout(schedule, 3000);
+      setTimeout(schedule, 6000);
     } else {
-      const onLoad = () => setTimeout(schedule, 3000);
+      const onLoad = () => setTimeout(schedule, 6000);
       window.addEventListener('load', onLoad, { once: true });
       return () => window.removeEventListener('load', onLoad);
     }

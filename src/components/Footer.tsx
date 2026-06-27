@@ -56,7 +56,14 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
   const [districts, setDistricts] = useState<District[]>([]);
 
   useEffect(() => {
-    fetchDistricts().then(setDistricts);
+    // Футер внизу страницы — грузим районы в простое браузера после LCP
+    const load = () => fetchDistricts().then(setDistricts).catch(() => undefined);
+    if ('requestIdleCallback' in window) {
+      const id = requestIdleCallback(load, { timeout: 4000 });
+      return () => cancelIdleCallback(id);
+    }
+    const t = setTimeout(load, 2000);
+    return () => clearTimeout(t);
   }, []);
 
   const company = settings.company_name || 'Бизнес. Маркетинг. Недвижимость.';
