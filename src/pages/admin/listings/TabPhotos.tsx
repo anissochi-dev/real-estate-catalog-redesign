@@ -7,9 +7,11 @@ interface Props {
   listing: Listing;
 }
 
-/** Строит URL thumb из CDN-ссылки на основное фото. */
+/** Строит URL thumb из CDN-ссылки на основное фото.
+ * Работает ТОЛЬКО для папки photos/ — логотипы не трогает. */
 function toThumbUrl(src: string): string {
   if (!src || !src.includes('cdn.poehali.dev')) return src;
+  if (!src.includes('/photos/')) return src;
   if (src.includes('_thumb.webp')) return src;
   return src.replace(/(_wm)?\.(webp|jpe?g|png)$/i, '_thumb.webp');
 }

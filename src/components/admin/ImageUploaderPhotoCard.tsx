@@ -19,11 +19,10 @@ interface Props {
 }
 
 /** Строит URL превью (thumb) из CDN-ссылки на основное фото.
- * photos/abc_wm.webp → photos/abc_thumb.webp
- * photos/abc.webp    → photos/abc_thumb.webp
- * Если _thumb.webp уже есть в URL — возвращает как есть. */
+ * Работает ТОЛЬКО для папки photos/ — логотипы, водяные знаки не трогает. */
 function toThumbUrl(src: string): string {
   if (!src || !src.includes('cdn.poehali.dev')) return src;
+  if (!src.includes('/photos/')) return src;
   if (src.includes('_thumb.webp')) return src;
   return src.replace(/(_wm)?\.(webp|jpe?g|png)$/i, '_thumb.webp');
 }
