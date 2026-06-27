@@ -187,6 +187,26 @@ def handler(event, context):
             'body': '',
         }
 
+    # GET: проверка размеров файлов в S3 (для диагностики)
+    if method == 'GET':
+        params = event.get('queryStringParameters') or {}
+        keys_raw = (params.get('keys') or '').split(',')
+        keys = [k.strip() for k in keys_raw if k.strip()]
+        if not keys:
+            return _err(400, 'укажи keys')
+        s3c = boto3.client('s3', endpoint_url='https://bucket.poehali.dev',
+                           aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+                           aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'])
+        results = []
+        for k in keys:
+            try:
+                head = s3c.head_object(Bucket='files', Key=k)
+                sz = head['ContentLength']
+                results.append({'key': k, 'size_bytes': sz, 'size_kb': round(sz / 1024, 1), 'content_type': head.get('ContentType', '')})
+            except Exception as e:
+                results.append({'key': k, 'error': str(e)})
+        return _ok({'files': results})
+
     if method != 'POST':
         return _err(405, 'Method not allowed')
 
