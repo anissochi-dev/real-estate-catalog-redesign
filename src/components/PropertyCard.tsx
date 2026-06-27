@@ -221,7 +221,6 @@ export default function PropertyCard({
     <>
       <div
         ref={rootRef}
-        role="listitem"
         onMouseEnter={handlePrefetch}
         onTouchStart={handlePrefetch}
         onClick={() => navigate(href)}
