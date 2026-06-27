@@ -232,13 +232,13 @@ export default function PropertyCard({
           {cover ? (
             <img
               src={cover}
-              srcSet={property.image_thumb ? `${property.image_thumb} 800w, ${cover} 1920w` : undefined}
+              srcSet={property.image_thumb ? `${property.image_thumb} 400w, ${cover} 800w` : undefined}
               alt={property.title}
               width={400}
               height={300}
-              sizes="(max-width: 640px) calc(100vw - 32px), 240px"
+              sizes="(max-width: 640px) calc(100vw - 32px), (max-width: 1024px) calc(50vw - 32px), 400px"
               loading={index < 4 ? 'eager' : 'lazy'}
-              fetchpriority={index === 0 ? 'high' : index < 4 ? 'auto' : 'low'}
+              fetchpriority={index === 0 ? 'high' : 'auto'}
               decoding={index === 0 ? 'sync' : 'async'}
               className="absolute inset-0 w-full h-full object-cover"
             />
