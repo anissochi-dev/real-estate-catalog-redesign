@@ -34,7 +34,6 @@ export default function CatalogMap({
   onDeselectPoint, onFullscreenChange, className, height = 420,
 }: CatalogMapProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
 
   useEffect(() => {
     const handler = () => onFullscreenChange(!!document.fullscreenElement);
