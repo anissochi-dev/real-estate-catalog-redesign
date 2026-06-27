@@ -36,15 +36,19 @@ export default function YandexMap({
   editingRef.current = editing;
 
   function reverseGeocode(lat: number, lng: number) {
-    if (!window.ymaps || typeof window.ymaps.geocode !== 'function') return;
-    // Сначала пробуем найти дом, если не нашли — берём любой ближайший объект
+    console.log('[map] reverseGeocode', lat, lng, 'ymaps?', !!window.ymaps, 'geocode?', typeof window.ymaps?.geocode);
+    if (!window.ymaps || typeof window.ymaps.geocode !== 'function') {
+      console.warn('[map] ymaps не готов — геокодирование пропущено');
+      return;
+    }
     window.ymaps.geocode([lat, lng], { results: 1 })
       .then((res: any) => {
         const obj = res?.geoObjects?.get(0);
+        console.log('[map] geocode result:', obj ? obj.getAddressLine?.() : 'NULL');
         if (!obj) return;
         parseYmapsGeoObject(obj, [lat, lng]);
       })
-      .catch(() => undefined);
+      .catch((err: any) => console.error('[map] geocode error:', err));
   }
 
   /* Инициализация карты */
