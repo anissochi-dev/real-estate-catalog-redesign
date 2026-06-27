@@ -14,6 +14,7 @@ import CategoryHero from './category/CategoryHero';
 import CategoryToolbar from './category/CategoryToolbar';
 import CategorySeoBlock from './category/CategorySeoBlock';
 import SeoHead from '@/components/SeoHead';
+import CatalogMap from './catalog/CatalogMap';
 
 interface Props {
   properties: Property[];
@@ -43,6 +44,9 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
   const [maxPrice, setMaxPrice] = useState('');
   const [sortBy, setSortBy] = useState<CatSort>('newest');
   const [districts, setDistricts] = useState<District[]>([]);
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const [mapSelected, setMapSelected] = useState<Property | null>(null);
+  const [mapFullscreen, setMapFullscreen] = useState(false);
 
   useEffect(() => { fetchDistricts().then(setDistricts); }, []);
 
@@ -97,6 +101,12 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
 
   const totalPages = Math.ceil(items.length / CAT_PAGE_SIZE);
   const pagedItems = items.slice((catPage - 1) * CAT_PAGE_SIZE, catPage * CAT_PAGE_SIZE);
+
+  const mapPoints = useMemo(() => items
+    .filter(p => p.lat && p.lng)
+    .map(p => ({ id: p.id, lat: Number(p.lat), lng: Number(p.lng), title: p.title, caption: `${p.area} м²`, type: p.type, isHot: !!p.isHot })),
+    [items],
+  );
 
   // Сброс на первую страницу при смене фильтров
   useEffect(() => { setCatPage(1); }, [dealFilter, districtFilter, minArea, maxPrice, sortBy]);
@@ -200,78 +210,102 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
         resetFilters={resetFilters}
       />
 
-      {/* Список объектов */}
-      <div className="container mx-auto px-4 py-8">
-        {items.length === 0 ? (
-          <div className="text-center py-16">
-            <Icon name="Building2" size={40} className="mx-auto mb-4 text-muted-foreground opacity-30" />
-            <div className="font-display font-700 text-xl text-foreground mb-2">
-              {hasActiveFilters
-                ? 'По выбранным фильтрам ничего не найдено'
-                : 'Объекты в этой категории появятся скоро'}
-            </div>
-            <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
-              {hasActiveFilters
-                ? 'Попробуйте смягчить условия фильтра или сбросить их.'
-                : `Пока в категории «${meta.labelRu}» нет активных объектов. Смотрите другие категории или оставьте заявку.`}
-            </p>
-            {hasActiveFilters ? (
-              <button onClick={resetFilters} className="btn-blue text-white px-6 py-2.5 rounded-xl text-sm font-semibold">
-                Сбросить фильтры
-              </button>
-            ) : (
-              <button onClick={() => navigate('/catalog')} className="btn-blue text-white px-6 py-2.5 rounded-xl text-sm font-semibold">
-                Смотреть все объекты
-              </button>
-            )}
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {pagedItems.map((property, i) => (
-                <PropertyCard
-                  key={property.id}
-                  property={property}
-                  isFavorite={favorites.includes(property.id)}
-                  isCompare={compareList.includes(property.id)}
-                  onToggleFavorite={onToggleFavorite}
-                  onToggleCompare={onToggleCompare}
-                  index={i}
-                  style={{ animationDelay: `${i * 0.03}s`, opacity: 0 }}
-                />
-              ))}
-            </div>
-
-            {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-8">
-                <button disabled={catPage === 1} onClick={() => { setCatPage(p => p - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                  className="px-3 py-2 rounded-lg border border-border hover:border-brand-blue disabled:opacity-30 transition-colors">
-                  <Icon name="ChevronLeft" size={16} />
-                </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                  <button key={p} onClick={() => { setCatPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                    className={`w-9 h-9 rounded-lg text-sm font-semibold transition-colors ${p === catPage ? 'btn-blue text-white' : 'border border-border hover:border-brand-blue'}`}>
-                    {p}
+      {/* Split-лэйаут: слева список, справа sticky карта */}
+      <div className="flex min-h-0">
+        {/* Левая колонка — результаты */}
+        <div className="flex-1 min-w-0">
+          <div className="container mx-auto px-4 py-8">
+            {items.length === 0 ? (
+              <div className="text-center py-16">
+                <Icon name="Building2" size={40} className="mx-auto mb-4 text-muted-foreground opacity-30" />
+                <div className="font-display font-700 text-xl text-foreground mb-2">
+                  {hasActiveFilters
+                    ? 'По выбранным фильтрам ничего не найдено'
+                    : 'Объекты в этой категории появятся скоро'}
+                </div>
+                <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
+                  {hasActiveFilters
+                    ? 'Попробуйте смягчить условия фильтра или сбросить их.'
+                    : `Пока в категории «${meta.labelRu}» нет активных объектов. Смотрите другие категории или оставьте заявку.`}
+                </p>
+                {hasActiveFilters ? (
+                  <button onClick={resetFilters} className="btn-blue text-white px-6 py-2.5 rounded-xl text-sm font-semibold">
+                    Сбросить фильтры
                   </button>
-                ))}
-                <button disabled={catPage === totalPages} onClick={() => { setCatPage(p => p + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                  className="px-3 py-2 rounded-lg border border-border hover:border-brand-blue disabled:opacity-30 transition-colors">
-                  <Icon name="ChevronRight" size={16} />
-                </button>
+                ) : (
+                  <button onClick={() => navigate('/catalog')} className="btn-blue text-white px-6 py-2.5 rounded-xl text-sm font-semibold">
+                    Смотреть все объекты
+                  </button>
+                )}
               </div>
-            )}
-          </>
-        )}
+            ) : (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {pagedItems.map((property, i) => (
+                    <PropertyCard
+                      key={property.id}
+                      property={property}
+                      isFavorite={favorites.includes(property.id)}
+                      isCompare={compareList.includes(property.id)}
+                      onToggleFavorite={onToggleFavorite}
+                      onToggleCompare={onToggleCompare}
+                      index={i}
+                      highlighted={hoveredId === property.id}
+                      onHover={setHoveredId}
+                      style={{ animationDelay: `${i * 0.03}s`, opacity: 0 }}
+                    />
+                  ))}
+                </div>
 
-        {/* SEO-текст внизу — показывается ВСЕГДА, в т.ч. при пустой категории */}
-        <CategorySeoBlock
-          meta={meta}
-          type={type}
-          city={city}
-          companySinceYear={settings.company_since_year}
-          aiSeoText={aiSeoText}
-          aiSeoLoading={aiSeoLoading}
-        />
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 mt-8">
+                    <button disabled={catPage === 1} onClick={() => { setCatPage(p => p - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                      className="px-3 py-2 rounded-lg border border-border hover:border-brand-blue disabled:opacity-30 transition-colors">
+                      <Icon name="ChevronLeft" size={16} />
+                    </button>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                      <button key={p} onClick={() => { setCatPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        className={`w-9 h-9 rounded-lg text-sm font-semibold transition-colors ${p === catPage ? 'btn-blue text-white' : 'border border-border hover:border-brand-blue'}`}>
+                        {p}
+                      </button>
+                    ))}
+                    <button disabled={catPage === totalPages} onClick={() => { setCatPage(p => p + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                      className="px-3 py-2 rounded-lg border border-border hover:border-brand-blue disabled:opacity-30 transition-colors">
+                      <Icon name="ChevronRight" size={16} />
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            <CategorySeoBlock
+              meta={meta}
+              type={type}
+              city={city}
+              companySinceYear={settings.company_since_year}
+              aiSeoText={aiSeoText}
+              aiSeoLoading={aiSeoLoading}
+            />
+          </div>
+        </div>
+
+        {/* Правая колонка — sticky карта (только десктоп) */}
+        <div className="hidden lg:block w-1/2 shrink-0">
+          <div className="sticky top-0 h-screen">
+            <CatalogMap
+              mapPoints={mapPoints}
+              mapSelected={mapSelected}
+              city={city}
+              fullscreen={mapFullscreen}
+              highlightedId={hoveredId}
+              onClose={() => setMapSelected(null)}
+              onPointClick={() => {}}
+              onDeselectPoint={() => setMapSelected(null)}
+              onFullscreenChange={setMapFullscreen}
+              height="100%"
+            />
+          </div>
+        </div>
       </div>
     </div>
   );

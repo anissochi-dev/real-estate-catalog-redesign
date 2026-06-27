@@ -12,6 +12,7 @@ import DistrictHero from './district/DistrictHero';
 import DistrictStatsBar from './district/DistrictStatsBar';
 import DistrictSeoBlock from './district/DistrictSeoBlock';
 import SeoHead from '@/components/SeoHead';
+import CatalogMap from './catalog/CatalogMap';
 
 const DISTRICT_SEO_URL = 'https://functions.poehali.dev/4f6d05ce-e38c-4e10-8a8b-f282e1ed2ddd';
 const PAGE_SIZE = 12;
@@ -32,6 +33,9 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
   const [page, setPage] = useState(1);
   const [aiText, setAiText] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const [mapSelected, setMapSelected] = useState<Property | null>(null);
+  const [mapFullscreen, setMapFullscreen] = useState(false);
 
   const districtName = district ? decodeURIComponent(district) : '';
   const [districtData, setDistrictData] = useState<District | null>(null);
@@ -96,6 +100,12 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
 
   const totalPages = Math.ceil(items.length / PAGE_SIZE);
   const pageItems = items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const mapPoints = useMemo(() => items
+    .filter(p => p.lat && p.lng)
+    .map(p => ({ id: p.id, lat: Number(p.lat), lng: Number(p.lng), title: p.title, caption: `${p.area} м²`, type: p.type, isHot: !!p.isHot })),
+    [items],
+  );
 
   useEffect(() => {
     const base = `${(settings.site_url || '').replace(/\/$/, '')}/district/${district}`;
@@ -181,68 +191,92 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
         itemsCount={items.length}
       />
 
-      {/* Объекты */}
-      <div className="container mx-auto px-4 py-8">
-        {items.length === 0 ? (
-          <div className="text-center py-20">
-            <Icon name="MapPin" size={40} className="mx-auto mb-4 text-muted-foreground opacity-30" />
-            <div className="font-display font-700 text-xl text-foreground mb-2">
-              Объектов в этом {placeLabel}е пока нет
-            </div>
-            <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
-              Попробуйте посмотреть все объекты или выбрать другой {placeLabel}.
-            </p>
-            <button onClick={() => navigate('/catalog')} className="btn-blue text-white px-6 py-2.5 rounded-xl text-sm font-semibold">
-              Смотреть все объекты
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {pageItems.map((property, i) => (
-                <PropertyCard
-                  key={property.id}
-                  property={property}
-                  isFavorite={favorites.includes(property.id)}
-                  isCompare={compareList.includes(property.id)}
-                  onToggleFavorite={onToggleFavorite}
-                  onToggleCompare={onToggleCompare}
-                  index={i}
-                  style={{ animationDelay: `${i * 0.03}s` }}
-                />
-              ))}
-            </div>
-
-            {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-8">
-                <button disabled={page === 1} onClick={() => { setPage(p => p - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                  className="px-3 py-2 rounded-lg border border-border hover:border-brand-blue disabled:opacity-30 transition-colors">
-                  <Icon name="ChevronLeft" size={16} />
-                </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                  <button key={p} onClick={() => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                    className={`w-9 h-9 rounded-lg text-sm font-semibold transition-colors ${p === page ? 'btn-blue text-white' : 'border border-border hover:border-brand-blue'}`}>
-                    {p}
-                  </button>
-                ))}
-                <button disabled={page === totalPages} onClick={() => { setPage(p => p + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                  className="px-3 py-2 rounded-lg border border-border hover:border-brand-blue disabled:opacity-30 transition-colors">
-                  <Icon name="ChevronRight" size={16} />
+      {/* Split-лэйаут: слева список, справа sticky карта */}
+      <div className="flex min-h-0">
+        {/* Левая колонка — результаты */}
+        <div className="flex-1 min-w-0">
+          <div className="container mx-auto px-4 py-8">
+            {items.length === 0 ? (
+              <div className="text-center py-20">
+                <Icon name="MapPin" size={40} className="mx-auto mb-4 text-muted-foreground opacity-30" />
+                <div className="font-display font-700 text-xl text-foreground mb-2">
+                  Объектов в этом {placeLabel}е пока нет
+                </div>
+                <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
+                  Попробуйте посмотреть все объекты или выбрать другой {placeLabel}.
+                </p>
+                <button onClick={() => navigate('/catalog')} className="btn-blue text-white px-6 py-2.5 rounded-xl text-sm font-semibold">
+                  Смотреть все объекты
                 </button>
               </div>
-            )}
+            ) : (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {pageItems.map((property, i) => (
+                    <PropertyCard
+                      key={property.id}
+                      property={property}
+                      isFavorite={favorites.includes(property.id)}
+                      isCompare={compareList.includes(property.id)}
+                      onToggleFavorite={onToggleFavorite}
+                      onToggleCompare={onToggleCompare}
+                      index={i}
+                      highlighted={hoveredId === property.id}
+                      onHover={setHoveredId}
+                      style={{ animationDelay: `${i * 0.03}s` }}
+                    />
+                  ))}
+                </div>
 
-            {/* AI SEO-текст */}
-            <DistrictSeoBlock
-              displayName={displayName}
-              isOkrug={isOkrug}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 mt-8">
+                    <button disabled={page === 1} onClick={() => { setPage(p => p - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                      className="px-3 py-2 rounded-lg border border-border hover:border-brand-blue disabled:opacity-30 transition-colors">
+                      <Icon name="ChevronLeft" size={16} />
+                    </button>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                      <button key={p} onClick={() => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        className={`w-9 h-9 rounded-lg text-sm font-semibold transition-colors ${p === page ? 'btn-blue text-white' : 'border border-border hover:border-brand-blue'}`}>
+                        {p}
+                      </button>
+                    ))}
+                    <button disabled={page === totalPages} onClick={() => { setPage(p => p + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                      className="px-3 py-2 rounded-lg border border-border hover:border-brand-blue disabled:opacity-30 transition-colors">
+                      <Icon name="ChevronRight" size={16} />
+                    </button>
+                  </div>
+                )}
+
+                <DistrictSeoBlock
+                  displayName={displayName}
+                  isOkrug={isOkrug}
+                  city={city}
+                  aiText={aiText}
+                  aiLoading={aiLoading}
+                  description={districtData?.description}
+                />
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Правая колонка — sticky карта (только десктоп) */}
+        <div className="hidden lg:block w-1/2 shrink-0">
+          <div className="sticky top-0 h-screen">
+            <CatalogMap
+              mapPoints={mapPoints}
+              mapSelected={mapSelected}
               city={city}
-              aiText={aiText}
-              aiLoading={aiLoading}
-              description={districtData?.description}
+              fullscreen={mapFullscreen}
+              highlightedId={hoveredId}
+              onClose={() => setMapSelected(null)}
+              onPointClick={() => {}}
+              onDeselectPoint={() => setMapSelected(null)}
+              onFullscreenChange={setMapFullscreen}
+              height="100%"
             />
-          </>
-        )}
+          </div>
+        </div>
       </div>
     </div>
   );
