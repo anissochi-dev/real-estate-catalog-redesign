@@ -37,7 +37,8 @@ export default function YandexMap({
 
   function reverseGeocode(lat: number, lng: number) {
     if (!window.ymaps || typeof window.ymaps.geocode !== 'function') return;
-    window.ymaps.geocode([lat, lng], { results: 1, kind: 'house' })
+    // Сначала пробуем найти дом, если не нашли — берём любой ближайший объект
+    window.ymaps.geocode([lat, lng], { results: 1 })
       .then((res: any) => {
         const obj = res?.geoObjects?.get(0);
         if (!obj) return;

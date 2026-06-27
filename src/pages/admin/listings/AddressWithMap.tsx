@@ -283,7 +283,13 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     const street = obj.getThoroughfare?.() || '';
     const house = obj.getPremiseNumber?.() || '';
     const builtAddress = [settlement, street, house].filter(Boolean).join(', ');
-    const finalAddress = streetOverride || builtAddress || obj.getAddressLine?.() || '';
+    // Fallback: getAddressLine даёт полный адрес — обрезаем федеральные уровни
+    let fallback = obj.getAddressLine?.() || '';
+    for (const p of ['Россия, ', 'Краснодарский край, ']) {
+      if (fallback.startsWith(p)) fallback = fallback.slice(p.length);
+    }
+    fallback = fallback.replace(/^[А-ЯЁа-яё\s-]+ (район|р-н), /, '');
+    const finalAddress = streetOverride || builtAddress || fallback;
     const cur = editingRef.current;
     setEditing({ ...cur, district: microdistrict || '', address: finalAddress, lat: coords[0], lng: coords[1] });
     setStreetInput(finalAddress);
