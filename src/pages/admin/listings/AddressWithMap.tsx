@@ -259,9 +259,17 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
 
   function parseYmapsGeoObject(obj: any, coords: [number, number], streetOverride?: string) {
     let microdistrict = '';
+    let settlement = '';
     try {
       const meta = obj.properties?.get?.('metaDataProperty')?.GeocoderMetaData;
       const comps: { kind: string; name: string }[] = meta?.Address?.Components || [];
+      // Населённый пункт внутри города (посёлок, станица, хутор и т.д.)
+      const localityComp = comps.find(p => p.kind === 'locality');
+      const cityComp = comps.find(p => p.kind === 'province' && /город/i.test(p.name));
+      // Если locality отличается от основного города — это посёлок/станица
+      if (localityComp && localityComp.name !== currentCity && localityComp.name !== cityComp?.name) {
+        settlement = localityComp.name;
+      }
       const dists = comps.filter(p => p.kind === 'district').map(p => p.name);
       microdistrict = dists.find(n => /микрорайон|мкр|квартал|жилмассив/i.test(n))
         || (dists.length ? dists[dists.length - 1] : '');
@@ -274,7 +282,7 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
     }
     const street = obj.getThoroughfare?.() || '';
     const house = obj.getPremiseNumber?.() || '';
-    const builtAddress = [street, house].filter(Boolean).join(', ');
+    const builtAddress = [settlement, street, house].filter(Boolean).join(', ');
     const finalAddress = streetOverride || builtAddress || obj.getAddressLine?.() || '';
     const cur = editingRef.current;
     setEditing({ ...cur, district: microdistrict || '', address: finalAddress, lat: coords[0], lng: coords[1] });
