@@ -115,9 +115,21 @@ def _handle_suggest(event: dict, cur) -> dict:
     api_key = os.environ.get('DADATA_API_KEY', '')
     secret_key = os.environ.get('DADATA_SECRET_KEY', '')
 
+    # Если запрос начинается с обозначения населённого пункта — ищем по краю, а не по городу
+    settlement_starts = ('п.', 'пгт.', 'с.', 'ст.', 'х.', 'пос.', 'снт.', 'г.', 'аул')
+    query_lower = query.lower().strip()
+    is_settlement_query = any(query_lower.startswith(s) for s in settlement_starts)
+
+    if is_settlement_query:
+        search_query = query
+        locations = [{'region': 'Краснодарский край'}]
+    else:
+        search_query = f'{city}, {query}'
+        locations = [{'city': city}]
+
     payload = json.dumps({
-        'query': f'{city}, {query}', 'count': 8,
-        'locations': [{'city': city}], 'restrict_value': False,
+        'query': search_query, 'count': 8,
+        'locations': locations, 'restrict_value': False,
     }).encode('utf-8')
 
     req = urllib.request.Request(
