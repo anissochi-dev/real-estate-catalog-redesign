@@ -29,7 +29,7 @@ export default function CatalogResults({
   onToggleFavorite, onToggleCompare, onLoadMore,
 }: CatalogResultsProps) {
   return (
-    <section className="container mx-auto px-4 py-8" aria-label="Каталог объектов">
+    <section className="container mx-auto px-3 py-4" aria-label="Каталог объектов">
       <SchemaOrg schema={catalogBreadcrumbSchema} id="catalog-breadcrumb" />
       <div className="mb-4">
         <Breadcrumbs items={[
@@ -64,7 +64,7 @@ export default function CatalogResults({
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {pageItems.map((property, i) => (
               <PropertyCard
                 key={property.id}
@@ -74,6 +74,7 @@ export default function CatalogResults({
                 onToggleFavorite={onToggleFavorite}
                 onToggleCompare={onToggleCompare}
                 index={i}
+                variant="compact"
                 style={{ animationDelay: `${i * 0.03}s` }}
               />
             ))}

@@ -19,7 +19,7 @@ interface PropertyCardProps {
   onToggleCompare: (id: number) => void;
   style?: React.CSSProperties;
   index?: number;
-  variant?: 'default' | 'home';
+  variant?: 'default' | 'home' | 'compact';
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -181,6 +181,7 @@ export default function PropertyCard({
   property, isFavorite, isCompare, onToggleFavorite, onToggleCompare, style, index = 99, variant = 'default',
 }: PropertyCardProps) {
   const isHome = variant === 'home';
+  const isCompact = variant === 'compact';
   const href = `/object/${listingSlug(property.title, property.id)}`;
   const navigate = useNavigate();
   const { hint, rootRef } = usePredictHint(property.id);
@@ -224,11 +225,11 @@ export default function PropertyCard({
         onMouseEnter={handlePrefetch}
         onTouchStart={handlePrefetch}
         onClick={() => navigate(href)}
-        className={`property-card group bg-white rounded-2xl overflow-hidden border border-border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up flex flex-col cursor-pointer ${isHome ? 'sm:grid sm:grid-cols-[300px_1fr]' : ''}`}
+        className={`property-card group bg-white rounded-2xl overflow-hidden border border-border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up flex flex-col cursor-pointer ${isHome ? 'sm:grid sm:grid-cols-[300px_1fr]' : ''} ${isCompact ? 'rounded-xl' : ''}`}
         style={style}
       >
         {/* ── Левая колонка: фото ── */}
-        <div className="relative overflow-hidden bg-muted aspect-[4/3]">
+        <div className={`relative overflow-hidden bg-muted ${isCompact ? 'aspect-[3/2]' : 'aspect-[4/3]'}`}>
           {cover ? (
             <img
               src={cover}
@@ -296,13 +297,13 @@ export default function PropertyCard({
         </div>
 
         {/* ── Правая колонка: контент ── */}
-        <div className="flex flex-col justify-between p-4 gap-3 min-w-0 flex-1">
+        <div className={`flex flex-col justify-between min-w-0 flex-1 ${isCompact ? 'p-2.5 gap-1.5' : 'p-4 gap-3'}`}>
 
           {/* Верхний блок */}
           <div className="space-y-1.5 min-w-0">
 
             {/* Название */}
-            <h3 className={`font-display font-800 text-foreground leading-snug line-clamp-2 group-hover:text-brand-blue transition-colors ${isHome ? 'text-[18px] sm:text-[20px]' : 'font-700 text-[14px] sm:text-[15px]'}`}>
+            <h3 className={`font-display font-800 text-foreground leading-snug line-clamp-2 group-hover:text-brand-blue transition-colors ${isHome ? 'text-[18px] sm:text-[20px]' : isCompact ? 'font-700 text-[12px]' : 'font-700 text-[14px] sm:text-[15px]'}`}>
               {property.title}
             </h3>
 
@@ -329,7 +330,7 @@ export default function PropertyCard({
           </div>
 
           {/* Характеристики */}
-          <div className="flex flex-wrap gap-x-3 gap-y-1.5 bg-muted/50 rounded-xl px-3 py-2 items-center">
+          <div className={`flex flex-wrap items-center bg-muted/50 rounded-lg ${isCompact ? 'gap-x-2 gap-y-1 px-2 py-1' : 'gap-x-3 gap-y-1.5 rounded-xl px-3 py-2'}`}>
             {/* Категория с иконкой */}
             <div className="flex items-center gap-1.5 text-[12px] font-semibold text-brand-blue">
               <Icon name={TYPE_ICONS[property.type] || 'Building2'} size={12} className="text-brand-blue" />
@@ -374,9 +375,9 @@ export default function PropertyCard({
           })()}
 
           {/* Цена */}
-          <div className="border-t border-border/60 pt-3">
+          <div className={`border-t border-border/60 ${isCompact ? 'pt-1.5' : 'pt-3'}`}>
             <div className="flex items-baseline gap-2 flex-wrap">
-              <span className={`font-display font-900 leading-none tracking-tight text-foreground ${isHome ? 'text-[24px] sm:text-[28px]' : 'text-[20px] sm:text-[22px]'}`}>
+              <span className={`font-display font-900 leading-none tracking-tight text-foreground ${isHome ? 'text-[24px] sm:text-[28px]' : isCompact ? 'text-[15px]' : 'text-[20px] sm:text-[22px]'}`}>
                 {property.price.toLocaleString('ru')} ₽{property.deal === 'rent' ? '/мес' : ''}
               </span>
               {ppm2 && (
