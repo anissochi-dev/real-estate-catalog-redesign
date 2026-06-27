@@ -47,6 +47,8 @@ interface Props {
   onPointClick?: (point: MapPoint) => void;
   className?: string;
   highlightedId?: number | null;
+  selectedId?: number | null;
+  onBalloonClose?: () => void;
 }
 
 const KRASNODAR: [number, number] = [45.0355, 38.9753];
@@ -88,6 +90,8 @@ export default function YandexMap({
   onPointClick,
   className = '',
   highlightedId = null,
+  selectedId = null,
+  onBalloonClose,
 }: Props) {
   const { settings } = useSettings();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -177,14 +181,15 @@ export default function YandexMap({
 
     placemarkMapRef.current.clear();
     valid.forEach(p => {
+      const openUrl = p.url || '';
       const placemark = new window.ymaps.Placemark(
         [p.lat, p.lng],
         {
           balloonContentHeader: p.title || '',
-          balloonContentBody: p.caption || '',
+          balloonContentBody: `<div style="font-size:13px;color:#555;margin-bottom:6px">${p.caption || ''}</div>${openUrl ? `<a href="${openUrl}" style="display:inline-block;background:#1a56db;color:#fff;padding:4px 12px;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;margin-top:2px">Открыть →</a>` : ''}`,
           hintContent: p.title || '',
         },
-        { preset: presetFor(p.type, p.isHot) }
+        { preset: presetFor(p.type, p.isHot), balloonCloseButton: true, hideIconOnBalloonOpen: false }
       );
       if (onPointClick || p.url) {
         placemark.events.add('click', () => {
@@ -211,6 +216,28 @@ export default function YandexMap({
       map.setCenter(center, zoom);
     }
   }, [points, center, zoom, onPointClick, mapReady]);
+
+  // Открытие balloon над маркером при выборе
+  useEffect(() => {
+    if (!mapReady || !window.ymaps) return;
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (selectedId == null) {
+      map.balloon.close();
+      return;
+    }
+
+    const pm = placemarkMapRef.current.get(selectedId);
+    if (pm) {
+      pm.balloon.open();
+      // Подписываемся на закрытие balloon пользователем
+      const handler = () => { if (onBalloonClose) onBalloonClose(); };
+      pm.balloon.events.add('close', handler);
+      return () => { try { pm.balloon.events.remove('close', handler); } catch { /* ignore */ } };
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, mapReady]);
 
   // Подсветка маркера при hover из списка
   useEffect(() => {

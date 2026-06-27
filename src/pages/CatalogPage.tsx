@@ -15,6 +15,7 @@ import CatalogFilters from './catalog/CatalogFilters';
 import CatalogMap from './catalog/CatalogMap';
 import CatalogResults from './catalog/CatalogResults';
 import { buildCatalogH1 } from './catalog/catalogH1';
+import { listingSlug } from '@/lib/slug';
 
 interface CatalogPageProps {
   properties: Property[];
@@ -136,6 +137,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
         caption: `${formatPrice(p.price, p.deal)} · ${p.area} м²`,
         type: String(p.type),
         isHot: p.isHot,
+        url: `/object/${listingSlug(p.title, p.id)}`,
       })),
     [filtered],
   );
