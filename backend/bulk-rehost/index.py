@@ -407,6 +407,100 @@ def handler(event: dict, context) -> dict:
                     ),
                 })
 
+            # ── Перегенерация thumb 400px для ВСЕХ объектов ───────────────
+            elif action == 'rethumb_batch':
+                batch_size = min(int(params.get('batch_size') or body.get('batch_size') or 5), 10)
+                offset = int(params.get('offset') or body.get('offset') or 0)
+                THUMB_SIDE = 400
+                THUMB_QUALITY = 72
+
+                cur.execute(
+                    f"SELECT id, image, image_thumb FROM {SCHEMA}.listings "
+                    f"WHERE image LIKE '%cdn.poehali.dev%' "
+                    f"AND image IS NOT NULL AND image != '' "
+                    f"AND status = 'active' "
+                    f"ORDER BY id ASC "
+                    f"LIMIT {batch_size} OFFSET {offset}"
+                )
+                listings = cur.fetchall()
+
+                if not listings:
+                    return _ok({'done': True, 'processed': 0, 'ok': 0, 'errors': 0})
+
+                s3_client = _s3()
+                results = []
+                total_ok = total_errors = 0
+
+                for listing in listings:
+                    lid = listing['id']
+                    main_url = (listing.get('image') or '').strip()
+                    if not main_url or 'cdn.poehali.dev' not in main_url:
+                        results.append({'id': lid, 'skipped': 'no url'})
+                        continue
+                    try:
+                        raw = _fetch_image(main_url)
+                        from PIL import Image as _PI
+                        img = _PI.open(io.BytesIO(raw)).convert('RGB')
+                        tw, th = img.size
+
+                        # Масштабируем до 400px
+                        if max(tw, th) > THUMB_SIDE:
+                            t_scale = THUMB_SIDE / max(tw, th)
+                            thumb_img = img.resize(
+                                (int(tw * t_scale), int(th * t_scale)), _PI.LANCZOS
+                            )
+                        else:
+                            thumb_img = img
+
+                        buf = io.BytesIO()
+                        thumb_img.save(buf, format='WEBP', quality=THUMB_QUALITY, method=4)
+                        thumb_bytes = buf.getvalue()
+
+                        # Берём токен из основного URL или генерируем новый
+                        import re as _re
+                        m = _re.search(r'/photos/([^/]+?)(?:_wm)?\.webp', main_url)
+                        token = m.group(1) if m else secrets.token_urlsafe(10)
+                        thumb_key = f"photos/{token}_thumb.webp"
+                        s3_client.put_object(
+                            Bucket=BUCKET, Key=thumb_key, Body=thumb_bytes,
+                            ContentType='image/webp', CacheControl='public, max-age=31536000'
+                        )
+                        thumb_url = _cdn_url(thumb_key)
+
+                        cur.execute(
+                            f"UPDATE {SCHEMA}.listings "
+                            f"SET image_thumb = '{thumb_url.replace(chr(39), chr(39)*2)}', "
+                            f"updated_at = NOW() WHERE id = {lid}"
+                        )
+                        total_ok += 1
+                        results.append({
+                            'id': lid,
+                            'ok': True,
+                            'thumb_url': thumb_url,
+                            'new_kb': round(len(thumb_bytes) / 1024, 1),
+                        })
+                    except Exception as e:
+                        total_errors += 1
+                        results.append({'id': lid, 'error': str(e)[:120]})
+
+                conn.commit()
+
+                cur.execute(
+                    f"SELECT COUNT(*) as total FROM {SCHEMA}.listings "
+                    f"WHERE status = 'active' AND image LIKE '%cdn.poehali.dev%'"
+                )
+                total_active = cur.fetchone()['total']
+
+                return _ok({
+                    'done': (offset + batch_size) >= total_active,
+                    'processed': len(listings),
+                    'ok': total_ok,
+                    'errors': total_errors,
+                    'next_offset': offset + batch_size,
+                    'total_active': total_active,
+                    'results': results,
+                })
+
             # ── Статус пересжатия (сколько без thumb) ─────────────────────
             elif action == 'recompress_status':
                 cur.execute(
