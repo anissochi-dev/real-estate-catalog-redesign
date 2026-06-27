@@ -115,14 +115,18 @@ def _handle_suggest(event: dict, cur) -> dict:
     api_key = os.environ.get('DADATA_API_KEY', '')
     secret_key = os.environ.get('DADATA_SECRET_KEY', '')
 
-    # Ищем сначала в черте города, потом по всему региону — объединяем результаты
+    # Ищем сначала в черте города, потом в городском округе (включает пригороды/посёлки)
     payload_city = json.dumps({
         'query': f'{city}, {query}', 'count': 6,
         'locations': [{'city': city}], 'restrict_value': False,
     }).encode('utf-8')
-    payload_region = json.dumps({
-        'query': query, 'count': 4,
-        'locations': [{'region': 'Краснодарский край'}], 'restrict_value': False,
+    # Расширенный поиск БЕЗ locations — единственный способ найти п. Южный,
+    # ст. Елизаветинская и другие пригороды вне черты города
+    payload_okrug = json.dumps({
+        'query': f'Краснодарский край, {city}, {query}',
+        'count': 4,
+        'restrict_value': False,
+        # Без поля locations — DaData ищет по всей базе
     }).encode('utf-8')
 
     def _dadata_suggest(payload_bytes):
@@ -137,11 +141,67 @@ def _handle_suggest(event: dict, cur) -> dict:
             return json.loads(resp.read().decode('utf-8')).get('suggestions', [])
 
     city_results = _dadata_suggest(payload_city)
-    region_results = _dadata_suggest(payload_region)
+    okrug_results = _dadata_suggest(payload_okrug)
 
-    # Объединяем: сначала городские, потом региональные без дублей
+    # Дополнительно: Яндекс геокодер для пригородов (п. Южный и т.д.)
+    yandex_results = []
+    yandex_key = os.environ.get('YANDEX_GEOCODER_KEY', '')
+    # Запускаем Яндекс если в запросе есть признак пригорода (посёлок, станица, хутор и т.д.)
+    _suburb_hint = bool(re.search(r'южн|елизавет|старокорсун|новознамен|лазурн|пашковск|дачн|пос\.|п\.|ст-ца|ст\.|хут|станиц|поселок|посёлок', query, re.I))
+    if yandex_key and (_suburb_hint or not city_results):
+        try:
+            import urllib.parse as _up
+            # Для пригородов ищем без привязки к городу — только Краснодарский край
+            yq = _up.quote(f'Краснодарский край, {query}')
+            yurl = (
+                f'https://geocode-maps.yandex.ru/1.x/?apikey={yandex_key}'
+                f'&geocode={yq}&format=json&results=5&lang=ru_RU'
+                f'&ll=38.9753,45.0355&spn=2.0,2.0'
+            )
+            yreq = urllib.request.Request(yurl, headers={
+                'User-Agent': 'Mozilla/5.0', 'Referer': 'https://yandex.ru/maps/',
+            })
+            with urllib.request.urlopen(yreq, timeout=8) as yr:
+                ydata = json.loads(yr.read().decode('utf-8'))
+            members = ydata.get('response', {}).get('GeoObjectCollection', {}).get('featureMember', [])
+            for m in members:
+                obj = m.get('GeoObject', {})
+                meta = obj.get('metaDataProperty', {}).get('GeocoderMetaData', {})
+                addr = meta.get('Address', {})
+                comps = addr.get('Components', [])
+                formatted = addr.get('formatted', '')
+                # Убираем федеральные уровни
+                for pfx in ['Россия, ', 'Краснодарский край, ']:
+                    if formatted.startswith(pfx):
+                        formatted = formatted[len(pfx):]
+                formatted = re.sub(r'^[А-ЯЁа-яё\s-]+ (район|р-н), ', '', formatted)
+                pos = obj.get('Point', {}).get('pos', '')
+                if not pos:
+                    continue
+                lon_s, lat_s = pos.split()
+                street = next((c['name'] for c in comps if c.get('kind') == 'street'), '')
+                house = next((c['name'] for c in comps if c.get('kind') == 'house'), '')
+                MAIN = {'Краснодар', 'Сочи', 'Анапа', 'Геленджик', 'Новороссийск', 'Армавир'}
+                locs = [c['name'] for c in comps if c.get('kind') == 'locality']
+                settlement = locs[-1] if len(locs) >= 2 else (locs[0] if locs and locs[0] not in MAIN else '')
+                short_addr = ', '.join(filter(None, [settlement, street, house])) or formatted
+                if short_addr and short_addr not in {s.get('value') for s in city_results + okrug_results}:
+                    yandex_results.append({
+                        'value': short_addr, 'full': formatted,
+                        'lat': float(lat_s), 'lon': float(lon_s),
+                        'district': '',
+                        '_from_yandex': True,
+                    })
+        except Exception as e:
+            print(f'[suggest] yandex fallback error: {e}')
+
+    # Объединяем: сначала городские DaData, потом из округа, потом Яндекс
     seen_values = {s.get('value') for s in city_results}
-    combined = city_results + [s for s in region_results if s.get('value') not in seen_values]
+    combined = city_results
+    for s in okrug_results + yandex_results:
+        if s.get('value') not in seen_values:
+            seen_values.add(s.get('value'))
+            combined.append(s)
 
     rules = _load_street_rules(cur)
     suggestions = []
@@ -169,11 +229,15 @@ def _handle_suggest(event: dict, cur) -> dict:
         #          «Павловский район, г. Павловская, ул. ...» → «г. Павловская, ул. ...»
         short = re.sub(r'^[А-ЯЁа-яё\s\-]+ (район|р-н), ', '', short)
 
+        # Координаты: из DaData data или из Яндекс-результата напрямую
+        lat_val = float(d['geo_lat']) if d.get('geo_lat') else s.get('lat')
+        lon_val = float(d['geo_lon']) if d.get('geo_lon') else s.get('lon')
+        # Для Яндекс-результатов district уже проставлен, для DaData ищем по справочнику
+        dist_val = s.get('district') if s.get('_from_yandex') else district
         suggestions.append({
-            'value': short, 'full': value,
-            'lat': float(d['geo_lat']) if d.get('geo_lat') else None,
-            'lon': float(d['geo_lon']) if d.get('geo_lon') else None,
-            'district': district,
+            'value': short, 'full': s.get('full', value),
+            'lat': lat_val, 'lon': lon_val,
+            'district': dist_val,
         })
 
     return {'statusCode': 200, 'headers': {**CORS, 'Content-Type': 'application/json'},
