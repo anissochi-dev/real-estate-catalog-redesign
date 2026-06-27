@@ -60,7 +60,7 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
                 }
               </h5>
               {ppm2 ? (
-                <span className="text-sm font-semibold text-muted-foreground whitespace-nowrap">{ppm2.toLocaleString('ru')} ₽/м²</span>
+                <span className="text-sm font-semibold text-muted-foreground whitespace-nowrap">за 1 м² — {ppm2.toLocaleString('ru')} ₽</span>
               ) : null}
             </div>
           </div>
