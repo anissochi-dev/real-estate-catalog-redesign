@@ -23,6 +23,7 @@ interface Props {
 
 export default function PropertySidebar({ item, agents, sent, sending, form, setForm, onSubmit, captcha, setCaptcha, captchaKey }: Props) {
   const agent = agents[0] || null;
+  const ppm2 = item.pricePerM2 || (item.area && item.area > 0 ? Math.round(item.price / item.area) : null);
   const [chatOpen, setChatOpen] = useState(false);
   const [phoneRevealed, setPhoneRevealed] = useState(false);
 
@@ -58,10 +59,10 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
                   : <>{item.price.toLocaleString('ru')} ₽{item.deal === 'rent' ? '/мес' : ''}</>
                 }
               </h5>
-              {item.pricePerM2 ? (
+              {ppm2 ? (
                 <div className="flex items-center gap-1 shrink-0">
                   <Icon name="Scaling" size={11} className="text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">{item.pricePerM2.toLocaleString('ru')} ₽/м²</span>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">{ppm2.toLocaleString('ru')} ₽/м²</span>
                 </div>
               ) : null}
             </div>
