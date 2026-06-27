@@ -38,7 +38,7 @@ export default function ListingEditorHeader({
           {editing.id ? 'Редактировать' : 'Новый объект'}
           {editing.id ? (
             <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue">
-              #{fmtListingId(editing.id)}
+              #{fmtListingId(editing.id, editing.created_at)}
             </span>
           ) : null}
           {/* Виртуальный брокер: анализ цены — между названием и кнопкой видимости */}

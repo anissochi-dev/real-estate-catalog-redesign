@@ -99,12 +99,12 @@ export default function ListingInternalCard({ listingId, onClose, onBrokerChange
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-display font-700 text-base leading-snug">{listing.title}</span>
                 <button
-                  onClick={() => copyId(fmtListingId(listing.id))}
+                  onClick={() => copyId(fmtListingId(listing.id, listing.created_at))}
                   title="Нажмите, чтобы скопировать ID"
                   className="text-xs px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue font-mono font-semibold shrink-0 hover:bg-brand-blue/20 transition-colors flex items-center gap-1 cursor-pointer"
                 >
                   {copied ? <Icon name="Check" size={10} /> : <Icon name="Copy" size={10} />}
-                  #{fmtListingId(listing.id)}
+                  #{fmtListingId(listing.id, listing.created_at)}
                 </button>
                 {listing.is_hot && <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-semibold shrink-0">Горячее</span>}
                 {listing.is_new && <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold shrink-0">Новинка</span>}

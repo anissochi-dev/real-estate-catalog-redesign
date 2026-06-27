@@ -1,7 +1,16 @@
-/** Форматирует ID объекта: префикс 123 + числовой id.
- *  id=129 → "123129", id=53 → "12353" */
-export function fmtListingId(id: number): string {
-  return `123${id}`;
+/** Форматирует ID объекта: ДДММГГ + числовой id.
+ *  id=132, createdAt="2026-06-27" → "270626132" */
+export function fmtListingId(id: number, createdAt?: string): string {
+  if (createdAt) {
+    const d = new Date(createdAt);
+    if (!isNaN(d.getTime())) {
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const yy = String(d.getFullYear()).slice(2);
+      return `${dd}${mm}${yy}${id}`;
+    }
+  }
+  return `${id}`;
 }
 
 export function formatPrice(price: number, deal: string): string {

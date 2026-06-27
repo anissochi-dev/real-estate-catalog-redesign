@@ -191,7 +191,7 @@ export default function ListingsTable({
                 {/* ID + действия */}
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue">
-                    #{fmtListingId(it.id)}
+                    #{fmtListingId(it.id, it.created_at)}
                   </span>
                   <button
                     onClick={() => onHistory(it)}
@@ -396,7 +396,7 @@ export default function ListingsTable({
                 </button>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue">
-                    #{fmtListingId(it.id)}
+                    #{fmtListingId(it.id, it.created_at)}
                   </span>
                   <button onClick={() => onHistory(it)} title="История" className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-brand-blue transition-colors">
                     <Icon name="BarChart2" size={13} />

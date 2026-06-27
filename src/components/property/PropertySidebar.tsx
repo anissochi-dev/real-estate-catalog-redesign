@@ -67,7 +67,7 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
           <div className="px-4 py-1.5 bg-muted/40 border-t border-border flex items-center gap-1.5">
             <Icon name="Hash" size={11} className="text-muted-foreground" />
             <span className="text-xs text-muted-foreground">ID:</span>
-            <span className="text-xs font-mono font-semibold text-foreground">#{fmtListingId(item.id)}</span>
+            <span className="text-xs font-mono font-semibold text-foreground">#{fmtListingId(item.id, item.createdAt)}</span>
           </div>
 
           {/* Представитель собственника */}

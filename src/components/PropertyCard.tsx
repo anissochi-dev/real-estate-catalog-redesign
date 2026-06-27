@@ -196,7 +196,7 @@ export default function PropertyCard({
     ? property.pricePerM2
     : property.area > 0 ? Math.round(property.price / property.area) : null;
 
-  const publicId = fmtListingId(property.id);
+  const publicId = fmtListingId(property.id, property.createdAt);
   const assessCls = hint?.price_assessment
     ? (ASSESS_STYLES[hint.price_assessment.color] ?? ASSESS_STYLES.gray) : null;
 
