@@ -311,26 +311,29 @@ export default function PropertyCard({
               {property.title}
             </h3>
 
+            {/* Район — бейдж */}
+            {property.district && (
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); navigate(`/catalog?search=${encodeURIComponent(property.district || '')}`); }}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+              >
+                <Icon name="MapPin" size={10} />
+                {property.district}
+              </button>
+            )}
+
             {/* Адрес — полный */}
-            {addressLine ? (
+            {addressLine && (
               <button
                 type="button"
                 onClick={e => { e.stopPropagation(); setMapOpen(true); }}
                 className="flex items-start gap-1 text-[12px] text-muted-foreground hover:text-brand-blue transition-colors text-left w-full group/addr"
               >
                 <Icon name="MapPin" size={11} className="flex-shrink-0 text-brand-blue/40 group-hover/addr:text-brand-blue mt-0.5 transition-colors" />
-                <span className="break-words">{addressLine}</span>
+                <span className="break-words">{property.address}</span>
               </button>
-            ) : property.district ? (
-              <button
-                type="button"
-                onClick={e => { e.stopPropagation(); navigate(`/catalog?search=${encodeURIComponent(property.district || '')}`); }}
-                className="inline-flex items-center gap-1 text-[12px] text-muted-foreground hover:text-brand-blue transition-colors"
-              >
-                <Icon name="MapPin" size={11} className="text-brand-blue/40" />
-                {property.district}
-              </button>
-            ) : null}
+            )}
           </div>
 
           {/* Характеристики */}
