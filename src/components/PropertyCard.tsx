@@ -20,6 +20,8 @@ interface PropertyCardProps {
   style?: React.CSSProperties;
   index?: number;
   variant?: 'default' | 'home' | 'compact';
+  highlighted?: boolean;
+  onHover?: (id: number | null) => void;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -178,7 +180,7 @@ function getCoverImage(property: PropertyCardProps['property']): string | null {
 }
 
 export default function PropertyCard({
-  property, isFavorite, isCompare, onToggleFavorite, onToggleCompare, style, index = 99, variant = 'default',
+  property, isFavorite, isCompare, onToggleFavorite, onToggleCompare, style, index = 99, variant = 'default', highlighted = false, onHover,
 }: PropertyCardProps) {
   const isHome = variant === 'home';
   const isCompact = variant === 'compact';
@@ -225,7 +227,9 @@ export default function PropertyCard({
         onMouseEnter={handlePrefetch}
         onTouchStart={handlePrefetch}
         onClick={() => navigate(href)}
-        className={`property-card group bg-white rounded-2xl overflow-hidden border border-border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up flex flex-col cursor-pointer ${isHome ? 'sm:grid sm:grid-cols-[300px_1fr]' : ''} ${isCompact ? 'rounded-xl' : ''}`}
+        className={`property-card group bg-white rounded-2xl overflow-hidden border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up flex flex-col cursor-pointer ${isHome ? 'sm:grid sm:grid-cols-[300px_1fr]' : ''} ${isCompact ? 'rounded-xl' : ''} ${highlighted ? 'border-brand-blue ring-2 ring-brand-blue/30 shadow-md -translate-y-0.5' : 'border-border'}`}
+        onMouseEnter={() => onHover?.(property.id)}
+        onMouseLeave={() => onHover?.(null)}
         style={style}
       >
         {/* ── Левая колонка: фото ── */}

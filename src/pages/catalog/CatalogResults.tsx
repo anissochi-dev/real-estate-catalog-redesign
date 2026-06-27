@@ -17,16 +17,18 @@ interface CatalogResultsProps {
   typeFilter: string;
   catalogBreadcrumbSchema: object;
   loadStep: number;
+  hoveredId?: number | null;
   onToggleFavorite: (id: number) => void;
   onToggleCompare: (id: number) => void;
   onLoadMore: () => void;
+  onHover?: (id: number | null) => void;
 }
 
 export default function CatalogResults({
   h1, filtered, pageItems, favorites, compareList,
   visibleCount, hasMore, allLoaded, dealFilter, typeFilter,
-  catalogBreadcrumbSchema, loadStep,
-  onToggleFavorite, onToggleCompare, onLoadMore,
+  catalogBreadcrumbSchema, loadStep, hoveredId,
+  onToggleFavorite, onToggleCompare, onLoadMore, onHover,
 }: CatalogResultsProps) {
   return (
     <section className="container mx-auto px-3 py-4" aria-label="Каталог объектов">
@@ -75,6 +77,8 @@ export default function CatalogResults({
                 onToggleCompare={onToggleCompare}
                 index={i}
                 variant="compact"
+                highlighted={hoveredId === property.id}
+                onHover={onHover}
                 style={{ animationDelay: `${i * 0.03}s` }}
               />
             ))}

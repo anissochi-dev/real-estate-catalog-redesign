@@ -51,6 +51,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
   const [showMap, setShowMap] = useState(false);
   const [mapFullscreen, setMapFullscreen] = useState(false);
   const [mapSelected, setMapSelected] = useState<Property | null>(null);
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
 
   const isStubCoord = (n: number) => Math.abs(n - Math.round(n)) < 1e-6 && Math.abs(n * 1000 - Math.round(n * 1000)) < 1e-9;
 
@@ -209,9 +210,11 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
             typeFilter={typeFilter}
             catalogBreadcrumbSchema={catalogBreadcrumbSchema}
             loadStep={LOAD_STEP}
+            hoveredId={hoveredId}
             onToggleFavorite={onToggleFavorite}
             onToggleCompare={onToggleCompare}
             onLoadMore={() => setVisibleCount(v => v + LOAD_STEP)}
+            onHover={setHoveredId}
           />
         </div>
 
@@ -223,6 +226,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
               mapSelected={mapSelected}
               city={settings.main_city || 'Краснодар'}
               fullscreen={mapFullscreen}
+              highlightedId={hoveredId}
               onClose={() => setMapSelected(null)}
               onPointClick={handleMapPointClick}
               onDeselectPoint={() => setMapSelected(null)}

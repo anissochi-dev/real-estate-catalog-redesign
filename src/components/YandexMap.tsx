@@ -46,6 +46,7 @@ interface Props {
   height?: string;
   onPointClick?: (point: MapPoint) => void;
   className?: string;
+  highlightedId?: number | null;
 }
 
 const KRASNODAR: [number, number] = [45.0355, 38.9753];
@@ -86,11 +87,14 @@ export default function YandexMap({
   height = '500px',
   onPointClick,
   className = '',
+  highlightedId = null,
 }: Props) {
   const { settings } = useSettings();
   const containerRef = useRef<HTMLDivElement | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const placemarkMapRef = useRef<Map<number, any>>(new Map());
   const [error, setError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
 
@@ -171,6 +175,7 @@ export default function YandexMap({
       .map(p => ({ ...p, lat: Number(p.lat), lng: Number(p.lng) }))
       .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng) && p.lat !== 0 && p.lng !== 0);
 
+    placemarkMapRef.current.clear();
     valid.forEach(p => {
       const placemark = new window.ymaps.Placemark(
         [p.lat, p.lng],
@@ -188,6 +193,7 @@ export default function YandexMap({
         });
       }
       map.geoObjects.add(placemark);
+      placemarkMapRef.current.set(p.id, placemark);
     });
 
     if (valid.length === 1) {
@@ -205,6 +211,18 @@ export default function YandexMap({
       map.setCenter(center, zoom);
     }
   }, [points, center, zoom, onPointClick, mapReady]);
+
+  // Подсветка маркера при hover из списка
+  useEffect(() => {
+    if (!mapReady || !window.ymaps) return;
+    placemarkMapRef.current.forEach((pm, id) => {
+      try {
+        const isHL = id === highlightedId;
+        pm.options.set('zIndex', isHL ? 1000 : 0);
+        pm.options.set('iconOffset', isHL ? [0, -8] : [0, 0]);
+      } catch { /* ignore */ }
+    });
+  }, [highlightedId, mapReady]);
 
   // Ресайз карты при смене fullscreen (нативный Fullscreen API)
   useEffect(() => {

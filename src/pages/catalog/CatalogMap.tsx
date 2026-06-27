@@ -21,6 +21,7 @@ interface CatalogMapProps {
   mapSelected: Property | null;
   city: string;
   fullscreen: boolean;
+  highlightedId?: number | null;
   onClose: () => void;
   onPointClick: (pt: { id: number }) => void;
   onDeselectPoint: () => void;
@@ -32,7 +33,7 @@ interface CatalogMapProps {
 const KRASNODAR_CENTER: [number, number] = [45.0355, 38.9753];
 
 export default function CatalogMap({
-  mapPoints, mapSelected, city, fullscreen, onClose, onPointClick,
+  mapPoints, mapSelected, city, fullscreen, highlightedId, onClose, onPointClick,
   onDeselectPoint, onFullscreenChange, className, height = 420,
 }: CatalogMapProps) {
   const navigate = useNavigate();
@@ -99,28 +100,31 @@ export default function CatalogMap({
           height="100%"
           className={fullscreen ? '!rounded-none' : ''}
           onPointClick={onPointClick}
+          highlightedId={highlightedId}
         />
 
         {/* Карточка выбранного объекта */}
         {mapSelected && (
-          <div className="absolute bottom-3 left-3 right-3 z-10 bg-white rounded-xl shadow-lg border border-border p-3 flex gap-3 items-start max-w-sm">
-            {mapSelected.image && (
-              <img src={mapSelected.image} alt={mapSelected.title} className="w-16 h-16 rounded-lg object-cover shrink-0" />
-            )}
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold truncate mb-0.5">{mapSelected.title}</div>
-              <div className="text-[11px] text-muted-foreground truncate mb-1">{mapSelected.address || mapSelected.district || ''}</div>
-              <div className="text-sm font-display font-700 text-brand-blue">{formatPrice(mapSelected.price, mapSelected.deal)}</div>
-            </div>
-            <div className="flex flex-col gap-1.5 shrink-0">
+          <div className="absolute bottom-3 left-3 right-3 z-10 max-w-sm">
+            <div
+              className="bg-white rounded-xl shadow-lg border border-brand-blue/30 p-3 flex gap-3 items-start cursor-pointer hover:shadow-xl hover:border-brand-blue/60 transition-all duration-200"
+              onClick={() => navigate(`/object/${listingSlug(mapSelected.title, mapSelected.id)}`)}
+            >
+              {mapSelected.image && (
+                <img src={mapSelected.image} alt={mapSelected.title} className="w-16 h-16 rounded-lg object-cover shrink-0" />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-semibold line-clamp-2 mb-0.5 group-hover:text-brand-blue">{mapSelected.title}</div>
+                <div className="text-[11px] text-muted-foreground truncate mb-1">{mapSelected.address || mapSelected.district || ''}</div>
+                <div className="text-sm font-display font-700 text-brand-blue">{formatPrice(mapSelected.price, mapSelected.deal)}</div>
+                <div className="text-[10px] text-brand-blue/70 mt-1 font-medium">Нажмите, чтобы открыть →</div>
+              </div>
               <button
-                onClick={() => navigate(`/object/${listingSlug(mapSelected.title, mapSelected.id)}`)}
-                className="text-[11px] bg-brand-blue text-white px-2.5 py-1 rounded-lg font-semibold hover:bg-brand-blue/90 transition-colors"
+                onClick={e => { e.stopPropagation(); onDeselectPoint(); }}
+                className="text-muted-foreground hover:text-foreground transition-colors shrink-0 mt-0.5"
+                aria-label="Закрыть"
               >
-                Открыть
-              </button>
-              <button onClick={onDeselectPoint} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors text-center">
-                ✕
+                <Icon name="X" size={14} />
               </button>
             </div>
           </div>
