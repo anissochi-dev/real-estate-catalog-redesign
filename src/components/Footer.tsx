@@ -112,24 +112,15 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
               <div className="text-sm leading-relaxed">{description}</div>
             </div>
 
-            {/* Категории — 3 колонки */}
-            <div className="md:col-span-3">
+            {/* Категории — 4 колонки */}
+            <div className="md:col-span-4">
               <h3 className="font-semibold text-white mb-3">Категории</h3>
-              <ul className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-sm">
+              <ul className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-sm">
                 {(categoryLinks || DEFAULT_CATEGORIES).map(item => (
                   <li key={item.href}>
                     <Link to={item.href} className="hover:text-white transition-colors">{item.label}</Link>
                   </li>
                 ))}
-              </ul>
-            </div>
-
-            {/* Контакты */}
-            <div className="md:col-span-1">
-              <h3 className="font-semibold text-white mb-3">Контакты</h3>
-              <ul className="space-y-2 text-sm">
-                {phone && <li><a href={`tel:${phone}`} className="hover:text-white transition-colors break-all">{phone}</a></li>}
-                {email && <li><a href={`mailto:${email}`} className="hover:text-white transition-colors break-all">{email}</a></li>}
               </ul>
             </div>
           </div>
