@@ -48,7 +48,7 @@ function HomeLeadCard({ lead }: { lead: PublicLead }) {
   const cardTitle = titleParts.length > 0 ? titleParts.join(' · ') : null;
 
   return (
-    <article role="listitem" className="bg-white rounded-2xl border border-border shadow-sm hover:shadow-md hover:border-brand-blue/25 transition-all duration-200 p-5 flex flex-col">
+    <article className="bg-white rounded-2xl border border-border shadow-sm hover:shadow-md hover:border-brand-blue/25 transition-all duration-200 p-5 flex flex-col h-full">
       {/* Шапка */}
       <div className="flex items-center gap-3 mb-3">
         <div
@@ -157,11 +157,13 @@ export default function ClientLeadsSection({ limit = 6 }: Props) {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4" role="list">
+        <ul className="grid grid-cols-1 md:grid-cols-2 gap-4 list-none p-0 m-0">
           {leads.slice(0, limit).map(lead => (
-            <HomeLeadCard key={lead.id} lead={lead} />
+            <li key={lead.id}>
+              <HomeLeadCard lead={lead} />
+            </li>
           ))}
-        </div>
+        </ul>
       </div>
     </section>
   );

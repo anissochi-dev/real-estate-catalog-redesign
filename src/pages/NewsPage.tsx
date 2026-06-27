@@ -99,12 +99,11 @@ export function NewsListPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" role="list">
+          <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 list-none p-0 m-0">
             {news.filter(n => !!n.slug).map(n => (
+              <li key={n.id}>
               <article
-                key={n.id}
-                role="listitem"
-                className="bg-white rounded-2xl overflow-hidden border border-border hover:shadow-lg hover:-translate-y-1 transition-all duration-200 group"
+                className="bg-white rounded-2xl overflow-hidden border border-border hover:shadow-lg hover:-translate-y-1 transition-all duration-200 group h-full"
               >
                 <Link to={`/news/${n.slug}`} className="block">
                   <div className="relative h-44 bg-gradient-to-br from-brand-blue/10 to-brand-blue/20 overflow-hidden">
@@ -135,8 +134,9 @@ export function NewsListPage() {
                   </div>
                 </Link>
               </article>
+              </li>
             ))}
-          </div>
+          </ul>
 
           {total > LIMIT && (
             <div className="flex justify-center gap-2 mt-10">

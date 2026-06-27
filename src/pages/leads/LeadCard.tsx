@@ -103,7 +103,7 @@ export default function LeadCard({ lead, districts, onContact }: { lead: PublicL
   const cardTitle = titleParts.length > 0 ? titleParts.join(' · ') : null;
 
   return (
-    <article role="listitem" className="bg-white rounded-2xl border border-border shadow-sm hover:shadow-md hover:border-brand-blue/25 transition-all duration-200 p-6">
+    <article className="bg-white rounded-2xl border border-border shadow-sm hover:shadow-md hover:border-brand-blue/25 transition-all duration-200 p-6">
       {/* Шапка: аватар + название */}
       <div className="flex items-center gap-3 mb-4">
         <div

@@ -228,11 +228,13 @@ export default function LeadsListPage() {
           </div>
         ) : (
           <>
-            <div className="flex flex-col gap-4" role="list">
+            <ul className="flex flex-col gap-4 list-none p-0 m-0">
               {leads.map(lead => (
-                <LeadCard key={lead.id} lead={lead} districts={districts} onContact={() => openContact(lead)} />
+                <li key={lead.id}>
+                  <LeadCard lead={lead} districts={districts} onContact={() => openContact(lead)} />
+                </li>
               ))}
-            </div>
+            </ul>
 
             {hasMore && (
               <div className="flex flex-col items-center gap-2 mt-8">

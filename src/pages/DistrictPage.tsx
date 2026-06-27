@@ -198,7 +198,7 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4" role="list">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {pageItems.map((property, i) => (
                 <PropertyCard
                   key={property.id}
