@@ -7,6 +7,13 @@ interface Props {
   listing: Listing;
 }
 
+/** Строит URL thumb из CDN-ссылки на основное фото. */
+function toThumbUrl(src: string): string {
+  if (!src || !src.includes('cdn.poehali.dev')) return src;
+  if (src.includes('_thumb.webp')) return src;
+  return src.replace(/(_wm)?\.(webp|jpe?g|png)$/i, '_thumb.webp');
+}
+
 /** Преобразует URL с водяным знаком в оригинал.
  * Бэкенд upload/ сохраняет original в `original_url` + `image_url` с ВЗ.
  * Для уже-сохранённого `images` — пробуем по соглашению:
@@ -94,7 +101,7 @@ export default function TabPhotos({ listing }: Props) {
             <div key={`${url}-${idx}`}
                  className="group relative bg-muted rounded-xl overflow-hidden border border-border">
               <button onClick={() => setPreview(url)} className="block w-full">
-                <img src={url} alt={`Фото ${idx + 1}`}
+                <img src={toThumbUrl(url)} alt={`Фото ${idx + 1}`}
                      className="w-full aspect-[4/3] object-cover" loading="lazy" />
               </button>
               {isMain && (

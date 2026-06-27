@@ -18,6 +18,16 @@ interface Props {
   onRemove: () => void;
 }
 
+/** Строит URL превью (thumb) из CDN-ссылки на основное фото.
+ * photos/abc_wm.webp → photos/abc_thumb.webp
+ * photos/abc.webp    → photos/abc_thumb.webp
+ * Если _thumb.webp уже есть в URL — возвращает как есть. */
+function toThumbUrl(src: string): string {
+  if (!src || !src.includes('cdn.poehali.dev')) return src;
+  if (src.includes('_thumb.webp')) return src;
+  return src.replace(/(_wm)?\.(webp|jpe?g|png)$/i, '_thumb.webp');
+}
+
 export default function ImageUploaderPhotoCard({
   url,
   index,
@@ -34,6 +44,7 @@ export default function ImageUploaderPhotoCard({
   onRemove,
 }: Props) {
   const hasOwnWm = /_wm\.(jpe?g|png|webp)$/i.test(url);
+  const previewSrc = toThumbUrl(url);
 
   return (
     <div
@@ -61,9 +72,10 @@ export default function ImageUploaderPhotoCard({
       {/* Фото */}
       <div className="relative">
         <img
-          src={url}
+          src={previewSrc}
           alt=""
           draggable={false}
+          loading="lazy"
           className="w-full h-40 object-cover pointer-events-none"
         />
         {/* Иконка перетаскивания */}

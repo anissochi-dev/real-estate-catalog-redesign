@@ -83,7 +83,7 @@ export default function ListingsTable({
         const dm = dealMeta(it.deal);
         const m2 = perM2(it.price, it.area);
         const imgs = splitImages(it.images);
-        const mainImg = imgs[0] || it.image;
+        const mainImg = it.image_thumb || imgs[0] || it.image;
         const isSelected = selected.has(it.id);
         const isHidden = it.is_visible === false;
         const isBroker = user?.role === 'broker';
