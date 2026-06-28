@@ -63,8 +63,15 @@ export default function AdminSidebar({
         {/* Заголовок */}
         <div className="p-5 border-b border-border flex items-center justify-between shrink-0">
           <div>
-            <div className="font-display font-700 text-sm text-brand-blue leading-tight">Бизнес. Маркетинг. Недвижимость.</div>
-            <div className="text-xs text-muted-foreground">Админ-панель</div>
+            <a
+              href="/"
+              onClick={close}
+              className="font-display font-700 text-sm text-brand-blue leading-tight hover:underline flex items-center gap-1"
+            >
+              Бизнес. Маркетинг. Недвижимость.
+              <Icon name="ExternalLink" size={12} className="opacity-60 shrink-0" />
+            </a>
+            <div className="text-xs text-muted-foreground mt-0.5">{user.name} · {roleLabel[user.role]}</div>
           </div>
           <button onClick={close} className="p-1 rounded hover:bg-muted transition">
             <Icon name="X" size={20} />
@@ -121,17 +128,6 @@ export default function AdminSidebar({
 
         {/* Футер */}
         <div className="shrink-0 border-t border-border bg-white p-3">
-          <div className="px-3 py-2 mb-2">
-            <div className="text-sm font-semibold truncate">{user.name}</div>
-            <div className="text-xs text-muted-foreground">{roleLabel[user.role]}</div>
-          </div>
-          <button
-            onClick={() => { close(); onExit(); }}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm hover:bg-muted transition"
-          >
-            <Icon name="ExternalLink" size={16} />
-            На сайт
-          </button>
           <button
             onClick={() => logout()}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-red-600 hover:bg-red-50 transition"
