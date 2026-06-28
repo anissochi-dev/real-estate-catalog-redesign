@@ -197,12 +197,32 @@ def handler(event, context):
         s3c = boto3.client('s3', endpoint_url='https://bucket.poehali.dev',
                            aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
                            aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'])
+        import urllib.request as _ur
         results = []
+        project_id = os.environ['AWS_ACCESS_KEY_ID']
         for k in keys:
             try:
                 head = s3c.head_object(Bucket='files', Key=k)
                 sz = head['ContentLength']
-                results.append({'key': k, 'size_bytes': sz, 'size_kb': round(sz / 1024, 1), 'content_type': head.get('ContentType', ''), 'cache_control': head.get('CacheControl', '—')})
+                # Также проверяем через прямой HTTP HEAD к CDN
+                cdn_url = f'https://cdn.poehali.dev/projects/{project_id}/bucket/{k}'
+                try:
+                    req = _ur.Request(cdn_url, method='HEAD')
+                    with _ur.urlopen(req, timeout=5) as resp:
+                        cdn_cc = resp.headers.get('Cache-Control', '—')
+                        cdn_ct = resp.headers.get('Content-Type', '—')
+                except Exception as he:
+                    cdn_cc = f'err:{str(he)[:60]}'
+                    cdn_ct = '—'
+                results.append({
+                    'key': k,
+                    'size_bytes': sz,
+                    'size_kb': round(sz / 1024, 1),
+                    'content_type': head.get('ContentType', ''),
+                    's3_cache_control': head.get('CacheControl', '—'),
+                    'cdn_cache_control': cdn_cc,
+                    'cdn_content_type': cdn_ct,
+                })
             except Exception as e:
                 results.append({'key': k, 'error': str(e)})
         return _ok({'files': results})
@@ -250,7 +270,7 @@ def handler(event, context):
             return _err(429, 'Превышен лимит загрузок (10 в час). Попробуйте позже.')
         fhash = hashlib.sha256(file_data).hexdigest()[:16]
         fname = f'public/{int(time.time())}_{fhash}{pub_ext}'
-        s3_pub.put_object(Bucket='files', Key=fname, Body=file_data, ContentType=pub_mime)
+        s3_pub.put_object(Bucket='files', Key=fname, Body=file_data, ContentType=pub_mime, CacheControl='public, max-age=31536000')
         cdn = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{fname}"
         return _ok({'success': True, 'url': cdn, 'mime': pub_mime, 'size': len(file_data)})
 
@@ -404,9 +424,9 @@ def handler(event, context):
                     wm_data = _apply_watermark(data, dict(wm_row))
                     if wm_data and wm_data != data:
                         wm_key = f"{folder}/{token12}_wm.webp"
-                        s3.put_object(Bucket='files', Key=wm_key, Body=wm_data, ContentType='image/webp')
+                        s3.put_object(Bucket='files', Key=wm_key, Body=wm_data, ContentType='image/webp', CacheControl='public, max-age=31536000')
                         orig_key = f"{folder}/{token12}.{original_ext}"
-                        s3.put_object(Bucket='files', Key=orig_key, Body=original_data, ContentType=original_ct)
+                        s3.put_object(Bucket='files', Key=orig_key, Body=original_data, ContentType=original_ct, CacheControl='public, max-age=31536000')
 
                         wm_applied = True
                         url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{wm_key}"
@@ -432,7 +452,7 @@ def handler(event, context):
             # Без водяного знака — обычное сохранение
             if not wm_applied:
                 key = f"{folder}/{token12}.{ext}"
-                s3.put_object(Bucket='files', Key=key, Body=data, ContentType=content_type)
+                s3.put_object(Bucket='files', Key=key, Body=data, ContentType=content_type, CacheControl='public, max-age=31536000')
                 url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{key}"
                 try:
                     cur.execute(

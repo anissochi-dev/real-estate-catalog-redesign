@@ -621,6 +621,78 @@ def handler(event: dict, context) -> dict:
                     'results': results,
                 })
 
+            # ── Проставить CacheControl для всех фото из БД ───────────────
+            elif action == 'fix_cache':
+                offset_fc = int(params.get('offset') or body.get('offset') or 0)
+                batch_fc = min(int(params.get('batch_size') or body.get('batch_size') or 30), 50)
+                CC = 'public, max-age=31536000'
+
+                # Берём уникальные CDN-ключи из listings (image + image_thumb)
+                cur.execute(f"""
+                    SELECT DISTINCT url FROM (
+                        SELECT image AS url FROM {SCHEMA}.listings
+                            WHERE image LIKE '%cdn.poehali.dev%' AND image != ''
+                        UNION
+                        SELECT image_thumb AS url FROM {SCHEMA}.listings
+                            WHERE image_thumb LIKE '%cdn.poehali.dev%' AND image_thumb != ''
+                    ) t
+                    WHERE url IS NOT NULL
+                    ORDER BY url
+                    LIMIT {batch_fc} OFFSET {offset_fc}
+                """)
+                rows = [r['url'] for r in cur.fetchall()]
+
+                # Считаем total
+                cur.execute(f"""
+                    SELECT COUNT(DISTINCT url) as cnt FROM (
+                        SELECT image AS url FROM {SCHEMA}.listings
+                            WHERE image LIKE '%cdn.poehali.dev%' AND image != ''
+                        UNION
+                        SELECT image_thumb AS url FROM {SCHEMA}.listings
+                            WHERE image_thumb LIKE '%cdn.poehali.dev%' AND image_thumb != ''
+                    ) t WHERE url IS NOT NULL
+                """)
+                total_fc = cur.fetchone()['cnt']
+
+                s3c = _s3()
+                ok_count = err_count = skip_count = 0
+                import re as _re
+                for cdn_url in rows:
+                    # Извлекаем S3-ключ из CDN URL
+                    m = _re.search(r'/bucket/(.+)$', cdn_url)
+                    if not m:
+                        skip_count += 1
+                        continue
+                    k = m.group(1)
+                    try:
+                        head = s3c.head_object(Bucket=BUCKET, Key=k)
+                        if head.get('CacheControl') == CC:
+                            skip_count += 1
+                            continue
+                        ct = head.get('ContentType', 'image/webp')
+                        s3c.copy_object(
+                            Bucket=BUCKET, Key=k,
+                            CopySource={'Bucket': BUCKET, 'Key': k},
+                            ContentType=ct,
+                            CacheControl=CC,
+                            MetadataDirective='REPLACE',
+                        )
+                        ok_count += 1
+                    except Exception as e:
+                        err_count += 1
+                        print(f'[fix_cache] {k}: {e}')
+
+                done = (offset_fc + batch_fc) >= total_fc
+                return _ok({
+                    'done': done,
+                    'total': total_fc,
+                    'processed': len(rows),
+                    'ok': ok_count,
+                    'skipped': skip_count,
+                    'errors': err_count,
+                    'next_offset': offset_fc + batch_fc,
+                })
+
             # ── Удаление водяного знака через Яндекс Vision ────────────────
             elif action == 'remove_watermark':
                 url = (body.get('url') or '').strip()

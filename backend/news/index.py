@@ -585,7 +585,7 @@ def _generate_image(title: str, logo_url: str = '') -> str:
             aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
         )
         key = f'news/{_secrets.token_urlsafe(12)}.jpg'
-        s3.put_object(Bucket='files', Key=key, Body=img_bytes, ContentType='image/jpeg')
+        s3.put_object(Bucket='files', Key=key, Body=img_bytes, ContentType='image/jpeg', CacheControl='public, max-age=31536000')
         cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
         print(f'[news] YandexART: обложка создана → {cdn_url}')
         return cdn_url
