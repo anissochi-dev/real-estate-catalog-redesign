@@ -2,6 +2,7 @@ import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
 import { Listing, DEALS, fmtDate, perM2, splitImages } from './types';
 import { fmtListingId } from '@/lib/formatPrice';
+import { listingSlug } from '@/lib/slug';
 
 
 
@@ -137,8 +138,13 @@ export default function ListingsTable({
 
               {/* ── Фото (десктоп) ── */}
               <div
-                className="relative flex-shrink-0 w-48 overflow-hidden"
+                className="relative flex-shrink-0 w-48 overflow-hidden cursor-pointer"
                 style={{ minHeight: 140 }}
+                title="Открыть на сайте"
+                onClick={e => {
+                  e.stopPropagation();
+                  window.open(`/object/${listingSlug(it.title, it.id)}`, '_blank');
+                }}
               >
                 {mainImg ? (
                   <img
@@ -153,6 +159,12 @@ export default function ListingsTable({
                   </div>
                 )}
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-200" />
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-200">
+                  <span className="bg-black/60 text-white text-[11px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 backdrop-blur-sm">
+                    <Icon name="ExternalLink" size={11} />
+                    На сайте
+                  </span>
+                </div>
                 {imgs.length > 1 && (
                   <span className="absolute bottom-2 left-2 bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
                     <Icon name="Images" size={10} />
