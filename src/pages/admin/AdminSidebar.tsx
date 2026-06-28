@@ -63,14 +63,13 @@ export default function AdminSidebar({
         {/* Заголовок */}
         <div className="p-5 border-b border-border flex items-center justify-between shrink-0">
           <div>
-            <a
-              href="/"
-              onClick={close}
-              className="font-display font-700 text-sm text-brand-blue leading-tight hover:underline flex items-center gap-1"
+            <button
+              onClick={() => { close(); onExit(); }}
+              className="font-display font-700 text-sm text-brand-blue leading-tight hover:underline flex items-center gap-1 text-left"
             >
               Бизнес. Маркетинг. Недвижимость.
               <Icon name="ExternalLink" size={12} className="opacity-60 shrink-0" />
-            </a>
+            </button>
             <div className="text-xs text-muted-foreground mt-0.5">{user.name} · {roleLabel[user.role]}</div>
           </div>
           <button onClick={close} className="p-1 rounded hover:bg-muted transition">
