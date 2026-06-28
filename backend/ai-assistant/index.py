@@ -4398,7 +4398,7 @@ def handler(event, context):
 
                 SELECT_FIELDS = (
                     f"SELECT id, title, category, deal, price, price_per_m2, area, district, address, "
-                    f"payback, profit, monthly_rent, yearly_rent, tenant_name, image, "
+                    f"payback, profit, monthly_rent, yearly_rent, tenant_name, image, image_thumb, "
                     f"floor, total_floors, condition, road_line, rooms, parking, entrance, "
                     f"ceiling_height, electricity_kw, utilities, purpose, building_class, "
                     f"building_year, description "
@@ -4494,6 +4494,8 @@ def handler(event, context):
                         'payback': r.get('payback'),
                         'profit': r.get('profit'),
                         'monthly_rent': r.get('monthly_rent'),
+                        'image': r.get('image') or '',
+                        'image_thumb': r.get('image_thumb') or '',
                     }
                     if is_keyword_match:
                         obj['_keyword_match'] = True

@@ -81,7 +81,7 @@ export default function SimilarListings({ listingId }: Props) {
             <div className="aspect-[16/10] bg-muted overflow-hidden">
               {p.image ? (
                 <img
-                  src={p.image}
+                  src={p.image_thumb || p.image}
                   alt={p.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                 />

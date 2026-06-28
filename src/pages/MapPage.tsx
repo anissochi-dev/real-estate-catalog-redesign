@@ -103,6 +103,9 @@ export default function MapPage({
         caption: `${formatPrice(p.price, p.deal)} · ${p.area} м² · ${TYPE_LABEL[p.type] || p.type}`,
         type: String(p.type),
         isHot: p.isHot,
+        image: p.image,
+        image_thumb: p.image_thumb,
+        url: `/object/${listingSlug(p.title, p.id)}`,
       })),
     [filtered],
   );
@@ -185,7 +188,7 @@ export default function MapPage({
             <div className="flex-1 overflow-y-auto animate-slide-in-right">
               <div className="relative">
                 {selected.image ? (
-                  <img src={selected.image} alt={selected.title} className="w-full h-44 object-cover" />
+                  <img src={selected.image_thumb || selected.image} alt={selected.title} className="w-full h-44 object-cover" />
                 ) : (
                   <div className="w-full h-44 bg-muted flex items-center justify-center">
                     <Icon name="Image" size={36} className="text-muted-foreground" />

@@ -164,7 +164,7 @@ export default function ComparePage({ properties, onRemove, onNavigate }: Compar
                   style={{ animationDelay: `${i * 0.1}s` }}
                 >
                   <div className="relative">
-                    <img src={property.image} alt={property.title} className="w-full h-40 object-cover" />
+                    <img src={property.image_thumb || property.image} alt={property.title} className="w-full h-40 object-cover" />
                     <button
                       onClick={() => onRemove(property.id)}
                       className="absolute top-3 right-3 w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-red-500 transition-colors"

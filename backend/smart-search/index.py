@@ -198,7 +198,7 @@ def handler(event: dict, context) -> dict:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(f"""
                 SELECT id, title, category, deal, price, area, address, district,
-                       city, image, slug, embedding
+                       city, image, image_thumb, slug, embedding
                 FROM {SCHEMA}.listings
                 WHERE status = 'active' AND is_visible = TRUE AND embedding IS NOT NULL
                 ORDER BY updated_at DESC

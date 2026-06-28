@@ -262,7 +262,7 @@ export default function AIMatchModal({ open, onClose, initialPrompt, autoSubmit 
                             >
                               <div className="w-16 h-16 shrink-0 rounded-lg overflow-hidden bg-muted">
                                 {it.image
-                                  ? <img src={it.image} alt={it.title} className="w-full h-full object-cover" />
+                                  ? <img src={it.image_thumb || it.image} alt={it.title} className="w-full h-full object-cover" />
                                   : <div className="w-full h-full flex items-center justify-center"><Icon name="Building2" size={18} className="text-muted-foreground/40" /></div>
                                 }
                               </div>

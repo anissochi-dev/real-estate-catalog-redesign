@@ -11,6 +11,7 @@ interface MapPoint {
   type?: string;
   isHot?: boolean;
   image?: string;
+  image_thumb?: string;
   address?: string;
   area?: number;
   price?: number;
@@ -214,7 +215,7 @@ export default function YandexMap({
 
       const balloonBody = `
         <div onclick="if(window['${cbName}'])window['${cbName}']()" style="display:flex;gap:10px;align-items:flex-start;cursor:${p.url ? 'pointer' : 'default'};min-width:220px;max-width:280px">
-          ${p.image ? `<img src="${p.image}" style="width:64px;height:64px;border-radius:10px;object-fit:cover;flex-shrink:0" alt=""/>` : ''}
+          ${p.image ? `<img src="${p.image_thumb || p.image}" style="width:64px;height:64px;border-radius:10px;object-fit:cover;flex-shrink:0" alt=""/>` : ''}
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:700;color:#111;line-height:1.3;margin-bottom:4px">${p.title || ''}</div>
             ${p.address ? `<div style="font-size:11px;color:#888;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.address}</div>` : ''}

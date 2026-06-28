@@ -340,6 +340,7 @@ export interface AiMatchListing {
   payback: number | null;
   profit: number | null;
   image: string;
+  image_thumb?: string;
 }
 
 export interface AiMatchResult {

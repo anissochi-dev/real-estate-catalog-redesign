@@ -14,6 +14,7 @@ interface SearchResult {
   address: string;
   district?: string;
   image?: string;
+  image_thumb?: string;
   slug?: string;
   price_unit?: string;
   relevance_score: number;
@@ -215,7 +216,7 @@ export default function SmartSearchModal({ open, initialQuery = '', onClose }: P
                       {/* Фото */}
                       <div className="w-16 h-14 rounded-lg overflow-hidden shrink-0 bg-muted border border-border">
                         {item.image
-                          ? <img src={item.image} alt="" className="w-full h-full object-cover" loading="lazy" />
+                          ? <img src={item.image_thumb || item.image} alt="" className="w-full h-full object-cover" loading="lazy" />
                           : <div className="w-full h-full flex items-center justify-center text-muted-foreground">
                               <Icon name="Building2" size={20} />
                             </div>
