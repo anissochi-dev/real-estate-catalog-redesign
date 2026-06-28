@@ -20,6 +20,7 @@ interface AppViewManagerProps {
   adminInitialSection: string | undefined;
   onSetView: (v: AppView) => void;
   onSetAdminInitialSection: (s: string | undefined) => void;
+  onExitToPath: (path: string) => void;
 }
 
 const ADMIN_ROLES = ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'];
@@ -31,6 +32,7 @@ export default function AppViewManager({
   adminInitialSection,
   onSetView,
   onSetAdminInitialSection,
+  onExitToPath,
 }: AppViewManagerProps) {
   if (view === 'login') {
     return (
@@ -97,6 +99,7 @@ export default function AppViewManager({
           <SeoHead title="Админ-панель" noindex />
           <AdminPage
             onExit={() => { onSetView('site'); onSetAdminInitialSection(undefined); }}
+            onExitToPath={onExitToPath}
             initialSection={adminInitialSection as string | undefined}
           />
         </Suspense>

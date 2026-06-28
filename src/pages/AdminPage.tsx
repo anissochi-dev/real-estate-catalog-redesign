@@ -21,12 +21,13 @@ import MarketingAdmin from './admin/MarketingAdmin';
 
 interface Props {
   onExit: () => void;
+  onExitToPath: (path: string) => void;
   initialSection?: string;
 }
 
 const SECTION_KEY = 'biznest_admin_section';
 
-export default function AdminPage({ onExit, initialSection }: Props) {
+export default function AdminPage({ onExit, onExitToPath, initialSection }: Props) {
   const { user } = useAuth();
   const [section, setSection] = useState<AdminSection>(() => {
     if (initialSection) return initialSection as AdminSection;
@@ -57,7 +58,7 @@ export default function AdminPage({ onExit, initialSection }: Props) {
   }, []);
 
   return (
-    <AdminLayout section={section} setSection={setSection} onExit={onExit}>
+    <AdminLayout section={section} setSection={setSection} onExit={onExit} onExitToPath={onExitToPath}>
       {section === 'dashboard' && <Dashboard setSection={(s) => setSection(s as AdminSection)} />}
       {section === 'listings' && <ListingsAdmin />}
       {section === 'leads' && <LeadsAdmin />}

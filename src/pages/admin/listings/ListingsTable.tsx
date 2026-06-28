@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Listing, DEALS, fmtDate, perM2, splitImages } from './types';
 import { fmtListingId } from '@/lib/formatPrice';
 import { listingSlug } from '@/lib/slug';
+import { useExitToPath } from '../AdminLayout';
 
 
 
@@ -54,6 +55,7 @@ export default function ListingsTable({
   onBulk, onBulkDelete, bulkLoading = false, isAdmin = false,
 }: Props) {
   const { user } = useAuth();
+  const exitToPath = useExitToPath();
   const isBrokerRole = user?.role === 'broker';
   const canSeeFullDetails = user?.role && ['admin', 'director', 'broker', 'office_manager'].includes(user.role);
   const dealMeta = (d: string) => DEALS.find(x => x[0] === d);
@@ -143,7 +145,7 @@ export default function ListingsTable({
                 title="Открыть на сайте"
                 onClick={e => {
                   e.stopPropagation();
-                  window.open(`/object/${listingSlug(it.title, it.id)}`, '_blank');
+                  exitToPath?.(`/object/${listingSlug(it.title, it.id)}`);
                 }}
               >
                 {mainImg ? (

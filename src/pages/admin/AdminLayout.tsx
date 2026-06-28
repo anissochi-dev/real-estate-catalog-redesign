@@ -14,8 +14,13 @@ interface Props {
   section: AdminSection;
   setSection: (s: AdminSection) => void;
   onExit: () => void;
+  onExitToPath: (path: string) => void;
   children: ReactNode;
 }
+
+import { createContext, useContext } from 'react';
+export const ExitToPathCtx = createContext<((path: string) => void) | null>(null);
+export const useExitToPath = () => useContext(ExitToPathCtx);
 
 const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; group?: string }[] = [
   { id: 'dashboard',        label: 'Дашборд',          icon: 'LayoutDashboard', roles: ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'] },
@@ -35,7 +40,7 @@ const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; gro
   { id: 'crm-payments',     label: 'Платежи',           icon: 'CreditCard',      roles: ['admin', 'director', 'office_manager', 'manager'] },
 ];
 
-export default function AdminLayout({ section, setSection, onExit, children }: Props) {
+export default function AdminLayout({ section, setSection, onExit, onExitToPath, children }: Props) {
   const { user } = useAuth();
   const [aiOpen,      setAiOpen]      = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -80,6 +85,7 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
     : items;
 
   return (
+    <ExitToPathCtx.Provider value={onExitToPath}>
     <div className="min-h-screen bg-muted/30 flex">
       <AdminSidebar
         sortedItems={sortedItems}
@@ -120,5 +126,6 @@ export default function AdminLayout({ section, setSection, onExit, children }: P
         />
       )}
     </div>
+    </ExitToPathCtx.Provider>
   );
 }

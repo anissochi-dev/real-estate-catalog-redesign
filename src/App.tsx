@@ -63,6 +63,7 @@ export default function App() {
 
   const [view, setViewState] = useState<AppView>(() => loadInitialView());
   const [adminInitialSection, setAdminInitialSection] = useState<string | undefined>();
+  const [pendingNavigatePath, setPendingNavigatePath] = useState<string | undefined>();
 
   const { consentGiven, setConsentGiven, consentVisible } = useConsentBanner();
 
@@ -113,6 +114,14 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, authLoading]);
+
+  // Переход на нужный путь после выхода из админки на сайт
+  useEffect(() => {
+    if (view === 'site' && pendingNavigatePath) {
+      navigate(pendingNavigatePath, { replace: false });
+      setPendingNavigatePath(undefined);
+    }
+  }, [view, pendingNavigatePath, navigate]);
 
   // Флаги восстановления вида при F5
   useEffect(() => {
@@ -166,6 +175,7 @@ export default function App() {
       adminInitialSection={adminInitialSection}
       onSetView={setView}
       onSetAdminInitialSection={setAdminInitialSection}
+      onExitToPath={(path) => { setPendingNavigatePath(path); setAdminInitialSection(undefined); setView('site'); }}
     />
   );
 
