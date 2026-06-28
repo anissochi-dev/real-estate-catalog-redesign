@@ -202,7 +202,7 @@ def handler(event, context):
             try:
                 head = s3c.head_object(Bucket='files', Key=k)
                 sz = head['ContentLength']
-                results.append({'key': k, 'size_bytes': sz, 'size_kb': round(sz / 1024, 1), 'content_type': head.get('ContentType', '')})
+                results.append({'key': k, 'size_bytes': sz, 'size_kb': round(sz / 1024, 1), 'content_type': head.get('ContentType', ''), 'cache_control': head.get('CacheControl', '—')})
             except Exception as e:
                 results.append({'key': k, 'error': str(e)})
         return _ok({'files': results})
