@@ -32,7 +32,7 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
   const [aiQuery, setAiQuery] = useState('');
   const [aiOpen, setAiOpen] = useState(false);
   const [catPage, setCatPage] = useState(1);
-  const CAT_PAGE_SIZE = settings.category_page_size ?? 20;
+  const CAT_PAGE_SIZE = settings.category_page_size ?? 21;
   const [aiSeoText, setAiSeoText] = useState('');
   const [aiSeoLoading, setAiSeoLoading] = useState(false);
 

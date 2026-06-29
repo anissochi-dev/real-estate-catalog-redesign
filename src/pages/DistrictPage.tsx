@@ -15,7 +15,7 @@ import SeoHead from '@/components/SeoHead';
 import CatalogMap from './catalog/CatalogMap';
 
 const DISTRICT_SEO_URL = 'https://functions.poehali.dev/4f6d05ce-e38c-4e10-8a8b-f282e1ed2ddd';
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 21;
 
 interface Props {
   properties: Property[];
