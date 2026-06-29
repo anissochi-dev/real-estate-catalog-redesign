@@ -141,7 +141,7 @@ export default function ListingsTable({
               {/* ── Фото (десктоп) ── */}
               <div
                 className="relative flex-shrink-0 w-48 overflow-hidden cursor-pointer"
-                style={{ minHeight: 140 }}
+                style={{ height: 160 }}
                 title="Открыть на сайте"
                 onClick={e => {
                   e.stopPropagation();
@@ -152,11 +152,10 @@ export default function ListingsTable({
                   <img
                     src={mainImg}
                     alt={it.title}
-                    className="w-full h-full object-cover transition-opacity duration-200 group-hover:opacity-90"
-                    style={{ minHeight: 140 }}
+                    className="absolute inset-0 w-full h-full object-cover transition-opacity duration-200 group-hover:opacity-90"
                   />
                 ) : (
-                  <div className="w-full h-full bg-muted flex items-center justify-center" style={{ minHeight: 140 }}>
+                  <div className="w-full h-full bg-muted flex items-center justify-center">
                     <Icon name="Image" size={36} className="text-muted-foreground/40" />
                   </div>
                 )}
