@@ -169,12 +169,6 @@ export default function ListingEditorExtraSection({
               </div>
             ) : null}
           </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Прибыль/мес, ₽</label>
-            <input type="number" min="0" className="w-full px-3 py-2 border rounded-lg"
-              value={editing.profit ?? ''}
-              onChange={e => setEditing({ ...editing, profit: e.target.value === '' ? null : +e.target.value })} />
-          </div>
           <div className="sm:col-span-2">
             <label className="text-xs text-muted-foreground">Название арендатора (если есть)</label>
             <input className="w-full px-3 py-2 border rounded-lg"
