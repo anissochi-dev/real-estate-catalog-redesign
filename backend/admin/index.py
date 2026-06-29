@@ -2662,6 +2662,7 @@ def _listings(cur, conn, method, rid, event, user):
         offset = max(0, int(qp.get('offset') or 0))
         tab = qp.get('tab') or 'active'
         my_only = qp.get('my') == '1'
+        search_q = (qp.get('search') or '').strip()
         if tab == 'active':
             tab_where = "l.status = 'active' AND l.is_visible = TRUE"
         elif tab == 'archived':
@@ -2676,6 +2677,22 @@ def _listings(cur, conn, method, rid, event, user):
         if my_only and user and user.get('role') == 'broker':
             uid = int(user['id'])
             tab_where += f" AND (l.broker_id = {uid} OR l.author_id = {uid})"
+        # Серверный поиск по title, address, owner_name, owner_phone, id
+        if search_q:
+            sq = search_q.lower().replace("'", "''")
+            sq_digits = ''.join(c for c in search_q if c.isdigit())
+            if sq_digits and sq_digits.startswith('8'):
+                sq_digits = '7' + sq_digits[1:]
+            phone_cond = f"OR REGEXP_REPLACE(COALESCE(l.owner_phone,''), '[^0-9]', '', 'g') LIKE '%{sq_digits}%'" if sq_digits else ''
+            id_cond = f"OR CAST(l.id AS TEXT) = '{sq_digits}'" if sq_digits else ''
+            tab_where += (
+                f" AND (LOWER(COALESCE(l.title,'')) LIKE '%{sq}%'"
+                f" OR LOWER(COALESCE(l.address,'')) LIKE '%{sq}%'"
+                f" OR LOWER(COALESCE(l.district,'')) LIKE '%{sq}%'"
+                f" OR LOWER(COALESCE(l.owner_name,'')) LIKE '%{sq}%'"
+                f" OR LOWER(COALESCE(pc.name,'')) LIKE '%{sq}%'"
+                f" {phone_cond} {id_cond})"
+            )
         # COUNT с учётом фильтра my_only
         is_broker = user and user.get('role') == 'broker'
         broker_uid = user.get('id') if is_broker else None

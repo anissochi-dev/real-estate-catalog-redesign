@@ -215,7 +215,7 @@ export const adminApi = {
     req(`${ADMIN_URL}?resource=moderation&id=${id}`, { method: 'PUT', body: JSON.stringify({ action: 'reject', comment }) }),
 
   // listings
-  listListings: (offset = 0, limit = 25, tab = 'active', myOnly = false) => req(`${ADMIN_URL}?resource=listings&limit=${limit}&offset=${offset}&tab=${tab}${myOnly ? '&my=1' : ''}`),
+  listListings: (offset = 0, limit = 25, tab = 'active', myOnly = false, search = '') => req(`${ADMIN_URL}?resource=listings&limit=${limit}&offset=${offset}&tab=${tab}${myOnly ? '&my=1' : ''}${search ? `&search=${encodeURIComponent(search)}` : ''}`),
   getListing: (id: number) => req(`${ADMIN_URL}?resource=listings&id=${id}`),
   createListing: (data: Record<string, unknown>) =>
     req(`${ADMIN_URL}?resource=listings`, { method: 'POST', body: JSON.stringify(data) }),

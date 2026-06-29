@@ -62,13 +62,16 @@ export function useListingsState() {
   const [catFilter, setCatFilter] = useState('');
   const [hasDraft, setHasDraft] = useState(() => !!loadDraft());
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchRef = useRef('');
 
-  const load = (reset = true, tab?: StatusFilter, overrideMyOnly?: boolean) => {
+  const load = (reset = true, tab?: StatusFilter, overrideMyOnly?: boolean, overrideSearch?: string) => {
     setLoading(true);
     const currentTab = tab ?? statusFilter;
+    const currentSearch = overrideSearch !== undefined ? overrideSearch : searchRef.current;
     const offset = reset ? 0 : items.length;
     const useMyOnly = isBroker && (overrideMyOnly !== undefined ? overrideMyOnly : myOnly);
-    adminApi.listListings(offset, 25, currentTab, useMyOnly)
+    adminApi.listListings(offset, 25, currentTab, useMyOnly, currentSearch)
       .then(l => {
         const newItems = l.listings || [];
         setItems(prev => reset ? newItems : [...prev, ...newItems]);
@@ -111,7 +114,7 @@ export function useListingsState() {
     if (loading || items.length >= total) return;
     setLoading(true);
     const useMyOnly = isBroker && myOnly;
-    adminApi.listListings(items.length, 25, statusFilter, useMyOnly)
+    adminApi.listListings(items.length, 25, statusFilter, useMyOnly, searchRef.current)
       .then(l => {
         setItems(prev => [...prev, ...(l.listings || [])]);
         setTotal(l.total || 0);
@@ -126,6 +129,18 @@ export function useListingsState() {
     setMyOnly(next);
     setSelected(new Set());
     load(true, statusFilter, next);
+  };
+
+  // Обёртка setSearch с дебаунсом: меняет локальный state сразу (для отображения в поле),
+  // а API-запрос отправляет через 400мс после последнего нажатия.
+  const setSearchDebounced = (q: string) => {
+    setSearch(q);
+    searchRef.current = q;
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setSelected(new Set());
+      load(true, statusFilter, myOnly, q);
+    }, 400);
   };
 
   useEffect(() => load(true, 'active', isBroker ? true : false), []);
@@ -146,24 +161,9 @@ export function useListingsState() {
     load(true, tab, myOnly);
   };
 
-  // Фильтрация без клиентской сортировки — бэкенд отдаёт объекты уже отсортированными
-  // по updated_at DESC. Клиентская сортировка ломала порядок при пагинации (loadMore).
-  const filtered = items.filter(it => {
-    if (catFilter && it.category !== catFilter) return false;
-    if (search) {
-      const q = search.toLowerCase().replace(/^#/, '');
-      const qDigits = q.replace(/\D/g, '').replace(/^8/, '7');
-      return (
-        it.title?.toLowerCase().includes(q) ||
-        it.address?.toLowerCase().includes(q) ||
-        it.owner_name?.toLowerCase().includes(q) ||
-        (qDigits ? (it.owner_phone || '').replace(/\D/g, '').replace(/^8/, '7').includes(qDigits) : false) ||
-        String(`123${it.id}`).includes(q) ||
-        String(it.id).includes(q)
-      );
-    }
-    return true;
-  });
+  // Поиск выполняется через API (бэкенд), клиентская фильтрация — только по категории.
+  // Это гарантирует что поиск работает по всей базе, не только по загруженным 25 объектам.
+  const filtered = catFilter ? items.filter(it => it.category === catFilter) : items;
 
   const openEdit = (it?: Listing | Partial<Listing>) => {
     egrnObjectsRef.current = null; // сбрасываем при открытии нового объекта
@@ -546,7 +546,7 @@ export function useListingsState() {
     // bulk
     selected, setSelected, bulkLoading,
     // filters
-    statusFilter, setStatusFilter, search, setSearch, catFilter, setCatFilter,
+    statusFilter, setStatusFilter, search, setSearch: setSearchDebounced, catFilter, setCatFilter,
     // draft
     hasDraft, setHasDraft,
     // meta
