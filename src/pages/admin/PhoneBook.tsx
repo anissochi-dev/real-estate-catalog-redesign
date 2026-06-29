@@ -248,7 +248,7 @@ function FlagModal({ phone, current, token, onClose, onSaved }: {
 }
 
 export default function PhoneBook() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [contacts, setContacts] = useState<PhoneContact[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -262,7 +262,7 @@ export default function PhoneBook() {
   const [flags, setFlags] = useState<Record<string, PhoneFlag>>({});
   const [flagPhone, setFlagPhone] = useState<string | null>(null);
   const canManageFlags = user?.role === 'admin' || user?.role === 'director';
-  const tokenRef = useRef<string>('');
+  const tokenRef = useRef<string>(token);
 
   const load = useCallback((p = 1, q = '') => {
     setLoading(true);
@@ -283,9 +283,7 @@ export default function PhoneBook() {
     }).finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    try { tokenRef.current = localStorage.getItem('biznest_token') || ''; } catch { /* */ }
-  }, []);
+  useEffect(() => { tokenRef.current = token; }, [token]);
 
   const reloadFlags = async () => {
     if (!contacts.length) return;

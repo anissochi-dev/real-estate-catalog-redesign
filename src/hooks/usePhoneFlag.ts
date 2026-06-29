@@ -13,13 +13,25 @@ export interface PhoneFlag {
 
 const BASE = 'https://functions.poehali.dev/254609bc-df6e-4209-be01-2223b26c1665';
 
+/** Нормализует в формат 7XXXXXXXXXX (без плюса) — как хранит бэкенд */
+function norm(phone: string): string {
+  return normalizePhone(phone).replace(/^\+/, '');
+}
+
 export async function fetchPhoneFlags(phones: string[]): Promise<Record<string, PhoneFlag>> {
-  const normalized = phones.map(normalizePhone).filter(Boolean);
+  const normalized = phones.map(norm).filter(p => p.length >= 10);
   if (!normalized.length) return {};
   const res = await fetch(`${BASE}?phones=${normalized.join(',')}`);
   if (!res.ok) return {};
   const data = await res.json();
-  return data.flags || {};
+  // Индексируем по обоим форматам: "79..." и "+79..."
+  const raw: Record<string, PhoneFlag> = data.flags || {};
+  const result: Record<string, PhoneFlag> = {};
+  for (const [key, val] of Object.entries(raw)) {
+    result[key] = val;
+    result['+' + key] = val;
+  }
+  return result;
 }
 
 export async function setPhoneFlag(
