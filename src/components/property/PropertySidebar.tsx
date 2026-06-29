@@ -118,7 +118,7 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
                             // MAX: max.ru/chat?phone=79181234567
                             href: `https://max.ru/chat?phone=${phone}`,
                             title: 'MAX',
-                            src: 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/bucket/dce3958e-1d6b-453c-b9d3-494c86fd2e4d.png',
+                            src: 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/bucket/3b8594d9-4849-40fd-91a3-7f3f41ed8708.png',
                             cls: 'w-7 h-7',
                           },
                         ].map(({ href, title, src, cls }) => (
