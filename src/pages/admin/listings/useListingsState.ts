@@ -244,6 +244,7 @@ export function useListingsState() {
     if (Array.isArray(data.tags)) data.tags = (data.tags as string[]).join(',');
     data.images = photos.join('|');
     data.image = photos[0] || '';
+    data.image_thumb = photos[0] || '';
     if (data.video_url) data.video_type = detectVideoType(String(data.video_url));
 
     // При создании нового объекта — автогенерация SEO, тегов и H1-H5 через ИИ
