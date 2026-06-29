@@ -138,7 +138,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
         type: String(p.type),
         isHot: p.isHot,
         url: `/object/${listingSlug(p.title, p.id)}`,
-        image: p.image || '',
+        image: p.image_thumb || p.image || '',
         address: [p.address, p.district].filter(Boolean).join(', '),
         area: p.area,
         price: p.price,

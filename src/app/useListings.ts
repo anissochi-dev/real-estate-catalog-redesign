@@ -34,14 +34,20 @@ export function useListings() {
       setLoading(false);
       const lcpItem = listings[0];
       const lcpSrc = lcpItem?.image;
-      if (lcpSrc && !document.querySelector(`link[rel="preload"][href="${lcpSrc}"]`)) {
+      const lcpThumb = lcpItem?.image_thumb;
+      // На мобиле preload thumb (400px), на десктопе оригинал — экономим трафик
+      const lcpPreloadSrc = lcpThumb || lcpSrc;
+      if (lcpPreloadSrc && !document.querySelector(`link[rel="preload"][href="${lcpPreloadSrc}"]`)) {
         const link = document.createElement('link');
         link.rel = 'preload'; link.as = 'image';
-        link.href = lcpSrc;
         link.setAttribute('fetchpriority', 'high');
-        if (lcpItem?.image_thumb) {
-          link.setAttribute('imagesrcset', `${lcpItem.image_thumb} 800w, ${lcpSrc} 1920w`);
+        if (lcpThumb && lcpSrc && lcpThumb !== lcpSrc) {
+          // Браузер выберет нужный размер сам: thumb для мобиле, оригинал для широкого экрана
+          link.setAttribute('imagesrcset', `${lcpThumb} 400w, ${lcpSrc} 1920w`);
           link.setAttribute('imagesizes', '(max-width: 640px) calc(100vw - 32px), (max-width: 768px) calc(50vw - 24px), (max-width: 1024px) calc(33vw - 24px), 300px');
+          link.href = lcpThumb; // fallback для браузеров без imagesrcset
+        } else {
+          link.href = lcpPreloadSrc;
         }
         document.head.appendChild(link);
       }
