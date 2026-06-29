@@ -378,12 +378,12 @@ export default function PropertyCard({
 
           {/* Цена */}
           <div className={`border-t border-border/60 ${isCompact ? 'pt-1.5' : 'pt-3'}`}>
-            <div className="flex items-baseline gap-2 flex-wrap">
-              <span className={`font-display font-900 leading-none tracking-tight text-foreground ${isHome ? 'text-[24px] sm:text-[28px]' : isCompact ? 'text-[15px]' : 'text-[20px] sm:text-[22px]'}`}>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className={`font-display font-900 leading-none tracking-tight text-foreground ${isHome ? 'text-[24px] sm:text-[28px]' : isCompact ? 'text-[15px]' : 'text-[18px] sm:text-[22px]'}`}>
                 {property.price.toLocaleString('ru')} ₽{property.deal === 'rent' ? '/мес' : ''}
               </span>
               {ppm2 && (
-                <span className="text-[11px] text-muted-foreground flex items-center gap-0.5 whitespace-nowrap">
+                <span className="text-[11px] text-muted-foreground flex items-center gap-0.5 whitespace-nowrap shrink-0">
                   <Icon name="Scaling" size={10} className="text-muted-foreground/50" />
                   {ppm2.toLocaleString('ru')} ₽/м²
                 </span>
