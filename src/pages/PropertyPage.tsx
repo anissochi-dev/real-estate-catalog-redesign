@@ -234,15 +234,17 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
                 <div className="text-[10px] text-muted-foreground mb-0.5 font-medium uppercase tracking-wide">
                   {dealLabel}
                 </div>
-                <div className="font-display font-900 text-2xl text-brand-blue leading-none tracking-tight">
-                  {item.price.toLocaleString('ru')} ₽{item.deal === 'rent' ? '/мес' : ''}
-                </div>
-                {item.pricePerM2 ? (
-                  <div className="flex items-center gap-1 mt-1.5">
-                    <Icon name="Scaling" size={11} className="text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">{item.pricePerM2.toLocaleString('ru')} ₽/м²</span>
+                <div className="flex items-baseline justify-between gap-2">
+                  <div className="font-display font-900 text-[22px] text-brand-blue leading-none tracking-tight">
+                    {item.price.toLocaleString('ru')} ₽{item.deal === 'rent' ? '/мес' : ''}
                   </div>
-                ) : null}
+                  {item.pricePerM2 ? (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Icon name="Scaling" size={11} className="text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">{item.pricePerM2.toLocaleString('ru')} ₽/м²</span>
+                    </div>
+                  ) : null}
+                </div>
               </div>
               {(() => {
                 const withPhone = agents.filter(a => a.phone);
