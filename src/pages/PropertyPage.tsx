@@ -238,13 +238,13 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
                     {dealLabel}
                   </div>
                   <div className="flex items-baseline justify-between gap-2">
-                    <div className="font-display font-900 text-[22px] text-brand-blue leading-none tracking-tight">
+                    <div className="font-display font-900 text-[18px] text-brand-blue leading-none tracking-tight">
                       {item.price.toLocaleString('ru')} ₽{item.deal === 'rent' ? '/мес' : ''}
                     </div>
                     {ppm2 ? (
                       <div className="flex items-center gap-1 shrink-0">
-                        <Icon name="Scaling" size={11} className="text-muted-foreground" />
-                        <span className="text-xs text-muted-foreground whitespace-nowrap">{ppm2.toLocaleString('ru')} ₽/м²</span>
+                        <Icon name="Scaling" size={10} className="text-muted-foreground" />
+                        <span className="text-[11px] text-muted-foreground whitespace-nowrap">{ppm2.toLocaleString('ru')} ₽/м²</span>
                       </div>
                     ) : null}
                   </div>
