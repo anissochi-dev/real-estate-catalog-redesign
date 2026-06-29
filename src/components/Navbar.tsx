@@ -51,7 +51,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
         <div className="container mx-auto px-4">
 
           {/* ── Строка 1 (только десктоп): логотип + телефон + разместить + кабинет ── */}
-          <div className="hidden md:flex items-center justify-between h-12 border-b border-border/50">
+          <div className="hidden md:flex items-center h-12 border-b border-border/50 gap-4">
             {/* Logo */}
             <button
               onClick={() => handleNav('home')}
@@ -67,8 +67,8 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
               <span className="font-display font-800 text-base text-brand-blue tracking-tight">{brandName}</span>
             </button>
 
-            {/* Правая часть строки 1 */}
-            <div className="flex items-center gap-2">
+            {/* Правая часть строки 1 — растягивается и распределяет элементы равномерно */}
+            <div className="flex items-center gap-2 flex-1 justify-end">
               {/* Телефон */}
               <a
                 href="tel:+79183352888"
@@ -125,9 +125,9 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
             </div>
           </div>
 
-          {/* ── Строка 2 (только десктоп): меню навигации + сравнение ── */}
-          <div className="hidden md:flex items-center justify-between h-11">
-            <nav className="flex items-center gap-1">
+          {/* ── Строка 2 (только десктоп): меню навигации по центру + сравнение справа ── */}
+          <div className="hidden md:flex items-center h-11 relative">
+            <nav className="flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
               {navItems.map((item) => (
                 <button
                   key={item.id}
@@ -155,7 +155,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
             {compareCount > 0 && (
               <button
                 onClick={() => handleNav('compare')}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 border-brand-orange text-brand-orange text-sm font-semibold hover:bg-brand-orange hover:text-white transition-all duration-200"
+                className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 border-brand-orange text-brand-orange text-sm font-semibold hover:bg-brand-orange hover:text-white transition-all duration-200"
               >
                 <Icon name="GitCompare" size={15} />
                 <span>Сравнить ({compareCount})</span>
