@@ -54,7 +54,11 @@ export default function PropertyMediaGallery({
     if (!isVideoActive && mediaTab === 'video' && activeImg !== videoIndex) setMediaTab('photos');
   }, [isVideoActive, activeImg, videoIndex, mediaTab]);
 
-  const photoThumbs = rawImgs;
+  const photoThumbs = rawImgs.map(src => {
+    if (!src || !src.includes('cdn.poehali.dev') || !src.includes('/photos/')) return src;
+    if (src.includes('_thumb.webp')) return src;
+    return src.replace(/(_wm)?\.(webp|jpe?g|png)$/i, '_thumb.webp');
+  });
   const photoActiveIdx = hasVideo && activeImg > videoIndex
     ? activeImg - 1
     : (hasVideo && activeImg === videoIndex ? 0 : activeImg);

@@ -114,7 +114,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
     const lcpImgs = newObjects.slice(1, 4);
     const added: HTMLLinkElement[] = [];
     lcpImgs.forEach((p) => {
-      const src = p.image;
+      const src = p.image_thumb || p.image;
       if (!src) return;
       if (document.querySelector(`link[rel="preload"][href="${src}"]`)) return;
       const link = document.createElement('link');
