@@ -328,6 +328,14 @@ export default function ListingsTable({
                   </span>
                 </button>
 
+                {/* Брокер */}
+                {it.broker_name && (
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Icon name="UserCheck" size={12} className="text-brand-blue/60 flex-shrink-0" />
+                    <span className="text-xs font-medium text-foreground truncate">{it.broker_name}</span>
+                  </div>
+                )}
+
                 {/* Собственник */}
                 <div className="flex items-center gap-1.5 min-w-0">
                   <Icon name="User" size={12} className="text-muted-foreground/50 flex-shrink-0" />
