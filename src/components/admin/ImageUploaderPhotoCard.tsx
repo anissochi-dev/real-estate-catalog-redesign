@@ -16,6 +16,7 @@ interface Props {
   onDownloadOriginal: () => void;
   onRemoveWatermark: () => void;
   onRemove: () => void;
+  onMakeMain?: () => void;
 }
 
 /** Строит URL превью (thumb) из CDN-ссылки на основное фото.
@@ -41,6 +42,7 @@ export default function ImageUploaderPhotoCard({
   onDownloadOriginal,
   onRemoveWatermark,
   onRemove,
+  onMakeMain,
 }: Props) {
   const hasOwnWm = /_wm\.(jpe?g|png|webp)$/i.test(url);
   const previewSrc = toThumbUrl(url);
@@ -164,6 +166,19 @@ export default function ImageUploaderPhotoCard({
            wmStatus === 'error'   ? 'Ошибка' :
            'Удалить ВЗ'}
         </button>
+
+        {/* Сделать главным */}
+        {index > 0 && onMakeMain && (
+          <button
+            type="button"
+            onPointerDown={e => e.stopPropagation()}
+            onClick={e => { e.stopPropagation(); onMakeMain(); }}
+            className="inline-flex items-center justify-center gap-0.5 text-[9px] font-semibold px-1.5 py-1 rounded-md bg-brand-blue/10 border border-brand-blue/30 text-brand-blue hover:bg-brand-blue/20 transition"
+            title="Сделать главным фото"
+          >
+            <Icon name="Star" size={10} /> Главным
+          </button>
+        )}
 
         {/* Удалить фото */}
         <button

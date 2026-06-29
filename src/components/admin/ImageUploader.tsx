@@ -149,6 +149,11 @@ export default function ImageUploader({
         const [moved] = next.splice(dragFromIdx.current, 1);
         next.splice(over, 0, moved);
         onChange(next);
+        // Если первое фото сменилось — обновляем thumb
+        const prevFirst = valueRef.current[0];
+        if (next[0] !== prevFirst && onThumbChange) {
+          onThumbChange(next[0]);
+        }
       }
     }
     dragFromIdx.current = null;
@@ -158,7 +163,7 @@ export default function ImageUploader({
     setDragIdx(null);
     setDragOverIdx(null);
     setGhostPos(null);
-  }, [onChange]);
+  }, [onChange, onThumbChange]);
 
   const shouldCompress = compress ?? (folder === 'photos');
 
@@ -271,6 +276,15 @@ export default function ImageUploader({
 
   const remove = (i: number) => onChange(value.filter((_, idx) => idx !== i));
 
+  const makeMain = (i: number) => {
+    if (i === 0) return;
+    const next = [...value];
+    const [moved] = next.splice(i, 1);
+    next.unshift(moved);
+    onChange(next);
+    if (onThumbChange) onThumbChange(next[0]);
+  };
+
   return (
     <div className={className}>
       {/* ── Зона загрузки ── */}
@@ -317,6 +331,7 @@ export default function ImageUploader({
                 onDownloadOriginal={() => download(url, { original: true })}
                 onRemoveWatermark={() => removeWatermark(i, url)}
                 onRemove={() => remove(i)}
+                onMakeMain={multiple ? () => makeMain(i) : undefined}
               />
             ))}
           </div>

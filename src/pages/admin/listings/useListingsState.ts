@@ -5,6 +5,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { Listing, City, Purpose, LandVri, empty, detectVideoType, splitImages } from './types';
 
+function toThumbUrl(src: string): string {
+  if (!src || !src.includes('cdn.poehali.dev')) return src;
+  if (!src.includes('/photos/')) return src;
+  if (src.includes('_thumb.webp')) return src;
+  return src.replace(/(_wm)?\.(webp|jpe?g|png)$/i, '_thumb.webp');
+}
+
 export const DRAFT_KEY = 'biznest_listing_draft';
 
 export function loadDraft(): { editing: Partial<Listing>; photos: string[] } | null {
@@ -244,7 +251,7 @@ export function useListingsState() {
     if (Array.isArray(data.tags)) data.tags = (data.tags as string[]).join(',');
     data.images = photos.join('|');
     data.image = photos[0] || '';
-    data.image_thumb = photos[0] || '';
+    data.image_thumb = photos[0] ? toThumbUrl(photos[0]) : '';
     if (data.video_url) data.video_type = detectVideoType(String(data.video_url));
 
     // При создании нового объекта — автогенерация SEO, тегов и H1-H5 через ИИ
