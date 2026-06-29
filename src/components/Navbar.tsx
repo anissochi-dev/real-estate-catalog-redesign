@@ -49,85 +49,24 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
     <>
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-border shadow-sm">
         <div className="container mx-auto px-4">
-
-          {/* ── Строка 1 (только десктоп): логотип + телефон + разместить + кабинет ── */}
-          <div className="hidden md:flex items-center h-12 border-b border-border/50 gap-4">
+          <div className="flex items-center justify-between h-14">
             {/* Logo */}
             <button
               onClick={() => handleNav('home')}
               className="flex items-center gap-2 group shrink-0"
             >
               {logoUrl ? (
-                <img src={logoUrl} alt={brandName} width={36} height={36} loading="eager" className="w-8 h-8 rounded-lg object-contain bg-white" />
+                <img src={logoUrl} alt={brandName} width={36} height={36} loading="eager" className="w-8 h-8 md:w-9 md:h-9 rounded-lg object-contain bg-white" />
               ) : (
-                <div className="w-8 h-8 rounded-lg btn-blue flex items-center justify-center">
+                <div className="w-8 h-8 md:w-9 md:h-9 rounded-lg btn-blue flex items-center justify-center">
                   <Icon name="Building" size={18} className="text-white" />
                 </div>
               )}
-              <span className="font-display font-800 text-base text-brand-blue tracking-tight">{brandName}</span>
+              <span className="font-display font-800 text-base md:text-lg text-brand-blue tracking-tight truncate max-w-[160px] sm:max-w-[260px] md:max-w-none">{brandName}</span>
             </button>
 
-            {/* Правая часть строки 1 — растягивается и распределяет элементы равномерно */}
-            <div className="flex items-center gap-2 flex-1 justify-end">
-              {/* Телефон */}
-              <a
-                href="tel:+79183352888"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold text-foreground hover:text-brand-blue hover:bg-muted transition-all duration-200 shrink-0"
-              >
-                <Icon name="Phone" size={15} className="text-brand-blue" />
-                +7 (918) 33 52 888
-              </a>
-
-              {/* Разместить объект */}
-              <button
-                onClick={() => setOwnerModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-orange text-white text-sm font-semibold hover:bg-brand-orange/90 transition-all duration-200 shrink-0"
-              >
-                <Icon name="PlusCircle" size={15} />
-                Разместить объект
-              </button>
-
-              {/* Кабинет / Войти */}
-              {user ? (
-                isStaff ? (
-                  <button
-                    onClick={onAdmin}
-                    title="Открыть админ-панель"
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted hover:bg-brand-blue/10 text-sm transition-colors"
-                  >
-                    <Icon name="User" size={14} className="text-brand-blue flex-shrink-0" />
-                    <span className="text-foreground font-medium">{user.name}</span>
-                  </button>
-                ) : isClient ? (
-                  <button
-                    onClick={onClientDashboard}
-                    title="Личный кабинет"
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted hover:bg-brand-blue/10 text-sm transition-colors"
-                  >
-                    <Icon name="LayoutDashboard" size={14} className="text-brand-blue flex-shrink-0" />
-                    <span className="text-foreground font-medium">Кабинет</span>
-                  </button>
-                ) : (
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted text-sm">
-                    <Icon name="User" size={14} />
-                    <span>{user.name}</span>
-                  </div>
-                )
-              ) : (
-                <button
-                  onClick={onLogin}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
-                >
-                  <Icon name="LogIn" size={14} />
-                  Войти
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* ── Строка 2 (только десктоп): меню навигации по центру + сравнение справа ── */}
-          <div className="hidden md:flex items-center h-11 relative">
-            <nav className="flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
+            {/* Nav links — desktop */}
+            <nav className="hidden md:flex items-center gap-1">
               {navItems.map((item) => (
                 <button
                   key={item.id}
@@ -135,7 +74,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
                   onMouseEnter={() => prefetchPage(item.id)}
                   onFocus={() => prefetchPage(item.id)}
                   aria-label={'ariaLabel' in item ? (item as { ariaLabel: string }).ariaLabel : item.label}
-                  className={`relative flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200
+                  className={`relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200
                     ${currentPage === item.id
                       ? 'bg-brand-blue text-white'
                       : 'text-foreground hover:bg-muted'
@@ -152,48 +91,77 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
               ))}
             </nav>
 
-            {compareCount > 0 && (
-              <button
-                onClick={() => handleNav('compare')}
-                className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 border-brand-orange text-brand-orange text-sm font-semibold hover:bg-brand-orange hover:text-white transition-all duration-200"
+            {/* Right side — desktop */}
+            <div className="flex items-center gap-2">
+              {/* Телефон */}
+              <a
+                href="tel:+79183352888"
+                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold text-foreground hover:text-brand-blue hover:bg-muted transition-all duration-200 shrink-0"
               >
-                <Icon name="GitCompare" size={15} />
-                <span>Сравнить ({compareCount})</span>
+                <Icon name="Phone" size={15} className="text-brand-blue" />
+                +7 (918) 33 52 888
+              </a>
+
+              {/* Кнопка "Разместить объект" */}
+              <button
+                onClick={() => setOwnerModalOpen(true)}
+                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-orange text-white text-sm font-semibold hover:bg-brand-orange/90 transition-all duration-200 shrink-0"
+              >
+                <Icon name="PlusCircle" size={15} />
+                Разместить объект
               </button>
-            )}
-          </div>
 
-          {/* ── Мобильная строка (только мобиль): логотип + гамбургер ── */}
-          <div className="flex md:hidden items-center justify-between h-14">
-            <button
-              onClick={() => handleNav('home')}
-              className="flex items-center gap-2 group shrink-0"
-            >
-              {logoUrl ? (
-                <img src={logoUrl} alt={brandName} width={36} height={36} loading="eager" className="w-8 h-8 rounded-lg object-contain bg-white" />
-              ) : (
-                <div className="w-8 h-8 rounded-lg btn-blue flex items-center justify-center">
-                  <Icon name="Building" size={18} className="text-white" />
-                </div>
+              {compareCount > 0 && (
+                <button
+                  onClick={() => handleNav('compare')}
+                  className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 border-brand-orange text-brand-orange text-sm font-semibold hover:bg-brand-orange hover:text-white transition-all duration-200"
+                >
+                  <Icon name="GitCompare" size={15} />
+                  <span>Сравнить ({compareCount})</span>
+                </button>
               )}
-              <span className="font-display font-800 text-base text-brand-blue tracking-tight truncate max-w-[160px] sm:max-w-[260px]">{brandName}</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setDrawerOpen(true);
-                navItems.forEach(i => prefetchPage(i.id));
-              }}
-              className="p-2.5 rounded-lg hover:bg-muted transition-colors relative min-h-[44px] min-w-[44px] flex items-center justify-center"
-              aria-label="Открыть меню"
-            >
-              <Icon name="Menu" size={22} />
-              {favoritesCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-brand-orange" />
+              {user && (
+                isStaff ? (
+                  <button
+                    onClick={onAdmin}
+                    title="Открыть админ-панель"
+                    className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted hover:bg-brand-blue/10 text-sm transition-colors"
+                  >
+                    <Icon name="User" size={14} className="text-brand-blue flex-shrink-0" />
+                    <span className="text-foreground font-medium">{user.name}</span>
+                  </button>
+                ) : isClient ? (
+                  <button
+                    onClick={onClientDashboard}
+                    title="Личный кабинет"
+                    className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted hover:bg-brand-blue/10 text-sm transition-colors"
+                  >
+                    <Icon name="LayoutDashboard" size={14} className="text-brand-blue flex-shrink-0" />
+                    <span className="text-foreground font-medium">Кабинет</span>
+                  </button>
+                ) : (
+                  <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted text-sm">
+                    <Icon name="User" size={14} />
+                    <span>{user.name}</span>
+                  </div>
+                )
               )}
-            </button>
+              {/* Hamburger — mobile */}
+              <button
+                onClick={() => {
+                  setDrawerOpen(true);
+                  navItems.forEach(i => prefetchPage(i.id));
+                }}
+                className="md:hidden p-2.5 rounded-lg hover:bg-muted transition-colors relative min-h-[44px] min-w-[44px] flex items-center justify-center"
+                aria-label="Открыть меню"
+              >
+                <Icon name="Menu" size={22} />
+                {favoritesCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-brand-orange" />
+                )}
+              </button>
+            </div>
           </div>
-
         </div>
       </header>
 
