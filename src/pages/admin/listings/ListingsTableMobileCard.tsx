@@ -33,13 +33,13 @@ export default function ListingsTableMobileCard({
       {/* ── Мобильное фото — во всю ширину ── */}
       <div
         className="sm:hidden relative cursor-pointer overflow-hidden w-full"
-        onClick={() => it.slug ? window.open(`${siteUrl || ''}/property/${it.slug}`, '_blank') : onInternalCard?.(it)}
+        onClick={() => onInternalCard?.(it)}
         style={{ aspectRatio: '16/9' }}
       >
         {mainImg ? (
-          <img src={mainImg} alt={it.title} className="w-full h-full object-cover" />
+          <img src={mainImg} alt={it.title} className="absolute inset-0 w-full h-full object-cover" />
         ) : (
-          <div className="w-full h-full bg-muted flex items-center justify-center min-h-[160px]">
+          <div className="absolute inset-0 bg-muted flex items-center justify-center">
             <Icon name="Image" size={36} className="text-muted-foreground/40" />
           </div>
         )}
