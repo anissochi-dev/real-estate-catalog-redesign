@@ -8,7 +8,7 @@ import AdminIdleWarning from './AdminIdleWarning';
 
 export type AdminSection = 'dashboard' | 'listings' | 'leads' | 'network-tenants' | 'users' | 'pages' | 'settings' | 'ai-logs'
   | 'crm-owners' | 'crm-kanban' | 'crm-gamification' | 'crm-checks' | 'crm-payments'
-  | 'phones' | 'news' | 'vb-knowledge' | 'seo' | 'districts' | 'marketing';
+  | 'phones' | 'news' | 'vb-knowledge' | 'seo' | 'districts' | 'marketing' | 'training';
 
 interface Props {
   section: AdminSection;
@@ -32,6 +32,7 @@ const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; gro
   { id: 'districts',        label: 'Районы',            icon: 'MapPin',          roles: ['admin', 'editor'] },
   { id: 'vb-knowledge',     label: 'База знаний ВБ',   icon: 'Brain',           roles: ['admin', 'editor', 'director'] },
   { id: 'marketing',        label: 'Маркетолог',        icon: 'Megaphone',       roles: ['admin', 'editor', 'manager', 'director'] },
+  { id: 'training',         label: 'Учебный центр',     icon: 'GraduationCap',   roles: ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'] },
   { id: 'settings',         label: 'Настройки',         icon: 'Settings',        roles: ['admin', 'editor'] },
   { id: 'phones',           label: 'Телефонная база',   icon: 'Phone',           roles: ['admin', 'editor', 'manager', 'director', 'office_manager'] },
   { id: 'crm-kanban',       label: 'Воронка сделок',   icon: 'KanbanSquare',    roles: ['admin', 'director', 'manager', 'office_manager'] },

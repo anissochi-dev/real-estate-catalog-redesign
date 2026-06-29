@@ -1,9 +1,12 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import PhoneCardModal from '@/components/admin/PhoneCardModal';
 import ListingInternalCard from './listings/ListingInternalCard';
 import { formatPhone, normalizePhone, extractDigits } from '@/lib/phone';
+import { fetchPhoneFlags, setPhoneFlag, removePhoneFlag, type PhoneFlag, type FlagType } from '@/hooks/usePhoneFlag';
+import PhoneFlagBadge from '@/components/PhoneFlagBadge';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface PhoneContact {
   id: number;
@@ -173,7 +176,79 @@ function AddContactModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
   );
 }
 
+const FLAG_LABELS: Record<FlagType, string> = {
+  bad_owner: 'Плохой собственник',
+  competitor: 'Брокер-конкурент',
+};
+
+function FlagModal({ phone, current, token, onClose, onSaved }: {
+  phone: string; current: PhoneFlag | null; token: string;
+  onClose: () => void; onSaved: () => void;
+}) {
+  const [type, setType] = useState<FlagType>(current?.flag_type || 'bad_owner');
+  const [comment, setComment] = useState(current?.comment || '');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await setPhoneFlag(phone, type, comment, token);
+      onSaved(); onClose();
+    } finally { setSaving(false); }
+  };
+
+  const remove = async () => {
+    setSaving(true);
+    try {
+      await removePhoneFlag(phone, token);
+      onSaved(); onClose();
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="font-display font-700 text-base">Отметить номер</div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><Icon name="X" size={18} /></button>
+        </div>
+        <div className="font-mono text-brand-blue font-semibold">{formatPhone(phone)}</div>
+        <div className="space-y-2">
+          {(['bad_owner', 'competitor'] as FlagType[]).map(ft => (
+            <button key={ft} onClick={() => setType(ft)}
+              className={`w-full text-left px-3 py-2.5 rounded-xl border-2 transition text-sm font-medium flex items-center gap-2 ${type === ft ? (ft === 'bad_owner' ? 'border-red-400 bg-red-50 text-red-700' : 'border-orange-400 bg-orange-50 text-orange-700') : 'border-border hover:bg-muted/50'}`}>
+              <span className={`w-3 h-3 rounded-full shrink-0 ${ft === 'bad_owner' ? 'bg-red-500' : 'bg-orange-400'}`} />
+              {FLAG_LABELS[ft]}
+            </button>
+          ))}
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground mb-1 block">Комментарий</label>
+          <textarea className="w-full border border-border rounded-lg px-3 py-2 text-sm resize-none" rows={2}
+            placeholder="Коротко — почему отмечаете этот номер"
+            value={comment} onChange={e => setComment(e.target.value.slice(0, 300))} />
+          <div className="text-right text-[11px] text-muted-foreground">{comment.length}/300</div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={save} disabled={saving}
+            className="btn-blue text-white px-4 py-2 rounded-xl text-sm font-semibold flex-1">
+            {saving ? 'Сохранение...' : current ? 'Обновить' : 'Отметить'}
+          </button>
+          {current && (
+            <button onClick={remove} disabled={saving}
+              className="px-4 py-2 rounded-xl text-sm border border-red-200 text-red-600 hover:bg-red-50">
+              Снять
+            </button>
+          )}
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm border border-border hover:bg-muted">Отмена</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PhoneBook() {
+  const { user } = useAuth();
   const [contacts, setContacts] = useState<PhoneContact[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -184,19 +259,39 @@ export default function PhoneBook() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
   const [openListingId, setOpenListingId] = useState<number | null>(null);
+  const [flags, setFlags] = useState<Record<string, PhoneFlag>>({});
+  const [flagPhone, setFlagPhone] = useState<string | null>(null);
+  const canManageFlags = user?.role === 'admin' || user?.role === 'director';
+  const tokenRef = useRef<string>('');
 
   const load = useCallback((p = 1, q = '') => {
     setLoading(true);
     const promise = q.length >= 2
       ? adminApi.searchPhones(q)
       : adminApi.listPhones(p);
-    promise.then(r => {
-      setContacts(r.contacts || []);
-      setTotal(r.total ?? r.contacts?.length ?? 0);
+    promise.then(async r => {
+      const list: PhoneContact[] = r.contacts || [];
+      setContacts(list);
+      setTotal(r.total ?? list.length ?? 0);
       setPages(r.pages ?? 1);
       setPage(r.page ?? 1);
+      if (list.length) {
+        const phoneNums = list.map(c => c.phone);
+        const f = await fetchPhoneFlags(phoneNums);
+        setFlags(f);
+      }
     }).finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    try { tokenRef.current = localStorage.getItem('biznest_token') || ''; } catch { /* */ }
+  }, []);
+
+  const reloadFlags = async () => {
+    if (!contacts.length) return;
+    const f = await fetchPhoneFlags(contacts.map(c => c.phone));
+    setFlags(f);
+  };
 
   useEffect(() => { load(1, search); }, [search, load]);
 
@@ -262,10 +357,12 @@ export default function PhoneBook() {
         <>
         {/* Мобильный вид */}
         <div className="sm:hidden bg-white rounded-2xl shadow-sm divide-y divide-border">
-          {contacts.map(c => (
-            <div key={c.id} onClick={() => setSelectedId(c.id)}
-              className="px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-muted/20 transition">
-              <div className="shrink-0">
+          {contacts.map(c => {
+            const nPhone = normalizePhone(c.phone);
+            const flag = flags[nPhone] || null;
+            return (
+            <div key={c.id} className="px-4 py-3 flex items-center gap-3">
+              <div className="shrink-0" onClick={() => setSelectedId(c.id)}>
                 {c.photo_url
                   ? <img src={c.photo_url} alt="" className="w-10 h-10 rounded-full object-cover" />
                   : <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
@@ -273,7 +370,7 @@ export default function PhoneBook() {
                     </div>
                 }
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setSelectedId(c.id)}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="font-mono font-semibold text-brand-blue text-sm">{formatPhone(c.phone)}</div>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -291,10 +388,19 @@ export default function PhoneBook() {
                     {c.company && <span className="text-xs text-muted-foreground ml-1">{c.company}</span>}
                   </div>
                 )}
+                {flag && <div className="mt-1"><PhoneFlagBadge flag={flag} size="sm" /></div>}
                 <div className="text-xs text-muted-foreground mt-0.5">{fmtDate(c.created_at)}</div>
               </div>
+              {canManageFlags && (
+                <button onClick={() => setFlagPhone(c.phone)}
+                  title={flag ? 'Изменить метку' : 'Отметить'}
+                  className={`shrink-0 p-2 rounded-lg border transition ${flag ? 'border-transparent text-muted-foreground' : 'border-dashed border-border text-muted-foreground/40 hover:border-red-300 hover:text-red-500'}`}>
+                  <Icon name={flag ? 'Pencil' : 'Flag'} size={14} />
+                </button>
+              )}
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Десктопный вид */}
@@ -308,11 +414,15 @@ export default function PhoneBook() {
                 <th className="px-4 py-3 hidden sm:table-cell">ИНН</th>
                 <th className="px-4 py-3 text-center">Объекты</th>
                 <th className="px-4 py-3 text-center">Лиды</th>
+                <th className="px-4 py-3 hidden md:table-cell">Метка</th>
                 <th className="px-4 py-3 hidden md:table-cell">Добавлен</th>
               </tr>
             </thead>
             <tbody>
-              {contacts.map(c => (
+              {contacts.map(c => {
+                const nPhone = normalizePhone(c.phone);
+                const flag = flags[nPhone] || null;
+                return (
                 <tr key={c.id}
                   onClick={() => setSelectedId(c.id)}
                   className="border-t border-border hover:bg-muted/30 cursor-pointer">
@@ -343,9 +453,25 @@ export default function PhoneBook() {
                       ? <span className="bg-brand-orange/10 text-brand-orange text-xs font-semibold px-2 py-0.5 rounded-full">{c.leads_count}</span>
                       : <span className="text-muted-foreground">—</span>}
                   </td>
+                  <td className="px-4 py-3 hidden md:table-cell" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center gap-2">
+                      {flag && <PhoneFlagBadge flag={flag} size="sm" />}
+                      {canManageFlags && (
+                        <button
+                          onClick={() => setFlagPhone(c.phone)}
+                          title={flag ? 'Изменить метку' : 'Отметить номер'}
+                          className={`p-1 rounded-lg border transition ${flag ? 'border-transparent text-muted-foreground hover:bg-muted' : 'border-dashed border-border text-muted-foreground/50 hover:border-red-300 hover:text-red-500'}`}
+                        >
+                          <Icon name={flag ? 'Pencil' : 'Flag'} size={13} />
+                        </button>
+                      )}
+                      {!flag && !canManageFlags && <span className="text-muted-foreground">—</span>}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-xs text-muted-foreground hidden md:table-cell">{fmtDate(c.created_at)}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -387,6 +513,16 @@ export default function PhoneBook() {
         <AddContactModal
           onClose={() => setAdding(false)}
           onAdded={handleAdded}
+        />
+      )}
+
+      {flagPhone && (
+        <FlagModal
+          phone={flagPhone}
+          current={flags[normalizePhone(flagPhone)] || null}
+          token={tokenRef.current}
+          onClose={() => setFlagPhone(null)}
+          onSaved={reloadFlags}
         />
       )}
     </div>

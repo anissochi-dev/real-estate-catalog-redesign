@@ -2,10 +2,18 @@ import type { ListingDetail, Agent } from '@/lib/api';
 import Icon from '@/components/ui/icon';
 import { DEAL_LABELS } from './propertyLabels';
 import { fmtListingId } from '@/lib/formatPrice';
+import { usePhoneFlag } from '@/hooks/usePhoneFlag';
+import PhoneFlagBadge from '@/components/PhoneFlagBadge';
 
 interface Props {
   item: ListingDetail;
   agents: Agent[];
+}
+
+function AgentPhoneFlag({ phone }: { phone: string }) {
+  const { flag } = usePhoneFlag(phone);
+  if (!flag) return null;
+  return <div className="mt-2"><PhoneFlagBadge flag={flag} size="md" /></div>;
 }
 
 export default function PropertySidebar({ item, agents }: Props) {
@@ -43,11 +51,14 @@ export default function PropertySidebar({ item, agents }: Props) {
           {agents.slice(0, 1).map(agent => (
             <div key={agent.id}>
               {agent.phone && (
-                <a href={`tel:${agent.phone}`}
-                  className="inline-flex items-center gap-2 text-lg font-bold text-brand-blue hover:underline">
-                  <Icon name="Phone" size={18} />
-                  {agent.phone}
-                </a>
+                <>
+                  <a href={`tel:${agent.phone}`}
+                    className="inline-flex items-center gap-2 text-lg font-bold text-brand-blue hover:underline">
+                    <Icon name="Phone" size={18} />
+                    {agent.phone}
+                  </a>
+                  <AgentPhoneFlag phone={agent.phone} />
+                </>
               )}
             </div>
           ))}

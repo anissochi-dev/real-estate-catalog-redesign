@@ -1,0 +1,33 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS CORS",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "GET без параметров — ошибка",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 400,
+      "expectedBody": {"error": "Укажи параметр phones"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET с phones — пустой результат",
+      "method": "GET",
+      "path": "/?phones=79999999999",
+      "expectedStatus": 200,
+      "expectedBody": {"flags": {}},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "POST без авторизации — 401",
+      "method": "POST",
+      "path": "/",
+      "body": {"phone": "79001234567", "flag_type": "bad_owner", "comment": "тест"},
+      "expectedStatus": 401
+    }
+  ]
+}

@@ -3,6 +3,8 @@ import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import PhoneCardModal from './PhoneCardModal';
 import { formatPhone, normalizePhone, extractDigits } from '@/lib/phone';
+import { usePhoneFlag } from '@/hooks/usePhoneFlag';
+import PhoneFlagBadge from '@/components/PhoneFlagBadge';
 
 interface PhoneContact {
   id: number;
@@ -133,6 +135,7 @@ export default function PhonePickerInput({ value, onChange, onNameChange, placeh
 
   const digits = extractDigits(value);
   const isComplete = digits.length === 10;
+  const { flag } = usePhoneFlag(value);
 
   return (
     <>
@@ -204,6 +207,13 @@ export default function PhonePickerInput({ value, onChange, onNameChange, placeh
             </span>
           ) : null}
         </div>
+
+        {/* Флаг номера — плохой собственник / конкурент */}
+        {flag && (
+          <div className="mt-2">
+            <PhoneFlagBadge flag={flag} size="md" />
+          </div>
+        )}
 
         {/* Дропдаун с подсказками */}
         {open && suggestions.length > 0 && (
