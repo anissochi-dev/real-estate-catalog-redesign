@@ -126,6 +126,7 @@ export function TabRadar({ listingId, listing }: { listingId: number; listing: L
   const totalViews = stats?.total_views ?? 0;
   const totalLeads = stats?.total_leads ?? 0;
   const totalCalls = stats?.total_calls ?? 0;
+  const totalQr    = stats?.total_qr ?? 0;
   const conversion = totalViews > 0 ? ((totalLeads / totalViews) * 100).toFixed(1) : '0';
 
   // SEO-оценка
@@ -174,12 +175,13 @@ export function TabRadar({ listingId, listing }: { listingId: number; listing: L
     <div className="p-4 space-y-3 bg-muted/20">
 
       {/* ── Строка 1: KPI ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
-          { icon: 'Eye',      label: 'Просмотров',  value: fmt(totalViews),  grad: 'from-brand-blue to-indigo-600' },
-          { icon: 'Phone',    label: 'Звонков',     value: fmt(totalCalls),  grad: 'from-emerald-500 to-emerald-700' },
-          { icon: 'Inbox',    label: 'Заявок',      value: fmt(totalLeads),  grad: 'from-brand-orange to-orange-600' },
-          { icon: 'Percent',  label: 'Конверсия',   value: `${conversion}%`, grad: 'from-violet-500 to-violet-700' },
+          { icon: 'Eye',      label: 'Просмотров',   value: fmt(totalViews),  grad: 'from-brand-blue to-indigo-600' },
+          { icon: 'Phone',    label: 'Звонков',      value: fmt(totalCalls),  grad: 'from-emerald-500 to-emerald-700' },
+          { icon: 'Inbox',    label: 'Заявок',       value: fmt(totalLeads),  grad: 'from-brand-orange to-orange-600' },
+          { icon: 'QrCode',   label: 'Переходов QR', value: fmt(totalQr),     grad: 'from-pink-500 to-rose-600' },
+          { icon: 'Percent',  label: 'Конверсия',    value: `${conversion}%`, grad: 'from-violet-500 to-violet-700' },
         ].map(c => (
           <div key={c.label} className={`bg-gradient-to-br ${c.grad} text-white rounded-2xl p-4`}>
             <div className="flex items-center gap-1.5 text-xs opacity-80 mb-1">
