@@ -621,13 +621,22 @@ def handler(event: dict, context) -> dict:
                     'results': results,
                 })
 
-            # ── Проставить CacheControl для всех фото из БД ───────────────
+            # ── Проставить CacheControl: скачать байты → put_object заново ──
             elif action == 'fix_cache':
+                import re as _re
+                import urllib.request as _ur
+                import threading as _th
                 offset_fc = int(params.get('offset') or body.get('offset') or 0)
-                batch_fc = min(int(params.get('batch_size') or body.get('batch_size') or 30), 50)
+                batch_fc = min(int(params.get('batch_size') or body.get('batch_size') or 10), 20)
+                # Токен для self-chain
+                _auth_token = (
+                    (event.get('headers') or {}).get('X-Auth-Token') or
+                    (event.get('headers') or {}).get('x-auth-token') or ''
+                )
+                _self_url = f"https://functions.poehali.dev/d86482e4-0555-457a-8063-0d3305c171ff"
                 CC = 'public, max-age=31536000'
 
-                # Берём уникальные CDN-ключи из listings (image + image_thumb)
+                # Уникальные CDN-URL из БД (image + image_thumb + images)
                 cur.execute(f"""
                     SELECT DISTINCT url FROM (
                         SELECT image AS url FROM {SCHEMA}.listings
@@ -635,54 +644,92 @@ def handler(event: dict, context) -> dict:
                         UNION
                         SELECT image_thumb AS url FROM {SCHEMA}.listings
                             WHERE image_thumb LIKE '%cdn.poehali.dev%' AND image_thumb != ''
+                        UNION
+                        SELECT TRIM(u) AS url
+                        FROM {SCHEMA}.listings,
+                        LATERAL unnest(string_to_array(images, '|')) AS u
+                        WHERE images LIKE '%cdn.poehali.dev%' AND images != ''
                     ) t
-                    WHERE url IS NOT NULL
+                    WHERE url IS NOT NULL AND url != ''
                     ORDER BY url
                     LIMIT {batch_fc} OFFSET {offset_fc}
                 """)
                 rows = [r['url'] for r in cur.fetchall()]
 
-                # Считаем total
                 cur.execute(f"""
-                    SELECT COUNT(DISTINCT url) as cnt FROM (
+                    SELECT COUNT(DISTINCT url) AS cnt FROM (
                         SELECT image AS url FROM {SCHEMA}.listings
                             WHERE image LIKE '%cdn.poehali.dev%' AND image != ''
                         UNION
                         SELECT image_thumb AS url FROM {SCHEMA}.listings
                             WHERE image_thumb LIKE '%cdn.poehali.dev%' AND image_thumb != ''
-                    ) t WHERE url IS NOT NULL
+                        UNION
+                        SELECT TRIM(u) AS url
+                        FROM {SCHEMA}.listings,
+                        LATERAL unnest(string_to_array(images, '|')) AS u
+                        WHERE images LIKE '%cdn.poehali.dev%' AND images != ''
+                    ) t WHERE url IS NOT NULL AND url != ''
                 """)
                 total_fc = cur.fetchone()['cnt']
 
                 s3c = _s3()
                 ok_count = err_count = skip_count = 0
-                import re as _re
+
                 for cdn_url in rows:
-                    # Извлекаем S3-ключ из CDN URL
                     m = _re.search(r'/bucket/(.+)$', cdn_url)
                     if not m:
                         skip_count += 1
                         continue
                     k = m.group(1)
                     try:
+                        # Проверяем текущий CacheControl через head_object
                         head = s3c.head_object(Bucket=BUCKET, Key=k)
                         if head.get('CacheControl') == CC:
                             skip_count += 1
                             continue
                         ct = head.get('ContentType', 'image/webp')
-                        s3c.copy_object(
-                            Bucket=BUCKET, Key=k,
-                            CopySource={'Bucket': BUCKET, 'Key': k},
+
+                        # Безопасная перезапись: скачиваем байты → put_object заново
+                        # (copy_object не поддерживается провайдером bucket.poehali.dev)
+                        resp = _ur.urlopen(cdn_url, timeout=15)
+                        data = resp.read()
+                        if not data:
+                            err_count += 1
+                            print(f'[fix_cache] пустые байты: {k}')
+                            continue
+
+                        s3c.put_object(
+                            Bucket=BUCKET,
+                            Key=k,
+                            Body=data,
                             ContentType=ct,
                             CacheControl=CC,
-                            MetadataDirective='REPLACE',
                         )
                         ok_count += 1
+                        print(f'[fix_cache] ok: {k} ({len(data)} bytes)')
                     except Exception as e:
                         err_count += 1
-                        print(f'[fix_cache] {k}: {e}')
+                        print(f'[fix_cache] err: {k}: {e}')
 
-                done = (offset_fc + batch_fc) >= total_fc
+                next_off = offset_fc + batch_fc
+                done = next_off >= total_fc
+
+                # Self-chain: если ещё есть файлы — запускаем следующий батч
+                # в фоновом потоке (fire-and-forget), не ждём ответа
+                if not done and _auth_token:
+                    def _chain():
+                        try:
+                            _req = _ur.Request(
+                                _self_url,
+                                data=json.dumps({'action': 'fix_cache', 'offset': next_off, 'batch_size': batch_fc}).encode(),
+                                headers={'Content-Type': 'application/json', 'X-Auth-Token': _auth_token},
+                                method='POST',
+                            )
+                            _ur.urlopen(_req, timeout=25)
+                        except Exception as _e:
+                            print(f'[fix_cache] chain err offset={next_off}: {_e}')
+                    _th.Thread(target=_chain, daemon=True).start()
+
                 return _ok({
                     'done': done,
                     'total': total_fc,
@@ -690,7 +737,87 @@ def handler(event: dict, context) -> dict:
                     'ok': ok_count,
                     'skipped': skip_count,
                     'errors': err_count,
-                    'next_offset': offset_fc + batch_fc,
+                    'next_offset': next_off,
+                    'chained': not done and bool(_auth_token),
+                })
+
+            # ── Прогнать fix_cache по всем записям за один вызов ─────────────
+            elif action == 'fix_cache_all':
+                import re as _re
+                import urllib.request as _ur
+                CC = 'public, max-age=31536000'
+                BATCH = 15  # небольшой батч чтобы не упасть по таймауту
+
+                cur.execute(f"""
+                    SELECT COUNT(DISTINCT url) AS cnt FROM (
+                        SELECT image AS url FROM {SCHEMA}.listings
+                            WHERE image LIKE '%cdn.poehali.dev%' AND image != ''
+                        UNION
+                        SELECT image_thumb AS url FROM {SCHEMA}.listings
+                            WHERE image_thumb LIKE '%cdn.poehali.dev%' AND image_thumb != ''
+                        UNION
+                        SELECT TRIM(u) AS url
+                        FROM {SCHEMA}.listings,
+                        LATERAL unnest(string_to_array(images, '|')) AS u
+                        WHERE images LIKE '%cdn.poehali.dev%' AND images != ''
+                    ) t WHERE url IS NOT NULL AND url != ''
+                """)
+                total_all = cur.fetchone()['cnt']
+
+                start_offset = int(params.get('offset') or body.get('offset') or 0)
+                cur.execute(f"""
+                    SELECT DISTINCT url FROM (
+                        SELECT image AS url FROM {SCHEMA}.listings
+                            WHERE image LIKE '%cdn.poehali.dev%' AND image != ''
+                        UNION
+                        SELECT image_thumb AS url FROM {SCHEMA}.listings
+                            WHERE image_thumb LIKE '%cdn.poehali.dev%' AND image_thumb != ''
+                        UNION
+                        SELECT TRIM(u) AS url
+                        FROM {SCHEMA}.listings,
+                        LATERAL unnest(string_to_array(images, '|')) AS u
+                        WHERE images LIKE '%cdn.poehali.dev%' AND images != ''
+                    ) t
+                    WHERE url IS NOT NULL AND url != ''
+                    ORDER BY url
+                    OFFSET {start_offset}
+                """)
+                all_rows = [r['url'] for r in cur.fetchall()]
+
+                s3c = _s3()
+                total_ok = total_skip = total_err = 0
+
+                for cdn_url in all_rows:
+                    m = _re.search(r'/bucket/(.+)$', cdn_url)
+                    if not m:
+                        total_skip += 1
+                        continue
+                    k = m.group(1)
+                    try:
+                        head = s3c.head_object(Bucket=BUCKET, Key=k)
+                        if head.get('CacheControl') == CC:
+                            total_skip += 1
+                            continue
+                        ct = head.get('ContentType', 'image/webp')
+                        resp = _ur.urlopen(cdn_url, timeout=15)
+                        data = resp.read()
+                        if not data:
+                            total_err += 1
+                            continue
+                        s3c.put_object(Bucket=BUCKET, Key=k, Body=data,
+                                       ContentType=ct, CacheControl=CC)
+                        total_ok += 1
+                    except Exception as e:
+                        total_err += 1
+                        print(f'[fix_cache_all] err {k}: {e}')
+
+                return _ok({
+                    'done': True,
+                    'total': total_all,
+                    'processed': len(all_rows),
+                    'ok': total_ok,
+                    'skipped': total_skip,
+                    'errors': total_err,
                 })
 
             # ── Удаление водяного знака через Яндекс Vision ────────────────

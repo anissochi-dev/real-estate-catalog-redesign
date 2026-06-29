@@ -207,12 +207,14 @@ def handler(event, context):
                 # Также проверяем через прямой HTTP HEAD к CDN
                 cdn_url = f'https://cdn.poehali.dev/projects/{project_id}/bucket/{k}'
                 cdn_size = 0
+                cdn_all_headers = {}
                 try:
                     req = _ur.Request(cdn_url, method='HEAD')
                     with _ur.urlopen(req, timeout=5) as resp:
                         cdn_cc = resp.headers.get('Cache-Control', '—')
                         cdn_ct = resp.headers.get('Content-Type', '—')
                         cdn_size = int(resp.headers.get('Content-Length', 0) or 0)
+                        cdn_all_headers = dict(resp.headers)
                 except Exception as he:
                     cdn_cc = f'err:{str(he)[:60]}'
                     cdn_ct = '—'
@@ -222,8 +224,10 @@ def handler(event, context):
                     'size_kb': round((sz or cdn_size) / 1024, 1),
                     'content_type': head.get('ContentType', ''),
                     's3_cache_control': head.get('CacheControl', '—'),
+                    's3_all': {k2: v for k2, v in head.items() if 'cache' in k2.lower() or 'Cache' in k2},
                     'cdn_cache_control': cdn_cc,
                     'cdn_content_type': cdn_ct,
+                    'cdn_all_headers': cdn_all_headers,
                     'cdn_size_bytes': cdn_size,
                 })
             except Exception as e:

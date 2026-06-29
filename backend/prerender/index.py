@@ -89,9 +89,9 @@ CATEGORY_META = {
 }
 
 TTL_BY_TYPE = {
-    'object':   600,
+    'object':   1800,
     'news':     1800,
-    'category': 900,
+    'category': 1800,
     'district': 1800,
     'static':   3600,
 }
@@ -108,7 +108,7 @@ def _resp(status, html, page_type='static'):
         'headers': {
             'Content-Type': 'text/html; charset=utf-8',
             'Access-Control-Allow-Origin': '*',
-            'Cache-Control': f'public, max-age={ttl}, s-maxage={ttl}',
+            'Cache-Control': f'public, max-age={ttl}, s-maxage={ttl}, stale-if-error=86400',
             'X-Robots-Tag': 'noindex' if status == 404 else '',
         },
         'body': html,
