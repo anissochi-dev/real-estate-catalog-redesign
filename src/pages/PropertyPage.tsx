@@ -230,22 +230,27 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
 
             {/* Цена + агент — только мобильный, после галереи */}
             <div className="lg:hidden bg-white rounded-2xl shadow-sm overflow-hidden">
-              <div className="px-4 pt-3 pb-3">
-                <div className="text-[10px] text-muted-foreground mb-0.5 font-medium uppercase tracking-wide">
-                  {dealLabel}
-                </div>
-                <div className="flex items-baseline justify-between gap-2">
-                  <div className="font-display font-900 text-[22px] text-brand-blue leading-none tracking-tight">
-                    {item.price.toLocaleString('ru')} ₽{item.deal === 'rent' ? '/мес' : ''}
+              {(() => {
+                const ppm2 = item.pricePerM2 || (item.area && item.area > 0 ? Math.round(item.price / item.area) : null);
+                return (
+                <div className="px-4 pt-3 pb-3">
+                  <div className="text-[10px] text-muted-foreground mb-0.5 font-medium uppercase tracking-wide">
+                    {dealLabel}
                   </div>
-                  {item.pricePerM2 ? (
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Icon name="Scaling" size={11} className="text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">{item.pricePerM2.toLocaleString('ru')} ₽/м²</span>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <div className="font-display font-900 text-[22px] text-brand-blue leading-none tracking-tight">
+                      {item.price.toLocaleString('ru')} ₽{item.deal === 'rent' ? '/мес' : ''}
                     </div>
-                  ) : null}
+                    {ppm2 ? (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Icon name="Scaling" size={11} className="text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">{ppm2.toLocaleString('ru')} ₽/м²</span>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
+                );
+              })()}
               {(() => {
                 const withPhone = agents.filter(a => a.phone);
                 const brokerAgent = item.brokerId ? withPhone.find(a => a.id === item.brokerId) : null;
