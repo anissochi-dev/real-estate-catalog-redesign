@@ -21,11 +21,12 @@ export function TabStats({ listingId, listing }: { listingId: number; listing: L
     { label: 'Просмотров', value: stats?.total_views ?? 0, icon: 'Eye', color: 'from-brand-blue to-indigo-600' },
     { label: 'Звонков', value: stats?.total_calls ?? 0, icon: 'Phone', color: 'from-emerald-500 to-emerald-700' },
     { label: 'Заявок', value: stats?.total_leads ?? 0, icon: 'Inbox', color: 'from-brand-orange to-orange-600' },
+    { label: 'Переходов QR', value: stats?.total_qr ?? 0, icon: 'QrCode', color: 'from-violet-500 to-violet-700' },
   ];
 
   return (
     <div className="p-6 space-y-5">
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {cards.map(c => (
           <div key={c.label} className={`rounded-2xl p-4 bg-gradient-to-br ${c.color} text-white`}>
             <Icon name={c.icon} size={20} className="mb-2 opacity-80" />

@@ -184,6 +184,12 @@ def handler(event: dict, context) -> dict:
                     )
                     history = [dict(r) for r in cur.fetchall()]
 
+                # Удобные поля для фронта
+                total_views = event_totals.get('view_site', 0)
+                total_calls = event_totals.get('call', 0)
+                total_leads = event_totals.get('lead', 0)
+                total_qr    = event_totals.get('qr_scan', 0)
+
                 return _ok({
                     'listing_id': int(listing_id),
                     'views_site': views_site,
@@ -193,6 +199,12 @@ def handler(event: dict, context) -> dict:
                     'source_labels': SOURCE_LABELS,
                     'event_labels': EVENT_LABELS,
                     'history': history,
+                    'stats': {
+                        'total_views': total_views,
+                        'total_calls': total_calls,
+                        'total_leads': total_leads,
+                        'total_qr': total_qr,
+                    },
                 })
 
             return _err('Method not allowed', 405)

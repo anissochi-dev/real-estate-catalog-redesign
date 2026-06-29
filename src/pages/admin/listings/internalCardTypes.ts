@@ -12,6 +12,7 @@ export interface StatData {
   total_views?: number;
   total_calls?: number;
   total_leads?: number;
+  total_qr?: number;
   daily?: { date: string; views?: number; calls?: number; leads?: number }[];
 }
 
