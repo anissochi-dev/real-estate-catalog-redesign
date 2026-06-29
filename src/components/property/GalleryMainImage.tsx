@@ -132,10 +132,12 @@ export function GalleryMainImage({
       {/* Fav / Compare */}
       <div className="absolute top-3 right-3 flex gap-2">
         <button onClick={e => { e.stopPropagation(); onToggleFavorite(item.id); }}
+          aria-label={isFav ? 'Удалить из избранного' : 'Добавить в избранное'}
           className={`w-9 h-9 rounded-full flex items-center justify-center shadow transition-colors ${isFav ? 'bg-red-500 text-white' : 'bg-white text-foreground'}`}>
           <Icon name="Heart" size={16} />
         </button>
         <button onClick={e => { e.stopPropagation(); onToggleCompare(item.id); }}
+          aria-label={inCompare ? 'Удалить из сравнения' : 'Добавить в сравнение'}
           className={`w-9 h-9 rounded-full flex items-center justify-center shadow transition-colors ${inCompare ? 'bg-brand-orange text-white' : 'bg-white text-foreground'}`}>
           <Icon name="GitCompare" size={16} />
         </button>

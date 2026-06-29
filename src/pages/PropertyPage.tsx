@@ -102,7 +102,36 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   const seoDesc = item ? (item.seoDescription || (item.description || '')).slice(0, 160) : undefined;
 
   if (loading) {
-    return <div className="container mx-auto px-4 py-20 text-center text-muted-foreground">Загрузка объекта...</div>;
+    return (
+      <div className="bg-background">
+        <div className="container mx-auto px-4 py-4 animate-pulse">
+          {/* TopBar skeleton */}
+          <div className="h-8 bg-muted rounded-xl w-64 mb-4" />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 space-y-3">
+              {/* Gallery skeleton — aspect-ratio как у реального галереи */}
+              <div className="rounded-2xl bg-muted" style={{ aspectRatio: '4/3' }} />
+              {/* Title skeleton */}
+              <div className="space-y-2 pt-1">
+                <div className="h-7 bg-muted rounded-xl w-3/4" />
+                <div className="h-4 bg-muted rounded-lg w-1/2" />
+              </div>
+              {/* Details skeleton */}
+              <div className="grid grid-cols-2 gap-3">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="h-16 bg-muted rounded-xl" />
+                ))}
+              </div>
+            </div>
+            {/* Sidebar skeleton */}
+            <div className="space-y-3">
+              <div className="h-48 bg-muted rounded-2xl" />
+              <div className="h-32 bg-muted rounded-2xl" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
   if (!item) {
     return (
