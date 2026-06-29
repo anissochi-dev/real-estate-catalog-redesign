@@ -232,41 +232,44 @@
       })();
     </script>
 
-    <!-- OG Preview: redirect social bots to server-side og-tags -->
+    <!-- Prerender: redirect search bots and social crawlers to server-side HTML -->
     <script>
       (function() {
+        var PRERENDER = 'https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff';
         var ua = navigator.userAgent || '';
-        var bots = ['Twitterbot','facebookexternalhit','LinkedInBot','WhatsApp','TelegramBot','vkShare','Slackbot','Discordbot','Applebot'];
-        var isBot = bots.some(function(b){ return ua.indexOf(b) !== -1; });
-        if (isBot) {
-          var m = window.location.pathname.match(/\/property\/(\d+)/);
-          if (m) {
-            window.location.replace('https://functions.poehali.dev/efd4ed37-ed36-44f6-8c4f-bdbb770a9a64?id=' + m[1]);
-          }
-        }
-      })();
-    </script>
+        var ual = ua.toLowerCase();
 
-    <!-- SEO 404: для поисковых краулеров проверяем существование страницы.
-         Если страница не найдена — заранее проставляем noindex в <head>,
-         чтобы несуществующие URL не попадали в индекс (SPA отдаёт 200). -->
-    <script>
-      (function() {
-        var ua = (navigator.userAgent || '').toLowerCase();
-        var crawlers = ['googlebot','yandex','bingbot','mail.ru','duckduckbot','baiduspider','petalbot','semrush','ahrefsbot'];
-        var isCrawler = crawlers.some(function(b){ return ua.indexOf(b) !== -1; });
-        if (!isCrawler) return;
-        var path = window.location.pathname;
-        try {
-          var xhr = new XMLHttpRequest();
-          xhr.open('GET', 'https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff?path=' + encodeURIComponent(path), false);
-          xhr.send(null);
-          if (xhr.status === 404) {
-            var m = document.querySelector('meta[name="robots"]');
-            if (!m) { m = document.createElement('meta'); m.setAttribute('name','robots'); document.head.appendChild(m); }
-            m.setAttribute('content', 'noindex, nofollow');
-          }
-        } catch (e) {}
+        // Поисковые боты — получают полный prerender HTML
+        var searchBots = ['googlebot','yandex','bingbot','mail.ru','duckduckbot','baiduspider','petalbot','semrush','ahrefsbot','mj12bot','dotbot'];
+        var isSearchBot = searchBots.some(function(b){ return ual.indexOf(b) !== -1; });
+
+        // Боты соцсетей — получают prerender HTML с OG-тегами
+        var socialBots = ['Twitterbot','facebookexternalhit','LinkedInBot','WhatsApp','TelegramBot','vkShare','Slackbot','Discordbot','Applebot','SkypeUriPreview','Viber'];
+        var isSocialBot = socialBots.some(function(b){ return ua.indexOf(b) !== -1; });
+
+        if (!isSearchBot && !isSocialBot) return;
+
+        var path = window.location.pathname.replace(/\/+$/, '') || '/';
+
+        // Известные страницы которые покрывает prerender
+        var KNOWN = ['/','/catalog','/map','/network-tenants','/news','/leads',
+          '/catalog/office','/catalog/retail','/catalog/warehouse',
+          '/catalog/restaurant','/catalog/hotel','/catalog/business',
+          '/catalog/gab','/catalog/production','/catalog/land',
+          '/catalog/building','/catalog/free_purpose','/catalog/car_service'];
+        var PATTERNS = [/^\/object\/.+/,/^\/district\/.+/,/^\/news\/.+/];
+        var isCovered = KNOWN.indexOf(path) !== -1 || PATTERNS.some(function(r){ return r.test(path); });
+
+        if (!isCovered) {
+          // Страница не существует — проставляем noindex
+          var mr = document.querySelector('meta[name="robots"]');
+          if (!mr) { mr = document.createElement('meta'); mr.setAttribute('name','robots'); document.head.appendChild(mr); }
+          mr.setAttribute('content', 'noindex, nofollow');
+          return;
+        }
+
+        // Редирект на prerender — бот получит готовый HTML с мета-тегами и JSON-LD
+        window.location.replace(PRERENDER + '?path=' + encodeURIComponent(path));
       })();
     </script>
 
