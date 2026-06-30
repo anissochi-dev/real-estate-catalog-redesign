@@ -73,7 +73,7 @@ export default function ListingEditorExtraSection({
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div>
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-              <Icon name="Paintbrush" size={12} className="text-pink-500" />Отделка (для досок)
+              <span className="w-5 h-5 rounded-full bg-pink-100 flex items-center justify-center flex-shrink-0"><Icon name="Paintbrush" size={11} className="text-pink-600" /></span>Отделка (для досок)
               <span className="text-muted-foreground/60 font-normal">— из «Состояния»</span>
             </label>
             <select className="w-full px-3 py-2 border rounded-lg"
@@ -85,7 +85,7 @@ export default function ListingEditorExtraSection({
           </div>
           <div {...errWrap('building_class')}>
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-              <Icon name="Award" size={12} className="text-amber-500" />Класс здания *
+              <span className="w-5 h-5 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0"><Icon name="Award" size={11} className="text-amber-600" /></span>Класс здания *
             </label>
             <select className={`w-full px-3 py-2 border rounded-lg ${err('building_class')}`}
               value={editing.building_class || ''}
@@ -96,7 +96,7 @@ export default function ListingEditorExtraSection({
           </div>
           <div {...errWrap('building_year')}>
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-              <Icon name="CalendarDays" size={12} className="text-brand-blue" />Год постройки *
+              <span className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0"><Icon name="CalendarDays" size={11} className="text-brand-blue" /></span>Год постройки *
             </label>
             <input type="number" min={1900} max={2030} className={`w-full px-3 py-2 border rounded-lg ${err('building_year')}`}
               placeholder="напр. 2005"
@@ -105,7 +105,7 @@ export default function ListingEditorExtraSection({
           </div>
           <div {...errWrap('property_rights')}>
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-              <Icon name="ShieldCheck" size={12} className="text-emerald-600" />Права на объект *
+              <span className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0"><Icon name="ShieldCheck" size={11} className="text-emerald-700" /></span>Права на объект *
             </label>
             <select className={`w-full px-3 py-2 border rounded-lg ${err('property_rights')}`}
               value={editing.property_rights || ''}
@@ -116,7 +116,7 @@ export default function ListingEditorExtraSection({
           </div>
           <div>
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-              <Icon name="SplitSquareHorizontal" size={12} className="text-slate-500" />Мин. площадь нарезки, м²
+              <span className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0"><Icon name="SplitSquareHorizontal" size={11} className="text-slate-600" /></span>Мин. площадь нарезки, м²
             </label>
             <input type="number" min={1} className="w-full px-3 py-2 border rounded-lg"
               placeholder="если делится на части"
@@ -128,19 +128,19 @@ export default function ListingEditorExtraSection({
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={!!editing.has_furniture}
               onChange={e => setEditing({ ...editing, has_furniture: e.target.checked })} />
-            <Icon name="Sofa" size={13} className="text-muted-foreground" />
+            <span className="w-5 h-5 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0"><Icon name="Sofa" size={11} className="text-orange-600" /></span>
             <span className="text-sm">Мебель есть</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={!!editing.has_equipment}
               onChange={e => setEditing({ ...editing, has_equipment: e.target.checked })} />
-            <Icon name="Settings2" size={13} className="text-muted-foreground" />
+            <span className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0"><Icon name="Settings2" size={11} className="text-slate-600" /></span>
             <span className="text-sm">Оборудование есть</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={!!editing.is_apartments}
               onChange={e => setEditing({ ...editing, is_apartments: e.target.checked })} />
-            <Icon name="Home" size={13} className="text-muted-foreground" />
+            <span className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0"><Icon name="Home" size={11} className="text-indigo-600" /></span>
             <span className="text-sm">Апартаменты</span>
           </label>
         </div>
@@ -155,7 +155,7 @@ export default function ListingEditorExtraSection({
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div>
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-              <Icon name="Wallet" size={12} className="text-emerald-500" />МАП (мес. арендный поток), ₽
+              <span className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0"><Icon name="Wallet" size={11} className="text-emerald-600" /></span>МАП (мес. арендный поток), ₽
             </label>
             <input type="number" min="0" className="w-full px-3 py-2 border rounded-lg"
               value={editing.monthly_rent ?? ''}
@@ -166,7 +166,7 @@ export default function ListingEditorExtraSection({
           </div>
           <div>
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-              <Icon name="Coins" size={12} className="text-yellow-600" />ГАП (год. арендный поток), ₽
+              <span className="w-5 h-5 rounded-full bg-yellow-100 flex items-center justify-center flex-shrink-0"><Icon name="Coins" size={11} className="text-yellow-700" /></span>ГАП (год. арендный поток), ₽
             </label>
             <input type="number" min="0" className="w-full px-3 py-2 border rounded-lg"
               value={editing.yearly_rent ?? ''}
@@ -177,7 +177,7 @@ export default function ListingEditorExtraSection({
           </div>
           <div>
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-              <Icon name="Timer" size={12} />Окупаемость, мес
+              <span className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0"><Icon name="Timer" size={11} className="text-blue-600" /></span>Окупаемость, мес
             </label>
             <input type="number" min="0" className="w-full px-3 py-2 border rounded-lg"
               placeholder="авто, если пусто"
@@ -191,7 +191,7 @@ export default function ListingEditorExtraSection({
           </div>
           <div className="sm:col-span-2">
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-              <Icon name="Users" size={12} />Название арендатора (если есть)
+              <span className="w-5 h-5 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0"><Icon name="Users" size={11} className="text-violet-600" /></span>Название арендатора (если есть)
             </label>
             <input className="w-full px-3 py-2 border rounded-lg"
               placeholder="напр. «Магнит», «Сбербанк»..."
