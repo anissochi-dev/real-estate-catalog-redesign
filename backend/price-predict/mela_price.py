@@ -129,11 +129,11 @@ def _db_analogs(cur, listing: dict) -> list:
     """
     Ищет реальные аналоги в базе данных системы.
     Стратегия поиска (по убыванию релевантности):
-      1. ±30% площади, тот же район, то же состояние
-      2. ±40% площади, тот же район
-      3. ±50% площади, любой район
-      4. ±80% площади, любой район (только если аналогов < 3)
-    Исключает сам объект и точные дубли.
+      1. район + состояние ±40% площади
+      2. район ±50% площади
+      3. округ ±60% площади
+      4. весь город ±80% площади
+    Дополнительные факторы релевантности: этаж, land_area, monthly_rent, electricity_kw.
     """
     cat = (listing.get('category') or '').replace("'", "''")
     deal = (listing.get('deal') or 'sale').replace("'", "''")
@@ -142,13 +142,16 @@ def _db_analogs(cur, listing: dict) -> list:
     district = (listing.get('district') or '').lower().strip()
     condition = (listing.get('condition') or '').lower().strip()
     listing_id = int(listing.get('id') or 0)
+    floor = listing.get('floor')          # этаж объекта (не этажность)
+    land_area = listing.get('land_area')  # площадь участка (сотки)
+    monthly_rent = listing.get('monthly_rent')  # арендный поток/мес
+    electricity_kw = listing.get('electricity_kw')  # эл. мощность кВт
 
     if area <= 0:
         return []
 
     # Всегда исключаем сам объект — и по id, и по точному совпадению цены+площади
     id_clause = f'AND id != {listing_id}' if listing_id else ''
-    # Исключаем объекты с той же ценой И той же площадью (это сам объект без id)
     self_exclude = ''
     if price > 0:
         p_lo = round(price * 0.99)
@@ -210,16 +213,38 @@ def _db_analogs(cur, listing: dict) -> list:
         area_min = max(1, area * (1 - area_mult))
         area_max = area * (1 + area_mult)
 
+        # Состояние учитываем только на первом уровне (район)
         condition_clause = f"AND condition = '{safe_condition}'" if safe_condition and area_mult <= 0.40 else ''
 
+        # Дополнительный фильтр: этаж ±2 при наличии (только на первых двух уровнях)
+        floor_clause = ''
+        if floor is not None and area_mult <= 0.50:
+            try:
+                f_val = int(floor)
+                floor_clause = f'AND floor BETWEEN {max(1, f_val - 2)} AND {f_val + 2}'
+            except (TypeError, ValueError):
+                pass
+
+        # Дополнительный фильтр: участок — если есть, ищем объекты с участком
+        land_clause = ''
+        if land_area and float(land_area or 0) > 0 and area_mult <= 0.50:
+            land_clause = 'AND land_area IS NOT NULL AND land_area > 0'
+
+        # Дополнительный фильтр: арендный поток — если ГАБ, берём только с monthly_rent
+        rent_clause = ''
+        if monthly_rent and float(monthly_rent or 0) > 0 and cat in ('gab', 'business'):
+            rent_clause = 'AND (monthly_rent > 0 OR yearly_rent > 0)'
+
         cur.execute(
-            f"SELECT id, price, area, price_per_m2, district, condition, status "
+            f"SELECT id, price, area, price_per_m2, district, condition, status, "
+            f"  floor, land_area, monthly_rent, electricity_kw "
             f"FROM {SCHEMA}.listings "
             f"WHERE category = '{cat}' AND deal = '{deal}' "
             f"AND area BETWEEN {area_min} AND {area_max} "
             f"AND price > 0 AND area > 0 "
             f"AND status IN ('active', 'archived') "
-            f"{where_extra} {condition_clause} {id_clause} {self_exclude} "
+            f"{where_extra} {condition_clause} {floor_clause} {land_clause} {rent_clause} "
+            f"{id_clause} {self_exclude} "
             f"ORDER BY CASE WHEN status='active' THEN 0 ELSE 1 END, "
             f"ABS(area - {area}) ASC, updated_at DESC "
             f"LIMIT 20"
@@ -243,6 +268,10 @@ def _db_analogs(cur, listing: dict) -> list:
                     'district': str(r.get('district') or ''),
                     'url': '',
                     'status': str(r.get('status') or ''),
+                    'floor': r.get('floor'),
+                    'land_area': r.get('land_area'),
+                    'monthly_rent': float(r['monthly_rent']) if r.get('monthly_rent') else None,
+                    'electricity_kw': float(r['electricity_kw']) if r.get('electricity_kw') else None,
                     '_relevance': label,
                 })
                 new += 1
@@ -324,34 +353,58 @@ def _parse_html_analogs(html: str, source: str, min_price: float, area: float) -
 
 
 def _scrape_arrpro(listing: dict) -> list:
-    """Парсит krasnodar.arrpro.ru/katalog/all/ — каталог коммерческой недвижимости Краснодара."""
+    """
+    Парсит krasnodar.arrpro.ru — каталог коммерческой недвижимости Краснодара.
+    Использует URL с фильтром по категории и типу сделки:
+    /katalog/{cat_slug}/?type={deal_slug}
+    При отсутствии категории или ответе < 1000 байт — fallback на /katalog/all/.
+    """
+    cat = (listing.get('category') or '').lower()
     deal = (listing.get('deal') or 'sale').lower()
     area = float(listing.get('area') or 0)
-    # Каталог всех объектов — больше объявлений чем на главной
-    url = 'https://krasnodar.arrpro.ru/katalog/all/'
-    try:
-        req = urllib.request.Request(url, headers={
-            'User-Agent': USER_AGENT,
-            'Accept': 'text/html,application/xhtml+xml,*/*;q=0.9',
-            'Accept-Language': 'ru-RU,ru;q=0.9',
-            'Cache-Control': 'no-cache',
-            'Referer': 'https://krasnodar.arrpro.ru/',
-        })
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            raw = resp.read(700_000)
-            html = raw.decode('utf-8', errors='replace')
-        if len(html) < 1000:
-            print(f'[mela_price] arrpro.ru: empty response ({len(html)} bytes)')
-            return []
-        print(f'[mela_price] arrpro.ru: html={len(html)} bytes, has_price={"₽" in html or "руб" in html}')
-        min_p = 20_000 if deal == 'rent' else 300_000
-        broad_area = area if area > 0 else 100
-        res = _parse_html_analogs(html, 'arrpro.ru', min_p, broad_area)
-        print(f'[mela_price] arrpro.ru: {len(res)} analogs found')
-        return res
-    except Exception as e:
-        print(f'[mela_price] arrpro.ru error: {e}')
+
+    cat_slug = CAT_TO_ARRPRO.get(cat, '')
+    deal_slug = 'arenda' if deal == 'rent' else 'prodazha'
+
+    # Строим URL: сначала с фильтром по категории, fallback — все объекты
+    candidate_urls = []
+    if cat_slug:
+        candidate_urls.append(f'https://krasnodar.arrpro.ru/katalog/{cat_slug}/?type={deal_slug}')
+        candidate_urls.append(f'https://krasnodar.arrpro.ru/katalog/{cat_slug}/')
+    candidate_urls.append(f'https://krasnodar.arrpro.ru/katalog/all/?type={deal_slug}')
+    candidate_urls.append('https://krasnodar.arrpro.ru/katalog/all/')
+
+    html = ''
+    used_url = ''
+    for url in candidate_urls:
+        try:
+            req = urllib.request.Request(url, headers={
+                'User-Agent': USER_AGENT,
+                'Accept': 'text/html,application/xhtml+xml,*/*;q=0.9',
+                'Accept-Language': 'ru-RU,ru;q=0.9',
+                'Cache-Control': 'no-cache',
+                'Referer': 'https://krasnodar.arrpro.ru/',
+            })
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                raw = resp.read(700_000)
+                html = raw.decode('utf-8', errors='replace')
+            if len(html) >= 1000:
+                used_url = url
+                break
+            html = ''
+        except Exception as e:
+            print(f'[mela_price] arrpro.ru {url}: {e}')
+
+    if not html:
+        print('[mela_price] arrpro.ru: all URLs failed')
         return []
+
+    print(f'[mela_price] arrpro.ru: html={len(html)} bytes from {used_url}, has_price={"₽" in html or "руб" in html}')
+    min_p = 20_000 if deal == 'rent' else 300_000
+    broad_area = area if area > 0 else 100
+    res = _parse_html_analogs(html, 'arrpro.ru', min_p, broad_area)
+    print(f'[mela_price] arrpro.ru: {len(res)} analogs found')
+    return res
 
 
 def _scrape_kayan(listing: dict) -> list:
@@ -366,55 +419,78 @@ def _scrape_kayan(listing: dict) -> list:
 
 def _scrape_ayax(listing: dict) -> list:
     """
-    Парсит ayax.ru — крупное агентство Краснодара.
-    URL: /kommercheskaya-nedvizhimost/ для продажи и аренды (SSR, до 600кб).
+    Парсит ayax.ru — крупное агентство Краснодара (SSR, до 700кб).
+    URL строится с учётом типа сделки:
+      продажа: /kommercheskaya-nedvizhimost/prodazha/
+      аренда:  /kommercheskaya-nedvizhimost/arenda/
+    При 404 — fallback на /kommercheskaya-nedvizhimost/.
     """
+    cat = (listing.get('category') or '').lower()
     deal = (listing.get('deal') or 'sale').lower()
     area = float(listing.get('area') or 0)
-    url = 'https://www.ayax.ru/kommercheskaya-nedvizhimost/'
-    try:
-        req = urllib.request.Request(url, headers={
-            'User-Agent': USER_AGENT,
-            'Accept': 'text/html,application/xhtml+xml,*/*;q=0.9',
-            'Accept-Language': 'ru-RU,ru;q=0.9',
-            'Cache-Control': 'no-cache',
-            'Referer': 'https://www.ayax.ru/',
-            'Connection': 'keep-alive',
-        })
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            raw = resp.read(700_000)
-            html = raw.decode('utf-8', errors='replace')
-        print(f'[mela_price] ayax.ru: html={len(html)} bytes, has_price={"₽" in html}')
-        if len(html) < 10_000:
-            print('[mela_price] ayax.ru: response too small, skipping')
-            return []
-        min_p = 20_000 if deal == 'rent' else 300_000
-        res = _parse_html_analogs(html, 'ayax.ru', min_p, area)
-        # Дополнительный поиск цен в формате "цена: X ₽" и data-атрибутах
-        if len(res) < 3:
-            price_pat2 = re.compile(r'data-price=["\'](\d+)["\']', re.IGNORECASE)
-            area_pat2  = re.compile(r'data-area=["\'](\d+(?:\.\d+)?)["\']', re.IGNORECASE)
-            prices2 = [(m.start(), float(m.group(1))) for m in price_pat2.finditer(html)]
-            areas2  = [(m.start(), float(m.group(1))) for m in area_pat2.finditer(html)]
-            area_min = area * 0.2 if area > 0 else 5
-            area_max = area * 5.0 if area > 0 else 10000
-            used = set()
-            for pi, p in prices2:
-                if p < min_p or pi in used:
-                    continue
-                for ai, a_val in areas2:
-                    if area_min <= a_val <= area_max and abs(ai - pi) < 2000:
-                        res.append({'source': 'ayax.ru', 'price': p, 'area': a_val,
-                                    'price_per_m2': round(p / a_val), 'url': url})
-                        used.add(pi)
-                        break
-                if len(res) >= 10:
-                    break
-        print(f'[mela_price] ayax.ru: {len(res)} analogs found')
-        return res[:10]
-    except Exception as e:
-        print(f'[mela_price] ayax.ru error: {e}')
+
+    deal_slug = 'arenda' if deal == 'rent' else 'prodazha'
+    cat_slug = CAT_TO_AYAX.get(cat, '')
+
+    # Строим список URL: сначала с фильтрами, затем fallback
+    candidate_urls = []
+    if cat_slug:
+        candidate_urls.append(f'https://www.ayax.ru/kommercheskaya-nedvizhimost/{cat_slug}/{deal_slug}/')
+        candidate_urls.append(f'https://www.ayax.ru/kommercheskaya-nedvizhimost/{cat_slug}/')
+    candidate_urls.append(f'https://www.ayax.ru/kommercheskaya-nedvizhimost/{deal_slug}/')
+    candidate_urls.append('https://www.ayax.ru/kommercheskaya-nedvizhimost/')
+
+    html = ''
+    used_url = ''
+    for url in candidate_urls:
+        try:
+            req = urllib.request.Request(url, headers={
+                'User-Agent': USER_AGENT,
+                'Accept': 'text/html,application/xhtml+xml,*/*;q=0.9',
+                'Accept-Language': 'ru-RU,ru;q=0.9',
+                'Cache-Control': 'no-cache',
+                'Referer': 'https://www.ayax.ru/',
+                'Connection': 'keep-alive',
+            })
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                raw = resp.read(700_000)
+                html = raw.decode('utf-8', errors='replace')
+            if len(html) >= 10_000:
+                used_url = url
+                break
+            html = ''
+        except Exception as e:
+            print(f'[mela_price] ayax.ru {url}: {e}')
+
+    if not html:
+        print('[mela_price] ayax.ru: all URLs failed or too small')
         return []
+
+    print(f'[mela_price] ayax.ru: html={len(html)} bytes from {used_url}, has_price={"₽" in html}')
+    min_p = 20_000 if deal == 'rent' else 300_000
+    res = _parse_html_analogs(html, 'ayax.ru', min_p, area)
+    # Дополнительный поиск через data-атрибуты (некоторые шаблоны ayax.ru)
+    if len(res) < 3:
+        price_pat2 = re.compile(r'data-price=["\'](\d+)["\']', re.IGNORECASE)
+        area_pat2  = re.compile(r'data-area=["\'](\d+(?:\.\d+)?)["\']', re.IGNORECASE)
+        prices2 = [(m.start(), float(m.group(1))) for m in price_pat2.finditer(html)]
+        areas2  = [(m.start(), float(m.group(1))) for m in area_pat2.finditer(html)]
+        area_min = area * 0.2 if area > 0 else 5
+        area_max = area * 5.0 if area > 0 else 10000
+        used = set()
+        for pi, p in prices2:
+            if p < min_p or pi in used:
+                continue
+            for ai, a_val in areas2:
+                if area_min <= a_val <= area_max and abs(ai - pi) < 2000:
+                    res.append({'source': 'ayax.ru', 'price': p, 'area': a_val,
+                                'price_per_m2': round(p / a_val), 'url': used_url})
+                    used.add(pi)
+                    break
+            if len(res) >= 10:
+                break
+    print(f'[mela_price] ayax.ru: {len(res)} analogs found')
+    return res[:10]
 
 
 def _scrape_etagi(listing: dict) -> list:
@@ -758,12 +834,20 @@ GPT_PROMPT = (
     '- Склад: 25–55 тыс ₽/м²\n'
     '- Производство: 15–40 тыс ₽/м²\n'
     '- Свободное назначение: 70–150 тыс ₽/м² (зависит от района)\n'
-    '- ГАБ/ГРБ: оценка по доходному методу (10–14% годовых)\n\n'
+    '- ГАБ/ГРБ: оценка по доходному методу (10–14% годовых)\n'
+    '- Земельный участок: 0.5–5 млн ₽/сот. (зависит от назначения и района)\n\n'
     'Для аренды (₽/м²/мес):\n'
     '- Офис центр: 800–1800 ₽/м²/мес, окраина: 400–900 ₽/м²/мес\n'
     '- Торговое: 1000–3000 ₽/м²/мес (зависит от трафика)\n'
     '- Склад: 200–500 ₽/м²/мес\n\n'
-    'Учти район, состояние, этаж, площадь. Сгенерируй 8 реалистичных аналогов '
+    'Факторы влияющие на цену (учитывай обязательно):\n'
+    '- Этаж: 1-й этаж +10-20% к торговым, подвал/цоколь −15-25%\n'
+    '- Состояние: новое/евро +15-25%, требует ремонта −15-20%\n'
+    '- Земельный участок: наличие участка повышает цену здания на 10-40%\n'
+    '- Эл. мощность: >100 кВт важна для производства/склада, даёт +5-15%\n'
+    '- Коммуникации: центральные все = норма, газ+вода+канализация +5-10%\n'
+    '- Арендный поток (ГАБ): цена = месячная_аренда × 10-14 лет\n\n'
+    'Учти все переданные параметры. Сгенерируй 8 реалистичных аналогов '
     'с ценами близкими к реальному рынку Краснодара.\n'
     'Верни СТРОГО JSON одной строкой без markdown:\n'
     '{"analogs":[{"area":<м²>,"price":<₽>,"district":"<район Краснодара>"}],'
@@ -787,9 +871,17 @@ def _gpt_fallback(listing: dict, api_key: str, folder_id: str) -> list:
     if listing.get('district'):
         parts.append(f"Район: {listing['district']}")
     if listing.get('floor'):
-        parts.append(f"Этаж: {listing['floor']}")
+        parts.append(f"Этаж: {listing['floor']} (важно для торговых)")
     if listing.get('condition'):
         parts.append(f"Состояние: {listing['condition']}")
+    if listing.get('land_area'):
+        parts.append(f"Площадь участка: {listing['land_area']} соток")
+    if listing.get('electricity_kw'):
+        parts.append(f"Электрическая мощность: {listing['electricity_kw']} кВт")
+    if listing.get('utilities'):
+        parts.append(f"Коммуникации: {listing['utilities']}")
+    if listing.get('monthly_rent'):
+        parts.append(f"Арендный поток: {listing['monthly_rent']:,.0f} ₽/мес (ГАБ)")
 
     try:
         text = chat_simple(GPT_PROMPT, '\n'.join(parts), api_key, folder_id,
@@ -911,6 +1003,9 @@ def _verdict(user_price: float, area: float, analogs: list) -> dict:
 
 
 def _cache_key(listing: dict) -> str:
+    # floor с точностью до 1, land_area до 5 соток (объекты с участком — особая выборка)
+    floor_bucket = int(listing.get('floor') or 0)
+    land_bucket = round((float(listing.get('land_area') or 0)) / 5) * 5
     payload = {
         'category': listing.get('category') or '',
         'deal': listing.get('deal') or '',
@@ -918,6 +1013,8 @@ def _cache_key(listing: dict) -> str:
         'district': (listing.get('district') or '').lower().strip(),
         'condition': (listing.get('condition') or '').lower().strip(),
         'price_bucket': round(float(listing.get('price') or 0) / 100000) * 100000,
+        'floor': floor_bucket,
+        'land': land_bucket,
     }
     return hashlib.md5(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
@@ -1041,15 +1138,25 @@ def handle_mela_price_check(cur, conn, body: dict, qs: dict) -> dict:
     if area <= 0:
         return {'_status': 400, 'error': 'Укажите площадь объекта'}
 
+    def _safe_float(v):
+        try:
+            return float(v) if v not in (None, '', 'null') else None
+        except (TypeError, ValueError):
+            return None
+
     listing = {
-        'category': str(data.get('category') or ''),
-        'deal':     str(data.get('deal') or 'sale'),
-        'area':     area,
-        'price':    price,
-        'address':  str(data.get('address') or ''),
-        'district': str(data.get('district') or ''),
-        'floor':    data.get('floor'),
-        'condition': str(data.get('condition') or ''),
+        'category':      str(data.get('category') or ''),
+        'deal':          str(data.get('deal') or 'sale'),
+        'area':          area,
+        'price':         price,
+        'address':       str(data.get('address') or ''),
+        'district':      str(data.get('district') or ''),
+        'floor':         _safe_float(data.get('floor')),
+        'condition':     str(data.get('condition') or ''),
+        'land_area':     _safe_float(data.get('land_area')),
+        'electricity_kw': _safe_float(data.get('electricity_kw')),
+        'utilities':     str(data.get('utilities') or ''),
+        'monthly_rent':  _safe_float(data.get('monthly_rent')),
     }
 
     refresh = str(data.get('refresh') or '').lower() in ('1', 'true', 'yes')

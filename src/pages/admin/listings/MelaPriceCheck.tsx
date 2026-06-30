@@ -90,6 +90,10 @@ export default function MelaPriceCheck({ editing, onApplySuggested }: Props) {
           district: editing.district || '',
           floor: editing.floor || null,
           condition: editing.condition || '',
+          land_area: editing.land_area || null,
+          electricity_kw: editing.electricity_kw || null,
+          utilities: editing.utilities || '',
+          monthly_rent: editing.monthly_rent || null,
           refresh,
         }),
       })
