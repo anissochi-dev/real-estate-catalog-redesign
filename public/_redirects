@@ -25,9 +25,9 @@
 /catalog/car_service  https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff/?path=/catalog/car_service   200
 
 # Динамические страницы объектов, районов, новостей
-/object/*   https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff/?path=/:splat    200
-/district/* https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff/?path=/:splat    200
-/news/*     https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff/?path=/:splat    200
+/object/*   https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff/?path=/object/:splat    200
+/district/* https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff/?path=/district/:splat  200
+/news/*     https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff/?path=/news/:splat      200
 
 # Статические разделы (не требуют динамического контента из БД)
 /news             https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff/?path=/news              200
