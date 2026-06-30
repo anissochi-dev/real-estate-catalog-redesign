@@ -57,6 +57,9 @@ export default function PropertyTopBar({ itemType, itemTitle, shareUrl }: Proper
         ]} />
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
+        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground whitespace-nowrap">
+          <Icon name="ArrowLeft" size={11} /> Назад
+        </button>
         <div className="relative">
           <button
             onClick={() => setShareOpen(v => !v)}
@@ -65,7 +68,7 @@ export default function PropertyTopBar({ itemType, itemTitle, shareUrl }: Proper
             <Icon name="Share2" size={11} /> Поделиться
           </button>
           {shareOpen && (
-            <div className="absolute right-0 top-full mt-1.5 z-50 bg-white border border-border rounded-xl shadow-lg p-1.5 min-w-[180px]">
+            <div className="absolute left-0 md:left-auto md:right-0 top-full mt-1.5 z-50 bg-white border border-border rounded-xl shadow-lg p-1.5 min-w-[180px]">
               <div className="text-[10px] font-semibold text-muted-foreground/70 px-2 py-1 uppercase tracking-wide">Поделиться</div>
               {shareNetworks.map(n => (
                 <a key={n.label} href={n.href} target="_blank" rel="noopener noreferrer"
@@ -86,9 +89,6 @@ export default function PropertyTopBar({ itemType, itemTitle, shareUrl }: Proper
           )}
           {shareOpen && <div className="fixed inset-0 z-40" onClick={() => setShareOpen(false)} />}
         </div>
-        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground whitespace-nowrap">
-          <Icon name="ArrowLeft" size={11} /> Назад
-        </button>
       </div>
     </div>
   );
