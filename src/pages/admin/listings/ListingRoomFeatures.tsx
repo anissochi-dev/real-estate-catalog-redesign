@@ -56,6 +56,26 @@ export default function ListingRoomFeatures({ editing, setEditing, landVri = [],
             </>
           )}
           <div className="sm:col-span-3">
+            <div className="flex flex-wrap gap-4 mb-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={!!editing.has_furniture}
+                  onChange={e => setEditing({ ...editing, has_furniture: e.target.checked })} />
+                <div className="w-5 h-5 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0"><Icon name="Sofa" size={11} className="text-orange-600" /></div>
+                <span className="text-sm">Мебель есть</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={!!editing.has_equipment}
+                  onChange={e => setEditing({ ...editing, has_equipment: e.target.checked })} />
+                <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0"><Icon name="Settings2" size={11} className="text-slate-600" /></div>
+                <span className="text-sm">Оборудование есть</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={!!editing.is_apartments}
+                  onChange={e => setEditing({ ...editing, is_apartments: e.target.checked })} />
+                <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0"><Icon name="Home" size={11} className="text-indigo-600" /></div>
+                <span className="text-sm">Апартаменты</span>
+              </label>
+            </div>
             <label className="text-xs text-muted-foreground block mb-2">Коммуникации</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {UTILITIES_MAP.map(({ key, label, icon, color, bg, options }) => {

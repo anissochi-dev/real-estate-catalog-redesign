@@ -124,26 +124,6 @@ export default function ListingEditorExtraSection({
               onChange={e => setEditing({ ...editing, min_area: e.target.value === '' ? null : +e.target.value })} />
           </div>
         </div>
-        <div className="flex flex-wrap gap-4 mt-1">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={!!editing.has_furniture}
-              onChange={e => setEditing({ ...editing, has_furniture: e.target.checked })} />
-            <span className="w-5 h-5 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0"><Icon name="Sofa" size={11} className="text-orange-600" /></span>
-            <span className="text-sm">Мебель есть</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={!!editing.has_equipment}
-              onChange={e => setEditing({ ...editing, has_equipment: e.target.checked })} />
-            <span className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0"><Icon name="Settings2" size={11} className="text-slate-600" /></span>
-            <span className="text-sm">Оборудование есть</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={!!editing.is_apartments}
-              onChange={e => setEditing({ ...editing, is_apartments: e.target.checked })} />
-            <span className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0"><Icon name="Home" size={11} className="text-indigo-600" /></span>
-            <span className="text-sm">Апартаменты</span>
-          </label>
-        </div>
       </div>
 
       {/* ─── XML фиды ─── */}
