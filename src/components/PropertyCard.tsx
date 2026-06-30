@@ -80,16 +80,21 @@ const predictListeners = new Map<number, Array<(h: PredictHint | null) => void>>
 let batchQueue: number[] = [];
 let batchTimer: ReturnType<typeof setTimeout> | null = null;
 const BATCH_DELAY = 80;
+const BATCH_TIMEOUT = 8000; // 8 сек — учитываем холодный старт функции
 
-function flushBatch() {
+function flushBatch(attempt = 0) {
   batchTimer = null;
   const ids = [...new Set(batchQueue)];
   batchQueue = [];
   if (ids.length === 0) return;
 
-  fetch(`${PREDICT_URL}?ids=${ids.join(',')}`)
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), BATCH_TIMEOUT);
+
+  fetch(`${PREDICT_URL}?ids=${ids.join(',')}`, { signal: controller.signal })
     .then(r => r.json())
     .then((data: Record<string, { price_assessment?: PredictHint['price_assessment'] }>) => {
+      clearTimeout(timeoutId);
       ids.forEach(id => {
         const d = data[String(id)];
         const val: PredictHint | null = d?.price_assessment ? { price_assessment: d.price_assessment } : null;
@@ -98,7 +103,19 @@ function flushBatch() {
         predictListeners.delete(id);
       });
     })
-    .catch(() => {
+    .catch(err => {
+      clearTimeout(timeoutId);
+      // При таймауте делаем один retry через 2 сек
+      const isAborted = err?.name === 'AbortError';
+      if (isAborted && attempt === 0) {
+        const retryIds = ids.filter(id => predictListeners.has(id));
+        if (retryIds.length > 0) {
+          batchQueue.push(...retryIds);
+          batchTimer = setTimeout(() => flushBatch(1), 2000);
+          return;
+        }
+      }
+      // Финальный fallback — сохраняем null чтобы не висеть вечно
       ids.forEach(id => {
         predictCache.set(id, null);
         predictListeners.get(id)?.forEach(cb => cb(null));
