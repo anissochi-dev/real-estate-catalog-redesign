@@ -168,6 +168,61 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
             onChange={e => { setEditing({ ...editing, broker_commission: e.target.value } as typeof editing); setErrors?.(v => ({ ...v, broker_commission: false })); }} />
         </div>
       </div>
+
+      {/* ─── Доходность и арендатор ─── */}
+      <div className="space-y-3 border-t border-border pt-4">
+        <div className="text-sm font-semibold flex items-center gap-2">
+          <Icon name="TrendingUp" size={15} className="text-brand-blue" />
+          Доходность и арендатор
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <span className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0"><Icon name="Wallet" size={11} className="text-emerald-600" /></span>МАП (мес. арендный поток), ₽
+            </label>
+            <input type="number" min="0" className="w-full px-3 py-2 border rounded-lg"
+              value={editing.monthly_rent ?? ''}
+              onChange={e => {
+                const v = e.target.value === '' ? null : +e.target.value;
+                setEditing({ ...editing, monthly_rent: v, yearly_rent: v ? Math.round(v * 12) : editing.yearly_rent ?? null });
+              }} />
+          </div>
+          <div>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <span className="w-5 h-5 rounded-full bg-yellow-100 flex items-center justify-center flex-shrink-0"><Icon name="Coins" size={11} className="text-yellow-700" /></span>ГАП (год. арендный поток), ₽
+            </label>
+            <input type="number" min="0" className="w-full px-3 py-2 border rounded-lg"
+              value={editing.yearly_rent ?? ''}
+              onChange={e => {
+                const v = e.target.value === '' ? null : +e.target.value;
+                setEditing({ ...editing, yearly_rent: v, monthly_rent: v ? Math.round(v / 12) : editing.monthly_rent ?? null });
+              }} />
+          </div>
+          <div>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <span className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0"><Icon name="Timer" size={11} className="text-blue-600" /></span>Окупаемость, мес
+            </label>
+            <input type="number" min="0" className="w-full px-3 py-2 border rounded-lg"
+              placeholder="авто, если пусто"
+              value={editing.payback ?? ''}
+              onChange={e => setEditing({ ...editing, payback: e.target.value === '' ? null : +e.target.value })} />
+            {!editing.payback && editing.price && (editing.monthly_rent || editing.profit) ? (
+              <div className="text-[11px] text-muted-foreground mt-0.5">
+                Авто: ~{Math.round(+editing.price / +(editing.monthly_rent || editing.profit || 1))} мес
+              </div>
+            ) : null}
+          </div>
+          <div className="sm:col-span-2">
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <span className="w-5 h-5 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0"><Icon name="Users" size={11} className="text-violet-600" /></span>Название арендатора (если есть)
+            </label>
+            <input className="w-full px-3 py-2 border rounded-lg"
+              placeholder="напр. «Магнит», «Сбербанк»..."
+              value={editing.tenant_name || ''}
+              onChange={e => setEditing({ ...editing, tenant_name: e.target.value })} />
+          </div>
+        </div>
+      </div>
     </>
   );
 }
