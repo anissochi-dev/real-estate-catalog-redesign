@@ -834,12 +834,13 @@ def find_real_analogs(cur, listing: dict) -> dict:
     }
 
 
-def load_market_comparables(cur, category: str, district: str) -> dict:
+def load_market_comparables(cur, category: str, district: str, area: float = 0) -> dict:
     """
     Загружает рыночные аналоги из market_listings (свежие данные с arrpro, ayax и др.).
     Аренда и продажа строго разделены по deal_type.
     Для аренды возвращает price_per_m2 = ₽/м²/мес.
     Для продажи возвращает price_per_m2 = ₽/м².
+    area — площадь объекта для фильтра ±50% (отсекает нерелевантные по масштабу объекты).
     Дополнительно — fallback на price_market_snapshots если в market_listings мало данных.
     """
     import statistics as _stat
@@ -847,25 +848,39 @@ def load_market_comparables(cur, category: str, district: str) -> dict:
     result = {'rent': None, 'sale': None, 'sources': [], 'snapshot_date': None}
 
     # Маппинг категорий: наши типы → категории market_listings
+    # ВАЖНО: 'other' исключён — содержит 10 000+ мусорных записей ЦИАН с нерелевантными ставками
     CAT_ALIAS = {
-        'hotel': ['hotel', 'other', 'standalone'],
-        'restaurant': ['catering', 'other'],
+        'hotel': ['hotel', 'standalone'],
+        'restaurant': ['catering'],
         'office': ['office'],
         'retail': ['retail', 'free_purpose'],
         'warehouse': ['warehouse'],
         'free_purpose': ['free_purpose', 'retail'],
         'production': ['industrial', 'warehouse'],
-        'building': ['standalone', 'other'],
+        'building': ['standalone'],
         'gab': ['free_purpose', 'retail', 'office'],
         'business': ['free_purpose', 'retail', 'office'],
-        'car_service': ['other'],
+        'car_service': ['industrial'],
         'land': ['land'],
     }
     cats = CAT_ALIAS.get(category, [category])
     cats_sql = ','.join(f"'{c}'" for c in cats)
 
+    # Фильтр по площади: ±50% от площади объекта (убирает промзоны 25 000 м² при здании 850 м²)
+    # Минимальный порог: не менее 50 м²
+    area_filter = ''
+    if area and area > 0:
+        area_lo = max(50, round(area * 0.5))
+        area_hi = round(area * 2.0)
+        area_filter = f'AND area BETWEEN {area_lo} AND {area_hi}'
+
+    # Минимальный порог цены за м²: для аренды — не менее 100 ₽/м²/мес (отсекает ошибочные записи)
+    MIN_RENT_P2 = 100   # ₽/м²/мес — ниже нет реального рынка в Краснодаре
+    MIN_SALE_P2 = 5000  # ₽/м² — ниже нет реального рынка
+
     try:
         for deal in ('sale', 'rent'):
+            min_p2 = MIN_RENT_P2 if deal == 'rent' else MIN_SALE_P2
             # Сначала пробуем с районом, затем без
             dist_filters = []
             if district:
@@ -881,8 +896,9 @@ def load_market_comparables(cur, category: str, district: str) -> dict:
                     FROM {SCHEMA}.market_listings
                     WHERE deal_type = '{deal}'
                       AND category IN ({cats_sql})
-                      AND price_per_m2 > 0
-                      AND scraped_at > NOW() - INTERVAL '14 days'
+                      AND price_per_m2 >= {min_p2}
+                      AND scraped_at > NOW() - INTERVAL '90 days'
+                      {area_filter}
                       {dist_clause}
                     ORDER BY scraped_at DESC
                     LIMIT 50
@@ -1175,7 +1191,8 @@ def handle_noi_request(cur, conn, qs: dict) -> dict:
     # Загружаем рыночные аналоги из снапшотов (АЯКС, АРРпро, Этажи и др.)
     category = listing.get('category') or ''
     district = listing.get('district') or ''
-    comparables = load_market_comparables(cur, category, district)
+    obj_area = float(listing.get('area') or 0)
+    comparables = load_market_comparables(cur, category, district, area=obj_area)
 
     # Рыночная ставка аренды из market_listings — уже в ₽/м²/мес, делить не нужно
     market_rent_snap = comparables.get('rent')
