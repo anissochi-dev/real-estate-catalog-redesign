@@ -18,6 +18,7 @@ interface Props {
 
 export default function ListingEditorPriceSection({ editing, setEditing, errors = {}, setErrors }: Props) {
   const err = (field: string) => errors[field] ? 'border-red-400 bg-red-50' : '';
+  const unit = editing.price_unit || 'total';
   const [priceDisplay, setPriceDisplay] = useState(() => formatPriceDisplay(editing.price));
 
   useEffect(() => {
@@ -32,18 +33,54 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
     setErrors?.(v => ({ ...v, price: false }));
   };
 
+  // При смене единицы — пересчитываем цену чтобы она сохранила смысл
+  const handleUnitChange = (newUnit: string) => {
+    const price = +editing.price || 0;
+    const area = +editing.area || 0;
+    let newPrice = price;
+    if (area > 0 && price > 0) {
+      if (unit === 'total' && newUnit === 'm2') {
+        // было: за объект → теперь: за м²
+        newPrice = Math.round(price / area);
+      } else if (unit === 'm2' && newUnit === 'total') {
+        // было: за м² → теперь: за объект
+        newPrice = Math.round(price * area);
+      } else if (unit === 'total' && newUnit === 'sotka') {
+        const sotki = area / 100;
+        newPrice = sotki > 0 ? Math.round(price / sotki) : price;
+      } else if (unit === 'sotka' && newUnit === 'total') {
+        const sotki = area / 100;
+        newPrice = Math.round(price * sotki);
+      } else if (unit === 'm2' && newUnit === 'sotka') {
+        newPrice = Math.round(price * 100);
+      } else if (unit === 'sotka' && newUnit === 'm2') {
+        newPrice = Math.round(price / 100);
+      }
+    }
+    setPriceDisplay(formatPriceDisplay(newPrice));
+    setEditing({ ...editing, price_unit: newUnit, price: newPrice });
+  };
+
+  // Вычисляем производное значение для показа
+  const price = +editing.price || 0;
+  const area = +editing.area || 0;
+  const derivedTotal = unit === 'm2' && price > 0 && area > 0 ? Math.round(price * area) : null;
+  const derivedPerM2 = unit === 'total' && price > 0 && area > 0 ? Math.round(price / area) : null;
+  const derivedSotka = unit === 'total' && price > 0 && area > 0 ? Math.round(price / (area / 100)) : null;
+
   return (
     <>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-            <span className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0"><Icon name="Banknote" size={11} className="text-emerald-600" /></span>Цена, ₽ *
+            <span className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0"><Icon name="Banknote" size={11} className="text-emerald-600" /></span>
+            {unit === 'm2' ? 'Цена за м², ₽ *' : unit === 'sotka' ? 'Цена за сотку, ₽ *' : 'Цена, ₽ *'}
           </label>
           <input
             type="text"
             inputMode="numeric"
             className={`w-full px-3 py-2 border rounded-lg font-mono tracking-wide ${err('price')}`}
-            placeholder="1 500 000"
+            placeholder={unit === 'm2' ? 'напр. 80 000' : unit === 'sotka' ? 'напр. 500 000' : '1 500 000'}
             value={priceDisplay}
             onChange={handlePriceChange}
           />
@@ -64,8 +101,8 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
             <span className="w-5 h-5 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0"><Icon name="Tag" size={11} className="text-violet-600" /></span>Единица цены
           </label>
-          <select className="w-full px-3 py-2 border rounded-lg" value={editing.price_unit || 'total'}
-            onChange={e => setEditing({ ...editing, price_unit: e.target.value })}>
+          <select className="w-full px-3 py-2 border rounded-lg" value={unit}
+            onChange={e => handleUnitChange(e.target.value)}>
             <option value="total">За весь объект</option>
             <option value="m2">За м²</option>
             <option value="sotka">За сотку</option>
@@ -109,12 +146,24 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
         </div>
       </div>
 
-      {editing.price && editing.area ? (
-        <div className="text-sm bg-muted/40 rounded-lg p-3">
-          За м²: <b>{perM2(+editing.price, +editing.area).toLocaleString('ru')} ₽</b>
-          {editing.price_unit === 'total' && ' (рассчитано из цены за объект)'}
+      {price > 0 && area > 0 && (
+        <div className="text-sm bg-muted/40 rounded-lg p-3 flex flex-wrap gap-x-6 gap-y-1">
+          {unit === 'total' && (
+            <>
+              <span>За м²: <b>{derivedPerM2?.toLocaleString('ru')} ₽</b></span>
+              {editing.category === 'land' && derivedSotka && (
+                <span className="text-muted-foreground">За сотку: <b>{derivedSotka.toLocaleString('ru')} ₽</b></span>
+              )}
+            </>
+          )}
+          {unit === 'm2' && derivedTotal && (
+            <span>Полная стоимость: <b>{derivedTotal.toLocaleString('ru')} ₽</b></span>
+          )}
+          {unit === 'sotka' && price > 0 && area > 0 && (
+            <span>Полная стоимость: <b>{Math.round(price * (area / 100)).toLocaleString('ru')} ₽</b></span>
+          )}
         </div>
-      ) : null}
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div>
