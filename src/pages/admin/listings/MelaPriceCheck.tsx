@@ -148,6 +148,8 @@ export default function MelaPriceCheck({ editing, onApplySuggested }: Props) {
   if (!result) return null;
 
   const v = result.verdict;
+  if (!v) return null;
+
   const colorClass = COLOR_BADGE[v.color] || COLOR_BADGE.gray;
   const iconName = ICON_BY_COLOR[v.color] || 'HelpCircle';
 
