@@ -134,6 +134,7 @@ export default function PropertyMainContent({
           {item.yearlyRent ? <ParamCard icon="Coins" label="Арендный поток/год" value={`${item.yearlyRent.toLocaleString('ru')} ₽`} /> : null}
           {item.profit && !item.monthlyRent ? <ParamCard icon="LineChart" label="Прибыль/мес" value={`${(item.profit / 1000).toFixed(0)} тыс ₽`} /> : null}
           {item.tenantName ? <ParamCard icon="Users" label="Арендатор" value={item.tenantName} /> : null}
+          {itemExt.rentIndexPct ? <ParamCard icon="Percent" label="Индексация аренды" value={`+${itemExt.rentIndexPct}% / год`} /> : null}
         </div>
 
         {/* Коммуникации */}

@@ -97,6 +97,7 @@ export default function PropertyMainContent({
           {itemExt.propertyRights ? <ParamCard icon="ShieldCheck" label="Права на объект" value={PROPERTY_RIGHTS_LABELS[itemExt.propertyRights] || itemExt.propertyRights} /> : null}
           {itemExt.hasFurniture ? <ParamCard icon="Sofa" label="Мебель" value="Есть" /> : null}
           {itemExt.hasEquipment ? <ParamCard icon="Settings2" label="Оборудование" value="Есть" /> : null}
+          {itemExt.rentIndexPct ? <ParamCard icon="Percent" label="Индексация аренды" value={`+${itemExt.rentIndexPct}% / год`} /> : null}
         </div>
 
         {/* Коммуникации */}
