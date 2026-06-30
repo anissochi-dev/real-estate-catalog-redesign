@@ -37,7 +37,7 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-            <Icon name="Banknote" size={12} />Цена, ₽ *
+            <Icon name="Banknote" size={12} className="text-emerald-500" />Цена, ₽ *
           </label>
           <input
             type="text"
@@ -50,7 +50,7 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
         </div>
         <div>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-            <Icon name="Maximize2" size={12} />Площадь, м² *
+            <Icon name="Maximize2" size={12} className="text-brand-blue" />Площадь, м² *
           </label>
           <input type="number" className={`w-full px-3 py-2 border rounded-lg ${err('area')}`}
             value={editing.area || ''} onChange={e => { setEditing({ ...editing, area: +e.target.value }); setErrors?.(v => ({ ...v, area: false })); }} />
@@ -62,7 +62,7 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
         </div>
         <div>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-            <Icon name="Tag" size={12} />Единица цены
+            <Icon name="Tag" size={12} className="text-violet-500" />Единица цены
           </label>
           <select className="w-full px-3 py-2 border rounded-lg" value={editing.price_unit || 'total'}
             onChange={e => setEditing({ ...editing, price_unit: e.target.value })}>
@@ -77,7 +77,7 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-            <Icon name="Trees" size={12} />Площадь участка, сот.
+            <Icon name="Trees" size={12} className="text-green-500" />Площадь участка, сот.
           </label>
           <input type="number" step="0.01" min="0" className="w-full px-3 py-2 border rounded-lg"
             placeholder="напр. 12.5"
@@ -91,7 +91,7 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
         </div>
         <div>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-            <Icon name="MoveVertical" size={12} />Высота потолка, м
+            <Icon name="MoveVertical" size={12} className="text-sky-500" />Высота потолка, м
           </label>
           <input type="number" step="0.1" min="0" className="w-full px-3 py-2 border rounded-lg"
             placeholder="напр. 3.2"
@@ -100,7 +100,7 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
         </div>
         <div>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-            <Icon name="Zap" size={12} />Эл. мощность, кВт
+            <Icon name="Zap" size={12} className="text-yellow-500" />Эл. мощность, кВт
           </label>
           <input type="number" step="0.1" min="0" className="w-full px-3 py-2 border rounded-lg"
             placeholder="напр. 15"
@@ -119,21 +119,21 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-            <Icon name="Layers" size={12} />Этаж{editing.category === 'office' ? ' *' : ''}
+            <Icon name="Layers" size={12} className="text-brand-blue" />Этаж{editing.category === 'office' ? ' *' : ''}
           </label>
           <input type="number" className={`w-full px-3 py-2 border rounded-lg ${err('floor')}`}
             value={editing.floor ?? ''} onChange={e => { setEditing({ ...editing, floor: e.target.value === '' ? null : +e.target.value }); setErrors?.(v => ({ ...v, floor: false })); }} />
         </div>
         <div>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-            <Icon name="Building" size={12} />Этажность{editing.category === 'office' ? ' *' : ''}
+            <Icon name="Building" size={12} className="text-slate-500" />Этажность{editing.category === 'office' ? ' *' : ''}
           </label>
           <input type="number" className={`w-full px-3 py-2 border rounded-lg ${err('total_floors')}`}
             value={editing.total_floors ?? ''} onChange={e => { setEditing({ ...editing, total_floors: e.target.value === '' ? null : +e.target.value }); setErrors?.(v => ({ ...v, total_floors: false })); }} />
         </div>
         <div>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-            <Icon name="LayoutGrid" size={12} />Комнат
+            <Icon name="LayoutGrid" size={12} className="text-violet-400" />Комнат
           </label>
           <input type="number" min={0} max={99} className="w-full px-3 py-2 border rounded-lg"
             placeholder="—"
@@ -142,7 +142,7 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
         </div>
         <div>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-            <Icon name="ParkingSquare" size={12} />Парковка
+            <Icon name="ParkingSquare" size={12} className="text-sky-600" />Парковка
           </label>
           <select className="w-full px-3 py-2 border rounded-lg" value={editing.parking || 'none'}
             onChange={e => setEditing({ ...editing, parking: e.target.value })}>
@@ -151,7 +151,7 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
         </div>
         <div>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-            <Icon name="DoorOpen" size={12} />Вход
+            <Icon name="DoorOpen" size={12} className="text-orange-500" />Вход
           </label>
           <select className="w-full px-3 py-2 border rounded-lg" value={editing.entrance || 'street'}
             onChange={e => setEditing({ ...editing, entrance: e.target.value })}>
@@ -160,7 +160,7 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
         </div>
         <div data-field-error={errors.broker_commission ? 'true' : undefined}>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-            <Icon name="Percent" size={12} />Комиссия брокера *
+            <Icon name="Percent" size={12} className="text-amber-500" />Комиссия брокера *
           </label>
           <input type="text" className={`w-full px-3 py-2 border rounded-lg ${err('broker_commission')}`}
             placeholder="напр. 3% или 50 000 ₽"

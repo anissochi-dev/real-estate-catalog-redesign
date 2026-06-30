@@ -113,7 +113,7 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div {...errWrap('category')}>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-            <Icon name="Building2" size={12} />Категория *
+            <Icon name="Building2" size={12} className="text-brand-blue" />Категория *
           </label>
           <select className={`w-full px-3 py-2 border rounded-lg text-sm ${err('category')}`} value={editing.category || ''}
             onChange={e => { setEditing({ ...editing, category: e.target.value }); setErrors(v => ({ ...v, category: false })); }}>
@@ -124,7 +124,7 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
         </div>
         <div {...errWrap('deal')}>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-            <Icon name="Handshake" size={12} />Тип сделки *
+            <Icon name="Handshake" size={12} className="text-emerald-500" />Тип сделки *
           </label>
           <select className={`w-full px-3 py-2 border rounded-lg text-sm ${err('deal')}`} value={editing.deal || ''}
             onChange={e => { setEditing({ ...editing, deal: e.target.value }); setErrors(v => ({ ...v, deal: false })); }}>
@@ -135,7 +135,7 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
         </div>
         <div {...errWrap('condition')}>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-            <Icon name="Star" size={12} />Состояние *
+            <Icon name="Star" size={12} className="text-amber-400" />Состояние *
           </label>
           <select className={`w-full px-3 py-2 border rounded-lg text-sm ${err('condition')}`} value={editing.condition || ''}
             onChange={e => { setEditing({ ...editing, condition: e.target.value }); setErrors(v => ({ ...v, condition: false })); }}>
@@ -149,7 +149,7 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
       {/* Назначение */}
       <div>
         <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Icon name="Target" size={12} />Назначение (можно выбрать несколько, максимум {MAX_PURPOSES})
+          <Icon name="Target" size={12} className="text-violet-500" />Назначение (можно выбрать несколько, максимум {MAX_PURPOSES})
           {selectedPurposes.length >= MAX_PURPOSES && (
             <span className="ml-2 text-amber-600 font-medium">— достигнут лимит</span>
           )}
@@ -219,7 +219,7 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div {...errWrap('owner_name')}>
               <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-                <Icon name="User" size={12} />Имя {canEditPhone ? '*' : ''}
+                <Icon name="User" size={12} className="text-brand-blue" />Имя {canEditPhone ? '*' : ''}
               </label>
               <input
                 className={`w-full px-3 py-2 border rounded-lg ${err('owner_name')} ${!canEditPhone ? 'bg-muted/50 text-muted-foreground cursor-not-allowed' : ''}`}
@@ -231,7 +231,7 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
             </div>
             <div {...errWrap('owner_phone')}>
               <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-                <Icon name="Phone" size={12} />Телефон {canEditPhone ? '*' : ''}
+                <Icon name="Phone" size={12} className="text-emerald-500" />Телефон {canEditPhone ? '*' : ''}
               </label>
               <PhonePickerInput
                 value={editing.owner_phone || ''}
@@ -249,7 +249,7 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
             </div>
             <div className="sm:col-start-2">
               <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-                <Icon name="PhonePlus" size={12} />Доп. телефон
+                <Icon name="PhonePlus" size={12} className="text-slate-400" />Доп. телефон
               </label>
               <PhonePickerInput
                 value={(editing as Record<string, unknown>).owner_phone2 as string || ''}
