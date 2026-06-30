@@ -239,60 +239,23 @@
         var ua = navigator.userAgent || '';
         var ual = ua.toLowerCase();
 
-        // Поисковые боты — получают полный prerender HTML
         var searchBots = ['googlebot','yandex','bingbot','mail.ru','duckduckbot','baiduspider','petalbot','semrush','ahrefsbot','mj12bot','dotbot'];
         var isSearchBot = searchBots.some(function(b){ return ual.indexOf(b) !== -1; });
 
-        // Боты соцсетей — получают prerender HTML с OG-тегами
         var socialBots = ['Twitterbot','facebookexternalhit','LinkedInBot','WhatsApp','TelegramBot','vkShare','Slackbot','Discordbot','Applebot','SkypeUriPreview','Viber'];
         var isSocialBot = socialBots.some(function(b){ return ua.indexOf(b) !== -1; });
 
-        var path = window.location.pathname.replace(/\/+$/, '') || '/';
-        var PATTERNS = [/^\/object\/.+/,/^\/district\/.+/,/^\/news\/.+/];
-        var isDynamic = PATTERNS.some(function(r){ return r.test(path); });
-
-        // Для динамических страниц объектов/районов/новостей — синхронно подгружаем og-теги
-        // через XHR до рендера страницы (работает для Telegram, VK, WhatsApp которые рендерят JS)
-        if (isDynamic) {
-          try {
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', PRERENDER + '?path=' + encodeURIComponent(path), false); // синхронный
-            xhr.send(null);
-            if (xhr.status === 200) {
-              var html = xhr.responseText;
-              // Извлекаем og-теги из prerender-ответа и вставляем в head
-              var ogTags = html.match(/<meta[^>]+property="og:[^>]+">/g) || [];
-              var twTags = html.match(/<meta[^>]+name="twitter:[^>]+">/g) || [];
-              var titleMatch = html.match(/<title>([^<]+)<\/title>/);
-              var descMatch = html.match(/<meta[^>]+name="description"[^>]+content="([^"]+)"/);
-              // Удаляем старые og/twitter теги из head
-              document.querySelectorAll('meta[property^="og:"],meta[name^="twitter:"]').forEach(function(el){ el.parentNode.removeChild(el); });
-              // Вставляем новые теги
-              var frag = document.createDocumentFragment();
-              ogTags.concat(twTags).forEach(function(tag) {
-                var tmp = document.createElement('div');
-                tmp.innerHTML = tag;
-                var el = tmp.firstChild;
-                if (el) frag.appendChild(el);
-              });
-              document.head.appendChild(frag);
-              // Обновляем title и description
-              if (titleMatch && titleMatch[1]) document.title = titleMatch[1];
-              var descEl = document.querySelector('meta[name="description"]');
-              if (descEl && descMatch && descMatch[1]) descEl.setAttribute('content', descMatch[1]);
-            }
-          } catch(e) {}
-        }
-
         if (!isSearchBot && !isSocialBot) return;
 
-        // Известные страницы которые покрывает prerender
+        var path = window.location.pathname.replace(/\/+$/, '') || '/';
+
         var KNOWN = ['/','/catalog','/map','/network-tenants','/news','/leads',
           '/catalog/office','/catalog/retail','/catalog/warehouse',
           '/catalog/restaurant','/catalog/hotel','/catalog/business',
           '/catalog/gab','/catalog/production','/catalog/land',
           '/catalog/building','/catalog/free_purpose','/catalog/car_service'];
-        var isCovered = KNOWN.indexOf(path) !== -1 || isDynamic;
+        var PATTERNS = [/^\/object\/.+/,/^\/district\/.+/,/^\/news\/.+/];
+        var isCovered = KNOWN.indexOf(path) !== -1 || PATTERNS.some(function(r){ return r.test(path); });
 
         if (!isCovered) {
           var mr = document.querySelector('meta[name="robots"]');
@@ -301,10 +264,7 @@
           return;
         }
 
-        // Поисковые боты — редирект на prerender для полного HTML с JSON-LD
-        if (isSearchBot) {
-          window.location.replace(PRERENDER + '?path=' + encodeURIComponent(path));
-        }
+        window.location.replace(PRERENDER + '?path=' + encodeURIComponent(path));
       })();
     </script>
 
