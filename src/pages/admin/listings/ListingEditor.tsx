@@ -104,8 +104,8 @@ export default function ListingEditor({
     if (!editing.condition) e.condition = true;
     if (!editing.price) e.price = true;
     if (!editing.area) e.area = true;
-    if (editing.floor == null) e.floor = true;
-    if (editing.total_floors == null) e.total_floors = true;
+    if (editing.category === 'office' && editing.floor == null) e.floor = true;
+    if (editing.category === 'office' && editing.total_floors == null) e.total_floors = true;
     if (!editing.address?.trim() && !editing.district?.trim()) e.address = true;
     if (!editing.district?.trim()) e.district = true;
     const bc = (editing as Record<string, unknown>).broker_commission as string | undefined;

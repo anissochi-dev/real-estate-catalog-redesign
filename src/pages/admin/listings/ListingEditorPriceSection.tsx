@@ -105,12 +105,12 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div>
-          <label className="text-xs text-muted-foreground">Этаж *</label>
+          <label className="text-xs text-muted-foreground">Этаж{editing.category === 'office' ? ' *' : ''}</label>
           <input type="number" className={`w-full px-3 py-2 border rounded-lg ${err('floor')}`}
             value={editing.floor ?? ''} onChange={e => { setEditing({ ...editing, floor: e.target.value === '' ? null : +e.target.value }); setErrors?.(v => ({ ...v, floor: false })); }} />
         </div>
         <div>
-          <label className="text-xs text-muted-foreground">Этажность *</label>
+          <label className="text-xs text-muted-foreground">Этажность{editing.category === 'office' ? ' *' : ''}</label>
           <input type="number" className={`w-full px-3 py-2 border rounded-lg ${err('total_floors')}`}
             value={editing.total_floors ?? ''} onChange={e => { setEditing({ ...editing, total_floors: e.target.value === '' ? null : +e.target.value }); setErrors?.(v => ({ ...v, total_floors: false })); }} />
         </div>
