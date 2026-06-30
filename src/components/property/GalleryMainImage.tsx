@@ -77,6 +77,7 @@ export function GalleryMainImage({
               fetchPriority="high"
               decoding="sync"
               onLoad={onImgLoad}
+              onError={e => { (e.currentTarget as HTMLImageElement).src = mainImg ?? ''; }}
               className={`w-full h-full object-cover transition-opacity duration-300 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
             />
             {!imgLoaded && (
