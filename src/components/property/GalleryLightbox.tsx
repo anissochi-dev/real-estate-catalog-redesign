@@ -115,7 +115,7 @@ export function GalleryLightbox({ imgs, activeImg, setActiveImg, onClose, title 
           alt={title}
           draggable={false}
           loading="eager"
-          fetchPriority="high"
+          fetchpriority="high"
           decoding="async"
           style={{
             maxHeight: '90vh',

@@ -74,7 +74,7 @@ export function GalleryMainImage({
               src={photoMediums[photoActiveIdx] || mainImg}
               alt={item.title}
               loading="eager"
-              fetchPriority="high"
+              fetchpriority="high"
               decoding="sync"
               onLoad={onImgLoad}
               onError={e => { (e.currentTarget as HTMLImageElement).src = mainImg ?? ''; }}
