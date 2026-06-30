@@ -52,20 +52,6 @@ export default function ListingRoomFeatures({ editing, setEditing, landVri = [],
               </div>
             </>
           )}
-          <div>
-            <label className="text-xs text-muted-foreground">Высота потолка, м</label>
-            <input type="number" step="0.1" min="0" className="w-full px-3 py-2 border rounded-lg"
-              placeholder="напр. 3.2"
-              value={editing.ceiling_height ?? ''}
-              onChange={e => setEditing({ ...editing, ceiling_height: e.target.value === '' ? null : +e.target.value })} />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Эл. мощность, кВт</label>
-            <input type="number" step="0.1" min="0" className="w-full px-3 py-2 border rounded-lg"
-              placeholder="напр. 15"
-              value={editing.electricity_kw ?? ''}
-              onChange={e => setEditing({ ...editing, electricity_kw: e.target.value === '' ? null : +e.target.value })} />
-          </div>
           <div className="sm:col-span-3">
             <label className="text-xs text-muted-foreground block mb-2">Коммуникации</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

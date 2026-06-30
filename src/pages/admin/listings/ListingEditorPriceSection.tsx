@@ -66,7 +66,7 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
         </div>
       </div>
 
-      {/* Площадь участка — отдельная строка, всегда видима */}
+      {/* Площадь участка + Высота потолка + Эл. мощность — одна строка */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div>
           <label className="text-xs text-muted-foreground">Площадь участка, сот.</label>
@@ -79,6 +79,20 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
               ≈ {(+editing.land_area * 100).toLocaleString('ru')} м²
             </div>
           ) : null}
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">Высота потолка, м</label>
+          <input type="number" step="0.1" min="0" className="w-full px-3 py-2 border rounded-lg"
+            placeholder="напр. 3.2"
+            value={editing.ceiling_height ?? ''}
+            onChange={e => setEditing({ ...editing, ceiling_height: e.target.value === '' ? null : +e.target.value })} />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">Эл. мощность, кВт</label>
+          <input type="number" step="0.1" min="0" className="w-full px-3 py-2 border rounded-lg"
+            placeholder="напр. 15"
+            value={editing.electricity_kw ?? ''}
+            onChange={e => setEditing({ ...editing, electricity_kw: e.target.value === '' ? null : +e.target.value })} />
         </div>
       </div>
 
