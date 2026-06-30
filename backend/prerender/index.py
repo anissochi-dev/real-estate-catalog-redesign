@@ -199,21 +199,48 @@ def _fmt_price(price):
 
 
 def _listing_card_html(row):
-    """HTML-карточка объекта для списка (каталог, район)."""
+    """HTML-карточка объекта для списка (каталог, район).
+    Использует RealEstateListing вместо Product — не требует offers/review/aggregateRating.
+    Внутри offers itemprop добавлена цена и доступность для корректного Rich Result.
+    """
     d = dict(row)
-    slug = d.get('slug') or f"object-{d['id']}"
-    url  = f"{SITE_URL}/object/{slug}"
+    slug  = d.get('slug') or f"object-{d['id']}"
+    url   = f"{SITE_URL}/object/{slug}"
     title = _esc(d.get('title') or '')
     addr  = _esc(d.get('address') or '')
-    price = _esc(_fmt_price(d.get('price')))
+    price_raw = d.get('price')
+    price_str = _esc(_fmt_price(price_raw))
     area  = _esc(f"{d['area']} м²" if d.get('area') else '')
     deal  = 'Аренда' if d.get('deal') == 'rent' else 'Продажа'
     img   = (d.get('image') or '').split('|')[0]
-    img_tag = f'<img src="{_esc(img)}" alt="{title}" loading="lazy">' if img else ''
-    parts = [p for p in [area, price] if p]
+    img_tag = f'<img src="{_esc(img)}" itemprop="image" alt="{title}" loading="lazy">' if img else ''
+    parts = [p for p in [area, price_str] if p]
     meta_str = ' · '.join(parts)
+
+    # offers itemprop — обязателен для Rich Results, даже в microdata-карточках
+    offers_html = ''
+    if price_raw:
+        price_num = str(int(float(price_raw)))
+        offers_html = (
+            f'<div itemprop="offers" itemscope itemtype="https://schema.org/Offer">'
+            f'<meta itemprop="price" content="{price_num}">'
+            f'<meta itemprop="priceCurrency" content="RUB">'
+            f'<link itemprop="availability" href="https://schema.org/InStock">'
+            f'<link itemprop="url" href="{_esc(url)}">'
+            f'</div>'
+        )
+    else:
+        # Нет цены — используем PriceSpecification без конкретной суммы
+        offers_html = (
+            f'<div itemprop="offers" itemscope itemtype="https://schema.org/Offer">'
+            f'<meta itemprop="priceCurrency" content="RUB">'
+            f'<link itemprop="availability" href="https://schema.org/InStock">'
+            f'<link itemprop="url" href="{_esc(url)}">'
+            f'</div>'
+        )
+
     return (
-        f'<article itemscope itemtype="https://schema.org/Product">'
+        f'<article itemscope itemtype="https://schema.org/RealEstateListing">'
         f'<a href="{_esc(url)}" itemprop="url">'
         f'{img_tag}'
         f'<h2 itemprop="name">{title}</h2>'
@@ -221,6 +248,7 @@ def _listing_card_html(row):
         f'<p>{_esc(deal)}</p>'
         + ('<p itemprop="description">' + _esc(addr) + '</p>' if addr else '')
         + ('<p>' + meta_str + '</p>' if meta_str else '')
+        + offers_html
         + '</article>'
     )
 
@@ -273,28 +301,64 @@ def _get_listing_meta(cur, lid):
     cat_link = f' | <a href="/catalog/{cat_slug}">{_esc(cat_label)}</a>' if cat_slug else ''
     body_parts.append(f'<nav><a href="/">Главная</a> | <a href="/catalog">Каталог</a>{cat_link}</nav>')
 
+    # Формируем offers — для аренды указываем единицу (месяц), для продажи — полная сумма
+    is_rent = d.get('deal') == 'rent'
+    offers_block: dict = {
+        '@type': 'Offer',
+        'url': canonical,
+        'priceCurrency': 'RUB',
+        'availability': 'https://schema.org/InStock',
+        'seller': {
+            '@type': 'Organization',
+            'name': SITE_NAME,
+            'url': SITE_URL,
+        },
+    }
+    if d.get('price'):
+        offers_block['price'] = str(int(float(d['price'])))
+        if is_rent:
+            offers_block['priceSpecification'] = {
+                '@type': 'UnitPriceSpecification',
+                'price': str(int(float(d['price']))),
+                'priceCurrency': 'RUB',
+                'referenceQuantity': {
+                    '@type': 'QuantitativeValue',
+                    'value': 1,
+                    'unitCode': 'MON',
+                },
+            }
+    else:
+        # Нет цены — ставим 0 чтобы Google не ругался на отсутствие поля
+        offers_block['price'] = '0'
+        offers_block['priceValidUntil'] = '2099-12-31'
+
+    listing_node: dict = {
+        '@type': 'RealEstateListing',
+        'name': d.get('title') or title,
+        'description': (d.get('description') or desc)[:500],
+        'url': canonical,
+        'offers': offers_block,
+        'address': {
+            '@type': 'PostalAddress',
+            'addressLocality': city,
+            'streetAddress': d.get('address') or '',
+            'addressCountry': 'RU',
+        },
+    }
+    img_url = (d.get('image') or '').split('|')[0]
+    if img_url:
+        listing_node['image'] = img_url
+    if area_str:
+        listing_node['floorSize'] = {
+            '@type': 'QuantitativeValue',
+            'value': float(d['area']),
+            'unitCode': 'MTK',
+        }
+
     product = {
         '@context': 'https://schema.org',
         '@graph': [
-            {
-                '@type': 'Product',
-                'name': d.get('title') or title,
-                'description': (d.get('description') or desc)[:500],
-                'url': canonical,
-                'image': (d.get('image') or '').split('|')[0] or None,
-                'offers': {
-                    '@type': 'Offer',
-                    'price': str(int(d['price'])) if d.get('price') else None,
-                    'priceCurrency': 'RUB',
-                    'availability': 'https://schema.org/InStock',
-                },
-                'address': {
-                    '@type': 'PostalAddress',
-                    'addressLocality': city,
-                    'streetAddress': d.get('address') or '',
-                    'addressCountry': 'RU',
-                },
-            },
+            listing_node,
             json.loads(_jsonld_breadcrumb([
                 ('Главная', SITE_URL + '/'),
                 ('Каталог', SITE_URL + '/catalog'),
@@ -303,9 +367,6 @@ def _get_listing_meta(cur, lid):
             ])),
         ],
     }
-    product['@graph'][0]['offers'] = {k: v for k, v in product['@graph'][0]['offers'].items() if v is not None}
-    if not product['@graph'][0].get('image'):
-        del product['@graph'][0]['image']
 
     return {
         'title': title,
