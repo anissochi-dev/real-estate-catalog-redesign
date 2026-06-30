@@ -369,15 +369,12 @@ export default function PropertyCard({
                 </div>
               </>
             ) : null}
-            {property.floor ? (
+            {(property.floor || property.totalFloors) ? (
               <div className="flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
                 <Icon name="Layers" size={12} className="text-brand-blue/50" />
-                {property.floor}{property.totalFloors ? `/${property.totalFloors}` : ''} эт.
-              </div>
-            ) : property.payback ? (
-              <div className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-700">
-                <Icon name="TrendingUp" size={12} className="text-emerald-500" />
-                Окуп. {property.payback} мес
+                {property.floor
+                  ? `${property.floor}${property.totalFloors ? `/${property.totalFloors}` : ''} эт.`
+                  : `${property.totalFloors} эт.`}
               </div>
             ) : null}
           </div>
