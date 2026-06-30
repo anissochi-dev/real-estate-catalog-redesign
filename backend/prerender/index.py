@@ -126,12 +126,24 @@ def _html(title, desc, og_image='', canonical='', extra_meta='',
     """
     robots    = '<meta name="robots" content="noindex, nofollow">' if is_404 else '<meta name="robots" content="index, follow">'
     pre_code  = '<meta name="prerender-status-code" content="404">' if is_404 else ''
-    og_img    = f'<meta property="og:image" content="{_esc(og_image)}">' if og_image else ''
     og_url    = f'<meta property="og:url" content="{_esc(canonical)}">' if canonical else ''
     canon_tag = f'<link rel="canonical" href="{_esc(canonical)}">' if canonical else ''
     jsonld_tag = f'<script type="application/ld+json">{jsonld}</script>' if jsonld else ''
     t = _esc(title)
     d = _esc(desc)
+    # og:image — полный блок с размерами и twitter:image для мессенджеров и соцсетей
+    if og_image:
+        esc_img = _esc(og_image)
+        og_img_block = (
+            f'<meta property="og:image" content="{esc_img}">'
+            f'<meta property="og:image:secure_url" content="{esc_img}">'
+            f'<meta property="og:image:type" content="image/webp">'
+            f'<meta property="og:image:width" content="1920">'
+            f'<meta property="og:image:height" content="1080">'
+            f'<meta name="twitter:image" content="{esc_img}">'
+        )
+    else:
+        og_img_block = ''
     favicon = 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/favicon-1780486766400.png'
     return (
         f'<!DOCTYPE html><html lang="ru"><head>'
@@ -146,7 +158,7 @@ def _html(title, desc, og_image='', canonical='', extra_meta='',
         f'<meta property="og:site_name" content="{_esc(SITE_NAME)}">'
         f'<meta property="og:title" content="{t}">'
         f'<meta property="og:description" content="{d}">'
-        f'{og_url}{og_img}'
+        f'{og_url}{og_img_block}'
         f'<meta name="twitter:card" content="summary_large_image">'
         f'<meta name="twitter:title" content="{t}">'
         f'<meta name="twitter:description" content="{d}">'
