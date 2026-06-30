@@ -112,7 +112,9 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
       {/* Категория, сделка, состояние */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div {...errWrap('category')}>
-          <label className="text-xs text-muted-foreground">Категория *</label>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+            <Icon name="Building2" size={12} />Категория *
+          </label>
           <select className={`w-full px-3 py-2 border rounded-lg text-sm ${err('category')}`} value={editing.category || ''}
             onChange={e => { setEditing({ ...editing, category: e.target.value }); setErrors(v => ({ ...v, category: false })); }}>
             <option value="">— Выберите категорию —</option>
@@ -121,7 +123,9 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
           {errMsg('category', 'Выберите категорию')}
         </div>
         <div {...errWrap('deal')}>
-          <label className="text-xs text-muted-foreground">Тип сделки *</label>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+            <Icon name="Handshake" size={12} />Тип сделки *
+          </label>
           <select className={`w-full px-3 py-2 border rounded-lg text-sm ${err('deal')}`} value={editing.deal || ''}
             onChange={e => { setEditing({ ...editing, deal: e.target.value }); setErrors(v => ({ ...v, deal: false })); }}>
             <option value="">— Выберите тип сделки —</option>
@@ -130,7 +134,9 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
           {errMsg('deal', 'Выберите тип сделки')}
         </div>
         <div {...errWrap('condition')}>
-          <label className="text-xs text-muted-foreground">Состояние *</label>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+            <Icon name="Star" size={12} />Состояние *
+          </label>
           <select className={`w-full px-3 py-2 border rounded-lg text-sm ${err('condition')}`} value={editing.condition || ''}
             onChange={e => { setEditing({ ...editing, condition: e.target.value }); setErrors(v => ({ ...v, condition: false })); }}>
             <option value="">— Не выбрано —</option>
@@ -142,8 +148,8 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
 
       {/* Назначение */}
       <div>
-        <label className="text-xs text-muted-foreground">
-          Назначение (можно выбрать несколько, максимум {MAX_PURPOSES})
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Icon name="Target" size={12} />Назначение (можно выбрать несколько, максимум {MAX_PURPOSES})
           {selectedPurposes.length >= MAX_PURPOSES && (
             <span className="ml-2 text-amber-600 font-medium">— достигнут лимит</span>
           )}
@@ -212,7 +218,9 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div {...errWrap('owner_name')}>
-              <label className="text-xs text-muted-foreground">Имя {canEditPhone ? '*' : ''}</label>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                <Icon name="User" size={12} />Имя {canEditPhone ? '*' : ''}
+              </label>
               <input
                 className={`w-full px-3 py-2 border rounded-lg ${err('owner_name')} ${!canEditPhone ? 'bg-muted/50 text-muted-foreground cursor-not-allowed' : ''}`}
                 value={editing.owner_name || ''}
@@ -222,7 +230,9 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
               {errMsg('owner_name', 'Введите имя собственника')}
             </div>
             <div {...errWrap('owner_phone')}>
-              <label className="text-xs text-muted-foreground">Телефон {canEditPhone ? '*' : ''}</label>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                <Icon name="Phone" size={12} />Телефон {canEditPhone ? '*' : ''}
+              </label>
               <PhonePickerInput
                 value={editing.owner_phone || ''}
                 readOnly={!canEditPhone}
@@ -238,7 +248,9 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
               {errMsg('owner_phone', 'Введите телефон собственника')}
             </div>
             <div className="sm:col-start-2">
-              <label className="text-xs text-muted-foreground">Доп. телефон</label>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                <Icon name="PhonePlus" size={12} />Доп. телефон
+              </label>
               <PhonePickerInput
                 value={(editing as Record<string, unknown>).owner_phone2 as string || ''}
                 readOnly={!canEditPhone}

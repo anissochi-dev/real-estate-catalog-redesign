@@ -72,9 +72,9 @@ export default function ListingEditorExtraSection({
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div>
-            <label className="text-xs text-muted-foreground">
-              Отделка (для досок)
-              <span className="ml-1 text-muted-foreground/60 font-normal">— заполняется из «Состояния»</span>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <Icon name="Paintbrush" size={12} />Отделка (для досок)
+              <span className="text-muted-foreground/60 font-normal">— из «Состояния»</span>
             </label>
             <select className="w-full px-3 py-2 border rounded-lg"
               value={editing.finishing || ''}
@@ -84,7 +84,9 @@ export default function ListingEditorExtraSection({
             </select>
           </div>
           <div {...errWrap('building_class')}>
-            <label className="text-xs text-muted-foreground">Класс здания *</label>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <Icon name="Award" size={12} />Класс здания *
+            </label>
             <select className={`w-full px-3 py-2 border rounded-lg ${err('building_class')}`}
               value={editing.building_class || ''}
               onChange={e => { setEditing({ ...editing, building_class: e.target.value || null }); clearErr('building_class'); }}>
@@ -93,14 +95,18 @@ export default function ListingEditorExtraSection({
             </select>
           </div>
           <div {...errWrap('building_year')}>
-            <label className="text-xs text-muted-foreground">Год постройки здания *</label>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <Icon name="CalendarDays" size={12} />Год постройки *
+            </label>
             <input type="number" min={1900} max={2030} className={`w-full px-3 py-2 border rounded-lg ${err('building_year')}`}
               placeholder="напр. 2005"
               value={editing.building_year ?? ''}
               onChange={e => { setEditing({ ...editing, building_year: e.target.value === '' ? null : +e.target.value }); clearErr('building_year'); }} />
           </div>
           <div {...errWrap('property_rights')}>
-            <label className="text-xs text-muted-foreground">Права на объект *</label>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <Icon name="ShieldCheck" size={12} />Права на объект *
+            </label>
             <select className={`w-full px-3 py-2 border rounded-lg ${err('property_rights')}`}
               value={editing.property_rights || ''}
               onChange={e => { setEditing({ ...editing, property_rights: e.target.value || null }); clearErr('property_rights'); }}>
@@ -109,7 +115,9 @@ export default function ListingEditorExtraSection({
             </select>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Мин. площадь нарезки, м²</label>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <Icon name="SplitSquareHorizontal" size={12} />Мин. площадь нарезки, м²
+            </label>
             <input type="number" min={1} className="w-full px-3 py-2 border rounded-lg"
               placeholder="если делится на части"
               value={editing.min_area ?? ''}
@@ -120,16 +128,19 @@ export default function ListingEditorExtraSection({
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={!!editing.has_furniture}
               onChange={e => setEditing({ ...editing, has_furniture: e.target.checked })} />
+            <Icon name="Sofa" size={13} className="text-muted-foreground" />
             <span className="text-sm">Мебель есть</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={!!editing.has_equipment}
               onChange={e => setEditing({ ...editing, has_equipment: e.target.checked })} />
+            <Icon name="Settings2" size={13} className="text-muted-foreground" />
             <span className="text-sm">Оборудование есть</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={!!editing.is_apartments}
               onChange={e => setEditing({ ...editing, is_apartments: e.target.checked })} />
+            <Icon name="Home" size={13} className="text-muted-foreground" />
             <span className="text-sm">Апартаменты</span>
           </label>
         </div>
@@ -143,7 +154,9 @@ export default function ListingEditorExtraSection({
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div>
-            <label className="text-xs text-muted-foreground">МАП (мес. арендный поток), ₽</label>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <Icon name="Wallet" size={12} />МАП (мес. арендный поток), ₽
+            </label>
             <input type="number" min="0" className="w-full px-3 py-2 border rounded-lg"
               value={editing.monthly_rent ?? ''}
               onChange={e => {
@@ -152,7 +165,9 @@ export default function ListingEditorExtraSection({
               }} />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">ГАП (год. арендный поток), ₽</label>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <Icon name="Coins" size={12} />ГАП (год. арендный поток), ₽
+            </label>
             <input type="number" min="0" className="w-full px-3 py-2 border rounded-lg"
               value={editing.yearly_rent ?? ''}
               onChange={e => {
@@ -161,7 +176,9 @@ export default function ListingEditorExtraSection({
               }} />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Окупаемость, мес</label>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <Icon name="Timer" size={12} />Окупаемость, мес
+            </label>
             <input type="number" min="0" className="w-full px-3 py-2 border rounded-lg"
               placeholder="авто, если пусто"
               value={editing.payback ?? ''}
@@ -173,7 +190,9 @@ export default function ListingEditorExtraSection({
             ) : null}
           </div>
           <div className="sm:col-span-2">
-            <label className="text-xs text-muted-foreground">Название арендатора (если есть)</label>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <Icon name="Users" size={12} />Название арендатора (если есть)
+            </label>
             <input className="w-full px-3 py-2 border rounded-lg"
               placeholder="напр. «Магнит», «Сбербанк»..."
               value={editing.tenant_name || ''}
