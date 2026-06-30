@@ -4448,55 +4448,114 @@ def handler(event, context):
                 # SQL фильтр по категории если определена
                 cat_filter = f" AND category = '{detected_category}'" if detected_category else ''
 
-                # ── Keyword-поиск ТОЛЬКО по «сильным» полям (не description) ─────
-                # description даёт ложные совпадения — там часто пишут "можно использовать под X"
-                raw_tokens = [w.strip(",.!?:;\"'()[]") for w in user_text.split()]
-                tokens = [t for t in raw_tokens if len(t) >= 3]
+                # ── Определяем тип сделки из текста ──────────────────────────────
+                DEAL_RENT_KW = ['аренд', 'снять', 'снимаю', 'сниму', 'арендовать', 'арендую']
+                DEAL_SALE_KW = ['купить', 'куплю', 'продаж', 'приобрести', 'покупк']
+                detected_deal = None
+                if any(kw in text_lower for kw in DEAL_RENT_KW):
+                    detected_deal = 'rent'
+                elif any(kw in text_lower for kw in DEAL_SALE_KW):
+                    detected_deal = 'sale'
+                deal_filter = f" AND deal = '{detected_deal}'" if detected_deal else ''
 
-                keyword_ids = set()
-                if tokens:
-                    like_parts = []
-                    for tok in tokens[:8]:
-                        st = tok.replace("'", "''")
-                        if tok.isdigit():
-                            num = int(tok)
-                            like_parts.append(
-                                f"(id = {num} OR "
-                                f"CAST(area AS TEXT) LIKE '%{st}%' OR "
-                                f"CAST(COALESCE(floor,0) AS TEXT) = '{st}')"
-                            )
-                        else:
+                # ── Определяем округ/район из текста ─────────────────────────────
+                OKRUG_MAP = {
+                    'чмр': ['черемушки', 'чмр'],
+                    'юмр': ['юбилейный', 'юмр'],
+                    'цмр': ['центральный', 'цмр', 'центр'],
+                    'гмр': ['гидростроителей', 'гмр'],
+                    'фмр': ['фестивальный', 'фмр'],
+                    'пмр': ['прикубанский', 'пмр'],
+                    'рип': ['рип', 'рипская'],
+                    'комсомольский': ['комсомольск'],
+                    'прикубанский': ['прикубанск'],
+                    'карасунский': ['карасунск'],
+                    'западный': ['западн'],
+                    'центральный': ['центральн'],
+                }
+                detected_district = None
+                for district_key, kws in OKRUG_MAP.items():
+                    if any(kw in text_lower for kw in kws):
+                        detected_district = district_key
+                        break
+                district_filter = (
+                    f" AND LOWER(COALESCE(district,'')) LIKE '%{detected_district}%'"
+                    if detected_district else ''
+                )
+
+                # ── Извлекаем числовые ID из запроса ─────────────────────────────
+                import re as _re
+                id_matches = _re.findall(r'(?:id|#|№)?\s*(\d{3,9})', user_text, _re.IGNORECASE)
+                id_filter_parts = []
+                for id_str in id_matches[:3]:
+                    num = int(id_str)
+                    if num > 100000:
+                        # Полный ID
+                        id_filter_parts.append(f"id = {num}")
+                    else:
+                        # Короткий ID — последние цифры
+                        id_filter_parts.append(f"(id % 1000000 = {num} OR id % 10000 = {num % 10000})")
+                id_filter = f" AND ({' OR '.join(id_filter_parts)})" if id_filter_parts else ''
+
+                # ── Если запросили конкретный ID — ищем только его ───────────────
+                if id_filter:
+                    cur.execute(f"{SELECT_FIELDS}{id_filter} LIMIT 5")
+                    id_rows = [dict(r) for r in cur.fetchall()]
+                    if id_rows:
+                        matches = id_rows
+                        # Пропускаем остальной поиск
+                        id_rows = None  # флаг что уже нашли
+                    else:
+                        id_rows = None
+                else:
+                    id_rows = None
+
+                if matches:
+                    pass  # уже заполнено по ID
+                else:
+                    # ── Комбинированный SQL-фильтр ────────────────────────────────
+                    combined_filter = cat_filter + deal_filter + district_filter
+
+                    # ── Keyword-поиск по сильным полям + коммуникациям ────────────
+                    raw_tokens = [w.strip(",.!?:;\"'()[]#№") for w in user_text.split()]
+                    tokens = [t for t in raw_tokens if len(t) >= 3 and not t.isdigit()]
+
+                    keyword_ids = set()
+                    kw_rows = []
+                    if tokens:
+                        like_parts = []
+                        for tok in tokens[:10]:
+                            st = tok.replace("'", "''")
                             like_parts.append(
                                 f"(LOWER(title) LIKE LOWER('%{st}%') OR "
                                 f"LOWER(COALESCE(district,'')) LIKE LOWER('%{st}%') OR "
                                 f"LOWER(COALESCE(address,'')) LIKE LOWER('%{st}%') OR "
                                 f"LOWER(COALESCE(purpose,'')) LIKE LOWER('%{st}%') OR "
-                                f"LOWER(COALESCE(category,'')) LIKE LOWER('%{st}%'))"
+                                f"LOWER(COALESCE(utilities,'')) LIKE LOWER('%{st}%') OR "
+                                f"LOWER(COALESCE(description,'')) LIKE LOWER('%{st}%'))"
                             )
-                    where_kw = ' OR '.join(like_parts)
+                        where_kw = ' OR '.join(like_parts)
+                        cur.execute(
+                            f"{SELECT_FIELDS}{combined_filter} AND ({where_kw}) "
+                            f"ORDER BY updated_at DESC LIMIT 50"
+                        )
+                        kw_rows = [dict(r) for r in cur.fetchall()]
+                        keyword_ids = {r['id'] for r in kw_rows}
+
+                    # Все объекты с применёнными фильтрами
                     cur.execute(
-                        f"{SELECT_FIELDS}{cat_filter} AND ({where_kw}) "
-                        f"ORDER BY updated_at DESC LIMIT 40"
+                        f"{SELECT_FIELDS}{combined_filter} ORDER BY updated_at DESC LIMIT 150"
                     )
-                    kw_rows = [dict(r) for r in cur.fetchall()]
-                    keyword_ids = {r['id'] for r in kw_rows}
-                else:
-                    kw_rows = []
+                    all_rows = [dict(r) for r in cur.fetchall()]
 
-                # Все объекты нужной категории (или все если не определена)
-                cur.execute(
-                    f"{SELECT_FIELDS}{cat_filter} ORDER BY updated_at DESC LIMIT 100"
-                )
-                all_rows = [dict(r) for r in cur.fetchall()]
-
-                # Объединяем: keyword-совпадения первыми, без дублей
-                seen = set()
-                merged = []
-                for r in kw_rows + all_rows:
-                    if r['id'] not in seen:
-                        seen.add(r['id'])
-                        merged.append(r)
-                matches = merged[:100]
+                    # Объединяем: keyword-совпадения первыми, без дублей
+                    seen = set()
+                    merged = []
+                    for r in kw_rows + all_rows:
+                        if r['id'] not in seen:
+                            seen.add(r['id'])
+                            merged.append(r)
+                    matches = merged[:120]
 
                 def _make_compact(r, is_keyword_match=False):
                     obj = {

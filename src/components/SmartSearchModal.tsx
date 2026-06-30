@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '@/components/ui/icon';
 
-const SMART_SEARCH_URL = 'https://functions.poehali.dev/32925bd2-c418-4a8c-8e32-97b5385e67da';
+const AI_ASSISTANT_URL = 'https://functions.poehali.dev/34bfc4a2-89b9-4c89-bcbc-d82314730aef';
 
 interface SearchResult {
   id: number;
@@ -10,6 +10,7 @@ interface SearchResult {
   category: string;
   deal: string;
   price: number;
+  price_per_m2?: number;
   area: number;
   address: string;
   district?: string;
@@ -17,7 +18,8 @@ interface SearchResult {
   image_thumb?: string;
   slug?: string;
   price_unit?: string;
-  relevance_score: number;
+  monthly_rent?: number;
+  payback?: number;
 }
 
 const DEAL_LABEL: Record<string, string> = { sale: 'Продажа', rent: 'Аренда' };
@@ -38,11 +40,14 @@ function fmtPrice(price: number, unit?: string) {
 }
 
 const HINTS = [
-  'офис до 100м² в центре для IT-компании',
-  'склад с пандусом от 500м²',
-  'помещение под кафе на первой линии',
-  'торговое помещение до 1 млн рублей',
-  'готовый арендный бизнес с доходностью 12%',
+  'снять офис до 100м² в центре',
+  'склад от 500м² с пандусом и электричеством 380В',
+  'помещение под кафе на первой линии в ЧМР',
+  'купить торговое помещение до 10 млн рублей',
+  'готовый арендный бизнес с доходом от 200 тыс/мес',
+  'здание в ЮМР до 150 000 ₽/м²',
+  'производство с газом от 1000м²',
+  'id 200',
 ];
 
 interface Props {
@@ -56,6 +61,8 @@ export default function SmartSearchModal({ open, initialQuery = '', onClose }: P
   const [query, setQuery] = useState(initialQuery);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<SearchResult[] | null>(null);
+  const [reasoning, setReasoning] = useState('');
+  const [advice, setAdvice] = useState('');
   const [error, setError] = useState('');
   const [hint] = useState(() => HINTS[Math.floor(Math.random() * HINTS.length)]);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -64,6 +71,8 @@ export default function SmartSearchModal({ open, initialQuery = '', onClose }: P
     if (open) {
       setQuery(initialQuery);
       setResults(null);
+      setReasoning('');
+      setAdvice('');
       setError('');
       setTimeout(() => inputRef.current?.focus(), 100);
     }
@@ -75,15 +84,19 @@ export default function SmartSearchModal({ open, initialQuery = '', onClose }: P
     setLoading(true);
     setError('');
     setResults(null);
+    setReasoning('');
+    setAdvice('');
     try {
-      const res = await fetch(SMART_SEARCH_URL, {
+      const res = await fetch(AI_ASSISTANT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: text, limit: 12, min_score: 0.45 }),
+        body: JSON.stringify({ action: 'match', message: text }),
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Ошибка поиска');
-      setResults(data.results || []);
+      setResults(data.listings || []);
+      setReasoning(data.reasoning || '');
+      setAdvice(data.advice || '');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Ошибка');
     } finally {
@@ -188,23 +201,38 @@ export default function SmartSearchModal({ open, initialQuery = '', onClose }: P
         {results && !loading && (
           <div className="overflow-y-auto flex-1">
             {results.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">
+              <div className="p-6 text-center text-muted-foreground">
                 <Icon name="SearchX" size={36} className="mx-auto mb-3 opacity-40" />
-                <p className="font-semibold">Ничего не найдено</p>
-                <p className="text-xs mt-1">Попробуйте другой запрос или измените критерии</p>
+                <p className="font-semibold">Подходящих объектов не найдено</p>
+                {reasoning && <p className="text-xs mt-2 text-foreground/70">{reasoning}</p>}
+                {advice && (
+                  <div className="mt-3 bg-violet-50 rounded-xl px-4 py-2.5 text-left">
+                    <p className="text-[11px] font-semibold text-violet-700 mb-0.5">Совет:</p>
+                    <p className="text-xs text-violet-800">{advice}</p>
+                  </div>
+                )}
               </div>
             ) : (
               <>
-                <div className="px-4 pt-3 pb-1 flex items-center justify-between">
+                {/* Комментарий ИИ */}
+                {reasoning && (
+                  <div className="px-4 pt-3 pb-2 border-b border-border bg-muted/30">
+                    <div className="flex items-start gap-2">
+                      <Icon name="Sparkles" size={13} className="text-violet-600 mt-0.5 shrink-0" />
+                      <p className="text-xs text-foreground/80">{reasoning}</p>
+                    </div>
+                    {advice && (
+                      <div className="flex items-start gap-2 mt-1.5">
+                        <Icon name="Lightbulb" size={13} className="text-amber-500 mt-0.5 shrink-0" />
+                        <p className="text-xs text-muted-foreground">{advice}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="px-4 pt-2 pb-1 flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">
-                    Найдено {results.length} объектов по смыслу запроса
+                    Найдено {results.length} {results.length === 1 ? 'объект' : results.length < 5 ? 'объекта' : 'объектов'}
                   </span>
-                  <button
-                    onClick={onClose}
-                    className="text-xs text-violet-600 hover:underline"
-                  >
-                    Смотреть все в каталоге →
-                  </button>
                 </div>
                 <div className="divide-y divide-border">
                   {results.map(item => (
@@ -213,7 +241,6 @@ export default function SmartSearchModal({ open, initialQuery = '', onClose }: P
                       onClick={() => goToListing(item)}
                       className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors text-left"
                     >
-                      {/* Фото */}
                       <div className="w-16 h-14 rounded-lg overflow-hidden shrink-0 bg-muted border border-border">
                         {item.image
                           ? <img src={item.image_thumb || item.image} alt="" className="w-full h-full object-cover" loading="lazy" />
@@ -222,8 +249,6 @@ export default function SmartSearchModal({ open, initialQuery = '', onClose }: P
                             </div>
                         }
                       </div>
-
-                      {/* Инфо */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
                           <span className="text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full font-medium">
@@ -232,19 +257,22 @@ export default function SmartSearchModal({ open, initialQuery = '', onClose }: P
                           <span className="text-[10px] text-muted-foreground">
                             {DEAL_LABEL[item.deal] || item.deal}
                           </span>
-                          {/* Релевантность */}
-                          <span className="ml-auto text-[10px] text-emerald-600 font-semibold">
-                            {Math.round(item.relevance_score * 100)}% совпадение
-                          </span>
+                          <span className="text-[10px] text-muted-foreground ml-auto">#{item.id}</span>
                         </div>
                         <p className="text-sm font-semibold text-foreground truncate">{item.title}</p>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                           {item.area ? <span>{item.area} м²</span> : null}
                           {item.district ? <span>· {item.district}</span> : null}
-                          {item.price ? <span className="text-brand-blue font-semibold ml-auto">{fmtPrice(item.price, item.price_unit)}</span> : null}
+                          {item.monthly_rent
+                            ? <span className="text-emerald-600 font-semibold ml-auto">{fmtPrice(item.monthly_rent)}/мес</span>
+                            : item.price
+                              ? <span className="text-brand-blue font-semibold ml-auto">{fmtPrice(item.price)}</span>
+                              : null}
                         </div>
+                        {item.price_per_m2 ? (
+                          <p className="text-[10px] text-muted-foreground mt-0.5">{item.price_per_m2.toLocaleString('ru')} ₽/м²</p>
+                        ) : null}
                       </div>
-
                       <Icon name="ChevronRight" size={16} className="text-muted-foreground shrink-0" />
                     </button>
                   ))}
