@@ -261,6 +261,17 @@ FINISHING_CIAN = {
     'designer': 'design',
 }
 
+# Маппинг condition (из вкладки "Основное") → ЦИАН-значения отделки
+# Используется как fallback если finishing не заполнен вручную
+CONDITION_TO_FINISHING_CIAN = {
+    'new': 'design',        # Дизайнерский ремонт
+    'euro': 'euro',         # Евроремонт
+    'good': 'cosmetic',     # Косметический ремонт
+    'cosmetic': 'roughFinish',  # Предчистовая
+    'rough': 'no',          # Без отделки
+    'shellcore': 'rough',   # Черновая
+}
+
 PROPERTY_RIGHTS_AVITO = {
     'ownership': 'Собственность',
     'lease': 'Аренда',
@@ -635,9 +646,14 @@ def _build_cian(listings, company):
         if l.get('electricity_kw'):
             out.append(f'<ElectricPower>{l["electricity_kw"]}</ElectricPower>')
 
-        # Отделка
+        # Отделка: приоритет finishing, fallback — condition
+        _decoration = None
         if l.get('finishing') and l['finishing'] in FINISHING_CIAN:
-            out.append(f'<Decoration>{FINISHING_CIAN[l["finishing"]]}</Decoration>')
+            _decoration = FINISHING_CIAN[l['finishing']]
+        elif l.get('condition') and l['condition'] in CONDITION_TO_FINISHING_CIAN:
+            _decoration = CONDITION_TO_FINISHING_CIAN[l['condition']]
+        if _decoration:
+            out.append(f'<Decoration>{_decoration}</Decoration>')
 
         # Мебель
         if l.get('has_furniture'):

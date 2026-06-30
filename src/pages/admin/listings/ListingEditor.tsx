@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Listing, City, LandVri, Purpose } from './types';
+import { Listing, City, LandVri, Purpose, CONDITION_TO_FINISHING } from './types';
 import ListingEditorPriceSection from './ListingEditorPriceSection';
 import ListingEditorDetailsSection from './ListingEditorDetailsSection';
 import ListingEditorContentSection from './ListingEditorContentSection';
@@ -112,7 +112,6 @@ export default function ListingEditor({
     if (!bc || !bc.trim()) e.broker_commission = true;
     // Описание — обязательное, минимум 30 символов
     if (!editing.description?.trim() || editing.description.trim().length < 30) e.description = true;
-    if (!editing.finishing) e.finishing = true;
     if (!editing.building_class) e.building_class = true;
     if (!editing.building_year) e.building_year = true;
     if (!editing.property_rights) e.property_rights = true;
@@ -171,10 +170,18 @@ export default function ListingEditor({
   const handleSave = async () => {
     setSubmitAttempted(true);
     if (validate()) {
+      // Автомаппинг: если finishing не заполнен вручную — ставим из condition
+      if (editing.condition && !editing.finishing) {
+        const autoFinishing = CONDITION_TO_FINISHING[editing.condition];
+        if (autoFinishing) setEditing({ ...editing, finishing: autoFinishing });
+      }
       const patch = await ensureCoordinates();
       // Передаём patch явно — React-стейт ещё не успел обновиться,
       // но координаты обязаны попасть в сохраняемый объект.
-      onSave(patch || undefined);
+      const finishingPatch = (editing.condition && !editing.finishing)
+        ? { finishing: CONDITION_TO_FINISHING[editing.condition] || editing.finishing }
+        : {};
+      onSave({ ...finishingPatch, ...(patch || {}) });
       return;
     }
     // Переключаемся на первую вкладку с ошибкой
@@ -186,7 +193,7 @@ export default function ListingEditor({
       if (t === 'location') return !editing.district?.trim();
       if (t === 'details') return !editing.price || !editing.area || editing.floor == null || editing.total_floors == null || !bc?.trim() || (editing.category === 'land' && (!editing.land_status || !editing.land_vri));
       if (t === 'content') return !editing.description?.trim() || editing.description.trim().length < 30;
-      if (t === 'extra') return !editing.finishing || !editing.building_class || !editing.building_year || !editing.property_rights;
+      if (t === 'extra') return !editing.building_class || !editing.building_year || !editing.property_rights;
       return false;
     });
     if (firstErrTab) setTab(firstErrTab);

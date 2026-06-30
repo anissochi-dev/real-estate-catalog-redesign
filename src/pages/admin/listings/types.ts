@@ -124,9 +124,19 @@ export const DEALS: [string, string, string][] = [
   ['rent', 'Аренда', 'bg-blue-100 text-blue-700'],
 ];
 export const CONDITIONS = [
-  ['new', 'Новое'], ['euro', 'Евроремонт'], ['good', 'Хорошее'],
-  ['cosmetic', 'Требуется косметика'], ['rough', 'Без отделки'], ['shellcore', 'Черновая отделка'],
+  ['new', 'Дизайнерский ремонт'], ['euro', 'Евроремонт'], ['good', 'Косметический ремонт'],
+  ['cosmetic', 'Предчистовая'], ['rough', 'Без отделки'], ['shellcore', 'Черновая отделка'],
 ];
+
+// Маппинг condition → finishing (для автозаполнения при выгрузке на доски)
+export const CONDITION_TO_FINISHING: Record<string, string> = {
+  new: 'designer',
+  euro: 'euro',
+  good: 'cosmetic',
+  cosmetic: 'pre_finish',
+  rough: 'none',
+  shellcore: 'rough',
+};
 export const PARKING = [['none', 'Нет'], ['street', 'На улице'], ['building', 'В здании']];
 export const ENTRANCE = [['street', 'С улицы'], ['yard', 'Со двора']];
 

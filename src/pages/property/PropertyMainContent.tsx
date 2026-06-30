@@ -80,7 +80,6 @@ export default function PropertyMainContent({
           {itemExt.condition ? (
             <ParamCard icon="CheckCircle2" label="Состояние" value={CONDITION_LABELS[itemExt.condition] || itemExt.condition} />
           ) : null}
-          {item.finishing ? <ParamCard icon="Paintbrush" label="Отделка" value={FINISHING_LABELS[item.finishing] || item.finishing} /> : null}
           {itemExt.parking && itemExt.parking !== 'none' ? (
             <ParamCard icon="ParkingSquare" label="Парковка" value={PARKING_LABELS[itemExt.parking] || itemExt.parking} />
           ) : null}
