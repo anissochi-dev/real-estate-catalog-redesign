@@ -1194,6 +1194,21 @@ def handle_noi_request(cur, conn, qs: dict) -> dict:
     obj_area = float(listing.get('area') or 0)
     comparables = load_market_comparables(cur, category, district, area=obj_area)
 
+    # Если аналогов для продажи < MIN_ANALOGS — дозапрашиваем с внешних сайтов
+    sale_snap = comparables.get('sale')
+    sale_count = sale_snap['analogs_count'] if sale_snap else 0
+    if sale_count < MIN_ANALOGS and listing.get('deal') == 'sale':
+        print(f'[noi_model] market_listings sale analogs {sale_count} < {MIN_ANALOGS}, дозапрос...')
+        try:
+            ext = fetch_external_analogs(listing, cur, conn, need=MIN_ANALOGS)
+            if ext.get('count', 0) > 0:
+                # Повторяем запрос — новые данные уже сохранены в market_listings
+                comparables = load_market_comparables(cur, category, district, area=obj_area)
+                new_count = (comparables.get('sale') or {}).get('analogs_count', 0)
+                print(f'[noi_model] после дозапроса: sale analogs={new_count}')
+        except Exception as e:
+            print(f'[noi_model] дозапрос сравнения с рынком ошибка: {e}')
+
     # Рыночная ставка аренды из market_listings — уже в ₽/м²/мес, делить не нужно
     market_rent_snap = comparables.get('rent')
     if market_rent_snap and market_rent_snap.get('price_per_m2', 0) > 0:
