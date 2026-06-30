@@ -41,6 +41,7 @@ interface ApiListing {
   property_rights?: string | null;
   has_furniture?: boolean | null;
   has_equipment?: boolean | null;
+  rent_index_pct?: number | null;
   updated_at?: string | null;
   created_at?: string | null;
   last_edited_at?: string | null;
@@ -94,6 +95,7 @@ export function mapApiListing(item: ApiListing): Property {
     propertyRights: item.property_rights ?? undefined,
     hasFurniture: item.has_furniture ?? undefined,
     hasEquipment: item.has_equipment ?? undefined,
+    rentIndexPct: item.rent_index_pct ?? undefined,
     updatedAt: item.updated_at ?? undefined,
     createdAt: item.created_at ?? undefined,
     lastEditedAt: item.last_edited_at ?? undefined,
@@ -162,6 +164,7 @@ export interface ListingDetail extends Property {
   propertyRights?: string;
   hasFurniture?: boolean | null;
   hasEquipment?: boolean | null;
+  rentIndexPct?: number | null;
   landStatus?: string;
   landArea?: number | null;
   landVri?: string;
@@ -229,6 +232,7 @@ export async function fetchListingById(id: number): Promise<ListingDetail | null
         propertyRights: it.property_rights,
         hasFurniture: it.has_furniture ?? null,
         hasEquipment: it.has_equipment ?? null,
+        rentIndexPct: it.rent_index_pct ?? null,
         landStatus: it.land_status,
         landArea: it.land_area ?? null,
         landVri: it.land_vri,

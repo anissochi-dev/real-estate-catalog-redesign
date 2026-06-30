@@ -1,0 +1,1 @@
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS rent_index_pct numeric(5,2);

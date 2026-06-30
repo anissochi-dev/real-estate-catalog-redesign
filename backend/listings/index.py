@@ -759,7 +759,7 @@ def handler(event: dict, context) -> dict:
                 "l.id, l.title, LEFT(l.description, 200) AS description, l.category, l.deal, l.price, l.price_per_m2, l.area, "
                 "l.payback, l.profit, l.floor, l.total_floors, l.address, l.district, l.lat, l.lng, "
                 "l.image, l.image_thumb, l.tags, l.is_hot, l.is_new, l.is_exclusive, l.is_urgent, l.public_code, "
-                "l.tenant_name, l.monthly_rent, l.yearly_rent, l.purpose, l.finishing, "
+                "l.tenant_name, l.monthly_rent, l.yearly_rent, l.rent_index_pct, l.purpose, l.finishing, "
                 "l.ceiling_height, l.electricity_kw, l.utilities, l.road_line, "
                 "l.updated_at, l.created_at, l.last_edited_at, "
                 "l.owner_phone, "

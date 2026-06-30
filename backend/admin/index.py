@@ -2722,7 +2722,7 @@ def _listings(cur, conn, method, rid, event, user):
             "l.slug, l.public_code, l.lat, l.lng, "
             "l.created_at, l.updated_at, l.last_edited_at, l.last_edited_by, "
             "l.use_watermark, l.video_url, l.video_type, "
-            "l.cadastral_number, l.egrn_objects"
+            "l.cadastral_number, l.egrn_objects, l.rent_index_pct"
         )
         cur.execute(
             f"SELECT {list_cols}, "
@@ -2795,7 +2795,7 @@ def _listings(cur, conn, method, rid, event, user):
 
         sql = (
             f"INSERT INTO {SCHEMA}.listings "
-            f"(title, description, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, owner_phone_contact_id, owner_phone2_contact_id, cadastral_number, egrn_objects, image_thumb) VALUES ("
+            f"(title, description, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, owner_phone_contact_id, owner_phone2_contact_id, cadastral_number, egrn_objects, image_thumb, rent_index_pct) VALUES ("
             f"{_str_or_null(body.get('title'), 255)}, {_str_or_null(body.get('description'), 5000)}, "
             f"{_str_or_null(body.get('category'), 50)}, {_str_or_null(body.get('deal'), 20)}, "
             f"{_int_or_null(body.get('price'))}, {_int_or_null(body.get('price_per_m2'))}, "
@@ -2833,7 +2833,7 @@ def _listings(cur, conn, method, rid, event, user):
             f"{owner_pc2_id if owner_pc2_id else 'NULL'}, "
             f"{_str_or_null(body.get('cadastral_number'), 50)}, "
             f"{_jsonb_or_null(body.get('egrn_objects'))}, "
-            f"{_str_or_null(body.get('image_thumb'), 500)}) RETURNING id"
+            f"{_str_or_null(body.get('image_thumb'), 500)}, {_num_or_null(body.get('rent_index_pct'))}) RETURNING id"
         )
         cur.execute(sql)
         new_id = cur.fetchone()['id']
@@ -2944,7 +2944,7 @@ def _listings(cur, conn, method, rid, event, user):
                   'building_year', 'subway_distance'):
             if f in body:
                 fields.append(f"{f} = {_int_or_null(body.get(f))}")
-        for f in ('monthly_rent', 'yearly_rent', 'ceiling_height', 'electricity_kw', 'land_area', 'min_area'):
+        for f in ('monthly_rent', 'yearly_rent', 'ceiling_height', 'electricity_kw', 'land_area', 'min_area', 'rent_index_pct'):
             if f in body:
                 fields.append(f"{f} = {_num_or_null(body.get(f))}")
         for f in ('use_watermark', 'export_yandex', 'export_avito', 'export_cian'):

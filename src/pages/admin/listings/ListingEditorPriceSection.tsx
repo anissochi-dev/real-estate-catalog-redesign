@@ -221,7 +221,44 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
               value={editing.tenant_name || ''}
               onChange={e => setEditing({ ...editing, tenant_name: e.target.value })} />
           </div>
+          <div>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <span className="w-5 h-5 rounded-full bg-rose-100 flex items-center justify-center flex-shrink-0"><Icon name="Percent" size={11} className="text-rose-600" /></span>Индексация аренды, % в год
+            </label>
+            <input type="number" min="0" max="100" step="0.5" className="w-full px-3 py-2 border rounded-lg"
+              placeholder="напр. 5"
+              value={(editing as Record<string,unknown>).rent_index_pct != null ? String((editing as Record<string,unknown>).rent_index_pct) : ''}
+              onChange={e => setEditing({ ...editing, rent_index_pct: e.target.value === '' ? null : +e.target.value } as typeof editing)} />
+          </div>
         </div>
+
+        {/* Прогноз арендного потока */}
+        {editing.monthly_rent && (editing as Record<string,unknown>).rent_index_pct ? (() => {
+          const map = editing.monthly_rent!;
+          const pct = (editing as Record<string,unknown>).rent_index_pct as number;
+          const rows = Array.from({ length: 10 }, (_, i) => {
+            const mon = Math.round(map * Math.pow(1 + pct / 100, i + 1));
+            return { year: i + 1, monthly: mon, yearly: mon * 12 };
+          });
+          return (
+            <div className="mt-3 rounded-xl border border-border overflow-hidden">
+              <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 border-b border-border">
+                <Icon name="TrendingUp" size={13} className="text-emerald-600" />
+                <span className="text-xs font-semibold">Прогноз при индексации {pct}% в год</span>
+                <span className="ml-auto text-[11px] text-muted-foreground">Сейчас: {map.toLocaleString('ru')} ₽/мес</span>
+              </div>
+              <div className="divide-y divide-border">
+                {rows.map(r => (
+                  <div key={r.year} className="grid grid-cols-3 px-3 py-1.5 text-xs hover:bg-muted/30 transition-colors">
+                    <span className="text-muted-foreground">Год {r.year}</span>
+                    <span className="font-medium">{r.monthly.toLocaleString('ru')} ₽/мес</span>
+                    <span className="text-muted-foreground text-right">{r.yearly.toLocaleString('ru')} ₽/год</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })() : null}
       </div>
     </>
   );

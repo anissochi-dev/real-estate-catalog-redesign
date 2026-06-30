@@ -40,6 +40,7 @@ export interface Property {
   propertyRights?: string;
   hasFurniture?: boolean;
   hasEquipment?: boolean;
+  rentIndexPct?: number | null;
   updatedAt?: string;
   createdAt?: string;
   lastEditedAt?: string;

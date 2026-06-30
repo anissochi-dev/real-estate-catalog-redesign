@@ -47,7 +47,7 @@ function ParamCard({ icon, label, value }: { icon: string; label: string; value:
 export default function PropertyMainContent({
   item, dealLabel, typeLabel, sent, sending, form, setForm, onSubmit, captcha, setCaptcha, captchaKey,
 }: Props) {
-  const itemExt = item as ListingDetail & { condition?: string; parking?: string; entrance?: string; propertyRights?: string; landStatus?: string; landVri?: string };
+  const itemExt = item as ListingDetail & { condition?: string; parking?: string; entrance?: string; propertyRights?: string; landStatus?: string; landVri?: string; rentIndexPct?: number | null };
   const isLand = item.type === 'land';
   const sotki = isLand && item.area ? +(item.area / 100).toFixed(2) : null;
   const addressStr = [item.city || 'Краснодар', item.district, item.address].filter(Boolean).join(', ');
@@ -94,6 +94,7 @@ export default function PropertyMainContent({
           price={item.price}
           area={item.area}
           deal={item.deal}
+          rentIndexPct={itemExt.rentIndexPct}
         />
       </Suspense>
 

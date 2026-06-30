@@ -15,6 +15,7 @@ interface Props {
   price: number;
   area: number;
   deal?: string;
+  rentIndexPct?: number | null;
 }
 
 const buildInitialParams = (api: NoiApiResponse): UserParams => ({
@@ -22,16 +23,16 @@ const buildInitialParams = (api: NoiApiResponse): UserParams => ({
   vacancy_pct: api.benchmarks.vacancy_pct,
   opex_per_m2: api.benchmarks.opex_per_m2,
   property_tax_pct: api.benchmarks.property_tax_pct,
-  avg_indexation_pct: api.benchmarks.avg_indexation_pct,
+  avg_indexation_pct: api.benchmarks.avg_indexation_pct, // переопределяется ниже если задано брокером
   cb_rate_pct: 21,
   ltv_pct: 0,
-  loan_rate_pct: 22, // актуальная ставка для коммерческой ипотеки
+  loan_rate_pct: 22,
   loan_years: 10,
   infra_rent_uplift_pct: 0,
   infra_year: 0,
 });
 
-export default function InvestmentModel({ listingId, price, area, deal }: Props) {
+export default function InvestmentModel({ listingId, price, area, deal, rentIndexPct }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -51,8 +52,12 @@ export default function InvestmentModel({ listingId, price, area, deal }: Props)
 
   const [params, setParams] = useState<UserParams | null>(null);
   useEffect(() => {
-    if (data && !params) setParams(buildInitialParams(data));
-  }, [data, params]);
+    if (data && !params) {
+      const initial = buildInitialParams(data);
+      if (rentIndexPct != null) initial.avg_indexation_pct = rentIndexPct;
+      setParams(initial);
+    }
+  }, [data, params, rentIndexPct]);
 
   const setParam = <K extends keyof UserParams>(key: K, value: UserParams[K]) => {
     setParams(p => (p ? { ...p, [key]: value } : p));
