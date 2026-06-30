@@ -36,6 +36,10 @@ export interface Property {
   utilities?: string;
   roadLine?: string;
   landArea?: number | null;
+  rooms?: number | null;
+  propertyRights?: string;
+  hasFurniture?: boolean;
+  hasEquipment?: boolean;
   updatedAt?: string;
   createdAt?: string;
   lastEditedAt?: string;

@@ -127,6 +127,30 @@ export default function ListingsTableMobileCard({
               {it.area} м²
             </span>
           ) : null}
+          {(it as Record<string,unknown>).rooms ? (
+            <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+              <Icon name="LayoutGrid" size={10} className="opacity-60" />
+              {String((it as Record<string,unknown>).rooms)} комн.
+            </span>
+          ) : null}
+          {(it as Record<string,unknown>).property_rights ? (
+            <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+              <Icon name="ShieldCheck" size={10} className="text-emerald-500 opacity-80" />
+              {({'ownership':'Собств.','lease':'Аренда','sublease':'Субаренда'} as Record<string,string>)[(it as Record<string,unknown>).property_rights as string] || String((it as Record<string,unknown>).property_rights)}
+            </span>
+          ) : null}
+          {(it as Record<string,unknown>).has_furniture && (
+            <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+              <Icon name="Sofa" size={10} className="text-orange-400 opacity-80" />
+              Мебель
+            </span>
+          )}
+          {(it as Record<string,unknown>).has_equipment && (
+            <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+              <Icon name="Settings2" size={10} className="text-slate-500 opacity-80" />
+              Оборуд.
+            </span>
+          )}
           <ListingsTableExportBadges it={it} />
         </div>
 

@@ -37,6 +37,10 @@ interface ApiListing {
   utilities?: string | null;
   road_line?: string | null;
   land_area?: number | null;
+  rooms?: number | null;
+  property_rights?: string | null;
+  has_furniture?: boolean | null;
+  has_equipment?: boolean | null;
   updated_at?: string | null;
   created_at?: string | null;
   last_edited_at?: string | null;
@@ -86,6 +90,10 @@ export function mapApiListing(item: ApiListing): Property {
     utilities: item.utilities ?? undefined,
     roadLine: item.road_line ?? undefined,
     landArea: item.land_area ?? undefined,
+    rooms: item.rooms ?? undefined,
+    propertyRights: item.property_rights ?? undefined,
+    hasFurniture: item.has_furniture ?? undefined,
+    hasEquipment: item.has_equipment ?? undefined,
     updatedAt: item.updated_at ?? undefined,
     createdAt: item.created_at ?? undefined,
     lastEditedAt: item.last_edited_at ?? undefined,
@@ -152,6 +160,8 @@ export interface ListingDetail extends Property {
   parking?: string;
   entrance?: string;
   propertyRights?: string;
+  hasFurniture?: boolean | null;
+  hasEquipment?: boolean | null;
   landStatus?: string;
   landArea?: number | null;
   landVri?: string;
@@ -217,6 +227,8 @@ export async function fetchListingById(id: number): Promise<ListingDetail | null
         parking: it.parking,
         entrance: it.entrance,
         propertyRights: it.property_rights,
+        hasFurniture: it.has_furniture ?? null,
+        hasEquipment: it.has_equipment ?? null,
         landStatus: it.land_status,
         landArea: it.land_area ?? null,
         landVri: it.land_vri,

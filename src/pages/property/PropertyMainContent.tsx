@@ -8,7 +8,7 @@ import LocationScoreWidget from '@/components/property/LocationScoreWidget';
 import SimilarListings from '@/components/SimilarListings';
 import {
   CONDITION_LABELS, FINISHING_LABELS, PARKING_LABELS,
-  ENTRANCE_LABELS, UTILITY_ICONS, ROAD_LINE_LABELS,
+  ENTRANCE_LABELS, UTILITY_ICONS, ROAD_LINE_LABELS, PROPERTY_RIGHTS_LABELS,
 } from './propertyLabels';
 
 const InvestmentModel = lazy(() => import('@/components/property/InvestmentModel'));
@@ -41,7 +41,7 @@ function ParamCard({ icon, label, value }: { icon: string; label: string; value:
 export default function PropertyMainContent({
   item, dealLabel, typeLabel, sent, sending, form, setForm, onSubmit,
 }: Props) {
-  const itemExt = item as ListingDetail & { condition?: string; parking?: string; entrance?: string };
+  const itemExt = item as ListingDetail & { condition?: string; parking?: string; entrance?: string; rooms?: number | null; propertyRights?: string; hasFurniture?: boolean | null; hasEquipment?: boolean | null };
   const addressStr = [item.city || 'Краснодар', item.district, item.address].filter(Boolean).join(', ');
 
   return (
@@ -92,6 +92,10 @@ export default function PropertyMainContent({
           {item.yearlyRent ? <ParamCard icon="Coins" label="Арендный поток/год" value={`${item.yearlyRent.toLocaleString('ru')} ₽`} /> : null}
           {item.profit && !item.monthlyRent ? <ParamCard icon="LineChart" label="Прибыль/мес" value={`${(item.profit / 1000).toFixed(0)} тыс ₽`} /> : null}
           {item.tenantName ? <ParamCard icon="Users" label="Арендатор" value={item.tenantName} /> : null}
+          {itemExt.rooms ? <ParamCard icon="LayoutGrid" label="Комнат" value={String(itemExt.rooms)} /> : null}
+          {itemExt.propertyRights ? <ParamCard icon="ShieldCheck" label="Права на объект" value={PROPERTY_RIGHTS_LABELS[itemExt.propertyRights] || itemExt.propertyRights} /> : null}
+          {itemExt.hasFurniture ? <ParamCard icon="Sofa" label="Мебель" value="Есть" /> : null}
+          {itemExt.hasEquipment ? <ParamCard icon="Settings2" label="Оборудование" value="Есть" /> : null}
         </div>
 
         {/* Коммуникации */}
