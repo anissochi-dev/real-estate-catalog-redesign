@@ -1,6 +1,8 @@
 import Icon from '@/components/ui/icon';
 import { Listing, DEALS, fmtDate, perM2, splitImages } from './types';
 import { fmtListingId } from '@/lib/formatPrice';
+import { listingSlug } from '@/lib/slug';
+import { useExitToPath } from '../AdminLayout';
 import ListingsTableExportBadges from './ListingsTableExportBadges';
 
 interface Props {
@@ -20,6 +22,7 @@ export default function ListingsTableMobileCard({
   it, isSelected, canSelect, canEdit, showPhone, siteUrl,
   onToggleSelect, onEdit, onHistory, onInternalCard,
 }: Props) {
+  const exitToPath = useExitToPath();
   const dealMeta = (d: string) => DEALS.find(x => x[0] === d);
   const dm = dealMeta(it.deal);
   const m2 = perM2(it.price, it.area);
@@ -30,19 +33,27 @@ export default function ListingsTableMobileCard({
 
   return (
     <>
-      {/* ── Мобильное фото — во всю ширину ── */}
+      {/* ── Мобильное фото — во всю ширину → переход на сайт ── */}
       <div
-        className="sm:hidden relative cursor-pointer overflow-hidden w-full"
-        onClick={() => onInternalCard?.(it)}
+        className="sm:hidden relative cursor-pointer overflow-hidden w-full group"
+        title="Открыть на сайте"
+        onClick={e => {
+          e.stopPropagation();
+          exitToPath?.(`/object/${listingSlug(it.title, it.id)}`);
+        }}
         style={{ aspectRatio: '16/9' }}
       >
         {mainImg ? (
-          <img src={mainImg} alt={it.title} className="absolute inset-0 w-full h-full object-cover" />
+          <img src={mainImg} alt={it.title} className="absolute inset-0 w-full h-full object-cover transition-opacity duration-200 group-hover:opacity-90" />
         ) : (
           <div className="absolute inset-0 bg-muted flex items-center justify-center">
             <Icon name="Image" size={36} className="text-muted-foreground/40" />
           </div>
         )}
+        {/* Иконка "открыть на сайте" */}
+        <div className="absolute bottom-2 right-2 bg-black/50 backdrop-blur-sm text-white rounded-lg px-2 py-1 flex items-center gap-1 text-[10px] font-semibold opacity-80">
+          <Icon name="ExternalLink" size={10} />На сайте
+        </div>
         {/* Чекбокс поверх фото */}
         {canSelect && (
           <div
