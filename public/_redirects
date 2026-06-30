@@ -6,9 +6,6 @@
 # React подхватывает HTML и оживляет его (hydration) — сайт полностью интерактивен.
 # Поисковые боты индексируют текст без выполнения JavaScript.
 
-# Главная
-/    https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff/?path=/    200
-
 # Каталог и категории
 /catalog              https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff/?path=/catalog               200
 /catalog/office       https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff/?path=/catalog/office        200
@@ -46,6 +43,9 @@
 
 # Файлы верификации — прямой прокси на CDN (добавлять по одной строке на каждый файл)
 /mailru-domain6dS7udsVWBpJx77O  https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/bucket/verify/mailru-domain6dS7udsVWBpJx77O  200
+
+# Главная — prerender (после всех динамических правил)
+/    https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff/?path=/    200
 
 # Всё остальное — SPA
 /*          /index.html    200
