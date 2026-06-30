@@ -11,6 +11,7 @@ import urllib.request
 import urllib.error
 from datetime import datetime, timedelta
 from ai_client import chat_simple, load_keys
+from analogs_fetcher import fetch_external_analogs
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
 CACHE_TTL_DAYS = 90
@@ -246,7 +247,7 @@ def _gpt_comment_only(listing: dict, bench: dict, api_key: str, folder_id: str) 
         return ''
 
 
-def _get_benchmarks(listing: dict, api_key: str, folder_id: str, cur=None) -> dict:
+def _get_benchmarks(listing: dict, api_key: str, folder_id: str, cur=None, conn=None) -> dict:
     """
     Возвращает бенчмарки для объекта. Все числа — из детерминированного кода.
     Приоритет источников (от высшего к низшему):
@@ -268,6 +269,7 @@ def _get_benchmarks(listing: dict, api_key: str, folder_id: str, cur=None) -> di
     bench = _fallback_benchmarks(listing)
 
     # ── Слой 0: реальные аналоги из БД (приоритет над всем) ────────────────────
+    _conn_ref = conn  # передаём в fetch_external_analogs для сохранения в market_listings
     analogs_meta = {}
     if cur:
         analogs_result = find_real_analogs(cur, listing)
@@ -277,18 +279,33 @@ def _get_benchmarks(listing: dict, api_key: str, folder_id: str, cur=None) -> di
             'analogs_sources': analogs_result.get('sources', []),
             'area_range': analogs_result.get('area_range'),
         }
+        if analogs_result['count'] < MIN_ANALOGS:
+            print(f'[noi_model] analogs в БД: {analogs_result["count"]} < {MIN_ANALOGS}, дозапрос с внешних сайтов...')
+            try:
+                ext_result = fetch_external_analogs(listing, cur, _conn_ref, need=MIN_ANALOGS)
+                if ext_result['count'] > 0:
+                    # Повторяем поиск в БД — новые данные уже сохранены в market_listings
+                    analogs_result2 = find_real_analogs(cur, listing)
+                    if analogs_result2['count'] > analogs_result['count']:
+                        analogs_result = analogs_result2
+                    analogs_meta['external_scraped'] = ext_result['count']
+                    analogs_meta['external_source'] = ext_result.get('source', 'none')
+                    print(f'[noi_model] после дозапроса: {analogs_result["count"]} аналогов')
+            except Exception as e:
+                print(f'[noi_model] внешний дозапрос ошибка: {e}')
+
         if analogs_result['count'] >= MIN_ANALOGS:
             # Ставка аренды из реальных аналогов (только для аренды)
             if analogs_result.get('rent_rate_median') and (listing.get('deal') or '') == 'rent':
                 bench['rent_rate'] = analogs_result['rent_rate_median']
-                bench['rent_source'] = f"реальные аналоги БД ({analogs_result['count']} шт, уровень: {analogs_result.get('source_level')})"
+                bench['rent_source'] = f"реальные аналоги ({analogs_result['count']} шт, уровень: {analogs_result.get('source_level')})"
             # Цена за м² из аналогов (для продажи — используем для расчёта cap rate)
             if analogs_result.get('price_per_m2_median') and (listing.get('deal') or '') == 'sale':
                 bench['market_price_per_m2'] = analogs_result['price_per_m2_median']
-                bench['price_source'] = f"реальные аналоги БД ({analogs_result['count']} шт, уровень: {analogs_result.get('source_level')})"
+                bench['price_source'] = f"реальные аналоги ({analogs_result['count']} шт, уровень: {analogs_result.get('source_level')})"
             print(f'[noi_model] analogs: count={analogs_result["count"]}, level={analogs_result.get("source_level")}, rent_median={analogs_result.get("rent_rate_median")}')
         else:
-            print(f'[noi_model] analogs недостаточно ({analogs_result["count"]} < {MIN_ANALOGS}), нужен Этап 2 (внешние сайты)')
+            print(f'[noi_model] итого аналогов: {analogs_result["count"]} — используем детерминированные бенчмарки')
 
     # ── Слой 1: price_history — cap_rate и vacancy по категории+район ──────────
     if cur:
@@ -1139,7 +1156,7 @@ def handle_noi_request(cur, conn, qs: dict) -> dict:
     bench = None if refresh else load_cached(cur, listing_id)
     if bench is None:
         api_key, folder_id = _load_keys(cur)
-        bench = _get_benchmarks(listing, api_key, folder_id, cur=cur)
+        bench = _get_benchmarks(listing, api_key, folder_id, cur=cur, conn=conn)
         try:
             save_cache(cur, conn, listing_id, bench)
         except Exception:
