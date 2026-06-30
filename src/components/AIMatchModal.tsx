@@ -24,7 +24,6 @@ const QUICK_FILTERS = {
   deal: [
     { label: 'Купить', value: 'продажа' },
     { label: 'Арендовать', value: 'аренда' },
-    { label: 'Готовый бизнес', value: 'готовый бизнес' },
   ],
   category: [
     { label: '🏢 Офис', value: 'офис' },
