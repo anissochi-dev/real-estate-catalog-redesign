@@ -289,7 +289,39 @@ export function TabOverview({ listing, siteUrl }: { listing: Listing; siteUrl?: 
         </div>
         <OverviewBlock title="Характеристики" icon="Settings2" rows={props} />
         {building.length > 0 && <OverviewBlock title="Здание / земля" icon="Building2" rows={building} />}
-        {income.length > 0 && <OverviewBlock title="Доходность" icon="TrendingUp" rows={income} />}
+        {income.length > 0 && (
+          <div className="space-y-3">
+            <OverviewBlock title="Доходность" icon="TrendingUp" rows={income} />
+            {listing.monthly_rent && listing.rent_index_pct ? (() => {
+              const map = listing.monthly_rent!;
+              const pct = listing.rent_index_pct!;
+              const step = Math.round(map * pct / 100);
+              const rows = Array.from({ length: 10 }, (_, i) => ({
+                year: i + 1,
+                monthly: map + step * (i + 1),
+                yearly: (map + step * (i + 1)) * 12,
+              }));
+              return (
+                <div className="bg-white rounded-xl border border-border overflow-hidden">
+                  <div className="px-4 py-2 bg-muted/30 border-b border-border flex items-center gap-2">
+                    <Icon name="TrendingUp" size={14} className="text-emerald-600" />
+                    <span className="text-sm font-semibold">Прогноз индексации {pct}% / год</span>
+                    <span className="ml-auto text-[11px] text-muted-foreground">+{step.toLocaleString('ru')} ₽/мес ежегодно</span>
+                  </div>
+                  <div className="divide-y divide-border">
+                    {rows.map(r => (
+                      <div key={r.year} className="grid grid-cols-3 px-4 py-1.5 text-xs hover:bg-muted/20">
+                        <span className="text-muted-foreground">Год {r.year}</span>
+                        <span className="font-medium">{r.monthly.toLocaleString('ru')} ₽/мес</span>
+                        <span className="text-muted-foreground text-right">{r.yearly.toLocaleString('ru')} ₽/год</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })() : null}
+          </div>
+        )}
         <OverviewBlock title="Сотрудничество" icon="Handshake" rows={legal} />
       </div>
 

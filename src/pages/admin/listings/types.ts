@@ -95,6 +95,7 @@ export interface Listing {
   is_apartments?: boolean;
   cadastral_number?: string | null;
   egrn_objects?: EgrnStoredObject[] | null;
+  rent_index_pct?: number | null;
   // Сводная статистика — приходит вместе со списком объектов
   stats_views?: number | null;
   stats_calls?: number | null;

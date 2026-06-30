@@ -236,8 +236,9 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
         {editing.monthly_rent && (editing as Record<string,unknown>).rent_index_pct ? (() => {
           const map = editing.monthly_rent!;
           const pct = (editing as Record<string,unknown>).rent_index_pct as number;
+          const step = Math.round(map * pct / 100);
           const rows = Array.from({ length: 10 }, (_, i) => {
-            const mon = Math.round(map * Math.pow(1 + pct / 100, i + 1));
+            const mon = map + step * (i + 1);
             return { year: i + 1, monthly: mon, yearly: mon * 12 };
           });
           return (
