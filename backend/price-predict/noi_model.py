@@ -13,7 +13,9 @@ from datetime import datetime, timedelta
 from ai_client import chat_simple, load_keys
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
-CACHE_TTL_DAYS = 7
+CACHE_TTL_DAYS = 90
+MIN_ANALOGS = 35
+AREA_DELTA_PCT = 0.20  # ±20% по площади
 
 DEAL_RU = {'sale': 'продажа', 'rent': 'аренда', 'business': 'готовый бизнес'}
 CONDITION_RU = {
@@ -248,6 +250,7 @@ def _get_benchmarks(listing: dict, api_key: str, folder_id: str, cur=None) -> di
     """
     Возвращает бенчмарки для объекта. Все числа — из детерминированного кода.
     Приоритет источников (от высшего к низшему):
+      0. Реальные аналоги из БД (listings + market_listings, ≥35 шт, иерархия адрес→район→город)
       1. Реальные данные арендатора (monthly_rent / yearly_rent) — для ГАБ
       2. price_history — cap_rate и vacancy по категории и району (актуальная аналитика)
       3. price_history_biweekly — реальная индексация (CAGR за 5+ лет)
@@ -263,6 +266,29 @@ def _get_benchmarks(listing: dict, api_key: str, folder_id: str, cur=None) -> di
 
     # База: DEFAULT_BENCHMARKS по типу объекта
     bench = _fallback_benchmarks(listing)
+
+    # ── Слой 0: реальные аналоги из БД (приоритет над всем) ────────────────────
+    analogs_meta = {}
+    if cur:
+        analogs_result = find_real_analogs(cur, listing)
+        analogs_meta = {
+            'analogs_count': analogs_result['count'],
+            'analogs_source_level': analogs_result.get('source_level'),
+            'analogs_sources': analogs_result.get('sources', []),
+            'area_range': analogs_result.get('area_range'),
+        }
+        if analogs_result['count'] >= MIN_ANALOGS:
+            # Ставка аренды из реальных аналогов (только для аренды)
+            if analogs_result.get('rent_rate_median') and (listing.get('deal') or '') == 'rent':
+                bench['rent_rate'] = analogs_result['rent_rate_median']
+                bench['rent_source'] = f"реальные аналоги БД ({analogs_result['count']} шт, уровень: {analogs_result.get('source_level')})"
+            # Цена за м² из аналогов (для продажи — используем для расчёта cap rate)
+            if analogs_result.get('price_per_m2_median') and (listing.get('deal') or '') == 'sale':
+                bench['market_price_per_m2'] = analogs_result['price_per_m2_median']
+                bench['price_source'] = f"реальные аналоги БД ({analogs_result['count']} шт, уровень: {analogs_result.get('source_level')})"
+            print(f'[noi_model] analogs: count={analogs_result["count"]}, level={analogs_result.get("source_level")}, rent_median={analogs_result.get("rent_rate_median")}')
+        else:
+            print(f'[noi_model] analogs недостаточно ({analogs_result["count"]} < {MIN_ANALOGS}), нужен Этап 2 (внешние сайты)')
 
     # ── Слой 1: price_history — cap_rate и vacancy по категории+район ──────────
     if cur:
@@ -327,7 +353,14 @@ def _get_benchmarks(listing: dict, api_key: str, folder_id: str, cur=None) -> di
     # GPT добавляет только текстовый комментарий
     bench['comment'] = _gpt_comment_only(listing, bench, api_key, folder_id) \
                        or f"Бенчмарки по рыночным данным Краснодара для сегмента {type_key}, район {district or 'не указан'}."
-    bench['source'] = 'deterministic+db'
+
+    # Определяем итоговый источник данных
+    has_real_analogs = analogs_meta.get('analogs_count', 0) >= MIN_ANALOGS
+    bench['source'] = 'real_analogs+db' if has_real_analogs else 'deterministic+db'
+
+    # Прикрепляем мета-данные об аналогах к бенчмаркам
+    bench['analogs_meta'] = analogs_meta
+
     return bench
 
 
@@ -554,14 +587,234 @@ def load_cached(cur, listing_id: int):
 
 def save_cache(cur, conn, listing_id: int, benchmarks: dict):
     expires = datetime.now() + timedelta(days=CACHE_TTL_DAYS)
+
+    # Вычисляем confidence_score: 1.0 если ≥35 реальных аналогов, иначе пропорционально
+    analogs_meta = benchmarks.get('analogs_meta') or {}
+    analogs_count = analogs_meta.get('analogs_count', 0)
+    confidence = round(min(1.0, analogs_count / MIN_ANALOGS), 3) if analogs_count > 0 else 0.0
+    analogs_source_level = analogs_meta.get('analogs_source_level') or 'none'
+
     cur.execute(
-        f"INSERT INTO {SCHEMA}.noi_benchmarks_cache (listing_id, benchmarks, expires_at) "
-        f"VALUES (%s, %s, %s) "
+        f"INSERT INTO {SCHEMA}.noi_benchmarks_cache "
+        f"(listing_id, benchmarks, expires_at, analogs_count, analogs_source_level, confidence_score) "
+        f"VALUES (%s, %s, %s, %s, %s, %s) "
         f"ON CONFLICT (listing_id) DO UPDATE "
-        f"SET benchmarks = EXCLUDED.benchmarks, expires_at = EXCLUDED.expires_at, created_at = NOW()",
-        (listing_id, json.dumps(benchmarks, ensure_ascii=False), expires),
+        f"SET benchmarks = EXCLUDED.benchmarks, expires_at = EXCLUDED.expires_at, "
+        f"analogs_count = EXCLUDED.analogs_count, analogs_source_level = EXCLUDED.analogs_source_level, "
+        f"confidence_score = EXCLUDED.confidence_score, created_at = NOW()",
+        (listing_id, json.dumps(benchmarks, ensure_ascii=False), expires,
+         analogs_count, analogs_source_level, confidence),
     )
     conn.commit()
+
+
+def find_real_analogs(cur, listing: dict) -> dict:
+    """
+    Ищет аналоги объекта с иерархией: адрес → район → округ.
+    Источники: listings + market_listings.
+    Параметры отбора: категория, тип сделки, площадь ±20%.
+    Дополнительные фильтры: этажность, состояние, арендная ставка (если есть), коммуникации.
+    Возвращает dict с полями: analogs, count, source_level, rent_rate_median, price_per_m2_median.
+    """
+    import statistics as _stat
+
+    category = (listing.get('category') or listing.get('type') or '').lower()
+    deal = (listing.get('deal') or '').lower()
+    area = float(listing.get('area') or 0)
+    address = (listing.get('address') or '').strip()
+    district = (listing.get('district') or '').strip()
+    floor = listing.get('floor')
+    condition = (listing.get('condition') or '').lower()
+    has_rent = bool(listing.get('monthly_rent') or listing.get('yearly_rent'))
+
+    if not category or area <= 0:
+        return {'analogs': [], 'count': 0, 'source_level': None}
+
+    area_lo = round(area * (1 - AREA_DELTA_PCT), 1)
+    area_hi = round(area * (1 + AREA_DELTA_PCT), 1)
+
+    # Маппинг deal для market_listings
+    deal_ml = 'rent' if deal == 'rent' else 'sale'
+
+    # Маппинг категорий listings → market_listings
+    CAT_ALIAS_ML = {
+        'office': ['office'],
+        'retail': ['retail', 'free_purpose'],
+        'warehouse': ['warehouse'],
+        'restaurant': ['catering', 'other'],
+        'hotel': ['hotel', 'standalone'],
+        'gab': ['free_purpose', 'retail', 'office'],
+        'business': ['free_purpose', 'retail', 'office'],
+        'production': ['industrial', 'warehouse'],
+        'building': ['standalone', 'other'],
+        'free_purpose': ['free_purpose', 'retail'],
+        'car_service': ['other'],
+        'land': ['land'],
+    }
+    cats_ml = CAT_ALIAS_ML.get(category, [category])
+    cats_ml_sql = ','.join(f"'{c}'" for c in cats_ml)
+
+    # Дополнительные фильтры
+    condition_clause_l = f"AND condition = '{condition.replace(chr(39), chr(39)*2)}'" if condition else ''
+    condition_clause_ml = f"AND condition ILIKE '%{condition.replace(chr(39), chr(39)*2)}%'" if condition else ''
+    rent_clause = 'AND monthly_rent > 0' if has_rent else ''
+
+    # Ключевое слово района (берём аббревиатуру в скобках: "Черёмушки (ЧМР)" → "ЧМР")
+    dist_kw = district.split('(')[-1].replace(')', '').strip() if '(' in district else district.split()[0] if district else ''
+
+    # Короткое слово адреса (улица без номера дома)
+    addr_kw = ''
+    if address:
+        parts = address.replace('ул.', '').replace('пр.', '').replace('пр-т', '').split(',')
+        addr_kw = parts[0].strip()[:30] if parts else ''
+
+    def _fetch_listings(where_extra: str) -> list:
+        deal_safe = deal.replace("'", "''")
+        cat_safe = category.replace("'", "''")
+        try:
+            cur.execute(f"""
+                SELECT id, price, price_per_m2, area, address, district,
+                       monthly_rent, yearly_rent, floor, total_floors, condition,
+                       utilities, deal, category, 'own' AS src
+                FROM {SCHEMA}.listings
+                WHERE category = '{cat_safe}'
+                  AND deal = '{deal_safe}'
+                  AND area BETWEEN {area_lo} AND {area_hi}
+                  AND status IN ('active', 'archived')
+                  AND price > 0 AND area > 0
+                  {rent_clause}
+                  {condition_clause_l}
+                  {where_extra}
+                ORDER BY ABS(area - {area}) ASC
+                LIMIT 100
+            """)
+            return cur.fetchall() or []
+        except Exception as e:
+            print(f'[find_real_analogs] listings error: {e}')
+            return []
+
+    def _fetch_market(where_extra: str) -> list:
+        try:
+            cur.execute(f"""
+                SELECT id, price, price_per_m2, area, address, district,
+                       NULL AS monthly_rent, NULL AS yearly_rent,
+                       floor, total_floors, condition,
+                       NULL AS utilities, deal_type AS deal, category,
+                       source AS src
+                FROM {SCHEMA}.market_listings
+                WHERE deal_type = '{deal_ml}'
+                  AND category IN ({cats_ml_sql})
+                  AND area BETWEEN {area_lo} AND {area_hi}
+                  AND price_per_m2 > 0
+                  {condition_clause_ml}
+                  {where_extra}
+                ORDER BY scraped_at DESC
+                LIMIT 100
+            """)
+            return cur.fetchall() or []
+        except Exception as e:
+            print(f'[find_real_analogs] market_listings error: {e}')
+            return []
+
+    def _dict(r):
+        if hasattr(r, '_asdict'):
+            return r._asdict()
+        if hasattr(r, 'keys'):
+            return dict(r)
+        return r
+
+    analogs = []
+    source_level = None
+
+    # Уровень 1: по адресу (улице)
+    if addr_kw and len(analogs) < MIN_ANALOGS:
+        addr_safe = addr_kw.replace("'", "''")
+        rows = _fetch_listings(f"AND address ILIKE '%{addr_safe}%'")
+        rows += _fetch_market(f"AND address ILIKE '%{addr_safe}%'")
+        seen = set()
+        for r in rows:
+            d = _dict(r)
+            key = f"{d.get('src','?')}_{d.get('id','?')}"
+            if key not in seen:
+                seen.add(key)
+                analogs.append(d)
+        if len(analogs) >= MIN_ANALOGS:
+            source_level = 'address'
+            print(f'[find_real_analogs] level=address, found={len(analogs)}')
+
+    # Уровень 2: по району
+    if dist_kw and len(analogs) < MIN_ANALOGS:
+        dist_safe = dist_kw.replace("'", "''")
+        rows = _fetch_listings(f"AND district ILIKE '%{dist_safe}%'")
+        rows += _fetch_market(f"AND district ILIKE '%{dist_safe}%'")
+        seen_ids = {f"{_dict(a).get('src','?')}_{_dict(a).get('id','?')}" for a in analogs}
+        for r in rows:
+            d = _dict(r)
+            key = f"{d.get('src','?')}_{d.get('id','?')}"
+            if key not in seen_ids:
+                seen_ids.add(key)
+                analogs.append(d)
+        if len(analogs) >= MIN_ANALOGS:
+            source_level = 'district'
+            print(f'[find_real_analogs] level=district, found={len(analogs)}')
+
+    # Уровень 3: без фильтра по локации (весь город)
+    if len(analogs) < MIN_ANALOGS:
+        rows = _fetch_listings('')
+        rows += _fetch_market('')
+        seen_ids = {f"{_dict(a).get('src','?')}_{_dict(a).get('id','?')}" for a in analogs}
+        for r in rows:
+            d = _dict(r)
+            key = f"{d.get('src','?')}_{d.get('id','?')}"
+            if key not in seen_ids:
+                seen_ids.add(key)
+                analogs.append(d)
+        if analogs:
+            source_level = source_level or 'city'
+            print(f'[find_real_analogs] level=city, found={len(analogs)}')
+
+    # Считаем медианы по пулу аналогов
+    import statistics as _stat
+    rent_rates = []
+    prices_per_m2 = []
+    for a in analogs:
+        d = _dict(a) if not isinstance(a, dict) else a
+        # Арендная ставка ₽/м²/мес
+        mr = float(d.get('monthly_rent') or 0)
+        yr = float(d.get('yearly_rent') or 0)
+        ar = float(d.get('area') or 0)
+        if mr > 0 and ar > 0:
+            rent_rates.append(mr / ar)
+        elif yr > 0 and ar > 0:
+            rent_rates.append(yr / 12 / ar)
+        # Цена за м²
+        ppm2 = float(d.get('price_per_m2') or 0)
+        if ppm2 > 0:
+            prices_per_m2.append(ppm2)
+
+    # Отсекаем выбросы (10–90 перцентиль)
+    def _trim(lst):
+        if len(lst) < 2:
+            return lst
+        srt = sorted(lst)
+        lo_i = max(0, int(len(srt) * 0.10))
+        hi_i = min(len(srt) - 1, int(len(srt) * 0.90))
+        return srt[lo_i:hi_i + 1]
+
+    rent_rates = _trim(rent_rates)
+    prices_per_m2 = _trim(prices_per_m2)
+
+    sources = list({(a.get('src') or 'own') for a in analogs})
+
+    return {
+        'analogs': analogs[:50],
+        'count': len(analogs),
+        'source_level': source_level,
+        'rent_rate_median': round(_stat.median(rent_rates), 1) if rent_rates else None,
+        'price_per_m2_median': round(_stat.median(prices_per_m2)) if prices_per_m2 else None,
+        'sources': sources,
+        'area_range': [area_lo, area_hi],
+    }
 
 
 def load_market_comparables(cur, category: str, district: str) -> dict:
