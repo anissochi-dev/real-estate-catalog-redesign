@@ -4448,6 +4448,9 @@ def handler(event, context):
                 # SQL фильтр по категории если определена
                 cat_filter = f" AND category = '{detected_category}'" if detected_category else ''
 
+                # Инициализируем keyword_ids — будет заполнен ниже если поиск не по ID
+                keyword_ids = set()
+
                 # ── Определяем тип сделки из текста ──────────────────────────────
                 DEAL_RENT_KW = ['аренд', 'снять', 'снимаю', 'сниму', 'арендовать', 'арендую']
                 DEAL_SALE_KW = ['купить', 'куплю', 'продаж', 'приобрести', 'покупк']
