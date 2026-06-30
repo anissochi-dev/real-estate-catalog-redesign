@@ -8,7 +8,7 @@ import ScenarioCards from './investmentModel/ScenarioCards';
 const CashFlowChart = lazy(() => import('./investmentModel/CashFlowChart'));
 import { fmtMoneyFull, fmtMoney } from './investmentModel/modelMath';
 import { computeModel } from './investmentModel/modelMath';
-import { NoiApiResponse, PRICE_PREDICT_URL, UserParams } from './investmentModel/types';
+import { NoiApiResponse, PRICE_PREDICT_URL, UserParams, AnalogsMeta } from './investmentModel/types';
 
 interface Props {
   listingId: number;
@@ -31,6 +31,84 @@ const buildInitialParams = (api: NoiApiResponse): UserParams => ({
   infra_rent_uplift_pct: 0,
   infra_year: 0,
 });
+
+const LEVEL_LABEL: Record<string, string> = {
+  address: 'по улице',
+  district: 'по району',
+  city: 'по городу',
+  none: '',
+};
+
+const SOURCE_LABEL: Record<string, string> = {
+  own: 'база', arrpro: 'АРРпро', cian: 'ЦИАН', ayax: 'Аякс',
+  'arrpro+cian': 'АРРпро+ЦИАН',
+};
+
+function AnalogsMetaBlock({ meta }: { meta: AnalogsMeta }) {
+  const count = meta.analogs_count ?? 0;
+  const level = meta.analogs_source_level;
+  const sources = (meta.analogs_sources ?? [])
+    .map(s => SOURCE_LABEL[s] || s)
+    .filter(Boolean)
+    .join(', ');
+  const extScraped = meta.external_scraped;
+  const hasEnough = count >= 35;
+
+  // confidence: 1.0 при ≥35, пропорционально ниже
+  const confidence = Math.min(1, count / 35);
+  const confColor = confidence >= 1 ? 'bg-emerald-500' : confidence >= 0.6 ? 'bg-amber-400' : 'bg-red-400';
+  const confLabel = confidence >= 1 ? 'Высокая' : confidence >= 0.6 ? 'Средняя' : 'Низкая';
+  const confTextColor = confidence >= 1 ? 'text-emerald-700' : confidence >= 0.6 ? 'text-amber-700' : 'text-red-600';
+
+  if (count === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-border bg-muted/30 px-3 py-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px]">
+      <div className="flex items-center gap-1.5">
+        <Icon name="BarChart2" size={12} className="text-muted-foreground shrink-0" />
+        <span className="text-muted-foreground">Аналогов для расчёта:</span>
+        <span className="font-semibold text-foreground">{count}</span>
+        {level && LEVEL_LABEL[level] && (
+          <span className="text-muted-foreground">({LEVEL_LABEL[level]})</span>
+        )}
+      </div>
+
+      {sources && (
+        <div className="flex items-center gap-1">
+          <span className="text-muted-foreground">Источники:</span>
+          <span className="font-medium text-foreground">{sources}</span>
+        </div>
+      )}
+
+      {extScraped != null && extScraped > 0 && (
+        <div className="flex items-center gap-1">
+          <Icon name="RefreshCw" size={10} className="text-sky-500" />
+          <span className="text-sky-600">+{extScraped} с рынка</span>
+        </div>
+      )}
+
+      <div className="flex items-center gap-1.5 ml-auto">
+        <span className="text-muted-foreground">Достоверность:</span>
+        <div className="flex items-center gap-1">
+          <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
+            <div
+              className={`h-full rounded-full ${confColor} transition-all`}
+              style={{ width: `${Math.round(confidence * 100)}%` }}
+            />
+          </div>
+          <span className={`font-semibold ${confTextColor}`}>{confLabel}</span>
+        </div>
+      </div>
+
+      {!hasEnough && (
+        <div className="w-full flex items-center gap-1 text-amber-600">
+          <Icon name="AlertTriangle" size={10} className="shrink-0" />
+          <span>Мало аналогов — бенчмарки частично из справочных данных</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function InvestmentModel({ listingId, price, area, deal, rentIndexPct }: Props) {
   const [expanded, setExpanded] = useState(false);
@@ -175,6 +253,9 @@ export default function InvestmentModel({ listingId, price, area, deal, rentInde
                   </button>
                 </div>
               )}
+
+              {/* Блок аналогов — откуда данные для бенчмарков */}
+              {data.analogs_meta && <AnalogsMetaBlock meta={data.analogs_meta} />}
 
               {/* Предупреждение: объект на продажу без арендатора */}
               {!data.listing.has_tenant && deal === 'sale' && (

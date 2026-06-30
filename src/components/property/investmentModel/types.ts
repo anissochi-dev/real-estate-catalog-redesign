@@ -69,6 +69,15 @@ export interface PriceVsMarket {
   district: string;
 }
 
+export interface AnalogsMeta {
+  analogs_count: number;
+  analogs_source_level: 'address' | 'district' | 'city' | 'none' | null;
+  analogs_sources: string[];
+  area_range?: [number, number] | null;
+  external_scraped?: number | null;
+  external_source?: string | null;
+}
+
 export interface NoiApiResponse {
   listing: {
     id: number;
@@ -97,6 +106,7 @@ export interface NoiApiResponse {
     snapshot_date?: string | null;
   };
   price_vs_market?: PriceVsMarket | null;
+  analogs_meta?: AnalogsMeta | null;
 }
 
 export interface UserParams {

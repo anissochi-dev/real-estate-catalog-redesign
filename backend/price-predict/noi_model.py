@@ -1238,4 +1238,5 @@ def handle_noi_request(cur, conn, qs: dict) -> dict:
             'snapshot_date': comparables.get('snapshot_date'),
         },
         'price_vs_market': price_vs_market,
+        'analogs_meta': bench.get('analogs_meta') or {},
     }
