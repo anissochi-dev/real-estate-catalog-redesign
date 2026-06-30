@@ -343,6 +343,15 @@ export default function PropertyCard({
               <Icon name="Maximize" size={12} className="text-brand-blue/50" />
               {property.area} м²
             </div>
+            {property.landArea ? (
+              <>
+                <span className="text-border text-[10px]">|</span>
+                <div className="flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
+                  <Icon name="Trees" size={12} className="text-brand-blue/50" />
+                  {property.landArea} сот.
+                </div>
+              </>
+            ) : null}
             {property.floor ? (
               <div className="flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
                 <Icon name="Layers" size={12} className="text-brand-blue/50" />

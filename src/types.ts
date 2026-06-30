@@ -35,6 +35,7 @@ export interface Property {
   electricityKw?: number;
   utilities?: string;
   roadLine?: string;
+  landArea?: number | null;
   updatedAt?: string;
   createdAt?: string;
   lastEditedAt?: string;

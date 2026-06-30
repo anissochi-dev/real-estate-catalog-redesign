@@ -70,6 +70,7 @@ export default function PropertyMainContent({
         <div className="font-display font-700 text-lg mb-4">Параметры объекта</div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <ParamCard icon="Maximize" label="Площадь" value={`${item.area} м²`} />
+          {item.landArea ? <ParamCard icon="Trees" label="Площадь участка" value={`${item.landArea} сот.`} /> : null}
           <ParamCard icon="Briefcase" label="Тип сделки" value={dealLabel} />
           <ParamCard icon="Building2" label="Тип объекта" value={typeLabel} />
           {item.floor ? <ParamCard icon="Layers" label="Этаж" value={`${item.floor}${item.totalFloors ? ` из ${item.totalFloors}` : ''}`} /> : null}

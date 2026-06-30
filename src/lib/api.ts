@@ -36,6 +36,7 @@ interface ApiListing {
   electricity_kw?: number | null;
   utilities?: string | null;
   road_line?: string | null;
+  land_area?: number | null;
   updated_at?: string | null;
   created_at?: string | null;
   last_edited_at?: string | null;
@@ -84,6 +85,7 @@ export function mapApiListing(item: ApiListing): Property {
     electricityKw: item.electricity_kw ?? undefined,
     utilities: item.utilities ?? undefined,
     roadLine: item.road_line ?? undefined,
+    landArea: item.land_area ?? undefined,
     updatedAt: item.updated_at ?? undefined,
     createdAt: item.created_at ?? undefined,
     lastEditedAt: item.last_edited_at ?? undefined,
