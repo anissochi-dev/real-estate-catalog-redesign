@@ -44,7 +44,15 @@ const SOURCE_LABEL: Record<string, string> = {
   'arrpro+cian': 'АРРпро+ЦИАН',
 };
 
-function AnalogsMetaBlock({ meta }: { meta: AnalogsMeta }) {
+function AnalogsMetaBlock({
+  meta,
+  onRefresh,
+  refreshing,
+}: {
+  meta: AnalogsMeta;
+  onRefresh: () => void;
+  refreshing: boolean;
+}) {
   const count = meta.analogs_count ?? 0;
   const level = meta.analogs_source_level;
   const sources = (meta.analogs_sources ?? [])
@@ -54,7 +62,6 @@ function AnalogsMetaBlock({ meta }: { meta: AnalogsMeta }) {
   const extScraped = meta.external_scraped;
   const hasEnough = count >= 35;
 
-  // confidence: 1.0 при ≥35, пропорционально ниже
   const confidence = Math.min(1, count / 35);
   const confColor = confidence >= 1 ? 'bg-emerald-500' : confidence >= 0.6 ? 'bg-amber-400' : 'bg-red-400';
   const confLabel = confidence >= 1 ? 'Высокая' : confidence >= 0.6 ? 'Средняя' : 'Низкая';
@@ -64,6 +71,7 @@ function AnalogsMetaBlock({ meta }: { meta: AnalogsMeta }) {
 
   return (
     <div className="rounded-xl border border-border bg-muted/30 px-3 py-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px]">
+      {/* Строка 1: счётчик + источники + достоверность + кнопка */}
       <div className="flex items-center gap-1.5">
         <Icon name="BarChart2" size={12} className="text-muted-foreground shrink-0" />
         <span className="text-muted-foreground">Аналогов для расчёта:</span>
@@ -87,23 +95,37 @@ function AnalogsMetaBlock({ meta }: { meta: AnalogsMeta }) {
         </div>
       )}
 
-      <div className="flex items-center gap-1.5 ml-auto">
-        <span className="text-muted-foreground">Достоверность:</span>
-        <div className="flex items-center gap-1">
-          <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
-            <div
-              className={`h-full rounded-full ${confColor} transition-all`}
-              style={{ width: `${Math.round(confidence * 100)}%` }}
-            />
+      <div className="flex items-center gap-3 ml-auto">
+        {/* Индикатор достоверности */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-muted-foreground">Достоверность:</span>
+          <div className="flex items-center gap-1">
+            <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
+              <div
+                className={`h-full rounded-full ${confColor} transition-all`}
+                style={{ width: `${Math.round(confidence * 100)}%` }}
+              />
+            </div>
+            <span className={`font-semibold ${confTextColor}`}>{confLabel}</span>
           </div>
-          <span className={`font-semibold ${confTextColor}`}>{confLabel}</span>
         </div>
+
+        {/* Кнопка обновления */}
+        <button
+          onClick={onRefresh}
+          disabled={refreshing}
+          className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground border border-border rounded-md px-2 py-0.5 hover:bg-muted transition disabled:opacity-40"
+          title="Обновить аналоги с рынка и пересчитать бенчмарки"
+        >
+          <Icon name="RefreshCw" size={10} className={refreshing ? 'animate-spin' : ''} />
+          {refreshing ? 'Ищу…' : 'Обновить аналоги'}
+        </button>
       </div>
 
       {!hasEnough && (
         <div className="w-full flex items-center gap-1 text-amber-600">
           <Icon name="AlertTriangle" size={10} className="shrink-0" />
-          <span>Мало аналогов — бенчмарки частично из справочных данных</span>
+          <span>Мало аналогов — бенчмарки частично из справочных данных. Нажмите «Обновить аналоги» для поиска на рынке.</span>
         </div>
       )}
     </div>
@@ -113,6 +135,7 @@ function AnalogsMetaBlock({ meta }: { meta: AnalogsMeta }) {
 export default function InvestmentModel({ listingId, price, area, deal, rentIndexPct }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [refreshingAnalogs, setRefreshingAnalogs] = useState(false);
 
   const { data, isLoading, error, refetch, isFetching } = useQuery<NoiApiResponse>({
     queryKey: ['noi-model', listingId],
@@ -143,6 +166,17 @@ export default function InvestmentModel({ listingId, price, area, deal, rentInde
 
   const reset = () => {
     if (data) setParams(buildInitialParams(data));
+  };
+
+  const handleRefreshAnalogs = async () => {
+    setRefreshingAnalogs(true);
+    setParams(null);
+    try {
+      await fetch(`${PRICE_PREDICT_URL}?action=noi_model&listing_id=${listingId}&refresh=1`);
+      await refetch();
+    } finally {
+      setRefreshingAnalogs(false);
+    }
   };
 
   const liveResult = useMemo(() => {
@@ -255,7 +289,13 @@ export default function InvestmentModel({ listingId, price, area, deal, rentInde
               )}
 
               {/* Блок аналогов — откуда данные для бенчмарков */}
-              {data.analogs_meta && <AnalogsMetaBlock meta={data.analogs_meta} />}
+              {data.analogs_meta && (
+                <AnalogsMetaBlock
+                  meta={data.analogs_meta}
+                  onRefresh={handleRefreshAnalogs}
+                  refreshing={refreshingAnalogs || isFetching}
+                />
+              )}
 
               {/* Предупреждение: объект на продажу без арендатора */}
               {!data.listing.has_tenant && deal === 'sale' && (
