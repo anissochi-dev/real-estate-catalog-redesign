@@ -40,9 +40,9 @@ export default function PropertyTopBar({ itemType, itemTitle, shareUrl }: Proper
       icon: 'MessageCircle',
     },
     {
-      label: 'Одноклассники',
-      href: `https://connect.ok.ru/offer?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(itemTitle || '')}`,
-      icon: 'Users',
+      label: 'Макс',
+      href: `https://max.ru/share?url=${encodeURIComponent(shareUrl)}`,
+      icon: 'Sparkles',
     },
   ];
 
