@@ -4545,9 +4545,9 @@ def handler(event, context):
                         kw_rows = [dict(r) for r in cur.fetchall()]
                         keyword_ids = {r['id'] for r in kw_rows}
 
-                    # Все объекты с применёнными фильтрами
+                    # Все активные объекты с применёнными фильтрами — без лимита
                     cur.execute(
-                        f"{SELECT_FIELDS}{combined_filter} ORDER BY updated_at DESC LIMIT 150"
+                        f"{SELECT_FIELDS}{combined_filter} ORDER BY updated_at DESC"
                     )
                     all_rows = [dict(r) for r in cur.fetchall()]
 
@@ -4558,7 +4558,7 @@ def handler(event, context):
                         if r['id'] not in seen:
                             seen.add(r['id'])
                             merged.append(r)
-                    matches = merged[:120]
+                    matches = merged
 
                 def _make_compact(r, is_keyword_match=False):
                     obj = {
@@ -4708,7 +4708,7 @@ def handler(event, context):
 
             full_prompt = user_text
             if ctx_data:
-                full_prompt += '\n\nДанные:\n' + json.dumps(ctx_data, ensure_ascii=False, default=str)[:12000]
+                full_prompt += '\n\nДанные:\n' + json.dumps(ctx_data, ensure_ascii=False, default=str)[:32000]
 
             db_key, db_folder = _load_keys_from_db(cur)
             # Диалоговые режимы: история + температура повыше + 32k-модель + больше токенов
@@ -4735,6 +4735,10 @@ def handler(event, context):
                 # Отчёты — здесь длина оправдана
                 model_to_use = YANDEX_MODEL_NAME
                 max_tok = 6000
+            elif action == 'match':
+                # match обрабатывает весь каталог — нужно больше токенов на ответ
+                model_to_use = YANDEX_MODEL_NAME
+                max_tok = 4000
             elif action in dialog_actions:
                 model_to_use = YANDEX_MODEL_NAME
                 max_tok = 3000
