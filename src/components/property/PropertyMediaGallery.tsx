@@ -59,6 +59,14 @@ export default function PropertyMediaGallery({
     if (src.includes('_thumb.webp')) return src;
     return src.replace(/(_wm)?\.(webp|jpe?g|png)$/i, '_thumb.webp');
   });
+
+  // Medium 900px — для основного блока галереи (вместо оригинала ~500 КБ)
+  const photoMediums = rawImgs.map(src => {
+    if (!src || !src.includes('cdn.poehali.dev') || !src.includes('/photos/')) return src;
+    if (src.includes('_medium.webp')) return src;
+    if (src.includes('_thumb.webp')) return src; // старые фото без medium — thumb лучше чем ничего
+    return src.replace(/(_wm)?\.(webp|jpe?g|png)$/i, '_medium.webp');
+  });
   const photoActiveIdx = hasVideo && activeImg > videoIndex
     ? activeImg - 1
     : (hasVideo && activeImg === videoIndex ? 0 : activeImg);
@@ -143,6 +151,7 @@ export default function PropertyMediaGallery({
           isVideoActive={isVideoActive}
           mainImg={mainImg}
           photoThumbs={photoThumbs}
+          photoMediums={photoMediums}
           photoActiveIdx={photoActiveIdx}
           showArrows={showArrows}
           imgLoaded={imgLoaded}

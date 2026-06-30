@@ -7,6 +7,7 @@ interface GalleryMainImageProps {
   isVideoActive: boolean;
   mainImg: string | null;
   photoThumbs: string[];
+  photoMediums: string[];
   photoActiveIdx: number;
   showArrows: boolean;
   imgLoaded: boolean;
@@ -29,7 +30,7 @@ interface GalleryMainImageProps {
 }
 
 export function GalleryMainImage({
-  item, isVideoActive, mainImg, photoThumbs, photoActiveIdx,
+  item, isVideoActive, mainImg, photoThumbs, photoMediums, photoActiveIdx,
   showArrows, imgLoaded, fadeKey,
   isFav, inCompare, dealLabel, typeLabel,
   onImgLoad, onOpenLightbox,
@@ -70,7 +71,7 @@ export function GalleryMainImage({
           >
             <img
               key={fadeKey}
-              src={mainImg}
+              src={photoMediums[photoActiveIdx] || mainImg}
               alt={item.title}
               loading="eager"
               fetchPriority="high"

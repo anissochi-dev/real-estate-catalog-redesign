@@ -381,6 +381,20 @@ def handler(event, context):
                     buf_thumb = io.BytesIO()
                     thumb_img.save(buf_thumb, format='WEBP', quality=72, method=4)
                     thumb_data = buf_thumb.getvalue()
+
+                    # Medium 900px — для галереи на странице объекта (основной блок)
+                    MEDIUM_SIDE = 900
+                    medium_data = None
+                    if max(tw, th) > MEDIUM_SIDE:
+                        m_scale = MEDIUM_SIDE / max(tw, th)
+                        medium_img = img.resize(
+                            (int(tw * m_scale), int(th * m_scale)), PilImage.LANCZOS
+                        )
+                        buf_medium = io.BytesIO()
+                        medium_img.save(buf_medium, format='WEBP', quality=82, method=4)
+                        medium_data = buf_medium.getvalue()
+                    else:
+                        medium_data = None  # оригинал и так мал — medium не нужен
                 except Exception:
                     pass  # если Pillow не смог — грузим оригинал
 
@@ -401,6 +415,7 @@ def handler(event, context):
 
             # Сохраняем thumb 400px в S3 (всегда для kind=photo)
             thumb_url = None
+            medium_url = None
             if thumb_data:
                 thumb_key = f"{folder}/{token12}_thumb.webp"
                 try:
@@ -419,6 +434,26 @@ def handler(event, context):
                         pass
                 except Exception:
                     thumb_url = None
+
+            # Сохраняем medium 900px в S3 (для галереи объекта)
+            if medium_data and kind == 'photo':
+                medium_key = f"{folder}/{token12}_medium.webp"
+                try:
+                    s3.put_object(
+                        Bucket='files', Key=medium_key, Body=medium_data,
+                        ContentType='image/webp', CacheControl='public, max-age=31536000'
+                    )
+                    medium_url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{medium_key}"
+                    try:
+                        cur.execute(
+                            f"INSERT INTO {SCHEMA}.s3_photo_refs (s3_key, cdn_url, is_orphan) "
+                            f"VALUES (%s, %s, TRUE) ON CONFLICT (s3_key) DO NOTHING",
+                            (medium_key, medium_url)
+                        )
+                    except Exception:
+                        pass
+                except Exception:
+                    medium_url = None
 
             # Если фото и нужен водяной знак — накладываем + сохраняем ОТДЕЛЬНО оригинал
             if kind == 'photo' and apply_wm and ext in ('jpg', 'jpeg', 'png', 'webp'):
@@ -452,6 +487,7 @@ def handler(event, context):
                             'url': url,
                             'original_url': original_url,
                             'thumb_url': thumb_url,
+                            'medium_url': medium_url,
                             'watermarked': True,
                             'size': len(wm_data),
                         })
@@ -474,6 +510,7 @@ def handler(event, context):
                     'url': url,
                     'original_url': url,
                     'thumb_url': thumb_url,
+                    'medium_url': medium_url,
                     'watermarked': False,
                     'size': len(data),
                 })
