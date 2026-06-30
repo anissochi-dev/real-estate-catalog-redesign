@@ -56,6 +56,19 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
           ) : null}
         </div>
         <div>
+          <label className="text-xs text-muted-foreground">Единица цены</label>
+          <select className="w-full px-3 py-2 border rounded-lg" value={editing.price_unit || 'total'}
+            onChange={e => setEditing({ ...editing, price_unit: e.target.value })}>
+            <option value="total">За весь объект</option>
+            <option value="m2">За м²</option>
+            <option value="sotka">За сотку</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Площадь участка — отдельная строка, всегда видима */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div>
           <label className="text-xs text-muted-foreground">Площадь участка, сот.</label>
           <input type="number" step="0.01" min="0" className="w-full px-3 py-2 border rounded-lg"
             placeholder="напр. 12.5"
@@ -66,15 +79,6 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
               ≈ {(+editing.land_area * 100).toLocaleString('ru')} м²
             </div>
           ) : null}
-        </div>
-        <div>
-          <label className="text-xs text-muted-foreground">Единица цены</label>
-          <select className="w-full px-3 py-2 border rounded-lg" value={editing.price_unit || 'total'}
-            onChange={e => setEditing({ ...editing, price_unit: e.target.value })}>
-            <option value="total">За весь объект</option>
-            <option value="m2">За м²</option>
-            <option value="sotka">За сотку</option>
-          </select>
         </div>
       </div>
 
