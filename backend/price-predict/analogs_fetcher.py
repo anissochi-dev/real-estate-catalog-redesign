@@ -39,22 +39,34 @@ CAT_TO_ARRPRO = {
     'car_service':  'svobodnogo-naznacheniya',
 }
 
-# Маппинг наших категорий → slug ayax.ru (проверено: реальная структура сайта — /{prodazha|arenda}-{slug}/)
-# Подтверждённые категории: zdanij (здания), ofisov (офисы). Остальные — best-effort,
-# при неудаче (404/пусто) категория не скрапится вообще (без fallback на общий каталог).
-CAT_TO_AYAX = {
-    'building': 'zdanij',
-    'office': 'ofisov',
-    'warehouse': 'skladov',
-    'retail': 'torgovyh-ploschadej',
-    'production': 'proizvodstva',
+# Маппинг наших категорий → slug ayax.ru.
+# ВАЖНО: у ayax.ru РАЗНЫЕ url-паттерны для продажи и аренды одной категории
+# (сайт непоследователен: где-то "kupit-X", где-то "X", где-то "prodazha-X").
+# Проверено вручную по каждой категории и типу сделки отдельно (2026-07-03).
+# Категории без подтверждённого рабочего URL не включены — лучше не скрапить,
+# чем подмешать чужую категорию под неверной меткой.
+CAT_TO_AYAX_SALE = {
+    'building': 'prodazha-zdanij',
+    'office': 'kupit-ofis',
+    'retail': 'torgovye-ploshadi',
+    # warehouse: страница существует, но 0 объявлений на момент проверки — не скрапим
+}
+CAT_TO_AYAX_RENT = {
+    'building': 'arenda-zdanij',
+    'office': 'arenda-ofisov',
+    'retail': 'arenda-torgovyh-ploschadej',
+    'warehouse': 'arenda-skladov',
 }
 
-# Маппинг наших категорий → slug etagi.com (krasnodar.etagi.com/commerce/{slug}/)
+# Маппинг наших категорий → slug etagi.com.
+# Структура: продажа krasnodar.etagi.com/commerce/{slug}/,
+#            аренда  krasnodar.etagi.com/commerce/arenda/{slug}/
 CAT_TO_ETAGI = {
     'building': 'zdanie',
     'office': 'ofis',
     'retail': 'torgovye-pomeshheniya',
+    'warehouse': 'sklad',
+    'free_purpose': 'svobodnoe-naznachenie',
 }
 
 # Маппинг наших внутренних категорий → категории схемы market_listings
@@ -309,17 +321,17 @@ def _parse_generic_html(html: str, source: str, category: str, deal_type: str,
 def _scrape_ayax_targeted(category: str, deal_type: str, area: float) -> list[dict]:
     """
     Целевой скрап ayax.ru по категории и типу сделки для дозапроса аналогов.
-    Реальная структура сайта: /{prodazha|arenda}-{slug}/ (например /prodazha-zdanij/).
-    Если категория не сопоставлена (нет в CAT_TO_AYAX) — сайт не скрапится вообще,
+    URL-slug различаются для продажи/аренды (см. CAT_TO_AYAX_SALE/CAT_TO_AYAX_RENT).
+    Если категория+сделка не имеют подтверждённого URL — сайт не скрапится,
     чтобы не подмешивать объекты чужих категорий под неверной меткой.
     """
-    cat_slug = CAT_TO_AYAX.get(category, '')
-    if not cat_slug:
-        print(f'[analogs_fetcher] ayax.ru: категория "{category}" не поддерживается, пропуск')
+    cat_map = CAT_TO_AYAX_RENT if deal_type == 'rent' else CAT_TO_AYAX_SALE
+    slug = cat_map.get(category, '')
+    if not slug:
+        print(f'[analogs_fetcher] ayax.ru: категория "{category}"/{deal_type} не поддерживается, пропуск')
         return []
 
-    deal_prefix = 'arenda' if deal_type == 'rent' else 'prodazha'
-    url = f'https://www.ayax.ru/{deal_prefix}-{cat_slug}/'
+    url = f'https://www.ayax.ru/{slug}/'
 
     html = _fetch(url, timeout=15)
     if not html or len(html) < 10_000:
@@ -335,7 +347,8 @@ def _scrape_ayax_targeted(category: str, deal_type: str, area: float) -> list[di
 def _scrape_etagi_targeted(category: str, deal_type: str, area: float) -> list[dict]:
     """
     Целевой скрап etagi.com (федеральный агрегатор) для дозапроса аналогов.
-    Реальная структура: krasnodar.etagi.com/commerce/{slug}/ (только продажа/общий каталог).
+    Структура: krasnodar.etagi.com/commerce/{slug}/ (продажа),
+               krasnodar.etagi.com/commerce/arenda/{slug}/ (аренда).
     Если категория не сопоставлена — сайт не скрапится вообще (см. _scrape_ayax_targeted).
     JSON-поля "square" и "price" встроены в HTML каталога.
     """
@@ -345,12 +358,11 @@ def _scrape_etagi_targeted(category: str, deal_type: str, area: float) -> list[d
     if not cat_slug:
         print(f'[analogs_fetcher] etagi.com: категория "{category}" не поддерживается, пропуск')
         return []
-    # Каталог etagi.com/commerce/ отдаёт только объявления продажи — для аренды не используем
-    if deal_type == 'rent':
-        print('[analogs_fetcher] etagi.com: раздел аренды не поддерживается, пропуск')
-        return []
 
-    url = f'https://krasnodar.etagi.com/commerce/{cat_slug}/'
+    if deal_type == 'rent':
+        url = f'https://krasnodar.etagi.com/commerce/arenda/{cat_slug}/'
+    else:
+        url = f'https://krasnodar.etagi.com/commerce/{cat_slug}/'
     html = _fetch(url, timeout=12)
 
     if not html or len(html) < 10_000:
