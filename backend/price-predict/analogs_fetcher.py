@@ -77,6 +77,88 @@ OUR_CAT_TO_ML_CAT = {
     'production': 'industrial',
 }
 
+# Маппинг категорий для чтения из общей копилки market_listings.
+# Единый источник для noi_model.load_market_comparables и mela_price (Виртуальный брокер) —
+# оба инструмента должны видеть одинаковый набор аналогов по одной категории.
+# ВАЖНО: 'other' исключён — содержит мусорные записи ЦИАН с нерелевантными ставками.
+MARKET_CAT_ALIAS = {
+    'hotel': ['hotel', 'standalone'],
+    'restaurant': ['catering'],
+    'office': ['office'],
+    'retail': ['retail', 'free_purpose'],
+    'warehouse': ['warehouse'],
+    'free_purpose': ['free_purpose', 'retail'],
+    'production': ['industrial', 'warehouse'],
+    'building': ['standalone'],
+    'gab': ['free_purpose', 'retail', 'office'],
+    'business': ['free_purpose', 'retail', 'office'],
+    'car_service': ['industrial'],
+    'land': ['land'],
+}
+
+
+def query_market_listings(cur, category: str, deal: str, area: float = 0,
+                           district: str = '', limit: int = 50) -> list[dict]:
+    """
+    Единый запрос к накопленной копилке market_listings (данные с arrpro/ayax/etagi/cian).
+    Каскадно расширяет площадь (±50% → ±75% → ±100%), пробует сначала с районом, потом без.
+    Возвращает сырые строки: price, area, price_per_m2, district, source, url.
+
+    Используется ОБОИМИ инструментами сравнения с рынком:
+      - noi_model.load_market_comparables (агрегирует в медиану для инвестмодели)
+      - mela_price.handle_mela_price_check (берёт как готовый список аналогов для Виртуального брокера)
+    Так оба инструмента видят один и тот же набор данных по одному объекту.
+    """
+    cats = MARKET_CAT_ALIAS.get(category, [category] if category else [])
+    cats_sql = ','.join(f"'{c}'" for c in cats if c)
+    if not cats_sql:
+        return []
+
+    deal_type = 'rent' if deal == 'rent' else 'sale'
+    min_p2 = 100 if deal_type == 'rent' else 5000
+
+    area_mults = [0.5, 0.75, 1.0]
+    dist_filters = []
+    if district:
+        dist_kw = district.split('(')[-1].replace(')', '').strip() if '(' in district else district.split()[0]
+        dist_filters.append(dist_kw)
+    dist_filters.append(None)
+
+    best_rows: list = []
+    for dist_kw in dist_filters:
+        if len(best_rows) >= 5:
+            break
+        dist_clause = f"AND district ILIKE '%{dist_kw.replace(chr(39), chr(39)*2)}%'" if dist_kw else ''
+
+        rows: list = []
+        for mult in area_mults:
+            area_filter = ''
+            if area and area > 0:
+                area_lo = max(50, round(area * (1 - mult)))
+                area_hi = round(area * (1 + mult))
+                area_filter = f'AND area BETWEEN {area_lo} AND {area_hi}'
+
+            cur.execute(f"""
+                SELECT price, area, price_per_m2, district, source, url
+                FROM {SCHEMA}.market_listings
+                WHERE deal_type = '{deal_type}'
+                  AND category IN ({cats_sql})
+                  AND price_per_m2 >= {min_p2}
+                  AND scraped_at > NOW() - INTERVAL '90 days'
+                  {area_filter}
+                  {dist_clause}
+                ORDER BY scraped_at DESC
+                LIMIT {limit}
+            """)
+            rows = cur.fetchall() or []
+            if len(rows) >= 5 or mult == area_mults[-1]:
+                break
+
+        if len(rows) > len(best_rows):
+            best_rows = rows
+
+    return best_rows
+
 # Маппинг URL-slugs → категории (для парсинга ответа)
 URL_CAT_MAP = {
     'sklad': 'warehouse', 'ofis': 'office',

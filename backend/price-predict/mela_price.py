@@ -1,8 +1,12 @@
 """
 Виртуальный брокер: проверка цены объекта по реальным аналогам.
-Источники данных:
-1. Yandex XML Search — реальный поиск по ЦИАН, Авито, Restate (обходит блокировки)
-2. YandexGPT — фоллбэк если Search API недоступен
+Источники данных (по приоритету):
+1. База объектов системы (listings)
+2. Общая копилка рыночных данных market_listings (arrpro/ayax/etagi/cian) —
+   та же копилка, что использует инвестиционная модель (noi_model) — единый источник данных
+3. Живой парсинг локальных сайтов Краснодара (если копилка пуста для этой категории)
+4. Yandex XML Search — реальный поиск по ЦИАН, Авито, Restate (обходит блокировки)
+5. YandexGPT — фоллбэк если ничего не найдено
 Возвращает вердикт (выше/рыночная/ниже) + диапазон цен.
 """
 
@@ -17,6 +21,7 @@ import urllib.error
 from datetime import datetime, timedelta
 
 from ai_client import chat_simple
+from analogs_fetcher import query_market_listings
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
 YANDEX_SEARCH_URL = 'https://yandex.ru/search/xml'
@@ -268,8 +273,8 @@ def _db_analogs(cur, listing: dict) -> list:
                     'district': str(r.get('district') or ''),
                     'url': '',
                     'status': str(r.get('status') or ''),
-                    'floor': r.get('floor'),
-                    'land_area': r.get('land_area'),
+                    'floor': float(r['floor']) if r.get('floor') is not None else None,
+                    'land_area': float(r['land_area']) if r.get('land_area') is not None else None,
                     'monthly_rent': float(r['monthly_rent']) if r.get('monthly_rent') else None,
                     'electricity_kw': float(r['electricity_kw']) if r.get('electricity_kw') else None,
                     '_relevance': label,
@@ -289,6 +294,42 @@ def _db_analogs(cur, listing: dict) -> list:
     if deduped:
         deduped[0]['_search_level'] = search_level
     return deduped[:12]
+
+
+def _market_listings_analogs(cur, listing: dict) -> list:
+    """
+    Читает аналоги из общей копилки market_listings — той же самой, что использует
+    инвестиционная модель (noi_model.load_market_comparables). Единый источник данных
+    для обоих инструментов сравнения с рынком.
+    """
+    category = (listing.get('category') or '').lower()
+    deal = (listing.get('deal') or 'sale').lower()
+    area = float(listing.get('area') or 0)
+    district = (listing.get('district') or '').strip()
+
+    try:
+        rows = query_market_listings(cur, category, deal, area=area, district=district, limit=20)
+    except Exception as e:
+        print(f'[mela_price] market_listings query error: {e}')
+        return []
+
+    results = []
+    for r in rows:
+        p = float(r.get('price') or 0)
+        a = float(r.get('area') or 0)
+        if p <= 0 or a <= 0:
+            continue
+        ppm2 = float(r.get('price_per_m2') or 0) or round(p / a)
+        results.append({
+            'source': r.get('source') or 'рынок',
+            'price': p,
+            'area': a,
+            'price_per_m2': ppm2,
+            'district': str(r.get('district') or ''),
+            'url': str(r.get('url') or ''),
+        })
+    print(f'[mela_price] market_listings: {len(results)} analogs')
+    return results
 
 
 # ─── Парсеры сторонних сайтов Краснодара ────────────────────────────────────
@@ -1184,7 +1225,21 @@ def handle_mela_price_check(cur, conn, body: dict, qs: dict) -> dict:
     except Exception as e:
         print(f'[mela_price] DB analogs error: {e}')
 
-    # 2) Парсинг локальных сайтов Краснодара (etagi, ayax, kayan, arrpro, moreon)
+    # 2) Общая копилка рыночных данных (та же, что использует инвестиционная модель) —
+    # быстрее живого парсинга, т.к. данные уже накоплены с прошлых проверок/дозапросов
+    if len(analogs) < 5:
+        try:
+            market_analogs = _market_listings_analogs(cur, listing)
+            if market_analogs:
+                analogs.extend(market_analogs)
+                for a in market_analogs:
+                    if a['source'] not in sources_used:
+                        sources_used.append(a['source'])
+        except Exception as e:
+            print(f'[mela_price] market_listings error: {e}')
+
+    # 3) Парсинг локальных сайтов Краснодара (etagi, ayax, kayan, arrpro, moreon) —
+    # только если копилка не дала достаточно данных
     if len(analogs) < 5:
         try:
             site_analogs = _scrape_local_sites(listing)
@@ -1196,7 +1251,7 @@ def handle_mela_price_check(cur, conn, body: dict, qs: dict) -> dict:
         except Exception as e:
             print(f'[mela_price] local sites error: {e}')
 
-    # 3) Yandex XML Search (когда будет настроен)
+    # 4) Yandex XML Search (когда будет настроен)
     if len(analogs) < 5:
         search_key = os.environ.get('YANDEX_SEARCH_API_KEY', '')
         search_user = os.environ.get('YANDEX_SEARCH_USER', '')
@@ -1211,7 +1266,7 @@ def handle_mela_price_check(cur, conn, body: dict, qs: dict) -> dict:
             except Exception as e:
                 print(f'[mela_price] Search analogs error: {e}')
 
-    # 4) Если данных всё ещё мало — GPT-фоллбэк
+    # 5) Если данных всё ещё мало — GPT-фоллбэк
     if len(analogs) < 3:
         api_key, folder_id = _load_keys(cur)
         gpt_analogs = _gpt_fallback(listing, api_key, folder_id)
