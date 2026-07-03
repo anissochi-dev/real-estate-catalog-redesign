@@ -710,32 +710,39 @@ def handler(event: dict, context) -> dict:
                 from market_snapshots import handle_refresh as _msr, aggregate_market_listings as _aml
                 refresh_result = _msr(cur, conn, force=body_data.get('action') == 'price_market_refresh' and body_data.get('force') is True)
 
-                # Еженедельная агрегация market_listings → price_market_snapshots
+                # Еженедельная агрегация market_listings → price_market_snapshots.
+                # ВАЖНО: запускаем ТОЛЬКО когда батч-цикл сбора завершён (done=True) или пропущен —
+                # никогда не совмещаем два тяжёлых процесса в одном 30-секундном вызове функции
+                # (раньше это приводило к таймауту и зависанию цикла в статусе in_progress=true).
                 agg_result = {}
-                try:
-                    cur.execute(
-                        f"SELECT market_listings_agg_last_at FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
-                    )
-                    row = cur.fetchone()
-                    last_agg = row['market_listings_agg_last_at'] if row else None
-                    import datetime as _dt
-                    need_agg = (
-                        last_agg is None or
-                        (_dt.datetime.now(_dt.timezone.utc) - last_agg).days >= 7
-                    )
-                    if need_agg:
-                        agg_result = _aml(cur, conn)
+                cycle_finished = refresh_result.get('done') or refresh_result.get('skipped')
+                if cycle_finished:
+                    try:
                         cur.execute(
-                            f"UPDATE {SCHEMA}.settings SET market_listings_agg_last_at = NOW() "
-                            f"WHERE id = (SELECT id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1)"
+                            f"SELECT market_listings_agg_last_at FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
                         )
-                        conn.commit()
-                        print(f'[ping_cron] weekly aggregate done: {agg_result}')
-                    else:
-                        agg_result = {'skipped': True, 'last_at': str(last_agg)}
-                except Exception as _e:
-                    agg_result = {'error': str(_e)}
-                    print(f'[ping_cron] aggregate error: {_e}')
+                        row = cur.fetchone()
+                        last_agg = row['market_listings_agg_last_at'] if row else None
+                        import datetime as _dt
+                        need_agg = (
+                            last_agg is None or
+                            (_dt.datetime.now(_dt.timezone.utc) - last_agg).days >= 7
+                        )
+                        if need_agg:
+                            agg_result = _aml(cur, conn)
+                            cur.execute(
+                                f"UPDATE {SCHEMA}.settings SET market_listings_agg_last_at = NOW() "
+                                f"WHERE id = (SELECT id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1)"
+                            )
+                            conn.commit()
+                            print(f'[ping_cron] weekly aggregate done: {agg_result}')
+                        else:
+                            agg_result = {'skipped': True, 'last_at': str(last_agg)}
+                    except Exception as _e:
+                        agg_result = {'error': str(_e)}
+                        print(f'[ping_cron] aggregate error: {_e}')
+                else:
+                    agg_result = {'skipped': True, 'reason': 'batch cycle in progress'}
 
                 return _ok({**refresh_result, 'aggregate': agg_result})
 

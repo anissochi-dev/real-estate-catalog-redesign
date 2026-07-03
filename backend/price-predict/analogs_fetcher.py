@@ -559,6 +559,34 @@ def _filter_by_area(items: list[dict], area: float, delta_pct: float = 1.0) -> l
     return [i for i in items if i.get('area') and lo <= float(i['area']) <= hi]
 
 
+def scrape_arrpro_targeted(category: str, deal_type: str, area: float = 0, max_pages: int = 2) -> list[dict]:
+    """
+    Быстрый целевой скрап arrpro.ru по одной категории+сделке (1-2 страницы каталога).
+    В отличие от fetch_external_analogs (до 8 страниц, для одного объекта) — эта версия
+    рассчитана на фоновый обход МНОГИХ категорий за один вызов батча (укладываемся в таймаут).
+    """
+    arrpro_slug = CAT_TO_ARRPRO.get(category)
+    if not arrpro_slug:
+        return []
+
+    deal_prefix = 'arenda' if deal_type == 'rent' else 'prodam'
+    base_url = f'https://krasnodar.arrpro.ru/katalog/{deal_prefix}/{arrpro_slug}/'
+
+    all_items: list[dict] = []
+    for page in range(1, max_pages + 1):
+        url = base_url if page == 1 else f'{base_url}page/{page}/'
+        html = _fetch(url, timeout=12)
+        if not html or len(html) < 3000:
+            break
+        items = _parse_arrpro_page(html, deal_type)
+        all_items.extend(items)
+        if len(items) < 5:
+            break
+
+    filtered = _filter_by_area(all_items, area) if area > 0 else all_items
+    return filtered
+
+
 def fetch_external_analogs(listing: dict, cur, conn, need: int = 35) -> dict:
     """
     Целевой дозапрос аналогов с внешних сайтов: arrpro → ayax → etagi → cian (резерв).

@@ -1,0 +1,1 @@
+UPDATE t_p71821556_real_estate_catalog_.settings SET price_refresh_last_at = '2026-05-01 00:00:00+00' WHERE id = (SELECT id FROM t_p71821556_real_estate_catalog_.settings ORDER BY id ASC LIMIT 1);

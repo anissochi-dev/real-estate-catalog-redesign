@@ -3,18 +3,25 @@
 Батчевая стратегия (укладываемся в таймаут 30 сек):
   Каждый вызов handle_refresh() обрабатывает ОДИН источник данных:
     batch 0 → база системы (быстро, < 2 сек)
-    batch 1 → arrpro.ru
-    batch 2 → ayax.ru
-    batch 3 → etagi.com
-    batch 4 → moreon-invest.ru
+    batch 1 → arrpro.ru — целевой обход ВСЕХ комбинаций категория+сделка
+    batch 2 → ayax.ru — целевой обход ВСЕХ комбинаций категория+сделка
+    batch 3 → etagi.com — целевой обход ВСЕХ комбинаций категория+сделка
+    batch 4 → moreon-invest.ru (продажа + аренда, сайт без разбивки по категориям)
     batch 5 → финализация (merge + commit снапшотов)
+
+  ВАЖНО: batch 1-3 используют ТЕ ЖЕ точные целевые функции (analogs_fetcher.py),
+  что и «Виртуальный брокер» и инвестиционная модель — с правильными URL по каждой
+  категории+сделке. Каждый батч проходит по ВСЕМ активным комбинациям категория+сделка
+  (а не только по одной "office/rent" как было раньше), и сразу сохраняет найденное
+  в market_listings — общую копилку для всех инструментов сравнения с рынком.
 
   Прогресс хранится в settings.price_refresh_status (JSONB):
     {
       "in_progress": true,
       "started_at": "2026-06-04",
       "next_batch": 1,
-      "pool": {"office|rent|": [...], "office|rent|Центральный": [...]}
+      "pool": {"office|rent|": [...], "office|rent|Центральный": [...]},
+      "site_saved": {"arrpro": 120, "ayax": 45}
     }
 
   При ping_cron: если in_progress → продолжаем батч.
@@ -209,44 +216,75 @@ def _batch_db(cur, combos, districts):
     return pool
 
 
-def _batch_site(scraper_fn, site_name):
-    """Батч 1-4: парсим один сайт, возвращаем сырые аналоги."""
-    try:
-        generic = {'category': 'office', 'deal': 'rent', 'area': 100,
-                   'price': 0, 'district': '', 'condition': ''}
-        analogs = scraper_fn(generic)
-        print(f'[price_refresh] batch_{site_name}: {len(analogs)} analogs')
-        return analogs
-    except Exception as e:
-        print(f'[price_refresh] batch_{site_name} error: {e}')
-        return []
-
-
-def _merge_site_analogs(pool, site_analogs):
-    """Добавляем аналоги сайта только к совпадающим ключам пула по category+deal.
-    Аналог с сайта добавляется к ключу только если category и deal совпадают
-    (или аналог не имеет категории — тогда к ключам с той же deal).
+def _batch_targeted_site(cur, conn, combos, start_idx, site_scraper, site_name, time_budget_sec=22):
     """
+    Батч 1-3 (arrpro/ayax/etagi): целевой обход ВСЕХ активных комбинаций категория+сделка
+    (а не одной фиксированной "office/rent" как раньше). Для каждой комбинации вызывает
+    ТОЧНУЮ целевую функцию сайта (те же, что использует инвестмодель и Виртуальный брокер) —
+    она сама знает правильный URL по категории+сделке и не скрапит категории без
+    подтверждённого рабочего адреса.
+
+    Найденное сразу сохраняется в market_listings (общая копилка для всех инструментов).
+    Ограничение по времени (time_budget_sec) — чтобы не превысить таймаут функции 30 сек.
+    Начинает с start_idx — если за один вызов не успели обойти все комбинации, продолжаем
+    с этого индекса в следующем вызове того же батча (не переходя к следующему источнику).
+
+    Возвращает (pool_analogs, next_idx) — next_idx >= len(combos) означает "источник пройден полностью".
+    """
+    import time as _time
+    start = _time.time()
+    pool_analogs: list[dict] = []
+    idx = start_idx
+
+    while idx < len(combos):
+        if _time.time() - start > time_budget_sec:
+            break
+        category, deal = combos[idx]
+        idx += 1
+        try:
+            items = site_scraper(category, deal)
+        except Exception as e:
+            print(f'[price_refresh] {site_name} {category}/{deal} error: {e}')
+            items = []
+        if not items:
+            continue
+
+        # Сохраняем в общую копилку market_listings — доступно для ВСЕХ инструментов сразу
+        try:
+            from analogs_fetcher import _save_to_market_listings
+            _save_to_market_listings(cur, conn, items)
+        except Exception as e:
+            print(f'[price_refresh] {site_name} save error: {e}')
+
+        for it in items:
+            p = float(it.get('price') or 0)
+            a = float(it.get('area') or 0)
+            if p <= 0 or a <= 0:
+                continue
+            ppm2 = float(it.get('price_per_m2') or 0) or round(p / a)
+            pool_analogs.append({
+                'category': category, 'deal': deal,
+                'source': it.get('source') or site_name,
+                'price': p, 'area': a, 'price_per_m2': ppm2,
+                'district': str(it.get('district') or ''),
+                'url': str(it.get('url') or ''),
+            })
+        print(f'[price_refresh] {site_name} {category}/{deal}: +{len(items)}')
+
+    print(f'[price_refresh] {site_name}: обработано {idx}/{len(combos)} комбинаций, {len(pool_analogs)} аналогов за вызов')
+    return pool_analogs, idx
+
+
+def _merge_into_pool(pool, site_analogs):
+    """Добавляем найденные с сайта аналоги в пул по точному ключу category|deal|'' (город)."""
     if not site_analogs:
         return pool
-
-    # Группируем аналоги сайта по (category, deal)
-    by_cat_deal: dict = {}
     for a in site_analogs:
-        cat  = (a.get('category') or '').lower().strip()
+        cat = (a.get('category') or '').lower().strip()
         deal = (a.get('deal') or '').lower().strip()
-        for k in [(cat, deal), ('', deal), (cat, ''), ('', '')]:
-            by_cat_deal.setdefault(k, []).append(a)
-
-    for key in list(pool.keys()):
-        parts = key.split('|', 2)
-        if len(parts) != 3:
-            continue
-        p_cat, p_deal, _ = parts
-        # Берём только аналоги с совпадающей категорией+deal
-        matched = by_cat_deal.get((p_cat.lower(), p_deal.lower()), [])
-        if matched:
-            pool[key] = pool[key] + matched
+        key = _pool_key(cat, deal, '')
+        pool.setdefault(key, [])
+        pool[key].append(a)
     return pool
 
 
@@ -315,8 +353,6 @@ def handle_refresh(cur, conn, force=False):
       {'source': 'finalize', 'done': True, 'saved': N}  — цикл завершён
       {'skipped': True, 'reason': '...'}                — не время
     """
-    from mela_price import _scrape_arrpro, _scrape_ayax, _scrape_etagi, _scrape_moreon
-
     cfg = _load_status(cur)
     enabled = cfg.get('price_refresh_enabled')
     if not enabled and not force:
@@ -361,7 +397,8 @@ def handle_refresh(cur, conn, force=False):
     combos    = _get_active_combos(cur)
     districts = _get_active_districts(cur)
     source_name = BATCH_SOURCES[next_batch]
-    print(f'[price_refresh] batch={next_batch} ({source_name}), combos={len(combos)}, districts={len(districts)}')
+    site_combo_idx = int(status.get('site_combo_idx', 0))
+    print(f'[price_refresh] batch={next_batch} ({source_name}), combos={len(combos)}, districts={len(districts)}, site_combo_idx={site_combo_idx}')
 
     pool_raw = status.get('pool', {})
     pool = {k: v for k, v in pool_raw.items() if isinstance(v, list)}
@@ -370,17 +407,63 @@ def handle_refresh(cur, conn, force=False):
     if source_name == 'db':
         pool = _batch_db(cur, combos, districts)
 
-    elif source_name == 'arrpro':
-        pool = _merge_site_analogs(pool, _batch_site(_scrape_arrpro, 'arrpro'))
+    elif source_name in ('arrpro', 'ayax', 'etagi'):
+        from analogs_fetcher import scrape_arrpro_targeted, _scrape_ayax_targeted, _scrape_etagi_targeted
+        site_scrapers = {
+            'arrpro': lambda cat, deal: scrape_arrpro_targeted(cat, deal),
+            'ayax': lambda cat, deal: _scrape_ayax_targeted(cat, deal, 0),
+            'etagi': lambda cat, deal: _scrape_etagi_targeted(cat, deal, 0),
+        }
+        site_analogs, next_idx = _batch_targeted_site(
+            cur, conn, combos, site_combo_idx, site_scrapers[source_name], source_name
+        )
+        pool = _merge_into_pool(pool, site_analogs)
 
-    elif source_name == 'ayax':
-        pool = _merge_site_analogs(pool, _batch_site(_scrape_ayax, 'ayax'))
-
-    elif source_name == 'etagi':
-        pool = _merge_site_analogs(pool, _batch_site(_scrape_etagi, 'etagi'))
+        if next_idx < len(combos):
+            # Не успели обойти все комбинации — продолжаем этот же батч в следующем вызове
+            _save_status(cur, conn, {
+                'in_progress': True,
+                'started_at': today,
+                'next_batch': next_batch,
+                'site_combo_idx': next_idx,
+                'pool': pool,
+            })
+            return {
+                'done': False, 'batch': next_batch, 'source': source_name,
+                'pool_keys': len(pool), 'next': source_name,
+                'progress': f'{next_idx}/{len(combos)}',
+            }
+        # Источник пройден полностью — сбрасываем индекс, идём к следующему батчу
+        site_combo_idx = 0
 
     elif source_name == 'moreon':
-        pool = _merge_site_analogs(pool, _batch_site(_scrape_moreon, 'moreon'))
+        from mela_price import _scrape_moreon
+        moreon_analogs = []
+        for deal in ('sale', 'rent'):
+            try:
+                items = _scrape_moreon({'deal': deal, 'area': 0})
+            except Exception as e:
+                print(f'[price_refresh] moreon {deal} error: {e}')
+                items = []
+            for it in items:
+                p = float(it.get('price') or 0)
+                a = float(it.get('area') or 0)
+                if p <= 0 or a <= 0:
+                    continue
+                moreon_analogs.append({
+                    'category': '', 'deal': deal, 'source': 'moreon-invest.ru',
+                    'price': p, 'area': a,
+                    'price_per_m2': float(it.get('price_per_m2') or 0) or round(p / a),
+                    'district': '', 'url': str(it.get('url') or ''),
+                })
+        # moreon без категорий — добавляем к каждой активной комбинации той же сделки
+        for category, deal in combos:
+            matched = [dict(a, category=category) for a in moreon_analogs if a['deal'] == deal]
+            if matched:
+                key = _pool_key(category, deal, '')
+                pool.setdefault(key, [])
+                pool[key].extend(matched)
+        print(f'[price_refresh] moreon: {len(moreon_analogs)} analogs распределены по {len(combos)} комбинациям')
 
     elif source_name == 'finalize':
         saved = _batch_finalize(cur, conn, pool, today)
@@ -397,6 +480,7 @@ def handle_refresh(cur, conn, force=False):
         'in_progress': True,
         'started_at': today,
         'next_batch': next_batch,
+        'site_combo_idx': 0,
         'pool': pool,
     })
 
