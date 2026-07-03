@@ -866,13 +866,9 @@ def load_market_comparables(cur, category: str, district: str, area: float = 0) 
     cats = CAT_ALIAS.get(category, [category])
     cats_sql = ','.join(f"'{c}'" for c in cats)
 
-    # Фильтр по площади: ±50% от площади объекта (убирает промзоны 25 000 м² при здании 850 м²)
-    # Минимальный порог: не менее 50 м²
-    area_filter = ''
-    if area and area > 0:
-        area_lo = max(50, round(area * 0.5))
-        area_hi = round(area * 2.0)
-        area_filter = f'AND area BETWEEN {area_lo} AND {area_hi}'
+    # Каскадное расширение площади: ±50% → ±75% → ±100% (честно расширяем, если аналогов мало,
+    # вместо того чтобы натягивать нерелевантные объекты)
+    area_mults = [0.5, 0.75, 1.0]
 
     # Минимальный порог цены за м²: для аренды — не менее 100 ₽/м²/мес (отсекает ошибочные записи)
     MIN_RENT_P2 = 100   # ₽/м²/мес — ниже нет реального рынка в Краснодаре
@@ -889,52 +885,76 @@ def load_market_comparables(cur, category: str, district: str, area: float = 0) 
                 dist_filters.append(dist_kw)
             dist_filters.append(None)  # fallback без района
 
+            best_rows: list = []
+            best_dist_kw = None
             for dist_kw in dist_filters:
+                # Если уже нашли достаточно (≥5) аналогов — дальше не ищем
+                if len(best_rows) >= 5:
+                    break
                 dist_clause = f"AND district ILIKE '%{dist_kw.replace(chr(39), chr(39)*2)}%'" if dist_kw else ''
-                cur.execute(f"""
-                    SELECT price_per_m2, price, area, address, district, source
-                    FROM {SCHEMA}.market_listings
-                    WHERE deal_type = '{deal}'
-                      AND category IN ({cats_sql})
-                      AND price_per_m2 >= {min_p2}
-                      AND scraped_at > NOW() - INTERVAL '90 days'
-                      {area_filter}
-                      {dist_clause}
-                    ORDER BY scraped_at DESC
-                    LIMIT 50
-                """)
-                rows = cur.fetchall() or []
-                if len(rows) < 2:
-                    continue
 
-                prices = [float(r['price_per_m2']) for r in rows if r.get('price_per_m2')]
-                if not prices:
-                    continue
+                rows: list = []
+                for mult in area_mults:
+                    area_filter = ''
+                    if area and area > 0:
+                        area_lo = max(50, round(area * (1 - mult)))
+                        area_hi = round(area * (1 + mult))
+                        area_filter = f'AND area BETWEEN {area_lo} AND {area_hi}'
 
-                # Отсекаем выбросы (10%-90% перцентиль)
-                srt = sorted(prices)
-                lo = srt[max(0, int(len(srt) * 0.1))]
-                hi = srt[min(len(srt)-1, int(len(srt) * 0.9))]
-                filtered = [p for p in srt if lo <= p <= hi] or srt
+                    cur.execute(f"""
+                        SELECT price_per_m2, price, area, address, district, source
+                        FROM {SCHEMA}.market_listings
+                        WHERE deal_type = '{deal}'
+                          AND category IN ({cats_sql})
+                          AND price_per_m2 >= {min_p2}
+                          AND scraped_at > NOW() - INTERVAL '90 days'
+                          {area_filter}
+                          {dist_clause}
+                        ORDER BY scraped_at DESC
+                        LIMIT 50
+                    """)
+                    rows = cur.fetchall() or []
+                    # Продолжаем расширять площадь, пока не найдём ≥5 аналогов (честный порог)
+                    if len(rows) >= 5 or mult == area_mults[-1]:
+                        break
 
-                median_p2 = round(_stat.median(filtered))
-                all_prices = [float(r['price']) for r in rows if r.get('price') and r['price'] > 0]
-                srcs = list({r.get('source', '') for r in rows if r.get('source')})
+                # Запоминаем лучший (по количеству) результат среди district-попыток
+                if len(rows) > len(best_rows):
+                    best_rows = rows
+                    best_dist_kw = dist_kw
 
-                result[deal] = {
-                    'price_per_m2': median_p2,
-                    'price_median': round(_stat.median(all_prices)) if all_prices else None,
-                    'price_min': round(min(filtered)),
-                    'price_max': round(max(filtered)),
-                    'analogs_count': len(rows),
-                    'district': dist_kw or 'Краснодар',
-                    'snapshot_date': None,
-                    'sources': srcs,
-                }
-                for s in srcs:
-                    if s and s not in result['sources']:
-                        result['sources'].append(s)
-                break  # нашли — не идём дальше
+            rows = best_rows
+            dist_kw = best_dist_kw
+            if len(rows) < 2:
+                continue
+
+            prices = [float(r['price_per_m2']) for r in rows if r.get('price_per_m2')]
+            if not prices:
+                continue
+
+            # Отсекаем выбросы (10%-90% перцентиль)
+            srt = sorted(prices)
+            lo = srt[max(0, int(len(srt) * 0.1))]
+            hi = srt[min(len(srt)-1, int(len(srt) * 0.9))]
+            filtered = [p for p in srt if lo <= p <= hi] or srt
+
+            median_p2 = round(_stat.median(filtered))
+            all_prices = [float(r['price']) for r in rows if r.get('price') and r['price'] > 0]
+            srcs = list({r.get('source', '') for r in rows if r.get('source')})
+
+            result[deal] = {
+                'price_per_m2': median_p2,
+                'price_median': round(_stat.median(all_prices)) if all_prices else None,
+                'price_min': round(min(filtered)),
+                'price_max': round(max(filtered)),
+                'analogs_count': len(rows),
+                'district': dist_kw or 'Краснодар',
+                'snapshot_date': None,
+                'sources': srcs,
+            }
+            for s in srcs:
+                if s and s not in result['sources']:
+                    result['sources'].append(s)
 
         # Fallback: если нет данных в market_listings — берём из снапшотов (только продажа)
         if result['sale'] is None:

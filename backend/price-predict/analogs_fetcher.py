@@ -39,11 +39,30 @@ CAT_TO_ARRPRO = {
     'car_service':  'svobodnogo-naznacheniya',
 }
 
-# Маппинг наших категорий → slug ayax.ru
+# Маппинг наших категорий → slug ayax.ru (проверено: реальная структура сайта — /{prodazha|arenda}-{slug}/)
+# Подтверждённые категории: zdanij (здания), ofisov (офисы). Остальные — best-effort,
+# при неудаче (404/пусто) категория не скрапится вообще (без fallback на общий каталог).
 CAT_TO_AYAX = {
-    'office': 'office', 'retail': 'retail', 'warehouse': 'warehouse',
-    'free_purpose': 'free', 'production': 'production',
-    'business': 'business', 'restaurant': 'catering',
+    'building': 'zdanij',
+    'office': 'ofisov',
+    'warehouse': 'skladov',
+    'retail': 'torgovyh-ploschadej',
+    'production': 'proizvodstva',
+}
+
+# Маппинг наших категорий → slug etagi.com (krasnodar.etagi.com/commerce/{slug}/)
+CAT_TO_ETAGI = {
+    'building': 'zdanie',
+    'office': 'ofis',
+    'retail': 'torgovye-pomeshheniya',
+}
+
+# Маппинг наших внутренних категорий → категории схемы market_listings
+# (market_listings использует свой набор: 'standalone' вместо 'building' и т.д.)
+OUR_CAT_TO_ML_CAT = {
+    'building': 'standalone',
+    'restaurant': 'catering',
+    'production': 'industrial',
 }
 
 # Маппинг URL-slugs → категории (для парсинга ответа)
@@ -238,6 +257,8 @@ def _parse_generic_html(html: str, source: str, category: str, deal_type: str,
     """
     import hashlib
 
+    ml_category = OUR_CAT_TO_ML_CAT.get(category, category)
+
     results = []
     price_pat = re.compile(r'(\d[\d\s]{4,})\s*(?:₽|руб\.?|р\.)', re.UNICODE)
     area_pat = re.compile(r'(\d+[.,]?\d*)\s*м²', re.UNICODE)
@@ -267,7 +288,7 @@ def _parse_generic_html(html: str, source: str, category: str, deal_type: str,
                 'external_id': ext_id,
                 'url': '',
                 'title': f'{category} {deal_type} {best_a} м²',
-                'category': category,
+                'category': ml_category,
                 'deal_type': deal_type,
                 'price': float(p),
                 'price_per_m2': round(p / best_a, 2),
@@ -288,26 +309,21 @@ def _parse_generic_html(html: str, source: str, category: str, deal_type: str,
 def _scrape_ayax_targeted(category: str, deal_type: str, area: float) -> list[dict]:
     """
     Целевой скрап ayax.ru по категории и типу сделки для дозапроса аналогов.
+    Реальная структура сайта: /{prodazha|arenda}-{slug}/ (например /prodazha-zdanij/).
+    Если категория не сопоставлена (нет в CAT_TO_AYAX) — сайт не скрапится вообще,
+    чтобы не подмешивать объекты чужих категорий под неверной меткой.
     """
-    deal_slug = 'arenda' if deal_type == 'rent' else 'prodazha'
     cat_slug = CAT_TO_AYAX.get(category, '')
+    if not cat_slug:
+        print(f'[analogs_fetcher] ayax.ru: категория "{category}" не поддерживается, пропуск')
+        return []
 
-    candidate_urls = []
-    if cat_slug:
-        candidate_urls.append(f'https://www.ayax.ru/kommercheskaya-nedvizhimost/{cat_slug}/{deal_slug}/')
-        candidate_urls.append(f'https://www.ayax.ru/kommercheskaya-nedvizhimost/{cat_slug}/')
-    candidate_urls.append(f'https://www.ayax.ru/kommercheskaya-nedvizhimost/{deal_slug}/')
-    candidate_urls.append('https://www.ayax.ru/kommercheskaya-nedvizhimost/')
+    deal_prefix = 'arenda' if deal_type == 'rent' else 'prodazha'
+    url = f'https://www.ayax.ru/{deal_prefix}-{cat_slug}/'
 
-    html = ''
-    for url in candidate_urls:
-        html = _fetch(url, timeout=15)
-        if html and len(html) >= 10_000:
-            break
-        html = ''
-
-    if not html:
-        print('[analogs_fetcher] ayax.ru: all URLs failed or too small')
+    html = _fetch(url, timeout=15)
+    if not html or len(html) < 10_000:
+        print(f'[analogs_fetcher] ayax.ru {url}: пусто или слишком мало данных')
         return []
 
     min_p = 20_000 if deal_type == 'rent' else 300_000
@@ -319,32 +335,29 @@ def _scrape_ayax_targeted(category: str, deal_type: str, area: float) -> list[di
 def _scrape_etagi_targeted(category: str, deal_type: str, area: float) -> list[dict]:
     """
     Целевой скрап etagi.com (федеральный агрегатор) для дозапроса аналогов.
+    Реальная структура: krasnodar.etagi.com/commerce/{slug}/ (только продажа/общий каталог).
+    Если категория не сопоставлена — сайт не скрапится вообще (см. _scrape_ayax_targeted).
     JSON-поля "square" и "price" встроены в HTML каталога.
     """
     import hashlib
 
+    cat_slug = CAT_TO_ETAGI.get(category, '')
+    if not cat_slug:
+        print(f'[analogs_fetcher] etagi.com: категория "{category}" не поддерживается, пропуск')
+        return []
+    # Каталог etagi.com/commerce/ отдаёт только объявления продажи — для аренды не используем
     if deal_type == 'rent':
-        candidate_urls = [
-            'https://krasnodar.etagi.com/realty/arenda-kommercheskoy-nedvizhimosti/',
-            'https://krasnodar.etagi.com/rent/commercial/',
-        ]
-    else:
-        candidate_urls = [
-            'https://krasnodar.etagi.com/realty/kommercheskaya-nedvizhimost/',
-            'https://krasnodar.etagi.com/commercial/',
-        ]
-
-    html = ''
-    for url in candidate_urls:
-        html = _fetch(url, timeout=12)
-        if html and len(html) >= 10_000:
-            break
-        html = ''
-
-    if not html:
-        print('[analogs_fetcher] etagi.com: all URLs failed')
+        print('[analogs_fetcher] etagi.com: раздел аренды не поддерживается, пропуск')
         return []
 
+    url = f'https://krasnodar.etagi.com/commerce/{cat_slug}/'
+    html = _fetch(url, timeout=12)
+
+    if not html or len(html) < 10_000:
+        print(f'[analogs_fetcher] etagi.com {url}: пусто или слишком мало данных')
+        return []
+
+    ml_category = OUR_CAT_TO_ML_CAT.get(category, category)
     min_p = 20_000 if deal_type == 'rent' else 300_000
     area_min = area * 0.2 if area > 0 else 5
     area_max = area * 5.0 if area > 0 else 10000
@@ -374,7 +387,7 @@ def _scrape_etagi_targeted(category: str, deal_type: str, area: float) -> list[d
                 'external_id': ext_id,
                 'url': '',
                 'title': f'{category} {deal_type} {sq_val} м²',
-                'category': category,
+                'category': ml_category,
                 'deal_type': deal_type,
                 'price': best_p[1],
                 'price_per_m2': round(best_p[1] / sq_val, 2),
@@ -440,8 +453,13 @@ def _save_to_market_listings(cur, conn, items: list[dict]) -> int:
     return saved
 
 
-def _filter_by_area(items: list[dict], area: float, delta_pct: float = 0.20) -> list[dict]:
-    """Оставляем только объекты в диапазоне площади ±delta_pct."""
+def _filter_by_area(items: list[dict], area: float, delta_pct: float = 1.0) -> list[dict]:
+    """
+    Оставляем только объекты в диапазоне площади ±delta_pct.
+    По умолчанию ±100% — согласовано с каскадным расширением в load_market_comparables
+    (noi_model.py), где итоговая фильтрация по площади происходит при выборке из БД.
+    Здесь фильтр лишь отсекает явно нерелевантные по масштабу объекты (напр. 25 000 м² склад).
+    """
     lo = area * (1 - delta_pct)
     hi = area * (1 + delta_pct)
     return [i for i in items if i.get('area') and lo <= float(i['area']) <= hi]
