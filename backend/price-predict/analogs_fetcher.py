@@ -39,6 +39,13 @@ CAT_TO_ARRPRO = {
     'car_service':  'svobodnogo-naznacheniya',
 }
 
+# Маппинг наших категорий → slug ayax.ru
+CAT_TO_AYAX = {
+    'office': 'office', 'retail': 'retail', 'warehouse': 'warehouse',
+    'free_purpose': 'free', 'production': 'production',
+    'business': 'business', 'restaurant': 'catering',
+}
+
 # Маппинг URL-slugs → категории (для парсинга ответа)
 URL_CAT_MAP = {
     'sklad': 'warehouse', 'ofis': 'office',
@@ -221,6 +228,175 @@ def _parse_arrpro_page(html: str, deal_type: str) -> list[dict]:
     return results
 
 
+def _parse_generic_html(html: str, source: str, category: str, deal_type: str,
+                         min_price: float, area: float) -> list[dict]:
+    """
+    Универсальный парсер цен+площадей из HTML (для ayax.ru и etagi.com),
+    когда точной структуры карточек не знаем — ищем пары
+    "цена" + "площадь" в окне ±800 символов.
+    Возвращает элементы в формате, совместимом с _save_to_market_listings.
+    """
+    import hashlib
+
+    results = []
+    price_pat = re.compile(r'(\d[\d\s]{4,})\s*(?:₽|руб\.?|р\.)', re.UNICODE)
+    area_pat = re.compile(r'(\d+[.,]?\d*)\s*м²', re.UNICODE)
+
+    prices = [(m.start(), _clean_price(m.group(1))) for m in price_pat.finditer(html)]
+    areas = [(m.start(), _clean_area(m.group(1))) for m in area_pat.finditer(html)]
+
+    area_min = area * 0.2 if area > 0 else 5
+    area_max = area * 5.0 if area > 0 else 10000
+
+    used_prices = set()
+    for pi, p in prices:
+        if not p or p < min_price or pi in used_prices:
+            continue
+        best_a = None
+        best_dist = 9999
+        for ai, a_val in areas:
+            if a_val and area_min <= a_val <= area_max and abs(ai - pi) < 800:
+                dist = abs(ai - pi)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_a = a_val
+        if best_a and best_a > 0:
+            ext_id = hashlib.md5(f'{source}_{p}_{best_a}'.encode()).hexdigest()[:16]
+            results.append({
+                'source': source,
+                'external_id': ext_id,
+                'url': '',
+                'title': f'{category} {deal_type} {best_a} м²',
+                'category': category,
+                'deal_type': deal_type,
+                'price': float(p),
+                'price_per_m2': round(p / best_a, 2),
+                'area': float(best_a),
+                'address': None,
+                'district': None,
+                'floor': None,
+                'total_floors': None,
+                'condition': None,
+                'road_line': None,
+            })
+            used_prices.add(pi)
+        if len(results) >= 15:
+            break
+    return results
+
+
+def _scrape_ayax_targeted(category: str, deal_type: str, area: float) -> list[dict]:
+    """
+    Целевой скрап ayax.ru по категории и типу сделки для дозапроса аналогов.
+    """
+    deal_slug = 'arenda' if deal_type == 'rent' else 'prodazha'
+    cat_slug = CAT_TO_AYAX.get(category, '')
+
+    candidate_urls = []
+    if cat_slug:
+        candidate_urls.append(f'https://www.ayax.ru/kommercheskaya-nedvizhimost/{cat_slug}/{deal_slug}/')
+        candidate_urls.append(f'https://www.ayax.ru/kommercheskaya-nedvizhimost/{cat_slug}/')
+    candidate_urls.append(f'https://www.ayax.ru/kommercheskaya-nedvizhimost/{deal_slug}/')
+    candidate_urls.append('https://www.ayax.ru/kommercheskaya-nedvizhimost/')
+
+    html = ''
+    for url in candidate_urls:
+        html = _fetch(url, timeout=15)
+        if html and len(html) >= 10_000:
+            break
+        html = ''
+
+    if not html:
+        print('[analogs_fetcher] ayax.ru: all URLs failed or too small')
+        return []
+
+    min_p = 20_000 if deal_type == 'rent' else 300_000
+    res = _parse_generic_html(html, 'ayax.ru', category, deal_type, min_p, area)
+    print(f'[analogs_fetcher] ayax.ru: {len(res)} analogs found')
+    return res
+
+
+def _scrape_etagi_targeted(category: str, deal_type: str, area: float) -> list[dict]:
+    """
+    Целевой скрап etagi.com (федеральный агрегатор) для дозапроса аналогов.
+    JSON-поля "square" и "price" встроены в HTML каталога.
+    """
+    import hashlib
+
+    if deal_type == 'rent':
+        candidate_urls = [
+            'https://krasnodar.etagi.com/realty/arenda-kommercheskoy-nedvizhimosti/',
+            'https://krasnodar.etagi.com/rent/commercial/',
+        ]
+    else:
+        candidate_urls = [
+            'https://krasnodar.etagi.com/realty/kommercheskaya-nedvizhimost/',
+            'https://krasnodar.etagi.com/commercial/',
+        ]
+
+    html = ''
+    for url in candidate_urls:
+        html = _fetch(url, timeout=12)
+        if html and len(html) >= 10_000:
+            break
+        html = ''
+
+    if not html:
+        print('[analogs_fetcher] etagi.com: all URLs failed')
+        return []
+
+    min_p = 20_000 if deal_type == 'rent' else 300_000
+    area_min = area * 0.2 if area > 0 else 5
+    area_max = area * 5.0 if area > 0 else 10000
+
+    squares = [(m.start(), float(m.group(1))) for m in re.finditer(r'"square"\s*:\s*(\d+(?:\.\d+)?)', html)]
+    prices = [(m.start(), float(m.group(1))) for m in re.finditer(r'"price"\s*:\s*"?(\d+)"?', html)]
+
+    results = []
+    used_price_pos = set()
+    for sq_pos, sq_val in squares:
+        if not (area_min <= sq_val <= area_max):
+            continue
+        best_p = None
+        best_dist = 9999
+        for pr_pos, pr_val in prices:
+            if pr_pos in used_price_pos:
+                continue
+            dist = abs(pr_pos - sq_pos)
+            if dist < 3000 and dist < best_dist and pr_val >= min_p:
+                best_dist = dist
+                best_p = (pr_pos, pr_val)
+        if best_p:
+            used_price_pos.add(best_p[0])
+            ext_id = hashlib.md5(f'etagi_{best_p[1]}_{sq_val}'.encode()).hexdigest()[:16]
+            results.append({
+                'source': 'etagi.com',
+                'external_id': ext_id,
+                'url': '',
+                'title': f'{category} {deal_type} {sq_val} м²',
+                'category': category,
+                'deal_type': deal_type,
+                'price': best_p[1],
+                'price_per_m2': round(best_p[1] / sq_val, 2),
+                'area': sq_val,
+                'address': None,
+                'district': None,
+                'floor': None,
+                'total_floors': None,
+                'condition': None,
+                'road_line': None,
+            })
+        if len(results) >= 15:
+            break
+
+    if not results:
+        min_p = 20_000 if deal_type == 'rent' else 300_000
+        results = _parse_generic_html(html, 'etagi.com', category, deal_type, min_p, area)
+
+    print(f'[analogs_fetcher] etagi.com: {len(results)} analogs found')
+    return results
+
+
 def _save_to_market_listings(cur, conn, items: list[dict]) -> int:
     """Сохраняет найденные аналоги в market_listings для будущего использования."""
     saved = 0
@@ -273,16 +449,18 @@ def _filter_by_area(items: list[dict], area: float, delta_pct: float = 0.20) -> 
 
 def fetch_external_analogs(listing: dict, cur, conn, need: int = 35) -> dict:
     """
-    Целевой дозапрос аналогов с внешних сайтов (arrpro → cian).
+    Целевой дозапрос аналогов с внешних сайтов: arrpro → ayax → etagi → cian (резерв).
     Вызывается когда в БД нашлось < need аналогов.
 
     Стратегия arrpro:
       - Шаг 1: страница 1-3 по точной категории+сделке
       - Шаг 2: если мало — добавляем страницы 4-8
       - Фильтруем по площади ±20% после скачивания
+    Ayax и Etagi добавляются по одной странице каталога каждый,
+    если после arrpro всё ещё не хватает аналогов.
 
     Все найденные объекты сохраняются в market_listings.
-    Возвращает dict: items (list), count (int), saved (int), source ('arrpro'/'cian'/'none')
+    Возвращает dict: items (list), count (int), saved (int), source (напр. 'arrpro+ayax+etagi')
     """
     category = (listing.get('category') or listing.get('type') or '').lower()
     deal = (listing.get('deal') or '').lower()
@@ -327,9 +505,33 @@ def fetch_external_analogs(listing: dict, cur, conn, need: int = 35) -> dict:
             print(f'[analogs_fetcher] arrpro result: total_scraped={len(all_items)}, filtered={len(filtered)}')
         all_items = filtered
 
-    # ── CIAN: резерв если arrpro дал мало ────────────────────────────────────
+    # ── AYAX: добавляем если после arrpro всё ещё не хватает ─────────────────
     if len(all_items) < need:
-        print(f'[analogs_fetcher] arrpro дал {len(all_items)} < {need}, пробуем cian')
+        print(f'[analogs_fetcher] после arrpro {len(all_items)} < {need}, пробуем ayax')
+        ayax_items = _scrape_ayax_targeted(category, deal_type_ml, area)
+        if ayax_items:
+            existing_ids = {i.get('external_id') for i in all_items}
+            new_ayax = [i for i in ayax_items if i.get('external_id') not in existing_ids]
+            all_items.extend(new_ayax)
+            if new_ayax:
+                scrape_source = scrape_source + '+ayax' if scrape_source != 'none' else 'ayax'
+            print(f'[analogs_fetcher] ayax добавил {len(new_ayax)}, итого={len(all_items)}')
+
+    # ── ETAGI: добавляем если всё ещё не хватает ─────────────────────────────
+    if len(all_items) < need:
+        print(f'[analogs_fetcher] после ayax {len(all_items)} < {need}, пробуем etagi')
+        etagi_items = _scrape_etagi_targeted(category, deal_type_ml, area)
+        if etagi_items:
+            existing_ids = {i.get('external_id') for i in all_items}
+            new_etagi = [i for i in etagi_items if i.get('external_id') not in existing_ids]
+            all_items.extend(new_etagi)
+            if new_etagi:
+                scrape_source = scrape_source + '+etagi' if scrape_source != 'none' else 'etagi'
+            print(f'[analogs_fetcher] etagi добавил {len(new_etagi)}, итого={len(all_items)}')
+
+    # ── CIAN: последний резерв если всё ещё мало ─────────────────────────────
+    if len(all_items) < need:
+        print(f'[analogs_fetcher] после etagi {len(all_items)} < {need}, пробуем cian')
         cian_items = _scrape_cian_targeted(category, deal_type_ml, area)
         if cian_items:
             # Дедупликация по external_id
