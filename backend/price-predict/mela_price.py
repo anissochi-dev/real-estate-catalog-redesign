@@ -21,7 +21,7 @@ import urllib.error
 from datetime import datetime, timedelta
 
 from ai_client import chat_simple
-from analogs_fetcher import query_market_listings
+from analogs_fetcher import query_market_listings, fetch_external_analogs
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
 YANDEX_SEARCH_URL = 'https://yandex.ru/search/xml'
@@ -329,6 +329,55 @@ def _market_listings_analogs(cur, listing: dict) -> list:
             'url': str(r.get('url') or ''),
         })
     print(f'[mela_price] market_listings: {len(results)} analogs')
+    return results
+
+
+def _targeted_external_analogs(cur, conn, listing: dict) -> list:
+    """
+    Целевой live-дозапрос с arrpro/ayax/etagi/cian — та же точная логика (точные URL
+    по категории+сделке), что использует инвестиционная модель (noi_model → analogs_fetcher).
+    Вызывается когда своя база + копилка market_listings не дали достаточно данных.
+
+    ВАЖНО: fetch_external_analogs сохраняет ВСЁ найденное на странице каталога (может
+    включать смежные категории вроде 'free_purpose' при скрапе 'warehouse'). Поэтому после
+    сохранения перечитываем копилку через query_market_listings с фильтром по нужной
+    категории+сделке — точно так же, как это делает noi_model.load_market_comparables.
+    """
+    category = (listing.get('category') or '').lower()
+    deal = (listing.get('deal') or 'sale').lower()
+    area = float(listing.get('area') or 0)
+    district = (listing.get('district') or '').strip()
+
+    try:
+        ext = fetch_external_analogs(listing, cur, conn, need=15)
+        print(f'[mela_price] targeted external scrape: {ext.get("count", 0)} raw items (source={ext.get("source")})')
+    except Exception as e:
+        print(f'[mela_price] targeted external analogs error: {e}')
+        return []
+
+    if not ext.get('count'):
+        return []
+
+    # Перечитываем копилку с фильтром по точной категории+сделке (без ограничения по времени
+    # scraped_at здесь не нужно — query_market_listings уже фильтрует на 90 дней)
+    rows = query_market_listings(cur, category, deal, area=area, district=district, limit=20)
+
+    results = []
+    for r in rows:
+        p = float(r.get('price') or 0)
+        a = float(r.get('area') or 0)
+        if p <= 0 or a <= 0:
+            continue
+        ppm2 = float(r.get('price_per_m2') or 0) or round(p / a)
+        results.append({
+            'source': r.get('source') or 'рынок',
+            'price': p,
+            'area': a,
+            'price_per_m2': ppm2,
+            'district': str(r.get('district') or ''),
+            'url': str(r.get('url') or ''),
+        })
+    print(f'[mela_price] targeted external (filtered): {len(results)} analogs')
     return results
 
 
@@ -1238,18 +1287,31 @@ def handle_mela_price_check(cur, conn, body: dict, qs: dict) -> dict:
         except Exception as e:
             print(f'[mela_price] market_listings error: {e}')
 
-    # 3) Парсинг локальных сайтов Краснодара (etagi, ayax, kayan, arrpro, moreon) —
-    # только если копилка не дала достаточно данных
+    # 3) Целевой live-дозапрос с arrpro/ayax/etagi/cian — точная логика по категории+сделке
+    # (общая с инвестиционной моделью). Найденное сохраняется в market_listings.
+    # Только если своя база + копилка не дали достаточно данных.
     if len(analogs) < 5:
         try:
-            site_analogs = _scrape_local_sites(listing)
-            if site_analogs:
-                analogs.extend(site_analogs)
-                for a in site_analogs:
+            targeted_analogs = _targeted_external_analogs(cur, conn, listing)
+            if targeted_analogs:
+                analogs.extend(targeted_analogs)
+                for a in targeted_analogs:
                     if a['source'] not in sources_used:
                         sources_used.append(a['source'])
         except Exception as e:
-            print(f'[mela_price] local sites error: {e}')
+            print(f'[mela_price] targeted external error: {e}')
+
+    # 3б) moreon-invest.ru — уникальный источник, не используется инвестмоделью
+    if len(analogs) < 5:
+        try:
+            moreon_analogs = _scrape_moreon(listing)
+            if moreon_analogs:
+                analogs.extend(moreon_analogs)
+                for a in moreon_analogs:
+                    if a['source'] not in sources_used:
+                        sources_used.append(a['source'])
+        except Exception as e:
+            print(f'[mela_price] moreon error: {e}')
 
     # 4) Yandex XML Search (когда будет настроен)
     if len(analogs) < 5:
