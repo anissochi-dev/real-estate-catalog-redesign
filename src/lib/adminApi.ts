@@ -450,7 +450,7 @@ export interface UploadResult {
  *  При 502/503/504 (таймаут бэкенда во время Pillow-обработки) — до 3 retry с паузой. */
 export async function uploadFileEx(
   file: File,
-  folder: 'photos' | 'logo' | 'watermark' = 'photos',
+  folder: 'photos' | 'logo' | 'watermark' | 'document' = 'photos',
   applyWatermark = false,
 ): Promise<UploadResult> {
   const b64 = await new Promise<string>((resolve, reject) => {
@@ -460,7 +460,7 @@ export async function uploadFileEx(
     r.readAsDataURL(file);
   });
   const token = getToken();
-  const kind = folder === 'photos' ? 'photo' : folder === 'logo' ? 'logo' : 'watermark';
+  const kind = folder === 'photos' ? 'photo' : folder === 'logo' ? 'logo' : folder === 'document' ? 'document' : 'watermark';
   const body = JSON.stringify({ file_base64: b64, filename: file.name, kind, apply_watermark: applyWatermark });
   const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(token ? { 'X-Auth-Token': token } : {}) };
 
@@ -503,7 +503,7 @@ export async function uploadFileEx(
 /** Обратно-совместимая загрузка — возвращает только URL (с ВЗ если есть, иначе оригинал) */
 export async function uploadFile(
   file: File,
-  folder: 'photos' | 'logo' | 'watermark' = 'photos',
+  folder: 'photos' | 'logo' | 'watermark' | 'document' = 'photos',
   applyWatermark = false,
 ): Promise<string> {
   const r = await uploadFileEx(file, folder, applyWatermark);

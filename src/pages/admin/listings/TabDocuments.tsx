@@ -35,7 +35,7 @@ export function TabDocuments({ listingId }: { listingId: number }) {
   const handleFile = async (file: File) => {
     setUploading(true);
     try {
-      const url = await uploadFile(file, 'photos');
+      const url = await uploadFile(file, 'document');
       await adminApi.addListingDocument(listingId, file.name, url);
       loadDocs();
     } catch (e: unknown) {

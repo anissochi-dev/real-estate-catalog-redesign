@@ -1,7 +1,8 @@
 """
-Business: Загрузка фото/логотипа/водяного знака в S3 через base64. Опционально накладывает водяной знак на фото объектов.
+Business: Загрузка фото/логотипа/водяного знака/документа в S3 через base64. Опционально накладывает водяной знак на фото объектов.
 Также поддерживает публичную загрузку (kind=public) с защитой по magic bytes, rate limit и сканированием кода.
-Args: event с httpMethod POST, body {file_base64, filename, kind (photo/logo/watermark/public), apply_watermark}, headers X-Auth-Token
+kind=document — сохраняет файл (pdf/doc/docx/xls/xlsx/zip) как есть, без обработки как изображение.
+Args: event с httpMethod POST, body {file_base64, filename, kind (photo/logo/watermark/document/public), apply_watermark}, headers X-Auth-Token
 Returns: HTTP-ответ с url загруженного файла на CDN
 """
 
@@ -313,6 +314,50 @@ def handler(event, context):
 
             if len(data) > 15 * 1024 * 1024:
                 return _err(400, 'Файл больше 15 МБ')
+
+            # Документы (PDF/DOC/XLS/ZIP и т.д.) — сохраняем как есть, БЕЗ обработки как изображение.
+            # Раньше документы шли через kind='photo', из-за чего расширение подменялось на .jpg
+            # и сервер пытался открыть, например, .docx как картинку через Pillow — это приводило
+            # к зависанию обработки и таймауту (HTTP 502) на файлах больше первого.
+            if kind == 'document':
+                doc_ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'bin'
+                DOC_ALLOWED = {
+                    'pdf': 'application/pdf',
+                    'doc': 'application/msword',
+                    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    'xls': 'application/vnd.ms-excel',
+                    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'zip': 'application/zip',
+                    'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
+                }
+                if doc_ext not in DOC_ALLOWED:
+                    return _err(400, 'Неподдерживаемый тип файла для документа')
+                doc_ct = DOC_ALLOWED[doc_ext]
+                aws_key_doc = os.environ['AWS_ACCESS_KEY_ID']
+                s3_doc = boto3.client(
+                    's3', endpoint_url='https://bucket.poehali.dev',
+                    aws_access_key_id=aws_key_doc,
+                    aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+                )
+                doc_token = secrets.token_urlsafe(12)
+                safe_name = _safe(filename.rsplit('/', 1)[-1], 150) or f'file.{doc_ext}'
+                doc_key = f'documents/{doc_token}.{doc_ext}'
+                s3_doc.put_object(
+                    Bucket='files', Key=doc_key, Body=data, ContentType=doc_ct,
+                    CacheControl='public, max-age=31536000',
+                    ContentDisposition=f'inline; filename="{safe_name}"',
+                )
+                doc_url = f"https://cdn.poehali.dev/projects/{aws_key_doc}/bucket/{doc_key}"
+                try:
+                    cur.execute(
+                        f"INSERT INTO {SCHEMA}.s3_photo_refs (s3_key, cdn_url, is_orphan) "
+                        f"VALUES (%s, %s, TRUE) ON CONFLICT (s3_key) DO NOTHING",
+                        (doc_key, doc_url)
+                    )
+                    conn.commit()
+                except Exception:
+                    pass
+                return _ok({'url': doc_url, 'original_url': doc_url, 'watermarked': False, 'size': len(data)})
 
             ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'jpg'
             if ext not in ('jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'heic', 'heif'):
