@@ -141,8 +141,6 @@ export default function CrmDashboard({ setSection }: { setSection?: (s: string) 
 
   // Данные
   const d = data ?? {};
-  const funnel: { id: number; name: string; color: string; count: number; amount: number }[] = d.funnel ?? [];
-  const funnelMax = Math.max(...funnel.map(f => f.count), 1);
   const timeline: { day: string; count: number }[] = d.timeline ?? [];
   const timelineMax = Math.max(...timeline.map(t => t.count), 1);
   const leaderboard: { id: number; name: string; avatar: string | null; points: number }[] = d.leaderboard ?? [];
@@ -282,48 +280,8 @@ export default function CrmDashboard({ setSection }: { setSection?: (s: string) 
         </div>
       )}
 
-      {/* ── Воронка + динамика ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-
-        {/* Воронка этапов */}
-        <SectionCard icon="Filter" title="Воронка сделок">
-          {funnel.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Нет этапов</p>
-          ) : (
-            <div className="space-y-2.5">
-              {funnel.map(stage => (
-                <div key={stage.id}>
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: stage.color || '#64748b' }} />
-                      <span className="text-sm font-medium truncate max-w-[140px]">{stage.name}</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs flex-shrink-0">
-                      <span className="font-bold">{stage.count}</span>
-                      {stage.amount > 0 && (
-                        <span className="text-muted-foreground">{fmtMoney(stage.amount)}</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="h-2 bg-muted/40 rounded-full overflow-hidden">
-                    <div
-                      className="h-2 rounded-full transition-all duration-500"
-                      style={{
-                        width: `${funnelMax > 0 ? Math.max(4, Math.round(stage.count / funnelMax * 100)) : 0}%`,
-                        backgroundColor: stage.color || '#64748b',
-                        opacity: 0.8,
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-              <div className="pt-2 border-t border-border mt-2 flex justify-between text-xs text-muted-foreground">
-                <span>Активных сделок: <b className="text-foreground">{funnel.reduce((s, f) => s + f.count, 0)}</b></span>
-                <span>На сумму: <b className="text-foreground">{fmtMoney(funnel.reduce((s, f) => s + f.amount, 0))}</b></span>
-              </div>
-            </div>
-          )}
-        </SectionCard>
+      {/* ── Динамика ── */}
+      <div className="grid grid-cols-1 gap-3">
 
         {/* Динамика */}
         <SectionCard icon="TrendingUp" title={`Динамика сделок ${PERIOD_LABEL[period]}`}
