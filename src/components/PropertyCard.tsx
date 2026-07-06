@@ -7,7 +7,7 @@ import YandexMap from '@/components/YandexMap';
 import { useSettings } from '@/contexts/SettingsContext';
 import { prefetchListingById } from '@/lib/api';
 import { prefetchPage } from '@/app/lazyPages';
-import { fmtListingId } from '@/lib/formatPrice';
+import { fmtListingId, computePaybackYears } from '@/lib/formatPrice';
 
 const PREDICT_URL = 'https://functions.poehali.dev/9986e5a6-c4d4-407a-919f-a303aa3eddf2';
 
@@ -388,13 +388,17 @@ export default function PropertyCard({
             const isRent = property.deal === 'rent';
             const label = isBusiness ? 'Доход' : isRent ? 'Ставка' : hasTenant ? 'Сдан' : 'Прогноз';
             const isFact = hasTenant || isBusiness || isRent;
+            const paybackYears = computePaybackYears(property.price, property.deal, property.yearlyRent, property.monthlyRent);
             return (
               <div
-                className={`flex items-center gap-1.5 text-[12px] font-semibold ${isFact ? 'text-emerald-700' : 'text-blue-700'}`}
+                className={`flex items-center gap-1.5 flex-wrap text-[12px] font-semibold ${isFact ? 'text-emerald-700' : 'text-blue-700'}`}
                 title={hasTenant && property.tenantName ? `Арендатор: ${property.tenantName}` : ''}
               >
                 <Icon name={isFact ? 'CheckCircle2' : 'TrendingUp'} size={13} className={isFact ? 'text-emerald-500' : 'text-blue-500'} />
                 {label}: +{(income / 1000).toFixed(0)} тыс/мес
+                {paybackYears ? (
+                  <span className="text-muted-foreground font-normal">· окупаемость ~{paybackYears.toFixed(1)} лет</span>
+                ) : null}
               </div>
             );
           })()}

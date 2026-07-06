@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import type { ListingDetail } from '@/lib/api';
 import Icon from '@/components/ui/icon';
 import DescriptionRenderer from '@/components/property/DescriptionRenderer';
+import { computePaybackYears } from '@/lib/formatPrice';
 import PublicPhoneInput from '@/components/PublicPhoneInput';
 import PropertyMapInfrastructure from '@/components/PropertyMapInfrastructure';
 import LocationScoreWidget from '@/components/property/LocationScoreWidget';
@@ -88,7 +89,12 @@ export default function PropertyMainContent({
             <ParamCard icon="DoorOpen" label="Вход" value={ENTRANCE_LABELS[itemExt.entrance] || itemExt.entrance} />
           ) : null}
           {item.roadLine ? <ParamCard icon="Milestone" label="Линия расположения" value={ROAD_LINE_LABELS[item.roadLine] || item.roadLine} /> : null}
-          {item.payback ? <ParamCard icon="TrendingUp" label="Окупаемость" value={`${item.payback} мес${item.payback >= 12 ? ` (~${(item.payback / 12).toFixed(1)} лет)` : ''}`} /> : null}
+          {item.payback ? (
+            <ParamCard icon="TrendingUp" label="Окупаемость" value={`${item.payback} мес${item.payback >= 12 ? ` (~${(item.payback / 12).toFixed(1)} лет)` : ''}`} />
+          ) : (() => {
+            const autoYears = computePaybackYears(item.price, item.deal, item.yearlyRent, item.monthlyRent);
+            return autoYears ? <ParamCard icon="TrendingUp" label="Окупаемость" value={`~${autoYears.toFixed(1)} лет`} /> : null;
+          })()}
           {item.monthlyRent ? <ParamCard icon="Wallet" label="Арендный поток/мес" value={`${item.monthlyRent.toLocaleString('ru')} ₽`} /> : null}
           {item.yearlyRent ? <ParamCard icon="Coins" label="Арендный поток/год" value={`${item.yearlyRent.toLocaleString('ru')} ₽`} /> : null}
           {item.profit && !item.monthlyRent ? <ParamCard icon="LineChart" label="Прибыль/мес" value={`${(item.profit / 1000).toFixed(0)} тыс ₽`} /> : null}
