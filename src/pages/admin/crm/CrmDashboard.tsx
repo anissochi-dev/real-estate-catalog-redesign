@@ -141,8 +141,6 @@ export default function CrmDashboard({ setSection }: { setSection?: (s: string) 
 
   // Данные
   const d = data ?? {};
-  const timeline: { day: string; count: number }[] = d.timeline ?? [];
-  const timelineMax = Math.max(...timeline.map(t => t.count), 1);
   const leaderboard: { id: number; name: string; avatar: string | null; points: number }[] = d.leaderboard ?? [];
   const teamStats: { id: number; name: string; avatar: string | null; deals_count: number; commission_sum: number; won_count: number }[] = d.team_stats ?? [];
   const freshLeads: { id: number; name: string; phone: string; source: string; created_at: string; message: string }[] = d.fresh_leads ?? [];
@@ -279,41 +277,6 @@ export default function CrmDashboard({ setSection }: { setSection?: (s: string) 
           )}
         </div>
       )}
-
-      {/* ── Динамика ── */}
-      <div className="grid grid-cols-1 gap-3">
-
-        {/* Динамика */}
-        <SectionCard icon="TrendingUp" title={`Динамика сделок ${PERIOD_LABEL[period]}`}
-          badge={`${dealsList.length} шт`}>
-          {isLoading ? (
-            <div className="h-24 bg-muted/30 rounded-xl animate-pulse" />
-          ) : timeline.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">Нет сделок за период</div>
-          ) : (
-            <>
-              <div className="flex items-end gap-0.5 h-24 mb-3">
-                {timeline.map((t, i) => (
-                  <div key={i} className="flex-1 flex flex-col items-center group relative">
-                    <div
-                      className="w-full bg-brand-blue/30 hover:bg-brand-blue rounded-t-sm transition-all"
-                      style={{ height: `${Math.max(Math.round(t.count / timelineMax * 100), 4)}%` }}
-                    />
-                    <div className="absolute bottom-full mb-1 text-[10px] bg-foreground text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-10">
-                      {t.day.slice(5)}: {t.count}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>{timeline[0]?.day?.slice(5)}</span>
-                <span className="font-semibold text-brand-blue">{fmtMoney(d.amount_period ?? 0)}</span>
-                <span>{timeline[timeline.length - 1]?.day?.slice(5)}</span>
-              </div>
-            </>
-          )}
-        </SectionCard>
-      </div>
 
       {/* ── Команда: рейтинг + активность ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
