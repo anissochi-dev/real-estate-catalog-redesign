@@ -157,22 +157,22 @@ export default function CrmDashboard({ setSection }: { setSection?: (s: string) 
     <div className="space-y-4">
 
       {/* ── Шапка: заголовок + период ── */}
-      <div className="bg-white rounded-2xl border border-border px-5 py-4 flex items-center gap-4 flex-wrap">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
+      <div className="bg-white rounded-2xl border border-border px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+        <div className="flex items-center gap-3 min-w-0 sm:flex-1">
           <div className="w-10 h-10 rounded-xl bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
             <Icon name="LayoutDashboard" size={20} className="text-brand-blue" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h2 className="font-bold text-lg leading-none">Командный пульт</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">Сделки, команда и активность {PERIOD_LABEL[period]}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">Сделки, команда и активность {PERIOD_LABEL[period]}</p>
           </div>
         </div>
-        <div className="flex gap-1 bg-muted/40 rounded-xl p-1">
+        <div className="grid grid-cols-4 sm:flex gap-1 bg-muted/40 rounded-xl p-1 flex-shrink-0">
           {PERIOD_OPTS.map(opt => (
             <button
               key={opt.value}
               onClick={() => setPeriod(opt.value)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+              className={`px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition whitespace-nowrap ${
                 period === opt.value ? 'bg-white shadow-sm text-brand-blue' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
