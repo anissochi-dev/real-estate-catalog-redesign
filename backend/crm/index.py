@@ -260,22 +260,24 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
     # ── DASHBOARD ──────────────────────────────────────────────────────────────
     if resource == 'dashboard':
         period = qs.get('period', 'month')
-        period_filter = {
-            'week':  "created_at >= date_trunc('week', NOW())",
-            'month': "created_at >= date_trunc('month', NOW())",
-            'year':  "created_at >= date_trunc('year', NOW())",
-            'all':   "TRUE",
-        }.get(period, "created_at >= date_trunc('month', NOW())")
+        PERIOD_TRUNC = {'week': 'week', 'month': 'month', 'year': 'year'}
+
+        def period_cond(column: str) -> str:
+            """Строит условие фильтра по периоду для указанной колонки (можно с алиасом таблицы,
+            например 'p.created_at' или 'd.closed_at'). Для period='all' — без фильтра (TRUE)."""
+            if period not in PERIOD_TRUNC:
+                return 'TRUE'
+            return f"{column} >= date_trunc('{PERIOD_TRUNC[period]}', NOW())"
 
         # ── Базовые метрики сделок ──
         cur.execute("SELECT COUNT(*) FROM crm_deals")
         total_deals = cur.fetchone()[0]
-        cur.execute(f"SELECT COUNT(*) FROM crm_deals WHERE {period_filter}")
+        cur.execute(f"SELECT COUNT(*) FROM crm_deals WHERE {period_cond('created_at')}")
         deals_period = cur.fetchone()[0]
 
         cur.execute("SELECT COUNT(*) FROM crm_deals WHERE closed_at IS NOT NULL AND stage_id IN (SELECT id FROM crm_stages WHERE is_win = TRUE)")
         won_deals = cur.fetchone()[0]
-        cur.execute(f"SELECT COUNT(*) FROM crm_deals WHERE closed_at IS NOT NULL AND stage_id IN (SELECT id FROM crm_stages WHERE is_win = TRUE) AND {period_filter.replace('created_at', 'closed_at')}")
+        cur.execute(f"SELECT COUNT(*) FROM crm_deals WHERE closed_at IS NOT NULL AND stage_id IN (SELECT id FROM crm_stages WHERE is_win = TRUE) AND {period_cond('closed_at')}")
         won_deals_period = cur.fetchone()[0]
 
         cur.execute("SELECT COUNT(*) FROM crm_owners")
@@ -283,10 +285,10 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
 
         cur.execute("SELECT COALESCE(SUM(commission), 0) FROM crm_deals WHERE stage_id IN (SELECT id FROM crm_stages WHERE is_win = TRUE)")
         total_commission = float(cur.fetchone()[0])
-        cur.execute(f"SELECT COALESCE(SUM(commission), 0) FROM crm_deals WHERE stage_id IN (SELECT id FROM crm_stages WHERE is_win = TRUE) AND {period_filter.replace('created_at', 'closed_at')}")
+        cur.execute(f"SELECT COALESCE(SUM(commission), 0) FROM crm_deals WHERE stage_id IN (SELECT id FROM crm_stages WHERE is_win = TRUE) AND {period_cond('closed_at')}")
         commission_period = float(cur.fetchone()[0])
 
-        cur.execute(f"SELECT COALESCE(SUM(amount), 0) FROM crm_deals WHERE {period_filter}")
+        cur.execute(f"SELECT COALESCE(SUM(amount), 0) FROM crm_deals WHERE {period_cond('created_at')}")
         amount_period = float(cur.fetchone()[0])
 
         # ── Просроченные и тревожные ──
@@ -328,7 +330,7 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
         # ── Рейтинг команды ──
         cur.execute(
             "SELECT u.id, u.name, u.avatar, COALESCE(SUM(p.points),0) as total_points "
-            f"FROM users u LEFT JOIN crm_points p ON p.user_id = u.id AND p.{period_filter} "
+            f"FROM users u LEFT JOIN crm_points p ON p.user_id = u.id AND {period_cond('p.created_at')} "
             "WHERE u.role IN ('broker','director','office_manager','manager') "
             "  AND u.is_active = TRUE "
             "GROUP BY u.id, u.name, u.avatar ORDER BY total_points DESC LIMIT 7"
@@ -342,7 +344,7 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
                    COALESCE(SUM(d.commission), 0) AS commission_sum,
                    COUNT(DISTINCT CASE WHEN s.is_win THEN d.id END) AS won_count
             FROM users u
-            LEFT JOIN crm_deals d ON d.assigned_to = u.id AND d.{period_filter}
+            LEFT JOIN crm_deals d ON d.assigned_to = u.id AND {period_cond('d.created_at')}
             LEFT JOIN crm_stages s ON s.id = d.stage_id
             WHERE u.role IN ('broker','director','manager') AND u.is_active = TRUE
             GROUP BY u.id, u.name, u.avatar
@@ -375,7 +377,7 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
         # ── Динамика по дням ──
         cur.execute(f"""
             SELECT DATE(created_at) AS day, COUNT(*) AS cnt
-            FROM crm_deals WHERE {period_filter}
+            FROM crm_deals WHERE {period_cond('created_at')}
             GROUP BY DATE(created_at) ORDER BY day ASC
         """)
         timeline = [{'day': str(r[0]), 'count': int(r[1])} for r in cur.fetchall()]
@@ -405,7 +407,7 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
             LEFT JOIN crm_stages s ON s.id = d.stage_id
             LEFT JOIN users u ON u.id = d.assigned_to
             LEFT JOIN listings l ON l.id = d.listing_id
-            WHERE d.{period_filter}
+            WHERE {period_cond('d.created_at')}
             ORDER BY d.created_at DESC LIMIT 100
         """)
         deals_list = [
