@@ -331,7 +331,7 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
         cur.execute(
             "SELECT u.id, u.name, u.avatar, COALESCE(SUM(p.points),0) as total_points "
             f"FROM users u LEFT JOIN crm_points p ON p.user_id = u.id AND {period_cond('p.created_at')} "
-            "WHERE u.role IN ('broker','director','office_manager','manager') "
+            "WHERE u.role IN ('broker','director','office_manager','manager','admin') "
             "  AND u.is_active = TRUE "
             "GROUP BY u.id, u.name, u.avatar ORDER BY total_points DESC LIMIT 7"
         )
@@ -346,7 +346,7 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
             FROM users u
             LEFT JOIN crm_deals d ON d.assigned_to = u.id AND {period_cond('d.created_at')}
             LEFT JOIN crm_stages s ON s.id = d.stage_id
-            WHERE u.role IN ('broker','director','manager') AND u.is_active = TRUE
+            WHERE u.role IN ('broker','director','manager','admin') AND u.is_active = TRUE
             GROUP BY u.id, u.name, u.avatar
             ORDER BY deals_count DESC, commission_sum DESC
             LIMIT 8
@@ -878,7 +878,7 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
                 LEFT JOIN crm_deals d ON d.assigned_to = u.id
                     AND d.stage_id IN (SELECT id FROM crm_stages WHERE is_win = TRUE)
                     {deals_filter}
-                WHERE u.role IN ('broker', 'director', 'office_manager', 'manager')
+                WHERE u.role IN ('broker', 'director', 'office_manager', 'manager', 'admin')
                   AND u.is_active = TRUE
                 GROUP BY u.id, u.name, u.avatar, u.role
                 ORDER BY total_points DESC, deals_won DESC
