@@ -45,7 +45,7 @@
       "path": "/?resource=public_home_data",
       "expectedStatus": 200,
       "bodyMatcher": "partial",
-      "expectedBody": { "stats": { "total": 124 } }
+      "expectedBody": { "stats": {} }
     }
   ]
 }

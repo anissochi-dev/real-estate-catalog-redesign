@@ -681,16 +681,17 @@ def handler(event: dict, context) -> dict:
                         'body': json.dumps({'error': 'Not found'}),
                     }
                 d = dict(row)
-                if d.get('owner_name_final'):
-                    d['owner_name'] = d['owner_name_final']
-                if d.get('owner_phone_final'):
-                    d['owner_phone'] = d['owner_phone_final']
                 # ВРИ: показываем читаемое имя из справочника (если ВРИ удалён — оставляем slug)
                 if d.get('land_vri_name'):
                     d['land_vri'] = d['land_vri_name']
                 d.pop('owner_name_final', None)
                 d.pop('owner_phone_final', None)
                 d.pop('land_vri_name', None)
+                # Телефон/имя собственника — категорически не публикуем на сайте,
+                # доступен только брокеру внутри админки (backend/admin)
+                d.pop('owner_name', None)
+                d.pop('owner_phone', None)
+                d.pop('owner_phone2', None)
                 return _ok({'listing': _serialize(d)}, cache='public, max-age=120, stale-while-revalidate=30')
 
             where = ["status = 'active'", "(is_visible IS NULL OR is_visible = TRUE)"]
@@ -762,7 +763,6 @@ def handler(event: dict, context) -> dict:
                 "l.tenant_name, l.monthly_rent, l.yearly_rent, l.rent_index_pct, l.purpose, l.finishing, "
                 "l.ceiling_height, l.electricity_kw, l.utilities, l.road_line, "
                 "l.updated_at, l.created_at, l.last_edited_at, "
-                "l.owner_phone, "
                 "u.phone AS broker_phone"
             )
 
