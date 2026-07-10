@@ -895,13 +895,13 @@ def handler(event, context):
 
                         cur.execute(
                             f"INSERT INTO {SCHEMA}.listings "
-                            f"(title, description, category, deal, price, area, address, city, image, images, status, author_id, "
+                            f"(title, description, category, deal, price, area, address, city, image, images, status, author_id, broker_id, "
                             f"floor, total_floors, ceiling_height, building_year, building_class, subway_station, subway_distance, lat, lng) "
                             f"VALUES ('{_safe(title, 255)}', '{_safe(description, 5000)}', "
                             f"'{category}', '{deal}', {price}, {area}, "
                             f"'{_safe(address, 255)}', '{_safe(city, 100)}', "
                             f"'{_safe(first_img, 500)}', '{_safe(images_str, 5000)}', "
-                            f"'active', {user['id']}, "
+                            f"'active', {user['id']}, {user['id']}, "
                             f"{floor if floor is not None else 'NULL'}, "
                             f"{total_floors if total_floors is not None else 'NULL'}, "
                             f"{ceiling_height if ceiling_height is not None else 'NULL'}, "

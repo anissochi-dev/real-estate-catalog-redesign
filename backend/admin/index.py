@@ -2795,7 +2795,7 @@ def _listings(cur, conn, method, rid, event, user):
 
         sql = (
             f"INSERT INTO {SCHEMA}.listings "
-            f"(title, description, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, owner_phone_contact_id, owner_phone2_contact_id, cadastral_number, egrn_objects, image_thumb, rent_index_pct) VALUES ("
+            f"(title, description, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, broker_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, owner_phone_contact_id, owner_phone2_contact_id, cadastral_number, egrn_objects, image_thumb, rent_index_pct) VALUES ("
             f"{_str_or_null(body.get('title'), 255)}, {_str_or_null(body.get('description'), 5000)}, "
             f"{_str_or_null(body.get('category'), 50)}, {_str_or_null(body.get('deal'), 20)}, "
             f"{_int_or_null(body.get('price'))}, {_int_or_null(body.get('price_per_m2'))}, "
@@ -2822,7 +2822,8 @@ def _listings(cur, conn, method, rid, event, user):
             f"{_str_or_null(body.get('finishing'), 100)}, "
             f"{_num_or_null(body.get('ceiling_height'))}, {_num_or_null(body.get('electricity_kw'))}, "
             f"{_str_or_null(body.get('utilities'), 500)}, {_str_or_null(body.get('road_line'), 50)}, "
-            f"{user['id']}, {_bool(body.get('is_visible', True))}, {_int_or_null(body.get('rooms'))}, "
+            f"{user['id']}, {_int_or_null(body.get('broker_id')) if body.get('broker_id') not in (None, '') else user['id']}, "
+            f"{_bool(body.get('is_visible', True))}, {_int_or_null(body.get('rooms'))}, "
             f"{_str_or_null(body.get('broker_commission'), 100)}, "
             f"{_str_or_null(body.get('building_class'), 10)}, {_int_or_null(body.get('building_year'))}, "
             f"{_str_or_null(body.get('property_rights'), 30)}, {_num_or_null(body.get('min_area'))}, "
@@ -3627,9 +3628,14 @@ def _moderation(cur, conn, method, rid, event, user):
         if action == 'approve':
             # Одобряем объект: делаем видимым, меняем статус.
             # Доступ к кабинету выдаётся отдельно через PUT users?action=grant_access
+            # Если автор/брокер ещё не назначены (объект подан собственником напрямую) —
+            # назначаем модератора, одобрившего объект, автором и брокером.
             cur.execute(
                 f"UPDATE {SCHEMA}.listings SET status = 'active', is_visible = TRUE, "
-                f"moderation_comment = NULL, updated_at = NOW() WHERE id = {lid}"
+                f"moderation_comment = NULL, updated_at = NOW(), "
+                f"author_id = COALESCE(author_id, {int(user['id'])}), "
+                f"broker_id = COALESCE(broker_id, {int(user['id'])}) "
+                f"WHERE id = {lid}"
             )
             # Получаем slug для SEO-тригера
             cur.execute(f"SELECT slug FROM {SCHEMA}.listings WHERE id = {lid} LIMIT 1")

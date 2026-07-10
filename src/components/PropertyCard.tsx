@@ -418,8 +418,8 @@ export default function PropertyCard({
             </div>
           </div>
 
-          {/* Кнопка показа номера */}
-          <PhoneRevealButton phone={property.brokerPhone || property.ownerPhone || null} />
+          {/* Кнопка показа номера (только брокер — телефон собственника на сайте не показываем) */}
+          <PhoneRevealButton phone={property.brokerPhone || null} />
 
         </div>
       </div>
