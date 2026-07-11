@@ -870,13 +870,31 @@ def load_market_comparables(cur, category: str, district: str, area: float = 0) 
     # вместо того чтобы натягивать нерелевантные объекты)
     area_mults = [0.5, 0.75, 1.0]
 
-    # Минимальный порог цены за м²: для аренды — не менее 100 ₽/м²/мес (отсекает ошибочные записи)
-    MIN_RENT_P2 = 100   # ₽/м²/мес — ниже нет реального рынка в Краснодаре
-    MIN_SALE_P2 = 5000  # ₽/м² — ниже нет реального рынка
+    # Санитарные диапазоны цены за м² по категориям (₽/м²/мес для аренды, ₽/м² для продажи).
+    # Отсекают как заниженные (ошибка парсинга/годовая ставка), так и завышенные (элитная
+    # недвижимость/земля под другим видом) значения — согласовано с PPM2_RANGES в market_snapshots.py.
+    PPM2_SANITY = {
+        'office':       {'rent': (300, 10_000),  'sale': (30_000, 500_000)},
+        'retail':       {'rent': (300, 15_000),  'sale': (30_000, 600_000)},
+        'warehouse':    {'rent': (100, 5_000),   'sale': (10_000, 300_000)},
+        'restaurant':   {'rent': (300, 15_000),  'sale': (30_000, 500_000)},
+        'hotel':        {'rent': (200, 10_000),  'sale': (20_000, 500_000)},
+        'gab':          {'rent': (200, 10_000),  'sale': (30_000, 600_000)},
+        'business':     {'rent': (200, 10_000),  'sale': (5_000, 500_000)},
+        'production':   {'rent': (50, 3_000),    'sale': (5_000, 200_000)},
+        'building':     {'rent': (200, 10_000),  'sale': (20_000, 500_000)},
+        'free_purpose': {'rent': (200, 10_000),  'sale': (20_000, 500_000)},
+        'car_service':  {'rent': (200, 8_000),   'sale': (20_000, 300_000)},
+        'land':         {'rent': (10, 1_000),    'sale': (1_000, 150_000)},
+    }
+    sanity = PPM2_SANITY.get(category, {'rent': (100, 20_000), 'sale': (5_000, 1_000_000)})
+    MIN_RENT_P2, MAX_RENT_P2 = sanity['rent']
+    MIN_SALE_P2, MAX_SALE_P2 = sanity['sale']
 
     try:
         for deal in ('sale', 'rent'):
             min_p2 = MIN_RENT_P2 if deal == 'rent' else MIN_SALE_P2
+            max_p2 = MAX_RENT_P2 if deal == 'rent' else MAX_SALE_P2
             # Сначала пробуем с районом, затем без
             dist_filters = []
             if district:
@@ -907,6 +925,7 @@ def load_market_comparables(cur, category: str, district: str, area: float = 0) 
                         WHERE deal_type = '{deal}'
                           AND category IN ({cats_sql})
                           AND price_per_m2 >= {min_p2}
+                          AND price_per_m2 <= {max_p2}
                           AND scraped_at > NOW() - INTERVAL '90 days'
                           {area_filter}
                           {dist_clause}

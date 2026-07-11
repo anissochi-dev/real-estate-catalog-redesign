@@ -616,7 +616,9 @@ def aggregate_market_listings(cur, conn, today=None):
             ('land',         'sale'): (1_000,   150_000),
             ('business',     'sale'): (5_000,   500_000),
             ('industrial',   'sale'): (5_000,   200_000),
+            ('industrial',   'rent'): (50,        3_000),
             ('standalone',   'sale'): (20_000,  500_000),
+            ('standalone',   'rent'): (200,      10_000),
         }
         ppm2_range = PPM2_RANGES.get((cat, deal))
         if ppm2_range and not (ppm2_range[0] <= ppm2 <= ppm2_range[1]):
