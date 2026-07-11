@@ -12,6 +12,9 @@ export interface Benchmarks {
   usn_annual?: number;
   property_tax_annual?: number;
   net_income_annual?: number;
+  // Рыночная ставка аренды (для сравнения с фактической в ГАБ-режиме)
+  market_rent_rate?: number;
+  actual_rent_rate?: number;
 }
 
 export interface YearRow {
