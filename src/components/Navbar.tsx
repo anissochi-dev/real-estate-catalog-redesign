@@ -53,16 +53,16 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
             {/* Logo */}
             <button
               onClick={() => handleNav('home')}
-              className="flex items-center gap-2 group shrink-0"
+              className="flex items-center gap-2 group shrink-0 min-w-0 max-w-[70%] sm:max-w-none"
             >
               {logoUrl ? (
-                <img src={logoUrl} alt={brandName} width={36} height={36} loading="eager" className="w-8 h-8 md:w-9 md:h-9 rounded-lg object-contain bg-white" />
+                <img src={logoUrl} alt={brandName} width={36} height={36} loading="eager" className="w-8 h-8 md:w-9 md:h-9 rounded-lg object-contain bg-white shrink-0" />
               ) : (
-                <div className="w-8 h-8 md:w-9 md:h-9 rounded-lg btn-blue flex items-center justify-center">
+                <div className="w-8 h-8 md:w-9 md:h-9 rounded-lg btn-blue flex items-center justify-center shrink-0">
                   <Icon name="Building" size={18} className="text-white" />
                 </div>
               )}
-              <span className="font-display font-800 text-[11px] leading-tight sm:text-base md:text-lg text-brand-blue tracking-tight line-clamp-2 sm:truncate sm:line-clamp-1 max-w-[130px] sm:max-w-[260px] md:max-w-none">{brandName}</span>
+              <span className="font-display font-800 text-[10px] sm:text-base md:text-lg text-brand-blue tracking-tight truncate min-w-0">{brandName}</span>
             </button>
 
             {/* Nav links — desktop */}
