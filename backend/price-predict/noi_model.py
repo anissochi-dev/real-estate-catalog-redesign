@@ -78,6 +78,74 @@ def _load_keys(cur):
     return load_keys()
 
 
+# Ключевые слова из свободного поля `purpose` листинга → профильная категория
+# для подбора рыночных аналогов. Актуально для широких категорий объекта
+# (building/free_purpose/gab/business), где сам `category` не отражает
+# фактическое назначение помещения (например, здание под рестораном).
+PURPOSE_KEYWORDS = [
+    ('кафе', 'restaurant'), ('ресторан', 'restaurant'), ('пиццери', 'restaurant'),
+    ('бар', 'restaurant'), ('паб', 'restaurant'), ('кофейн', 'restaurant'),
+    ('кальян', 'restaurant'), ('пекарн', 'restaurant'), ('столов', 'restaurant'),
+    ('фастфуд', 'restaurant'), ('суши', 'restaurant'), ('вок-', 'restaurant'),
+    ('магазин', 'retail'), ('торгов', 'retail'), ('продуктов', 'retail'),
+    ('офис', 'office'), ('банк', 'office'), ('медцентр', 'office'), ('клиник', 'office'),
+    ('склад', 'warehouse'),
+    ('гостиниц', 'hotel'), ('отел', 'hotel'), ('мини-отел', 'hotel'),
+    ('автосервис', 'car_service'), ('сто', 'car_service'), ('автомойк', 'car_service'),
+    ('производств', 'production'), ('цех', 'production'),
+]
+
+
+def _attribute_rent_multiplier(listing: dict) -> float:
+    """
+    Общий множитель поправки ставки аренды на состояние/класс здания/линию улицы/этаж.
+    Переиспользуется и для дефолтных бенчмарков, и для медианы рыночных аналогов —
+    чтобы обе оценки одинаково учитывали характеристики конкретного объекта.
+    """
+    condition = (listing.get('condition') or '').lower()
+    road_line = str(listing.get('road_line') or '')
+    building_class = (listing.get('building_class') or '').upper()
+    floor = int(listing.get('floor') or 0)
+    type_key = (listing.get('type') or listing.get('category') or '').lower()
+
+    mult = 1.0
+
+    CONDITION_RENT_DELTA = {
+        'new': 1.15, 'euro': 1.10, 'good': 1.05, 'cosmetic': 1.0,
+        'working': 0.92, 'rough': 0.80, 'shellcore': 0.82, 'needs_repair': 0.70,
+    }
+    mult *= CONDITION_RENT_DELTA.get(condition, 1.0)
+
+    CLASS_RENT_MULT = {'A': 1.25, 'B+': 1.10, 'B': 1.0, 'C': 0.80, 'D': 0.65}
+    if building_class in CLASS_RENT_MULT:
+        mult *= CLASS_RENT_MULT[building_class]
+
+    if type_key in ('retail', 'restaurant', 'free_purpose') and road_line:
+        ROAD_LINE_RENT = {'1': 1.20, '2': 1.0, '3': 0.85, 'yard': 0.75}
+        mult *= ROAD_LINE_RENT.get(road_line, 1.0)
+
+    if type_key in ('retail', 'restaurant') and floor > 2:
+        mult *= 0.85
+
+    return round(mult, 4)
+
+
+def _detect_purpose_category(purpose: str) -> str | None:
+    """
+    Определяет профильную категорию объекта по свободному тексту поля `purpose`
+    (например, "Кафе / Ресторан|Кафе" → 'restaurant').
+    Возвращает None, если явного совпадения не найдено — тогда используется
+    исходная `category` объекта без сужения.
+    """
+    if not purpose:
+        return None
+    text = purpose.lower()
+    for kw, cat in PURPOSE_KEYWORDS:
+        if kw in text:
+            return cat
+    return None
+
+
 def _fallback_benchmarks(listing: dict) -> dict:
     """
     Дефолтные бенчмарки по типу объекта. Калиброваны под Краснодар 2025-2026.
@@ -851,13 +919,13 @@ def load_market_comparables(cur, category: str, district: str, area: float = 0) 
     # ВАЖНО: 'other' исключён — содержит 10 000+ мусорных записей ЦИАН с нерелевантными ставками
     CAT_ALIAS = {
         'hotel': ['hotel', 'standalone'],
-        'restaurant': ['catering'],
+        'restaurant': ['catering', 'free_purpose', 'retail'],
         'office': ['office'],
         'retail': ['retail', 'free_purpose'],
         'warehouse': ['warehouse'],
         'free_purpose': ['free_purpose', 'retail'],
         'production': ['industrial', 'warehouse'],
-        'building': ['standalone'],
+        'building': ['standalone', 'building'],
         'gab': ['free_purpose', 'retail', 'office'],
         'business': ['free_purpose', 'retail', 'office'],
         'car_service': ['industrial'],
@@ -1231,7 +1299,18 @@ def handle_noi_request(cur, conn, qs: dict) -> dict:
     category = listing.get('category') or ''
     district = listing.get('district') or ''
     obj_area = float(listing.get('area') or 0)
-    comparables = load_market_comparables(cur, category, district, area=obj_area)
+
+    # Для широких категорий (здание/ПСН/ГАБ/бизнес) сам `category` не отражает
+    # фактическое назначение помещения — уточняем по свободному полю `purpose`
+    # (например, "Кафе / Ресторан" → подбираем аналоги как для restaurant).
+    purpose_cat = None
+    if category in ('building', 'free_purpose', 'gab', 'business'):
+        purpose_cat = _detect_purpose_category(listing.get('purpose') or '')
+    comparables_category = purpose_cat or category
+    if purpose_cat:
+        print(f'[noi_model] category "{category}" уточнена по purpose → "{purpose_cat}"')
+
+    comparables = load_market_comparables(cur, comparables_category, district, area=obj_area)
 
     # Если аналогов для продажи < MIN_ANALOGS — дозапрашиваем с внешних сайтов
     sale_snap = comparables.get('sale')
@@ -1242,16 +1321,22 @@ def handle_noi_request(cur, conn, qs: dict) -> dict:
             ext = fetch_external_analogs(listing, cur, conn, need=MIN_ANALOGS)
             if ext.get('count', 0) > 0:
                 # Повторяем запрос — новые данные уже сохранены в market_listings
-                comparables = load_market_comparables(cur, category, district, area=obj_area)
+                comparables = load_market_comparables(cur, comparables_category, district, area=obj_area)
                 new_count = (comparables.get('sale') or {}).get('analogs_count', 0)
                 print(f'[noi_model] после дозапроса: sale analogs={new_count}')
         except Exception as e:
             print(f'[noi_model] дозапрос сравнения с рынком ошибка: {e}')
 
-    # Рыночная ставка аренды из market_listings — уже в ₽/м²/мес, делить не нужно
+    # Рыночная ставка аренды из market_listings — уже в ₽/м²/мес, делить не нужно.
+    # Аналоги в подборке — обезличенные (без class/road_line/condition конкретного объекта),
+    # поэтому применяем тот же атрибутный множитель, что и к дефолтным бенчмаркам —
+    # чтобы рыночная оценка учитывала класс здания/линию/состояние/этаж ЭТОГО объекта.
     market_rent_snap = comparables.get('rent')
     if market_rent_snap and market_rent_snap.get('price_per_m2', 0) > 0:
-        snap_rent_rate = round(market_rent_snap['price_per_m2'], 1)
+        snap_rent_rate_raw = round(market_rent_snap['price_per_m2'], 1)
+        attr_mult = _attribute_rent_multiplier(listing)
+        snap_rent_rate = round(snap_rent_rate_raw * attr_mult, 1)
+        bench['market_rent_rate_snap_raw'] = snap_rent_rate_raw
         bench['market_rent_rate_snap'] = snap_rent_rate
         bench['comparables_count_rent'] = market_rent_snap['analogs_count']
 
