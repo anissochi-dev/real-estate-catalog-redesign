@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, type RefObject } from 'react';
 import { Page } from '@/App';
 import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { prefetchPage } from '@/app/lazyPages';
 import OwnerSubmitModal from '@/components/OwnerSubmitModal';
+import { useAutoFitText } from '@/hooks/useAutoFitText';
 
 interface NavbarProps {
   currentPage: Page;
@@ -34,6 +35,11 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
   const isClient = user && user.role === 'client';
   const brandName = settings.company_name || 'Бизнес. Маркетинг. Недвижимость.';
   const logoUrl = settings.logo_url;
+  const { containerRef: brandRef, fontSize: brandFontSize } = useAutoFitText({
+    text: brandName,
+    minPx: 9,
+    maxPx: 18,
+  });
 
   const handleNav = (page: Page) => {
     if (page === 'network-tenants' && isStaff && onAdminLeads) {
@@ -53,7 +59,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
             {/* Logo */}
             <button
               onClick={() => handleNav('home')}
-              className="flex items-center gap-2 group shrink-0 min-w-0 max-w-[70%] sm:max-w-none"
+              className="flex items-center gap-2 group min-w-0 flex-1 md:flex-initial md:shrink-0"
             >
               {logoUrl ? (
                 <img src={logoUrl} alt={brandName} width={36} height={36} loading="eager" className="w-8 h-8 md:w-9 md:h-9 rounded-lg object-contain bg-white shrink-0" />
@@ -62,7 +68,13 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
                   <Icon name="Building" size={18} className="text-white" />
                 </div>
               )}
-              <span className="font-display font-800 text-[10px] sm:text-base md:text-lg text-brand-blue tracking-tight truncate min-w-0">{brandName}</span>
+              <span
+                ref={brandRef as RefObject<HTMLSpanElement>}
+                style={{ fontSize: `${brandFontSize}px` }}
+                className="font-display font-800 text-brand-blue tracking-tight whitespace-nowrap overflow-hidden text-ellipsis min-w-0 flex-1 md:flex-initial"
+              >
+                {brandName}
+              </span>
             </button>
 
             {/* Nav links — desktop */}
