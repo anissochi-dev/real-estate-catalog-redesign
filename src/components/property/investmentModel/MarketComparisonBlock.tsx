@@ -61,7 +61,8 @@ export default function MarketComparisonBlock({ data, params }: Props) {
       {/* Рыночная ставка аренды */}
       {data.comparables?.rent && (() => {
         const r = data.comparables!.rent!;
-        const snapRentRate = Math.round(r.price_per_m2 / 12);
+        // price_per_m2 для аренды уже в ₽/м²/мес (см. load_market_comparables в noi_model.py)
+        const snapRentRate = Math.round(r.price_per_m2);
         const benchRentRate = Math.round(params?.rent_rate ?? data.benchmarks.rent_rate);
         const diff = snapRentRate > 0 && benchRentRate > 0
           ? Math.round((snapRentRate / benchRentRate - 1) * 100)
