@@ -37,8 +37,8 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
   const logoUrl = settings.logo_url;
   const { containerRef: brandRef, fontSize: brandFontSize } = useAutoFitText({
     text: brandName,
-    minPx: 9,
-    maxPx: 18,
+    minPx: 10,
+    maxPx: 22,
   });
 
   const handleNav = (page: Page) => {

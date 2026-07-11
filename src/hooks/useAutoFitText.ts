@@ -41,6 +41,9 @@ export function useAutoFitText({ text, minPx, maxPx, fontWeight = 800, fontFamil
     };
 
     measure();
+    if (document.fonts?.ready) {
+      document.fonts.ready.then(measure).catch(() => {});
+    }
 
     const ro = new ResizeObserver(measure);
     ro.observe(el);
