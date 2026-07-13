@@ -652,63 +652,146 @@ DEAL_LABELS_RU = {'sale': 'продажа', 'rent': 'аренда'}
 
 
 def _analyze_price_changes(cur, threshold_pct: float = 3.0) -> list:
-    """Сравнивает два последних среза price_history_biweekly, возвращает значимые изменения."""
+    """
+    Сравнивает два последних снапшота price_market_snapshots (город в целом, district=''),
+    возвращает значимые изменения цены за м² по категориям + направлению сделки (аренда/продажа).
+
+    ВАЖНО: раньше использовалась price_history_biweekly, которая не пополняется автоматически
+    (последний срез застрял на 2026-06-02) — из-за этого сводка была идентична неделя за неделей.
+    price_market_snapshots пополняется ежедневным cron-батчем price_market_refresh на реальных
+    данных с arrpro/ayax/etagi — здесь всегда есть актуальный срез.
+    """
     try:
         cur.execute(
-            f"SELECT DISTINCT date_recorded FROM {SCHEMA}.price_history_biweekly "
-            f"ORDER BY date_recorded DESC LIMIT 2"
+            f"SELECT DISTINCT snapshot_date FROM {SCHEMA}.price_market_snapshots "
+            f"WHERE district = '' ORDER BY snapshot_date DESC LIMIT 2"
         )
-        dates = [r['date_recorded'] for r in cur.fetchall()]
+        dates = [r['snapshot_date'] for r in cur.fetchall()]
         if len(dates) < 2:
             return []
         date_new, date_old = dates[0], dates[1]
 
         cur.execute(
-            f"SELECT category, deal_type, price_per_m2, change_pct "
-            f"FROM {SCHEMA}.price_history_biweekly "
-            f"WHERE date_recorded = '{date_new}' ORDER BY ABS(change_pct) DESC"
+            f"SELECT n.category, n.deal, "
+            f"n.price_per_m2_median AS price_new, o.price_per_m2_median AS price_old, "
+            f"n.analogs_count AS cnt_new, o.analogs_count AS cnt_old "
+            f"FROM {SCHEMA}.price_market_snapshots n "
+            f"JOIN {SCHEMA}.price_market_snapshots o "
+            f"  ON n.category = o.category AND n.deal = o.deal AND n.district = o.district "
+            f"WHERE n.district = '' AND n.snapshot_date = '{date_new}' AND o.snapshot_date = '{date_old}' "
+            f"  AND n.price_per_m2_median IS NOT NULL AND o.price_per_m2_median IS NOT NULL "
+            f"  AND n.price_per_m2_median > 0 AND o.price_per_m2_median > 0 "
+            f"  AND n.analogs_count >= 3 AND o.analogs_count >= 3"
         )
         rows = [dict(r) for r in cur.fetchall()]
 
         significant = []
         for r in rows:
-            chg = float(r.get('change_pct') or 0)
-            # Фильтруем аномальные выбросы (>50%) — скорее всего единичные сделки
+            price_new = float(r['price_new'])
+            price_old = float(r['price_old'])
+            chg = round((price_new / price_old - 1) * 100, 1)
+            # Фильтруем аномальные выбросы (>50%) — скорее всего смена состава выборки, не рынка
             if abs(chg) >= threshold_pct and abs(chg) <= 50.0:
                 cat = r.get('category') or ''
-                deal = r.get('deal_type') or ''
-                price = float(r.get('price_per_m2') or 0)
+                deal = r.get('deal') or ''
                 significant.append({
                     'category': cat,
                     'deal_type': deal,
                     'cat_label': CAT_LABELS_RU.get(cat, cat),
                     'deal_label': DEAL_LABELS_RU.get(deal, deal),
-                    'price_per_m2': price,
+                    'price_per_m2': price_new,
                     'change_pct': chg,
                     'arrow': '↑' if chg > 0 else '↓',
                     'sign': '+' if chg > 0 else '',
                     'date_new': str(date_new),
                     'date_old': str(date_old),
                 })
+        significant.sort(key=lambda c: abs(c['change_pct']), reverse=True)
         return significant
     except Exception as e:
         print(f'[price_digest] ошибка анализа: {e}')
         return []
 
 
-def _build_price_digest_text(changes: list, date_str: str) -> str:
+def _analyze_district_changes(cur, threshold_pct: float = 5.0, limit: int = 3) -> list:
+    """
+    Сравнивает два последних снапшота price_market_snapshots по районам (district != ''),
+    возвращает топ районов с наибольшим изменением цены за м² по любой категории+сделке.
+    Используется как дополнительный блок сводки — если изменений нет, блок просто не включается.
+    """
+    try:
+        cur.execute(
+            f"SELECT DISTINCT snapshot_date FROM {SCHEMA}.price_market_snapshots "
+            f"WHERE district != '' ORDER BY snapshot_date DESC LIMIT 2"
+        )
+        dates = [r['snapshot_date'] for r in cur.fetchall()]
+        if len(dates) < 2:
+            return []
+        date_new, date_old = dates[0], dates[1]
+
+        cur.execute(
+            f"SELECT n.category, n.deal, n.district, "
+            f"n.price_per_m2_median AS price_new, o.price_per_m2_median AS price_old, "
+            f"n.analogs_count AS cnt_new, o.analogs_count AS cnt_old "
+            f"FROM {SCHEMA}.price_market_snapshots n "
+            f"JOIN {SCHEMA}.price_market_snapshots o "
+            f"  ON n.category = o.category AND n.deal = o.deal AND n.district = o.district "
+            f"WHERE n.district != '' AND n.snapshot_date = '{date_new}' AND o.snapshot_date = '{date_old}' "
+            f"  AND n.price_per_m2_median IS NOT NULL AND o.price_per_m2_median IS NOT NULL "
+            f"  AND n.price_per_m2_median > 0 AND o.price_per_m2_median > 0 "
+            f"  AND n.analogs_count >= 3 AND o.analogs_count >= 3"
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+
+        significant = []
+        for r in rows:
+            price_new = float(r['price_new'])
+            price_old = float(r['price_old'])
+            chg = round((price_new / price_old - 1) * 100, 1)
+            if abs(chg) >= threshold_pct and abs(chg) <= 50.0:
+                cat = r.get('category') or ''
+                deal = r.get('deal') or ''
+                significant.append({
+                    'district': r.get('district') or '',
+                    'category': cat,
+                    'deal_type': deal,
+                    'cat_label': CAT_LABELS_RU.get(cat, cat),
+                    'deal_label': DEAL_LABELS_RU.get(deal, deal),
+                    'price_per_m2': price_new,
+                    'change_pct': chg,
+                    'arrow': '↑' if chg > 0 else '↓',
+                    'sign': '+' if chg > 0 else '',
+                })
+        significant.sort(key=lambda c: abs(c['change_pct']), reverse=True)
+        return significant[:limit]
+    except Exception as e:
+        print(f'[price_digest] ошибка анализа районов: {e}')
+        return []
+
+
+def _build_price_digest_text(changes: list, date_str: str, district_changes: list | None = None) -> str:
     """Формирует краткий текст дайджеста для MAX."""
     lines = [f'📊 Обзор рынка коммерческой недвижимости — {date_str}', '']
-    if not changes:
+    if not changes and not district_changes:
         lines.append('Значимых изменений цен не выявлено.')
         return '\n'.join(lines)
-    for c in changes:
-        arrow = c['arrow']
-        sign = c['sign']
-        lines.append(
-            f"{arrow} {c['cat_label']} ({c['deal_label']}): "
-            f"{sign}{c['change_pct']:.1f}% → {int(c['price_per_m2']):,} ₽/м²".replace(',', ' ')
-        )
+    if changes:
+        for c in changes:
+            arrow = c['arrow']
+            sign = c['sign']
+            lines.append(
+                f"{arrow} {c['cat_label']} ({c['deal_label']}): "
+                f"{sign}{c['change_pct']:.1f}% → {int(c['price_per_m2']):,} ₽/м²".replace(',', ' ')
+            )
+    if district_changes:
+        lines += ['', '📍 По районам:']
+        for c in district_changes:
+            arrow = c['arrow']
+            sign = c['sign']
+            lines.append(
+                f"{arrow} {c['district']} — {c['cat_label']} ({c['deal_label']}): "
+                f"{sign}{c['change_pct']:.1f}% → {int(c['price_per_m2']):,} ₽/м²".replace(',', ' ')
+            )
     lines += ['', '📈 Данные по рынку Краснодара']
     return '\n'.join(lines)
 
@@ -745,34 +828,62 @@ def _send_max_digest(bot_token: str, roles_str: str, cur, text: str):
         return 0
 
 
-def _build_price_news_prompt(changes: list, date_str: str, key_rate: float | None) -> str:
-    """Строит prompt для GPT для генерации обзорной новостной статьи."""
+def _build_price_news_prompt(
+    changes: list, date_str: str, key_rate: float | None,
+    district_changes: list | None = None, prev_key_rate: float | None = None,
+) -> str:
+    """
+    Строит prompt для GPT для генерации обзорной еженедельной статьи.
+    Включает ТОЛЬКО блоки, где реально есть изменения (по городу, по районам, по ставке ЦБ) —
+    пустые блоки не упоминаются вообще, чтобы не плодить шаблонные фразы вида
+    "значимых изменений не выявлено" из недели в неделю.
+    """
     now = datetime.now(timezone.utc)
     MONTHS_RU = ['января','февраля','марта','апреля','мая','июня',
                  'июля','августа','сентября','октября','ноября','декабря']
     month_year = f'{MONTHS_RU[now.month-1]} {now.year}'
 
-    table_lines = []
-    for c in changes:
-        table_lines.append(
+    blocks = []
+
+    if changes:
+        table_lines = [
             f"- {c['cat_label']} ({c['deal_label']}): {c['sign']}{c['change_pct']:.1f}%, "
             f"цена {int(c['price_per_m2']):,} ₽/м²".replace(',', ' ')
-        )
-    table = '\n'.join(table_lines) if table_lines else 'Существенных изменений не зафиксировано.'
+            for c in changes
+        ]
+        blocks.append('Изменение цен по городу (за неделю):\n' + '\n'.join(table_lines))
 
-    rate_str = f'{key_rate:.2f}%' if key_rate else 'актуальное значение уточняйте на сайте ЦБ РФ'
+    if district_changes:
+        dist_lines = [
+            f"- {c['district']}, {c['cat_label']} ({c['deal_label']}): "
+            f"{c['sign']}{c['change_pct']:.1f}%, цена {int(c['price_per_m2']):,} ₽/м²".replace(',', ' ')
+            for c in district_changes
+        ]
+        blocks.append('Изменение цен по районам (за неделю):\n' + '\n'.join(dist_lines))
+
+    if key_rate is not None and prev_key_rate is not None and abs(key_rate - prev_key_rate) >= 0.01:
+        direction = 'повышена' if key_rate > prev_key_rate else 'снижена'
+        blocks.append(
+            f'Ключевая ставка ЦБ РФ {direction}: было {prev_key_rate:.2f}%, стало {key_rate:.2f}%.'
+        )
+    elif key_rate is not None:
+        blocks.append(f'Ключевая ставка ЦБ РФ без изменений: {key_rate:.2f}%.')
+
+    data_block = '\n\n'.join(blocks)
 
     return (
-        f'Напиши профессиональную аналитическую статью «Обзор рынка коммерческой недвижимости Краснодара — {month_year}».\n\n'
-        f'Данные по изменению цен:\n{table}\n\n'
-        f'Ключевая ставка ЦБ РФ: {rate_str}.\n\n'
-        f'Требования: 4-5 абзацев, 400-600 слов, профессиональный деловой стиль, '
-        f'анализ причин изменений, прогноз на ближайший квартал. '
+        f'Напиши профессиональную аналитическую статью «Обзор рынка коммерческой недвижимости Краснодара — {month_year}» '
+        f'по итогам недели ({date_str}).\n\n'
+        f'{data_block}\n\n'
+        f'ВАЖНО: пиши ТОЛЬКО о данных, приведённых выше. Если по какому-то направлению (город/районы/ставка) '
+        f'данных нет в блоке — вообще не упоминай его и не пиши, что там "нет изменений" — просто пропусти. '
+        f'Требования: 3-5 абзацев, 300-600 слов, профессиональный деловой стиль, '
+        f'краткий анализ возможных причин изменений на основе только приведённых цифр, без придуманных прогнозов. '
         f'Отвечай строго в JSON: {{"title":"...","summary":"...","content":"..."}}'
     )
 
 
-def _save_article(cur, conn, article, is_auto, user_id=None, auto_publish=False, logo_url='', key_rate: float | None = None):
+def _save_article(cur, conn, article, is_auto, user_id=None, auto_publish=False, logo_url='', key_rate: float | None = None, topic: str = ''):
     title = _safe(article.get('title', ''), 299)
     summary = _safe(article.get('summary', ''), 999)
     content = _safe(article.get('content', ''), 49999)
@@ -781,16 +892,47 @@ def _save_article(cur, conn, article, is_auto, user_id=None, auto_publish=False,
     pub_val = 'TRUE' if auto_publish else 'FALSE'
     pub_at_val = f"'{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')}'" if auto_publish else 'NULL'
     rate_val = str(key_rate) if key_rate is not None else 'NULL'
+    topic_val = f"'{_safe(topic, 299)}'" if topic else 'NULL'
     cur.execute(
-        f"INSERT INTO {SCHEMA}.news (title, summary, content, image_url, is_auto, is_published, published_at, created_by, cb_key_rate) "
+        f"INSERT INTO {SCHEMA}.news (title, summary, content, image_url, is_auto, is_published, published_at, created_by, cb_key_rate, topic) "
         f"VALUES ('{title}', '{summary}', '{content}', {img_val}, {is_auto}, {pub_val}, {pub_at_val}, "
-        f"{'NULL' if not user_id else user_id}, {rate_val}) RETURNING id"
+        f"{'NULL' if not user_id else user_id}, {rate_val}, {topic_val}) RETURNING id"
     )
     news_id = cur.fetchone()['id']
     slug = _slug(article.get('title', ''), news_id)
     cur.execute(f"UPDATE {SCHEMA}.news SET slug = '{_safe(slug, 319)}' WHERE id = {news_id}")
     conn.commit()
     return news_id, slug
+
+
+def _pick_fresh_topics(cur, pool: list, count: int, cooldown_days: int = 14) -> list:
+    """
+    Выбирает случайные темы из pool, исключая те, что уже использовались
+    в последние cooldown_days дней — защита от повторов вида
+    "Новые тенденции на рынке недвижимости Кубани" 3 раза за неделю.
+    Если после исключения тем не хватает — добираем из оставшихся (лучше похожая тема,
+    чем полный простой генерации).
+    """
+    import random
+    try:
+        cur.execute(
+            f"SELECT DISTINCT topic FROM {SCHEMA}.news "
+            f"WHERE topic IS NOT NULL AND created_at >= NOW() - INTERVAL '{int(cooldown_days)} days'"
+        )
+        recent = {r['topic'] for r in cur.fetchall() if r.get('topic')}
+    except Exception as e:
+        print(f'[news] _pick_fresh_topics ошибка чтения истории: {e}')
+        recent = set()
+
+    fresh_pool = [t for t in pool if t not in recent]
+    if len(fresh_pool) >= count:
+        return random.sample(fresh_pool, count)
+    # Не хватает свежих тем — добираем из полного пула (включая недавние), чтобы не сорвать генерацию
+    chosen = list(fresh_pool)
+    remaining = [t for t in pool if t not in chosen]
+    random.shuffle(remaining)
+    chosen += remaining[:max(0, count - len(chosen))]
+    return chosen[:count]
 
 
 def _row_to_dict(r):
@@ -809,6 +951,7 @@ def _row_to_dict(r):
         'published_at': r['published_at'],
         'created_at': r['created_at'],
         'cb_key_rate': float(r['cb_key_rate']) if r.get('cb_key_rate') is not None else None,
+        'topic': r.get('topic'),
     }
 
 
@@ -863,7 +1006,6 @@ def handler(event: dict, context) -> dict:
                             print('[news] CRON: YandexGPT не настроен — пропускаем генерацию')
                         else:
                             key_rate = _fetch_cbr_key_rate()
-                            import random
                             count = int(sch.get('articles_per_run', 3))
                             # Берём темы из расписания если заданы, иначе из AUTO_TOPICS
                             custom_topics_raw = (sch.get('topics') or '').strip()
@@ -871,7 +1013,8 @@ def handler(event: dict, context) -> dict:
                                 pool = [t.strip() for t in custom_topics_raw.splitlines() if t.strip()]
                             else:
                                 pool = AUTO_TOPICS
-                            topics = random.sample(pool, min(count, len(pool)))
+                            # Исключаем темы, публиковавшиеся последние 14 дней — защита от повторов
+                            topics = _pick_fresh_topics(cur, pool, min(count, len(pool)), cooldown_days=14)
                             # Один раз ищем общий дайджест новостей Краснодара за сегодня
                             daily_news, _ = _fetch_news_snippets(
                                 'коммерческая недвижимость Краснодар новости сегодня', limit=10
@@ -886,7 +1029,7 @@ def handler(event: dict, context) -> dict:
                                     news_snippets=combined[:8],
                                 )
                                 if article and _is_valid_article(article):
-                                    _save_article(cur, conn, article, True, auto_publish=True, key_rate=key_rate)
+                                    _save_article(cur, conn, article, True, auto_publish=True, key_rate=key_rate, topic=topic)
                                     news_generated += 1
                                 elif article:
                                     print(f'[news] Отклонена статья (отказ модели): {article.get("title", "")[:80]}')
@@ -989,6 +1132,7 @@ def handler(event: dict, context) -> dict:
 
                         if (pd_enabled or pn_enabled) and is_digest_day and not already_ran_week:
                             changes = _analyze_price_changes(cur, pd_threshold)
+                            district_changes = _analyze_district_changes(cur, threshold_pct=max(pd_threshold, 5.0))
                             now_d = now_utc
                             MONTHS_RU = ['января','февраля','марта','апреля','мая','июня',
                                          'июля','августа','сентября','октября','ноября','декабря']
@@ -996,8 +1140,17 @@ def handler(event: dict, context) -> dict:
                             sent_max = 0
                             news_id = None
 
+                            key_rate_d = _fetch_cbr_key_rate()
+                            prev_key_rate = sch_d.get('price_digest_last_key_rate')
+                            prev_key_rate = float(prev_key_rate) if prev_key_rate is not None else None
+                            rate_changed = (
+                                key_rate_d is not None and prev_key_rate is not None
+                                and abs(key_rate_d - prev_key_rate) >= 0.01
+                            )
+                            has_any_data = bool(changes) or bool(district_changes) or rate_changed
+
                             # MAX-дайджест менеджерам
-                            if pm_enabled and changes:
+                            if pm_enabled and (changes or district_changes):
                                 try:
                                     cur.execute(
                                         f"SELECT notify_max_bot_token, notify_max_roles "
@@ -1005,7 +1158,7 @@ def handler(event: dict, context) -> dict:
                                     )
                                     s_row = cur.fetchone()
                                     if s_row and s_row.get('notify_max_bot_token'):
-                                        digest_text = _build_price_digest_text(changes, date_str)
+                                        digest_text = _build_price_digest_text(changes, date_str, district_changes)
                                         sent_max = _send_max_digest(
                                             s_row['notify_max_bot_token'],
                                             s_row.get('notify_max_roles') or 'broker,admin,director',
@@ -1014,33 +1167,43 @@ def handler(event: dict, context) -> dict:
                                 except Exception as e:
                                     print(f'[price_digest] MAX error: {e}')
 
-                            # Авто-новость на сайт
-                            if pn_enabled:
+                            # Авто-новость на сайт — публикуем ТОЛЬКО если есть хоть какие-то
+                            # реальные изменения (город/районы/ставка ЦБ), иначе неделя пропускается
+                            # без публикации, вместо шаблонной статьи "изменений не выявлено"
+                            if pn_enabled and has_any_data:
                                 try:
                                     api_key, folder_id = _load_gpt_keys(cur)
                                     if api_key and folder_id:
-                                        key_rate_d = _fetch_cbr_key_rate()
-                                        prompt_text = _build_price_news_prompt(changes, date_str, key_rate_d)
+                                        prompt_text = _build_price_news_prompt(
+                                            changes, date_str, key_rate_d,
+                                            district_changes=district_changes,
+                                            prev_key_rate=prev_key_rate,
+                                        )
                                         gpt_result = _call_gpt_raw(api_key, folder_id, prompt_text)
                                         if gpt_result:
                                             article = _parse_article_json(gpt_result)
                                             if article and _is_valid_article(article):
                                                 news_id, _ = _save_article(
                                                     cur, conn, article, True,
-                                                    auto_publish=True, key_rate=key_rate_d
+                                                    auto_publish=True, key_rate=key_rate_d,
+                                                    topic='weekly_price_digest',
                                                 )
                                 except Exception as e:
                                     print(f'[price_digest] news error: {e}')
 
-                            # Обновляем last_at
+                            # Обновляем last_at и последнюю ставку ЦБ (для сравнения на след. неделе)
                             ts_pd = now_utc.strftime('%Y-%m-%d %H:%M:%S+00')
+                            rate_sql = str(key_rate_d) if key_rate_d is not None else 'NULL'
                             cur.execute(
-                                f"UPDATE {SCHEMA}.news_schedule SET price_digest_last_at = '{ts_pd}' "
+                                f"UPDATE {SCHEMA}.news_schedule SET price_digest_last_at = '{ts_pd}', "
+                                f"price_digest_last_key_rate = {rate_sql} "
                                 f"WHERE id = {sch_d['id']}"
                             )
                             conn.commit()
                             price_digest_result = {
                                 'changes_found': len(changes),
+                                'district_changes_found': len(district_changes),
+                                'rate_changed': rate_changed,
                                 'sent_max': sent_max,
                                 'news_id': news_id,
                                 'date': date_str,
@@ -1222,8 +1385,9 @@ def handler(event: dict, context) -> dict:
             if action == 'generate':
                 topic = body.get('topic', '').strip()
                 if not topic:
-                    import random
-                    topic = random.choice(AUTO_TOPICS)
+                    # Тема не указана вручную — выбираем свежую (не публиковавшуюся 14 дней)
+                    picked = _pick_fresh_topics(cur, AUTO_TOPICS, 1, cooldown_days=14)
+                    topic = picked[0] if picked else AUTO_TOPICS[0]
                 api_key, folder_id = _load_gpt_keys(cur)
                 auto_pub = bool(body.get('auto_publish', False))
                 key_rate = _fetch_cbr_key_rate()
@@ -1236,7 +1400,7 @@ def handler(event: dict, context) -> dict:
                     return _err(f'Ошибка генерации: {err}')
                 if not _is_valid_article(article):
                     return _err(f'Модель отказалась писать статью на тему: {topic}')
-                nid, slug = _save_article(cur, conn, article, True, user['id'], auto_publish=auto_pub, key_rate=key_rate)
+                nid, slug = _save_article(cur, conn, article, True, user['id'], auto_publish=auto_pub, key_rate=key_rate, topic=topic)
                 return _ok({'id': nid, 'slug': slug, 'title': article.get('title'), 'topic': topic, 'cb_key_rate': key_rate, 'news_source': src, 'news_count': len(news_snippets)})
 
             # ── АВТОЗАПУСК ВРУЧНУЮ ────────────────────────────────────────
@@ -1245,8 +1409,8 @@ def handler(event: dict, context) -> dict:
                 key_rate = _fetch_cbr_key_rate()
                 count = min(int(body.get('count', 3)), 10)
                 auto_pub = bool(body.get('auto_publish', True))
-                import random
-                topics = random.sample(AUTO_TOPICS, min(count, len(AUTO_TOPICS)))
+                # Исключаем темы, публиковавшиеся последние 14 дней — защита от повторов
+                topics = _pick_fresh_topics(cur, AUTO_TOPICS, min(count, len(AUTO_TOPICS)), cooldown_days=14)
                 # Общий дайджест новостей на случай если по теме ничего нет
                 daily_news, _ = _fetch_news_snippets('коммерческая недвижимость Краснодар новости', limit=10)
                 results = []
@@ -1256,7 +1420,7 @@ def handler(event: dict, context) -> dict:
                     combined = topic_news + [s for s in daily_news if s['url'] not in seen]
                     article, err = _gpt(api_key, folder_id, topic, key_rate=key_rate, news_snippets=combined[:8])
                     if article and _is_valid_article(article):
-                        nid, slug = _save_article(cur, conn, article, True, user['id'], auto_publish=auto_pub, key_rate=key_rate)
+                        nid, slug = _save_article(cur, conn, article, True, user['id'], auto_publish=auto_pub, key_rate=key_rate, topic=topic)
                         results.append({'id': nid, 'slug': slug, 'title': article.get('title'), 'topic': topic, 'cb_key_rate': key_rate})
                     else:
                         results.append({'error': err or 'Модель отказалась писать статью', 'topic': topic})
