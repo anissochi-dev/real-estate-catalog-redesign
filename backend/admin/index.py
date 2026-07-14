@@ -631,18 +631,6 @@ def _ai_memory(cur, conn, method, rid, event, user):
                     'key начинается с market_hist_, латиница нижний регистр через _.'
                 ),
             },
-            'biweekly_history': {
-                'prefix': 'biweekly_',
-                'system': (
-                    'Ты — аналитик рынка коммерческой недвижимости Краснодара. '
-                    'На входе — двухнедельные срезы цен продажи и аренды по категориям с 2019 по 2026 год. '
-                    'Извлеки 10-20 конкретных фактов: пиковые значения, минимумы, динамику роста, '
-                    'сравнение категорий, долгосрочные тренды, аномальные скачки. '
-                    'Формат: JSON-массив без markdown: '
-                    '[{"key": "biweekly_slug", "value": "факт с цифрами, датами и % изменением"}, ...]\n'
-                    'key начинается с biweekly_, латиница нижний регистр через _.'
-                ),
-            },
         }
 
         total_saved = 0
@@ -803,58 +791,6 @@ def _ai_memory(cur, conn, method, rid, event, user):
                         if r.get('notes'): p.append((r['notes'] or '')[:150])
                         if p: _facts_mh.append({'key': f'market_hist_{slug}', 'value': f'{yr} | {dn} | {cat} ({dt}): ' + ', '.join(p)})
                     saved_count = _save_facts(_facts_mh, cfg['prefix'])
-                    per_source.append({'source': src, 'saved': saved_count, 'input_count': count_input})
-                    total_saved += saved_count
-                    continue
-
-                elif src == 'biweekly_history':
-                    # Генерируем факты программно — без GPT, мгновенно
-                    cur.execute(
-                        f"SELECT EXTRACT(YEAR FROM date_recorded)::int AS yr, category, deal_type, "
-                        f"ROUND(AVG(price_per_m2)::numeric, 0) AS avg_price "
-                        f"FROM {SCHEMA}.price_history_biweekly "
-                        f"GROUP BY yr, category, deal_type ORDER BY category, deal_type, yr"
-                    )
-                    yearly_rows = cur.fetchall() or []
-                    count_input = len(yearly_rows)
-                    _cat_ru = {
-                        'retail': 'Торговая недвижимость', 'office': 'Офисная недвижимость',
-                        'warehouse': 'Складская недвижимость', 'industrial': 'Производственные помещения',
-                        'catering': 'Помещения общепита', 'free_purpose': 'ПСН',
-                        'standalone': 'Отдельно стоящие здания',
-                    }
-                    from collections import defaultdict as _dd
-                    _data = _dd(dict)
-                    for r in yearly_rows:
-                        _data[(r['category'], r['deal_type'])][int(r['yr'])] = int(r['avg_price'] or 0)
-                    all_biweekly_facts = []
-                    for (cat, dt), yearly in _data.items():
-                        cl = _cat_ru.get(cat, cat)
-                        dl = 'продажа' if dt == 'sale' else 'аренда/мес'
-                        yrs = sorted(yearly.keys())
-                        if not yrs:
-                            continue
-                        p0, p1 = yearly[yrs[0]], yearly[yrs[-1]]
-                        if p0 > 0:
-                            pct = round((p1 - p0) / p0 * 100)
-                            s = '+' if pct >= 0 else ''
-                            all_biweekly_facts.append({'key': f'biweekly_{cat}_{dt}_trend', 'value': f'{cl} ({dl}): с {p0:,} руб/м² в {yrs[0]} до {p1:,} руб/м² в {yrs[-1]} ({s}{pct}% за {yrs[-1]-yrs[0]} лет)'})
-                        for yr in yrs:
-                            all_biweekly_facts.append({'key': f'biweekly_{cat}_{dt}_{yr}', 'value': f'{cl} ({dl}) {yr} год: средняя цена {yearly[yr]:,} руб/м²'})
-                        my = max(yearly, key=yearly.get)
-                        mny = min(yearly, key=yearly.get)
-                        all_biweekly_facts.append({'key': f'biweekly_{cat}_{dt}_peak', 'value': f'{cl} ({dl}): пик цены в {my} году — {yearly[my]:,} руб/м²'})
-                        if mny != my:
-                            all_biweekly_facts.append({'key': f'biweekly_{cat}_{dt}_min', 'value': f'{cl} ({dl}): минимум цены в {mny} году — {yearly[mny]:,} руб/м²'})
-                        for i in range(1, len(yrs)):
-                            yp, yc = yrs[i-1], yrs[i]
-                            pp, pc = yearly[yp], yearly[yc]
-                            if pp > 0:
-                                chg = round((pc - pp) / pp * 100)
-                                if abs(chg) >= 15:
-                                    d = 'вырос' if chg > 0 else 'упал'
-                                    all_biweekly_facts.append({'key': f'biweekly_{cat}_{dt}_{yp}_{yc}_yoy', 'value': f'{cl} ({dl}): цена {d} на {abs(chg)}% с {yp} по {yc} год ({pp:,} → {pc:,} руб/м²)'})
-                    saved_count = _save_facts(all_biweekly_facts, cfg['prefix'])
                     per_source.append({'source': src, 'saved': saved_count, 'input_count': count_input})
                     total_saved += saved_count
                     continue

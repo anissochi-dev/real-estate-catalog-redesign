@@ -751,31 +751,43 @@ def handler(event: dict, context) -> dict:
                 return _ok(_mss(cur, params_all))
 
             if action == 'price_biweekly_stats' or params_all.get('action') == 'price_biweekly_stats':
-                # Возвращает последние 2 среза price_history_biweekly с изменениями
+                # Возвращает изменения цен между двумя последними снапшотами price_market_snapshots
+                # (реальный ежедневный сбор с arrpro/ayax/etagi — см. price_market_refresh).
+                # Раньше здесь читалась price_history_biweekly, но эта таблица содержала
+                # синтетический xlsx-импорт (2019-2026) и была очищена 14.07.2026.
                 cur.execute(
-                    f"SELECT DISTINCT date_recorded FROM {SCHEMA}.price_history_biweekly "
-                    f"ORDER BY date_recorded DESC LIMIT 2"
+                    f"SELECT DISTINCT snapshot_date FROM {SCHEMA}.price_market_snapshots "
+                    f"WHERE district = '' ORDER BY snapshot_date DESC LIMIT 2"
                 )
-                dates = [str(r['date_recorded']) for r in cur.fetchall()]
+                dates = [str(r['snapshot_date']) for r in cur.fetchall()]
                 rows_out = []
-                if dates:
-                    date_latest = dates[0].replace("'", "''")
+                if len(dates) == 2:
+                    date_new, date_old = dates[0], dates[1]
                     cur.execute(
-                        f"SELECT category, deal_type, price_per_m2, change_pct, date_recorded "
-                        f"FROM {SCHEMA}.price_history_biweekly "
-                        f"WHERE date_recorded = '{date_latest}' "
-                        f"ORDER BY ABS(change_pct) DESC"
+                        f"SELECT n.category, n.deal AS deal_type, "
+                        f"n.price_per_m2_median AS price_new, o.price_per_m2_median AS price_old, "
+                        f"n.snapshot_date AS date_recorded "
+                        f"FROM {SCHEMA}.price_market_snapshots n "
+                        f"JOIN {SCHEMA}.price_market_snapshots o "
+                        f"  ON n.category = o.category AND n.deal = o.deal AND n.district = o.district "
+                        f"WHERE n.district = '' AND n.snapshot_date = %s AND o.snapshot_date = %s "
+                        f"  AND n.price_per_m2_median IS NOT NULL AND o.price_per_m2_median IS NOT NULL "
+                        f"  AND n.price_per_m2_median > 0 AND o.price_per_m2_median > 0 "
+                        f"  AND n.analogs_count >= 3 AND o.analogs_count >= 3",
+                        (date_new, date_old),
                     )
-                    rows_out = [
-                        {
+                    for r in cur.fetchall():
+                        p_new = float(r['price_new'])
+                        p_old = float(r['price_old'])
+                        chg = round((p_new / p_old - 1) * 100, 1) if p_old else 0.0
+                        rows_out.append({
                             'category': r['category'],
                             'deal_type': r['deal_type'],
-                            'price_per_m2': float(r['price_per_m2'] or 0),
-                            'change_pct': float(r['change_pct'] or 0),
+                            'price_per_m2': p_new,
+                            'change_pct': chg,
                             'date_recorded': str(r['date_recorded']),
-                        }
-                        for r in cur.fetchall()
-                    ]
+                        })
+                    rows_out.sort(key=lambda x: abs(x['change_pct']), reverse=True)
                 return _ok({'rows': rows_out, 'dates': dates})
 
             if action == 'aggregate_market_listings':

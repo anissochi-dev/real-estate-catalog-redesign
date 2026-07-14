@@ -1166,6 +1166,13 @@ def load_real_indexation(cur, category: str) -> float | None:
     """
     Считает реальную среднегодовую индексацию из price_history_biweekly.
     Берёт первую и последнюю точку за последние 5 лет и вычисляет CAGR.
+
+    ВАЖНО: таблица price_history_biweekly очищена 14.07.2026 — старые данные (2019-2026)
+    были синтетическим xlsx-импортом с нереалистичными скачками (например -76% за 2 недели),
+    архивированы в price_history_biweekly_archived_20260714. Таблица пуста и заново
+    накапливает только реальные данные. Пока в ней меньше 1 года истории — функция
+    честно возвращает None (требуется минимум 1 год между первой и последней точкой),
+    и вызывающий код (_get_benchmarks) откатывается на DEFAULT_BENCHMARKS.
     """
     CAT_ALIAS = {
         'hotel': 'standalone', 'restaurant': 'catering', 'office': 'office',
@@ -1185,7 +1192,7 @@ def load_real_indexation(cur, category: str) -> float | None:
                 SELECT date_recorded, price_per_m2
                 FROM {SCHEMA}.price_history_biweekly
                 WHERE category = '{cat_safe}' AND deal_type = '{deal_t}' AND price_per_m2 > 0
-                  AND date_recorded >= NOW() - INTERVAL '6 years'
+                  AND date_recorded >= '2026-06-12'
                 ORDER BY date_recorded ASC LIMIT 1
             """)
             first = cur.fetchone()
@@ -1193,6 +1200,7 @@ def load_real_indexation(cur, category: str) -> float | None:
                 SELECT date_recorded, price_per_m2
                 FROM {SCHEMA}.price_history_biweekly
                 WHERE category = '{cat_safe}' AND deal_type = '{deal_t}' AND price_per_m2 > 0
+                  AND date_recorded >= '2026-06-12'
                 ORDER BY date_recorded DESC LIMIT 1
             """)
             last = cur.fetchone()

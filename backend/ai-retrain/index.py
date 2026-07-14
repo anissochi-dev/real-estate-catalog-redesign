@@ -125,9 +125,9 @@ def _cron_check(cur, conn) -> dict:
         try:
             sources_raw = json.loads(sources_raw)
         except Exception:
-            sources_raw = ['news', 'listings', 'invest', 'demand', 'terms', 'market_prices', 'biweekly_history', 'market_history']
+            sources_raw = ['news', 'listings', 'invest', 'demand', 'terms', 'market_prices', 'market_history']
     if not sources_raw:
-        sources_raw = ['news', 'listings', 'invest', 'demand', 'terms', 'market_prices', 'biweekly_history', 'market_history']
+        sources_raw = ['news', 'listings', 'invest', 'demand', 'terms', 'market_prices', 'market_history']
 
     done_sources = progress.get('done_sources') or []
     total_saved_so_far = int(progress.get('total_saved') or 0)
@@ -149,7 +149,7 @@ def _cron_check(cur, conn) -> dict:
     src = remaining[0]
 
     # Загружаем ключи GPT (нужны только для текстовых источников)
-    PROGRAMMATIC_SOURCES = {'biweekly_history', 'invest', 'demand', 'market_history', 'market_import', 'district_prices', 'auto_seo'}
+    PROGRAMMATIC_SOURCES = {'invest', 'demand', 'market_history', 'market_import', 'district_prices', 'auto_seo'}
     cur.execute(f"SELECT yandex_api_key, yandex_folder_id FROM {SCHEMA}.settings ORDER BY id LIMIT 1")
     keys = cur.fetchone() or {}
     api_key = keys.get('yandex_api_key') or os.environ.get('YANDEX_API_KEY', '')
@@ -416,37 +416,12 @@ def _process_source(cur, src: str, api_key: str, folder_id: str):
                 'key начинается с market_hist_, латиница нижний регистр через _. Чем больше фактов — тем лучше.'
             ),
         },
-        'biweekly_history': {
-            'prefix': 'biweekly_',
-            'system': (
-                'Ты — аналитик рынка коммерческой недвижимости Краснодара. '
-                'На входе — среднегодовые цены продажи и аренды по 7 категориям с 2019 по 2026 год.\n\n'
-                'ОБЯЗАТЕЛЬНО создай отдельный факт для каждой из следующих позиций:\n'
-                '1. Для каждой категории (7 штук) — факт о динамике цены продажи за 7 лет с % роста от 2019 к 2026\n'
-                '2. Для каждой категории аренды (6 штук) — факт о динамике арендной ставки\n'
-                '3. Для каждого года (2019-2026, 8 штук) — факт о рынке в целом в этот год\n'
-                '4. Топ-3 категории по росту цены за весь период\n'
-                '5. Топ-3 категории по стабильности\n'
-                '6. Аномальные скачки (резкий рост или падение более 20% за год) — по одному факту на каждый\n'
-                '7. Сравнение 2019 vs 2026 для каждой категории\n\n'
-                'Итого должно быть НЕ МЕНЕЕ 40 фактов. Каждый факт — конкретная цифра и вывод.\n'
-                'Формат ответа — ТОЛЬКО JSON-массив, без текста вокруг:\n'
-                '[{"key": "biweekly_retail_sale_trend", "value": "Торговая недвижимость (продажа): рост с 90917 руб/м2 в 2019 до 184077 руб/м2 в 2026, +102% за 7 лет"}, ...]\n'
-                'key: латиница, нижний регистр, через _, начинается с biweekly_'
-            ),
-        },
     }
 
     if src not in source_configs:
         return 0, 0, f'Неизвестный источник: {src}'
 
     # Источники с числовыми данными — генерируем факты программно без GPT
-    if src == 'biweekly_history':
-        facts, count_input = _generate_biweekly_facts(cur)
-        saved = _save_facts(cur, facts, 'biweekly_')
-        print(f'[retrain:biweekly_history] generated={len(facts)} saved={saved}')
-        return saved, count_input, None
-
     if src == 'invest':
         facts, count_input = _generate_invest_facts(cur)
         saved = _save_facts(cur, facts, 'invest_')
@@ -1080,84 +1055,6 @@ def _generate_market_history_facts(cur) -> tuple:
     return facts, len(ph_rows) + len(macro_rows)
 
 
-def _generate_biweekly_facts(cur) -> tuple:
-    """Генерирует факты о динамике цен программно — без GPT."""
-    cat_ru = {
-        'retail': 'Торговая недвижимость', 'office': 'Офисная недвижимость',
-        'warehouse': 'Складская недвижимость', 'industrial': 'Производственные помещения',
-        'catering': 'Помещения общепита', 'free_purpose': 'Помещения свободного назначения (ПСН)',
-        'standalone': 'Отдельно стоящие здания',
-    }
-    cur.execute(
-        f"SELECT EXTRACT(YEAR FROM date_recorded)::int AS yr, category, deal_type, "
-        f"ROUND(AVG(price_per_m2)::numeric, 0) AS avg_price "
-        f"FROM {SCHEMA}.price_history_biweekly "
-        f"GROUP BY yr, category, deal_type ORDER BY category, deal_type, yr"
-    )
-    rows = cur.fetchall() or []
-
-    # Группируем: {(category, deal_type): {year: avg_price}}
-    from collections import defaultdict
-    data = defaultdict(dict)
-    for r in rows:
-        data[(r['category'], r['deal_type'])][int(r['yr'])] = int(r['avg_price'] or 0)
-
-    facts = []
-
-    for (cat, dt), yearly in data.items():
-        cat_label = cat_ru.get(cat, cat)
-        dt_label = 'продажа' if dt == 'sale' else 'аренда/мес'
-        years = sorted(yearly.keys())
-        if not years:
-            continue
-
-        # Факт: динамика за весь период
-        p_first = yearly[years[0]]
-        p_last = yearly[years[-1]]
-        if p_first > 0:
-            pct = round((p_last - p_first) / p_first * 100)
-            sign = '+' if pct >= 0 else ''
-            facts.append({
-                'key': f'biweekly_{cat}_{dt}_trend',
-                'value': f'{cat_label} ({dt_label}): цена выросла с {p_first:,} руб/м² в {years[0]} до {p_last:,} руб/м² в {years[-1]} ({sign}{pct}% за {years[-1]-years[0]} лет)'
-            })
-
-        # Факты: цена каждого года
-        for yr in years:
-            facts.append({
-                'key': f'biweekly_{cat}_{dt}_{yr}',
-                'value': f'{cat_label} ({dt_label}) в {yr}: средняя цена {yearly[yr]:,} руб/м²'
-            })
-
-        # Факт: пик и минимум
-        max_yr = max(yearly, key=yearly.get)
-        min_yr = min(yearly, key=yearly.get)
-        facts.append({
-            'key': f'biweekly_{cat}_{dt}_peak',
-            'value': f'{cat_label} ({dt_label}): пик цены в {max_yr} году — {yearly[max_yr]:,} руб/м²'
-        })
-        if min_yr != max_yr:
-            facts.append({
-                'key': f'biweekly_{cat}_{dt}_min',
-                'value': f'{cat_label} ({dt_label}): минимальная цена в {min_yr} году — {yearly[min_yr]:,} руб/м²'
-            })
-
-        # Факты: год-к-году изменения > 15%
-        for i in range(1, len(years)):
-            y_prev, y_cur = years[i-1], years[i]
-            p_prev, p_cur = yearly[y_prev], yearly[y_cur]
-            if p_prev > 0:
-                chg = round((p_cur - p_prev) / p_prev * 100)
-                if abs(chg) >= 15:
-                    direction = 'вырос' if chg > 0 else 'упал'
-                    facts.append({
-                        'key': f'biweekly_{cat}_{dt}_{y_prev}_{y_cur}_yoy',
-                        'value': f'{cat_label} ({dt_label}): цена {direction} на {abs(chg)}% с {y_prev} по {y_cur} год ({p_prev:,} → {p_cur:,} руб/м²)'
-                    })
-
-    return facts, len(rows)
-
-
 def _fetch_db_source(cur, src: str):
     """Загружает данные из БД для нужного источника."""
     if src == 'news':
@@ -1273,61 +1170,6 @@ def _fetch_db_source(cur, src: str):
                 if vac: line += f"вакансия {vac}%, "
                 if nt: line += nt
                 parts.append(line.replace(',', ' '))
-        return '\n'.join(parts)[:9000], count_input
-
-    if src == 'biweekly_history':
-        # Сводка мин/макс/среднее по всему периоду
-        cur.execute(
-            f"SELECT category, deal_type, "
-            f"MIN(date_recorded) AS date_from, MAX(date_recorded) AS date_to, "
-            f"MIN(price_per_m2) AS price_min, MAX(price_per_m2) AS price_max, "
-            f"ROUND(AVG(price_per_m2)::numeric, 0) AS price_avg, COUNT(*) AS cnt "
-            f"FROM {SCHEMA}.price_history_biweekly "
-            f"GROUP BY category, deal_type ORDER BY deal_type, category"
-        )
-        summary_rows = cur.fetchall() or []
-        # Годовые агрегаты (среднее за год) — компактно и информативно
-        cur.execute(
-            f"SELECT EXTRACT(YEAR FROM date_recorded)::int AS yr, category, deal_type, "
-            f"ROUND(AVG(price_per_m2)::numeric, 0) AS avg_price, "
-            f"ROUND(MIN(price_per_m2)::numeric, 0) AS min_price, "
-            f"ROUND(MAX(price_per_m2)::numeric, 0) AS max_price "
-            f"FROM {SCHEMA}.price_history_biweekly "
-            f"GROUP BY yr, category, deal_type ORDER BY category, deal_type, yr"
-        )
-        yearly_rows = cur.fetchall() or []
-        count_input = len(summary_rows) + len(yearly_rows)
-        cat_ru = {
-            'retail': 'Торговая', 'office': 'Офисная', 'warehouse': 'Складская',
-            'industrial': 'Производственная', 'catering': 'Общепит',
-            'free_purpose': 'ПСН', 'standalone': 'Отдельно стоящие здания',
-        }
-        parts = ['=== Сводка по категориям (весь период 2019-2026) ===']
-        for r in summary_rows:
-            cat = cat_ru.get(r.get('category') or '', r.get('category') or '')
-            dt = 'продажа' if r.get('deal_type') == 'sale' else 'аренда'
-            pmin = int(r.get('price_min') or 0)
-            pmax = int(r.get('price_max') or 0)
-            pavg = int(r.get('price_avg') or 0)
-            parts.append(
-                f"{cat} ({dt}): мин {pmin:,} руб/м2  макс {pmax:,} руб/м2  среднее {pavg:,} руб/м2"
-                f"  период {r.get('date_from')}–{r.get('date_to')}  наблюдений {r.get('cnt')}"
-            )
-        parts.append('')
-        parts.append('=== Среднегодовые цены по категориям ===')
-        cur_cat = None
-        for r in yearly_rows:
-            cat_key = f"{r.get('category')}/{r.get('deal_type')}"
-            if cat_key != cur_cat:
-                cur_cat = cat_key
-                cat = cat_ru.get(r.get('category') or '', r.get('category') or '')
-                dt = 'продажа' if r.get('deal_type') == 'sale' else 'аренда'
-                parts.append(f'--- {cat} ({dt}) ---')
-            yr = r.get('yr')
-            avg = int(r.get('avg_price') or 0)
-            lo = int(r.get('min_price') or 0)
-            hi = int(r.get('max_price') or 0)
-            parts.append(f"  {yr}: среднее {avg:,}  диапазон {lo:,}–{hi:,} руб/м2")
         return '\n'.join(parts)[:9000], count_input
 
     return '', 0

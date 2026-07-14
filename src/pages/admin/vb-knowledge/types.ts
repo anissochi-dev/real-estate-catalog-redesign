@@ -47,7 +47,6 @@ export const TRAINING_SOURCES = [
   { id: 'market_prices', label: 'Цены с агрегаторов', icon: 'Globe', hint: 'Парсинг Аякс, Этажи, ЦИАН — актуальные цены рынка' },
   { id: 'web_sources', label: 'Мои ссылки', icon: 'Link', hint: 'Сайты, добавленные вами для обучения ВБ' },
   { id: 'market_history', label: 'История рынка 2021–2026', icon: 'BarChart2', hint: 'Цены по годам, округам, категориям + макроэкономика' },
-  { id: 'biweekly_history', label: 'Двухнедельная динамика 2019–2026', icon: 'TrendingUp', hint: '2544 среза цен продажи и аренды по 7 категориям каждые 2 недели' },
   { id: 'auto_seo', label: 'SEO-теги объектов', icon: 'Sparkles', hint: 'Автоматически генерирует факты из SEO-заголовков и описаний объектов и страниц сайта — без GPT' },
 ];
 

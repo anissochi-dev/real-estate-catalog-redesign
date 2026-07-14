@@ -1,0 +1,2 @@
+ALTER TABLE t_p71821556_real_estate_catalog_.price_history_biweekly
+  RENAME TO price_history_biweekly_archived_20260714;
