@@ -322,7 +322,7 @@ def _get_benchmarks(listing: dict, api_key: str, folder_id: str, cur=None, conn=
       0. Реальные аналоги из БД (listings + market_listings, ≥35 шт, иерархия адрес→район→город)
       1. Реальные данные арендатора (monthly_rent / yearly_rent) — для ГАБ
       2. price_history — cap_rate и vacancy по категории и району (актуальная аналитика)
-      3. price_history_biweekly — реальная индексация (CAGR за 5+ лет)
+      3. avg_indexation_cache — реальная индексация (CAGR из price_market_snapshots, кэш обновляется в 01:30)
       4. DEFAULT_BENCHMARKS + атрибутные поправки (детерминированные коэффициенты)
     YandexGPT добавляет только текстовый комментарий — не влияет на цифры.
     """
@@ -391,12 +391,12 @@ def _get_benchmarks(listing: dict, api_key: str, folder_id: str, cur=None, conn=
                 bench['rent_source'] = f"price_history ({db_bench.get('district_found', 'Краснодар')})"
             print(f'[noi_model] district_bench {type_key}/{district}: {db_bench}')
 
-    # ── Слой 2: price_history_biweekly — реальная индексация (CAGR) ────────────
+    # ── Слой 2: avg_indexation_cache — реальная индексация (CAGR) ──────────────
     if cur:
         real_idx = load_real_indexation(cur, type_key)
         if real_idx is not None:
             bench['avg_indexation_pct'] = real_idx
-            bench['indexation_source'] = 'price_history_biweekly (CAGR 5+ лет)'
+            bench['indexation_source'] = 'price_market_snapshots (CAGR, кэш 01:30)'
 
     # ── Слой 3: атрибутные поправки (детерминированные правила) ────────────────
     condition = (listing.get('condition') or '').lower()
@@ -1164,66 +1164,28 @@ def load_district_benchmarks(cur, category: str, district: str) -> dict:
 
 def load_real_indexation(cur, category: str) -> float | None:
     """
-    Считает реальную среднегодовую индексацию из price_history_biweekly.
-    Берёт первую и последнюю точку за последние 5 лет и вычисляет CAGR.
+    Возвращает реальную среднегодовую индексацию (CAGR) арендной ставки из
+    avg_indexation_cache — кэш пересчитывается ежедневно в 01:30 функцией
+    indexation-cron на основе реальных ежедневных снимков рынка
+    price_market_snapshots (arrpro/ayax/etagi/moreon + собственная база).
 
-    ВАЖНО: таблица price_history_biweekly очищена 14.07.2026 — старые данные (2019-2026)
-    были синтетическим xlsx-импортом с нереалистичными скачками (например -76% за 2 недели),
-    архивированы в price_history_biweekly_archived_20260714. Таблица пуста и заново
-    накапливает только реальные данные. Пока в ней меньше 1 года истории — функция
-    честно возвращает None (требуется минимум 1 год между первой и последней точкой),
-    и вызывающий код (_get_benchmarks) откатывается на DEFAULT_BENCHMARKS.
+    ВАЖНО: до 14.07.2026 здесь читалась price_history_biweekly — таблица с
+    синтетическим xlsx-импортом (нереалистичные скачки вроде -76% за 2 недели).
+    Она архивирована, а расчёт переведён на честный источник. Пока в кэше нет
+    записи для категории (недостаточно истории — требуется от 1 года), функция
+    возвращает None, и вызывающий код (_get_benchmarks) откатывается на
+    DEFAULT_BENCHMARKS.
     """
-    CAT_ALIAS = {
-        'hotel': 'standalone', 'restaurant': 'catering', 'office': 'office',
-        'retail': 'retail', 'warehouse': 'warehouse', 'free_purpose': 'free_purpose',
-        'production': 'industrial', 'building': 'standalone', 'gab': 'retail',
-        'business': 'free_purpose', 'car_service': 'industrial', 'land': None,
-    }
-    bw_cat = CAT_ALIAS.get(category, category)
-    if not bw_cat:
-        return None
-    cat_safe = bw_cat.replace("'", "''")
     try:
-        # Используем аренду — CAGR ставки аренды = реальная индексация для инвестора
-        # Если аренды нет в biweekly — берём продажу как прокси (более консервативная оценка)
-        for deal_t in ('rent', 'sale'):
-            cur.execute(f"""
-                SELECT date_recorded, price_per_m2
-                FROM {SCHEMA}.price_history_biweekly
-                WHERE category = '{cat_safe}' AND deal_type = '{deal_t}' AND price_per_m2 > 0
-                  AND date_recorded >= '2026-06-12'
-                ORDER BY date_recorded ASC LIMIT 1
-            """)
-            first = cur.fetchone()
-            cur.execute(f"""
-                SELECT date_recorded, price_per_m2
-                FROM {SCHEMA}.price_history_biweekly
-                WHERE category = '{cat_safe}' AND deal_type = '{deal_t}' AND price_per_m2 > 0
-                  AND date_recorded >= '2026-06-12'
-                ORDER BY date_recorded DESC LIMIT 1
-            """)
-            last = cur.fetchone()
-            if first and last:
-                break
-        if not first or not last:
+        cur.execute(f"""
+            SELECT avg_indexation_pct, deal FROM {SCHEMA}.avg_indexation_cache
+            WHERE category = %s ORDER BY deal ASC LIMIT 1
+        """, (category,))
+        row = cur.fetchone()
+        if not row:
             return None
-        p0 = float(first['price_per_m2'])
-        p1 = float(last['price_per_m2'])
-        if p0 <= 0 or p1 <= 0:
-            return None
-        # Количество лет между точками
-        days = (last['date_recorded'] - first['date_recorded']).days
-        years = days / 365.25
-        if years < 1:
-            return None
-        cagr = ((p1 / p0) ** (1 / years) - 1) * 100
-        # Если использовали продажу как прокси — ставки аренды исторически растут ~60% от роста цен
-        if deal_t == 'sale':
-            cagr = cagr * 0.6
-        # Ограничиваем реалистичным диапазоном для индексации арендной ставки: 3–12%
-        cagr = max(3.0, min(12.0, round(cagr, 1)))
-        print(f'[noi_model] indexation {bw_cat}/{deal_t}: p0={p0:.0f} p1={p1:.0f} years={years:.1f} CAGR={cagr}%')
+        cagr = float(row['avg_indexation_pct'])
+        print(f'[noi_model] indexation {category}/{row["deal"]} (из кэша): CAGR={cagr}%')
         return cagr
     except Exception as e:
         print(f'[noi_model] load_real_indexation error: {e}')

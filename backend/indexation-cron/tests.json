@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "name": "Ручной пересчёт индексации — возвращает JSON с результатом",
+      "method": "GET",
+      "path": "/?action=run",
+      "expectedStatus": 200,
+      "expectedBody": { "ok": true },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "OPTIONS — CORS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    }
+  ]
+}

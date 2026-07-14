@@ -1091,6 +1091,20 @@ def handler(event: dict, context) -> dict:
                     price_refresh_result = {'error': str(_pr_e)[:100]}
                 result['price_refresh'] = price_refresh_result
 
+                # ── Пересчёт индексации (CAGR) — по расписанию, по умолчанию 01:30 ─
+                indexation_result = None
+                try:
+                    import urllib.request as _ur_idx
+                    _idx_req = _ur_idx.Request(
+                        'https://functions.poehali.dev/a9a02fcd-b7f8-48ef-b74c-d377edc3250f?action=ping_cron',
+                        method='GET',
+                    )
+                    with _ur_idx.urlopen(_idx_req, timeout=25) as _idx_resp:
+                        indexation_result = json.loads(_idx_resp.read(4096).decode('utf-8', errors='replace'))
+                except Exception as _idx_e:
+                    indexation_result = {'error': str(_idx_e)[:100]}
+                result['indexation_cron'] = indexation_result
+
                 # ── VK Ads: синхронизация кабинета (каждые 6 часов) ──────
                 vk_ads_result = None
                 try:
