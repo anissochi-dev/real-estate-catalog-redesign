@@ -377,18 +377,16 @@ def handle_refresh(cur, conn, force=False):
             # Принудительный запуск — сбрасываем любые ограничения и стартуем
             print(f'[price_refresh] forced start, today={today_date}')
         else:
-            # Запускаем только 1-го числа каждого месяца
-            if today_date.day != 1:
-                return {'skipped': True, 'reason': f'not 1st day of month (today={today_date})'}
-
-            # Защита от повторного запуска в том же месяце
+            # Запускаем раз в price_refresh_interval_days дней (по умолчанию 1 — ежедневно)
+            interval_days = int(cfg.get('price_refresh_interval_days') or 1)
             last_at = cfg.get('price_refresh_last_at')
             if last_at:
                 if isinstance(last_at, str):
                     last_at = datetime.datetime.fromisoformat(last_at)
                 last_date = last_at.date() if hasattr(last_at, 'date') else last_at
-                if last_date.year == today_date.year and last_date.month == today_date.month:
-                    return {'skipped': True, 'reason': f'already ran this month ({last_date})'}
+                days_since = (today_date - last_date).days
+                if days_since < interval_days:
+                    return {'skipped': True, 'reason': f'interval not reached ({days_since}/{interval_days} days since {last_date})'}
 
         next_batch = 0
         today = str(today_date)
