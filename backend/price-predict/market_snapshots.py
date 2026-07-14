@@ -731,17 +731,20 @@ def handle_stats(cur, params):
             except Exception:
                 st = {}
         nb = st.get('next_batch')
-        # Вычисляем дату следующего запуска — 1-е число следующего месяца
-        _today = datetime.date.today()
-        if _today.month == 12:
-            _next_run = datetime.date(_today.year + 1, 1, 1)
+        # Вычисляем дату следующего запуска — last_at + interval_days
+        interval_days = int(srow.get('price_refresh_interval_days') or 1)
+        last_at = srow.get('price_refresh_last_at')
+        if last_at:
+            last_date = last_at.date() if hasattr(last_at, 'date') else last_at
+            _next_run = last_date + datetime.timedelta(days=interval_days)
         else:
-            _next_run = datetime.date(_today.year, _today.month + 1, 1)
+            _next_run = datetime.date.today()
+        schedule_label = 'ежедневно' if interval_days <= 1 else f'раз в {interval_days} дн.'
 
         schedule = {
             'enabled':     srow.get('price_refresh_enabled'),
             'last_at':     str(srow['price_refresh_last_at']) if srow.get('price_refresh_last_at') else None,
-            'schedule':    '1-е число каждого месяца',
+            'schedule':    schedule_label,
             'next_run':    str(_next_run),
             'in_progress': bool(st.get('in_progress')),
             'next_source': BATCH_SOURCES[int(nb)] if nb is not None and int(nb) < len(BATCH_SOURCES) else None,

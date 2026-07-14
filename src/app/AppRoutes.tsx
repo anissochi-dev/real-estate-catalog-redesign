@@ -14,6 +14,7 @@ import {
   NewsListPage,
   NewsArticlePage,
   LeadsListPage,
+  MarketIndexPage,
 } from './lazyPages';
 import type { Property, Page } from './appTypes';
 
@@ -118,6 +119,7 @@ export default function AppRoutes({
       <Route path="/news" element={<NewsListPage />} />
       <Route path="/news/:slug" element={<NewsArticlePage />} />
       <Route path="/leads" element={<LeadsListPage />} />
+      <Route path="/market-index" element={<MarketIndexPage />} />
       <Route path="/declined" element={<DeclinedPage />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

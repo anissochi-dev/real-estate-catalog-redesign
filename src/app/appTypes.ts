@@ -87,7 +87,7 @@ export function loadInitialView(): AppView {
     const path = window.location.pathname;
 
     // 3. Публичные страницы — открываем как сайт
-    const publicPaths = ['/object', '/catalog', '/map', '/favorites', '/compare', '/network-tenants', '/news', '/leads', '/declined'];
+    const publicPaths = ['/object', '/catalog', '/map', '/favorites', '/compare', '/network-tenants', '/news', '/leads', '/declined', '/market-index'];
     if (path === '/' || publicPaths.some(p => path.startsWith(p))) return 'site';
 
     // 4. Если в localStorage сохранён вид — восстанавливаем его.

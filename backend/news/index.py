@@ -379,6 +379,37 @@ def _fetch_news_snippets(query: str, limit: int = 8) -> tuple[list[dict], str]:
     return [], 'none'
 
 
+def _fetch_local_news_snippets(query: str, limit: int = 3) -> list[dict]:
+    """
+    Ищет новости только на локальных СМИ Краснодарского края (Юга.ру, MK Кубань)
+    через Google News RSS с оператором site: — точечно, без замены основного поиска.
+    Используется как доп. источник для более региональной фактуры в статьях.
+    """
+    try:
+        q_enc = urllib.parse.quote(f'{query} (site:yuga.ru OR site:kuban.mk.ru)')
+        rss_url = f'https://news.google.com/rss/search?q={q_enc}&hl=ru&gl=RU&ceid=RU:ru'
+        req = urllib.request.Request(rss_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            rss_data = resp.read().decode('utf-8', errors='replace')
+        root = ET.fromstring(rss_data)
+        results = []
+        for item in root.iter('item'):
+            t_el = item.find('title')
+            d_el = item.find('description')
+            l_el = item.find('link')
+            title = (t_el.text or '') if t_el is not None else ''
+            snippet = re.sub(r'<[^>]+>', '', (d_el.text or '') if d_el is not None else '').strip()
+            link = (l_el.text or '') if l_el is not None else ''
+            title = re.sub(r'\s+-\s+[\w\s]+$', '', title).strip()
+            if title:
+                results.append({'title': title[:150], 'snippet': snippet[:300], 'url': link[:200]})
+            if len(results) >= limit:
+                break
+        return results
+    except Exception:
+        return []
+
+
 def _build_news_context(snippets: list[dict]) -> str:
     """Форматирует найденные новости в читаемый блок для промпта GPT."""
     if not snippets:
@@ -980,8 +1011,12 @@ def handler(event: dict, context) -> dict:
                             )
                             for topic in topics:
                                 topic_news, src = _fetch_news_snippets(f'{topic} Краснодар', limit=5)
+                                # Доп. локальная фактура с Юга.ру / MK Кубань — более региональные новости
+                                local_news = _fetch_local_news_snippets(topic, limit=3)
                                 seen_urls = {s['url'] for s in topic_news}
-                                combined = topic_news + [s for s in daily_news if s['url'] not in seen_urls]
+                                combined = topic_news + [s for s in local_news if s['url'] not in seen_urls]
+                                seen_urls |= {s['url'] for s in local_news}
+                                combined += [s for s in daily_news if s['url'] not in seen_urls]
                                 # Ставку ЦБ берём только если она реально упомянута в найденных новостях
                                 key_rate = _extract_key_rate_from_snippets(combined)
                                 article, err = _gpt(
@@ -1357,6 +1392,10 @@ def handler(event: dict, context) -> dict:
                 news_snippets, src = _fetch_news_snippets(f'{topic} Краснодар', limit=8)
                 if not news_snippets:
                     news_snippets, src = _fetch_news_snippets('коммерческая недвижимость Краснодар', limit=8)
+                # Доп. локальная фактура с Юга.ру / MK Кубань
+                local_news = _fetch_local_news_snippets(topic, limit=3)
+                seen_urls = {s['url'] for s in news_snippets}
+                news_snippets += [s for s in local_news if s['url'] not in seen_urls]
                 # Ставку ЦБ берём только если она реально упомянута в найденных новостях
                 key_rate = _extract_key_rate_from_snippets(news_snippets)
                 article, err = _gpt(api_key, folder_id, topic, key_rate=key_rate, news_snippets=news_snippets)
@@ -1379,8 +1418,11 @@ def handler(event: dict, context) -> dict:
                 results = []
                 for topic in topics:
                     topic_news, src = _fetch_news_snippets(f'{topic} Краснодар', limit=5)
+                    local_news = _fetch_local_news_snippets(topic, limit=3)
                     seen = {s['url'] for s in topic_news}
-                    combined = topic_news + [s for s in daily_news if s['url'] not in seen]
+                    combined = topic_news + [s for s in local_news if s['url'] not in seen]
+                    seen |= {s['url'] for s in local_news}
+                    combined += [s for s in daily_news if s['url'] not in seen]
                     # Ставку ЦБ берём только если она реально упомянута в найденных новостях
                     key_rate = _extract_key_rate_from_snippets(combined)
                     article, err = _gpt(api_key, folder_id, topic, key_rate=key_rate, news_snippets=combined[:8])

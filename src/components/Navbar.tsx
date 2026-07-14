@@ -1,4 +1,5 @@
 import { useState, type RefObject } from 'react';
+import { Link } from 'react-router-dom';
 import { Page } from '@/App';
 import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
@@ -101,6 +102,15 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
                   )}
                 </button>
               ))}
+              <Link
+                to="/market-index"
+                onMouseEnter={() => prefetchPage('market-index')}
+                onFocus={() => prefetchPage('market-index')}
+                className="relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 text-foreground hover:bg-muted"
+              >
+                <Icon name="TrendingUp" size={16} />
+                Индекс цен
+              </Link>
             </nav>
 
             {/* Right side — desktop */}
@@ -241,6 +251,16 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
               )}
             </button>
           ))}
+
+          <Link
+            to="/market-index"
+            onClick={() => setDrawerOpen(false)}
+            onTouchStart={() => prefetchPage('market-index')}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 text-left text-foreground hover:bg-muted"
+          >
+            <Icon name="TrendingUp" size={18} />
+            <span className="flex-1">Индекс цен</span>
+          </Link>
 
           {compareCount > 0 && (
             <button
