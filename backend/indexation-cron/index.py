@@ -7,10 +7,15 @@
 живого пересчёта на каждый запрос инвестмодели.
 
 Запуск:
-  - Серверный триггер платформы poehali.dev на 01:30 (настраивается в UI функции)
-  - Резервный клиентский пинг (action=ping_cron) из news/index.py по расписанию
-    settings.indexation_cron_hour/minute — на случай если серверный триггер не настроен
-  - Ручной запуск (action=run) для проверки из админки
+  - Клиентский пинг (action=ping_cron) из news/index.py — вызывается при заходе
+    посетителя на сайт, срабатывает раз в сутки в окне settings.indexation_cron_hour/
+    minute (UTC!). По умолчанию 22:30 UTC = 01:30 МСК.
+  - Ручной запуск (action=run) для проверки из админки — игнорирует расписание,
+    пересчитывает сразу.
+
+ВАЖНО про часовой пояс: indexation_cron_hour/minute хранятся и сравниваются в UTC
+(now_utc из datetime.now(timezone.utc)). МСК = UTC+3, поэтому для запуска в 01:30 МСК
+нужно ставить indexation_cron_hour=22, indexation_cron_minute=30.
 """
 import json
 import os
