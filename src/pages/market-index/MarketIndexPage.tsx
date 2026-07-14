@@ -1,6 +1,7 @@
 import Icon from '@/components/ui/icon';
 import SeoHead, { useSeoH1 } from '@/components/SeoHead';
-import SchemaOrg, { makeBreadcrumbSchema } from '@/components/SchemaOrg';
+import SchemaOrg, { makeBreadcrumbSchema, makeFaqSchema } from '@/components/SchemaOrg';
+import PropertyFaqSection from '@/components/property/PropertyFaqSection';
 import { getSiteUrl } from '@/lib/siteUrl';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useMarketIndexData } from './useMarketIndexData';
@@ -9,6 +10,8 @@ import MarketIndexTrend from './MarketIndexTrend';
 import MarketIndexDistricts from './MarketIndexDistricts';
 import MarketIndexSupply from './MarketIndexSupply';
 import MarketIndexTable from './MarketIndexTable';
+import MarketIndexSeoBlock from './MarketIndexSeoBlock';
+import { MARKET_INDEX_FAQ } from './marketIndexFaq';
 
 export default function MarketIndexPage() {
   const { settings } = useSettings();
@@ -23,13 +26,21 @@ export default function MarketIndexPage() {
     { name: 'Главная', url: siteUrl },
     { name: 'Индекс цен', url: `${siteUrl}/market-index` },
   ]);
+  const faqSchema = makeFaqSchema(MARKET_INDEX_FAQ);
 
   const noData = !loading && (!data || data.snapshots.length === 0);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
-      <SeoHead path="/market-index" h1={h1} />
+      <SeoHead
+        path="/market-index"
+        h1={h1}
+        title={`Цены на коммерческую недвижимость в Краснодаре — аренда и продажа | ${settings.company_name || 'Индекс цен'}`}
+        description="Актуальные медианные цены за м² на офисы, торговые помещения, склады и другую коммерческую недвижимость в Краснодаре. Динамика цен по районам, обновление ежедневно."
+        keywords="цены на коммерческую недвижимость Краснодар, стоимость аренды офиса, цена м² склад, аналитика рынка недвижимости"
+      />
       <SchemaOrg schema={bcSchema} id="market-index-bc" />
+      <SchemaOrg schema={faqSchema} id="market-index-faq" />
 
       <MarketIndexHero updatedAt={updatedAt} totalAnalogs={totalAnalogs} />
 
@@ -88,6 +99,9 @@ export default function MarketIndexPage() {
           <MarketIndexTable latest={data?.latest ?? []} />
         </div>
       )}
+
+      <MarketIndexSeoBlock city={settings.main_city || 'Краснодар'} />
+      <PropertyFaqSection faq={MARKET_INDEX_FAQ} faqLoading={false} />
     </div>
   );
 }

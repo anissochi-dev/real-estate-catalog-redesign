@@ -1,10 +1,11 @@
 """
-SEO-тексты для посадочных страниц: категории и районы.
+SEO-тексты для посадочных страниц: категории, районы и индекс цен рынка.
 Заменяет category-seo (OpenAI) и district-seo (YandexGPT) — единый кеш, единый движок.
 
-action=category  GET ?category=office&city=Краснодар
-action=district  GET ?district=Прикубанский&city=Краснодар
-force=true       — сбросить кеш и перегенерировать
+action=category     GET ?category=office&city=Краснодар
+action=district     GET ?district=Прикубанский&city=Краснодар
+action=market_index GET ?market=true&city=Краснодар
+force=true          — сбросить кеш и перегенерировать
 
 Returns: { text: str, cached: bool }
 """
@@ -113,6 +114,26 @@ def _prompt_district(district: str, city: str, stats: dict, district_desc: str) 
     )
 
 
+def _prompt_market_index(city: str, stats: dict) -> str:
+    cats_str = ', '.join(TYPE_LABELS.get(c, c) for c in stats.get('categories', [])[:6]) or 'офисы, торговые помещения, склады'
+    price_lines = []
+    for row in stats.get('price_rows', [])[:6]:
+        deal_ru = 'аренда' if row['deal'] == 'rent' else 'продажа'
+        price_lines.append(f'{TYPE_LABELS.get(row["category"], row["category"])} ({deal_ru}) — {int(row["price"]):,} руб/м²'.replace(',', ' '))
+    price_str = '; '.join(price_lines)
+    return (
+        f'Напиши SEO-текст (3-4 абзаца, ~350 слов) для страницы «Индекс цен коммерческой недвижимости {city}а» '
+        f'на сайте агентства недвижимости.\n\n'
+        f'Раздел содержит актуальные медианные цены за м² по категориям и районам, а также динамику предложения.\n'
+        f'Категории объектов в базе: {cats_str}.\n'
+        f'{f"Текущие ориентиры: {price_str}." if price_str else ""}\n\n'
+        'Требования: объясни ценность индекса для арендаторов, покупателей и инвесторов, упомяни что цены '
+        'обновляются на основе реальных рыночных предложений, включи ключевые запросы '
+        '(цены на аренду/продажу коммерческой недвижимости, стоимость м², аналитика рынка, город), '
+        'заверши призывом обратиться в агентство за консультацией, без заголовков и markdown.'
+    )
+
+
 def _get_district_desc(cur, district: str) -> str:
     try:
         cur.execute(
@@ -141,9 +162,10 @@ def handler(event: dict, context) -> dict:
     city = (params.get('city') or body.get('city') or 'Краснодар').strip()
     force = str(params.get('force') or body.get('force') or '').lower() == 'true'
 
-    # Определяем режим: category или district
+    # Определяем режим: category, district или market_index
     category = (params.get('category') or body.get('category') or '').strip().lower()
     district = (params.get('district') or body.get('district') or '').strip()
+    market = str(params.get('market') or body.get('market') or '').lower() == 'true'
 
     if category:
         if category not in CATEGORY_CONTEXT:
@@ -151,8 +173,10 @@ def handler(event: dict, context) -> dict:
         cache_key = category
     elif district:
         cache_key = f'district:{district}'
+    elif market:
+        cache_key = 'market_index'
     else:
-        return _err('category или district обязателен')
+        return _err('category, district или market обязателен')
 
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     try:
@@ -186,7 +210,7 @@ def handler(event: dict, context) -> dict:
                 stats = {'count': int(r.get('c') or 0), 'avg_price': float(r.get('avg_p') or 0),
                          'min_area': float(r.get('min_a') or 0), 'max_area': float(r.get('max_a') or 0)}
                 prompt = _prompt_category(category, city, stats)
-            else:
+            elif district:
                 cur.execute(
                     f"SELECT COUNT(*) AS c, AVG(price) AS avg_p FROM {SCHEMA}listings "
                     f"WHERE status = 'active' AND district ILIKE %s",
@@ -201,6 +225,21 @@ def handler(event: dict, context) -> dict:
                 types = [r['category'] for r in cur.fetchall() if r.get('category')]
                 stats = {'count': int(agg.get('c') or 0), 'avg_price': float(agg.get('avg_p') or 0), 'types': types}
                 prompt = _prompt_district(district, city, stats, _get_district_desc(cur, district))
+            else:
+                cur.execute(
+                    f"SELECT DISTINCT category FROM {SCHEMA}price_market_snapshots "
+                    f"WHERE district = '' ORDER BY category LIMIT 8"
+                )
+                categories = [r['category'] for r in cur.fetchall() if r.get('category')]
+                cur.execute(
+                    f"SELECT DISTINCT ON (category, deal) category, deal, price_per_m2_median AS price "
+                    f"FROM {SCHEMA}price_market_snapshots "
+                    f"WHERE district = '' AND price_per_m2_median IS NOT NULL AND analogs_count >= 3 "
+                    f"ORDER BY category, deal, snapshot_date DESC LIMIT 8"
+                )
+                price_rows = [dict(r) for r in cur.fetchall()]
+                stats = {'categories': categories, 'price_rows': price_rows}
+                prompt = _prompt_market_index(city, stats)
 
             text = _yandex_gpt(prompt, system, api_key, folder_id)
             if not text:
