@@ -157,7 +157,7 @@ export default function PropertyMediaGallery({
           <div className="flex gap-2 overflow-x-auto pb-1">
             <button onClick={() => setActiveImg(0)}
               className={`w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all ${activeImg === 0 ? 'border-brand-blue' : 'border-transparent opacity-70 hover:opacity-100'}`}>
-              <img src={rawImgs[0]} alt="" className="w-full h-full object-cover" />
+              <img src={rawImgs[0]} alt={`${item.title} — фото 1`} className="w-full h-full object-cover" />
             </button>
             {hasVideo && (
               <button onClick={() => setActiveImg(videoIndex)}
@@ -171,7 +171,7 @@ export default function PropertyMediaGallery({
               return (
                 <button key={u + i} onClick={() => setActiveImg(mediaIdx)}
                   className={`w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all ${mediaIdx === activeImg ? 'border-brand-blue' : 'border-transparent opacity-70 hover:opacity-100'}`}>
-                  <img src={u} alt="" className="w-full h-full object-cover" />
+                  <img src={u} alt={`${item.title} — фото ${mediaIdx}`} className="w-full h-full object-cover" />
                 </button>
               );
             })}
