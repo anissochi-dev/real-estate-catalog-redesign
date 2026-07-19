@@ -55,17 +55,18 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
     <>
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-border shadow-sm">
         <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between h-14">
+          <div className="flex items-center justify-between h-14 md:h-16">
             {/* Logo */}
             <button
               onClick={() => handleNav('home')}
-              className="flex items-center gap-2 group min-w-0 flex-1 md:flex-initial md:shrink-0"
+              className="flex items-center gap-2 md:gap-3 group min-w-0 flex-1 md:flex-initial md:shrink-0"
             >
               {logoUrl ? (
-                <img src={logoUrl} alt={brandName} width={36} height={36} loading="eager" className="w-8 h-8 md:w-9 md:h-9 rounded-lg object-contain bg-white shrink-0" />
+                <img src={logoUrl} alt={brandName} width={48} height={48} loading="eager" className="w-8 h-8 md:w-12 md:h-12 rounded-lg object-contain bg-white shrink-0" />
               ) : (
-                <div className="w-8 h-8 md:w-9 md:h-9 rounded-lg btn-blue flex items-center justify-center shrink-0">
-                  <Icon name="Building" size={18} className="text-white" />
+                <div className="w-8 h-8 md:w-12 md:h-12 rounded-lg btn-blue flex items-center justify-center shrink-0">
+                  <Icon name="Building" size={18} className="md:hidden text-white" />
+                  <Icon name="Building" size={24} className="hidden md:block text-white" />
                 </div>
               )}
               <span
