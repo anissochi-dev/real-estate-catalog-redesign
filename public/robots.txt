@@ -36,18 +36,6 @@ Disallow: /map
 Disallow: /favorites
 Disallow: /compare
 
-User-agent: GPTBot
-Disallow: /
-
-User-agent: ChatGPT-User
-Disallow: /
-
-User-agent: CCBot
-Disallow: /
-
-User-agent: anthropic-ai
-Disallow: /
-
 User-agent: Bingbot
 Allow: /
 Disallow: /admin
