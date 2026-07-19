@@ -57,7 +57,7 @@ export default function GeneralTab({ tab, s, setS, cities, saved, save }: Props)
             onChange={urls => setS({ ...s, logo_url: urls[0] || '' })}
             folder="logo"
             multiple={false}
-            hint="Перетащите файл логотипа или выберите с устройства. PNG прозрачный, рекомендуется 512×512"
+            hint="Перетащите файл логотипа или выберите с устройства. PNG прозрачный. Поддерживаются любые пропорции — квадратный или прямоугольный (высота в шапке сайта ~40px)"
           />
           {field('company_name', 'Название компании')}
         </div>

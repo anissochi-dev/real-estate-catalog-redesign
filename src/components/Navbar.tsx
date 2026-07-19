@@ -1,4 +1,4 @@
-import { useState, type RefObject } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Page } from '@/App';
 import Icon from '@/components/ui/icon';
@@ -6,7 +6,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { prefetchPage } from '@/app/lazyPages';
 import OwnerSubmitModal from '@/components/OwnerSubmitModal';
-import { useAutoFitText } from '@/hooks/useAutoFitText';
 
 interface NavbarProps {
   currentPage: Page;
@@ -35,11 +34,6 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
   const isClient = user && user.role === 'client';
   const brandName = settings.company_name || 'Бизнес. Маркетинг. Недвижимость.';
   const logoUrl = settings.logo_url;
-  const { containerRef: brandRef, fontSize: brandFontSize } = useAutoFitText({
-    text: brandName,
-    minPx: 10,
-    maxPx: 22,
-  });
 
   const handleNav = (page: Page) => {
     if (page === 'network-tenants' && isStaff && onAdminLeads) {
@@ -59,23 +53,17 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
             {/* Logo */}
             <button
               onClick={() => handleNav('home')}
-              className="flex items-center gap-2 md:gap-3 group min-w-0 flex-1 md:flex-initial md:shrink-0"
+              className="flex items-center group shrink-0"
+              aria-label={brandName}
             >
               {logoUrl ? (
-                <img src={logoUrl} alt={brandName} width={40} height={40} loading="eager" className="w-8 h-8 md:w-10 md:h-10 rounded-lg object-contain bg-white shrink-0" />
+                <img src={logoUrl} alt={brandName} height={40} loading="eager" className="h-8 md:h-10 w-auto max-w-[160px] md:max-w-[220px] object-contain" />
               ) : (
                 <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg btn-blue flex items-center justify-center shrink-0">
                   <Icon name="Building" size={18} className="md:hidden text-white" />
                   <Icon name="Building" size={20} className="hidden md:block text-white" />
                 </div>
               )}
-              <span
-                ref={brandRef as RefObject<HTMLSpanElement>}
-                style={{ fontSize: `${brandFontSize}px` }}
-                className="font-display font-extrabold text-brand-blue tracking-tight whitespace-nowrap overflow-hidden text-ellipsis min-w-0 flex-1 md:flex-initial md:!text-[22px]"
-              >
-                {brandName}
-              </span>
             </button>
 
             {/* Nav links — desktop */}
