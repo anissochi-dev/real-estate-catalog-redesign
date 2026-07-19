@@ -72,7 +72,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
               <span
                 ref={brandRef as RefObject<HTMLSpanElement>}
                 style={{ fontSize: `${brandFontSize}px` }}
-                className="font-display font-extrabold text-brand-blue tracking-tight whitespace-nowrap overflow-hidden text-ellipsis min-w-0 flex-1 md:flex-initial"
+                className="font-display font-extrabold text-brand-blue tracking-tight whitespace-nowrap overflow-hidden text-ellipsis min-w-0 flex-1 md:flex-initial md:!text-[22px]"
               >
                 {brandName}
               </span>
