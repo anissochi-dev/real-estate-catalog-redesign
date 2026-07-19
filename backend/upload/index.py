@@ -384,6 +384,7 @@ def handler(event, context):
 
             # Конвертируем фото в WebP + масштабируем до 1920px + генерируем thumb 400px
             thumb_data = None  # будет заполнен если kind=photo
+            medium_data = None  # будет заполнен если kind=photo и фото больше MEDIUM_SIDE
             if kind == 'photo' and ext in ('jpg', 'jpeg', 'png', 'webp'):
                 try:
                     from PIL import Image as PilImage
