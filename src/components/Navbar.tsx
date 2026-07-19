@@ -24,7 +24,6 @@ const navItems = [
   { id: 'catalog' as Page, label: 'Каталог', icon: 'Building2' },
   { id: 'leads' as Page, label: 'Заявки', icon: 'FileText' },
   { id: 'news' as Page, label: 'Новости', icon: 'Newspaper' },
-  { id: 'favorites' as Page, label: '', icon: 'Heart', ariaLabel: 'Избранное' },
 ];
 
 export default function Navbar({ currentPage, setCurrentPage, favoritesCount, compareCount, onLogin, onAdmin, onAdminLeads, onClientDashboard }: NavbarProps) {
@@ -95,11 +94,6 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
                 >
                   <Icon name={item.icon} size={16} />
                   {item.label}
-                  {item.id === 'favorites' && favoritesCount > 0 && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full btn-orange text-white text-[10px] font-bold flex items-center justify-center">
-                      {favoritesCount}
-                    </span>
-                  )}
                 </button>
               ))}
             </nav>
@@ -169,9 +163,6 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
                 aria-label="Открыть меню"
               >
                 <Icon name="Menu" size={22} />
-                {favoritesCount > 0 && (
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-brand-orange" />
-                )}
               </button>
             </div>
           </div>
@@ -235,11 +226,6 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
             >
               <Icon name={item.icon} size={18} />
               <span className="flex-1">{item.label}</span>
-              {item.id === 'favorites' && favoritesCount > 0 && (
-                <span className="w-5 h-5 rounded-full btn-orange text-white text-[11px] font-bold flex items-center justify-center">
-                  {favoritesCount}
-                </span>
-              )}
             </button>
           ))}
 
@@ -302,6 +288,20 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
           )}
         </div>
       </div>}
+
+      {/* Плавающая кнопка избранного — видна только если есть добавленные объекты */}
+      {favoritesCount > 0 && (
+        <button
+          onClick={() => handleNav('favorites')}
+          onMouseEnter={() => prefetchPage('favorites')}
+          aria-label={`Избранное (${favoritesCount})`}
+          className={`fixed right-4 z-40 w-12 h-12 rounded-full bg-white shadow-lg border border-border flex items-center justify-center hover:scale-105 active:scale-95 transition-all duration-200 animate-scale-in ${
+            compareCount > 0 ? 'bottom-24' : 'bottom-4'
+          }`}
+        >
+          <Icon name="Heart" size={22} className="text-red-500" fill="currentColor" />
+        </button>
+      )}
 
       {/* Модальная форма собственника */}
       {ownerModalOpen && <OwnerSubmitModal onClose={() => setOwnerModalOpen(false)} />}
