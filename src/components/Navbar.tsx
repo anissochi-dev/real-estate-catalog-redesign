@@ -62,11 +62,11 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
               className="flex items-center gap-2 md:gap-3 group min-w-0 flex-1 md:flex-initial md:shrink-0"
             >
               {logoUrl ? (
-                <img src={logoUrl} alt={brandName} width={48} height={48} loading="eager" className="w-8 h-8 md:w-12 md:h-12 rounded-lg object-contain bg-white shrink-0" />
+                <img src={logoUrl} alt={brandName} width={40} height={40} loading="eager" className="w-8 h-8 md:w-10 md:h-10 rounded-lg object-contain bg-white shrink-0" />
               ) : (
-                <div className="w-8 h-8 md:w-12 md:h-12 rounded-lg btn-blue flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg btn-blue flex items-center justify-center shrink-0">
                   <Icon name="Building" size={18} className="md:hidden text-white" />
-                  <Icon name="Building" size={24} className="hidden md:block text-white" />
+                  <Icon name="Building" size={20} className="hidden md:block text-white" />
                 </div>
               )}
               <span
