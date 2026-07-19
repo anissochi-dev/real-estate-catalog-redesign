@@ -1,5 +1,5 @@
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  LineChart, Line, BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
 import Icon from '@/components/ui/icon';
@@ -15,10 +15,33 @@ interface TrendViewProps {
   onToggleCat: (cat: string) => void;
 }
 
+interface SupplyViewProps {
+  supplyData: Record<string, string | number>[];
+  selectedCats: string[];
+  onToggleCat: (cat: string) => void;
+}
+
 interface CompareViewProps {
   compareData: Record<string, string | number>[];
   selectedCats: string[];
   onToggleCat: (cat: string) => void;
+}
+
+function SupplyTooltip({ active, payload, label }: {
+  active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-border rounded-xl shadow-lg p-3 text-xs min-w-[160px]">
+      <div className="font-semibold mb-2 text-muted-foreground">{label}</div>
+      {payload.map((p, i) => (
+        <div key={i} className="flex items-center justify-between gap-3">
+          <span style={{ color: p.color }}>{p.name}</span>
+          <span className="font-semibold">{p.value} объектов</span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 interface HeatmapViewProps {
@@ -70,6 +93,50 @@ export function TrendView({ trendData, selectedCats, onToggleCat }: TrendViewPro
                   dot={{ r: 3 }} activeDot={{ r: 5 }} connectNulls />
               ))}
             </LineChart>
+          </ResponsiveContainer>
+        )
+      }
+    </div>
+  );
+}
+
+// ── Вид: Динамика предложения ──────────────────────────────────────────────────
+
+export function SupplyView({ supplyData, selectedCats, onToggleCat }: SupplyViewProps) {
+  return (
+    <div className="bg-white rounded-2xl border border-border p-4 space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h4 className="font-semibold text-sm">Динамика предложения</h4>
+          <p className="text-xs text-muted-foreground mt-0.5">Сколько объектов в продаже/аренде находим на рынке по категориям</p>
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {Object.keys(CAT_LABELS).map(cat => (
+            <button key={cat} onClick={() => onToggleCat(cat)}
+              className={`text-xs px-2 py-0.5 rounded-full border transition ${
+                selectedCats.includes(cat) ? 'bg-brand-blue text-white border-brand-blue' : 'border-border text-muted-foreground hover:bg-muted/50'
+              }`}>
+              {CAT_LABELS[cat]}
+            </button>
+          ))}
+        </div>
+      </div>
+      {supplyData.length === 0
+        ? <p className="text-sm text-muted-foreground text-center py-8">Нет данных за выбранный период</p>
+        : (
+          <ResponsiveContainer width="100%" height={280}>
+            <AreaChart data={supplyData} margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+              <Tooltip content={<SupplyTooltip />} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              {selectedCats.map((cat, i) => (
+                <Area key={cat} type="monotone" dataKey={cat} name={CAT_LABELS[cat]}
+                  stroke={PALETTE[i % PALETTE.length]} fill={PALETTE[i % PALETTE.length]}
+                  fillOpacity={0.15} strokeWidth={2} connectNulls />
+              ))}
+            </AreaChart>
           </ResponsiveContainer>
         )
       }
@@ -241,7 +308,7 @@ export function IndexView({ heatIndexData, data, filterDeal, filterDistrict }: I
 
 // ── Переключатель режима просмотра ────────────────────────────────────────────
 
-type ViewMode = 'trend' | 'compare' | 'heatmap' | 'index';
+type ViewMode = 'trend' | 'supply' | 'compare' | 'heatmap' | 'index';
 
 interface ViewModeSwitcherProps {
   viewMode: ViewMode;
@@ -253,6 +320,7 @@ export function ViewModeSwitcher({ viewMode, onSwitch }: ViewModeSwitcherProps) 
     <div className="flex gap-1 overflow-x-auto">
       {([
         { id: 'trend',   label: 'Тренд цен',       icon: 'TrendingUp' },
+        { id: 'supply',  label: 'Предложение',      icon: 'BarChart3' },
         { id: 'compare', label: 'Районы',            icon: 'MapPin' },
         { id: 'heatmap', label: 'Тепловая карта',   icon: 'Grid3x3' },
         { id: 'index',   label: 'Индекс перегрева', icon: 'Flame' },

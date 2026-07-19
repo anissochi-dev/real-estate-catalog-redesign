@@ -65,7 +65,6 @@ const importers = {
   declined: () => import('../pages/DeclinedPage'),
   news: () => import('../pages/NewsPage'),
   leads: () => import('../pages/LeadsListPage'),
-  marketIndex: () => import('../pages/market-index/MarketIndexPage'),
 };
 
 export const PropertyPage       = lazyWithRetry(importers.property);
@@ -82,7 +81,6 @@ export const DeclinedPage       = lazyWithRetry(importers.declined);
 export const NewsListPage       = lazyWithRetry(() => importers.news().then(m => ({ default: m.NewsListPage })));
 export const NewsArticlePage    = lazyWithRetry(() => importers.news().then(m => ({ default: m.NewsArticlePage })));
 export const LeadsListPage      = lazyWithRetry(importers.leads);
-export const MarketIndexPage    = lazyWithRetry(importers.marketIndex);
 
 // Префетч чанка страницы — вызываем при наведении/касании пункта меню,
 // чтобы к моменту клика код страницы уже был загружен (мгновенное открытие).
@@ -98,7 +96,6 @@ export function prefetchPage(page: string): void {
     leads: importers.leads,
     'network-tenants': importers.networkTenants,
     login: importers.login,
-    'market-index': importers.marketIndex,
   };
   const fn = map[page];
   if (!fn || prefetched.has(page)) return;

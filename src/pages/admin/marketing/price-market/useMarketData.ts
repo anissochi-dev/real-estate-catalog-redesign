@@ -6,7 +6,7 @@ import { getToken } from '@/lib/adminApi';
 
 const DISTRICT_AI_URL = 'https://functions.poehali.dev/eddffe59-b37d-425e-90a3-59d12d44623f';
 
-export type ViewMode = 'trend' | 'compare' | 'heatmap' | 'index';
+export type ViewMode = 'trend' | 'supply' | 'compare' | 'heatmap' | 'index';
 
 export interface MarketDataState {
   data: MarketStats | null;
@@ -21,6 +21,7 @@ export interface MarketDataState {
   assignProgress: { processed: number; updated: number; remaining: number } | null;
   aggregating: boolean;
   trendData: Record<string, string | number>[];
+  supplyData: Record<string, string | number>[];
   compareData: Record<string, string | number>[];
   heatmapData: {
     cats: string[];
@@ -246,6 +247,30 @@ export function useMarketData(): MarketDataState {
       .map(([date, vals]) => ({ date: fmtDate(date), ...vals }));
   })();
 
+  // ── Подготовка данных для графика предложения (кол-во объектов) ───────────
+
+  const supplyData = (() => {
+    if (!data?.snapshots.length) return [];
+    const CUT_DATE = '2026-06-12';
+    const filtered = data.snapshots.filter(s =>
+      s.deal === filterDeal &&
+      s.district === filterDistrict &&
+      selectedCats.includes(s.category) &&
+      s.snapshot_date &&
+      s.snapshot_date >= CUT_DATE
+    );
+    const byDate: Record<string, Record<string, number>> = {};
+    filtered.forEach(s => {
+      const d = s.snapshot_date || '';
+      if (!d) return;
+      if (!byDate[d]) byDate[d] = {};
+      byDate[d][s.category] = s.analogs_count ?? 0;
+    });
+    return Object.entries(byDate)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, vals]) => ({ date: fmtDate(date), ...vals }));
+  })();
+
   // ── Подготовка данных для сравнения районов ───────────────────────────────
 
   const compareData = (() => {
@@ -326,6 +351,7 @@ export function useMarketData(): MarketDataState {
     assignProgress,
     aggregating,
     trendData,
+    supplyData,
     compareData,
     heatmapData,
     heatIndexData,

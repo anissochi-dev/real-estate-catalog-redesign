@@ -1,6 +1,6 @@
 import Icon from '@/components/ui/icon';
 import { MarketStats } from './types';
-import { TrendView, CompareView, HeatmapView, IndexView, ViewModeSwitcher } from './MarketViews';
+import { TrendView, SupplyView, CompareView, HeatmapView, IndexView, ViewModeSwitcher } from './MarketViews';
 import { ViewMode } from './useMarketData';
 
 interface Props {
@@ -12,6 +12,7 @@ interface Props {
   filterDistrict: string;
   selectedCats: string[];
   trendData: Record<string, string | number>[];
+  supplyData: Record<string, string | number>[];
   compareData: Record<string, string | number>[];
   heatmapData: {
     cats: string[];
@@ -33,6 +34,7 @@ export default function MarketCharts({
   filterDistrict,
   selectedCats,
   trendData,
+  supplyData,
   compareData,
   heatmapData,
   heatIndexData,
@@ -67,6 +69,14 @@ export default function MarketCharts({
       {viewMode === 'trend' && (
         <TrendView
           trendData={trendData}
+          selectedCats={selectedCats}
+          onToggleCat={onToggleCat}
+        />
+      )}
+
+      {viewMode === 'supply' && (
+        <SupplyView
+          supplyData={supplyData}
           selectedCats={selectedCats}
           onToggleCat={onToggleCat}
         />

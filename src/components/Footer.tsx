@@ -117,13 +117,6 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
             <div className="md:col-span-1">
               <h3 className="font-display font-800 text-white text-lg mb-2">{company}</h3>
               <div className="text-sm leading-relaxed mb-3">{description}</div>
-              <Link
-                to="/market-index"
-                className="inline-flex items-center gap-1.5 text-sm text-white/70 hover:text-white transition-colors"
-              >
-                <Icon name="TrendingUp" size={14} />
-                Индекс цен на недвижимость
-              </Link>
             </div>
 
             {/* Категории — 4 колонки */}

@@ -36,6 +36,9 @@ export default function MarketHeader({
   const sched = data?.schedule;
   const lastDays = daysSince(sched?.last_at || null);
   const aggDays = daysSince(data?.agg_last_at || null);
+  const totalAnalogs = (data?.latest ?? [])
+    .filter(l => l.deal === filterDeal && l.district === filterDistrict)
+    .reduce((sum, l) => sum + (l.analogs_count ?? 0), 0);
 
   return (
     <div className="bg-white rounded-2xl border border-border p-4">
@@ -60,6 +63,12 @@ export default function MarketHeader({
                 : <span>{aggDays}д назад</span>}
             <span className="text-muted-foreground/60">· автоматически каждые 7 дней</span>
           </p>
+          {totalAnalogs > 0 && (
+            <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+              <Icon name="Building2" size={11} className="text-brand-blue" />
+              {totalAnalogs.toLocaleString('ru')} объектов в текущей выборке
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {sched && (

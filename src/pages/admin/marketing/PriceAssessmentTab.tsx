@@ -170,7 +170,7 @@ export default function PriceAssessmentTab() {
   const {
     data: marketData, loading: marketLoading, viewMode, filterDeal, filterDistrict, filterDays,
     selectedCats, refreshState, assigningDistricts, assignProgress, aggregating,
-    trendData, compareData, heatmapData, heatIndexData, dynamicDistricts,
+    trendData, supplyData, compareData, heatmapData, heatIndexData, dynamicDistricts,
     setViewMode, setFilterDeal, setFilterDistrict, setFilterDays,
     toggleCat, runBatchChain, runAutoAssign, runAggregate,
   } = useMarketData();
@@ -426,6 +426,7 @@ export default function PriceAssessmentTab() {
             filterDistrict={filterDistrict}
             selectedCats={selectedCats}
             trendData={trendData}
+            supplyData={supplyData}
             compareData={compareData}
             heatmapData={heatmapData}
             heatIndexData={heatIndexData}
