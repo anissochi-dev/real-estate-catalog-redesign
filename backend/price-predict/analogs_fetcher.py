@@ -11,6 +11,7 @@
 import re
 import gzip
 import time
+import hashlib
 import urllib.request
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
@@ -67,6 +68,53 @@ CAT_TO_ETAGI = {
     'retail': 'torgovye-pomeshheniya',
     'warehouse': 'sklad',
     'free_purpose': 'svobodnoe-naznachenie',
+}
+
+# Маппинг наших категорий → slug moreon-invest.ru (краснодарское агентство).
+# URL: /commercii/offers/filter/type-is-{prodaja|arenda}/category2-is-{slug}/apply/
+# Сайт поддерживает точный фильтр по категории — раньше не использовался вообще,
+# парсер читал общую ленту без разбивки (category оставалась пустой).
+CAT_TO_MOREON = {
+    'office': 'ofisnoe-pomeshchenie',
+    'retail': 'torgovoe-pomeshchenie',
+    'warehouse': 'skladskoe-pomeshchenie',
+    'production': 'proizvodstvennoe-pomeshchenie',
+    'free_purpose': 'pomeshchenie-svobodnogo-naznacheniya',
+    'restaurant': 'obshchepit',
+    'hotel': 'gostinicasaunabaza-otdyha',
+    'land': 'kommercheskaya-zemlya',
+}
+
+# Аббревиатуры районов Краснодара, которые moreon-invest.ru показывает в адресе
+# карточки (например "ЦМР", "РИП") → название района, как оно хранится в справочнике
+# districts проекта. Без этой нормализации район оставался бы пустым.
+MOREON_DISTRICT_MAP = {
+    'цмр': 'Центральный (ЦМР)',
+    'фмр': 'Фестивальный (ФМР)',
+    'юмр': 'Юбилейный (ЮМР)',
+    'гмр': 'Гидростроителей (ГМР)',
+    'пмр': 'Пашковский (ПМР)',
+    'кмр': 'Комсомольский (КМР)',
+    'смр': 'Славянский (СМР)',
+    'шмр': 'Школьный (ШМР)',
+    'чмр': 'Черёмушки (ЧМР)',
+    'рип': 'Завод радиоизмерительных приборов (РИП)',
+    'зип': 'Завод измерительных приборов (ЗИП)',
+    'сху': 'Сельскохозяйственный институт (СХИ)',
+    'схи': 'Сельскохозяйственный институт (СХИ)',
+    'кск': 'Камвольно-суконный комбинат (КСК)',
+    'хбк': 'Хлопчато-бумажный комбинат (ХБК)',
+    'ккб': 'Краевая клиническая больница (ККБ)',
+    'мхг': 'Микрохирургия глаза (МХГ)',
+    'тэц': 'Теплоэлектростанция (ТЭЦ)',
+    'краснодарский п': 'Краснодарский п.',
+    'энка': 'Энка (Жукова)',
+    'пашковка': 'Пашковка',
+    'старая кубань': 'Старая Кубань',
+    'гидростроителей': 'Гидростроителей (ГМР)',
+    'аэропорт': 'Аэропорт',
+    'музыкальный': 'Музыкальный',
+    'знаменский': 'Знаменский',
 }
 
 # Маппинг наших внутренних категорий → категории схемы market_listings
@@ -400,12 +448,14 @@ def _parse_generic_html(html: str, source: str, category: str, deal_type: str,
     return results
 
 
-def _scrape_ayax_targeted(category: str, deal_type: str, area: float) -> list[dict]:
+def _scrape_ayax_targeted(category: str, deal_type: str, area: float, max_pages: int = 3) -> list[dict]:
     """
     Целевой скрап ayax.ru по категории и типу сделки для дозапроса аналогов.
     URL-slug различаются для продажи/аренды (см. CAT_TO_AYAX_SALE/CAT_TO_AYAX_RENT).
     Если категория+сделка не имеют подтверждённого URL — сайт не скрапится,
     чтобы не подмешивать объекты чужих категорий под неверной меткой.
+    Обходит до 3 страниц каталога (/pageN/) — сайт поддерживает постраничный вывод,
+    раньше читалась только первая страница.
     """
     cat_map = CAT_TO_AYAX_RENT if deal_type == 'rent' else CAT_TO_AYAX_SALE
     slug = cat_map.get(category, '')
@@ -413,17 +463,24 @@ def _scrape_ayax_targeted(category: str, deal_type: str, area: float) -> list[di
         print(f'[analogs_fetcher] ayax.ru: категория "{category}"/{deal_type} не поддерживается, пропуск')
         return []
 
-    url = f'https://www.ayax.ru/{slug}/'
-
-    html = _fetch(url, timeout=15)
-    if not html or len(html) < 10_000:
-        print(f'[analogs_fetcher] ayax.ru {url}: пусто или слишком мало данных')
-        return []
-
     min_p = 20_000 if deal_type == 'rent' else 300_000
-    res = _parse_generic_html(html, 'ayax.ru', category, deal_type, min_p, area)
-    print(f'[analogs_fetcher] ayax.ru: {len(res)} analogs found')
-    return res
+    all_res: list[dict] = []
+    for page in range(1, max_pages + 1):
+        # Реальный формат пагинации сайта — query-параметр ?page=N (редиректит на
+        # канонический URL категории). Вариант /pageN/ отдаёт 404 — так было раньше.
+        url = f'https://www.ayax.ru/{slug}/' if page == 1 else f'https://www.ayax.ru/{slug}/?page={page}'
+        html = _fetch(url, timeout=15)
+        if not html or len(html) < 10_000:
+            if page == 1:
+                print(f'[analogs_fetcher] ayax.ru {url}: пусто или слишком мало данных')
+            break
+        res = _parse_generic_html(html, 'ayax.ru', category, deal_type, min_p, area)
+        if not res:
+            break
+        all_res.extend(res)
+
+    print(f'[analogs_fetcher] ayax.ru: {len(all_res)} analogs found')
+    return all_res
 
 
 def _scrape_etagi_targeted(category: str, deal_type: str, area: float) -> list[dict]:
@@ -432,7 +489,9 @@ def _scrape_etagi_targeted(category: str, deal_type: str, area: float) -> list[d
     Структура: krasnodar.etagi.com/commerce/{slug}/ (продажа),
                krasnodar.etagi.com/commerce/arenda/{slug}/ (аренда).
     Если категория не сопоставлена — сайт не скрапится вообще (см. _scrape_ayax_targeted).
-    JSON-поля "square" и "price" встроены в HTML каталога.
+    JSON-поля "square" и "price" встроены ОДНИМ блоком в HTML каталога — постраничная
+    навигация (PAGEN_1=N) не влияет на список объявлений, все они уже в первом ответе,
+    поэтому пагинация не нужна — важно лишь не обрезать список раньше времени (см. лимит ниже).
     """
     import hashlib
 
@@ -493,7 +552,10 @@ def _scrape_etagi_targeted(category: str, deal_type: str, area: float) -> list[d
                 'condition': None,
                 'road_line': None,
             })
-        if len(results) >= 15:
+        if len(results) >= 60:
+            # Все JSON-объявления уже встроены в один HTML-документ (без реальной
+            # постраничной навигации на этом сайте) — 60 достаточно с запасом,
+            # раньше лимит был искусственно занижен до 15.
             break
 
     if not results:
@@ -502,6 +564,117 @@ def _scrape_etagi_targeted(category: str, deal_type: str, area: float) -> list[d
 
     print(f'[analogs_fetcher] etagi.com: {len(results)} analogs found')
     return results
+
+
+def _detect_moreon_district(address_block: str) -> str | None:
+    """Извлекает район из блока адреса карточки moreon (например 'РИП' → полное имя района)."""
+    if not address_block:
+        return None
+    first_line = address_block.strip().split('\n')[0].strip().lower()
+    return MOREON_DISTRICT_MAP.get(first_line)
+
+
+def _parse_moreon_page(html: str, category: str, deal_type: str, min_price: float) -> list[dict]:
+    """
+    Парсит карточки объявлений moreon-invest.ru (блоки realty-list__item).
+    В отличие от старого generic-парсера (искал только цену+площадь россыпью),
+    здесь читаем структуру карточки целиком — заголовок содержит категорию и площадь,
+    блок address — район (аббревиатура вида "ЦМР", "РИП" и т.п.).
+    """
+    ml_category = OUR_CAT_TO_ML_CAT.get(category, category)
+    results = []
+
+    # Заголовок карточки: "Свободное назначение, 42 <span>м</span>"
+    title_pat = re.compile(
+        r'class="red font-700">\s*([^,<]+),\s*([\d\s]+(?:[.,]\d+)?)\s*<span>м</span>',
+        re.UNICODE,
+    )
+    # Блок адреса сразу после заголовка (первая строка — аббревиатура района)
+    addr_pat = re.compile(r'class="address">\s*([^<]+?)<br', re.UNICODE)
+    # Цена в блоке price чуть выше заголовка
+    price_pat = re.compile(r'class="rouble-bold">\s*([\d\s]+)\s*</span>', re.UNICODE)
+
+    titles = list(title_pat.finditer(html))
+    addrs = list(addr_pat.finditer(html))
+    prices = list(price_pat.finditer(html))
+
+    for i, tm in enumerate(titles):
+        title_text = tm.group(1).strip()
+        area_val = _clean_area(tm.group(2))
+        if not area_val or area_val <= 0:
+            continue
+
+        # Ближайшая цена ДО заголовка (карточка: цена → заголовок → адрес)
+        price_val = None
+        for pm in prices:
+            if pm.start() < tm.start() and (price_val is None or pm.start() > price_val[0]):
+                price_val = (pm.start(), _clean_price(pm.group(1)))
+        if not price_val or not price_val[1] or price_val[1] < min_price:
+            continue
+        price = price_val[1]
+
+        # Ближайший адрес ПОСЛЕ заголовка
+        district = None
+        for am in addrs:
+            if am.start() > tm.start():
+                district = _detect_moreon_district(am.group(1))
+                break
+
+        results.append({
+            'source': 'moreon-invest.ru',
+            'external_id': hashlib.md5(f'moreon_{title_text}_{price}_{area_val}_{i}'.encode()).hexdigest()[:16],
+            'url': '',
+            'title': f'{title_text}, {area_val} м²',
+            'category': ml_category,
+            'deal_type': deal_type,
+            'price': price,
+            'price_per_m2': round(price / area_val, 2),
+            'area': area_val,
+            'address': None,
+            'district': district,
+            'floor': None,
+            'total_floors': None,
+            'condition': None,
+            'road_line': None,
+        })
+
+    return results
+
+
+def _scrape_moreon_targeted(category: str, deal_type: str, area: float = 0, max_pages: int = 3) -> list[dict]:
+    """
+    Целевой скрап moreon-invest.ru по категории+сделке (до 3 страниц каталога).
+    Раньше сайт читался ОДНОЙ общей лентой без фильтра по категории — категория,
+    район и состояние оставались всегда пустыми. Теперь используем прямой фильтр сайта
+    (/category2-is-{slug}/) — категория известна заранее, район читаем из адреса карточки.
+    Состояние объекта сайт не публикует явно — оставляем пустым (это нормально: не
+    все источники дают такую деталь).
+    """
+    slug = CAT_TO_MOREON.get(category, '')
+    if not slug:
+        print(f'[analogs_fetcher] moreon-invest.ru: категория "{category}" не поддерживается, пропуск')
+        return []
+
+    deal_slug = 'arenda' if deal_type == 'rent' else 'prodaja'
+    base_url = f'https://moreon-invest.ru/commercii/offers/filter/type-is-{deal_slug}/category2-is-{slug}/apply/'
+    min_p = 20_000 if deal_type == 'rent' else 300_000
+
+    all_items: list[dict] = []
+    for page in range(1, max_pages + 1):
+        url = base_url if page == 1 else f'{base_url}?PAGEN_2={page}'
+        html = _fetch(url, timeout=15)
+        if not html or len(html) < 10_000:
+            break
+        items = _parse_moreon_page(html, category, deal_type, min_p)
+        if not items:
+            break
+        all_items.extend(items)
+        if len(items) < 5:
+            break
+
+    filtered = _filter_by_area(all_items, area) if area > 0 else all_items
+    print(f'[analogs_fetcher] moreon-invest.ru {category}/{deal_type}: {len(filtered)} analogs found')
+    return filtered
 
 
 def _save_to_market_listings(cur, conn, items: list[dict]) -> int:
@@ -559,11 +732,13 @@ def _filter_by_area(items: list[dict], area: float, delta_pct: float = 1.0) -> l
     return [i for i in items if i.get('area') and lo <= float(i['area']) <= hi]
 
 
-def scrape_arrpro_targeted(category: str, deal_type: str, area: float = 0, max_pages: int = 2) -> list[dict]:
+def scrape_arrpro_targeted(category: str, deal_type: str, area: float = 0, max_pages: int = 5) -> list[dict]:
     """
-    Быстрый целевой скрап arrpro.ru по одной категории+сделке (1-2 страницы каталога).
+    Целевой скрап arrpro.ru по одной категории+сделке (до 5 страниц каталога).
     В отличие от fetch_external_analogs (до 8 страниц, для одного объекта) — эта версия
     рассчитана на фоновый обход МНОГИХ категорий за один вызов батча (укладываемся в таймаут).
+    Лимит увеличен с 2 до 5 страниц — даёт заметно больше аналогов на комбинацию без риска
+    превысить таймаут функции (страница arrpro весит немного, обход идёт быстро).
     """
     arrpro_slug = CAT_TO_ARRPRO.get(category)
     if not arrpro_slug:

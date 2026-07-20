@@ -6,10 +6,13 @@
     batch 1 → arrpro.ru — целевой обход ВСЕХ комбинаций категория+сделка
     batch 2 → ayax.ru — целевой обход ВСЕХ комбинаций категория+сделка
     batch 3 → etagi.com — целевой обход ВСЕХ комбинаций категория+сделка
-    batch 4 → moreon-invest.ru (продажа + аренда, сайт без разбивки по категориям)
+    batch 4 → moreon-invest.ru — целевой обход ВСЕХ комбинаций категория+сделка
+              через прямой фильтр сайта (/category2-is-{slug}/), с извлечением района
+              из адреса карточки. Раньше сайт читался одной общей лентой без категории —
+              все записи сохранялись с пустыми category/district.
     batch 5 → финализация (merge + commit снапшотов)
 
-  ВАЖНО: batch 1-3 используют ТЕ ЖЕ точные целевые функции (analogs_fetcher.py),
+  ВАЖНО: batch 1-4 используют ТЕ ЖЕ точные целевые функции (analogs_fetcher.py),
   что и «Виртуальный брокер» и инвестиционная модель — с правильными URL по каждой
   категории+сделке. Каждый батч проходит по ВСЕМ активным комбинациям категория+сделка
   (а не только по одной "office/rent" как было раньше), и сразу сохраняет найденное
@@ -405,12 +408,18 @@ def handle_refresh(cur, conn, force=False):
     if source_name == 'db':
         pool = _batch_db(cur, combos, districts)
 
-    elif source_name in ('arrpro', 'ayax', 'etagi'):
-        from analogs_fetcher import scrape_arrpro_targeted, _scrape_ayax_targeted, _scrape_etagi_targeted
+    elif source_name in ('arrpro', 'ayax', 'etagi', 'moreon'):
+        from analogs_fetcher import (
+            scrape_arrpro_targeted, _scrape_ayax_targeted,
+            _scrape_etagi_targeted, _scrape_moreon_targeted,
+        )
         site_scrapers = {
             'arrpro': lambda cat, deal: scrape_arrpro_targeted(cat, deal),
             'ayax': lambda cat, deal: _scrape_ayax_targeted(cat, deal, 0),
             'etagi': lambda cat, deal: _scrape_etagi_targeted(cat, deal, 0),
+            # moreon теперь ходит по точному фильтру категории (см. analogs_fetcher.py),
+            # раньше был отдельный "слепой" обход без категории/района (см. историю ниже).
+            'moreon': lambda cat, deal: _scrape_moreon_targeted(cat, deal),
         }
         site_analogs, next_idx = _batch_targeted_site(
             cur, conn, combos, site_combo_idx, site_scrapers[source_name], source_name
@@ -433,35 +442,6 @@ def handle_refresh(cur, conn, force=False):
             }
         # Источник пройден полностью — сбрасываем индекс, идём к следующему батчу
         site_combo_idx = 0
-
-    elif source_name == 'moreon':
-        from mela_price import _scrape_moreon
-        moreon_analogs = []
-        for deal in ('sale', 'rent'):
-            try:
-                items = _scrape_moreon({'deal': deal, 'area': 0})
-            except Exception as e:
-                print(f'[price_refresh] moreon {deal} error: {e}')
-                items = []
-            for it in items:
-                p = float(it.get('price') or 0)
-                a = float(it.get('area') or 0)
-                if p <= 0 or a <= 0:
-                    continue
-                moreon_analogs.append({
-                    'category': '', 'deal': deal, 'source': 'moreon-invest.ru',
-                    'price': p, 'area': a,
-                    'price_per_m2': float(it.get('price_per_m2') or 0) or round(p / a),
-                    'district': '', 'url': str(it.get('url') or ''),
-                })
-        # moreon без категорий — добавляем к каждой активной комбинации той же сделки
-        for category, deal in combos:
-            matched = [dict(a, category=category) for a in moreon_analogs if a['deal'] == deal]
-            if matched:
-                key = _pool_key(category, deal, '')
-                pool.setdefault(key, [])
-                pool[key].extend(matched)
-        print(f'[price_refresh] moreon: {len(moreon_analogs)} analogs распределены по {len(combos)} комбинациям')
 
     elif source_name == 'finalize':
         saved = _batch_finalize(cur, conn, pool, today)
