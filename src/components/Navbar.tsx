@@ -49,27 +49,9 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
     <>
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-border shadow-sm">
         <div className="container mx-auto px-4">
-          <div className="flex items-center h-14 md:h-16">
-            {/* Logo */}
-            <button
-              onClick={() => handleNav('home')}
-              className="flex items-center group shrink-0"
-              aria-label={brandName}
-            >
-              <div className="flex items-center justify-start h-8 md:h-10 w-[160px] md:w-[220px] shrink-0">
-                {logoUrl ? (
-                  <img src={logoUrl} alt={brandName} height={40} loading="eager" className="h-8 md:h-10 w-auto max-w-full object-contain" />
-                ) : (
-                  <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg btn-blue flex items-center justify-center shrink-0">
-                    <Icon name="Building" size={18} className="md:hidden text-white" />
-                    <Icon name="Building" size={20} className="hidden md:block text-white" />
-                  </div>
-                )}
-              </div>
-            </button>
-
-            {/* Nav links — desktop */}
-            <nav className="hidden md:flex items-center gap-1 ml-4 lg:ml-6">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center h-14 md:h-16 gap-2">
+            {/* Nav links — desktop, left column */}
+            <nav className="hidden md:flex items-center gap-1 justify-self-start">
               {navItems.map((item) => (
                 <button
                   key={item.id}
@@ -89,8 +71,26 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
               ))}
             </nav>
 
-            {/* Right side — desktop */}
-            <div className="flex items-center gap-2 ml-auto">
+            {/* Logo — center column */}
+            <button
+              onClick={() => handleNav('home')}
+              className="flex items-center justify-center group shrink-0 justify-self-center"
+              aria-label={brandName}
+            >
+              <div className="flex items-center justify-center h-8 md:h-10 w-[160px] md:w-[220px] shrink-0">
+                {logoUrl ? (
+                  <img src={logoUrl} alt={brandName} height={40} loading="eager" className="h-8 md:h-10 w-auto max-w-full object-contain" />
+                ) : (
+                  <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg btn-blue flex items-center justify-center shrink-0">
+                    <Icon name="Building" size={18} className="md:hidden text-white" />
+                    <Icon name="Building" size={20} className="hidden md:block text-white" />
+                  </div>
+                )}
+              </div>
+            </button>
+
+            {/* Right side — desktop, right column */}
+            <div className="flex items-center gap-2 justify-self-end">
               {user && (
                 isStaff ? (
                   <button
