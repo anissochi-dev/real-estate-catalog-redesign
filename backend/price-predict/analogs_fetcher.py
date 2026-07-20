@@ -10,6 +10,7 @@
 
 import re
 import gzip
+import json
 import time
 import hashlib
 import urllib.request
@@ -123,6 +124,30 @@ OUR_CAT_TO_ML_CAT = {
     'building': 'standalone',
     'restaurant': 'catering',
     'production': 'industrial',
+}
+
+# ayax.ru отдаёт commerce_type.key прямо в данных объявления (гораздо надёжнее
+# наших URL-slug догадок) — маппим на категории market_listings.
+AYAX_TYPE_KEY_TO_ML_CAT = {
+    'office': 'office',
+    'trading': 'retail',
+    'industrial': 'industrial',
+    'separate-building': 'standalone',
+    'business': 'business',
+    'commerce': 'other',  # общая "коммерция" без уточнения — не смешиваем с конкретной категорией
+}
+
+# etagi.com классифицирует объявления через object_type_id (справочник
+# commerceTypesList в самих данных страницы) — надёжнее текстового поля "type",
+# которое даёт более гранулярные подкатегории (например "office_storeroom",
+# "space_base" — обе относятся к "Базы/Склады/Производство", id=20).
+ETAGI_OBJECT_TYPE_TO_ML_CAT = {
+    17: 'land',
+    18: 'office',
+    19: 'retail',
+    20: 'warehouse',   # "Базы/Склады/Производство" — единая категория на сайте
+    22: 'business',
+    23: 'free_purpose',
 }
 
 # Маппинг категорий для чтения из общей копилки market_listings.
@@ -448,39 +473,365 @@ def _parse_generic_html(html: str, source: str, category: str, deal_type: str,
     return results
 
 
+def _resolve_nuxt_value(data: list, idx, depth: int = 0, maxdepth: int = 6):
+    """
+    Разыменовывает Nuxt devalue-формат (__NUXT_DATA__): плоский массив, где сложные
+    значения — это индексы-ссылки на другие элементы того же массива.
+    """
+    if depth > maxdepth:
+        return None
+    if not isinstance(idx, int) or idx >= len(data):
+        return idx
+    v = data[idx]
+    if isinstance(v, (int, float, str, bool)) or v is None:
+        return v
+    if isinstance(v, list):
+        if len(v) == 2 and v[0] in ('Reactive', 'ShallowReactive', 'Ref'):
+            return _resolve_nuxt_value(data, v[1], depth + 1, maxdepth)
+        return [_resolve_nuxt_value(data, x, depth + 1, maxdepth) if isinstance(x, int) else x for x in v]
+    if isinstance(v, dict):
+        return {k: (_resolve_nuxt_value(data, x, depth + 1, maxdepth) if isinstance(x, int) else x) for k, x in v.items()}
+    return v
+
+
+# Ищем в тексте описания объявления характерные детали (высота потолков,
+# электрическая мощность, наличие вентиляции/охраны/отдельного входа) —
+# ayax.ru прячет их внутри свободного текста description, а не отдельными полями.
+_CEILING_RE = re.compile(r'[Вв]ысота\s+потолк[а-я]*[:\s]+([\d]+(?:[.,]\d+)?)\s*м', re.UNICODE)
+_ELECTRICITY_RE = re.compile(r'[Мм]ощность\s+(?:электр\w*\s+)?[:\s]*([\d]+(?:[.,]\d+)?)\s*кВт', re.UNICODE)
+
+
+def _extract_description_details(description: str) -> dict:
+    if not description:
+        return {}
+    plain = re.sub(r'<[^>]+>', ' ', description)
+    out: dict = {}
+    cm = _CEILING_RE.search(plain)
+    if cm:
+        try:
+            out['ceiling_height'] = float(cm.group(1).replace(',', '.'))
+        except Exception:
+            pass
+    em = _ELECTRICITY_RE.search(plain)
+    if em:
+        try:
+            out['electricity_kw'] = float(em.group(1).replace(',', '.'))
+        except Exception:
+            pass
+    lo = plain.lower()
+    if 'охрана' in lo or 'видеонаблюдение' in lo:
+        out['has_security'] = True
+    if 'вентиляц' in lo:
+        out['has_ventilation'] = True
+    if 'отдельный вход' in lo:
+        out['separate_entrance'] = True
+    return out
+
+
+def _parse_ayax_nuxt_data(html: str, category: str, deal_type: str, min_price: float) -> list[dict]:
+    """
+    Извлекает объявления из встроенного JSON __NUXT_DATA__ (Nuxt SSR payload) —
+    сайт присылает ГОТОВУЮ структуру каждого объявления (цена, площадь, этаж,
+    точный тип объекта, район, улица, координаты, описание), а не набор HTML-тегов
+    для regex-парсинга. Раньше парсер искал только "цена рядом с площадью" в тексте
+    страницы — из-за этого терялись район/этаж и иногда подмешивались чужие категории
+    (например жилые объявления под меткой "warehouse").
+    """
+    m = re.search(
+        r'<script type="application/json" data-nuxt-data="nuxt-app" data-ssr="true" id="__NUXT_DATA__">(.*?)</script>',
+        html, re.DOTALL,
+    )
+    if not m:
+        return []
+    try:
+        data = json.loads(m.group(1))
+    except Exception as e:
+        print(f'[analogs_fetcher] ayax.ru: __NUXT_DATA__ parse error: {e}')
+        return []
+
+    results = []
+    for i, raw_item in enumerate(data):
+        if not (isinstance(raw_item, dict) and 'price' in raw_item and 'properties' in raw_item and 'estate_type_id' in raw_item):
+            continue
+        try:
+            item = _resolve_nuxt_value(data, i, maxdepth=6)
+        except Exception:
+            continue
+        if not isinstance(item, dict):
+            continue
+
+        ct = item.get('commerce_type') or {}
+        type_key = ct.get('key') if isinstance(ct, dict) else None
+        ml_category = AYAX_TYPE_KEY_TO_ML_CAT.get(type_key)
+        # Строгая фильтрация: сохраняем только объявления с распознанным коммерческим
+        # типом, соответствующим искомой категории (или общей "commerce"-корзине).
+        # Это как раз исправляет старую проблему подмешивания жилых объектов.
+        expected_ml = OUR_CAT_TO_ML_CAT.get(category, category)
+        if ml_category is None or (ml_category != expected_ml and ml_category != 'other'):
+            continue
+        if ml_category == 'other':
+            ml_category = expected_ml
+
+        try:
+            price = float(item.get('price') or 0)
+        except Exception:
+            price = 0
+        if price < min_price:
+            continue
+
+        props = item.get('properties') or {}
+        try:
+            area_val = float(props.get('area_total') or 0)
+        except Exception:
+            area_val = 0
+        if area_val <= 0:
+            continue
+
+        floor = props.get('floor')
+        total_floors = props.get('floor_total')
+
+        addr = item.get('address') or {}
+        district_obj = addr.get('district') or {}
+        district_name = district_obj.get('name') if isinstance(district_obj, dict) else None
+        street_obj = addr.get('street') or {}
+        street_name = street_obj.get('name') if isinstance(street_obj, dict) else None
+        house_number = addr.get('house_number')
+        address_full = f'{street_name} {house_number}'.strip() if street_name else None
+
+        lat = lng = None
+        try:
+            if addr.get('coordX') is not None:
+                lat = float(addr.get('coordY'))  # coordY = широта (lat) на этом сайте
+                lng = float(addr.get('coordX'))
+        except Exception:
+            pass
+
+        description = item.get('description') or ''
+        extra = _extract_description_details(description)
+
+        ext_id = str(item.get('id') or item.get('code') or f'ayax_{i}')
+        price_per_m2 = round(price / area_val, 2) if area_val > 0 else None
+
+        results.append({
+            'source': 'ayax.ru',
+            'external_id': ext_id,
+            'url': str(item.get('url') or ''),
+            'title': re.sub(r'<[^>]+>', ' ', str(item.get('title') or '')).strip()[:300],
+            'category': ml_category,
+            'deal_type': deal_type,
+            'price': price,
+            'price_per_m2': price_per_m2,
+            'area': area_val,
+            'address': address_full,
+            'district': district_name,
+            'floor': floor if isinstance(floor, int) else None,
+            'total_floors': total_floors if isinstance(total_floors, int) else None,
+            'condition': None,
+            'road_line': None,
+            'lat': lat, 'lng': lng,
+            'street': street_name,
+            'description': re.sub(r'<[^>]+>', ' ', description)[:5000] if description else None,
+            'photos_count': len(item.get('image') or []) if isinstance(item.get('image'), list) else None,
+            **extra,
+        })
+
+    return results
+
+
 def _scrape_ayax_targeted(category: str, deal_type: str, area: float, max_pages: int = 3) -> list[dict]:
     """
     Целевой скрап ayax.ru по категории и типу сделки для дозапроса аналогов.
     URL-slug различаются для продажи/аренды (см. CAT_TO_AYAX_SALE/CAT_TO_AYAX_RENT).
     Если категория+сделка не имеют подтверждённого URL — сайт не скрапится,
     чтобы не подмешивать объекты чужих категорий под неверной меткой.
-    Обходит до 3 страниц каталога (/pageN/) — сайт поддерживает постраничный вывод,
+    Обходит до 3 страниц каталога (?page=N) — сайт поддерживает постраничный вывод,
     раньше читалась только первая страница.
+
+    Извлекает данные из встроенного JSON __NUXT_DATA__ (см. _parse_ayax_nuxt_data) —
+    сайт присылает точный тип объекта, район, улицу, этаж/этажность, координаты и
+    описание готовыми полями. Если по какой-то причине JSON не нашёлся (сайт сменил
+    формат) — используем старый общий regex-парсер как аварийный запасной вариант.
     """
     cat_map = CAT_TO_AYAX_RENT if deal_type == 'rent' else CAT_TO_AYAX_SALE
     slug = cat_map.get(category, '')
-    if not slug:
+    # Категории без выделенного URL для ПРОДАЖИ забираем из общего каталога
+    # /kommercheskaya-nedvizhimost/ (1000+ объявлений всех типов) — раньше сайт
+    # вообще не скрапился для таких категорий. Для аренды общего каталога у сайта
+    # нет, там категория без подтверждённого URL по-прежнему пропускается.
+    use_common_catalog = not slug and deal_type != 'rent'
+    if not slug and not use_common_catalog:
         print(f'[analogs_fetcher] ayax.ru: категория "{category}"/{deal_type} не поддерживается, пропуск')
         return []
 
     min_p = 20_000 if deal_type == 'rent' else 300_000
     all_res: list[dict] = []
     for page in range(1, max_pages + 1):
+        if use_common_catalog:
+            base = 'https://www.ayax.ru/kommercheskaya-nedvizhimost/'
+        else:
+            base = f'https://www.ayax.ru/{slug}/'
         # Реальный формат пагинации сайта — query-параметр ?page=N (редиректит на
         # канонический URL категории). Вариант /pageN/ отдаёт 404 — так было раньше.
-        url = f'https://www.ayax.ru/{slug}/' if page == 1 else f'https://www.ayax.ru/{slug}/?page={page}'
+        url = base if page == 1 else f'{base}?page={page}'
         html = _fetch(url, timeout=15)
         if not html or len(html) < 10_000:
             if page == 1:
                 print(f'[analogs_fetcher] ayax.ru {url}: пусто или слишком мало данных')
             break
-        res = _parse_generic_html(html, 'ayax.ru', category, deal_type, min_p, area)
+
+        has_nuxt_json = '__NUXT_DATA__' in html
+        res = _parse_ayax_nuxt_data(html, category, deal_type, min_p) if has_nuxt_json else []
         if not res:
-            break
+            if not has_nuxt_json and not use_common_catalog:
+                # JSON-блок вообще отсутствует на странице (сайт сменил формат) —
+                # используем старый общий regex-парсер как аварийный запасной вариант.
+                res = _parse_generic_html(html, 'ayax.ru', category, deal_type, min_p, area)
+            # Если JSON есть, но после точной фильтрации по типу объекта совпадений
+            # 0 (например, на "странице складов" сайта реально нет складов, только
+            # смешанная лента похожих объявлений) — это ЗАКОННЫЙ пустой результат,
+            # а не повод скатываться на небезопасный generic-парсер (который путает
+            # квартиры/дома со складами — именно так терялось качество раньше).
+            if not res:
+                break
         all_res.extend(res)
 
     print(f'[analogs_fetcher] ayax.ru: {len(all_res)} analogs found')
     return all_res
+
+
+def _extract_etagi_var_data(html: str) -> str | None:
+    """
+    Достаёт JSON-объект из `var data={...}` — на странице несколько <script> тегов,
+    поэтому обычный жадный regex захватывает лишнее (или ничего). Ищем начало
+    вручную и балансируем фигурные скобки с учётом строковых литералов.
+    """
+    idx = html.find('var data={')
+    if idx == -1:
+        return None
+    start = idx + len('var data=')
+    depth = 0
+    in_str = False
+    esc = False
+    i = start
+    while i < len(html):
+        ch = html[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == '\\':
+                esc = True
+            elif ch == '"':
+                in_str = False
+        else:
+            if ch == '"':
+                in_str = True
+            elif ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    return html[start:i + 1]
+        i += 1
+    return None
+
+
+def _parse_etagi_commerce_list(html: str, category: str, deal_type: str, min_price: float) -> list[dict]:
+    """
+    Извлекает объявления из встроенного JS-блока `var data={...}` (lists.commerce) —
+    сайт присылает ГОТОВУЮ структуру: точный тип объекта (object_type_id), район,
+    улицу, координаты, этаж/этажность, год постройки, материал стен, наличие
+    вентиляции/пожарной сигнализации/охраны/отдельного входа. Раньше парсер искал
+    только "square" и "price" россыпью по всему HTML — район и этаж всегда терялись
+    (0% заполнения), а фильтрации по типу объекта не было вообще.
+    """
+    raw = _extract_etagi_var_data(html)
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+    except Exception as e:
+        print(f'[analogs_fetcher] etagi.com: var data parse error: {e}')
+        return []
+
+    commerce = (data.get('lists') or {}).get('commerce') or []
+    expected_ml = OUR_CAT_TO_ML_CAT.get(category, category)
+
+    results = []
+    for c in commerce:
+        object_type_id = c.get('object_type_id')
+        ml_category = ETAGI_OBJECT_TYPE_TO_ML_CAT.get(object_type_id)
+        if ml_category != expected_ml:
+            continue
+
+        try:
+            price = float(c.get('price') or 0)
+        except Exception:
+            price = 0
+        if price < min_price:
+            continue
+
+        try:
+            area_val = float(c.get('square') or 0)
+        except Exception:
+            area_val = 0
+        if area_val <= 0:
+            continue
+
+        meta = c.get('meta') or {}
+        district_name = meta.get('district')
+        street_name = meta.get('street')
+        house_number = c.get('house_address_number') or c.get('house_num')
+        address_full = f'{street_name} {house_number}'.strip() if street_name else None
+
+        lat = lng = None
+        try:
+            if c.get('la') is not None:
+                lat = float(c.get('la'))
+                lng = float(c.get('lo'))
+        except Exception:
+            pass
+
+        extra: dict = {}
+        if meta.get('walls'):
+            extra['wall_material'] = meta.get('walls')
+        if c.get('building_year'):
+            extra['building_year'] = c.get('building_year')
+        if c.get('remoteSecurity'):
+            extra['has_security'] = True
+        if c.get('ventilation'):
+            extra['has_ventilation'] = True
+        if c.get('separate_entrance'):
+            extra['separate_entrance'] = True
+        media = c.get('media') or {}
+        if media.get('photos'):
+            extra['photos_count'] = media.get('photos')
+
+        ext_id = str(c.get('object_id') or c.get('_object_id') or '')
+        floor = c.get('floor')
+        total_floors = c.get('floors')
+
+        results.append({
+            'source': 'etagi.com',
+            'external_id': ext_id,
+            'url': '',
+            'title': f'{category} {deal_type} {area_val} м²',
+            'category': ml_category,
+            'deal_type': deal_type,
+            'price': price,
+            'price_per_m2': round(price / area_val, 2),
+            'area': area_val,
+            'address': address_full,
+            'district': district_name,
+            'floor': floor if isinstance(floor, int) else None,
+            'total_floors': total_floors if isinstance(total_floors, int) else None,
+            'condition': None,
+            'road_line': None,
+            'lat': lat, 'lng': lng,
+            'street': street_name,
+            **extra,
+        })
+
+    return results
 
 
 def _scrape_etagi_targeted(category: str, deal_type: str, area: float) -> list[dict]:
@@ -489,12 +840,10 @@ def _scrape_etagi_targeted(category: str, deal_type: str, area: float) -> list[d
     Структура: krasnodar.etagi.com/commerce/{slug}/ (продажа),
                krasnodar.etagi.com/commerce/arenda/{slug}/ (аренда).
     Если категория не сопоставлена — сайт не скрапится вообще (см. _scrape_ayax_targeted).
-    JSON-поля "square" и "price" встроены ОДНИМ блоком в HTML каталога — постраничная
-    навигация (PAGEN_1=N) не влияет на список объявлений, все они уже в первом ответе,
-    поэтому пагинация не нужна — важно лишь не обрезать список раньше времени (см. лимит ниже).
+    Извлекает данные из встроенного JS-блока `var data={...}` (см. _parse_etagi_commerce_list),
+    который содержит объявления ГОТОВОЙ структурой с районом/этажом/координатами — постраничная
+    навигация (PAGEN_1=N) не влияет на список, все объявления уже в первом ответе.
     """
-    import hashlib
-
     cat_slug = CAT_TO_ETAGI.get(category, '')
     if not cat_slug:
         print(f'[analogs_fetcher] etagi.com: категория "{category}" не поддерживается, пропуск')
@@ -510,57 +859,47 @@ def _scrape_etagi_targeted(category: str, deal_type: str, area: float) -> list[d
         print(f'[analogs_fetcher] etagi.com {url}: пусто или слишком мало данных')
         return []
 
-    ml_category = OUR_CAT_TO_ML_CAT.get(category, category)
     min_p = 20_000 if deal_type == 'rent' else 300_000
-    area_min = area * 0.2 if area > 0 else 5
-    area_max = area * 5.0 if area > 0 else 10000
+    has_var_data = 'var data={' in html
+    results = _parse_etagi_commerce_list(html, category, deal_type, min_p) if has_var_data else []
 
-    squares = [(m.start(), float(m.group(1))) for m in re.finditer(r'"square"\s*:\s*(\d+(?:\.\d+)?)', html)]
-    prices = [(m.start(), float(m.group(1))) for m in re.finditer(r'"price"\s*:\s*"?(\d+)"?', html)]
-
-    results = []
-    used_price_pos = set()
-    for sq_pos, sq_val in squares:
-        if not (area_min <= sq_val <= area_max):
-            continue
-        best_p = None
-        best_dist = 9999
-        for pr_pos, pr_val in prices:
-            if pr_pos in used_price_pos:
+    if not results and not has_var_data:
+        # JSON-блок вообще отсутствует на странице (сайт сменил формат) — используем
+        # старый общий regex-парсер как аварийный запасной вариант. Если же JSON
+        # найден, но после фильтрации по типу совпадений 0 — это законный пустой
+        # результат (на странице категории объектов этого типа не оказалось),
+        # a не повод скатываться на менее точный парсер.
+        area_min = area * 0.2 if area > 0 else 5
+        area_max = area * 5.0 if area > 0 else 10000
+        ml_category = OUR_CAT_TO_ML_CAT.get(category, category)
+        squares = [(mm.start(), float(mm.group(1))) for mm in re.finditer(r'"square"\s*:\s*(\d+(?:\.\d+)?)', html)]
+        prices = [(mm.start(), float(mm.group(1))) for mm in re.finditer(r'"price"\s*:\s*"?(\d+)"?', html)]
+        used_price_pos = set()
+        for sq_pos, sq_val in squares:
+            if not (area_min <= sq_val <= area_max):
                 continue
-            dist = abs(pr_pos - sq_pos)
-            if dist < 3000 and dist < best_dist and pr_val >= min_p:
-                best_dist = dist
-                best_p = (pr_pos, pr_val)
-        if best_p:
-            used_price_pos.add(best_p[0])
-            ext_id = hashlib.md5(f'etagi_{best_p[1]}_{sq_val}'.encode()).hexdigest()[:16]
-            results.append({
-                'source': 'etagi.com',
-                'external_id': ext_id,
-                'url': '',
-                'title': f'{category} {deal_type} {sq_val} м²',
-                'category': ml_category,
-                'deal_type': deal_type,
-                'price': best_p[1],
-                'price_per_m2': round(best_p[1] / sq_val, 2),
-                'area': sq_val,
-                'address': None,
-                'district': None,
-                'floor': None,
-                'total_floors': None,
-                'condition': None,
-                'road_line': None,
-            })
-        if len(results) >= 60:
-            # Все JSON-объявления уже встроены в один HTML-документ (без реальной
-            # постраничной навигации на этом сайте) — 60 достаточно с запасом,
-            # раньше лимит был искусственно занижен до 15.
-            break
-
-    if not results:
-        min_p = 20_000 if deal_type == 'rent' else 300_000
-        results = _parse_generic_html(html, 'etagi.com', category, deal_type, min_p, area)
+            best_p = None
+            best_dist = 9999
+            for pr_pos, pr_val in prices:
+                if pr_pos in used_price_pos:
+                    continue
+                dist = abs(pr_pos - sq_pos)
+                if dist < 3000 and dist < best_dist and pr_val >= min_p:
+                    best_dist = dist
+                    best_p = (pr_pos, pr_val)
+            if best_p:
+                used_price_pos.add(best_p[0])
+                ext_id = hashlib.md5(f'etagi_{best_p[1]}_{sq_val}'.encode()).hexdigest()[:16]
+                results.append({
+                    'source': 'etagi.com', 'external_id': ext_id, 'url': '',
+                    'title': f'{category} {deal_type} {sq_val} м²',
+                    'category': ml_category, 'deal_type': deal_type,
+                    'price': best_p[1], 'price_per_m2': round(best_p[1] / sq_val, 2),
+                    'area': sq_val, 'address': None, 'district': None,
+                    'floor': None, 'total_floors': None, 'condition': None, 'road_line': None,
+                })
+            if len(results) >= 60:
+                break
 
     print(f'[analogs_fetcher] etagi.com: {len(results)} analogs found')
     return results
@@ -678,7 +1017,13 @@ def _scrape_moreon_targeted(category: str, deal_type: str, area: float = 0, max_
 
 
 def _save_to_market_listings(cur, conn, items: list[dict]) -> int:
-    """Сохраняет найденные аналоги в market_listings для будущего использования."""
+    """
+    Сохраняет найденные аналоги в market_listings для будущего использования.
+    Помимо базовых полей сохраняет и "запасные" (lat/lng, год постройки, материал стен,
+    описание, улица, высота потолков, эл.мощность, охрана/вентиляция/отдельный вход,
+    число фото) — когда источник их предоставляет (сейчас: ayax.ru, etagi.com).
+    Не все источники дают эти данные — тогда поле останется NULL, это нормально.
+    """
     saved = 0
     for item in items:
         ext_id = str(item.get('external_id') or '')[:200]
@@ -688,11 +1033,18 @@ def _save_to_market_listings(cur, conn, items: list[dict]) -> int:
             cur.execute(
                 f"INSERT INTO {SCHEMA}.market_listings "
                 f"(source, external_id, url, title, category, deal_type, price, price_per_m2, "
-                f"area, address, district, floor, total_floors, condition, road_line, scraped_at) "
-                f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW()) "
+                f"area, address, district, floor, total_floors, condition, road_line, "
+                f"lat, lng, building_year, wall_material, description, street, "
+                f"ceiling_height, electricity_kw, has_security, has_ventilation, "
+                f"separate_entrance, photos_count, scraped_at) "
+                f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"
+                f"%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW()) "
                 f"ON CONFLICT (source, external_id) DO UPDATE SET "
                 f"price=%s, price_per_m2=%s, area=%s, address=%s, district=%s, "
-                f"floor=%s, total_floors=%s, condition=%s, road_line=%s, scraped_at=NOW()",
+                f"floor=%s, total_floors=%s, condition=%s, road_line=%s, "
+                f"lat=%s, lng=%s, building_year=%s, wall_material=%s, description=%s, street=%s, "
+                f"ceiling_height=%s, electricity_kw=%s, has_security=%s, has_ventilation=%s, "
+                f"separate_entrance=%s, photos_count=%s, scraped_at=NOW()",
                 (
                     item.get('source'), ext_id,
                     (item.get('url') or '')[:500], (item.get('title') or '')[:500],
@@ -702,12 +1054,26 @@ def _save_to_market_listings(cur, conn, items: list[dict]) -> int:
                     item.get('floor'), item.get('total_floors'),
                     (item.get('condition') or '')[:100],
                     (item.get('road_line') or '')[:50] or None,
+                    item.get('lat'), item.get('lng'), item.get('building_year'),
+                    (item.get('wall_material') or '')[:100] or None,
+                    (item.get('description') or '')[:5000] or None,
+                    (item.get('street') or '')[:200] or None,
+                    item.get('ceiling_height'), item.get('electricity_kw'),
+                    item.get('has_security'), item.get('has_ventilation'),
+                    item.get('separate_entrance'), item.get('photos_count'),
                     # ON CONFLICT SET
                     item.get('price'), item.get('price_per_m2'), item.get('area'),
                     (item.get('address') or '')[:300], (item.get('district') or '')[:200],
                     item.get('floor'), item.get('total_floors'),
                     (item.get('condition') or '')[:100],
                     (item.get('road_line') or '')[:50] or None,
+                    item.get('lat'), item.get('lng'), item.get('building_year'),
+                    (item.get('wall_material') or '')[:100] or None,
+                    (item.get('description') or '')[:5000] or None,
+                    (item.get('street') or '')[:200] or None,
+                    item.get('ceiling_height'), item.get('electricity_kw'),
+                    item.get('has_security'), item.get('has_ventilation'),
+                    item.get('separate_entrance'), item.get('photos_count'),
                 )
             )
             saved += 1
