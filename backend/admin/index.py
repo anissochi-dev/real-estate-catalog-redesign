@@ -4063,10 +4063,11 @@ def _webmaster_check(cur, method, action, event, user):
                 host_id = hosts[0].get('host_id')
             if not host_id:
                 return _err(400, f'Сайт {site_url} не найден в Яндекс Вебмастере. Сначала добавьте и подтвердите сайт.')
-            # Отправляем sitemap
+            # Отправляем sitemap — правильный эндпоинт именно user-added-sitemaps
+            # (обычный /sitemaps — только для чтения списка, POST туда даёт 405)
             payload = _json.dumps({'url': sitemap_url}).encode('utf-8')
             req2 = _ureq.Request(
-                f'https://api.webmaster.yandex.net/v4/user/{user_id}/hosts/{host_id}/sitemaps',
+                f'https://api.webmaster.yandex.net/v4/user/{user_id}/hosts/{host_id}/user-added-sitemaps',
                 data=payload,
                 headers={
                     'Authorization': f'OAuth {token}',
