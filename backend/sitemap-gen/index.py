@@ -79,6 +79,10 @@ def _build_sitemap_xml(cur) -> tuple:
     NOINDEX_PATHS = {'/favorites', '/compare'}
 
     # 1. Статические страницы
+    # /catalog/*, /leads и /district/* пропускаем здесь — они добавляются ниже
+    # отдельными блоками с более точной логикой (например, категория попадает
+    # в карту, только если в ней реально есть активные объекты). Иначе адрес
+    # дублируется дважды в sitemap.
     cur.execute(
         f"SELECT path, updated_at FROM {SCHEMA}.seo_pages "
         f"WHERE noindex = FALSE ORDER BY path"
@@ -88,6 +92,8 @@ def _build_sitemap_xml(cur) -> tuple:
         if p.startswith('/admin') or p.startswith('/login') or p.startswith('/auth'):
             continue
         if p in NOINDEX_PATHS:
+            continue
+        if p.startswith('/catalog/') or p == '/leads' or p.startswith('/district/'):
             continue
         urls.append((base + p, r.get('updated_at'), '0.8', 'weekly'))
 
