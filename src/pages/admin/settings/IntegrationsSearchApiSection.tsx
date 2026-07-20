@@ -7,7 +7,7 @@ interface Props {
   s: Partial<S>;
   setS: (v: Partial<S>) => void;
   saved: boolean;
-  save: () => void;
+  save: () => Promise<void>;
 }
 
 type St = 'idle' | 'loading' | 'ok' | 'err';
@@ -71,6 +71,9 @@ export default function IntegrationsSearchApiSection({ s, setS, saved, save }: P
   ) => {
     setter({ status: 'loading', message: '' });
     try {
+      // Сначала сохраняем текущие значения полей в БД — иначе backend
+      // читает настройки из базы и не увидит только что введённый токен/ключ.
+      await save();
       const d = await adminApi.webmasterCheck(action) as Record<string, unknown>;
       if (d?.success) {
         setter({ status: 'ok', message: String(d.message || 'Успешно') });
@@ -168,11 +171,16 @@ export default function IntegrationsSearchApiSection({ s, setS, saved, save }: P
             onClick={async () => {
               setYmCheck({ status: 'loading', message: '' });
               try {
+                // Сначала сохраняем токен в БД — иначе backend прочитает старое (пустое) значение
+                await save();
                 const d = await adminApi.webmasterCheck('yandex_check') as Record<string, unknown>;
                 if (d?.success) {
                   const uid = String(d.user_id || '');
                   setYmCheck({ status: 'ok', message: String(d.message) });
-                  if (uid) setS({ ...s, yandex_webmaster_user_id: uid });
+                  if (uid) {
+                    setS({ ...s, yandex_webmaster_user_id: uid });
+                    await save();
+                  }
                 } else {
                   setYmCheck({ status: 'err', message: String(d?.error || 'Ошибка') });
                 }
