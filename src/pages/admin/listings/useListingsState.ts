@@ -391,6 +391,7 @@ export function useListingsState() {
     if (e.profit) parts.push(`Чистая прибыль: ${e.profit} ₽`);
     if (e.payback) parts.push(`Окупаемость: ${e.payback} мес.`);
     if (includePrice && e.price) parts.push(`Цена: ${e.price} ₽`);
+    if (e.ai_notes) parts.push(`Особые пожелания к описанию (обязательно учесть): ${e.ai_notes}`);
     return parts.join('; ');
   };
 

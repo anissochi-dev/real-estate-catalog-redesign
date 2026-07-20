@@ -2731,8 +2731,9 @@ def _listings(cur, conn, method, rid, event, user):
 
         sql = (
             f"INSERT INTO {SCHEMA}.listings "
-            f"(title, description, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, broker_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, owner_phone_contact_id, owner_phone2_contact_id, cadastral_number, egrn_objects, image_thumb, rent_index_pct) VALUES ("
+            f"(title, description, ai_notes, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, broker_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, owner_phone_contact_id, owner_phone2_contact_id, cadastral_number, egrn_objects, image_thumb, rent_index_pct) VALUES ("
             f"{_str_or_null(body.get('title'), 255)}, {_str_or_null(body.get('description'), 5000)}, "
+            f"{_str_or_null(body.get('ai_notes'), 500)}, "
             f"{_str_or_null(body.get('category'), 50)}, {_str_or_null(body.get('deal'), 20)}, "
             f"{_int_or_null(body.get('price'))}, {_int_or_null(body.get('price_per_m2'))}, "
             f"{_int_or_null(body.get('area'))}, {_int_or_null(body.get('payback'))}, "
@@ -2862,7 +2863,7 @@ def _listings(cur, conn, method, rid, event, user):
             updated_slug = _make_slug(body['title'], int(rid))
             fields.append(f"slug = '{_safe(updated_slug, 120)}'")
 
-        for f, length in [('title', 255), ('description', 5000), ('category', 50), ('deal', 20),
+        for f, length in [('title', 255), ('description', 5000), ('ai_notes', 500), ('category', 50), ('deal', 20),
                           ('address', 255), ('district', 100), ('city', 100), ('image', 500),
                           ('images', 5000), ('tags', 1000), ('status', 20),
                           ('owner_name', 150), ('owner_phone', 30), ('owner_phone2', 30), ('price_unit', 10),

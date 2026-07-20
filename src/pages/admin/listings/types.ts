@@ -26,6 +26,7 @@ export interface Listing {
   city: string;
   status: string;
   description: string;
+  ai_notes?: string | null;
   image: string;
   images: string;
   tags: string[] | string;

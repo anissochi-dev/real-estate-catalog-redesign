@@ -80,6 +80,19 @@ export default function ListingEditorContentSection({
 
   return (
     <>
+      <div className="space-y-1">
+        <label className="text-sm font-semibold flex items-center gap-1.5">
+          Что учесть при составлении описания (необязательно)
+        </label>
+        <CharCount as="textarea" rows={2} max={500} warnAt={450}
+          placeholder="Например: сделай акцент на панорамных окнах, упомяни близость к вокзалу, не пиши про соседей по этажу"
+          value={editing.ai_notes || ''}
+          onChange={e => setEditing({ ...editing, ai_notes: (e.target as HTMLTextAreaElement).value })} />
+        <div className="text-[11px] text-muted-foreground">
+          Эти пожелания ИИ обязательно учтёт при генерации рекламного описания.
+        </div>
+      </div>
+
       <div className="space-y-1" data-field-error={descError ? 'true' : undefined}>
         <div className="flex items-center justify-between">
           <label className="text-sm font-semibold flex items-center gap-1.5">
