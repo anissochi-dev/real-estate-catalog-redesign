@@ -91,6 +91,33 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
 
             {/* Right side — desktop */}
             <div className="flex items-center gap-2 ml-auto">
+              {user && (
+                isStaff ? (
+                  <button
+                    onClick={onAdmin}
+                    title="Открыть админ-панель"
+                    className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted hover:bg-brand-blue/10 text-sm transition-colors"
+                  >
+                    <Icon name="User" size={14} className="text-brand-blue flex-shrink-0" />
+                    <span className="text-foreground font-medium">{user.name}</span>
+                  </button>
+                ) : isClient ? (
+                  <button
+                    onClick={onClientDashboard}
+                    title="Личный кабинет"
+                    className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted hover:bg-brand-blue/10 text-sm transition-colors"
+                  >
+                    <Icon name="LayoutDashboard" size={14} className="text-brand-blue flex-shrink-0" />
+                    <span className="text-foreground font-medium">Кабинет</span>
+                  </button>
+                ) : (
+                  <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted text-sm">
+                    <Icon name="User" size={14} />
+                    <span>{user.name}</span>
+                  </div>
+                )
+              )}
+
               {/* Телефон */}
               <a
                 href="tel:+79183352888"
@@ -117,32 +144,6 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
                   <Icon name="GitCompare" size={15} />
                   <span>Сравнить ({compareCount})</span>
                 </button>
-              )}
-              {user && (
-                isStaff ? (
-                  <button
-                    onClick={onAdmin}
-                    title="Открыть админ-панель"
-                    className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted hover:bg-brand-blue/10 text-sm transition-colors"
-                  >
-                    <Icon name="User" size={14} className="text-brand-blue flex-shrink-0" />
-                    <span className="text-foreground font-medium">{user.name}</span>
-                  </button>
-                ) : isClient ? (
-                  <button
-                    onClick={onClientDashboard}
-                    title="Личный кабинет"
-                    className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted hover:bg-brand-blue/10 text-sm transition-colors"
-                  >
-                    <Icon name="LayoutDashboard" size={14} className="text-brand-blue flex-shrink-0" />
-                    <span className="text-foreground font-medium">Кабинет</span>
-                  </button>
-                ) : (
-                  <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted text-sm">
-                    <Icon name="User" size={14} />
-                    <span>{user.name}</span>
-                  </div>
-                )
               )}
               {/* Hamburger — mobile */}
               <button
