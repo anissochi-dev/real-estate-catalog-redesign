@@ -459,14 +459,31 @@ def handler(event, context):
             original_ct = content_type
             wm_applied = False
 
-            # Сохраняем thumb 400px в S3 (всегда для kind=photo)
+            # Настройки водяного знака — читаем ОДИН раз до сохранения thumb/medium/full,
+            # чтобы наложить знак сразу на ВСЕ размеры (раньше знак попадал только на полноразмерную версию)
+            wm_settings = None
+            if kind == 'photo' and apply_wm and ext in ('jpg', 'jpeg', 'png', 'webp'):
+                cur.execute(
+                    f"SELECT watermark_enabled, watermark_url, watermark_opacity, watermark_position "
+                    f"FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
+                )
+                wm_row = cur.fetchone()
+                if wm_row and wm_row.get('watermark_enabled') and wm_row.get('watermark_url'):
+                    wm_settings = dict(wm_row)
+
+            # Сохраняем thumb 400px в S3 (всегда для kind=photo) — с водяным знаком, если он включён
             thumb_url = None
             medium_url = None
             if thumb_data:
+                thumb_to_save = thumb_data
+                if wm_settings:
+                    wm_thumb = _apply_watermark(thumb_data, wm_settings)
+                    if wm_thumb and wm_thumb != thumb_data:
+                        thumb_to_save = wm_thumb
                 thumb_key = f"{folder}/{token12}_thumb.webp"
                 try:
                     s3.put_object(
-                        Bucket='files', Key=thumb_key, Body=thumb_data,
+                        Bucket='files', Key=thumb_key, Body=thumb_to_save,
                         ContentType='image/webp', CacheControl='public, max-age=31536000'
                     )
                     thumb_url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{thumb_key}"
@@ -481,12 +498,17 @@ def handler(event, context):
                 except Exception:
                     thumb_url = None
 
-            # Сохраняем medium 900px в S3 (для галереи объекта)
+            # Сохраняем medium 900px в S3 (для галереи объекта) — с водяным знаком, если он включён
             if medium_data and kind == 'photo':
+                medium_to_save = medium_data
+                if wm_settings:
+                    wm_medium = _apply_watermark(medium_data, wm_settings)
+                    if wm_medium and wm_medium != medium_data:
+                        medium_to_save = wm_medium
                 medium_key = f"{folder}/{token12}_medium.webp"
                 try:
                     s3.put_object(
-                        Bucket='files', Key=medium_key, Body=medium_data,
+                        Bucket='files', Key=medium_key, Body=medium_to_save,
                         ContentType='image/webp', CacheControl='public, max-age=31536000'
                     )
                     medium_url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{medium_key}"
@@ -501,42 +523,36 @@ def handler(event, context):
                 except Exception:
                     medium_url = None
 
-            # Если фото и нужен водяной знак — накладываем + сохраняем ОТДЕЛЬНО оригинал
-            if kind == 'photo' and apply_wm and ext in ('jpg', 'jpeg', 'png', 'webp'):
-                cur.execute(
-                    f"SELECT watermark_enabled, watermark_url, watermark_opacity, watermark_position "
-                    f"FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
-                )
-                wm_row = cur.fetchone()
-                if wm_row and wm_row.get('watermark_enabled') and wm_row.get('watermark_url'):
-                    wm_data = _apply_watermark(data, dict(wm_row))
-                    if wm_data and wm_data != data:
-                        wm_key = f"{folder}/{token12}_wm.webp"
-                        s3.put_object(Bucket='files', Key=wm_key, Body=wm_data, ContentType='image/webp', CacheControl='public, max-age=31536000')
-                        orig_key = f"{folder}/{token12}.{original_ext}"
-                        s3.put_object(Bucket='files', Key=orig_key, Body=original_data, ContentType=original_ct, CacheControl='public, max-age=31536000')
+            # Полноразмерная версия (1920px) — накладываем знак, оригинал БЕЗ знака сохраняем отдельно
+            if wm_settings:
+                wm_data = _apply_watermark(data, wm_settings)
+                if wm_data and wm_data != data:
+                    wm_key = f"{folder}/{token12}_wm.webp"
+                    s3.put_object(Bucket='files', Key=wm_key, Body=wm_data, ContentType='image/webp', CacheControl='public, max-age=31536000')
+                    orig_key = f"{folder}/{token12}.{original_ext}"
+                    s3.put_object(Bucket='files', Key=orig_key, Body=original_data, ContentType=original_ct, CacheControl='public, max-age=31536000')
 
-                        wm_applied = True
-                        url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{wm_key}"
-                        original_url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{orig_key}"
-                        for _k, _u in [(wm_key, url), (orig_key, original_url)]:
-                            try:
-                                cur.execute(
-                                    f"INSERT INTO {SCHEMA}.s3_photo_refs (s3_key, cdn_url, is_orphan) "
-                                    f"VALUES (%s, %s, TRUE) ON CONFLICT (s3_key) DO NOTHING",
-                                    (_k, _u)
-                                )
-                            except Exception:
-                                pass
-                        conn.commit()
-                        return _ok({
-                            'url': url,
-                            'original_url': original_url,
-                            'thumb_url': thumb_url,
-                            'medium_url': medium_url,
-                            'watermarked': True,
-                            'size': len(wm_data),
-                        })
+                    wm_applied = True
+                    url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{wm_key}"
+                    original_url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{orig_key}"
+                    for _k, _u in [(wm_key, url), (orig_key, original_url)]:
+                        try:
+                            cur.execute(
+                                f"INSERT INTO {SCHEMA}.s3_photo_refs (s3_key, cdn_url, is_orphan) "
+                                f"VALUES (%s, %s, TRUE) ON CONFLICT (s3_key) DO NOTHING",
+                                (_k, _u)
+                            )
+                        except Exception:
+                            pass
+                    conn.commit()
+                    return _ok({
+                        'url': url,
+                        'original_url': original_url,
+                        'thumb_url': thumb_url,
+                        'medium_url': medium_url,
+                        'watermarked': True,
+                        'size': len(wm_data),
+                    })
 
             # Без водяного знака — обычное сохранение
             if not wm_applied:
