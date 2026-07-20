@@ -12,7 +12,6 @@ import PropertyMediaGallery from '@/components/property/PropertyMediaGallery';
 import PropertyMainContent from '@/components/property/PropertyMainContent';
 import PropertySidebar from '@/components/property/PropertySidebar';
 import PropertyTopBar from '@/components/property/PropertyTopBar';
-import PropertyAiSearchBar from '@/components/property/PropertyAiSearchBar';
 import PropertyFaqSection from '@/components/property/PropertyFaqSection';
 import { TYPE_LABELS, DEAL_LABELS } from '@/components/property/propertyLabels';
 import { categoryLabel, catalogCategoryUrl } from '@/lib/categories';
@@ -225,14 +224,6 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
 
       <div className="container mx-auto px-4 py-4">
         <PropertyTopBar itemType={item.type} itemTitle={item.title} shareUrl={shareUrl} />
-
-        {/* ИИ-панель: подбор похожих */}
-        <PropertyAiSearchBar
-          aiQuery={aiQuery}
-          setAiQuery={setAiQuery}
-          setAiOpen={setAiOpen}
-          itemTitle={item.title}
-        />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 space-y-3">
