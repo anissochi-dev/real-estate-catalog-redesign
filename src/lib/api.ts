@@ -403,6 +403,7 @@ export async function aiSearchLeads(prompt: string): Promise<{ ids: number[]; re
 /** Тип публичной заявки. */
 export interface PublicLead {
   id: number;
+  slug?: string;
   name: string;
   message: string;
   budget: number | null;
@@ -451,6 +452,18 @@ export async function fetchPublicLeads(params: {
     page: Number(data.page) || 1,
     pages: Number(data.pages) || 1,
   };
+}
+
+/** Одна заявка + похожие — для отдельной SEO-страницы заявки. */
+export async function fetchPublicLeadBySlug(slug: string): Promise<{ lead: PublicLead; similar: PublicLead[] } | null> {
+  const qs = new URLSearchParams();
+  qs.set('resource', 'public_lead_detail');
+  qs.set('slug', slug);
+  const res = await fetch(`${LISTINGS_URL}?${qs.toString()}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error('Не удалось загрузить заявку');
+  const data = await res.json();
+  return { lead: data.lead, similar: Array.isArray(data.similar) ? data.similar : [] };
 }
 
 export interface Agent {

@@ -345,7 +345,7 @@ def handler(event: dict, context) -> dict:
                 total = int(cur.fetchone()['c'] or 0)
 
                 cur.execute(
-                    f"SELECT id, name, message, budget, budget_to, company, request_category, "
+                    f"SELECT id, slug, name, message, budget, budget_to, company, request_category, "
                     f"lead_type, property_type, property_category, area_from, area_to, utilities, district_ids, "
                     f"is_network_tenant, created_at, updated_at "
                     f"FROM t_p71821556_real_estate_catalog_.leads WHERE {where_sql} "
@@ -370,6 +370,65 @@ def handler(event: dict, context) -> dict:
                     'limit': limit,
                     'pages': (total + limit - 1) // limit if limit else 1,
                 })
+
+            if params.get('resource') == 'public_lead_detail':
+                # Одна заявка по slug — для отдельной SEO-страницы заявки.
+                # Доступна без авторизации, контакты (телефон/email) не отдаём.
+                slug = (params.get('slug') or '').strip()
+                if not slug:
+                    return {
+                        'statusCode': 400,
+                        'headers': {'Access-Control-Allow-Origin': '*'},
+                        'body': json.dumps({'error': 'slug обязателен'}),
+                    }
+                slug_safe = slug.replace("'", "''")
+                cur.execute(
+                    f"SELECT id, slug, name, message, budget, budget_to, company, request_category, "
+                    f"lead_type, property_type, property_category, area_from, area_to, utilities, district_ids, "
+                    f"is_network_tenant, created_at, updated_at "
+                    f"FROM t_p71821556_real_estate_catalog_.leads "
+                    f"WHERE slug = '{slug_safe}' AND show_on_main = TRUE AND status IN ('new','in_progress') "
+                    f"AND is_public = TRUE"
+                )
+                row = cur.fetchone()
+                if not row:
+                    return {
+                        'statusCode': 404,
+                        'headers': {'Access-Control-Allow-Origin': '*'},
+                        'body': json.dumps({'error': 'Заявка не найдена'}),
+                    }
+                d = dict(row)
+                for k in ('created_at', 'updated_at'):
+                    if d.get(k) is not None:
+                        try:
+                            d[k] = d[k].isoformat()
+                        except Exception:
+                            d[k] = str(d[k])
+                if d.get('district_ids') is None:
+                    d['district_ids'] = []
+
+                # Похожие заявки — та же категория/тип, кроме текущей
+                similar = []
+                if d.get('property_category'):
+                    pc_safe = str(d['property_category']).replace("'", "''")
+                    cur.execute(
+                        f"SELECT id, slug, name, message, budget, budget_to, property_type, property_category, "
+                        f"area_from, area_to, created_at "
+                        f"FROM t_p71821556_real_estate_catalog_.leads "
+                        f"WHERE property_category = '{pc_safe}' AND id != {int(d['id'])} "
+                        f"AND show_on_main = TRUE AND status IN ('new','in_progress') AND is_public = TRUE "
+                        f"ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 4"
+                    )
+                    for r in cur.fetchall():
+                        sd = dict(r)
+                        if sd.get('created_at') is not None:
+                            try:
+                                sd['created_at'] = sd['created_at'].isoformat()
+                            except Exception:
+                                sd['created_at'] = str(sd['created_at'])
+                        similar.append(sd)
+
+                return _ok({'lead': d, 'similar': similar})
 
             if params.get('resource') == 'network_tenants':
                 cur.execute(

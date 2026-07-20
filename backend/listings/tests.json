@@ -46,6 +46,24 @@
       "expectedStatus": 200,
       "bodyMatcher": "partial",
       "expectedBody": { "stats": {} }
+    },
+    {
+      "name": "Список заявок — полный",
+      "method": "GET",
+      "path": "/?resource=public_leads_full",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Детали заявки без slug — ошибка",
+      "method": "GET",
+      "path": "/?resource=public_lead_detail",
+      "expectedStatus": 400
+    },
+    {
+      "name": "Детали заявки — несуществующий slug",
+      "method": "GET",
+      "path": "/?resource=public_lead_detail&slug=not-exists-999999",
+      "expectedStatus": 404
     }
   ]
 }

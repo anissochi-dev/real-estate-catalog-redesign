@@ -164,6 +164,20 @@ def _build_sitemap_xml(cur) -> tuple:
     # 6. Страница заявок (публичная лента спроса)
     urls.append((base + '/leads', now, '0.5', 'daily'))
 
+    # 7. Отдельные публичные заявки — каждая со своим SEO-адресом /request/{slug}
+    cur.execute(
+        f"SELECT slug, COALESCE(updated_at, created_at) as last_upd "
+        f"FROM {SCHEMA}.leads "
+        f"WHERE show_on_main = TRUE AND status IN ('new','in_progress') "
+        f"AND is_public = TRUE AND slug IS NOT NULL AND slug != '' "
+        f"ORDER BY last_upd DESC NULLS LAST LIMIT 3000"
+    )
+    for r in cur.fetchall():
+        lslug = r.get('slug')
+        if not lslug:
+            continue
+        urls.append((base + f"/request/{lslug}", r.get('last_upd') or now, '0.6', 'weekly'))
+
     parts = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '

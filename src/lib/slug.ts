@@ -32,3 +32,32 @@ export function extractIdFromSlug(slug: string): number | null {
   const m = String(slug || '').match(/-?(\d+)$/);
   return m ? parseInt(m[1], 10) : null;
 }
+
+const LEAD_TYPE_WORDS: Record<string, string> = {
+  rent: 'arenda',
+  sale: 'prodazha',
+};
+
+const LEAD_CATEGORY_WORDS: Record<string, string> = {
+  office: 'ofis',
+  retail: 'magazin',
+  warehouse: 'sklad',
+  restaurant: 'obschepit',
+  hotel: 'gostinitsa',
+  business: 'gotovyi-biznes',
+  gab: 'gab',
+  production: 'proizvodstvo',
+  land: 'zemlya',
+  building: 'zdanie',
+  free_purpose: 'svobodnogo-naznacheniya',
+  car_service: 'avtoservis',
+};
+
+/** Слаг для заявки: тип сделки + категория + id, чтобы был читаемым и уникальным. */
+export function leadSlug(propertyType: string | null, propertyCategory: string | null, id: number): string {
+  const parts: string[] = [];
+  if (propertyType && LEAD_TYPE_WORDS[propertyType]) parts.push(LEAD_TYPE_WORDS[propertyType]);
+  if (propertyCategory && LEAD_CATEGORY_WORDS[propertyCategory]) parts.push(LEAD_CATEGORY_WORDS[propertyCategory]);
+  if (parts.length === 0) parts.push('zayavka');
+  return `${parts.join('-')}-${id}`;
+}

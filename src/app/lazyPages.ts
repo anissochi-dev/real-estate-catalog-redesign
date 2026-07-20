@@ -65,6 +65,7 @@ const importers = {
   declined: () => import('../pages/DeclinedPage'),
   news: () => import('../pages/NewsPage'),
   leads: () => import('../pages/LeadsListPage'),
+  leadDetail: () => import('../pages/leads/LeadDetailPage'),
 };
 
 export const PropertyPage       = lazyWithRetry(importers.property);
@@ -81,6 +82,7 @@ export const DeclinedPage       = lazyWithRetry(importers.declined);
 export const NewsListPage       = lazyWithRetry(() => importers.news().then(m => ({ default: m.NewsListPage })));
 export const NewsArticlePage    = lazyWithRetry(() => importers.news().then(m => ({ default: m.NewsArticlePage })));
 export const LeadsListPage      = lazyWithRetry(importers.leads);
+export const LeadDetailPage     = lazyWithRetry(importers.leadDetail);
 
 // Префетч чанка страницы — вызываем при наведении/касании пункта меню,
 // чтобы к моменту клика код страницы уже был загружен (мгновенное открытие).

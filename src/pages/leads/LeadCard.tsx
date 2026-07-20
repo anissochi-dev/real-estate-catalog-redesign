@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import Icon from '@/components/ui/icon';
 import { PublicLead, District } from '@/lib/api';
 
@@ -77,7 +78,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   car_service: 'Car',
 };
 
-export default function LeadCard({ lead, districts, onContact }: { lead: PublicLead; districts: District[]; onContact: () => void }) {
+export default function LeadCard({ lead, districts, onContact, disableLink }: { lead: PublicLead; districts: District[]; onContact: () => void; disableLink?: boolean }) {
   const displayName = lead.name || `Клиент #${lead.id}`;
   const color = avatarColor(displayName);
   const typeLabel = lead.property_type === 'sale' ? 'Продажа' : lead.property_type === 'rent' ? 'Аренда' : null;
@@ -114,7 +115,13 @@ export default function LeadCard({ lead, districts, onContact }: { lead: PublicL
         </div>
         <div className="min-w-0">
           <div className="font-bold text-[17px] text-foreground leading-tight">
-            {cardTitle || `Заявка #${lead.id}`}
+            {!disableLink && lead.slug ? (
+              <Link to={`/request/${lead.slug}`} className="hover:text-brand-blue transition-colors">
+                {cardTitle || `Заявка #${lead.id}`}
+              </Link>
+            ) : (
+              cardTitle || `Заявка #${lead.id}`
+            )}
           </div>
           <div className="text-xs text-muted-foreground mt-0.5">№{lead.id}</div>
           {lead.is_network_tenant && (
