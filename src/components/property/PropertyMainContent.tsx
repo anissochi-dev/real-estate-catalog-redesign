@@ -11,7 +11,7 @@ import SmartCaptcha, { CaptchaResult } from '@/components/SmartCaptcha';
 
 const InvestmentModel = lazy(() => import('@/components/property/InvestmentModel'));
 import {
-  CONDITION_LABELS, FINISHING_LABELS, PARKING_LABELS,
+  CONDITION_LABELS, PARKING_LABELS,
   ENTRANCE_LABELS, UTILITY_ICONS, ROAD_LINE_LABELS, PURPOSE_LABELS,
   LAND_STATUS_LABELS, PROPERTY_RIGHTS_LABELS,
 } from './propertyLabels';
@@ -118,7 +118,6 @@ export default function PropertyMainContent({
           {itemExt.condition ? (
             <ParamCard icon="CheckCircle2" label="Состояние" value={CONDITION_LABELS[itemExt.condition] || itemExt.condition} />
           ) : null}
-          {item.finishing ? <ParamCard icon="Paintbrush" label="Отделка" value={FINISHING_LABELS[item.finishing] || item.finishing} /> : null}
           {itemExt.parking && itemExt.parking !== 'none' ? (
             <ParamCard icon="ParkingSquare" label="Парковка" value={PARKING_LABELS[itemExt.parking] || itemExt.parking} />
           ) : null}
