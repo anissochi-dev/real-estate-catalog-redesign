@@ -294,24 +294,25 @@ export default function SettingsAdmin() {
     },
   ];
   // Обычные разделы настроек видны только тем, у кого есть право на «Настройки»
-  const GROUPS = hasFullSettingsAccess ? ALL_GROUPS : [];
+  const SETTINGS_GROUPS = hasFullSettingsAccess ? ALL_GROUPS : [];
 
-  // Быстрый доступ — Пользователи/Телефоны/SEO/Районы. Не привязаны к группам настроек,
-  // всегда доступны отдельным блоком под переключателем групп (у кого есть права).
-  const QUICK_ACCESS: TabDef[] = ([
+  // Пользователи/Телефоны/SEO/Районы — каждый как отдельная группа в том же ряду
+  // и с тем же дизайном, что Компания/Сайт/Интеграции. Видимость — по своим правам.
+  const MANAGEMENT_GROUPS: { id: string; label: string; icon: string; tabs: TabDef[] }[] = ([
     ['users', 'Пользователи', 'Users'],
     ['phones', 'Телефонная база', 'Phone'],
     ['seo', 'SEO', 'TrendingUp'],
     ['districts', 'Районы', 'MapPin'],
-  ] as TabDef[]).filter(([id]) => hasManagementAccess(id));
+  ] as TabDef[])
+    .filter(([id]) => hasManagementAccess(id))
+    .map(([id, label, icon]) => ({ id, label, icon, tabs: [[id, label, icon]] as TabDef[] }));
 
-  const isQuickAccessTab = MANAGEMENT_TAB_IDS.includes(tab);
-  const currentGroup = !isQuickAccessTab
-    ? (GROUPS.find(g => g.tabs.some(([id]) => id === tab)) || GROUPS[0])
-    : undefined;
-  const allowedTabs = [...GROUPS.flatMap(g => g.tabs.map(([id]) => id)), ...QUICK_ACCESS.map(([id]) => id)];
-  // Разделы быстрого доступа — с широкими таблицами, им нужна полная ширина экрана,
-  // а не max-w-4xl как у остальных настроек
+  const GROUPS = [...SETTINGS_GROUPS, ...MANAGEMENT_GROUPS];
+
+  const currentGroup = GROUPS.find(g => g.tabs.some(([id]) => id === tab)) || GROUPS[0];
+  const allowedTabs = GROUPS.flatMap(g => g.tabs.map(([id]) => id));
+  // Разделы Пользователи/Телефоны/SEO/Районы — с широкими таблицами, им нужна полная
+  // ширина экрана, а не max-w-4xl как у остальных настроек
   const isManagementTab = MANAGEMENT_TAB_IDS.includes(tab);
 
   return (
@@ -337,29 +338,6 @@ export default function SettingsAdmin() {
               </button>
             );
           })}
-        </div>
-      )}
-
-      {/* Быстрый доступ: Пользователи / Телефонная база / SEO / Районы */}
-      {QUICK_ACCESS.length > 0 && (
-        <div className="bg-white rounded-xl p-3 shadow-sm border border-border">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2 px-1">
-            Быстрый доступ
-          </div>
-          <div className="flex gap-1 flex-wrap">
-            {QUICK_ACCESS.map(([id, label, icon]) => (
-              <button
-                key={id}
-                onClick={() => setTab(id)}
-                className={`px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition inline-flex items-center justify-center gap-2 ${
-                  tab === id ? 'bg-brand-blue text-white' : 'hover:bg-muted text-foreground/80 bg-muted/40'
-                }`}
-              >
-                <Icon name={icon} size={15} />
-                {label}
-              </button>
-            ))}
-          </div>
         </div>
       )}
 
