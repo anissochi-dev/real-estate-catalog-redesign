@@ -6,9 +6,9 @@ import AdminSidebar from './AdminSidebar';
 import AdminHeader from './AdminHeader';
 import AdminIdleWarning from './AdminIdleWarning';
 
-export type AdminSection = 'dashboard' | 'listings' | 'leads' | 'network-tenants' | 'users' | 'pages' | 'settings' | 'ai-logs'
+export type AdminSection = 'dashboard' | 'listings' | 'leads' | 'network-tenants' | 'pages' | 'settings' | 'ai-logs'
   | 'crm-owners' | 'crm-kanban' | 'crm-gamification' | 'crm-checks' | 'crm-payments'
-  | 'phones' | 'news' | 'seo' | 'districts' | 'marketing' | 'training';
+  | 'news' | 'marketing' | 'training';
 
 interface Props {
   section: AdminSection;
@@ -26,14 +26,10 @@ const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; gro
   { id: 'dashboard',        label: 'Дашборд',          icon: 'LayoutDashboard', roles: ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'] },
   { id: 'listings',         label: 'Объекты',           icon: 'Building2',       roles: ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'] },
   { id: 'leads',            label: 'Заявки',            icon: 'Inbox',           roles: ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'] },
-  { id: 'users',            label: 'Пользователи',      icon: 'Users',           roles: ['admin', 'director'] },
   { id: 'news',             label: 'Новости',           icon: 'Newspaper',       roles: ['admin', 'editor', 'manager', 'director'] },
-  { id: 'seo',              label: 'SEO',               icon: 'TrendingUp',      roles: ['admin', 'editor'] },
-  { id: 'districts',        label: 'Районы',            icon: 'MapPin',          roles: ['admin', 'editor'] },
   { id: 'marketing',        label: 'Маркетолог',        icon: 'Megaphone',       roles: ['admin', 'editor', 'manager', 'director'] },
   { id: 'training',         label: 'Учебный центр',     icon: 'GraduationCap',   roles: ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'] },
   { id: 'settings',         label: 'Настройки',         icon: 'Settings',        roles: ['admin', 'editor'] },
-  { id: 'phones',           label: 'Телефонная база',   icon: 'Phone',           roles: ['admin', 'editor', 'manager', 'director', 'office_manager'] },
   { id: 'crm-kanban',       label: 'Воронка сделок',   icon: 'KanbanSquare',    roles: ['admin', 'director', 'manager', 'office_manager'] },
   { id: 'crm-gamification', label: 'Рейтинг команды',  icon: 'Trophy',          roles: ['admin', 'director', 'manager', 'office_manager', 'broker'] },
   { id: 'crm-checks',       label: 'Проверки',          icon: 'ShieldCheck',     roles: ['admin', 'director', 'manager', 'office_manager', 'broker'] },

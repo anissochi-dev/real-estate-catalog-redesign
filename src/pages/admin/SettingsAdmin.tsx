@@ -23,6 +23,10 @@ import SiteHealthTab from './settings/SiteHealthTab';
 import VerificationTab from './settings/VerificationTab';
 import SettingsSearch from './settings/SettingsSearch';
 import VBKnowledgeAdmin from './VBKnowledgeAdmin';
+import UsersAdmin from './UsersAdmin';
+import PhoneBook from './PhoneBook';
+import SeoHubAdmin from './SeoHubAdmin';
+import DistrictsAdmin from './DistrictsAdmin';
 
 export default function SettingsAdmin() {
   const { reload } = useSettings();
@@ -34,7 +38,7 @@ export default function SettingsAdmin() {
   type TabId = 'general' | 'watermark' | 'brand-kit' | 'footer' | 'legal'
     | 'integrations' | 'ad-platforms' | 'autoposting' | 'feeds' | 'notifications'
     | 'cities' | 'purposes' | 'land-vri' | 'pages' | 'roles' | 'migration' | 'photo-optimize' | 'site-health' | 'verification'
-    | 'vb-knowledge';
+    | 'vb-knowledge' | 'users' | 'phones' | 'seo' | 'districts';
   const [tab, setTab] = useState<TabId>('general');
   const [showKey, setShowKey] = useState(false);
   const [showMapsKey, setShowMapsKey] = useState(false);
@@ -255,6 +259,14 @@ export default function SettingsAdmin() {
         ['vb-knowledge', 'База знаний ВБ', 'Brain'],
       ],
     },
+    {
+      id: 'management', label: 'Управление', icon: 'Users2', tabs: [
+        ['users', 'Пользователи', 'Users'],
+        ['phones', 'Телефонная база', 'Phone'],
+        ['seo', 'SEO', 'TrendingUp'],
+        ['districts', 'Районы', 'MapPin'],
+      ],
+    },
   ];
 
   const currentGroup = GROUPS.find(g => g.tabs.some(([id]) => id === tab)) || GROUPS[0];
@@ -343,6 +355,10 @@ export default function SettingsAdmin() {
       )}
       {tab === 'pages' && <PagesAdmin />}
       {tab === 'vb-knowledge' && <VBKnowledgeAdmin />}
+      {tab === 'users' && <UsersAdmin />}
+      {tab === 'phones' && <PhoneBook />}
+      {tab === 'seo' && <SeoHubAdmin />}
+      {tab === 'districts' && <DistrictsAdmin />}
     </div>
   );
 }
