@@ -77,7 +77,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
               className="flex items-center justify-center group shrink-0 justify-self-center"
               aria-label={brandName}
             >
-              <div className="flex items-center justify-center h-8 md:h-10 w-[160px] md:w-[220px] shrink-0">
+              <div className="flex items-center justify-center h-8 md:h-10 w-auto max-w-[110px] md:w-[220px] shrink-0">
                 {logoUrl ? (
                   <img src={logoUrl} alt={brandName} height={40} loading="eager" className="h-8 md:h-10 w-auto max-w-full object-contain" />
                 ) : (
@@ -90,7 +90,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
             </button>
 
             {/* Right side — desktop, right column */}
-            <div className="flex items-center gap-2 justify-self-end">
+            <div className="flex items-center gap-0.5 md:gap-2 shrink-0 justify-self-end">
               {user && (
                 isStaff ? (
                   <button
@@ -149,9 +149,9 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
               <a
                 href="tel:+79183352888"
                 aria-label="Позвонить"
-                className="md:hidden flex items-center gap-1 px-2 py-2.5 rounded-lg hover:bg-muted transition-colors min-h-[44px] text-brand-blue text-xs font-semibold whitespace-nowrap"
+                className="md:hidden flex items-center gap-1 pl-1.5 pr-1 py-2.5 rounded-lg hover:bg-muted transition-colors min-h-[44px] text-brand-blue text-[11px] font-semibold whitespace-nowrap shrink-0"
               >
-                <Icon name="Phone" size={16} className="shrink-0" />
+                <Icon name="Phone" size={15} className="shrink-0" />
                 +7 918 33 52 888
               </a>
 
@@ -161,7 +161,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
                   setDrawerOpen(true);
                   navItems.forEach(i => prefetchPage(i.id));
                 }}
-                className="md:hidden p-2.5 rounded-lg hover:bg-muted transition-colors relative min-h-[44px] min-w-[44px] flex items-center justify-center"
+                className="md:hidden p-2 rounded-lg hover:bg-muted transition-colors relative min-h-[44px] min-w-[36px] flex items-center justify-center shrink-0"
                 aria-label="Открыть меню"
               >
                 <Icon name="Menu" size={22} />
