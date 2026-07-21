@@ -59,7 +59,13 @@ function HomeLeadCard({ lead }: { lead: PublicLead }) {
         </div>
         <div className="min-w-0">
           <div className="font-bold text-[15px] text-foreground leading-tight truncate">
-            {cardTitle || `Заявка #${lead.id}`}
+            {lead.slug ? (
+              <Link to={`/request/${lead.slug}`} className="hover:text-brand-blue transition-colors">
+                {cardTitle || `Заявка #${lead.id}`}
+              </Link>
+            ) : (
+              cardTitle || `Заявка #${lead.id}`
+            )}
           </div>
           <div className="text-xs text-muted-foreground mt-0.5">№{lead.id}
             {lead.is_network_tenant && lead.company && (
@@ -114,7 +120,7 @@ function HomeLeadCard({ lead }: { lead: PublicLead }) {
 
       {/* Кнопка */}
       <Link
-        to="/leads"
+        to={lead.slug ? `/request/${lead.slug}` : '/leads'}
         className="btn-orange text-white px-4 py-2 rounded-xl text-sm font-semibold font-display inline-flex items-center justify-center gap-2 mt-auto"
       >
         <Icon name="ArrowRight" size={15} />
