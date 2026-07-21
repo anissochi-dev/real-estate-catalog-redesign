@@ -8,12 +8,15 @@ const IDLE_WARNING_MS = 2 * 60 * 1000;
 
 const SOCIAL_PARSER_URL = 'https://functions.poehali.dev/5d1bb364-c893-4d73-a003-e119069371ff';
 
+// Разделы верхнего меню (используется для фильтрации NAV в AdminLayout.tsx).
+// Пользователи/Телефоны/SEO/Районы больше не отдельные пункты меню — они вкладки внутри
+// «Настройки», но их видимость там по-прежнему регулируется собственными правами (ниже).
 const ROLE_DEFAULTS: Record<string, string[]> = {
-  director:       ['dashboard', 'listings', 'leads', 'news', 'phones', 'users', 'pages', 'settings', 'marketing', 'crm-kanban', 'crm-gamification', 'crm-checks', 'crm-payments'],
-  manager:        ['dashboard', 'listings', 'leads', 'news', 'phones', 'marketing', 'crm-kanban', 'crm-gamification', 'crm-checks', 'crm-payments'],
-  editor:         ['dashboard', 'listings', 'leads', 'news', 'phones', 'pages', 'settings', 'seo', 'districts', 'marketing', 'market-import'],
+  director:       ['dashboard', 'listings', 'leads', 'news', 'pages', 'settings', 'marketing', 'crm-kanban', 'crm-gamification', 'crm-checks', 'crm-payments', 'users', 'phones'],
+  manager:        ['dashboard', 'listings', 'leads', 'news', 'marketing', 'crm-kanban', 'crm-gamification', 'crm-checks', 'crm-payments', 'phones'],
+  editor:         ['dashboard', 'listings', 'leads', 'news', 'pages', 'settings', 'marketing', 'market-import', 'phones', 'seo', 'districts'],
   broker:         ['dashboard', 'listings', 'leads', 'crm-gamification', 'crm-checks'],
-  office_manager: ['dashboard', 'listings', 'leads', 'phones', 'crm-kanban', 'crm-payments'],
+  office_manager: ['dashboard', 'listings', 'leads', 'crm-kanban', 'crm-payments', 'phones'],
   client:         [],
 };
 

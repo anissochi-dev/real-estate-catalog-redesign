@@ -27,9 +27,12 @@ import UsersAdmin from './UsersAdmin';
 import PhoneBook from './PhoneBook';
 import SeoHubAdmin from './SeoHubAdmin';
 import DistrictsAdmin from './DistrictsAdmin';
+import { useAdminPerms, MANAGEMENT_TAB_IDS } from './AdminLayout';
+import { ROLE_DEFAULTS } from './useAdminPolling';
 
 export default function SettingsAdmin() {
   const { reload } = useSettings();
+  const adminPerms = useAdminPerms();
   const [s, setS] = useState<Partial<S>>({});
   const [cities, setCities] = useState<City[]>([]);
   const [saved, setSaved] = useState(false);
@@ -39,7 +42,33 @@ export default function SettingsAdmin() {
     | 'integrations' | 'ad-platforms' | 'autoposting' | 'feeds' | 'notifications'
     | 'cities' | 'purposes' | 'land-vri' | 'pages' | 'roles' | 'migration' | 'photo-optimize' | 'site-health' | 'verification'
     | 'vb-knowledge' | 'users' | 'phones' | 'seo' | 'districts';
-  const [tab, setTab] = useState<TabId>('general');
+
+  // Есть ли доступ к «обычным» настройкам (компания/сайт/интеграции/администрирование/база знаний)
+  const hasFullSettingsAccess = (() => {
+    if (!adminPerms || adminPerms.role === 'admin') return true;
+    const perms = adminPerms.rolePerms?.[adminPerms.role]?.settings;
+    if (perms !== undefined) {
+      return !!(typeof perms === 'object' ? Object.values(perms as Record<string, boolean>).some(Boolean) : perms);
+    }
+    return ROLE_DEFAULTS[adminPerms.role]?.includes('settings') ?? false;
+  })();
+
+  // Доступ к перенесённым разделам (Пользователи/Телефоны/SEO/Районы) — по их собственным правам
+  const hasManagementAccess = (id: string) => {
+    if (!adminPerms || adminPerms.role === 'admin') return true;
+    const perms = adminPerms.rolePerms?.[adminPerms.role]?.[id];
+    if (perms !== undefined) {
+      return !!(typeof perms === 'object' ? Object.values(perms as Record<string, boolean>).some(Boolean) : perms);
+    }
+    return ROLE_DEFAULTS[adminPerms.role]?.includes(id) ?? false;
+  };
+
+  const [tab, setTab] = useState<TabId>(() => {
+    if (!adminPerms || adminPerms.role === 'admin') return 'general';
+    if (hasFullSettingsAccess) return 'general';
+    const firstAllowed = MANAGEMENT_TAB_IDS.find(hasManagementAccess);
+    return (firstAllowed as TabId) || 'general';
+  });
   const [showKey, setShowKey] = useState(false);
   const [showMapsKey, setShowMapsKey] = useState(false);
   const [showYkSecret, setShowYkSecret] = useState(false);
@@ -157,15 +186,19 @@ export default function SettingsAdmin() {
     }
   };
 
-  const loadCities = () => adminApi.listCities().then(d => setCities(d.cities));
+  const loadCities = () => adminApi.listCities().then(d => setCities(d.cities)).catch(() => {});
 
   useEffect(() => {
+    // Настройки компании/сайта грузим только тем, у кого есть на них права —
+    // иначе роли с доступом лишь к «Управлению» (Пользователи/Телефоны/SEO/Районы) получат 403
+    if (!hasFullSettingsAccess) return;
     adminApi.getSettings().then(d => {
       const settings = d.settings || {};
       setS(settings);
-    });
+    }).catch(() => {});
     loadCities();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasFullSettingsAccess]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -265,16 +298,22 @@ export default function SettingsAdmin() {
         ['phones', 'Телефонная база', 'Phone'],
         ['seo', 'SEO', 'TrendingUp'],
         ['districts', 'Районы', 'MapPin'],
-      ],
+      ].filter(([id]) => hasManagementAccess(id)) as TabDef[],
     },
-  ];
+  ]
+    // Обычные разделы настроек видны только тем, у кого есть право на «Настройки»
+    .filter(g => g.id === 'management' ? g.tabs.length > 0 : hasFullSettingsAccess);
 
   const currentGroup = GROUPS.find(g => g.tabs.some(([id]) => id === tab)) || GROUPS[0];
+  const allowedTabs = GROUPS.flatMap(g => g.tabs.map(([id]) => id));
+  // Разделы «Управление» (Пользователи/Телефоны/SEO/Районы) — с широкими таблицами,
+  // им нужна полная ширина экрана, а не max-w-4xl как у остальных настроек
+  const isManagementTab = MANAGEMENT_TAB_IDS.includes(tab);
 
   return (
-    <div className="max-w-4xl space-y-3">
+    <div className={`space-y-3 ${isManagementTab ? '' : 'max-w-4xl'}`}>
       {/* Поиск по настройкам */}
-      <SettingsSearch onNavigate={(t) => setTab(t as TabId)} />
+      <SettingsSearch onNavigate={(t) => setTab(t as TabId)} allowedTabs={allowedTabs} />
 
       {/* Группы разделов */}
       <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm overflow-x-auto scrollbar-hide">

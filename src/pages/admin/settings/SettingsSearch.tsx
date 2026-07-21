@@ -43,15 +43,18 @@ export const SETTINGS_INDEX: SearchItem[] = [
 
 interface Props {
   onNavigate: (tab: string) => void;
+  /** Если задано — в результатах поиска показываются только вкладки из этого списка. */
+  allowedTabs?: string[];
 }
 
-export default function SettingsSearch({ onNavigate }: Props) {
+export default function SettingsSearch({ onNavigate, allowedTabs }: Props) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const results = query.trim().length < 1 ? [] : SETTINGS_INDEX.filter(item => {
+    if (allowedTabs && !allowedTabs.includes(item.tab)) return false;
     const q = query.toLowerCase();
     return (
       item.label.toLowerCase().includes(q) ||

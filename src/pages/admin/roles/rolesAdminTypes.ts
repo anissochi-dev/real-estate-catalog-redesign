@@ -28,16 +28,19 @@ export interface AllPerms {
   [role: string]: RolePerms;
 }
 
+// Примечание: «Пользователи», «Телефонная база», «SEO», «Районы» физически находятся
+// вкладками внутри раздела «Настройки», но права на них выдаются отдельно —
+// именно эти права определяют, какие вкладки видит роль внутри Настроек.
 export const SECTIONS: SectionDef[] = [
   { id: 'dashboard',        label: 'Дашборд',           group: 'Основное', ops: ['read'],                             icon: 'LayoutDashboard' },
   { id: 'listings',         label: 'Объекты',            group: 'Основное', ops: ['read', 'create', 'update', 'delete'], icon: 'Building2' },
   { id: 'leads',            label: 'Заявки',             group: 'Основное', ops: ['read', 'create', 'update', 'delete'], icon: 'Inbox' },
   { id: 'news',             label: 'Новости',            group: 'Основное', ops: ['read', 'create', 'update', 'delete'], icon: 'Newspaper' },
-  { id: 'phones',           label: 'Телефонная база',    group: 'Основное', ops: ['read', 'create', 'update', 'delete'], icon: 'Phone' },
-  { id: 'users',            label: 'Пользователи',       group: 'Основное', ops: ['read', 'create', 'update', 'delete'], icon: 'Users' },
+  { id: 'phones',           label: 'Телефонная база (в Настройках)',    group: 'Основное', ops: ['read', 'create', 'update', 'delete'], icon: 'Phone' },
+  { id: 'users',            label: 'Пользователи (в Настройках)',       group: 'Основное', ops: ['read', 'create', 'update', 'delete'], icon: 'Users' },
   { id: 'pages',            label: 'Страницы',           group: 'Контент',  ops: ['read', 'create', 'update', 'delete'], icon: 'FileText' },
-  { id: 'seo',              label: 'SEO',                group: 'Контент',  ops: ['read', 'update'],                   icon: 'TrendingUp' },
-  { id: 'districts',        label: 'Районы',             group: 'Контент',  ops: ['read', 'create', 'update', 'delete'], icon: 'MapPin' },
+  { id: 'seo',              label: 'SEO (в Настройках)',                group: 'Контент',  ops: ['read', 'update'],                   icon: 'TrendingUp' },
+  { id: 'districts',        label: 'Районы (в Настройках)',             group: 'Контент',  ops: ['read', 'create', 'update', 'delete'], icon: 'MapPin' },
   { id: 'marketing',        label: 'Маркетолог',         group: 'Контент',  ops: ['read', 'update'],                   icon: 'Megaphone' },
   { id: 'market-import',    label: 'Импорт рынка',      group: 'Контент',  ops: ['read', 'create'],                   icon: 'Upload' },
   { id: 'settings',         label: 'Настройки',          group: 'Контент',  ops: ['read', 'update'],                   icon: 'Settings' },
@@ -130,23 +133,19 @@ export const DEFAULT_PERMS: AllPerms = {
 };
 
 export const DEFAULT_NAV_ORDER: Record<string, string[]> = {
-  admin:          ['dashboard','listings','leads','users','news','phones','seo','districts','marketing','market-import','settings','crm-kanban','crm-gamification','crm-checks','crm-payments'],
-  director:       ['dashboard','listings','leads','news','phones','users','marketing','crm-kanban','crm-gamification','crm-checks','crm-payments'],
-  manager:        ['dashboard','listings','leads','news','phones','marketing','crm-kanban','crm-gamification','crm-checks','crm-payments'],
-  editor:         ['dashboard','listings','leads','news','phones','pages','settings','seo','districts','marketing','market-import'],
+  admin:          ['dashboard','listings','leads','news','marketing','market-import','settings','crm-kanban','crm-gamification','crm-checks','crm-payments'],
+  director:       ['dashboard','listings','leads','news','marketing','crm-kanban','crm-gamification','crm-checks','crm-payments'],
+  manager:        ['dashboard','listings','leads','news','marketing','crm-kanban','crm-gamification','crm-checks','crm-payments'],
+  editor:         ['dashboard','listings','leads','news','pages','settings','marketing','market-import'],
   broker:         ['dashboard','listings','leads','crm-gamification','crm-checks'],
-  office_manager: ['dashboard','listings','leads','phones','crm-kanban','crm-payments'],
+  office_manager: ['dashboard','listings','leads','crm-kanban','crm-payments'],
 };
 
 export const NAV_SECTION_META: Record<string, { label: string; icon: string; group: string }> = {
   dashboard:        { label: 'Дашборд',          icon: 'LayoutDashboard', group: 'Основное' },
   listings:         { label: 'Объекты',           icon: 'Building2',       group: 'Основное' },
   leads:            { label: 'Заявки',            icon: 'Inbox',           group: 'Основное' },
-  users:            { label: 'Пользователи',      icon: 'Users',           group: 'Основное' },
   news:             { label: 'Новости',           icon: 'Newspaper',       group: 'Основное' },
-  phones:           { label: 'Телефонная база',   icon: 'Phone',           group: 'Основное' },
-  seo:              { label: 'SEO',               icon: 'TrendingUp',      group: 'Контент' },
-  districts:        { label: 'Районы',            icon: 'MapPin',          group: 'Контент' },
   marketing:        { label: 'Маркетолог',        icon: 'Megaphone',       group: 'Контент' },
   'market-import':  { label: 'Импорт рынка',     icon: 'Upload',          group: 'Контент' },
   settings:         { label: 'Настройки',         icon: 'Settings',        group: 'Контент' },

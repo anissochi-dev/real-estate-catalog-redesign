@@ -22,6 +22,16 @@ import { createContext, useContext } from 'react';
 export const ExitToPathCtx = createContext<((path: string) => void) | null>(null);
 export const useExitToPath = () => useContext(ExitToPathCtx);
 
+interface AdminPerms {
+  rolePerms: Record<string, Record<string, boolean>> | null;
+  role: string;
+}
+export const AdminPermsCtx = createContext<AdminPerms | null>(null);
+export const useAdminPerms = () => useContext(AdminPermsCtx);
+
+/** Разделы, вложенные вкладками в «Настройки», но сохраняющие собственные права роли. */
+export const MANAGEMENT_TAB_IDS = ['users', 'phones', 'seo', 'districts'];
+
 const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; group?: string }[] = [
   { id: 'dashboard',        label: 'Дашборд',          icon: 'LayoutDashboard', roles: ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'] },
   { id: 'listings',         label: 'Объекты',           icon: 'Building2',       roles: ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'] },
@@ -54,20 +64,31 @@ export default function AdminLayout({ section, setSection, onExit, onExitToPath,
 
   if (!user) return null;
 
-  // Фильтрация пунктов меню по роли и правам
-  const items = NAV.filter(n => {
-    if (!n.roles.includes(user.role)) return false;
+  // Проверка прав на конкретный раздел (учитывает как rolePerms из БД, так и дефолты роли)
+  const hasSectionAccess = (sectionId: string) => {
     if (user.role === 'admin') return true;
     if (rolePerms && rolePerms[user.role]) {
-      const sectionPerms = rolePerms[user.role][n.id];
+      const sectionPerms = rolePerms[user.role][sectionId];
       if (sectionPerms === undefined) {
-        return ROLE_DEFAULTS[user.role]?.includes(n.id) ?? false;
+        return ROLE_DEFAULTS[user.role]?.includes(sectionId) ?? false;
       }
       return !!(typeof sectionPerms === 'object'
         ? Object.values(sectionPerms as Record<string, boolean>).some(Boolean)
         : sectionPerms);
     }
-    return ROLE_DEFAULTS[user.role]?.includes(n.id) ?? false;
+    return ROLE_DEFAULTS[user.role]?.includes(sectionId) ?? false;
+  };
+
+  // Фильтрация пунктов меню по роли и правам
+  const items = NAV.filter(n => {
+    if (!n.roles.includes(user.role)) return false;
+    if (user.role === 'admin') return true;
+    // «Настройки» также открываются, если есть права хотя бы на один из вложенных разделов
+    // (Пользователи / Телефонная база / SEO / Районы — перенесены во вкладки настроек)
+    if (n.id === 'settings') {
+      return hasSectionAccess('settings') || MANAGEMENT_TAB_IDS.some(hasSectionAccess);
+    }
+    return hasSectionAccess(n.id);
   });
 
   // Применяем сохранённый порядок меню для роли
@@ -82,6 +103,7 @@ export default function AdminLayout({ section, setSection, onExit, onExitToPath,
 
   return (
     <ExitToPathCtx.Provider value={onExitToPath}>
+    <AdminPermsCtx.Provider value={{ rolePerms, role: user.role }}>
     <div className="min-h-screen bg-muted/30 flex">
       <AdminSidebar
         sortedItems={sortedItems}
@@ -122,6 +144,7 @@ export default function AdminLayout({ section, setSection, onExit, onExitToPath,
         />
       )}
     </div>
+    </AdminPermsCtx.Provider>
     </ExitToPathCtx.Provider>
   );
 }
