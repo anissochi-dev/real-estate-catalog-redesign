@@ -444,15 +444,14 @@
   border-radius: 5px;
 }
 
-/* На мобильных/планшетах — увеличенная зона касания (track шире, "ползунок" визуально тоньше за счёт border) */
+/* На мобильных/планшетах — широкая полоса, бегунок занимает всё пространство без отступов */
 @media (max-width: 768px) {
   ::-webkit-scrollbar {
-    width: 20px;
+    width: 14px;
   }
   ::-webkit-scrollbar-thumb {
     background: hsl(215, 85%, 55%);
-    border-radius: 9px;
-    border: 6px solid hsl(220, 15%, 94%);
-    background-clip: padding-box;
+    border-radius: 7px;
+    border: none;
   }
 }
