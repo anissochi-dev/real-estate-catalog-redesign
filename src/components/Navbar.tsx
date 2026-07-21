@@ -48,13 +48,6 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
   return (
     <>
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-border shadow-sm">
-        <a
-          href="tel:+79183352888"
-          className="flex md:hidden items-center justify-center gap-1.5 py-1.5 text-sm font-semibold text-brand-blue bg-brand-blue/5"
-        >
-          <Icon name="Phone" size={14} />
-          +7 (918) 33 52 888
-        </a>
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-[1fr_auto_1fr] items-center h-14 md:h-16 gap-2">
             {/* Nav links — desktop, left column */}
@@ -152,6 +145,15 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
                   <span>Сравнить ({compareCount})</span>
                 </button>
               )}
+              {/* Телефон — mobile */}
+              <a
+                href="tel:+79183352888"
+                aria-label="Позвонить"
+                className="md:hidden p-2.5 rounded-lg hover:bg-muted transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center text-brand-blue"
+              >
+                <Icon name="Phone" size={20} />
+              </a>
+
               {/* Hamburger — mobile */}
               <button
                 onClick={() => {
