@@ -61,7 +61,7 @@ export default function MarketHeader({
               : aggDays === 0
                 ? <span className="text-emerald-600">сегодня</span>
                 : <span>{aggDays}д назад</span>}
-            <span className="text-muted-foreground/60">· автоматически каждые 7 дней</span>
+            <span className="text-muted-foreground/60">· автоматически каждый день</span>
           </p>
           {totalAnalogs > 0 && (
             <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">

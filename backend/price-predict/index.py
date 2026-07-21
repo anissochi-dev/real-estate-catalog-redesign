@@ -710,7 +710,11 @@ def handler(event: dict, context) -> dict:
                 from market_snapshots import handle_refresh as _msr, aggregate_market_listings as _aml
                 refresh_result = _msr(cur, conn, force=body_data.get('action') == 'price_market_refresh' and body_data.get('force') is True)
 
-                # Еженедельная агрегация market_listings → price_market_snapshots.
+                # Ежедневная агрегация market_listings → price_market_snapshots.
+                # Раньше запускалась раз в 7 дней — «Ценовые сигналы» отставали от
+                # ежедневного сбора сырых данных (price_refresh_interval_days=1) на неделю.
+                # Теперь синхронизировано: снапшот пересчитывается каждый день сразу после
+                # завершения сбора, поэтому сигналы показывают вчера-сегодня, а не прошлую неделю.
                 # ВАЖНО: запускаем ТОЛЬКО когда батч-цикл сбора завершён (done=True) или пропущен —
                 # никогда не совмещаем два тяжёлых процесса в одном 30-секундном вызове функции
                 # (раньше это приводило к таймауту и зависанию цикла в статусе in_progress=true).
@@ -726,7 +730,7 @@ def handler(event: dict, context) -> dict:
                         import datetime as _dt
                         need_agg = (
                             last_agg is None or
-                            (_dt.datetime.now(_dt.timezone.utc) - last_agg).days >= 7
+                            (_dt.datetime.now(_dt.timezone.utc) - last_agg).days >= 1
                         )
                         if need_agg:
                             agg_result = _aml(cur, conn)
@@ -735,7 +739,7 @@ def handler(event: dict, context) -> dict:
                                 f"WHERE id = (SELECT id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1)"
                             )
                             conn.commit()
-                            print(f'[ping_cron] weekly aggregate done: {agg_result}')
+                            print(f'[ping_cron] daily aggregate done: {agg_result}')
                         else:
                             agg_result = {'skipped': True, 'last_at': str(last_agg)}
                     except Exception as _e:
