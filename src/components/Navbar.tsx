@@ -48,6 +48,13 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
   return (
     <>
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-border shadow-sm">
+        <a
+          href="tel:+79183352888"
+          className="flex md:hidden items-center justify-center gap-1.5 py-1.5 text-sm font-semibold text-brand-blue bg-brand-blue/5"
+        >
+          <Icon name="Phone" size={14} />
+          +7 (918) 33 52 888
+        </a>
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-[1fr_auto_1fr] items-center h-14 md:h-16 gap-2">
             {/* Nav links — desktop, left column */}
@@ -237,13 +244,6 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
 
         {/* Drawer footer */}
         <div className="shrink-0 p-3 border-t border-border space-y-1">
-          <a
-            href="tel:+79183352888"
-            className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-brand-blue hover:bg-brand-blue/10 transition"
-          >
-            <Icon name="Phone" size={18} />
-            +7 (918) 33 52 888
-          </a>
           {user ? (
             <>
               <div className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground">
