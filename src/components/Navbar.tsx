@@ -149,9 +149,10 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
               <a
                 href="tel:+79183352888"
                 aria-label="Позвонить"
-                className="md:hidden p-2.5 rounded-lg hover:bg-muted transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center text-brand-blue"
+                className="md:hidden flex items-center gap-1 px-2 py-2.5 rounded-lg hover:bg-muted transition-colors min-h-[44px] text-brand-blue text-xs font-semibold whitespace-nowrap"
               >
-                <Icon name="Phone" size={20} />
+                <Icon name="Phone" size={16} className="shrink-0" />
+                +7 918 33 52 888
               </a>
 
               {/* Hamburger — mobile */}
