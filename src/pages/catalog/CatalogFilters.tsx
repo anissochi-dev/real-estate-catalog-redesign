@@ -61,61 +61,66 @@ export default function CatalogFilters({
     <div className="bg-white border-b border-border z-30">
       <div className="container mx-auto px-4">
 
-        {/* Табы тип сделки */}
-        <div className="flex items-center gap-0 overflow-x-auto scrollbar-none">
-          {DEAL_TYPES.map(dt => (
+        {/* Табы тип сделки + кнопки действий (десктоп — один ряд, мобильный — два ряда) */}
+        <div className="flex flex-wrap items-center">
+          <div className="flex items-center gap-0 overflow-x-auto scrollbar-none">
+            {DEAL_TYPES.map(dt => (
+              <button
+                key={dt.value}
+                onClick={() => onDealChange(dt.value)}
+                className={`flex-shrink-0 px-4 sm:px-5 py-3.5 text-sm font-semibold font-display border-b-2 transition-all duration-200
+                  ${dealFilter === dt.value
+                    ? 'border-brand-orange text-brand-orange'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+              >
+                {dt.label}
+              </button>
+            ))}
+          </div>
+          <div className="hidden lg:block flex-1" />
+          <div className="flex items-center gap-1.5 flex-wrap w-full lg:w-auto pb-1.5 lg:pb-0 lg:my-1.5">
+            {/* Кнопка уведомлений MAX */}
+            {onSubscribe && (
+              <button
+                onClick={onSubscribe}
+                className="flex-1 lg:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all border border-brand-blue text-brand-blue hover:bg-brand-blue hover:text-white"
+              >
+                <Icon name="Bell" size={14} />
+                <span className="hidden sm:inline">Уведомления в MAX</span>
+                <span className="sm:hidden">Уведомления</span>
+              </button>
+            )}
+            {/* Кнопка карты — только на мобильном, на ПК карта всегда видна */}
             <button
-              key={dt.value}
-              onClick={() => onDealChange(dt.value)}
-              className={`flex-shrink-0 px-5 py-3.5 text-sm font-semibold font-display border-b-2 transition-all duration-200
-                ${dealFilter === dt.value
-                  ? 'border-brand-orange text-brand-orange'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              onClick={onToggleMap}
+              className={`lg:hidden flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all border
+                ${showMap
+                  ? 'border-brand-orange bg-brand-orange text-white'
+                  : 'border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white'
                 }`}
             >
-              {dt.label}
+              <Icon name="Map" size={14} />
+              Карта
             </button>
-          ))}
-          <div className="flex-1" />
-          {/* Кнопка уведомлений MAX */}
-          {onSubscribe && (
+            {/* Кнопка фильтров справа */}
             <button
-              onClick={onSubscribe}
-              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 my-1.5 rounded-lg text-xs font-semibold transition-all border border-brand-blue text-brand-blue hover:bg-brand-blue hover:text-white mr-1.5"
+              onClick={onToggleFilters}
+              className={`lg:hidden flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all border
+                ${showFilters || hasActiveFilters
+                  ? 'border-brand-orange bg-brand-orange text-white'
+                  : 'border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white'
+                }`}
             >
-              <Icon name="Bell" size={14} />
-              Уведомления в MAX
+              <Icon name="SlidersHorizontal" size={14} />
+              Фильтры
+              {hasActiveFilters && (
+                <span className="w-4 h-4 rounded-full bg-white text-brand-orange text-[10px] flex items-center justify-center font-bold">
+                  {activeCount}
+                </span>
+              )}
             </button>
-          )}
-          {/* Кнопка карты — только на мобильном, на ПК карта всегда видна */}
-          <button
-            onClick={onToggleMap}
-            className={`lg:hidden flex-shrink-0 flex items-center gap-1.5 px-3 py-2 my-1.5 rounded-lg text-xs font-semibold transition-all border mr-1.5
-              ${showMap
-                ? 'border-brand-orange bg-brand-orange text-white'
-                : 'border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white'
-              }`}
-          >
-            <Icon name="Map" size={14} />
-            Карта
-          </button>
-          {/* Кнопка фильтров справа */}
-          <button
-            onClick={onToggleFilters}
-            className={`lg:hidden flex-shrink-0 flex items-center gap-1.5 px-3 py-2 my-1.5 rounded-lg text-xs font-semibold transition-all border
-              ${showFilters || hasActiveFilters
-                ? 'border-brand-orange bg-brand-orange text-white'
-                : 'border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white'
-              }`}
-          >
-            <Icon name="SlidersHorizontal" size={14} />
-            Фильтры
-            {hasActiveFilters && (
-              <span className="w-4 h-4 rounded-full bg-white text-brand-orange text-[10px] flex items-center justify-center font-bold">
-                {activeCount}
-              </span>
-            )}
-          </button>
+          </div>
         </div>
 
         {/* Раскрытые фильтры — на ПК всегда видны, на мобильном управляется showFilters */}

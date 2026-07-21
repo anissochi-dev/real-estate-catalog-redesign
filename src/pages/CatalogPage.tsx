@@ -56,6 +56,15 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
 
   const isStubCoord = (n: number) => Math.abs(n - Math.round(n)) < 1e-6 && Math.abs(n * 1000 - Math.round(n * 1000)) < 1e-9;
 
+  // Блокируем скролл фона, пока на мобильном открыта полноэкранная карта
+  useEffect(() => {
+    if (showMap) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = prev; };
+    }
+  }, [showMap]);
+
   const handleMapPointClick = useCallback((pt: { id: number }) => {
     setMapSelected(prev => prev?.id === pt.id ? prev : properties.find(x => x.id === pt.id) || null);
   }, [properties]);
@@ -199,6 +208,25 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
       />
 
       <AIMatchModal open={aiOpen} onClose={() => setAiOpen(false)} initialPrompt={aiQuery} autoSubmit={!!aiQuery.trim()} />
+
+      {/* Мобильная карта — fullscreen оверлей поверх шапки, только когда открыта кнопкой "Карта" */}
+      {showMap && (
+        <div className="lg:hidden fixed inset-0 top-14 md:top-16 z-40 bg-white">
+          <CatalogMap
+            mapPoints={mapPoints}
+            mapSelected={mapSelected}
+            city={settings.main_city || 'Краснодар'}
+            fullscreen={mapFullscreen}
+            highlightedId={hoveredId}
+            onClose={() => setShowMap(false)}
+            onPointClick={handleMapPointClick}
+            onDeselectPoint={() => setMapSelected(null)}
+            onFullscreenChange={setMapFullscreen}
+            className="relative w-full h-full bg-white"
+            height="100%"
+          />
+        </div>
+      )}
 
       {/* Split-лэйаут: слева список, справа sticky карта */}
       <div className="flex min-h-0">
