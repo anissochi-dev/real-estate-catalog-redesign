@@ -84,7 +84,7 @@ export default function SettingsSearch({ onNavigate }: Props) {
   };
 
   return (
-    <div ref={containerRef} className="relative w-full max-w-sm">
+    <div ref={containerRef} className="relative w-full">
       <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${open && query ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-border bg-white'}`}>
         <Icon name="Search" size={15} className="text-muted-foreground shrink-0" />
         <input
