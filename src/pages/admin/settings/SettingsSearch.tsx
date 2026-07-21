@@ -39,6 +39,10 @@ export const SETTINGS_INDEX: SearchItem[] = [
   { label: 'Сжатие и оптимизация фото', description: 'Сканирование битых фото и авто-ремонт', tab: 'photo-optimize', group: 'Администрирование', keywords: ['фото', 'сжатие', 'оптимизация', 'битые', 'изображения', 'photo'] },
   { label: 'Диагностика сайта', description: 'Проверка SEO, безопасности, хранилища, фидов', tab: 'site-health', group: 'Администрирование', keywords: ['диагностика', 'здоровье', 'проверка', 'health', 'безопасность', 'ssl', 'аудит'] },
   { label: 'База знаний ВБ', description: 'Факты, стоп-слова и источники обучения виртуального брокера', tab: 'vb-knowledge', group: 'База знаний ВБ', keywords: ['база знаний', 'вб', 'виртуальный брокер', 'ии', 'ai', 'обучение', 'стоп-слова', 'память'] },
+  { label: 'Пользователи', description: 'Сотрудники и собственники кабинетов', tab: 'users', group: 'Быстрый доступ', keywords: ['пользователи', 'сотрудники', 'users', 'роли', 'собственники'] },
+  { label: 'Телефонная база', description: 'Контакты, звонки и связанные заявки', tab: 'phones', group: 'Быстрый доступ', keywords: ['телефон', 'телефонная база', 'звонки', 'контакты', 'phones'] },
+  { label: 'SEO', description: 'Мета-теги, аудит и технические SEO-параметры', tab: 'seo', group: 'Быстрый доступ', keywords: ['seo', 'сео', 'мета', 'аудит', 'заголовки'] },
+  { label: 'Районы', description: 'Районы города для фильтрации объектов', tab: 'districts', group: 'Быстрый доступ', keywords: ['районы', 'district', 'округ', 'геолокация'] },
 ];
 
 interface Props {
@@ -100,6 +104,7 @@ export default function SettingsSearch({ onNavigate, allowedTabs }: Props) {
     'Интеграции': 'bg-amber-50 text-amber-700',
     'Администрирование': 'bg-slate-100 text-slate-600',
     'База знаний ВБ': 'bg-emerald-50 text-emerald-700',
+    'Быстрый доступ': 'bg-brand-blue/10 text-brand-blue',
   };
 
   return (

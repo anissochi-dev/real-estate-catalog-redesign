@@ -251,7 +251,7 @@ export default function SettingsAdmin() {
   };
 
   type TabDef = [TabId, string, string];
-  const GROUPS: { id: string; label: string; icon: string; tabs: TabDef[] }[] = [
+  const ALL_GROUPS: { id: string; label: string; icon: string; tabs: TabDef[] }[] = [
     {
       id: 'company', label: 'Компания', icon: 'Building2', tabs: [
         ['general', 'Общие', 'Settings'],
@@ -292,22 +292,26 @@ export default function SettingsAdmin() {
         ['vb-knowledge', 'База знаний ВБ', 'Brain'],
       ],
     },
-    {
-      id: 'management', label: 'Управление', icon: 'Users2', tabs: [
-        ['users', 'Пользователи', 'Users'],
-        ['phones', 'Телефонная база', 'Phone'],
-        ['seo', 'SEO', 'TrendingUp'],
-        ['districts', 'Районы', 'MapPin'],
-      ].filter(([id]) => hasManagementAccess(id)) as TabDef[],
-    },
-  ]
-    // Обычные разделы настроек видны только тем, у кого есть право на «Настройки»
-    .filter(g => g.id === 'management' ? g.tabs.length > 0 : hasFullSettingsAccess);
+  ];
+  // Обычные разделы настроек видны только тем, у кого есть право на «Настройки»
+  const GROUPS = hasFullSettingsAccess ? ALL_GROUPS : [];
 
-  const currentGroup = GROUPS.find(g => g.tabs.some(([id]) => id === tab)) || GROUPS[0];
-  const allowedTabs = GROUPS.flatMap(g => g.tabs.map(([id]) => id));
-  // Разделы «Управление» (Пользователи/Телефоны/SEO/Районы) — с широкими таблицами,
-  // им нужна полная ширина экрана, а не max-w-4xl как у остальных настроек
+  // Быстрый доступ — Пользователи/Телефоны/SEO/Районы. Не привязаны к группам настроек,
+  // всегда доступны отдельным блоком под переключателем групп (у кого есть права).
+  const QUICK_ACCESS: TabDef[] = ([
+    ['users', 'Пользователи', 'Users'],
+    ['phones', 'Телефонная база', 'Phone'],
+    ['seo', 'SEO', 'TrendingUp'],
+    ['districts', 'Районы', 'MapPin'],
+  ] as TabDef[]).filter(([id]) => hasManagementAccess(id));
+
+  const isQuickAccessTab = MANAGEMENT_TAB_IDS.includes(tab);
+  const currentGroup = !isQuickAccessTab
+    ? (GROUPS.find(g => g.tabs.some(([id]) => id === tab)) || GROUPS[0])
+    : undefined;
+  const allowedTabs = [...GROUPS.flatMap(g => g.tabs.map(([id]) => id)), ...QUICK_ACCESS.map(([id]) => id)];
+  // Разделы быстрого доступа — с широкими таблицами, им нужна полная ширина экрана,
+  // а не max-w-4xl как у остальных настроек
   const isManagementTab = MANAGEMENT_TAB_IDS.includes(tab);
 
   return (
@@ -316,26 +320,51 @@ export default function SettingsAdmin() {
       <SettingsSearch onNavigate={(t) => setTab(t as TabId)} allowedTabs={allowedTabs} />
 
       {/* Группы разделов */}
-      <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm overflow-x-auto scrollbar-hide">
-        {GROUPS.map(g => {
-          const active = currentGroup.id === g.id;
-          return (
-            <button
-              key={g.id}
-              onClick={() => setTab(g.tabs[0][0])}
-              className={`flex-1 min-w-fit px-4 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap transition inline-flex items-center justify-center gap-2 ${
-                active ? 'bg-brand-blue text-white' : 'hover:bg-muted text-foreground/80'
-              }`}
-            >
-              <Icon name={g.icon} size={15} />
-              {g.label}
-            </button>
-          );
-        })}
-      </div>
+      {GROUPS.length > 0 && (
+        <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm overflow-x-auto scrollbar-hide">
+          {GROUPS.map(g => {
+            const active = currentGroup?.id === g.id;
+            return (
+              <button
+                key={g.id}
+                onClick={() => setTab(g.tabs[0][0])}
+                className={`flex-1 min-w-fit px-4 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap transition inline-flex items-center justify-center gap-2 ${
+                  active ? 'bg-brand-blue text-white' : 'hover:bg-muted text-foreground/80'
+                }`}
+              >
+                <Icon name={g.icon} size={15} />
+                {g.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Быстрый доступ: Пользователи / Телефонная база / SEO / Районы */}
+      {QUICK_ACCESS.length > 0 && (
+        <div className="bg-white rounded-xl p-3 shadow-sm border border-border">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2 px-1">
+            Быстрый доступ
+          </div>
+          <div className="flex gap-1 flex-wrap">
+            {QUICK_ACCESS.map(([id, label, icon]) => (
+              <button
+                key={id}
+                onClick={() => setTab(id)}
+                className={`px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition inline-flex items-center justify-center gap-2 ${
+                  tab === id ? 'bg-brand-blue text-white' : 'hover:bg-muted text-foreground/80 bg-muted/40'
+                }`}
+              >
+                <Icon name={icon} size={15} />
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Вкладки текущей группы */}
-      {currentGroup.tabs.length > 1 && (
+      {currentGroup && currentGroup.tabs.length > 1 && (
         <div className="flex gap-1 bg-muted/40 rounded-xl p-1 overflow-x-auto scrollbar-hide">
           {currentGroup.tabs.map(([id, label, icon]) => (
             <button key={id} onClick={() => setTab(id)}
