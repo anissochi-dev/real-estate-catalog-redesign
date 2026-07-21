@@ -449,9 +449,6 @@
   ::-webkit-scrollbar {
     width: 14px;
   }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
   ::-webkit-scrollbar-thumb {
     background: hsl(215, 85%, 55%);
     border-radius: 7px;
