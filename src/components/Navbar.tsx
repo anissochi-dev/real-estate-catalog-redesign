@@ -49,7 +49,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
     <>
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-border shadow-sm">
         <div className="container mx-auto px-4">
-          <div className="flex md:grid md:grid-cols-[1fr_auto_1fr] items-center h-14 md:h-16 gap-2">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center h-14 md:h-16 gap-2">
             {/* Nav links — desktop, left column */}
             <nav className="hidden md:flex items-center gap-1 justify-self-start">
               {navItems.map((item) => (
@@ -74,10 +74,10 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
             {/* Logo — center column */}
             <button
               onClick={() => handleNav('home')}
-              className="flex items-center gap-2 group min-w-0 shrink md:shrink-0 md:justify-self-center"
+              className="flex items-center justify-center group shrink-0 justify-self-center"
               aria-label={brandName}
             >
-              <div className="flex items-center justify-center h-8 md:h-10 w-auto md:w-[220px] shrink-0">
+              <div className="flex items-center justify-center h-8 md:h-10 w-[160px] md:w-[220px] shrink-0">
                 {logoUrl ? (
                   <img src={logoUrl} alt={brandName} height={40} loading="eager" className="h-8 md:h-10 w-auto max-w-full object-contain" />
                 ) : (
@@ -87,13 +87,10 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
                   </div>
                 )}
               </div>
-              <span className="md:hidden text-[10px] font-semibold text-foreground leading-none whitespace-nowrap truncate min-w-0 text-left">
-                {brandName}
-              </span>
             </button>
 
             {/* Right side — desktop, right column */}
-            <div className="flex items-center gap-2 ml-auto md:ml-0 shrink-0 md:justify-self-end">
+            <div className="flex items-center gap-2 justify-self-end">
               {user && (
                 isStaff ? (
                   <button
