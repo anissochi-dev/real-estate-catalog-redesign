@@ -49,7 +49,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
     <>
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-border shadow-sm">
         <div className="container mx-auto px-4">
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center h-14 md:h-16 gap-2">
+          <div className="flex md:grid md:grid-cols-[1fr_auto_1fr] items-center justify-between md:justify-normal h-14 md:h-16 gap-2">
             {/* Nav links — desktop, left column */}
             <nav className="hidden md:flex items-center gap-1 justify-self-start">
               {navItems.map((item) => (
