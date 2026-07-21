@@ -74,7 +74,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
             {/* Logo — center column */}
             <button
               onClick={() => handleNav('home')}
-              className="flex items-center justify-center gap-2 group shrink-0 justify-self-center"
+              className="flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2 group shrink-0 justify-self-center"
               aria-label={brandName}
             >
               <div className="flex items-center justify-center h-8 md:h-10 w-auto md:w-[220px] shrink-0">
@@ -87,7 +87,7 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
                   </div>
                 )}
               </div>
-              <span className="md:hidden text-xs font-semibold text-foreground leading-tight text-left max-w-[130px]">
+              <span className="md:hidden text-[10px] font-semibold text-foreground leading-none whitespace-nowrap">
                 {brandName}
               </span>
             </button>
