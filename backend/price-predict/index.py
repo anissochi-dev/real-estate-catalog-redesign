@@ -604,7 +604,7 @@ def handler(event: dict, context) -> dict:
             'headers': {
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token, X-Authorization, Authorization, X-User-Id, X-Session-Id',
+                'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token, X-Authorization, Authorization, X-User-Id, X-Session-Id, X-Cron-Token',
                 'Access-Control-Max-Age': '86400',
             },
             'body': '',
@@ -616,6 +616,21 @@ def handler(event: dict, context) -> dict:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # NOI-модель (инвестиционная аналитика) — отдельная ветка
             params_all = event.get('queryStringParameters') or {}
+
+            # Платформенный крон (function.json → "cron": "*/20 * * * *") вызывает функцию
+            # ЧИСТЫМ GET без query-параметров — раньше сбор рыночных цен зависел ТОЛЬКО от
+            # захода посетителей на сайт (see useCrons.ts, троттлинг 10 мин), из-за чего
+            # цикл мог растягиваться на дни при низком трафике. X-Cron-Token — доверенный
+            # заголовок платформы (тот же секрет уже используется в auto-seo) — если он
+            # совпал, считаем вызов равносильным ?action=ping_cron.
+            _raw_headers = event.get('headers') or {}
+            _headers_lc = {k.lower(): v for k, v in _raw_headers.items()}
+            _cron_token = _headers_lc.get('x-cron-token') or ''
+            _expected_cron_token = os.environ.get('CRON_SECRET', '')
+            is_platform_cron = bool(_expected_cron_token) and _cron_token == _expected_cron_token
+            if is_platform_cron and 'action' not in params_all:
+                params_all = {**params_all, 'action': 'ping_cron'}
+
             if params_all.get('action') == 'noi_model':
                 result = handle_noi_request(cur, conn, params_all)
                 status = result.pop('_status', 200)
