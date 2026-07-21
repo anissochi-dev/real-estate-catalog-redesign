@@ -112,19 +112,19 @@ export default function SettingsSearch({ onNavigate, allowedTabs }: Props) {
 
   return (
     <div ref={containerRef} className="relative w-full">
-      <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${open && query ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-border bg-white'}`}>
-        <Icon name="Search" size={15} className="text-muted-foreground shrink-0" />
+      <div className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border transition-all ${open && query ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-border bg-white'}`}>
+        <Icon name="Search" size={18} className="text-muted-foreground shrink-0" />
         <input
           ref={inputRef}
           value={query}
           onChange={e => { setQuery(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           placeholder="Найти настройку..."
-          className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground"
+          className="flex-1 text-base bg-transparent outline-none placeholder:text-muted-foreground"
         />
         {query && (
           <button onClick={() => { setQuery(''); setOpen(false); }} className="text-muted-foreground hover:text-foreground">
-            <Icon name="X" size={14} />
+            <Icon name="X" size={16} />
           </button>
         )}
       </div>

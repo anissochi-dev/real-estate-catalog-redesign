@@ -316,20 +316,20 @@ export default function SettingsAdmin() {
   const isManagementTab = MANAGEMENT_TAB_IDS.includes(tab);
 
   return (
-    <div className={`space-y-3 ${isManagementTab ? '' : 'max-w-4xl'}`}>
+    <div className={`space-y-3 ${isManagementTab ? '' : 'max-w-6xl'}`}>
       {/* Поиск по настройкам */}
       <SettingsSearch onNavigate={(t) => setTab(t as TabId)} allowedTabs={allowedTabs} />
 
-      {/* Группы разделов */}
+      {/* Группы разделов — переносятся на новую строку на маленьких экранах */}
       {GROUPS.length > 0 && (
-        <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm overflow-x-auto scrollbar-hide">
+        <div className="flex flex-wrap gap-1 bg-white rounded-xl p-1 shadow-sm">
           {GROUPS.map(g => {
             const active = currentGroup?.id === g.id;
             return (
               <button
                 key={g.id}
                 onClick={() => setTab(g.tabs[0][0])}
-                className={`flex-1 min-w-fit px-4 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap transition inline-flex items-center justify-center gap-2 ${
+                className={`min-w-fit px-4 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap transition inline-flex items-center justify-center gap-2 ${
                   active ? 'bg-brand-blue text-white' : 'hover:bg-muted text-foreground/80'
                 }`}
               >
@@ -341,9 +341,9 @@ export default function SettingsAdmin() {
         </div>
       )}
 
-      {/* Вкладки текущей группы */}
+      {/* Вкладки текущей группы — тоже переносятся на новую строку */}
       {currentGroup && currentGroup.tabs.length > 1 && (
-        <div className="flex gap-1 bg-muted/40 rounded-xl p-1 overflow-x-auto scrollbar-hide">
+        <div className="flex flex-wrap gap-1 bg-muted/40 rounded-xl p-1">
           {currentGroup.tabs.map(([id, label, icon]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`min-w-fit px-3 py-2 rounded-lg text-sm whitespace-nowrap transition inline-flex items-center justify-center gap-1.5 ${
