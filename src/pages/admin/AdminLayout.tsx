@@ -8,7 +8,7 @@ import AdminIdleWarning from './AdminIdleWarning';
 
 export type AdminSection = 'dashboard' | 'listings' | 'leads' | 'network-tenants' | 'users' | 'pages' | 'settings' | 'ai-logs'
   | 'crm-owners' | 'crm-kanban' | 'crm-gamification' | 'crm-checks' | 'crm-payments'
-  | 'phones' | 'news' | 'vb-knowledge' | 'seo' | 'districts' | 'marketing' | 'training';
+  | 'phones' | 'news' | 'seo' | 'districts' | 'marketing' | 'training';
 
 interface Props {
   section: AdminSection;
@@ -30,7 +30,6 @@ const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; gro
   { id: 'news',             label: 'Новости',           icon: 'Newspaper',       roles: ['admin', 'editor', 'manager', 'director'] },
   { id: 'seo',              label: 'SEO',               icon: 'TrendingUp',      roles: ['admin', 'editor'] },
   { id: 'districts',        label: 'Районы',            icon: 'MapPin',          roles: ['admin', 'editor'] },
-  { id: 'vb-knowledge',     label: 'База знаний ВБ',   icon: 'Brain',           roles: ['admin', 'editor', 'director'] },
   { id: 'marketing',        label: 'Маркетолог',        icon: 'Megaphone',       roles: ['admin', 'editor', 'manager', 'director'] },
   { id: 'training',         label: 'Учебный центр',     icon: 'GraduationCap',   roles: ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'] },
   { id: 'settings',         label: 'Настройки',         icon: 'Settings',        roles: ['admin', 'editor'] },
@@ -116,7 +115,7 @@ export default function AdminLayout({ section, setSection, onExit, onExitToPath,
       {aiOpen && (
         <AiChat
           onClose={() => setAiOpen(false)}
-          onOpenKnowledge={() => { setAiOpen(false); setSection('vb-knowledge'); }}
+          onOpenKnowledge={() => { setAiOpen(false); setSection('settings'); window.dispatchEvent(new CustomEvent('settings:open-tab', { detail: 'vb-knowledge' })); }}
         />
       )}
 

@@ -38,6 +38,7 @@ export const SETTINGS_INDEX: SearchItem[] = [
   { label: 'Экспорт / Импорт данных', description: 'Миграция данных из других систем', tab: 'migration', group: 'Администрирование', keywords: ['миграция', 'экспорт', 'импорт', 'migration', 'данные', 'перенос'] },
   { label: 'Сжатие и оптимизация фото', description: 'Сканирование битых фото и авто-ремонт', tab: 'photo-optimize', group: 'Администрирование', keywords: ['фото', 'сжатие', 'оптимизация', 'битые', 'изображения', 'photo'] },
   { label: 'Диагностика сайта', description: 'Проверка SEO, безопасности, хранилища, фидов', tab: 'site-health', group: 'Администрирование', keywords: ['диагностика', 'здоровье', 'проверка', 'health', 'безопасность', 'ssl', 'аудит'] },
+  { label: 'База знаний ВБ', description: 'Факты, стоп-слова и источники обучения виртуального брокера', tab: 'vb-knowledge', group: 'База знаний ВБ', keywords: ['база знаний', 'вб', 'виртуальный брокер', 'ии', 'ai', 'обучение', 'стоп-слова', 'память'] },
 ];
 
 interface Props {
@@ -76,11 +77,26 @@ export default function SettingsSearch({ onNavigate }: Props) {
     inputRef.current?.blur();
   };
 
+  const highlight = (text: string) => {
+    const q = query.trim();
+    if (!q) return text;
+    const idx = text.toLowerCase().indexOf(q.toLowerCase());
+    if (idx === -1) return text;
+    return (
+      <>
+        {text.slice(0, idx)}
+        <mark className="bg-brand-blue/20 text-brand-blue rounded-sm px-0.5">{text.slice(idx, idx + q.length)}</mark>
+        {text.slice(idx + q.length)}
+      </>
+    );
+  };
+
   const groupColors: Record<string, string> = {
     'Компания': 'bg-blue-50 text-blue-700',
     'Сайт': 'bg-violet-50 text-violet-700',
     'Интеграции': 'bg-amber-50 text-amber-700',
     'Администрирование': 'bg-slate-100 text-slate-600',
+    'База знаний ВБ': 'bg-emerald-50 text-emerald-700',
   };
 
   return (
@@ -116,12 +132,12 @@ export default function SettingsSearch({ onNavigate }: Props) {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-sm">{item.label}</span>
+                  <span className="font-semibold text-sm">{highlight(item.label)}</span>
                   <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${groupColors[item.group] || 'bg-muted text-muted-foreground'}`}>
                     {item.group}
                   </span>
                 </div>
-                <div className="text-xs text-muted-foreground mt-0.5 truncate">{item.description}</div>
+                <div className="text-xs text-muted-foreground mt-0.5 truncate">{highlight(item.description)}</div>
               </div>
               <Icon name="ArrowRight" size={14} className="text-muted-foreground shrink-0 mt-1" />
             </button>

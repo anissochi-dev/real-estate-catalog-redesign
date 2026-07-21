@@ -22,6 +22,7 @@ import NotificationsTab from './settings/NotificationsTab';
 import SiteHealthTab from './settings/SiteHealthTab';
 import VerificationTab from './settings/VerificationTab';
 import SettingsSearch from './settings/SettingsSearch';
+import VBKnowledgeAdmin from './VBKnowledgeAdmin';
 
 export default function SettingsAdmin() {
   const { reload } = useSettings();
@@ -32,7 +33,8 @@ export default function SettingsAdmin() {
   const [cityAdding, setCityAdding] = useState(false);
   type TabId = 'general' | 'watermark' | 'brand-kit' | 'footer' | 'legal'
     | 'integrations' | 'ad-platforms' | 'autoposting' | 'feeds' | 'notifications'
-    | 'cities' | 'purposes' | 'land-vri' | 'pages' | 'roles' | 'migration' | 'photo-optimize' | 'site-health' | 'verification';
+    | 'cities' | 'purposes' | 'land-vri' | 'pages' | 'roles' | 'migration' | 'photo-optimize' | 'site-health' | 'verification'
+    | 'vb-knowledge';
   const [tab, setTab] = useState<TabId>('general');
   const [showKey, setShowKey] = useState(false);
   const [showMapsKey, setShowMapsKey] = useState(false);
@@ -161,6 +163,15 @@ export default function SettingsAdmin() {
     loadCities();
   }, []);
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail;
+      if (detail) setTab(detail as TabId);
+    };
+    window.addEventListener('settings:open-tab', handler);
+    return () => window.removeEventListener('settings:open-tab', handler);
+  }, []);
+
   const save = async () => {
     try {
       await adminApi.updateSettings(s as Record<string, unknown>);
@@ -239,6 +250,11 @@ export default function SettingsAdmin() {
         ['site-health', 'Диагностика', 'HeartPulse'],
       ],
     },
+    {
+      id: 'vb-knowledge', label: 'База знаний ВБ', icon: 'Brain', tabs: [
+        ['vb-knowledge', 'База знаний ВБ', 'Brain'],
+      ],
+    },
   ];
 
   const currentGroup = GROUPS.find(g => g.tabs.some(([id]) => id === tab)) || GROUPS[0];
@@ -268,17 +284,19 @@ export default function SettingsAdmin() {
       </div>
 
       {/* Вкладки текущей группы */}
-      <div className="flex gap-1 bg-muted/40 rounded-xl p-1 overflow-x-auto scrollbar-hide">
-        {currentGroup.tabs.map(([id, label, icon]) => (
-          <button key={id} onClick={() => setTab(id)}
-            className={`min-w-fit px-3 py-2 rounded-lg text-sm whitespace-nowrap transition inline-flex items-center justify-center gap-1.5 ${
-              tab === id ? 'bg-white text-brand-blue shadow-sm font-semibold' : 'hover:bg-white/60 text-foreground/70'
-            }`}>
-            <Icon name={icon} size={14} />
-            {label}
-          </button>
-        ))}
-      </div>
+      {currentGroup.tabs.length > 1 && (
+        <div className="flex gap-1 bg-muted/40 rounded-xl p-1 overflow-x-auto scrollbar-hide">
+          {currentGroup.tabs.map(([id, label, icon]) => (
+            <button key={id} onClick={() => setTab(id)}
+              className={`min-w-fit px-3 py-2 rounded-lg text-sm whitespace-nowrap transition inline-flex items-center justify-center gap-1.5 ${
+                tab === id ? 'bg-white text-brand-blue shadow-sm font-semibold' : 'hover:bg-white/60 text-foreground/70'
+              }`}>
+              <Icon name={icon} size={14} />
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {(tab === 'general' || tab === 'watermark') && (
         <GeneralTab tab={tab} s={s} setS={setS} cities={cities} saved={saved} save={save} />
@@ -324,6 +342,7 @@ export default function SettingsAdmin() {
         />
       )}
       {tab === 'pages' && <PagesAdmin />}
+      {tab === 'vb-knowledge' && <VBKnowledgeAdmin />}
     </div>
   );
 }

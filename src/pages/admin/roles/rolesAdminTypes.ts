@@ -38,7 +38,6 @@ export const SECTIONS: SectionDef[] = [
   { id: 'pages',            label: 'Страницы',           group: 'Контент',  ops: ['read', 'create', 'update', 'delete'], icon: 'FileText' },
   { id: 'seo',              label: 'SEO',                group: 'Контент',  ops: ['read', 'update'],                   icon: 'TrendingUp' },
   { id: 'districts',        label: 'Районы',             group: 'Контент',  ops: ['read', 'create', 'update', 'delete'], icon: 'MapPin' },
-  { id: 'vb-knowledge',     label: 'База знаний ВБ',    group: 'Контент',  ops: ['read', 'create', 'update', 'delete'], icon: 'Brain' },
   { id: 'marketing',        label: 'Маркетолог',         group: 'Контент',  ops: ['read', 'update'],                   icon: 'Megaphone' },
   { id: 'market-import',    label: 'Импорт рынка',      group: 'Контент',  ops: ['read', 'create'],                   icon: 'Upload' },
   { id: 'settings',         label: 'Настройки',          group: 'Контент',  ops: ['read', 'update'],                   icon: 'Settings' },
@@ -78,7 +77,6 @@ export const DEFAULT_PERMS: AllPerms = {
     pages:     { read: true, create: true, update: true },
     settings:  { read: true, update: true },
     marketing: { read: true, update: true },
-    'vb-knowledge':     { read: true },
     'crm-kanban':       { read: true, create: true, update: true, delete: true },
     'crm-gamification': { read: true },
     'crm-checks':       { read: true, create: true },
@@ -106,7 +104,6 @@ export const DEFAULT_PERMS: AllPerms = {
     settings:      { read: true, update: true },
     seo:           { read: true, update: true },
     districts:     { read: true, create: true, update: true },
-    'vb-knowledge':  { read: true, create: true, update: true },
     marketing:       { read: true, update: true },
     'market-import': { read: true, create: true },
   },
@@ -133,10 +130,10 @@ export const DEFAULT_PERMS: AllPerms = {
 };
 
 export const DEFAULT_NAV_ORDER: Record<string, string[]> = {
-  admin:          ['dashboard','listings','leads','users','news','phones','seo','districts','vb-knowledge','marketing','market-import','settings','crm-kanban','crm-gamification','crm-checks','crm-payments'],
-  director:       ['dashboard','listings','leads','news','phones','users','marketing','vb-knowledge','crm-kanban','crm-gamification','crm-checks','crm-payments'],
+  admin:          ['dashboard','listings','leads','users','news','phones','seo','districts','marketing','market-import','settings','crm-kanban','crm-gamification','crm-checks','crm-payments'],
+  director:       ['dashboard','listings','leads','news','phones','users','marketing','crm-kanban','crm-gamification','crm-checks','crm-payments'],
   manager:        ['dashboard','listings','leads','news','phones','marketing','crm-kanban','crm-gamification','crm-checks','crm-payments'],
-  editor:         ['dashboard','listings','leads','news','phones','pages','settings','seo','districts','vb-knowledge','marketing','market-import'],
+  editor:         ['dashboard','listings','leads','news','phones','pages','settings','seo','districts','marketing','market-import'],
   broker:         ['dashboard','listings','leads','crm-gamification','crm-checks'],
   office_manager: ['dashboard','listings','leads','phones','crm-kanban','crm-payments'],
 };
@@ -150,7 +147,6 @@ export const NAV_SECTION_META: Record<string, { label: string; icon: string; gro
   phones:           { label: 'Телефонная база',   icon: 'Phone',           group: 'Основное' },
   seo:              { label: 'SEO',               icon: 'TrendingUp',      group: 'Контент' },
   districts:        { label: 'Районы',            icon: 'MapPin',          group: 'Контент' },
-  'vb-knowledge':   { label: 'База знаний ВБ',   icon: 'Brain',           group: 'Контент' },
   marketing:        { label: 'Маркетолог',        icon: 'Megaphone',       group: 'Контент' },
   'market-import':  { label: 'Импорт рынка',     icon: 'Upload',          group: 'Контент' },
   settings:         { label: 'Настройки',         icon: 'Settings',        group: 'Контент' },

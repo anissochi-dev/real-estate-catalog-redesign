@@ -9,9 +9,9 @@ const IDLE_WARNING_MS = 2 * 60 * 1000;
 const SOCIAL_PARSER_URL = 'https://functions.poehali.dev/5d1bb364-c893-4d73-a003-e119069371ff';
 
 const ROLE_DEFAULTS: Record<string, string[]> = {
-  director:       ['dashboard', 'listings', 'leads', 'news', 'phones', 'users', 'pages', 'settings', 'marketing', 'vb-knowledge', 'crm-kanban', 'crm-gamification', 'crm-checks', 'crm-payments'],
+  director:       ['dashboard', 'listings', 'leads', 'news', 'phones', 'users', 'pages', 'settings', 'marketing', 'crm-kanban', 'crm-gamification', 'crm-checks', 'crm-payments'],
   manager:        ['dashboard', 'listings', 'leads', 'news', 'phones', 'marketing', 'crm-kanban', 'crm-gamification', 'crm-checks', 'crm-payments'],
-  editor:         ['dashboard', 'listings', 'leads', 'news', 'phones', 'pages', 'settings', 'seo', 'districts', 'vb-knowledge', 'marketing', 'market-import'],
+  editor:         ['dashboard', 'listings', 'leads', 'news', 'phones', 'pages', 'settings', 'seo', 'districts', 'marketing', 'market-import'],
   broker:         ['dashboard', 'listings', 'leads', 'crm-gamification', 'crm-checks'],
   office_manager: ['dashboard', 'listings', 'leads', 'phones', 'crm-kanban', 'crm-payments'],
   client:         [],

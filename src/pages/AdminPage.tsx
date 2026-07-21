@@ -14,7 +14,6 @@ import CrmPayments from './admin/crm/CrmPayments';
 import PhoneBook from './admin/PhoneBook';
 import NetworkTenantsAdmin from './admin/NetworkTenantsAdmin';
 import NewsAdmin from './admin/NewsAdmin';
-import VBKnowledgeAdmin from './admin/VBKnowledgeAdmin';
 import SeoHubAdmin from './admin/SeoHubAdmin';
 import DistrictsAdmin from './admin/DistrictsAdmin';
 import MarketingAdmin from './admin/MarketingAdmin';
@@ -75,7 +74,6 @@ export default function AdminPage({ onExit, onExitToPath, initialSection }: Prop
       {section === 'network-tenants' && <NetworkTenantsAdmin />}
       {section === 'news' && <NewsAdmin />}
       {section === 'seo' && <SeoHubAdmin />}
-      {section === 'vb-knowledge' && <VBKnowledgeAdmin />}
       {section === 'marketing' && <MarketingAdmin />}
       {section === 'training' && <TrainingCenter />}
 
