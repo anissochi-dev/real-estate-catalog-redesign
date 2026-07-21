@@ -74,10 +74,10 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
             {/* Logo — center column */}
             <button
               onClick={() => handleNav('home')}
-              className="flex items-center justify-center group shrink-0 justify-self-center"
+              className="flex items-center justify-center gap-2 group shrink-0 justify-self-center"
               aria-label={brandName}
             >
-              <div className="flex items-center justify-center h-8 md:h-10 w-[160px] md:w-[220px] shrink-0">
+              <div className="flex items-center justify-center h-8 md:h-10 w-auto md:w-[220px] shrink-0">
                 {logoUrl ? (
                   <img src={logoUrl} alt={brandName} height={40} loading="eager" className="h-8 md:h-10 w-auto max-w-full object-contain" />
                 ) : (
@@ -87,6 +87,9 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
                   </div>
                 )}
               </div>
+              <span className="md:hidden text-xs font-semibold text-foreground leading-tight text-left max-w-[130px]">
+                {brandName}
+              </span>
             </button>
 
             {/* Right side — desktop, right column */}
