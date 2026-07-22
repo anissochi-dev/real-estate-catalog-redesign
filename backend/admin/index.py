@@ -3230,7 +3230,7 @@ def _matching(cur, event, user):
         cur.execute(
             f"SELECT l.id, l.name, l.phone, l.status, l.property_type, l.property_category, "
             f"l.budget, l.budget_to, l.area_from, l.area_to, l.district_ids, l.company, "
-            f"l.message, l.created_at, l.updated_at, l.phone_hidden "
+            f"l.message, l.created_at, l.updated_at "
             f"FROM {SCHEMA}.leads l "
             f"WHERE l.status IN ('new', 'in_progress') "
             f"AND l.property_type = '{deal}' AND l.property_category = '{category}' "
