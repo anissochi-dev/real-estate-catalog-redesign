@@ -172,7 +172,14 @@ export default function MelaPriceCheck({ editing, onApplySuggested }: Props) {
       </button>
 
       {open && (
-        <div className="absolute z-50 right-0 top-full mt-1.5 w-[min(420px,90vw)] bg-white rounded-xl shadow-xl border border-border p-3 space-y-2.5 text-xs">
+        <div
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 sm:absolute sm:inset-auto sm:bg-transparent sm:block sm:p-0 sm:right-0 sm:top-full sm:mt-1.5"
+        >
+        <div
+          onClick={e => e.stopPropagation()}
+          className="w-full max-w-sm max-h-[80vh] overflow-y-auto sm:max-h-none sm:overflow-visible sm:w-[420px] sm:max-w-none bg-white rounded-xl shadow-xl border border-border p-3 space-y-2.5 text-xs"
+        >
           <div className="flex items-start gap-2">
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-pink-100 to-purple-100 flex items-center justify-center flex-shrink-0">
               <Icon name="Sparkles" size={14} className="text-purple-600" />
@@ -261,6 +268,7 @@ export default function MelaPriceCheck({ editing, onApplySuggested }: Props) {
             <Icon name={loading ? 'Loader2' : 'RefreshCw'} size={10} className={loading ? 'animate-spin' : ''} />
             {loading ? 'Обновляю…' : 'Пересчитать'}
           </button>
+        </div>
         </div>
       )}
     </div>
