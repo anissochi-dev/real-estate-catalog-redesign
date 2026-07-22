@@ -27,9 +27,9 @@ interface Props {
   aiAllLoading: boolean;
   aiImproveLoading: boolean;
   saving: boolean;
-  onDescribe: () => void;
+  onDescribe?: () => void;
   onGenerateTitle: () => void;
-  onGenerateTags: () => void;
+  onGenerateTags?: () => void;
   onGenerateSeo: () => void;
   onGenerateAll: () => void;
   onImproveWithAi: (fields: string[]) => void;
@@ -41,7 +41,7 @@ interface Props {
 export default function ListingEditor({
   editing, setEditing, photos, setPhotos, cities, purposes, landVri,
   aiLoading, aiTitleLoading, aiTagsLoading, aiSeoLoading, aiAllLoading, aiImproveLoading, saving,
-  onDescribe, onGenerateTitle, onGenerateTags, onGenerateSeo, onGenerateAll, onImproveWithAi, onClose, onSave, setEgrnObjects,
+  onGenerateTitle, onGenerateSeo, onGenerateAll, onImproveWithAi, onClose, onSave, setEgrnObjects,
 }: Props) {
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
@@ -286,8 +286,6 @@ export default function ListingEditor({
               setEditing={setEditing}
               aiLoading={aiLoading}
               aiTagsLoading={aiTagsLoading}
-              onDescribe={onDescribe}
-              onGenerateTags={onGenerateTags}
               errors={errors}
               setErrors={setErrors}
               canEditSeo={canEditSeo}

@@ -34,8 +34,6 @@ interface Props {
   setEditing: (l: Partial<Listing>) => void;
   aiLoading: boolean;
   aiTagsLoading: boolean;
-  onDescribe: () => void;
-  onGenerateTags: () => void;
   errors?: Record<string, boolean>;
   setErrors?: (fn: (prev: Record<string, boolean>) => Record<string, boolean>) => void;
   onVoiceFields?: (fields: VoiceFields, text: string) => void;
@@ -45,7 +43,6 @@ interface Props {
 export default function ListingEditorContentSection({
   editing, setEditing,
   aiLoading, aiTagsLoading,
-  onDescribe, onGenerateTags,
   errors = {}, setErrors,
   onVoiceFields, canEditSeo = true,
 }: Props) {
@@ -122,11 +119,12 @@ export default function ListingEditorContentSection({
                 {preview ? 'Редактировать' : 'Просмотр'}
               </button>
             )}
-            <button onClick={onDescribe} disabled={aiLoading}
-              className="text-xs text-brand-orange hover:underline inline-flex items-center gap-1">
-              <Icon name="Sparkles" size={12} />
-              {aiLoading ? 'Генерация...' : 'Сгенерировать ИИ'}
-            </button>
+            {aiLoading && (
+              <span className="text-xs text-brand-orange inline-flex items-center gap-1">
+                <Icon name="Loader2" size={12} className="animate-spin" />
+                Генерация...
+              </span>
+            )}
           </div>
         </div>
         {preview && descLen > 0 ? (
@@ -157,16 +155,17 @@ export default function ListingEditorContentSection({
         <div>
           <div className="flex items-center justify-between mb-1">
             <label className="text-sm font-semibold">Теги для поиска</label>
-            <button onClick={onGenerateTags} disabled={aiTagsLoading}
-              className="text-xs text-brand-orange hover:underline inline-flex items-center gap-1">
-              <Icon name="Sparkles" size={12} />
-              {aiTagsLoading ? 'Генерация...' : 'Сгенерировать ИИ'}
-            </button>
+            {aiTagsLoading && (
+              <span className="text-xs text-brand-orange inline-flex items-center gap-1">
+                <Icon name="Loader2" size={12} className="animate-spin" />
+                Генерация...
+              </span>
+            )}
           </div>
           <input className="w-full px-3 py-2 border rounded-lg bg-muted/30" readOnly
             placeholder="Теги создаются автоматически на основе данных объекта"
             value={typeof editing.tags === 'string' ? editing.tags : (editing.tags || []).join(', ')} />
-          <div className="text-xs text-muted-foreground mt-1">Создаются на основе данных. Кнопка ИИ — пересоздать.</div>
+          <div className="text-xs text-muted-foreground mt-1">Создаются автоматически при генерации через кнопку «ИИ» вверху формы.</div>
         </div>
       ) : (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
