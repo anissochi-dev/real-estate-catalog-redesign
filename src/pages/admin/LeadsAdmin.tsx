@@ -7,6 +7,7 @@ import LeadsFilterBar from './leads/LeadsFilterBar';
 import LeadsTable from './leads/LeadsTable';
 import LeadDetail from './leads/LeadDetail';
 import LeadEditModal from './leads/LeadEditModal';
+import MatchingModal from './MatchingModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { District, buildUrl, buildHeaders } from './districts/DistrictsTypes';
 
@@ -28,6 +29,7 @@ export default function LeadsAdmin() {
   const [search, setSearch] = useState('');
   const [listingSearch, setListingSearch] = useState('');
   const [listingDropOpen, setListingDropOpen] = useState(false);
+  const [matchingLeadId, setMatchingLeadId] = useState<number | null>(null);
 
   const load = () =>
     Promise.all([adminApi.listLeads(), adminApi.listListings()])
@@ -48,6 +50,22 @@ export default function LeadsAdmin() {
       })
       .catch(() => {});
   }, []);
+
+  // Открытие заявки по id из другого раздела (например из подбора совпадений в объектах)
+  useEffect(() => {
+    const handler = async (e: Event) => {
+      const id = (e as CustomEvent<number>).detail;
+      if (!id) return;
+      const l = leads.find(x => x.id === id);
+      if (l) { openLead(l); return; }
+      try {
+        const d = await adminApi.getLead(id);
+        if (d.lead) { setActive(d.lead); setComments(d.comments || []); }
+      } catch { /* ignore */ }
+    };
+    window.addEventListener('admin:open-lead', handler);
+    return () => window.removeEventListener('admin:open-lead', handler);
+  }, [leads]);
 
   const openLead = async (l: Lead) => {
     setActive(l);
@@ -187,7 +205,20 @@ export default function LeadsAdmin() {
         isBroker={isBroker}
         currentUserId={user?.id}
         districts={districts}
+        onShowMatching={setMatchingLeadId}
       />
+
+      {matchingLeadId !== null && (
+        <MatchingModal
+          mode="listings_for_lead"
+          id={matchingLeadId}
+          onClose={() => setMatchingLeadId(null)}
+          onOpenListing={id => {
+            setMatchingLeadId(null);
+            window.dispatchEvent(new CustomEvent('admin:open-listing', { detail: id }));
+          }}
+        />
+      )}
 
       {/* Детали заявки — модалка */}
       {active && (

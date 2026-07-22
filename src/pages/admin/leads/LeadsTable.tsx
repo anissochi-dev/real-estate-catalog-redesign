@@ -13,6 +13,7 @@ interface Props {
   currentUserId?: number;
   isBroker?: boolean;
   districts?: District[];
+  onShowMatching?: (id: number) => void;
 }
 
 const AVATAR_COLORS = [
@@ -63,7 +64,7 @@ const STATUS_STYLE: Record<string, { label: string; cls: string }> = {
 
 type SortKey = 'name' | 'date' | 'budget' | 'status';
 
-export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, search = '', currentUserId, isBroker = false, districts = [] }: Props) {
+export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, search = '', currentUserId, isBroker = false, districts = [], onShowMatching }: Props) {
   const [statusMenuId, setStatusMenuId] = useState<number | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -110,6 +111,7 @@ export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, se
         <table className="w-full text-sm min-w-[800px]">
           <thead className="bg-muted/50 border-b border-border">
             <tr>
+              <th className="text-left px-2 py-3 font-semibold text-foreground/70 whitespace-nowrap w-10"></th>
               <th className="text-left px-4 py-3 font-semibold text-foreground/70 cursor-pointer hover:bg-muted/80 transition-colors whitespace-nowrap select-none" onClick={() => handleSort('name')}>
                 Клиент <SortIcon col="name" />
               </th>
@@ -142,6 +144,25 @@ export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, se
                   onClick={() => onOpen(l)}
                   className="hover:bg-muted/30 transition-colors cursor-pointer"
                 >
+                  {/* Подходящие объекты (авто-подбор) */}
+                  <td className="px-2 py-3" onClick={e => e.stopPropagation()}>
+                    {onShowMatching && (
+                      <button
+                        onClick={() => onShowMatching(l.id)}
+                        title={(l.matching_listings_count ?? 0) > 0 ? `Подходящие объекты: ${l.matching_listings_count}` : 'Подходящих объектов не найдено'}
+                        className={[
+                          'flex items-center gap-1 text-[11px] font-semibold px-1.5 py-1 rounded-lg transition-colors',
+                          (l.matching_listings_count ?? 0) > 0
+                            ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                            : 'bg-red-100 text-red-600 hover:bg-red-200',
+                        ].join(' ')}
+                      >
+                        <Icon name="Building2" size={13} />
+                        {(l.matching_listings_count ?? 0) > 0 ? l.matching_listings_count : ''}
+                      </button>
+                    )}
+                  </td>
+
                   {/* Клиент */}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">

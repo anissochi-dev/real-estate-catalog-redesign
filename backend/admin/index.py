@@ -211,7 +211,7 @@ STAFF_ROLES = ('admin', 'director', 'manager', 'editor', 'broker', 'office_manag
 # Ресурсы доступные всем сотрудникам на чтение
 STAFF_READ_RESOURCES = (
     'stats', 'listing_comments', 'listing_history', 'listing_stats',
-    'listing_documents', 'ai_inpaint',
+    'listing_documents', 'ai_inpaint', 'matching',
 )
 
 # Встроенные права по умолчанию (fallback если role_permissions не настроены в БД)
@@ -412,6 +412,8 @@ def handler(event, context):
                 return _user_profile(cur, method, rid, user)
             if resource == 'moderation':
                 return _moderation(cur, conn, method, rid, event, user)
+            if resource == 'matching':
+                return _matching(cur, event, user)
 
             return _err(400, 'Неизвестный ресурс')
     finally:
@@ -2642,6 +2644,7 @@ def _listings(cur, conn, method, rid, event, user):
             f"FROM {SCHEMA}.listings {cnt_where}"
         )
         cnt = dict(cur.fetchone())
+        main_city = _safe((_get_settings(cur).get('main_city') or 'Краснодар'), 100)
         list_cols = (
             "l.id, l.title, l.category, l.deal, l.price, l.price_per_m2, l.area, "
             "l.payback, l.profit, l.floor, l.total_floors, l.address, l.district, l.city, "
@@ -2669,6 +2672,7 @@ def _listings(cur, conn, method, rid, event, user):
             f"  COALESCE(st.views, 0) AS stats_views, "
             f"  COALESCE(st.calls, 0) AS stats_calls, "
             f"  COALESCE(sl.leads, 0) AS stats_leads, "
+            f"  COALESCE(mm.matching_leads_count, 0) AS matching_leads_count, "
             f"  COUNT(*) OVER() AS _total "
             f"FROM {SCHEMA}.listings l "
             f"LEFT JOIN {SCHEMA}.users u ON u.id = COALESCE(l.broker_id, l.author_id) "
@@ -2683,6 +2687,18 @@ def _listings(cur, conn, method, rid, event, user):
             f"  SELECT listing_id, COUNT(*) AS leads FROM {SCHEMA}.leads "
             f"  WHERE listing_id IS NOT NULL GROUP BY listing_id"
             f") sl ON sl.listing_id = l.id "
+            f"LEFT JOIN LATERAL ("
+            f"  SELECT COUNT(*) AS matching_leads_count FROM {SCHEMA}.leads ld "
+            f"  WHERE ld.status IN ('new', 'in_progress') "
+            f"    AND ld.property_type = l.deal AND ld.property_category = l.category "
+            f"    AND ld.budget IS NOT NULL AND ld.budget_to IS NOT NULL "
+            f"    AND ld.area_from IS NOT NULL AND ld.area_to IS NOT NULL "
+            f"    AND l.price BETWEEN ld.budget * 0.9 AND ld.budget_to * 1.1 "
+            f"    AND l.area BETWEEN ld.area_from * 0.9 AND ld.area_to * 1.1 "
+            f"    AND COALESCE(l.city, '{main_city}') = COALESCE("
+            f"      (SELECT d.city FROM {SCHEMA}.districts d WHERE d.id = ANY(ld.district_ids) LIMIT 1), '{main_city}'"
+            f"    )"
+            f") mm ON TRUE "
             f"WHERE {tab_where} "
             f"ORDER BY COALESCE(l.updated_at, l.created_at) DESC "
             f"LIMIT {limit} OFFSET {offset}"
@@ -3055,7 +3071,24 @@ def _leads(cur, conn, method, rid, action, event, user):
             lead_dict = _apply_phone_visibility(dict(lead), user)
             return _ok({'lead': lead_dict, 'comments': comments})
 
-        cur.execute(f"SELECT * FROM {SCHEMA}.leads ORDER BY created_at DESC")
+        main_city = _safe((_get_settings(cur).get('main_city') or 'Краснодар'), 100)
+        cur.execute(
+            f"SELECT ld.*, COALESCE(mm.matching_listings_count, 0) AS matching_listings_count "
+            f"FROM {SCHEMA}.leads ld "
+            f"LEFT JOIN LATERAL ("
+            f"  SELECT COUNT(*) AS matching_listings_count FROM {SCHEMA}.listings l "
+            f"  WHERE l.status = 'active' AND l.is_visible = TRUE "
+            f"    AND l.deal = ld.property_type AND l.category = ld.property_category "
+            f"    AND ld.budget IS NOT NULL AND ld.budget_to IS NOT NULL "
+            f"    AND ld.area_from IS NOT NULL AND ld.area_to IS NOT NULL "
+            f"    AND l.price BETWEEN ld.budget * 0.9 AND ld.budget_to * 1.1 "
+            f"    AND l.area BETWEEN ld.area_from * 0.9 AND ld.area_to * 1.1 "
+            f"    AND COALESCE(l.city, '{main_city}') = COALESCE("
+            f"      (SELECT d.city FROM {SCHEMA}.districts d WHERE d.id = ANY(ld.district_ids) LIMIT 1), '{main_city}'"
+            f"    )"
+            f") mm ON ld.property_type IS NOT NULL AND ld.property_category IS NOT NULL "
+            f"ORDER BY ld.created_at DESC"
+        )
         leads_list = [_apply_phone_visibility(dict(r), user) for r in cur.fetchall()]
         return _ok({'leads': leads_list})
 
@@ -3159,6 +3192,102 @@ def _leads(cur, conn, method, rid, action, event, user):
             return _err(409, f'Не удалось удалить заявку — есть связанные данные. {msg}')
 
     return _err(400, 'Bad request')
+
+
+def _matching(cur, event, user):
+    """Авто-подбор совпадений между объектами и заявками.
+    GET ?resource=matching&type=leads_for_listing&id={listing_id} — заявки, подходящие объекту
+    GET ?resource=matching&type=listings_for_lead&id={lead_id} — объекты, подходящие заявке
+    Обязательные для сравнения поля: тип сделки, категория, цена (±10%), площадь (±10%), город.
+    Город заявки берётся из city выбранных district_ids, иначе — основной город из настроек.
+    """
+    qs = event.get('queryStringParameters') or {}
+    mtype = qs.get('type') or ''
+    rid = qs.get('id')
+    if not mtype or not rid:
+        return _err(400, 'Не указаны type и id')
+    try:
+        rid = int(rid)
+    except (TypeError, ValueError):
+        return _err(400, 'Некорректный id')
+
+    settings = _get_settings(cur)
+    main_city = _safe(settings.get('main_city') or 'Краснодар', 100)
+
+    if mtype == 'leads_for_listing':
+        cur.execute(f"SELECT category, deal, price, area, city FROM {SCHEMA}.listings WHERE id = {rid}")
+        row = cur.fetchone()
+        if not row:
+            return _err(404, 'Объект не найден')
+        lst = dict(row)
+        if not (lst.get('category') and lst.get('deal') and lst.get('price') and lst.get('area')):
+            return _ok({'results': [], 'total': 0})
+        city = _safe(lst.get('city') or main_city, 100)
+        category = _safe(lst['category'], 50)
+        deal = _safe(lst['deal'], 20)
+        price = int(lst['price'])
+        area = int(lst['area'])
+        cur.execute(
+            f"SELECT l.id, l.name, l.phone, l.status, l.property_type, l.property_category, "
+            f"l.budget, l.budget_to, l.area_from, l.area_to, l.district_ids, l.company, "
+            f"l.message, l.created_at, l.updated_at, l.phone_hidden "
+            f"FROM {SCHEMA}.leads l "
+            f"WHERE l.status IN ('new', 'in_progress') "
+            f"AND l.property_type = '{deal}' AND l.property_category = '{category}' "
+            f"AND l.budget IS NOT NULL AND l.budget_to IS NOT NULL "
+            f"AND l.area_from IS NOT NULL AND l.area_to IS NOT NULL "
+            f"AND {price} BETWEEN l.budget * 0.9 AND l.budget_to * 1.1 "
+            f"AND {area} BETWEEN l.area_from * 0.9 AND l.area_to * 1.1 "
+            f"AND '{city}' = COALESCE("
+            f"  (SELECT d.city FROM {SCHEMA}.districts d WHERE d.id = ANY(l.district_ids) LIMIT 1), '{main_city}'"
+            f") "
+            f"ORDER BY COALESCE(l.updated_at, l.created_at) DESC "
+            f"LIMIT 20"
+        )
+        results = [_apply_phone_visibility(dict(r), user) for r in cur.fetchall()]
+        return _ok({'results': results, 'total': len(results)})
+
+    if mtype == 'listings_for_lead':
+        cur.execute(
+            f"SELECT property_type, property_category, budget, budget_to, area_from, area_to, district_ids "
+            f"FROM {SCHEMA}.leads WHERE id = {rid}"
+        )
+        row = cur.fetchone()
+        if not row:
+            return _err(404, 'Заявка не найдена')
+        ld = dict(row)
+        if not (ld.get('property_type') and ld.get('property_category')
+                and ld.get('budget') is not None and ld.get('budget_to') is not None
+                and ld.get('area_from') is not None and ld.get('area_to') is not None):
+            return _ok({'results': [], 'total': 0})
+        deal = _safe(ld['property_type'], 20)
+        category = _safe(ld['property_category'], 50)
+        budget = int(ld['budget'])
+        budget_to = int(ld['budget_to'])
+        area_from = int(ld['area_from'])
+        area_to = int(ld['area_to'])
+        dids = ld.get('district_ids') or []
+        if dids:
+            ids_sql = ','.join(str(int(x)) for x in dids)
+            city_expr = f"COALESCE((SELECT d.city FROM {SCHEMA}.districts d WHERE d.id IN ({ids_sql}) LIMIT 1), '{main_city}')"
+        else:
+            city_expr = f"'{main_city}'"
+        cur.execute(
+            f"SELECT l.id, l.title, l.image, l.image_thumb, l.price, l.area, l.city, l.district, "
+            f"l.deal, l.category, l.status, l.created_at, l.updated_at, l.last_edited_at "
+            f"FROM {SCHEMA}.listings l "
+            f"WHERE l.status = 'active' AND l.is_visible = TRUE "
+            f"AND l.deal = '{deal}' AND l.category = '{category}' "
+            f"AND l.price BETWEEN {budget} * 0.9 AND {budget_to} * 1.1 "
+            f"AND l.area BETWEEN {area_from} * 0.9 AND {area_to} * 1.1 "
+            f"AND l.city = {city_expr} "
+            f"ORDER BY COALESCE(l.last_edited_at, l.updated_at, l.created_at) DESC "
+            f"LIMIT 20"
+        )
+        results = [dict(r) for r in cur.fetchall()]
+        return _ok({'results': results, 'total': len(results)})
+
+    return _err(400, 'Некорректный type')
 
 
 def _users(cur, conn, method, rid, event, user):

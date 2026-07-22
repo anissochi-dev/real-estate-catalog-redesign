@@ -11,6 +11,7 @@ interface Props {
   onPhotoDownload: (it: Listing) => void;
   onInternalCard?: (it: Listing) => void;
   onModerate?: (id: number, action: 'approve' | 'reject') => void;
+  onShowMatching?: (id: number) => void;
   selected: Set<number>;
   onToggleSelect: (id: number) => void;
   onSelectAll: () => void;
@@ -24,7 +25,7 @@ interface Props {
 }
 
 export default function ListingsTable({
-  items, onEdit, onArchive, onHistory, onPhotoDownload, onInternalCard, onModerate,
+  items, onEdit, onArchive, onHistory, onPhotoDownload, onInternalCard, onModerate, onShowMatching,
   selected, onToggleSelect, onSelectAll, onDeselectAll,
   siteUrl,
   onBulk, onBulkDelete, bulkLoading = false, isAdmin = false,
@@ -90,6 +91,7 @@ export default function ListingsTable({
                 onHistory={onHistory}
                 onInternalCard={onInternalCard}
                 onModerate={onModerate}
+                onShowMatching={onShowMatching}
               />
               <ListingsTableMobileCard
                 it={it}
@@ -102,6 +104,7 @@ export default function ListingsTable({
                 onEdit={onEdit}
                 onHistory={onHistory}
                 onInternalCard={onInternalCard}
+                onShowMatching={onShowMatching}
               />
             </div>
           </div>

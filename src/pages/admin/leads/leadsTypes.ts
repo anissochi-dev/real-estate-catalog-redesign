@@ -32,6 +32,8 @@ export interface Lead {
   budget_per_sqm_from?: number | null;
   budget_per_sqm_to?: number | null;
   district_ids?: number[] | null;
+  // Кол-во активных объектов, подходящих заявке по критериям авто-подбора (тип, категория, цена ±10%, площадь ±10%, город)
+  matching_listings_count?: number | null;
 }
 
 export const LEAD_TYPES: [string, string, string][] = [

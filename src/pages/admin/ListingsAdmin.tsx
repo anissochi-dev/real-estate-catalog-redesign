@@ -7,6 +7,7 @@ import ListingsToolbar from './listings/ListingsToolbar';
 import ListingsBulkBar from './listings/ListingsBulkBar';
 import PhotoPickModal from './listings/PhotoPickModal';
 import ListingInternalCard from './listings/ListingInternalCard';
+import MatchingModal from './MatchingModal';
 import Icon from '@/components/ui/icon';
 import { useListingsState } from './listings/useListingsState';
 import { adminApi } from '@/lib/adminApi';
@@ -14,6 +15,7 @@ import { adminApi } from '@/lib/adminApi';
 export default function ListingsAdmin() {
   const s = useListingsState();
   const [internalCardId, setInternalCardId] = useState<number | null>(null);
+  const [matchingListingId, setMatchingListingId] = useState<number | null>(null);
 
   const handleModerate = async (id: number, action: 'approve' | 'reject') => {
     try {
@@ -111,6 +113,7 @@ export default function ListingsAdmin() {
         onPhotoDownload={it => s.setPhotoPickListing(it)}
         onInternalCard={it => setInternalCardId(it.id)}
         onModerate={(s.isAdmin || s.isDirector) ? handleModerate : undefined}
+        onShowMatching={setMatchingListingId}
         selected={s.selected}
         onToggleSelect={s.toggleSelect}
         onSelectAll={() => s.setSelected(new Set(s.filtered.map(i => i.id)))}
@@ -191,6 +194,18 @@ export default function ListingsAdmin() {
           onClose={() => setInternalCardId(null)}
           onBrokerChanged={() => { setInternalCardId(null); }}
           onEdit={listing => { setInternalCardId(null); s.openEdit(listing); }}
+        />
+      )}
+
+      {matchingListingId !== null && (
+        <MatchingModal
+          mode="leads_for_listing"
+          id={matchingListingId}
+          onClose={() => setMatchingListingId(null)}
+          onOpenLead={id => {
+            setMatchingListingId(null);
+            window.dispatchEvent(new CustomEvent('admin:open-lead', { detail: id }));
+          }}
         />
       )}
     </div>

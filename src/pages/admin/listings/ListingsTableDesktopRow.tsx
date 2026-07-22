@@ -18,11 +18,12 @@ interface Props {
   onHistory: (it: Listing) => void;
   onInternalCard?: (it: Listing) => void;
   onModerate?: (id: number, action: 'approve' | 'reject') => void;
+  onShowMatching?: (id: number) => void;
 }
 
 export default function ListingsTableDesktopRow({
   it, isSelected, canSelect, canEdit, showPhone, canSeeFullDetails,
-  onToggleSelect, onEdit, onArchive, onHistory, onInternalCard, onModerate,
+  onToggleSelect, onEdit, onArchive, onHistory, onInternalCard, onModerate, onShowMatching,
 }: Props) {
   const exitToPath = useExitToPath();
   const dealMeta = (d: string) => DEALS.find(x => x[0] === d);
@@ -251,25 +252,43 @@ export default function ListingsTableDesktopRow({
         {/* Строка 4: Статистика + Собственник + Даты */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
 
-          {/* Статистика */}
-          <button
-            onClick={() => onInternalCard?.(it)}
-            title="Открыть внутреннюю карточку"
-            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
-          >
-            <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground" title="Просмотры">
-              <Icon name="Eye" size={13} className="text-brand-blue" />
-              {(it.stats_views ?? 0).toLocaleString('ru')}
-            </span>
-            <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground" title="Звонки">
-              <Icon name="Phone" size={13} className="text-emerald-500" />
-              {(it.stats_calls ?? 0).toLocaleString('ru')}
-            </span>
-            <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground" title="Заявки">
-              <Icon name="Inbox" size={13} className="text-brand-orange" />
-              {(it.stats_leads ?? 0).toLocaleString('ru')}
-            </span>
-          </button>
+          {/* Статистика + Подходящие заявки */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onInternalCard?.(it)}
+              title="Открыть внутреннюю карточку"
+              className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+            >
+              <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground" title="Просмотры">
+                <Icon name="Eye" size={13} className="text-brand-blue" />
+                {(it.stats_views ?? 0).toLocaleString('ru')}
+              </span>
+              <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground" title="Звонки">
+                <Icon name="Phone" size={13} className="text-emerald-500" />
+                {(it.stats_calls ?? 0).toLocaleString('ru')}
+              </span>
+              <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground" title="Заявки">
+                <Icon name="Inbox" size={13} className="text-brand-orange" />
+                {(it.stats_leads ?? 0).toLocaleString('ru')}
+              </span>
+            </button>
+
+            {onShowMatching && (
+              <button
+                onClick={e => { e.stopPropagation(); onShowMatching(it.id); }}
+                title={(it.matching_leads_count ?? 0) > 0 ? `Подходящие заявки: ${it.matching_leads_count}` : 'Подходящих заявок не найдено'}
+                className={[
+                  'flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg transition-colors ml-1',
+                  (it.matching_leads_count ?? 0) > 0
+                    ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                    : 'bg-red-100 text-red-600 hover:bg-red-200',
+                ].join(' ')}
+              >
+                <Icon name="Users" size={13} />
+                {(it.matching_leads_count ?? 0) > 0 ? it.matching_leads_count : ''}
+              </button>
+            )}
+          </div>
 
           {/* Брокер */}
           {it.broker_name && (

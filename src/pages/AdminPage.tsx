@@ -53,6 +53,13 @@ export default function AdminPage({ onExit, onExitToPath, initialSection }: Prop
     return () => window.removeEventListener('admin:open-listing', handler);
   }, []);
 
+  // Переключение на Заявки из любого раздела (например из подбора совпадений)
+  useEffect(() => {
+    const handler = () => setSection('leads');
+    window.addEventListener('admin:open-lead', handler);
+    return () => window.removeEventListener('admin:open-lead', handler);
+  }, []);
+
   return (
     <AdminLayout section={section} setSection={setSection} onExit={onExit} onExitToPath={onExitToPath}>
       {section === 'dashboard' && <Dashboard setSection={(s) => setSection(s as AdminSection)} />}

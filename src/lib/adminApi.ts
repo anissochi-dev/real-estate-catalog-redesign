@@ -273,6 +273,12 @@ export const adminApi = {
   deleteVbLearnSource: (id: number) =>
     req(`${ADMIN_URL}?resource=vb_learn_sources&id=${id}`, { method: 'DELETE' }),
 
+  // matching (авто-подбор объектов ↔ заявок)
+  matchLeadsForListing: (listingId: number) =>
+    req(`${ADMIN_URL}?resource=matching&type=leads_for_listing&id=${listingId}`),
+  matchListingsForLead: (leadId: number) =>
+    req(`${ADMIN_URL}?resource=matching&type=listings_for_lead&id=${leadId}`),
+
   // leads
   listLeads: () => req(`${ADMIN_URL}?resource=leads`),
   getLead: (id: number) => req(`${ADMIN_URL}?resource=leads&id=${id}`),

@@ -16,11 +16,12 @@ interface Props {
   onEdit: (it: Listing) => void;
   onHistory: (it: Listing) => void;
   onInternalCard?: (it: Listing) => void;
+  onShowMatching?: (id: number) => void;
 }
 
 export default function ListingsTableMobileCard({
   it, isSelected, canSelect, canEdit, showPhone, siteUrl,
-  onToggleSelect, onEdit, onHistory, onInternalCard,
+  onToggleSelect, onEdit, onHistory, onInternalCard, onShowMatching,
 }: Props) {
   const exitToPath = useExitToPath();
   const dealMeta = (d: string) => DEALS.find(x => x[0] === d);
@@ -170,6 +171,21 @@ export default function ListingsTableMobileCard({
               {(it.stats_leads ?? 0).toLocaleString('ru')}
             </span>
           </button>
+          {onShowMatching && (
+            <button
+              onClick={e => { e.stopPropagation(); onShowMatching(it.id); }}
+              title={(it.matching_leads_count ?? 0) > 0 ? `Подходящие заявки: ${it.matching_leads_count}` : 'Подходящих заявок не найдено'}
+              className={[
+                'flex items-center gap-1 text-[11px] font-semibold px-1.5 py-0.5 rounded-lg transition-colors shrink-0 ml-1',
+                (it.matching_leads_count ?? 0) > 0
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : 'bg-red-100 text-red-600',
+              ].join(' ')}
+            >
+              <Icon name="Users" size={11} />
+              {(it.matching_leads_count ?? 0) > 0 ? it.matching_leads_count : ''}
+            </button>
+          )}
           <div className="flex items-center gap-1 min-w-0 flex-1">
             <Icon name="User" size={11} className="text-muted-foreground/50 flex-shrink-0" />
             <div className="flex flex-col min-w-0">

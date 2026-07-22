@@ -101,6 +101,8 @@ export interface Listing {
   stats_views?: number | null;
   stats_calls?: number | null;
   stats_leads?: number | null;
+  // Кол-во заявок, подходящих объекту по критериям авто-подбора (тип, категория, цена ±10%, площадь ±10%, город)
+  matching_leads_count?: number | null;
 }
 
 export interface City { id: number; name: string; is_active: boolean }
