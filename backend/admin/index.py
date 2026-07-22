@@ -2691,10 +2691,10 @@ def _listings(cur, conn, method, rid, event, user):
             f"  SELECT COUNT(*) AS matching_leads_count FROM {SCHEMA}.leads ld "
             f"  WHERE ld.status IN ('new', 'in_progress') "
             f"    AND ld.property_type = l.deal AND ld.property_category = l.category "
-            f"    AND ld.budget IS NOT NULL AND ld.budget_to IS NOT NULL "
-            f"    AND ld.area_from IS NOT NULL AND ld.area_to IS NOT NULL "
-            f"    AND l.price BETWEEN ld.budget * 0.9 AND ld.budget_to * 1.1 "
-            f"    AND l.area BETWEEN ld.area_from * 0.9 AND ld.area_to * 1.1 "
+            f"    AND (ld.budget IS NULL AND ld.budget_to IS NULL "
+            f"      OR l.price BETWEEN COALESCE(ld.budget, 0) * 0.9 AND COALESCE(ld.budget_to, 999999999999) * 1.1) "
+            f"    AND (ld.area_from IS NULL AND ld.area_to IS NULL "
+            f"      OR l.area BETWEEN COALESCE(ld.area_from, 0) * 0.9 AND COALESCE(ld.area_to, 999999999) * 1.1) "
             f"    AND COALESCE(l.city, '{main_city}') = COALESCE("
             f"      (SELECT d.city FROM {SCHEMA}.districts d WHERE d.id = ANY(ld.district_ids) LIMIT 1), '{main_city}'"
             f"    )"
@@ -3079,10 +3079,10 @@ def _leads(cur, conn, method, rid, action, event, user):
             f"  SELECT COUNT(*) AS matching_listings_count FROM {SCHEMA}.listings l "
             f"  WHERE l.status = 'active' AND l.is_visible = TRUE "
             f"    AND l.deal = ld.property_type AND l.category = ld.property_category "
-            f"    AND ld.budget IS NOT NULL AND ld.budget_to IS NOT NULL "
-            f"    AND ld.area_from IS NOT NULL AND ld.area_to IS NOT NULL "
-            f"    AND l.price BETWEEN ld.budget * 0.9 AND ld.budget_to * 1.1 "
-            f"    AND l.area BETWEEN ld.area_from * 0.9 AND ld.area_to * 1.1 "
+            f"    AND (ld.budget IS NULL AND ld.budget_to IS NULL "
+            f"      OR l.price BETWEEN COALESCE(ld.budget, 0) * 0.9 AND COALESCE(ld.budget_to, 999999999999) * 1.1) "
+            f"    AND (ld.area_from IS NULL AND ld.area_to IS NULL "
+            f"      OR l.area BETWEEN COALESCE(ld.area_from, 0) * 0.9 AND COALESCE(ld.area_to, 999999999) * 1.1) "
             f"    AND COALESCE(l.city, '{main_city}') = COALESCE("
             f"      (SELECT d.city FROM {SCHEMA}.districts d WHERE d.id = ANY(ld.district_ids) LIMIT 1), '{main_city}'"
             f"    )"
@@ -3263,10 +3263,8 @@ def _matching(cur, event, user):
             f"FROM {SCHEMA}.leads l "
             f"WHERE l.status IN ('new', 'in_progress') "
             f"AND l.property_type = '{deal}' AND l.property_category = '{category}' "
-            f"AND l.budget IS NOT NULL AND l.budget_to IS NOT NULL "
-            f"AND l.area_from IS NOT NULL AND l.area_to IS NOT NULL "
-            f"AND {price} BETWEEN l.budget * 0.9 AND l.budget_to * 1.1 "
-            f"AND {area} BETWEEN l.area_from * 0.9 AND l.area_to * 1.1 "
+            f"AND {price} BETWEEN COALESCE(l.budget, 0) * 0.9 AND COALESCE(l.budget_to, 999999999999) * 1.1 "
+            f"AND {area} BETWEEN COALESCE(l.area_from, 0) * 0.9 AND COALESCE(l.area_to, 999999999) * 1.1 "
             f"AND '{city}' = COALESCE("
             f"  (SELECT d.city FROM {SCHEMA}.districts d WHERE d.id = ANY(l.district_ids) LIMIT 1), '{main_city}'"
             f") "
@@ -3285,16 +3283,14 @@ def _matching(cur, event, user):
         if not row:
             return _err(404, 'Заявка не найдена')
         ld = dict(row)
-        if not (ld.get('property_type') and ld.get('property_category')
-                and ld.get('budget') is not None and ld.get('budget_to') is not None
-                and ld.get('area_from') is not None and ld.get('area_to') is not None):
+        if not (ld.get('property_type') and ld.get('property_category')):
             return _ok({'results': [], 'total': 0})
         deal = _safe(ld['property_type'], 20)
         category = _safe(ld['property_category'], 50)
-        budget = int(ld['budget'])
-        budget_to = int(ld['budget_to'])
-        area_from = int(ld['area_from'])
-        area_to = int(ld['area_to'])
+        budget = int(ld['budget']) if ld.get('budget') is not None else 0
+        budget_to = int(ld['budget_to']) if ld.get('budget_to') is not None else 999999999999
+        area_from = int(ld['area_from']) if ld.get('area_from') is not None else 0
+        area_to = int(ld['area_to']) if ld.get('area_to') is not None else 999999999
         dids = ld.get('district_ids') or []
         if dids:
             ids_sql = ','.join(str(int(x)) for x in dids)
