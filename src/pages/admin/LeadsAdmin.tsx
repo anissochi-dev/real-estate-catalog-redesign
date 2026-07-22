@@ -9,10 +9,11 @@ import LeadDetail from './leads/LeadDetail';
 import LeadEditModal from './leads/LeadEditModal';
 import MatchingModal from './MatchingModal';
 import { useAuth } from '@/contexts/AuthContext';
-import { District, buildUrl, buildHeaders } from './districts/DistrictsTypes';
+import { District } from './districts/DistrictsTypes';
+import { fetchDistricts } from '@/lib/api';
 
 export default function LeadsAdmin() {
-  const { user, refreshToken } = useAuth();
+  const { user } = useAuth();
   const isBroker = user?.role === 'broker';
   // Брокер может видеть все лиды, но управлять только своими (leads: read+create, без update/delete)
   const canManageLead = (l: Lead) =>
@@ -41,14 +42,8 @@ export default function LeadsAdmin() {
 
   useEffect(() => {
     load();
-    const tok = refreshToken();
-    fetch(buildUrl(), { headers: buildHeaders(tok) })
-      .then(r => r.json())
-      .then(d => {
-        const list: District[] = Array.isArray(d?.districts) ? d.districts : Array.isArray(d) ? d : [];
-        setDistricts(list.filter(d => !d.is_okrug));
-      })
-      .catch(() => {});
+    // Тот же источник и сортировка, что и в форме объектов — единый список районов
+    fetchDistricts().then(list => setDistricts(list as District[])).catch(() => {});
   }, []);
 
   // Открытие заявки по id из другого раздела (например из подбора совпадений в объектах)

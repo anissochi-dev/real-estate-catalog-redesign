@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
 import PhonePickerInput from '@/components/admin/PhonePickerInput';
 import CharCount from '@/components/ui/CharCount';
@@ -6,10 +7,11 @@ import { Lead, Listing, STATUSES, PROPERTY_TYPES_LEAD, PROPERTY_CATEGORIES_LEAD 
 import SeoHeadingsBlock, { SeoHeadings } from '@/components/admin/SeoHeadingsBlock';
 import { District } from '../districts/DistrictsTypes';
 
-function DistrictDropdown({ districts, selected, onChange }: {
+function DistrictDropdown({ districts, selected, onChange, error }: {
   districts: District[];
   selected: number[];
   onChange: (ids: number[]) => void;
+  error?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -31,11 +33,14 @@ function DistrictDropdown({ districts, selected, onChange }: {
 
   return (
     <div ref={ref} className="relative">
-      <label className="text-xs text-muted-foreground mb-1 block">Желаемые районы</label>
+      <label className="text-xs text-muted-foreground mb-1 block">
+        Желаемые районы <span className="text-red-500">*</span>
+        {error && <span className="ml-2 text-red-500 font-normal">— обязательное поле</span>}
+      </label>
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between px-3 py-2 border rounded-lg text-sm bg-white hover:border-brand-blue transition-colors"
+        className={`w-full flex items-center justify-between px-3 py-2 border rounded-lg text-sm bg-white transition-colors ${error ? 'border-red-400 bg-red-50' : 'hover:border-brand-blue'}`}
       >
         <span className={selected.length === 0 ? 'text-muted-foreground' : 'text-foreground'}>
           {label}
@@ -109,6 +114,7 @@ export default function LeadEditModal({
   onSave,
 }: Props) {
   const listingDropRef = useRef<HTMLDivElement>(null);
+  const [errors, setErrors] = useState<Record<string, boolean>>({});
 
   const filteredListings = listings.filter(l =>
     listingSearch.length < 1 ? true :
@@ -126,6 +132,25 @@ export default function LeadEditModal({
     return () => document.removeEventListener('mousedown', handler);
   }, [setListingDropOpen]);
 
+  const validate = (): boolean => {
+    const e: Record<string, boolean> = {};
+    if (!editing.name?.trim()) e.name = true;
+    if (!editing.phone?.trim()) e.phone = true;
+    if (!editing.property_type) e.property_type = true;
+    if (!editing.property_category) e.property_category = true;
+    if (editing.budget_to == null) e.budget_to = true;
+    if (editing.area_to == null) e.area_to = true;
+    if (!editing.district_ids || editing.district_ids.length === 0) e.district_ids = true;
+    if (!editing.message?.trim()) e.message = true;
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSave = () => {
+    if (validate()) onSave();
+    else toast.error('Заполните все обязательные поля, отмеченные звёздочкой');
+  };
+
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
       onClick={e => { if (e.target === e.currentTarget) setEditing(null); }}>
@@ -138,7 +163,7 @@ export default function LeadEditModal({
         </div>
         <div className="p-5 space-y-3 overflow-y-auto flex-1">
           <div className="relative">
-            <input className="w-full px-3 py-2 border rounded-lg pr-16" placeholder="Имя клиента"
+            <input className={`w-full px-3 py-2 border rounded-lg pr-16 ${errors.name ? 'border-red-400 bg-red-50' : ''}`} placeholder="Имя клиента"
               maxLength={60}
               value={editing.name || ''}
               onChange={e => setEditing({ ...editing, name: e.target.value })} />
@@ -150,11 +175,13 @@ export default function LeadEditModal({
           </div>
           <div>
             <label className="text-xs text-muted-foreground">Телефон</label>
-            <PhonePickerInput
-              value={editing.phone || ''}
-              onChange={(phone, name) => setEditing({ ...editing, phone, ...(name && !editing.name ? { name } : {}) })}
-              onNameChange={name => { if (!editing.name) setEditing({ ...editing, name }); }}
-            />
+            <div className={errors.phone ? 'rounded-lg ring-1 ring-red-400 bg-red-50' : ''}>
+              <PhonePickerInput
+                value={editing.phone || ''}
+                onChange={(phone, name) => setEditing({ ...editing, phone, ...(name && !editing.name ? { name } : {}) })}
+                onNameChange={name => { if (!editing.name) setEditing({ ...editing, name }); }}
+              />
+            </div>
           </div>
           <input className="w-full px-3 py-2 border rounded-lg" placeholder="Email (необязательно)"
             value={editing.email || ''} onChange={e => setEditing({ ...editing, email: e.target.value })} />
@@ -163,20 +190,26 @@ export default function LeadEditModal({
           {/* Тип сделки и категория объекта */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Тип сделки</label>
-              <select className="w-full px-3 py-2 border rounded-lg text-sm"
+              <label className="text-xs text-muted-foreground mb-1 block">
+                Тип сделки <span className="text-red-500">*</span>
+                {errors.property_type && <span className="ml-1 text-red-500 font-normal">— обязательно</span>}
+              </label>
+              <select className={`w-full px-3 py-2 border rounded-lg text-sm ${errors.property_type ? 'border-red-400 bg-red-50' : ''}`}
                 value={editing.property_type || ''}
                 onChange={e => setEditing({ ...editing, property_type: e.target.value || null })}>
-                <option value="">— Любой —</option>
+                <option value="">— Выберите —</option>
                 {PROPERTY_TYPES_LEAD.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Категория объекта</label>
-              <select className="w-full px-3 py-2 border rounded-lg text-sm"
+              <label className="text-xs text-muted-foreground mb-1 block">
+                Категория объекта <span className="text-red-500">*</span>
+                {errors.property_category && <span className="ml-1 text-red-500 font-normal">— обязательно</span>}
+              </label>
+              <select className={`w-full px-3 py-2 border rounded-lg text-sm ${errors.property_category ? 'border-red-400 bg-red-50' : ''}`}
                 value={editing.property_category || ''}
                 onChange={e => setEditing({ ...editing, property_category: e.target.value || null })}>
-                <option value="">— Любая —</option>
+                <option value="">— Выберите —</option>
                 {PROPERTY_CATEGORIES_LEAD.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
             </div>
@@ -184,28 +217,31 @@ export default function LeadEditModal({
 
           {/* Бюджет от/до */}
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Бюджет, ₽</label>
+            <label className="text-xs text-muted-foreground mb-1 block">
+              Бюджет, ₽ — до <span className="text-red-500">*</span>
+              {errors.budget_to && <span className="ml-1 text-red-500 font-normal">— обязательно</span>}
+            </label>
             <div className="grid grid-cols-2 gap-3">
-              <input type="number" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="от"
+              <input type="number" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="от (необязательно)"
                 value={editing.budget ?? ''}
                 onChange={e => setEditing({ ...editing, budget: e.target.value === '' ? null : +e.target.value })} />
-              <input type="number" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="до"
+              <input type="number" className={`w-full px-3 py-2 border rounded-lg text-sm ${errors.budget_to ? 'border-red-400 bg-red-50' : ''}`} placeholder="до"
                 value={editing.budget_to ?? ''}
                 onChange={e => setEditing({ ...editing, budget_to: e.target.value === '' ? null : +e.target.value })} />
             </div>
           </div>
 
           {/* Площадь от/до */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Площадь от, м²</label>
-              <input type="number" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="100"
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">
+              Площадь, м² — до <span className="text-red-500">*</span>
+              {errors.area_to && <span className="ml-1 text-red-500 font-normal">— обязательно</span>}
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <input type="number" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="от (необязательно)"
                 value={editing.area_from ?? ''}
                 onChange={e => setEditing({ ...editing, area_from: e.target.value === '' ? null : +e.target.value })} />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Площадь до, м²</label>
-              <input type="number" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="500"
+              <input type="number" className={`w-full px-3 py-2 border rounded-lg text-sm ${errors.area_to ? 'border-red-400 bg-red-50' : ''}`} placeholder="до"
                 value={editing.area_to ?? ''}
                 onChange={e => setEditing({ ...editing, area_to: e.target.value === '' ? null : +e.target.value })} />
             </div>
@@ -225,12 +261,20 @@ export default function LeadEditModal({
               districts={districts}
               selected={editing.district_ids || []}
               onChange={ids => setEditing({ ...editing, district_ids: ids })}
+              error={errors.district_ids}
             />
           )}
 
-          <CharCount as="textarea" rows={5} max={1500} warnAt={1300} placeholder="Текст запроса"
-            value={editing.message || ''}
-            onChange={e => setEditing({ ...editing, message: (e.target as HTMLTextAreaElement).value })} />
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">
+              Текст запроса <span className="text-red-500">*</span>
+              {errors.message && <span className="ml-1 text-red-500 font-normal">— обязательно</span>}
+            </label>
+            <CharCount as="textarea" rows={5} max={1500} warnAt={1300} placeholder="Опишите запрос клиента"
+              className={errors.message ? 'border-red-400 bg-red-50' : ''}
+              value={editing.message || ''}
+              onChange={e => setEditing({ ...editing, message: (e.target as HTMLTextAreaElement).value })} />
+          </div>
 
           <div ref={listingDropRef} className="relative">
             <label className="text-xs text-muted-foreground">Привязка к объекту (необязательно)</label>
@@ -319,7 +363,7 @@ export default function LeadEditModal({
         </div>
         <div className="p-5 border-t border-border flex justify-end gap-3 flex-shrink-0 bg-white rounded-b-2xl">
           <button onClick={() => setEditing(null)} className="px-4 py-2 rounded-xl text-sm">Отмена</button>
-          <button onClick={onSave} className="btn-blue text-white px-5 py-2 rounded-xl text-sm font-semibold">
+          <button onClick={handleSave} className="btn-blue text-white px-5 py-2 rounded-xl text-sm font-semibold">
             Сохранить
           </button>
         </div>

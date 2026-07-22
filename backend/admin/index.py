@@ -3106,11 +3106,36 @@ def _leads(cur, conn, method, rid, action, event, user):
         conn.commit()
         return _ok({'success': True})
 
+    # Признак «полной формы» (LeadEditModal) — присутствие ключа property_type в теле.
+    # Точечные патчи (смена статуса, типа заявки, конвертация в сделку) этот ключ не шлют
+    # и не должны требовать дозаполнения заявки.
+    is_full_form = 'property_type' in body and 'property_category' in body
+
+    def _full_form_errors(b):
+        missing = []
+        if not b.get('property_type'):
+            missing.append('тип сделки')
+        if not b.get('property_category'):
+            missing.append('категория объекта')
+        if b.get('budget_to') in (None, ''):
+            missing.append('бюджет «до»')
+        if b.get('area_to') in (None, ''):
+            missing.append('площадь «до»')
+        if not b.get('district_ids'):
+            missing.append('районы')
+        if not (b.get('message') or '').strip():
+            missing.append('текст запроса')
+        return missing
+
     if method == 'POST':
         name = _safe(body.get('name') or '', 100)
         phone = _safe(body.get('phone') or '', 30)
         if not name or not phone:
             return _err(400, 'Имя и телефон обязательны')
+        if is_full_form:
+            missing = _full_form_errors(body)
+            if missing:
+                return _err(400, 'Заполните обязательные поля: ' + ', '.join(missing))
         raw_dids = body.get('district_ids')
         district_ids_val = 'ARRAY[' + ','.join(str(int(x)) for x in raw_dids) + ']::integer[]' if raw_dids else "'{}'"
         cur.execute(
@@ -3136,6 +3161,10 @@ def _leads(cur, conn, method, rid, action, event, user):
         return _ok({'id': cur.fetchone()['id'], 'success': True})
 
     if method == 'PUT' and rid:
+        if is_full_form:
+            missing = _full_form_errors(body)
+            if missing:
+                return _err(400, 'Заполните обязательные поля: ' + ', '.join(missing))
         fields = []
         for f, length in [('status', 20), ('email', 100), ('message', 2000), ('name', 100),
                           ('phone', 30), ('company', 200), ('source', 50), ('lead_type', 20),
