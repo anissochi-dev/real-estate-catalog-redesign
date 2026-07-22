@@ -35,7 +35,7 @@ export default function ListingEditorFooter({ editing, tab, setTab, tabErrors, o
             />
           ))}
         </div>
-        <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm">Отмена</button>
+        <button onClick={onClose} disabled={saving} className="px-4 py-2 rounded-xl text-sm disabled:opacity-60 disabled:cursor-not-allowed">Отмена</button>
         <button
           onClick={() => onSave()}
           disabled={saving}

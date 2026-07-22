@@ -157,6 +157,7 @@ export default function ListingsAdmin() {
           aiSeoLoading={s.aiSeoLoading}
           aiAllLoading={s.aiAllLoading}
           aiImproveLoading={s.aiImproveLoading}
+          saving={s.saving}
           onDescribe={s.aiDescribe}
           onGenerateTitle={s.aiTitle}
           onGenerateTags={s.generateTags}

@@ -22,13 +22,14 @@ interface Props {
   tabErrors: Partial<Record<EditorTab, boolean>>;
   hasErrors: boolean;
   aiAllLoading: boolean;
+  saving?: boolean;
   onGenerateAll: () => void;
   onClose: () => void;
 }
 
 export default function ListingEditorHeader({
   editing, setEditing, tab, setTab, tabErrors, hasErrors,
-  aiAllLoading, onGenerateAll, onClose,
+  aiAllLoading, saving, onGenerateAll, onClose,
 }: Props) {
   return (
     <>
@@ -64,7 +65,7 @@ export default function ListingEditorHeader({
             <Icon name={aiAllLoading ? 'Loader2' : 'Sparkles'} size={13} className={aiAllLoading ? 'animate-spin' : ''} />
             {aiAllLoading ? 'Генерация...' : 'ИИ'}
           </button>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1">
+          <button onClick={onClose} disabled={saving} className="text-muted-foreground hover:text-foreground p-1 disabled:opacity-40 disabled:cursor-not-allowed">
             <Icon name="X" size={20} />
           </button>
         </div>

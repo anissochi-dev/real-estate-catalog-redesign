@@ -54,6 +54,7 @@ export function useListingsState() {
   const [aiTagsLoading, setAiTagsLoading] = useState(false);
   const [aiSeoLoading, setAiSeoLoading] = useState(false);
   const [aiAllLoading, setAiAllLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
@@ -241,7 +242,8 @@ export function useListingsState() {
   };
 
   const save = async (override?: Partial<Listing>) => {
-    if (!editing) return;
+    if (!editing || saving) return;
+    setSaving(true);
     const isNew = !editing.id;
     const merged = { ...editing, ...(override || {}) };
     if (egrnObjectsRef.current && egrnObjectsRef.current.length > 0) {
@@ -307,6 +309,8 @@ export function useListingsState() {
       load(true);
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Ошибка');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -544,6 +548,7 @@ export function useListingsState() {
     photoPickListing, setPhotoPickListing,
     // ai
     aiLoading, aiTitleLoading, aiTagsLoading, aiSeoLoading, aiAllLoading, aiImproveLoading,
+    saving,
     // bulk
     selected, setSelected, bulkLoading,
     // filters

@@ -26,6 +26,7 @@ interface Props {
   aiSeoLoading: boolean;
   aiAllLoading: boolean;
   aiImproveLoading: boolean;
+  saving: boolean;
   onDescribe: () => void;
   onGenerateTitle: () => void;
   onGenerateTags: () => void;
@@ -39,7 +40,7 @@ interface Props {
 
 export default function ListingEditor({
   editing, setEditing, photos, setPhotos, cities, purposes, landVri,
-  aiLoading, aiTitleLoading, aiTagsLoading, aiSeoLoading, aiAllLoading, aiImproveLoading,
+  aiLoading, aiTitleLoading, aiTagsLoading, aiSeoLoading, aiAllLoading, aiImproveLoading, saving,
   onDescribe, onGenerateTitle, onGenerateTags, onGenerateSeo, onGenerateAll, onImproveWithAi, onClose, onSave, setEgrnObjects,
 }: Props) {
   const [errors, setErrors] = useState<Record<string, boolean>>({});
@@ -211,6 +212,7 @@ export default function ListingEditor({
           tabErrors={tabErrors}
           hasErrors={submitAttempted && Object.keys(errors).length > 0}
           aiAllLoading={aiAllLoading}
+          saving={geocoding || aiAllLoading || saving}
           onGenerateAll={onGenerateAll}
           onClose={onClose}
         />
@@ -315,8 +317,8 @@ export default function ListingEditor({
           tabErrors={tabErrors}
           onClose={onClose}
           onSave={handleSave}
-          saving={geocoding || aiAllLoading}
-          savingLabel={aiAllLoading ? 'Генерирую SEO...' : undefined}
+          saving={geocoding || aiAllLoading || saving}
+          savingLabel={aiAllLoading ? 'Генерирую SEO...' : (saving ? 'Сохраняю...' : undefined)}
         />
       </div>
     </div>
