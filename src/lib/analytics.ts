@@ -12,6 +12,27 @@ declare global {
   }
 }
 
+const STATS_URL = 'https://functions.poehali.dev/1d84bd40-ef8c-4bd3-82c3-af294b1ec0b1';
+
+/**
+ * Фиксирует клик по номеру телефона объекта в статистике (событие 'call').
+ * Используется в сайдбаре объекта, карточке каталога и мобильной панели «Позвонить».
+ * Отправляется через sendBeacon — событие гарантированно долетает до сервера,
+ * даже если браузер сразу переключается на приложение-диалер.
+ */
+export function trackListingCall(listingId: number, source: string = 'site'): void {
+  try {
+    const payload = JSON.stringify({ listing_id: listingId, event_type: 'call', source });
+    if (typeof navigator.sendBeacon === 'function') {
+      navigator.sendBeacon(STATS_URL, new Blob([payload], { type: 'application/json' }));
+    } else {
+      fetch(STATS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: true }).catch(() => {});
+    }
+  } catch {
+    // Не ломаем пользовательский флоу при ошибке аналитики
+  }
+}
+
 /**
  * Отправляет конверсию "lead_form" во все подключённые рекламные системы:
  * - Яндекс.Метрика → reachGoal → Директ обучается на реальных лидах

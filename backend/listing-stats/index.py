@@ -4,6 +4,8 @@ GET  ?listing_id=123          — сводка по объекту
 GET  ?listing_id=123&history=1 — история событий
 POST {listing_id, event_type, source, count, note} — записать событие вручную (только авторизованные)
 POST {listing_id, event_type='view_site'}           — записать просмотр сайта (публичный)
+POST {listing_id, event_type='qr_scan'}             — записать переход по QR-коду (публичный)
+POST {listing_id, event_type='call', source}        — записать клик по номеру телефона (публичный)
 """
 import json
 import os
@@ -103,6 +105,15 @@ def handler(event: dict, context) -> dict:
                     cur.execute(
                         f"INSERT INTO {SCHEMA}.listing_stats (listing_id, event_type, source, count) VALUES (%s, %s, %s, %s)",
                         (listing_id, 'qr_scan', 'qr', 1)
+                    )
+                    conn.commit()
+                    return _ok({'ok': True})
+
+                # call — публичный: клиент нажал на номер телефона объекта (сайдбар, карточка, мобильная панель)
+                if event_type == 'call':
+                    cur.execute(
+                        f"INSERT INTO {SCHEMA}.listing_stats (listing_id, event_type, source, count) VALUES (%s, %s, %s, %s)",
+                        (listing_id, 'call', source if source in SOURCE_LABELS else 'site', 1)
                     )
                     conn.commit()
                     return _ok({'ok': True})

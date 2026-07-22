@@ -1655,6 +1655,15 @@ def _site_health(cur, conn, method, action, event, user):
         qr_total = int((cur.fetchone() or {}).get('total') or 0)
         totals['qr_scans'] = qr_total
 
+        # 10.1. Звонки: общий счётчик за период (клики по номеру телефона объекта)
+        cur.execute(f"""
+            SELECT COALESCE(SUM(count), 0) AS total
+            FROM {SCHEMA}.listing_stats
+            WHERE event_type IN ('call','phone_call','phone_click') {stats_period_cond}
+        """)
+        calls_total = int((cur.fetchone() or {}).get('total') or 0)
+        totals['total_calls'] = calls_total
+
         # 11. QR-переходы по объектам (для кликабельного списка)
         cur.execute(f"""
             SELECT s.listing_id,

@@ -177,6 +177,10 @@ export default function MarketingOverviewSection({
           value={totalViews.toLocaleString('ru')}
         />
         <KpiCard
+          icon="Phone" label="Звонков" color="green"
+          value={(stats.totals.total_calls ?? 0).toLocaleString('ru')}
+        />
+        <KpiCard
           icon="QrCode" label="Переходов по QR" color="rose"
           value={qrTotal.toLocaleString('ru')}
           sub={qrTotal > 0 ? 'смотреть объекты →' : undefined}

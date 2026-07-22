@@ -7,6 +7,7 @@ import PublicPhoneInput from '@/components/PublicPhoneInput';
 import { fmtListingId } from '@/lib/formatPrice';
 import SmartCaptcha, { CaptchaResult } from '@/components/SmartCaptcha';
 import AIChatWidget from './AIChatWidget';
+import { trackListingCall } from '@/lib/analytics';
 
 interface Props {
   item: ListingDetail;
@@ -82,6 +83,7 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
                   <Icon name="Phone" size={16} className="text-brand-blue flex-shrink-0" />
                   {phoneRevealed ? (
                     <a href={`tel:${agent.phone}`}
+                      onClick={() => trackListingCall(item.id, 'sidebar')}
                       className="text-base font-bold text-brand-blue hover:underline flex-1 min-w-0 truncate">
                       {formatPhone(agent.phone)}
                     </a>

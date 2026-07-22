@@ -12,6 +12,7 @@ export interface MarketingStats {
     total_commission?: number;
     won_deals?: number;
     qr_scans?: number;
+    total_calls?: number;
   };
   leads_by_source: { source: string; cnt: number }[];
   leads_by_status: { status: string; cnt: number }[];

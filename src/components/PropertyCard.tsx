@@ -8,6 +8,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { prefetchListingById } from '@/lib/api';
 import { prefetchPage } from '@/app/lazyPages';
 import { fmtListingId, computePaybackYears } from '@/lib/formatPrice';
+import { trackListingCall } from '@/lib/analytics';
 
 const PREDICT_URL = 'https://functions.poehali.dev/9986e5a6-c4d4-407a-919f-a303aa3eddf2';
 
@@ -159,14 +160,14 @@ function usePredictHint(listingId: number) {
   return { hint, rootRef };
 }
 
-function PhoneRevealButton({ phone }: { phone: string | null }) {
+function PhoneRevealButton({ phone, listingId }: { phone: string | null; listingId: number }) {
   const [revealed, setRevealed] = useState(false);
   if (!phone) return null;
   if (revealed) {
     return (
       <a
         href={`tel:${phone}`}
-        onClick={e => e.stopPropagation()}
+        onClick={e => { e.stopPropagation(); trackListingCall(listingId, 'catalog_card'); }}
         className="w-full bg-brand-blue text-white text-[13px] font-bold font-display py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-sm hover:bg-brand-blue/90 transition-colors"
       >
         <Icon name="Phone" size={14} /> {phone}
@@ -419,7 +420,7 @@ export default function PropertyCard({
           </div>
 
           {/* Кнопка показа номера (только брокер — телефон собственника на сайте не показываем) */}
-          <PhoneRevealButton phone={property.brokerPhone || null} />
+          <PhoneRevealButton phone={property.brokerPhone || null} listingId={property.id} />
 
         </div>
       </div>

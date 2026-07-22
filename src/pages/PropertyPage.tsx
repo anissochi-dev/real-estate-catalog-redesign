@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchListingById, ListingDetail, sendLead, fetchAgents, Agent } from '@/lib/api';
-import { fireLeadConversion } from '@/lib/analytics';
+import { fireLeadConversion, trackListingCall } from '@/lib/analytics';
 import { CaptchaResult } from '@/components/SmartCaptcha';
 import { recordView } from '@/components/RecentlyViewed';
 import { extractIdFromSlug } from '@/lib/slug';
@@ -279,6 +279,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
                 return (
                   <div className="px-3 py-3 border-t border-border flex items-center gap-2">
                     <a href={`tel:${displayAgent.phone}`}
+                      onClick={() => trackListingCall(item.id, 'mobile_sticky')}
                       className="flex-1 flex items-center justify-center gap-1.5 bg-brand-blue text-white text-xs font-bold px-3 py-2.5 rounded-xl min-w-0">
                       <Icon name="Phone" size={14} className="flex-shrink-0" />
                       <span className="truncate">Позвонить</span>
