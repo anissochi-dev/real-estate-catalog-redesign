@@ -129,9 +129,9 @@ def fetch_zachestny(inn, api_key):
     """
     inn_clean = ''.join(filter(str.isdigit, str(inn)))
     if not inn_clean:
-        return {'error': 'ИНН не указан или некорректен'}
-    if len(inn_clean) not in (10, 12):
-        return {'error': f'Некорректная длина ИНН: {len(inn_clean)} цифр (должно быть 10 для организации или 12 для ИП)'}
+        return {'error': 'Номер не указан или некорректен'}
+    if len(inn_clean) not in (10, 12, 13, 15):
+        return {'error': f'Некорректная длина номера: {len(inn_clean)} цифр (ИНН — 10/12, ОГРН — 13, ОГРНИП — 15)'}
     url = f"https://zachestnyibiznesapi.ru/paid/data/card?api_key={api_key}&id={inn_clean}"
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'BizNest CRM/1.0', 'Accept': 'application/json'})
@@ -146,14 +146,14 @@ def fetch_zachestny(inn, api_key):
             else:
                 return {'error': 'Пустой ответ от API', '_raw': raw}
 
-            # Определяем тип: ИП или ООО
-            entity_type = 'ip' if len(inn_clean) == 12 else 'ul'
+            # Определяем тип: ИП (ИНН 12 цифр или ОГРНИП 15 цифр) или ООО
+            entity_type = 'ip' if len(inn_clean) in (12, 15) else 'ul'
 
             # Нормализованная карточка с ключевыми полями
             card = {
                 '_type': entity_type,
                 '_source': 'zachestnyibiznes',
-                'inn': inn_clean,
+                'inn': inn_clean if len(inn_clean) in (10, 12) else (item.get('ИНН') or ''),
                 'ogrn': item.get('ОГРН') or item.get('ogrn', ''),
                 'name': (item.get('НаимЮЛСокр') or item.get('НаимЮЛПолн')
                          or item.get('ФИОПолн') or item.get('name', '')),
@@ -296,12 +296,18 @@ def fetch_bezopasno(query, api_key):
 
 
 def fetch_dadata(inn: str, api_key: str, secret_key: str = '') -> dict:
-    """Проверка компании или ИП по ИНН через DaData API (party endpoint)."""
+    """
+    Проверка компании или ИП через DaData API (party endpoint).
+    Поддерживает ИНН (10/12 цифр) и ОГРН (13 цифр). ОГРНИП (15 цифр) DaData не ищет — для него
+    нужен ИНН предпринимателя (используйте Checko или ЧестныйБизнес).
+    """
     inn_clean = ''.join(filter(str.isdigit, str(inn)))
     if not inn_clean:
         return {'error': 'ИНН не указан или некорректен'}
-    if len(inn_clean) not in (10, 12):
-        return {'error': f'Некорректная длина ИНН: {len(inn_clean)} цифр (должно быть 10 для организации или 12 для ИП)'}
+    if len(inn_clean) == 15:
+        return {'error': 'DaData не поддерживает поиск по ОГРНИП — используйте Checko или ЧестныйБизнес'}
+    if len(inn_clean) not in (10, 12, 13):
+        return {'error': f'Некорректная длина номера: {len(inn_clean)} цифр (ИНН — 10/12, ОГРН — 13)'}
     if not api_key:
         return {'error': 'DaData API-ключ не настроен'}
 
@@ -430,16 +436,26 @@ def fetch_dadata(inn: str, api_key: str, secret_key: str = '') -> dict:
 
 
 def fetch_checko(inn: str, api_key: str) -> dict:
-    """Проверка компании или ИП по ИНН через Checko.ru API — полные данные ЕГРЮЛ/ЕГРИП."""
-    inn_clean = ''.join(filter(str.isdigit, str(inn)))
-    if not inn_clean:
-        return {'error': 'ИНН не указан или некорректен'}
-    if len(inn_clean) not in (10, 12):
-        return {'error': f'Некорректная длина ИНН: {len(inn_clean)} цифр (должно быть 10 для организации или 12 для ИП)'}
+    """
+    Проверка компании или ИП через Checko.ru API — полные данные ЕГРЮЛ/ЕГРИП.
+    Принимает ИНН (10/12 цифр), ОГРН (13 цифр) или ОГРНИП (15 цифр) — определяет тип по длине
+    и обращается к нужному эндпоинту (/v2/company или /v2/entrepreneur для ОГРНИП).
+    """
+    num_clean = ''.join(filter(str.isdigit, str(inn)))
+    if not num_clean:
+        return {'error': 'Номер не указан или некорректен'}
+    if len(num_clean) not in (10, 12, 13, 15):
+        return {'error': f'Некорректная длина номера: {len(num_clean)} цифр (ИНН — 10/12, ОГРН — 13, ОГРНИП — 15)'}
     if not api_key:
         return {'error': 'Checko API-ключ не настроен'}
 
-    url = f'https://api.checko.ru/v2/company?key={urllib.parse.quote(api_key)}&inn={inn_clean}'
+    key_q = urllib.parse.quote(api_key)
+    if len(num_clean) == 15:
+        url = f'https://api.checko.ru/v2/entrepreneur?key={key_q}&ogrn={num_clean}'
+    elif len(num_clean) == 13:
+        url = f'https://api.checko.ru/v2/company?key={key_q}&ogrn={num_clean}'
+    else:
+        url = f'https://api.checko.ru/v2/company?key={key_q}&inn={num_clean}'
     try:
         req = urllib.request.Request(
             url,
@@ -665,7 +681,7 @@ def fetch_checko(inn: str, api_key: str) -> dict:
         card = {
             '_source': 'checko',
             '_meta': meta,
-            'инн': data.get('ИНН') or inn_clean,
+            'инн': data.get('ИНН') or (num_clean if len(num_clean) in (10, 12) else ''),
             'огрн': data.get('ОГРН') or '',
             'огрнип': data.get('ОГРНИП') or '',
             'кпп': data.get('КПП') or '',
