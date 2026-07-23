@@ -1643,7 +1643,9 @@ def _site_health(cur, conn, method, action, event, user):
                 (SELECT COUNT(*) FROM {SCHEMA}.listings WHERE status='active') AS active_listings,
                 (SELECT COUNT(*) FROM {SCHEMA}.crm_deals WHERE 1=1 {deal_period_cond}) AS total_deals,
                 (SELECT COALESCE(SUM(commission),0) FROM {SCHEMA}.crm_deals WHERE 1=1 {deal_period_cond}) AS total_commission,
-                (SELECT COUNT(*) FROM {SCHEMA}.crm_deals WHERE is_win = TRUE {deal_period_cond.replace('AND','AND')}) AS won_deals
+                (SELECT COUNT(*) FROM {SCHEMA}.crm_deals d
+                    JOIN {SCHEMA}.crm_stages st ON st.id = d.stage_id
+                    WHERE st.is_win = TRUE {deal_period_cond.replace('created_at', 'd.created_at')}) AS won_deals
         """)
         totals = dict(cur.fetchone())
 
