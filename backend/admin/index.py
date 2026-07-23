@@ -4664,23 +4664,42 @@ def _listing_history(cur, method, rid, event, user):
 
 
 def _listing_stats(cur, rid):
+    """Статистика по объекту: реальные события из listing_stats (просмотры, звонки, QR)
+    + заявки из leads. Возвращает разбивку по дням для графика."""
     if not rid:
         return _err(400, 'id обязателен')
     lid = int(rid)
+
+    # Просмотры на сайте — сумма count событий view_site
     cur.execute(
-        f"SELECT COUNT(*) AS total FROM {SCHEMA}.listing_views WHERE listing_id = {lid}"
+        f"SELECT COALESCE(SUM(count), 0) AS total FROM {SCHEMA}.listing_stats "
+        f"WHERE listing_id = {lid} AND event_type = 'view_site'"
     )
     total_views = cur.fetchone()['total']
     cur.execute(
-        f"SELECT COUNT(*) AS c FROM {SCHEMA}.listing_views "
-        f"WHERE listing_id = {lid} AND viewed_at >= NOW() - INTERVAL '30 days'"
+        f"SELECT COALESCE(SUM(count), 0) AS c FROM {SCHEMA}.listing_stats "
+        f"WHERE listing_id = {lid} AND event_type = 'view_site' AND recorded_at >= NOW() - INTERVAL '30 days'"
     )
     views_30d = cur.fetchone()['c']
     cur.execute(
-        f"SELECT COUNT(*) AS c FROM {SCHEMA}.listing_views "
-        f"WHERE listing_id = {lid} AND viewed_at >= NOW() - INTERVAL '7 days'"
+        f"SELECT COALESCE(SUM(count), 0) AS c FROM {SCHEMA}.listing_stats "
+        f"WHERE listing_id = {lid} AND event_type = 'view_site' AND recorded_at >= NOW() - INTERVAL '7 days'"
     )
     views_7d = cur.fetchone()['c']
+
+    # Звонки и переходы по QR
+    cur.execute(
+        f"SELECT COALESCE(SUM(count), 0) AS c FROM {SCHEMA}.listing_stats "
+        f"WHERE listing_id = {lid} AND event_type IN ('call','phone_call','phone_click')"
+    )
+    total_calls = cur.fetchone()['c']
+    cur.execute(
+        f"SELECT COALESCE(SUM(count), 0) AS c FROM {SCHEMA}.listing_stats "
+        f"WHERE listing_id = {lid} AND event_type = 'qr_scan'"
+    )
+    total_qr = cur.fetchone()['c']
+
+    # Заявки — из основной таблицы leads (реальный источник)
     cur.execute(
         f"SELECT COUNT(*) AS c FROM {SCHEMA}.leads WHERE listing_id = {lid}"
     )
@@ -4690,15 +4709,43 @@ def _listing_stats(cur, rid):
         f"WHERE listing_id = {lid} AND created_at >= NOW() - INTERVAL '30 days'"
     )
     leads_30d = cur.fetchone()['c']
-    cur.execute(
-        f"SELECT stat_date::text, views_count, leads_count FROM {SCHEMA}.listing_stats_daily "
-        f"WHERE listing_id = {lid} ORDER BY stat_date DESC LIMIT 30"
-    )
-    daily = [dict(r) for r in cur.fetchall()]
+
+    # Разбивка по дням за последние 30 дней: просмотры/звонки из listing_stats, заявки из leads
+    cur.execute(f"""
+        SELECT day::text AS day, COALESCE(SUM(views), 0)::int AS views, COALESCE(SUM(calls), 0)::int AS calls
+        FROM (
+            SELECT DATE(recorded_at) AS day,
+                   CASE WHEN event_type = 'view_site' THEN count ELSE 0 END AS views,
+                   CASE WHEN event_type IN ('call','phone_call','phone_click') THEN count ELSE 0 END AS calls
+            FROM {SCHEMA}.listing_stats
+            WHERE listing_id = {lid} AND recorded_at >= NOW() - INTERVAL '30 days'
+        ) s
+        GROUP BY day ORDER BY day DESC
+    """)
+    views_rows = {r['day']: r for r in cur.fetchall()}
+
+    cur.execute(f"""
+        SELECT DATE(created_at)::text AS day, COUNT(*)::int AS leads
+        FROM {SCHEMA}.leads
+        WHERE listing_id = {lid} AND created_at >= NOW() - INTERVAL '30 days'
+        GROUP BY 1
+    """)
+    leads_rows = {r['day']: r['leads'] for r in cur.fetchall()}
+
+    all_days = sorted(set(views_rows.keys()) | set(leads_rows.keys()), reverse=True)
+    daily = [{
+        'date': d, 'stat_date': d,
+        'views': views_rows.get(d, {}).get('views', 0), 'views_count': views_rows.get(d, {}).get('views', 0),
+        'calls': views_rows.get(d, {}).get('calls', 0),
+        'leads': leads_rows.get(d, 0), 'leads_count': leads_rows.get(d, 0),
+    } for d in all_days[:30]]
+
     return _ok({
         'total_views': total_views,
         'views_30d': views_30d,
         'views_7d': views_7d,
+        'total_calls': total_calls,
+        'total_qr': total_qr,
         'leads_total': leads_total,
         'leads_30d': leads_30d,
         'daily': daily,
