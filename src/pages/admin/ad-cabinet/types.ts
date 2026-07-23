@@ -1,5 +1,29 @@
 export const CIAN_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=cian_stats';
 export const YANDEX_CALLS_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=yandex_stats';
+export const OTHER_PLATFORMS_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=other_platforms';
+
+export interface OtherPlatformListing {
+  id: number;
+  title: string;
+  image: string | null;
+  category: string | null;
+  deal: string | null;
+  city: string | null;
+  status: string;
+}
+
+export interface OtherPlatformRow {
+  id: number;
+  slug: string;
+  name: string;
+  is_active: boolean;
+  cdn_url: string | null;
+  last_generated_at: string | null;
+  supports_stats: boolean;
+  listings_count: number;
+  listings: OtherPlatformListing[];
+  stats: Record<string, number> | null;
+}
 
 export interface PlatformCard {
   key: string;

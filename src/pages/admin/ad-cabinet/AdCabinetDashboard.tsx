@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
-import { CIAN_API_URL, CianData, PlatformCard, SERVICE_TYPE_LABELS, YANDEX_CALLS_API_URL, YandexCallsData } from './types';
+import { CIAN_API_URL, CianData, OTHER_PLATFORMS_API_URL, OtherPlatformRow, PlatformCard, SERVICE_TYPE_LABELS, YANDEX_CALLS_API_URL, YandexCallsData } from './types';
 
 interface Props {
   onOpenPlatform: (key: string) => void;
@@ -89,9 +89,37 @@ function PlatformCardView({ card, onClick }: { card: PlatformCard; onClick: () =
   );
 }
 
+function OtherPlatformCardView({ platforms, onClick }: { platforms: OtherPlatformRow[]; onClick: () => void }) {
+  const totalListings = platforms[0]?.listings_count ?? 0;
+  const activeCount = platforms.filter(p => p.is_active).length;
+  return (
+    <div
+      onClick={onClick}
+      className="bg-white rounded-2xl border border-border p-4 flex flex-col gap-2 transition cursor-pointer hover:border-brand-blue hover:shadow-sm"
+    >
+      <div className="flex items-center gap-2.5">
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-violet-100 text-violet-600">
+          <Icon name="LayoutGrid" size={18} />
+        </div>
+        <div className="font-semibold text-sm">Разное</div>
+      </div>
+      <div className="text-xs text-muted-foreground">
+        {platforms.length} площад{platforms.length === 1 ? 'ка' : platforms.length < 5 ? 'ки' : 'ок'} · {totalListings} объявл.
+      </div>
+      <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit ${
+        activeCount > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-muted text-muted-foreground'
+      }`}>
+        <Icon name={activeCount > 0 ? 'CheckCircle2' : 'Circle'} size={10} />
+        {activeCount > 0 ? `Активно: ${activeCount}` : 'Нет площадок'}
+      </span>
+    </div>
+  );
+}
+
 export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
   const [cian, setCian] = useState<CianData | null>(null);
   const [yandex, setYandex] = useState<YandexCallsData | null>(null);
+  const [otherPlatforms, setOtherPlatforms] = useState<OtherPlatformRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -103,11 +131,13 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
     Promise.all([
       fetch(cianUrl).then(r => r.json()).catch(() => ({ error: 'network' })),
       fetch(yandexUrl).then(r => r.json()).catch(() => ({ error: 'network' })),
-    ]).then(([cianData, yandexData]) => {
+      fetch(OTHER_PLATFORMS_API_URL).then(r => r.json()).catch(() => ({ platforms: [] })),
+    ]).then(([cianData, yandexData, otherData]) => {
       if (cianData.error) { setError(cianData.error); setCian(null); }
       else { setCian(cianData); setError(null); }
       if (!yandexData.error) setYandex(yandexData);
       else setYandex(null);
+      setOtherPlatforms(otherData.platforms || []);
     }).finally(() => { setLoading(false); setSyncing(false); });
   };
 
@@ -211,7 +241,12 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
               {platforms.map(p => (
-                <PlatformCardView key={p.key} card={p} onClick={() => onOpenPlatform(p.key)} />
+                <Fragment key={p.key}>
+                  <PlatformCardView card={p} onClick={() => onOpenPlatform(p.key)} />
+                  {p.key === 'cian' && (
+                    <OtherPlatformCardView platforms={otherPlatforms} onClick={() => onOpenPlatform('other')} />
+                  )}
+                </Fragment>
               ))}
             </div>
           </div>

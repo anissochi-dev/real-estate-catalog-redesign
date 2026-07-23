@@ -1,40 +1,16 @@
 import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
-
-const OTHER_PLATFORMS_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=other_platforms';
-
-interface OtherListing {
-  id: number;
-  title: string;
-  image: string | null;
-  category: string | null;
-  deal: string | null;
-  city: string | null;
-  status: string;
-}
-
-interface OtherPlatform {
-  id: number;
-  slug: string;
-  name: string;
-  is_active: boolean;
-  cdn_url: string | null;
-  last_generated_at: string | null;
-  supports_stats: boolean;
-  listings_count: number;
-  listings: OtherListing[];
-  stats: Record<string, number> | null;
-}
+import { OTHER_PLATFORMS_API_URL, OtherPlatformRow } from './types';
 
 const DEAL_LABEL: Record<string, string> = { sale: 'Продажа', rent: 'Аренда' };
 
 export default function OtherPlatformsTab() {
-  const [platforms, setPlatforms] = useState<OtherPlatform[]>([]);
+  const [platforms, setPlatforms] = useState<OtherPlatformRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [openSlug, setOpenSlug] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(OTHER_PLATFORMS_URL)
+    fetch(OTHER_PLATFORMS_API_URL)
       .then(r => r.json())
       .then(d => setPlatforms(d.platforms || []))
       .finally(() => setLoading(false));
