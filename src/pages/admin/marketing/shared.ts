@@ -23,6 +23,7 @@ export interface MarketingStats {
   listings_stats: { category: string; deal: string; cnt: number; total_views: number; avg_views: number }[];
   deals_by_source: { source: string; cnt: number; total_amount: number; total_commission?: number }[];
   qr_by_listing?: QrListingRow[];
+  calls_by_source?: { source: string; cnt: number }[];
 }
 
 export interface QrListingRow {
@@ -62,6 +63,13 @@ export const DEAL_LABELS: Record<string, string> = { sale: 'Продажа', ren
 export const STATUS_LABELS: Record<string, string> = {
   new: 'Новые', pending: 'На модерации', in_progress: 'В работе',
   closed: 'Закрытые', rejected: 'Отказ',
+};
+
+export const CALL_SOURCE_LABELS: Record<string, string> = {
+  sidebar: 'Карточка объекта (сайдбар)',
+  catalog_card: 'Карточка в каталоге',
+  mobile_sticky: 'Мобильная панель «Позвонить»',
+  site: 'Другое (сайт)',
 };
 
 export const SOURCE_COLORS: Record<string, string> = {

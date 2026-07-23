@@ -1664,6 +1664,15 @@ def _site_health(cur, conn, method, action, event, user):
         calls_total = int((cur.fetchone() or {}).get('total') or 0)
         totals['total_calls'] = calls_total
 
+        # 10.2. Звонки по источникам клика (сайдбар / карточка каталога / мобильная панель)
+        cur.execute(f"""
+            SELECT COALESCE(NULLIF(source,''), 'site') AS source, SUM(count)::int AS cnt
+            FROM {SCHEMA}.listing_stats
+            WHERE event_type IN ('call','phone_call','phone_click') {stats_period_cond}
+            GROUP BY 1 ORDER BY cnt DESC
+        """)
+        calls_by_source = [dict(r) for r in cur.fetchall()]
+
         # 11. QR-переходы по объектам (для кликабельного списка)
         cur.execute(f"""
             SELECT s.listing_id,
@@ -1692,6 +1701,7 @@ def _site_health(cur, conn, method, action, event, user):
             'listings_stats': listings_stats,
             'deals_by_source': deals_by_source,
             'qr_by_listing': qr_by_listing,
+            'calls_by_source': calls_by_source,
         })
 
     # ── ДЕЙСТВИЯ ОБСЛУЖИВАНИЯ ────────────────────────────────────────────────

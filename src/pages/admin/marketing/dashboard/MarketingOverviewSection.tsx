@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, ReactNode } from 'react';
 import Icon from '@/components/ui/icon';
-import { MarketingStats, QrListingRow, SOURCE_COLORS, STATUS_LABELS, CATEGORY_LABELS, fmtMoney } from '../shared';
+import { MarketingStats, QrListingRow, SOURCE_COLORS, STATUS_LABELS, CATEGORY_LABELS, CALL_SOURCE_LABELS, fmtMoney } from '../shared';
 
 interface BudgetItem { id: number; title: string }
 
@@ -76,8 +76,9 @@ function MiniBar({ value, max, cls = 'bg-brand-blue' }: { value: number; max: nu
   );
 }
 
-function KpiCard({ icon, label, value, sub, color = 'blue', trend, onClick }: {
+function KpiCard({ icon, label, value, sub, color = 'blue', trend, onClick, tooltip }: {
   icon: string; label: string; value: string | number; sub?: string; color?: string; trend?: number; onClick?: () => void;
+  tooltip?: ReactNode;
 }) {
   const colorMap: Record<string, string> = {
     blue:   'bg-brand-blue/10 text-brand-blue',
@@ -89,7 +90,7 @@ function KpiCard({ icon, label, value, sub, color = 'blue', trend, onClick }: {
   return (
     <div
       onClick={onClick}
-      className={`bg-white rounded-2xl border border-border p-4 flex items-start gap-3 ${onClick ? 'cursor-pointer hover:border-brand-blue hover:shadow-sm transition' : ''}`}
+      className={`group relative bg-white rounded-2xl border border-border p-4 flex items-start gap-3 ${onClick ? 'cursor-pointer hover:border-brand-blue hover:shadow-sm transition' : ''}`}
     >
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${colorMap[color]}`}>
         <Icon name={icon} size={19} />
@@ -105,6 +106,14 @@ function KpiCard({ icon, label, value, sub, color = 'blue', trend, onClick }: {
           </div>
         )}
       </div>
+      {tooltip && (
+        <div className="pointer-events-none absolute left-1/2 bottom-full mb-2 -translate-x-1/2 z-20 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-150">
+          <div className="bg-foreground text-white text-xs rounded-xl px-3 py-2 shadow-lg whitespace-nowrap">
+            {tooltip}
+          </div>
+          <div className="w-2 h-2 bg-foreground rotate-45 absolute left-1/2 -translate-x-1/2 -bottom-1" />
+        </div>
+      )}
     </div>
   );
 }
@@ -179,6 +188,20 @@ export default function MarketingOverviewSection({
         <KpiCard
           icon="Phone" label="Звонков" color="green"
           value={(stats.totals.total_calls ?? 0).toLocaleString('ru')}
+          tooltip={(() => {
+            const rows = stats.calls_by_source ?? [];
+            if (rows.length === 0) return 'Звонков за этот период пока нет';
+            return (
+              <div className="flex flex-col gap-1">
+                {rows.map(r => (
+                  <div key={r.source} className="flex items-center justify-between gap-4">
+                    <span className="opacity-80">{CALL_SOURCE_LABELS[r.source] || r.source}</span>
+                    <span className="font-semibold">{r.cnt.toLocaleString('ru')}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         />
         <KpiCard
           icon="QrCode" label="Переходов по QR" color="rose"
