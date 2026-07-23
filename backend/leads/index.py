@@ -184,7 +184,11 @@ def handler(event: dict, context) -> dict:
                     "ON CONFLICT (phone_contact_id, lead_id) DO NOTHING",
                     (pc_id, lead_id)
                 )
-            # Инвалидируем кэш sitemap при новом объекте — нет, лид не меняет sitemap
+            # Инвалидируем кэш sitemap — заявка публична по умолчанию (is_public/show_on_main),
+            # попадает в карту сайта как отдельная страница /request/{slug}
+            cur.execute(
+                f"UPDATE {SCHEMA_LEADS}.seo_artifacts SET urls_count = 0 WHERE kind = 'sitemap'"
+            )
             conn.commit()
     finally:
         conn.close()

@@ -3181,6 +3181,11 @@ def _leads(cur, conn, method, rid, action, event, user):
             f"{_int_or_null(body.get('budget_per_sqm_from'))}, {_int_or_null(body.get('budget_per_sqm_to'))}, "
             f"{district_ids_val}) RETURNING id"
         )
+        # Инвалидируем кэш sitemap — заявка публична по умолчанию (is_public/show_on_main),
+        # попадает в карту сайта как отдельная страница /request/{slug}
+        cur.execute(
+            f"UPDATE {SCHEMA}.seo_artifacts SET urls_count = 0 WHERE kind = 'sitemap'"
+        )
         conn.commit()
         return _ok({'id': cur.fetchone()['id'], 'success': True})
 
@@ -3210,6 +3215,11 @@ def _leads(cur, conn, method, rid, action, event, user):
         # Помечаем заявку как «недавно отредактированную» — для сортировки на сайте
         fields.append('updated_at = NOW()')
         cur.execute(f"UPDATE {SCHEMA}.leads SET {', '.join(fields)} WHERE id = {int(rid)}")
+        # Инвалидируем кэш sitemap если изменилась публичная видимость заявки
+        if 'show_on_main' in body or 'status' in body:
+            cur.execute(
+                f"UPDATE {SCHEMA}.seo_artifacts SET urls_count = 0 WHERE kind = 'sitemap'"
+            )
         conn.commit()
         return _ok({'success': True})
 
