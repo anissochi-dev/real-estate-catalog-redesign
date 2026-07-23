@@ -1,5 +1,4 @@
 User-agent: *
-Allow: /
 Disallow: /admin
 Disallow: /admin/
 Disallow: /login
@@ -7,45 +6,19 @@ Disallow: /auth
 Disallow: /signin
 Disallow: /api/
 Disallow: /private/
-Disallow: /map
-Disallow: /favorites
-Disallow: /compare
+Allow: /
 
 User-agent: Yandex
-Allow: /
 Disallow: /admin
 Disallow: /admin/
 Disallow: /login
 Disallow: /auth
 Disallow: /signin
 Disallow: /api/
-Disallow: /map
-Disallow: /favorites
-Disallow: /compare
-Clean-param: utm_source&utm_medium&utm_campaign&utm_term&utm_content
-
-User-agent: Googlebot
+Disallow: /private/
 Allow: /
-Disallow: /admin
-Disallow: /admin/
-Disallow: /login
-Disallow: /auth
-Disallow: /signin
-Disallow: /api/
-Disallow: /map
-Disallow: /favorites
-Disallow: /compare
-
-User-agent: Bingbot
-Allow: /
-Disallow: /admin
-Disallow: /admin/
-Disallow: /map
-Disallow: /favorites
-Disallow: /compare
+Crawl-delay: 1
+Clean-param: utm_source&utm_medium&utm_campaign&utm_term&utm_content&utm_referrer&yclid&gclid&fbclid&_escaped_fragment_
+Host: bmn.su
 
 Sitemap: https://bmn.su/sitemap.xml
-
-# Разделы категорий и районов
-Allow: /catalog/
-Allow: /district/
