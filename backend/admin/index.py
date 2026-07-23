@@ -1639,7 +1639,8 @@ def _site_health(cur, conn, method, action, event, user):
             SELECT
                 (SELECT COUNT(*) FROM {SCHEMA}.leads WHERE 1=1 {period_cond}) AS total_leads,
                 (SELECT COUNT(*) FROM {SCHEMA}.leads WHERE created_at >= NOW() - INTERVAL '30 days') AS leads_30d,
-                (SELECT COALESCE(SUM(views_site),0) FROM {SCHEMA}.listings WHERE status='active') AS total_views,
+                (SELECT COALESCE(SUM(count),0) FROM {SCHEMA}.listing_stats
+                    WHERE event_type = 'view_site' {stats_period_cond}) AS total_views,
                 (SELECT COUNT(*) FROM {SCHEMA}.listings WHERE status='active') AS active_listings,
                 (SELECT COUNT(*) FROM {SCHEMA}.crm_deals WHERE 1=1 {deal_period_cond}) AS total_deals,
                 (SELECT COALESCE(SUM(commission),0) FROM {SCHEMA}.crm_deals WHERE 1=1 {deal_period_cond}) AS total_commission,
