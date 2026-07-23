@@ -10,12 +10,17 @@ import re
 import urllib.request
 import urllib.error
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timezone
 
+import boto3
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
+S3_BUCKET = 'files'
+S3_ENDPOINT = 'https://bucket.poehali.dev'
+CDN_BASE = 'https://cdn.poehali.dev'
+STATIC_REGEN_MINUTES = 10
 
 CONTROL_CHARS_RE = re.compile(r'[\x00-\x08\x0B\x0C\x0E-\x1F]')
 XML_DECL_RE = re.compile(r'^<\?xml[^?]*\?>', re.IGNORECASE)
@@ -151,6 +156,104 @@ def _json(data, status=200):
         'headers': {'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json'},
         'body': json.dumps(data, ensure_ascii=False, default=str),
     }
+
+
+def _s3_client():
+    return boto3.client(
+        's3',
+        endpoint_url=S3_ENDPOINT,
+        aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+        aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+    )
+
+
+def _cdn_url(key):
+    project_id = os.environ['AWS_ACCESS_KEY_ID']
+    return f"{CDN_BASE}/projects/{project_id}/bucket/{key}"
+
+
+def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal):
+    """Собирает XML для одной площадки из текущего состояния БД."""
+    where = ["status = 'active'", "(is_visible IS NULL OR is_visible = TRUE)"]
+    if filter_category:
+        where.append(f"category = '{_safe(filter_category, 50)}'")
+    if filter_deal:
+        where.append(f"deal = '{_safe(filter_deal, 20)}'")
+    if feed_slug == 'yandex':
+        where.append("export_yandex = TRUE")
+    elif feed_slug == 'avito':
+        where.append("export_avito = TRUE")
+    elif feed_slug == 'cian':
+        where.append("export_cian = TRUE")
+
+    cur.execute(f"SELECT * FROM {SCHEMA}.listings WHERE {' AND '.join(where)} ORDER BY created_at DESC")
+    listings = [dict(r) for r in cur.fetchall()]
+
+    cur.execute(f"SELECT slug, name FROM {SCHEMA}.land_vri")
+    _vri_map = {r['slug']: r['name'] for r in cur.fetchall()}
+    for l in listings:
+        for k in ('created_at', 'updated_at'):
+            if l.get(k):
+                l[k] = l[k].isoformat()
+        if l.get('category') == 'land' and not l.get('land_area') and l.get('area'):
+            try:
+                l['land_area'] = round(float(l['area']) / 100, 2)
+            except (TypeError, ValueError):
+                pass
+        if l.get('land_vri') and l['land_vri'] in _vri_map:
+            l['land_vri'] = _vri_map[l['land_vri']]
+
+    cur.execute(f"SELECT * FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
+    company = dict(cur.fetchone() or {})
+
+    if fmt == 'yandex':
+        return _build_yandex(listings, company)
+    if fmt == 'avito':
+        return _build_avito(listings, company)
+    if fmt == 'cian':
+        return _build_cian(listings, company)
+    return None
+
+
+def _regenerate_static_feeds(cur, conn, force=False):
+    """Пересобирает XML для всех активных фидов и заливает готовые файлы в S3.
+    Пропускает фид, если он обновлялся меньше STATIC_REGEN_MINUTES назад (если force=False)."""
+    cur.execute(f"SELECT * FROM {SCHEMA}.xml_feeds WHERE is_active = TRUE ORDER BY id ASC")
+    feeds = [dict(r) for r in cur.fetchall()]
+    s3 = None
+    results = []
+
+    for feed in feeds:
+        last_gen = feed.get('last_generated_at')
+        if not force and last_gen:
+            elapsed_min = (datetime.now(timezone.utc) - last_gen.replace(tzinfo=timezone.utc)).total_seconds() / 60
+            if elapsed_min < STATIC_REGEN_MINUTES:
+                results.append({'slug': feed['slug'], 'skipped': True, 'reason': f'{round(elapsed_min, 1)}m ago'})
+                continue
+
+        xml_content = _build_feed_xml(cur, feed['slug'], feed['format'], feed.get('filter_category'), feed.get('filter_deal'))
+        if xml_content is None:
+            results.append({'slug': feed['slug'], 'error': 'Неизвестный формат'})
+            continue
+
+        if s3 is None:
+            s3 = _s3_client()
+        key = f"xml-feeds/{feed['slug']}.xml"
+        s3.put_object(
+            Bucket=S3_BUCKET,
+            Key=key,
+            Body=xml_content.encode('utf-8'),
+            ContentType='application/xml; charset=utf-8',
+            CacheControl='public, max-age=300',
+        )
+        cdn_url = _cdn_url(key)
+        cur.execute(
+            f"UPDATE {SCHEMA}.xml_feeds SET cdn_url = '{_safe(cdn_url, 500)}', last_generated_at = NOW() WHERE id = {feed['id']}"
+        )
+        conn.commit()
+        results.append({'slug': feed['slug'], 'cdn_url': cdn_url, 'regenerated': True})
+
+    return results
 
 
 def _split_images(row):
@@ -731,55 +834,33 @@ def handler(event, context):
     conn = psycopg2.connect(dsn)
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            if method == 'GET' and params.get('action') == 'cron':
+                # Публичный пинг-крон: пересобирает статические файлы в S3, если пора (раз в 10 минут).
+                results = _regenerate_static_feeds(cur, conn, force=False)
+                return _json({'ok': True, 'results': results})
+
+            if method == 'GET' and params.get('action') == 'generate_static':
+                # Ручной принудительный пересчёт (из админки).
+                headers = event.get('headers') or {}
+                token = headers.get('X-Auth-Token') or headers.get('x-auth-token') or ''
+                user = _get_user(cur, token)
+                if not user or user['role'] not in ('admin', 'editor'):
+                    return _json({'error': 'Нет прав'}, 403)
+                results = _regenerate_static_feeds(cur, conn, force=True)
+                return _json({'ok': True, 'results': results})
+
             if method == 'GET':
+                # Legacy: генерация "на лету" по ?feed=slug (оставлено для обратной совместимости).
                 feed_slug = params.get('feed', 'yandex')
                 cur.execute(f"SELECT * FROM {SCHEMA}.xml_feeds WHERE slug = '{_safe(feed_slug, 50)}' AND is_active = TRUE")
                 feed = cur.fetchone()
                 if not feed:
                     return _json({'error': 'Фид не найден'}, 404)
 
-                where = ["status = 'active'", "(is_visible IS NULL OR is_visible = TRUE)"]
-                if feed['filter_category']:
-                    where.append(f"category = '{_safe(feed['filter_category'], 50)}'")
-                if feed['filter_deal']:
-                    where.append(f"deal = '{_safe(feed['filter_deal'], 20)}'")
-                if feed_slug == 'yandex':
-                    where.append("export_yandex = TRUE")
-                elif feed_slug == 'avito':
-                    where.append("export_avito = TRUE")
-                elif feed_slug == 'cian':
-                    where.append("export_cian = TRUE")
-
-                cur.execute(f"SELECT * FROM {SCHEMA}.listings WHERE {' AND '.join(where)} ORDER BY created_at DESC")
-                listings = [dict(r) for r in cur.fetchall()]
-                # Справочник ВРИ: slug → читаемое имя
-                cur.execute(f"SELECT slug, name FROM {SCHEMA}.land_vri")
-                _vri_map = {r['slug']: r['name'] for r in cur.fetchall()}
-                for l in listings:
-                    for k in ('created_at', 'updated_at'):
-                        if l.get(k):
-                            l[k] = l[k].isoformat()
-                    # Для земли: если сотки не заданы — считаем из площади (area в м²)
-                    if l.get('category') == 'land' and not l.get('land_area') and l.get('area'):
-                        try:
-                            l['land_area'] = round(float(l['area']) / 100, 2)
-                        except (TypeError, ValueError):
-                            pass
-                    # ВРИ читаемым названием
-                    if l.get('land_vri') and l['land_vri'] in _vri_map:
-                        l['land_vri'] = _vri_map[l['land_vri']]
-
-                cur.execute(f"SELECT * FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
-                company = dict(cur.fetchone() or {})
-
-                fmt = feed['format']
-                if fmt == 'yandex':
-                    return _xml_response(_build_yandex(listings, company))
-                if fmt == 'avito':
-                    return _xml_response(_build_avito(listings, company))
-                if fmt == 'cian':
-                    return _xml_response(_build_cian(listings, company))
-                return _json({'error': 'Неизвестный формат'}, 400)
+                xml_content = _build_feed_xml(cur, feed_slug, feed['format'], feed.get('filter_category'), feed.get('filter_deal'))
+                if xml_content is None:
+                    return _json({'error': 'Неизвестный формат'}, 400)
+                return _xml_response(xml_content)
 
             if method == 'POST':
                 headers = event.get('headers') or {}

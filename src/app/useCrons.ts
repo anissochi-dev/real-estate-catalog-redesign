@@ -50,6 +50,11 @@ export function useCrons() {
           localStorage.setItem('cian_cron_last_ping', String(Date.now()));
           fireCron('https://functions.poehali.dev/3655e748-2c8d-4998-adba-1cf7aed0eee4?action=cron');
         }
+        const xmlFeedsLast = parseInt(localStorage.getItem('xml_feeds_cron_last_ping') || '0', 10);
+        if (Date.now() - xmlFeedsLast > 10 * 60 * 1000) {
+          localStorage.setItem('xml_feeds_cron_last_ping', String(Date.now()));
+          fireCron('https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=cron');
+        }
       } catch { /* ignore */ }
     };
 

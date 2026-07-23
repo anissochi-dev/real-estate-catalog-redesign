@@ -5,6 +5,12 @@
       "method": "GET",
       "path": "/?feed=yandex",
       "expectedStatus": 200
+    },
+    {
+      "name": "Крон-пинг генерации статических фидов",
+      "method": "GET",
+      "path": "/?action=cron",
+      "expectedStatus": 200
     }
   ]
 }

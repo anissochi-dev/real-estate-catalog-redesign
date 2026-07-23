@@ -4589,22 +4589,24 @@ def _xml_feeds(cur, conn, method, rid, event, user):
 
     if method == 'POST':
         name = _safe(body.get('name') or '', 100)
-        platform = _safe(body.get('platform') or '', 50)
-        feed_type = _safe(body.get('feed_type') or 'export', 20)
-        url = _safe(body.get('url') or '', 500)
-        if not name or not platform:
-            return _err(400, 'Название и платформа обязательны')
-        url_s = "NULL" if not url else f"'{url}'"
+        slug = _safe(body.get('slug') or '', 50)
+        fmt = _safe(body.get('format') or '', 20)
+        filter_category = _safe(body.get('filter_category') or '', 50)
+        filter_deal = _safe(body.get('filter_deal') or '', 20)
+        if not name or not slug or not fmt:
+            return _err(400, 'Название, slug и формат обязательны')
+        cat_s = "NULL" if not filter_category else f"'{filter_category}'"
+        deal_s = "NULL" if not filter_deal else f"'{filter_deal}'"
         cur.execute(
-            f"INSERT INTO {SCHEMA}.xml_feeds (name, platform, feed_type, url) "
-            f"VALUES ('{name}', '{platform}', '{feed_type}', {url_s}) RETURNING id"
+            f"INSERT INTO {SCHEMA}.xml_feeds (name, slug, format, filter_category, filter_deal) "
+            f"VALUES ('{name}', '{slug}', '{fmt}', {cat_s}, {deal_s}) RETURNING id"
         )
         conn.commit()
         return _ok({'id': cur.fetchone()['id'], 'success': True})
 
     if method == 'PUT' and rid:
         fields = []
-        for f, length in [('name', 100), ('platform', 50), ('feed_type', 20), ('url', 500)]:
+        for f, length in [('name', 100), ('slug', 50), ('format', 20), ('filter_category', 50), ('filter_deal', 20)]:
             if f in body:
                 fields.append(f"{f} = {_str_or_null(body[f], length)}")
         if 'is_active' in body:
