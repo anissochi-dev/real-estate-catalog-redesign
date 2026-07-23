@@ -421,7 +421,8 @@ def _build_yandex(listings, company):
     now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S+00:00')
 
     out = ['<?xml version="1.0" encoding="UTF-8"?>']
-    out.append(f'<realty-feed xmlns="http://webmaster.yandex.ru/schemas/feed/realty/2010-06" generation-date="{now}">')
+    out.append('<realty-feed xmlns="http://webmaster.yandex.ru/schemas/feed/realty/2010-06">')
+    out.append(f'<generation-date>{now}</generation-date>')
 
     for l in listings:
         deal_map = {'sale': 'продажа', 'rent': 'аренда', 'business': 'продажа'}
