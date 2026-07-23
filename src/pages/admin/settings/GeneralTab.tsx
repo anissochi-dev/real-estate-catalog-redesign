@@ -175,12 +175,20 @@ export default function GeneralTab({ tab, s, setS, cities, saved, save }: Props)
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-2xl p-6 shadow-sm space-y-4">
-        <div className="font-display font-700 text-lg">Водяной знак</div>
-        <label className="flex items-center gap-2">
-          <input type="checkbox" checked={!!s.watermark_enabled}
-            onChange={e => setS({ ...s, watermark_enabled: e.target.checked })} />
-          <span className="text-sm">Включить водяной знак на фото</span>
-        </label>
+        <div className="flex items-center justify-between gap-3">
+          <div className="font-display font-700 text-lg">Водяной знак</div>
+          <div
+            onClick={() => setS({ ...s, watermark_enabled: !s.watermark_enabled })}
+            className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer flex-shrink-0 ${s.watermark_enabled ? 'bg-brand-blue' : 'bg-muted-foreground/30'}`}
+          >
+            <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${s.watermark_enabled ? 'translate-x-5' : 'translate-x-0'}`} />
+          </div>
+        </div>
+        {!s.watermark_enabled && (
+          <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            Водяной знак выключен — новые фото объектов будут загружаться без него.
+          </div>
+        )}
         <div>
           <label className="text-sm font-semibold block mb-1">Изображение водяного знака</label>
           <ImageUploader
