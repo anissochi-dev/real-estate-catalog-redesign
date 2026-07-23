@@ -1561,12 +1561,13 @@ def _site_health(cur, conn, method, action, event, user):
         """)
         leads_timeline = [{'day': str(r['day']), 'cnt': r['cnt']} for r in cur.fetchall()]
 
-        # 4. Статистика просмотров по источникам (всё время — нет дат в listing_stats)
+        # 4. Статистика просмотров по источникам (с учётом периода)
         cur.execute(f"""
             SELECT COALESCE(NULLIF(source,''), 'site') AS source,
                    event_type,
                    SUM(count) AS total
             FROM {SCHEMA}.listing_stats
+            WHERE 1=1 {stats_period_cond}
             GROUP BY 1, 2 ORDER BY total DESC
         """)
         stats_raw = cur.fetchall()
