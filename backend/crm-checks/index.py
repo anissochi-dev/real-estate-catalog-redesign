@@ -128,6 +128,10 @@ def fetch_zachestny(inn, api_key):
     ИНН 10 цифр = юрлицо, 12 цифр = ИП.
     """
     inn_clean = ''.join(filter(str.isdigit, str(inn)))
+    if not inn_clean:
+        return {'error': 'ИНН не указан или некорректен'}
+    if len(inn_clean) not in (10, 12):
+        return {'error': f'Некорректная длина ИНН: {len(inn_clean)} цифр (должно быть 10 для организации или 12 для ИП)'}
     url = f"https://zachestnyibiznesapi.ru/paid/data/card?api_key={api_key}&id={inn_clean}"
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'BizNest CRM/1.0', 'Accept': 'application/json'})
@@ -296,6 +300,8 @@ def fetch_dadata(inn: str, api_key: str, secret_key: str = '') -> dict:
     inn_clean = ''.join(filter(str.isdigit, str(inn)))
     if not inn_clean:
         return {'error': 'ИНН не указан или некорректен'}
+    if len(inn_clean) not in (10, 12):
+        return {'error': f'Некорректная длина ИНН: {len(inn_clean)} цифр (должно быть 10 для организации или 12 для ИП)'}
     if not api_key:
         return {'error': 'DaData API-ключ не настроен'}
 
@@ -323,6 +329,9 @@ def fetch_dadata(inn: str, api_key: str, secret_key: str = '') -> dict:
         state = data.get('state') or {}
         name_obj = data.get('name') or {}
         addr = data.get('address') or {}
+        addr_data = addr.get('data') if isinstance(addr, dict) else None
+        if not isinstance(addr_data, dict):
+            addr_data = {}
         mgmt = data.get('management') or {}
         opf = data.get('opf') or {}
         finance = data.get('finance') or {}
@@ -370,7 +379,7 @@ def fetch_dadata(inn: str, api_key: str, secret_key: str = '') -> dict:
         fin_profit = finance.get('profit') or ''
         fin_debt   = finance.get('debt') or ''
         fin_penalty= finance.get('penalty') or ''
-        ustavcap   = data.get('finance', {}).get('ustavcap') or data.get('authorized_capital') or ''
+        ustavcap   = finance.get('ustavcap') or data.get('authorized_capital') or ''
 
         card = {
             '_type':             'ip' if data.get('type') == 'INDIVIDUAL' else 'ul',
@@ -384,8 +393,8 @@ def fetch_dadata(inn: str, api_key: str, secret_key: str = '') -> dict:
             'status':            status_map.get(status_code, status_code),
             'status_code':       status_code,
             'address':           (addr.get('value') or '').strip(),
-            'address_postal':    addr.get('data', {}).get('postal_code') or '' if isinstance(addr.get('data'), dict) else '',
-            'address_region':    addr.get('data', {}).get('region_with_type') or '' if isinstance(addr.get('data'), dict) else '',
+            'address_postal':    addr_data.get('postal_code') or '',
+            'address_region':    addr_data.get('region_with_type') or '',
             'reg_date':          state.get('registration_date') or '',
             'liquidation_date':  state.get('liquidation_date') or '',
             'okved':             data.get('okved') or '',
@@ -425,6 +434,8 @@ def fetch_checko(inn: str, api_key: str) -> dict:
     inn_clean = ''.join(filter(str.isdigit, str(inn)))
     if not inn_clean:
         return {'error': 'ИНН не указан или некорректен'}
+    if len(inn_clean) not in (10, 12):
+        return {'error': f'Некорректная длина ИНН: {len(inn_clean)} цифр (должно быть 10 для организации или 12 для ИП)'}
     if not api_key:
         return {'error': 'Checko API-ключ не настроен'}
 
