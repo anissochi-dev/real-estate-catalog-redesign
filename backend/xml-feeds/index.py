@@ -850,17 +850,9 @@ def handler(event, context):
                 return _json({'ok': True, 'results': results})
 
             if method == 'GET':
-                # Legacy: генерация "на лету" по ?feed=slug (оставлено для обратной совместимости).
-                feed_slug = params.get('feed', 'yandex')
-                cur.execute(f"SELECT * FROM {SCHEMA}.xml_feeds WHERE slug = '{_safe(feed_slug, 50)}' AND is_active = TRUE")
-                feed = cur.fetchone()
-                if not feed:
-                    return _json({'error': 'Фид не найден'}, 404)
-
-                xml_content = _build_feed_xml(cur, feed_slug, feed['format'], feed.get('filter_category'), feed.get('filter_deal'))
-                if xml_content is None:
-                    return _json({'error': 'Неизвестный формат'}, 400)
-                return _xml_response(xml_content)
+                # Фиды отдаются только готовыми статическими файлами с CDN (см. cdn_url в xml_feeds).
+                # Генерация "на лету" по ?feed=slug удалена — используйте ссылку из админки.
+                return _json({'error': 'Используйте статическую ссылку на файл (cdn_url) из раздела XML фиды в админке'}, 410)
 
             if method == 'POST':
                 headers = event.get('headers') or {}
