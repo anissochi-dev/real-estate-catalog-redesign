@@ -1380,6 +1380,7 @@ def handler(event, context):
                 cur.execute(
                     f"SELECT id, title, image, category, deal, city, status "
                     f"FROM {SCHEMA}.listings WHERE export_other = TRUE AND status = 'active' "
+                    f"AND (is_visible IS NULL OR is_visible = TRUE) "
                     f"ORDER BY created_at DESC"
                 )
                 shared_listings = [dict(r) for r in cur.fetchall()]
