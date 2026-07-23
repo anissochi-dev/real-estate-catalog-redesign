@@ -7,6 +7,7 @@ import PriceAssessmentTab from '@/pages/admin/marketing/PriceAssessmentTab';
 import VkAdsTab from '@/pages/admin/marketing/VkAdsTab';
 import AdCabinetDashboard from '@/pages/admin/ad-cabinet/AdCabinetDashboard';
 import CianCabinetTab from '@/pages/admin/ad-cabinet/CianCabinetTab';
+import YandexCallsTab from '@/pages/admin/ad-cabinet/YandexCallsTab';
 
 type Tab = 'ad-cabinet' | 'dashboard' | 'pricing' | 'utm' | 'social' | 'vk-ads';
 
@@ -40,7 +41,7 @@ export default function MarketingAdmin() {
       </div>
 
       {tab === 'ad-cabinet' && (
-        adPlatform === 'cian' ? (
+        adPlatform === 'cian' || adPlatform === 'yandex_realty' ? (
           <div className="space-y-3">
             <button
               onClick={() => setAdPlatform(null)}
@@ -48,7 +49,7 @@ export default function MarketingAdmin() {
             >
               <Icon name="ArrowLeft" size={14} /> Назад к дашборду
             </button>
-            <CianCabinetTab />
+            {adPlatform === 'cian' ? <CianCabinetTab /> : <YandexCallsTab />}
           </div>
         ) : (
           <AdCabinetDashboard onOpenPlatform={setAdPlatform} />

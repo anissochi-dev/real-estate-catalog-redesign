@@ -28,6 +28,10 @@ STATIC_REGEN_MINUTES = 10
 CIAN_BASE = 'https://public-api.cian.ru'
 CIAN_SYNC_INTERVAL_HOURS = 6
 
+YANDEX_REALTY_API_BASE = 'https://api.realty.yandex.net/2.0'
+YANDEX_REALTY_PARTNER_TOKEN = 'public-partner-ak0hmqjjk1thu3eutxy8hd1i56mhprpfbb6575qw'
+YANDEX_REALTY_SYNC_INTERVAL_HOURS = 6
+
 CONTROL_CHARS_RE = re.compile(r'[\x00-\x08\x0B\x0C\x0E-\x1F]')
 XML_DECL_RE = re.compile(r'^<\?xml[^?]*\?>', re.IGNORECASE)
 CDATA_RE = re.compile(r'<!\[CDATA\[.*?\]\]>', re.DOTALL)
@@ -1142,6 +1146,158 @@ def _cian_handle(cur, conn, params):
     return _json(_cian_read_from_db(cur))
 
 
+# ── Яндекс.Недвижимость: синхронизация звонков через Public Partner API ─────
+# https://yandex.ru/support/realty-partner/ru/api-calls — только список звонков.
+
+def _yandex_calls_get(oauth_token, client_id, agency_id, date_from, date_to):
+    qs = urllib.parse.urlencode({
+        'clientId': client_id,
+        'agencyId': agency_id,
+        'fromDate': date_from,
+        'toDate': date_to,
+        'pageNum': '0',
+        'pageSize': '500',
+    })
+    url = f'{YANDEX_REALTY_API_BASE}/publicPartner/calls?{qs}'
+    req = urllib.request.Request(url, headers={
+        'accept': 'application/json',
+        'X-Authorization': f'Vertis {YANDEX_REALTY_PARTNER_TOKEN}',
+        'Authorization': f'OAuth {oauth_token}',
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return json.loads(r.read().decode()), None
+    except urllib.error.HTTPError as e:
+        try:
+            body = e.read().decode()[:300]
+        except Exception:
+            body = ''
+        return None, f'HTTP {e.code}: {body}'
+    except Exception as e:
+        return None, str(e)
+
+
+def _yandex_calls_sync(cur, conn, oauth_token, client_id, agency_id):
+    """Синхронизирует звонки Яндекс.Недвижимости за последние 30 дней → БД."""
+    date_to = datetime.now().strftime('%Y-%m-%d')
+    date_from = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+
+    data, err = _yandex_calls_get(oauth_token, client_id, agency_id, date_from, date_to)
+    if err:
+        cur.execute(f"""
+            INSERT INTO {SCHEMA}.yandex_sync_log (synced_at, calls_count, error)
+            VALUES (NOW(), 0, %s)
+        """, (err[:500],))
+        conn.commit()
+        return {'calls_count': 0, 'error': err}
+
+    calls = (data or {}).get('calls') or []
+    calls_count = 0
+    for c in calls:
+        obj_name = c.get('objectName') or ''
+        ext_id_match = re.search(r'\b(\d{4,})\b', obj_name)
+        ext_id = int(ext_id_match.group(1)) if ext_id_match else None
+        cur.execute(f"""
+            INSERT INTO {SCHEMA}.yandex_calls
+                (external_id, object_name, incoming_phone, internal_phone, wait_duration, call_duration,
+                 revenue, object_type, campaign_tariff, client_tariff, call_timestamp, synced_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW())
+            ON CONFLICT (call_timestamp, incoming_phone, internal_phone) DO UPDATE SET
+                object_name=EXCLUDED.object_name, wait_duration=EXCLUDED.wait_duration,
+                call_duration=EXCLUDED.call_duration, revenue=EXCLUDED.revenue,
+                object_type=EXCLUDED.object_type, synced_at=NOW()
+        """, (
+            ext_id, obj_name, c.get('incomingPhone'), c.get('internalPhone'),
+            c.get('waitDuration'), c.get('callDuration'), c.get('revenue'),
+            c.get('objectType'), c.get('campaignTariff'), c.get('clientTariff'), c.get('timestamp'),
+        ))
+        calls_count += 1
+    conn.commit()
+
+    cur.execute(f"""
+        INSERT INTO {SCHEMA}.yandex_sync_log (synced_at, calls_count)
+        VALUES (NOW(), %s)
+    """, (calls_count,))
+    conn.commit()
+
+    return {'calls_count': calls_count}
+
+
+def _yandex_calls_read_from_db(cur):
+    """Читает статистику звонков Яндекс.Недвижимости из БД для фронтенда."""
+    cur.execute(f"""
+        SELECT c.external_id, c.object_name, c.incoming_phone, c.internal_phone,
+               c.wait_duration, c.call_duration, c.revenue, c.object_type,
+               c.campaign_tariff, c.client_tariff, c.call_timestamp,
+               l.title, l.slug, l.category, l.deal, l.price, l.image
+        FROM {SCHEMA}.yandex_calls c
+        LEFT JOIN {SCHEMA}.listings l ON l.id = c.external_id
+        ORDER BY c.call_timestamp DESC
+        LIMIT 500
+    """)
+    calls = [dict(r) for r in cur.fetchall()]
+
+    cur.execute(f"SELECT * FROM {SCHEMA}.yandex_sync_log ORDER BY synced_at DESC LIMIT 1")
+    last_sync = dict(cur.fetchone() or {})
+
+    total_calls = len(calls)
+    total_duration = sum(c.get('call_duration') or 0 for c in calls)
+    unique_objects = len({c['external_id'] for c in calls if c.get('external_id')})
+
+    return {
+        'ok': True,
+        'last_sync': last_sync,
+        'summary': {
+            'total_calls': total_calls,
+            'total_duration': total_duration,
+            'unique_objects': unique_objects,
+        },
+        'calls': calls,
+    }
+
+
+def _yandex_calls_handle(cur, conn, params):
+    """Обрабатывает action=yandex_stats|yandex_cron: читает/синхронизирует звонки Яндекс.Недвижимости."""
+    action = params.get('action', '')
+    force_sync = params.get('sync') == '1'
+
+    cur.execute(f"SELECT api_key, extra, is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = 'yandex_realty' LIMIT 1")
+    row = cur.fetchone()
+    oauth_token = (row.get('api_key') or '').strip() if row else ''
+    extra = row.get('extra') or {} if row else {}
+    client_id = (extra.get('client_id') or '').strip()
+    agency_id = (extra.get('agency_id') or '').strip()
+    is_active = bool(row.get('is_active')) if row else False
+
+    if not oauth_token or not client_id:
+        return _json({'error': 'Яндекс.Недвижимость не настроена: заполните OAuth Token и Client ID в Настройках → Интеграции → Площадки'}, 400)
+
+    if action == 'yandex_cron' or force_sync:
+        if action == 'yandex_cron':
+            if not is_active:
+                return _json({'ok': True, 'skipped': True, 'reason': 'Интеграция выключена'})
+            cur.execute(f"SELECT synced_at FROM {SCHEMA}.yandex_sync_log ORDER BY synced_at DESC LIMIT 1")
+            last = cur.fetchone()
+            if last and last['synced_at']:
+                elapsed = (datetime.now(last['synced_at'].tzinfo) - last['synced_at']).total_seconds() / 3600
+                if elapsed < YANDEX_REALTY_SYNC_INTERVAL_HOURS:
+                    return _json({'ok': True, 'skipped': True, 'reason': f'Последняя синхронизация {round(elapsed, 1)}ч назад'})
+
+        result = _yandex_calls_sync(cur, conn, oauth_token, client_id, agency_id)
+        data = _yandex_calls_read_from_db(cur)
+        return _json({**data, 'synced_now': True, 'sync_result': result})
+
+    cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.yandex_sync_log")
+    never_synced = cur.fetchone()['c'] == 0
+
+    if never_synced:
+        result = _yandex_calls_sync(cur, conn, oauth_token, client_id, agency_id)
+        data = _yandex_calls_read_from_db(cur)
+        return _json({**data, 'synced_now': True, 'sync_result': result})
+
+    return _json(_yandex_calls_read_from_db(cur))
+
+
 def handler(event, context):
     method = event.get('httpMethod', 'GET')
     params = event.get('queryStringParameters') or {}
@@ -1164,14 +1320,23 @@ def handler(event, context):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             if method == 'GET' and params.get('action') == 'cron':
                 # Публичный пинг-крон: пересобирает статические файлы в S3 (раз в 10 мин)
-                # и параллельно синхронизирует кабинет ЦИАН (раз в 6 часов, если подключён).
+                # и параллельно синхронизирует кабинеты ЦИАН и Яндекс.Недвижимость (раз в 6 часов, если подключены).
                 results = _regenerate_static_feeds(cur, conn, force=False)
                 cur.execute(f"SELECT is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = 'cian' LIMIT 1")
                 row = cur.fetchone()
                 cian_result = None
                 if row and row.get('is_active'):
                     cian_result = _cian_handle(cur, conn, {'action': 'cian_cron'})
-                return _json({'ok': True, 'results': results, 'cian': json.loads(cian_result['body']) if cian_result else None})
+                cur.execute(f"SELECT is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = 'yandex_realty' LIMIT 1")
+                row = cur.fetchone()
+                yandex_result = None
+                if row and row.get('is_active'):
+                    yandex_result = _yandex_calls_handle(cur, conn, {'action': 'yandex_cron'})
+                return _json({
+                    'ok': True, 'results': results,
+                    'cian': json.loads(cian_result['body']) if cian_result else None,
+                    'yandex': json.loads(yandex_result['body']) if yandex_result else None,
+                })
 
             if method == 'GET' and params.get('action') == 'generate_static':
                 # Ручной принудительный пересчёт (из админки).
@@ -1186,6 +1351,10 @@ def handler(event, context):
             if method == 'GET' and params.get('action') in ('cian_stats', 'cian_sync', 'cian_cron'):
                 # Статистика/баланс/услуги кабинета ЦИАН (объединено из backend/cian-api).
                 return _cian_handle(cur, conn, params)
+
+            if method == 'GET' and params.get('action') in ('yandex_stats', 'yandex_sync', 'yandex_cron'):
+                # Статистика звонков кабинета Яндекс.Недвижимость (Public Partner API).
+                return _yandex_calls_handle(cur, conn, params)
 
             if method == 'GET':
                 # Фиды отдаются только готовыми статическими файлами с CDN (см. cdn_url в xml_feeds).

@@ -35,8 +35,9 @@ const PLATFORM_META: Record<string, { label: string; icon: string; color: string
     icon: 'Home',
     color: 'text-red-600 bg-red-50 border-red-200',
     fields: [
-      { key: 'api_key', label: 'OAuth Token', hint: 'Получите через Яндекс OAuth' },
-      { key: 'extra.partner_id', label: 'Partner ID', hint: 'ID партнёра в Яндекс.Недвижимости' },
+      { key: 'api_key', label: 'OAuth Token', hint: 'oauth.yandex.ru → авторизуйтесь под логином партнёрского кабинета', secret: true },
+      { key: 'extra.client_id', label: 'Client ID', hint: 'ID клиента в Балансе Яндекса (Партнёрский кабинет → Реквизиты)' },
+      { key: 'extra.agency_id', label: 'Agency ID', hint: 'ID агентства в Балансе Яндекса (необязательно)' },
     ],
   },
   domclick: {

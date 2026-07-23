@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
-import { CIAN_API_URL, CianData, PlatformCard, SERVICE_TYPE_LABELS } from './types';
+import { CIAN_API_URL, CianData, PlatformCard, SERVICE_TYPE_LABELS, YANDEX_CALLS_API_URL, YandexCallsData } from './types';
 
 interface Props {
   onOpenPlatform: (key: string) => void;
@@ -64,7 +64,9 @@ function PlatformCardView({ card, onClick }: { card: PlatformCard; onClick: () =
       {card.connected ? (
         <>
           <div className="text-xs text-muted-foreground">
-            {card.offersCount} объявл.{card.balance !== null ? ` · ${card.balance.toLocaleString('ru')} ₽` : ''}
+            {card.key === 'yandex_realty'
+              ? `${card.callsCount || 0} звонков за 30 дней`
+              : `${card.offersCount} объявл.${card.balance !== null ? ` · ${card.balance.toLocaleString('ru')} ₽` : ''}`}
           </div>
           {card.services.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-0.5">
@@ -89,21 +91,24 @@ function PlatformCardView({ card, onClick }: { card: PlatformCard; onClick: () =
 
 export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
   const [cian, setCian] = useState<CianData | null>(null);
+  const [yandex, setYandex] = useState<YandexCallsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
 
   const load = (sync = false) => {
     if (sync) setSyncing(true); else setLoading(true);
-    const url = sync ? `${CIAN_API_URL}&sync=1` : CIAN_API_URL;
-    fetch(url)
-      .then(r => r.json())
-      .then(d => {
-        if (d.error) { setError(d.error); setCian(null); }
-        else { setCian(d); setError(null); }
-      })
-      .catch(() => setError('Не удалось подключиться к ЦИАН'))
-      .finally(() => { setLoading(false); setSyncing(false); });
+    const cianUrl = sync ? `${CIAN_API_URL}&sync=1` : CIAN_API_URL;
+    const yandexUrl = sync ? `${YANDEX_CALLS_API_URL}&sync=1` : YANDEX_CALLS_API_URL;
+    Promise.all([
+      fetch(cianUrl).then(r => r.json()).catch(() => ({ error: 'network' })),
+      fetch(yandexUrl).then(r => r.json()).catch(() => ({ error: 'network' })),
+    ]).then(([cianData, yandexData]) => {
+      if (cianData.error) { setError(cianData.error); setCian(null); }
+      else { setCian(cianData); setError(null); }
+      if (!yandexData.error) setYandex(yandexData);
+      else setYandex(null);
+    }).finally(() => { setLoading(false); setSyncing(false); });
   };
 
   useEffect(() => { load(); }, []);
@@ -122,6 +127,17 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
         balance: cian.balance?.total_balance ? Number(cian.balance.total_balance) : 0,
         status: cian.summary.published_count > 0 ? 'active' : 'paused',
         services: servicesEntries,
+      };
+    }
+    if (key === 'yandex_realty' && yandex) {
+      return {
+        key, label: 'Яндекс.Недвижимость', icon: '', color: '',
+        connected: true,
+        offersCount: yandex.summary.unique_objects,
+        balance: null,
+        status: yandex.summary.total_calls > 0 ? 'active' : 'paused',
+        services: [],
+        callsCount: yandex.summary.total_calls,
       };
     }
     return {
@@ -171,10 +187,11 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
 
       {!loading && (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <KpiCard icon="Building2" label="Всего объявлений" value={fmt(totalOffers)} color="blue" />
             <KpiCard icon="CheckCircle2" label="Активных площадок" value={activeCount} sub={`из ${platforms.length}`} color="green" />
             <KpiCard icon="Eye" label="Просмотров (ЦИАН)" value={fmt(cian?.summary.total_views || 0)} color="purple" />
+            <KpiCard icon="Phone" label="Звонков (Яндекс)" value={fmt(yandex?.summary.total_calls || 0)} color="rose" />
             <KpiCard icon="Wallet" label="Баланс площадок" value={`${fmt(totalBalance)} ₽`} color="amber" />
           </div>
 
