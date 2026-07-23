@@ -287,6 +287,23 @@ YANDEX_CATEGORY_MAP = {
     'car_service': 'производственное помещение',
 }
 
+# Значение <commercial-type> для YRL-фида Яндекса (только для category=commercial).
+# Официально подтверждено значение "office" (пример из документации Яндекса);
+# остальные — по аналогии, требуют сверки через валидатор Яндекс.Вебмастера.
+YANDEX_COMMERCIAL_TYPE_MAP = {
+    'office': 'office',
+    'retail': 'retail',
+    'warehouse': 'warehouse',
+    'restaurant': 'freeAppointmentObject',
+    'hotel': 'hotel',
+    'business': 'business',
+    'gab': 'business',
+    'production': 'production',
+    'building': 'building',
+    'free_purpose': 'freeAppointmentObject',
+    'car_service': 'production',
+}
+
 AVITO_OBJECT_TYPE_MAP = {
     'office': 'Офисное помещение',
     'retail': 'Торговое помещение',
@@ -415,10 +432,16 @@ def _total_price(l):
 
 def _build_yandex(listings, company):
     company_name = _xml_escape(company.get('company_name', 'BIZNEST'))
-    phone = _xml_escape(company.get('company_phone', ''))
     email = _xml_escape(company.get('company_email', ''))
     site_url = (company.get('site_url') or '').rstrip('/')
     now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S+00:00')
+
+    # Телефон строго в формате +7XXXXXXXXXX (только цифры, код страны + 10 цифр)
+    raw_phone = company.get('company_phone', '') or ''
+    digits = re.sub(r'\D', '', raw_phone)
+    if digits.startswith('8') and len(digits) == 11:
+        digits = '7' + digits[1:]
+    phone = f'+{digits}' if len(digits) == 11 and digits.startswith('7') else ''
 
     out = ['<?xml version="1.0" encoding="UTF-8"?>']
     out.append('<realty-feed xmlns="http://webmaster.yandex.ru/schemas/feed/realty/2010-06">')
@@ -426,19 +449,33 @@ def _build_yandex(listings, company):
 
     for l in listings:
         deal_map = {'sale': 'продажа', 'rent': 'аренда', 'business': 'продажа'}
-        cat = YANDEX_CATEGORY_MAP.get(l.get('category'), 'коммерческая')
+        commercial_type = YANDEX_COMMERCIAL_TYPE_MAP.get(l.get('category'), 'office')
         deal = deal_map.get(l.get('deal'), 'продажа')
+
+        # creation-date в строгом ISO 8601: YYYY-MM-DDTHH:mm:ss+00:00 (без микросекунд)
+        creation_date = now
+        raw_created = l.get('created_at')
+        if raw_created:
+            try:
+                dt = datetime.fromisoformat(str(raw_created).replace('Z', '+00:00'))
+                if dt.tzinfo is None:
+                    creation_date = dt.strftime('%Y-%m-%dT%H:%M:%S+00:00')
+                else:
+                    creation_date = dt.strftime('%Y-%m-%dT%H:%M:%S%z')
+                    creation_date = creation_date[:-2] + ':' + creation_date[-2:]
+            except (ValueError, TypeError):
+                pass
 
         out.append(f'<offer internal-id="{l["id"]}">')
         out.append(f'<type>{deal}</type>')
-        out.append('<property-type>коммерческая</property-type>')
-        out.append(f'<category>{cat}</category>')
-        out.append('<deal-status>агентство</deal-status>')
-        out.append(f'<creation-date>{l["created_at"]}</creation-date>')
-        if site_url:
-            out.append(f'<url>{site_url}/listing/{l["id"]}</url>')
+        out.append('<category>commercial</category>')
+        out.append(f'<commercial-type>{commercial_type}</commercial-type>')
+        # deal-status обязателен только для аренды; для продажи не передаётся
+        if l.get('deal') == 'rent':
+            out.append('<deal-status>direct rent</deal-status>')
+        out.append(f'<creation-date>{creation_date}</creation-date>')
 
-        # Адрес и геолокация
+        # Адрес, геолокация и метро — всё внутри <location>
         out.append('<location>')
         out.append('<country>Россия</country>')
         out.append(f'<locality-name>{_xml_escape(l.get("city") or "Краснодар")}</locality-name>')
@@ -449,6 +486,12 @@ def _build_yandex(listings, company):
         if l.get('lat') and l.get('lng'):
             out.append(f'<latitude>{l["lat"]}</latitude>')
             out.append(f'<longitude>{l["lng"]}</longitude>')
+        if l.get('subway_station'):
+            out.append('<metro>')
+            out.append(f'<name>{_xml_escape(l["subway_station"])}</name>')
+            if l.get('subway_distance'):
+                out.append(f'<time-on-foot>{l["subway_distance"]}</time-on-foot>')
+            out.append('</metro>')
         out.append('</location>')
 
         # Агент
@@ -461,14 +504,13 @@ def _build_yandex(listings, company):
         out.append('<category>agency</category>')
         out.append('</sales-agent>')
 
-        # Цена
+        # Цена (unit не передаём — value всегда итоговая сумма, а не цена за м²)
         out.append('<price>')
         price_val = _total_price(l)
         out.append(f'<value>{price_val}</value>')
         out.append('<currency>RUB</currency>')
         if l.get('deal') == 'rent':
             out.append('<period>month</period>')
-            out.append('<unit>всего</unit>')
         out.append('</price>')
 
         # Площадь
@@ -496,9 +538,9 @@ def _build_yandex(listings, company):
         if l.get('condition') and l['condition'] in CONDITION_YANDEX:
             out.append(f'<quality>{CONDITION_YANDEX[l["condition"]]}</quality>')
 
-        # Класс здания
+        # Класс здания (office-class: A/A+/B/B+/C/C+)
         if l.get('building_class'):
-            out.append(f'<building-class>{_xml_escape(l["building_class"])}</building-class>')
+            out.append(f'<office-class>{_xml_escape(l["building_class"])}</office-class>')
 
         # Год постройки
         if l.get('building_year'):
@@ -508,34 +550,31 @@ def _build_yandex(listings, company):
         if l.get('ceiling_height'):
             out.append(f'<ceiling-height>{l["ceiling_height"]}</ceiling-height>')
 
-        # Электричество
+        # Электрическая мощность в кВт (целое число)
         if l.get('electricity_kw'):
-            out.append(f'<electricity>{l["electricity_kw"]}</electricity>')
+            try:
+                out.append(f'<electric-capacity>{int(float(l["electricity_kw"]))}</electric-capacity>')
+            except (TypeError, ValueError):
+                pass
 
-        # Парковка
-        parking_map = {'none': 'нет', 'street': 'открытая', 'building': 'подземная'}
+        # Парковка — факт наличия охраняемой парковки
         if l.get('parking') and l['parking'] != 'none':
-            out.append(f'<parking-type>{parking_map.get(l["parking"], "")}</parking-type>')
-
-        # Метро
-        if l.get('subway_station'):
-            out.append('<metro>')
-            out.append(f'<name>{_xml_escape(l["subway_station"])}</name>')
-            if l.get('subway_distance'):
-                out.append(f'<time-on-foot>{l["subway_distance"]}</time-on-foot>')
-            out.append('</metro>')
+            out.append('<parking>true</parking>')
 
         # Описание
         if l.get('description'):
             out.append(f'<description>{_xml_escape(l["description"])}</description>')
 
-        # Фото
-        for img in _split_images(l):
+        # Фото — не меньше двух по требованиям Яндекса
+        images = _split_images(l)
+        for img in images:
             out.append(f'<image>{_xml_escape(img)}</image>')
 
-        # Видео
-        if l.get('video_url'):
-            out.append(f'<video>{_xml_escape(l["video_url"])}</video>')
+        # Видео — только ссылки на YouTube
+        if l.get('video_url') and 'youtu' in l['video_url'].lower():
+            out.append('<video-review>')
+            out.append(f'<youtube-video-review-url>{_xml_escape(l["video_url"])}</youtube-video-review-url>')
+            out.append('</video-review>')
 
         out.append('</offer>')
 
