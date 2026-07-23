@@ -1577,21 +1577,22 @@ def _site_health(cur, conn, method, action, event, user):
                 views_by_source[s] = {}
             views_by_source[s][r['event_type']] = r['total']
 
-        # 5. Топ объектов по просмотрам
+        # 5. Топ объектов по просмотрам (+ реальные заявки и дни на рынке)
         cur.execute(f"""
-            SELECT id, title, category, deal, views_site, price, district,
-                   leads_count, days_on_market
-            FROM {SCHEMA}.listings
-            WHERE status = 'active' AND views_site > 0
-            ORDER BY views_site DESC LIMIT 10
+            SELECT l.id, l.title, l.category, l.deal, l.views_site, l.price, l.district,
+                   COALESCE(lc.cnt, 0) AS leads_count,
+                   GREATEST(0, DATE_PART('day', NOW() - l.created_at))::int AS days_on_market
+            FROM {SCHEMA}.listings l
+            LEFT JOIN (
+                SELECT listing_id, COUNT(*) AS cnt
+                FROM {SCHEMA}.leads
+                WHERE listing_id IS NOT NULL
+                GROUP BY listing_id
+            ) lc ON lc.listing_id = l.id
+            WHERE l.status = 'active' AND l.views_site > 0
+            ORDER BY l.views_site DESC LIMIT 10
         """)
-        top_listings = []
-        for r in cur.fetchall():
-            row = dict(r)
-            # days_on_market может быть вычислен если нет колонки
-            if row.get('days_on_market') is None:
-                row['days_on_market'] = 0
-            top_listings.append(row)
+        top_listings = [dict(r) for r in cur.fetchall()]
 
         # 6. Статистика объектов по категориям
         cur.execute(f"""
