@@ -148,6 +148,11 @@ export default function ListingEditorExtraSection({
               onChange={e => setEditing({ ...editing, export_cian: e.target.checked })} />
             ЦИАН
           </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={editing.export_other !== false}
+              onChange={e => setEditing({ ...editing, export_other: e.target.checked })} />
+            Разное <span className="text-[10px] text-muted-foreground font-normal">(доп. площадки, вкл. по умолчанию)</span>
+          </label>
         </div>
       </div>
 

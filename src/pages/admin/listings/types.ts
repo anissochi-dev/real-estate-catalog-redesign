@@ -48,6 +48,7 @@ export interface Listing {
   export_yandex: boolean;
   export_avito: boolean;
   export_cian: boolean;
+  export_other: boolean;
   created_at: string;
   updated_at: string;
   slug: string | null;
@@ -216,7 +217,7 @@ export const empty: Partial<Listing> = {
   owner_name: '', owner_phone: '', owner_phone2: '', price_unit: 'total',
   purpose: '', condition: '', parking: 'none', entrance: 'street',
   floor: null, total_floors: null, video_url: '', video_type: '',
-  use_watermark: true, export_yandex: false, export_avito: false, export_cian: false,
+  use_watermark: true, export_yandex: false, export_avito: false, export_cian: false, export_other: true,
   slug: null, seo_title: '', seo_description: '',
   tenant_name: '', monthly_rent: null, yearly_rent: null,
   finishing: '', ceiling_height: null, electricity_kw: null,

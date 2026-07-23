@@ -198,6 +198,11 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal):
         where.append("export_avito = TRUE")
     elif fmt == 'cian':
         where.append("export_cian = TRUE")
+    elif fmt == 'other':
+        # Площадки группы «Разное» (realtymag, rucountry и т.п.) — универсальные бесплатные
+        # каталоги без API. Один общий флаг «Р» на объекте включает выгрузку сразу во ВСЕ
+        # такие площадки одновременно (в отличие от Я/А/Ц, у каждой из которых свой флаг).
+        where.append("export_other = TRUE")
 
     cur.execute(f"SELECT * FROM {SCHEMA}.listings WHERE {' AND '.join(where)} ORDER BY created_at DESC")
     listings = [dict(r) for r in cur.fetchall()]
@@ -225,6 +230,10 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal):
         return _build_avito(listings, company)
     if fmt == 'cian':
         return _build_cian(listings, company)
+    if fmt == 'other':
+        # Площадки «Разное» без собственного формата — используем универсальную
+        # yandex-схему (её принимает большинство каталогов недвижимости).
+        return _build_yandex(listings, company)
     return None
 
 
@@ -1358,6 +1367,27 @@ def handler(event, context):
             if method == 'GET' and params.get('action') in ('yandex_stats', 'yandex_sync', 'yandex_cron'):
                 # Статистика звонков кабинета Яндекс.Недвижимость (Public Partner API).
                 return _yandex_calls_handle(cur, conn, params)
+
+            if method == 'GET' and params.get('action') == 'other_platforms':
+                # Вкладка «Разное»: список площадок формата 'other' (realtymag, rucountry и т.п.)
+                # с количеством и списком выгружаемых на них объектов (флаг export_other) и статусом
+                # автостатистики — площадка либо поддерживает передачу цифр через API, либо нет.
+                cur.execute(
+                    f"SELECT id, slug, name, is_active, cdn_url, last_generated_at, supports_stats "
+                    f"FROM {SCHEMA}.xml_feeds WHERE format = 'other' ORDER BY id ASC"
+                )
+                feeds = [dict(r) for r in cur.fetchall()]
+                cur.execute(
+                    f"SELECT id, title, image, category, deal, city, status "
+                    f"FROM {SCHEMA}.listings WHERE export_other = TRUE AND status = 'active' "
+                    f"ORDER BY created_at DESC"
+                )
+                shared_listings = [dict(r) for r in cur.fetchall()]
+                for f in feeds:
+                    f['listings_count'] = len(shared_listings)
+                    f['listings'] = shared_listings
+                    f['stats'] = None  # ручного ввода нет; появится, когда площадка подключит API
+                return _json({'platforms': feeds})
 
             if method == 'GET':
                 # Фиды отдаются только готовыми статическими файлами с CDN (см. cdn_url в xml_feeds).

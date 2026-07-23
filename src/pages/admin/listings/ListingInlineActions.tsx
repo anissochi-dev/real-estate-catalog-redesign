@@ -193,6 +193,7 @@ export default function ListingInlineActions({ listingId: _listingId, onBulk, on
                   { platform: 'yandex', label: 'Яндекс.Недвижимость', icon: 'Building2' },
                   { platform: 'avito',  label: 'Авито',               icon: 'ShoppingBag' },
                   { platform: 'cian',   label: 'ЦИАН',                icon: 'MapPin' },
+                  { platform: 'other',  label: 'Разное',              icon: 'LayoutGrid' },
                   { platform: 'all',    label: 'Все площадки',        icon: 'Globe' },
                 ].map(({ platform, label, icon }) => (
                   <div key={platform} className="flex items-center justify-between px-3 py-1.5 border-b border-border/30 last:border-0">

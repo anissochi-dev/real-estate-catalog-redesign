@@ -20,6 +20,7 @@ const PLATFORMS = [
   ['yandex', 'Яндекс.Недвижимость'],
   ['avito', 'Авито'],
   ['cian', 'ЦИАН'],
+  ['other', 'Разное (доп. площадки)'],
 ];
 
 function timeAgo(iso: string | null): string {

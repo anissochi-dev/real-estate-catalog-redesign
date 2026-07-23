@@ -8,11 +8,13 @@ import VkAdsTab from '@/pages/admin/marketing/VkAdsTab';
 import AdCabinetDashboard from '@/pages/admin/ad-cabinet/AdCabinetDashboard';
 import CianCabinetTab from '@/pages/admin/ad-cabinet/CianCabinetTab';
 import YandexCallsTab from '@/pages/admin/ad-cabinet/YandexCallsTab';
+import OtherPlatformsTab from '@/pages/admin/ad-cabinet/OtherPlatformsTab';
 
-type Tab = 'ad-cabinet' | 'dashboard' | 'pricing' | 'utm' | 'social' | 'vk-ads';
+type Tab = 'ad-cabinet' | 'other-platforms' | 'dashboard' | 'pricing' | 'utm' | 'social' | 'vk-ads';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'ad-cabinet', label: 'Рекламный кабинет', icon: 'Megaphone' },
+  { id: 'other-platforms', label: 'Разное', icon: 'LayoutGrid' },
   { id: 'dashboard', label: 'Пульт',       icon: 'LayoutDashboard' },
   { id: 'pricing',   label: 'Оценка цен',  icon: 'Sparkles' },
   { id: 'utm',       label: 'UTM-ссылки',  icon: 'Link' },
@@ -55,6 +57,7 @@ export default function MarketingAdmin() {
           <AdCabinetDashboard onOpenPlatform={setAdPlatform} />
         )
       )}
+      {tab === 'other-platforms' && <OtherPlatformsTab />}
       {tab === 'dashboard' && <MarketingDashboard />}
       {tab === 'pricing'   && <PriceAssessmentTab />}
       {tab === 'utm'       && <UtmTab />}
