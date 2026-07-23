@@ -288,20 +288,22 @@ YANDEX_CATEGORY_MAP = {
 }
 
 # Значение <commercial-type> для YRL-фида Яндекса (только для category=commercial).
-# Официально подтверждено значение "office" (пример из документации Яндекса);
-# остальные — по аналогии, требуют сверки через валидатор Яндекс.Вебмастера.
+# Точный список допустимых значений подтверждён валидатором Яндекс.Вебмастера:
+# office, retail, warehouse, free purpose, land, manufacturing, auto repair,
+# business, legal address, public catering, hotel.
 YANDEX_COMMERCIAL_TYPE_MAP = {
     'office': 'office',
     'retail': 'retail',
     'warehouse': 'warehouse',
-    'restaurant': 'freeAppointmentObject',
+    'restaurant': 'public catering',
     'hotel': 'hotel',
     'business': 'business',
     'gab': 'business',
-    'production': 'production',
-    'building': 'building',
-    'free_purpose': 'freeAppointmentObject',
-    'car_service': 'production',
+    'production': 'manufacturing',
+    'land': 'land',
+    'building': 'free purpose',
+    'free_purpose': 'free purpose',
+    'car_service': 'auto repair',
 }
 
 AVITO_OBJECT_TYPE_MAP = {
