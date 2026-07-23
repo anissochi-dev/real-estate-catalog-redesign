@@ -183,17 +183,20 @@ def _cdn_url(key):
 
 
 def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal):
-    """Собирает XML для одной площадки из текущего состояния БД."""
+    """Собирает XML для одной площадки из текущего состояния БД.
+    Набор объектов зависит от ФОРМАТА (fmt), а не от slug — так несколько фидов
+    с разными названиями (например «М2» и «Яндекс.Недвижимость») могут использовать
+    один и тот же формат yandex и брать один и тот же набор объектов с галочкой экспорта."""
     where = ["status = 'active'", "(is_visible IS NULL OR is_visible = TRUE)"]
     if filter_category:
         where.append(f"category = '{_safe(filter_category, 50)}'")
     if filter_deal:
         where.append(f"deal = '{_safe(filter_deal, 20)}'")
-    if feed_slug == 'yandex':
+    if fmt == 'yandex':
         where.append("export_yandex = TRUE")
-    elif feed_slug == 'avito':
+    elif fmt == 'avito':
         where.append("export_avito = TRUE")
-    elif feed_slug == 'cian':
+    elif fmt == 'cian':
         where.append("export_cian = TRUE")
 
     cur.execute(f"SELECT * FROM {SCHEMA}.listings WHERE {' AND '.join(where)} ORDER BY created_at DESC")

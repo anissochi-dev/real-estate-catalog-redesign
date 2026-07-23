@@ -4580,6 +4580,28 @@ def _districts(cur, conn, method, rid, event, user):
     return _err(400, 'Bad request')
 
 
+XML_FEED_FORMATS = ('yandex', 'avito', 'cian')
+
+
+def _make_feed_slug(cur, name: str, fmt: str) -> str:
+    """Генерирует уникальный технический slug из названия фида (например «М2» → 'm2').
+    Если название не даёт латинских символов — используется формат площадки + порядковый номер.
+    Гарантирует уникальность через проверку в БД (по аналогии с _make_slug для объявлений)."""
+    base = (name or '').lower()
+    base = ''.join(TRANSLIT_MAP.get(c, c) for c in base)
+    base = re.sub(r'[^a-z0-9]+', '-', base).strip('-')[:40]
+    if not base:
+        base = fmt or 'feed'
+    slug = base
+    n = 2
+    while True:
+        cur.execute(f"SELECT 1 FROM {SCHEMA}.xml_feeds WHERE slug = '{_safe(slug, 50)}' LIMIT 1")
+        if not cur.fetchone():
+            return slug
+        slug = f"{base}-{n}"
+        n += 1
+
+
 def _xml_feeds(cur, conn, method, rid, event, user):
     if method == 'GET':
         cur.execute(f"SELECT * FROM {SCHEMA}.xml_feeds ORDER BY id ASC")
@@ -4589,25 +4611,31 @@ def _xml_feeds(cur, conn, method, rid, event, user):
 
     if method == 'POST':
         name = _safe(body.get('name') or '', 100)
-        slug = _safe(body.get('slug') or '', 50)
         fmt = _safe(body.get('format') or '', 20)
         filter_category = _safe(body.get('filter_category') or '', 50)
         filter_deal = _safe(body.get('filter_deal') or '', 20)
-        if not name or not slug or not fmt:
-            return _err(400, 'Название, slug и формат обязательны')
+        if not name or not fmt:
+            return _err(400, 'Название и площадка обязательны')
+        if fmt not in XML_FEED_FORMATS:
+            return _err(400, f'Неизвестная площадка: {fmt}')
+        slug = _make_feed_slug(cur, name, fmt)
         cat_s = "NULL" if not filter_category else f"'{filter_category}'"
         deal_s = "NULL" if not filter_deal else f"'{filter_deal}'"
         cur.execute(
             f"INSERT INTO {SCHEMA}.xml_feeds (name, slug, format, filter_category, filter_deal) "
-            f"VALUES ('{name}', '{slug}', '{fmt}', {cat_s}, {deal_s}) RETURNING id"
+            f"VALUES ('{name}', '{slug}', '{fmt}', {cat_s}, {deal_s}) RETURNING id, slug"
         )
         conn.commit()
-        return _ok({'id': cur.fetchone()['id'], 'success': True})
+        row = cur.fetchone()
+        return _ok({'id': row['id'], 'slug': row['slug'], 'success': True})
 
     if method == 'PUT' and rid:
         fields = []
-        for f, length in [('name', 100), ('slug', 50), ('format', 20), ('filter_category', 50), ('filter_deal', 20)]:
+        # slug больше не редактируется вручную — это технический идентификатор файла
+        for f, length in [('name', 100), ('format', 20), ('filter_category', 50), ('filter_deal', 20)]:
             if f in body:
+                if f == 'format' and body[f] and body[f] not in XML_FEED_FORMATS:
+                    return _err(400, f'Неизвестная площадка: {body[f]}')
                 fields.append(f"{f} = {_str_or_null(body[f], length)}")
         if 'is_active' in body:
             fields.append(f"is_active = {_bool(body['is_active'])}")

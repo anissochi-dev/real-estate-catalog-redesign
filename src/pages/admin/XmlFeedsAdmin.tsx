@@ -119,7 +119,7 @@ export default function XmlFeedsAdmin() {
               <Icon name="RefreshCw" size={14} className={regenerating ? 'animate-spin' : ''} />
               {regenerating ? 'Обновляю…' : 'Обновить сейчас'}
             </button>
-            <button onClick={() => setEditing({ name: '', slug: 'yandex', format: 'yandex', is_active: true })}
+            <button onClick={() => setEditing({ name: '', format: 'yandex', is_active: true })}
               className="btn-blue text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2">
               <Icon name="Plus" size={14} /> Добавить фид
             </button>
@@ -142,7 +142,7 @@ export default function XmlFeedsAdmin() {
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Платформа: {PLATFORMS.find(p => p[0] === f.slug)?.[1] || f.slug} · {timeAgo(f.last_generated_at)}
+                    Площадка: {PLATFORMS.find(p => p[0] === f.format)?.[1] || f.format} · {timeAgo(f.last_generated_at)}
                   </div>
                   <div className="mt-2 flex flex-col gap-2 overflow-hidden">
                     {f.cdn_url ? (
@@ -247,16 +247,22 @@ export default function XmlFeedsAdmin() {
             </div>
             <div className="p-5 space-y-3">
               <div>
-                <label className="text-xs text-muted-foreground">Название</label>
-                <input className="w-full px-3 py-2 border rounded-lg"
+                <label className="text-xs text-muted-foreground">Название фида</label>
+                <input className="w-full px-3 py-2 border rounded-lg" placeholder="Например: М2, Яндекс.Недвижимость"
                   value={editing.name || ''} onChange={e => setEditing({ ...editing, name: e.target.value })} />
+                <div className="text-[11px] text-muted-foreground mt-1">
+                  Любое удобное название — можно завести несколько фидов на одну площадку под разные названия.
+                </div>
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">Платформа</label>
-                <select className="w-full px-3 py-2 border rounded-lg" value={editing.slug || 'yandex'}
-                  onChange={e => setEditing({ ...editing, slug: e.target.value, format: e.target.value })}>
+                <label className="text-xs text-muted-foreground">Площадка (формат XML)</label>
+                <select className="w-full px-3 py-2 border rounded-lg" value={editing.format || 'yandex'}
+                  onChange={e => setEditing({ ...editing, format: e.target.value })}>
                   {PLATFORMS.map(p => <option key={p[0]} value={p[0]}>{p[1]}</option>)}
                 </select>
+                <div className="text-[11px] text-muted-foreground mt-1">
+                  Определяет формат XML и какие объекты попадут в фид (по галочкам экспорта в карточке объекта).
+                </div>
               </div>
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={editing.is_active !== false}
