@@ -1,6 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { uploadFileEx, getOriginalPhotoUrl, getToken, REMOVE_WM_URL } from '@/lib/adminApi';
-import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
 import ImageUploaderLightbox from './ImageUploaderLightbox';
@@ -80,7 +79,6 @@ export default function ImageUploader({
       : [];
   value = safeValue;
 
-  const { settings } = useSettings();
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -201,8 +199,12 @@ export default function ImageUploader({
     for (const f of arr) {
       try {
         const compressed = shouldCompress ? await compressImage(f) : f;
-        const needWm = !!(applyWatermark && settings.watermark_enabled && settings.watermark_url);
-        const r = await uploadFileEx(compressed, folder, needWm);
+        // Финальное решение "накладывать ли знак" всегда принимает бэкенд (читает актуальные
+        // настройки из БД на каждый запрос) — здесь только просьба применить, если это разрешено
+        // для конкретного объекта (applyWatermark). Раньше тут же проверялись settings из контекста,
+        // но на мобильных при медленном соединении они могли не успеть загрузиться к моменту
+        // выбора фото — из-за этого знак не накладывался даже при включённой настройке.
+        const r = await uploadFileEx(compressed, folder, !!applyWatermark);
         uploaded.push(r.url);
         // Сохраняем thumb первого загруженного фото (обложка списков)
         if (!firstThumbUrl && r.thumbUrl) firstThumbUrl = r.thumbUrl;
