@@ -45,11 +45,8 @@ export function useCrons() {
             });
           }
         }
-        const cianLast = parseInt(localStorage.getItem('cian_cron_last_ping') || '0', 10);
-        if (Date.now() - cianLast > THROTTLE_MS) {
-          localStorage.setItem('cian_cron_last_ping', String(Date.now()));
-          fireCron('https://functions.poehali.dev/3655e748-2c8d-4998-adba-1cf7aed0eee4?action=cron');
-        }
+        // xml-feeds?action=cron обновляет статические файлы фидов (раз в 10 мин)
+        // и синхронизацию кабинета ЦИАН (раз в 6 часов) — единый пинг для обоих.
         const xmlFeedsLast = parseInt(localStorage.getItem('xml_feeds_cron_last_ping') || '0', 10);
         if (Date.now() - xmlFeedsLast > 10 * 60 * 1000) {
           localStorage.setItem('xml_feeds_cron_last_ping', String(Date.now()));

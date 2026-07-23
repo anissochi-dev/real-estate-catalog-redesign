@@ -1,5 +1,4 @@
 {
-  "cian-api": "https://functions.poehali.dev/3655e748-2c8d-4998-adba-1cf7aed0eee4",
   "indexation-cron": "https://functions.poehali.dev/a9a02fcd-b7f8-48ef-b74c-d377edc3250f",
   "phone-flags": "https://functions.poehali.dev/254609bc-df6e-4209-be01-2223b26c1665",
   "photo-cleanup": "https://functions.poehali.dev/98a2eda7-410c-4378-91b9-a2f195cc0dc2",

@@ -1,4 +1,4 @@
-export const CIAN_API_URL = 'https://functions.poehali.dev/3655e748-2c8d-4998-adba-1cf7aed0eee4';
+export const CIAN_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=cian_stats';
 
 export interface PlatformCard {
   key: string;

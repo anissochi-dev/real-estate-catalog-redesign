@@ -56,7 +56,7 @@ export default function CianCabinetTab() {
 
   const load = (sync = false) => {
     if (sync) setSyncing(true); else setLoading(true);
-    const url = sync ? `${CIAN_API_URL}?sync=1` : CIAN_API_URL;
+    const url = sync ? `${CIAN_API_URL}&sync=1` : CIAN_API_URL;
     fetch(url)
       .then(r => r.json())
       .then(d => {
