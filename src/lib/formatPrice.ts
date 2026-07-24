@@ -1,15 +1,6 @@
-/** Форматирует ID объекта: ДДММГГ + числовой id.
- *  id=132, createdAt="2026-06-27" → "270626132" */
-export function fmtListingId(id: number, createdAt?: string): string {
-  if (createdAt) {
-    const d = new Date(createdAt);
-    if (!isNaN(d.getTime())) {
-      const dd = String(d.getDate()).padStart(2, '0');
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const yy = String(d.getFullYear()).slice(2);
-      return `${dd}${mm}${yy}${id}`;
-    }
-  }
+/** Форматирует ID объекта: просто числовой id, без даты.
+ *  id=132 → "132" */
+export function fmtListingId(id: number, _createdAt?: string): string {
   return `${id}`;
 }
 
