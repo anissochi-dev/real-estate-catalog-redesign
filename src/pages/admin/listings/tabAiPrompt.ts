@@ -8,9 +8,8 @@ export const CAT_LABELS: Record<string, string> = {
   land: 'земельный участок', building: 'здание', car_service: 'автосервис',
 };
 export const COND_LABELS: Record<string, string> = {
-  new: 'новое', euro: 'евроремонт', designer: 'дизайнерский ремонт',
-  good: 'хорошее', normal: 'рабочее', needs_repair: 'требует ремонта',
-  rough: 'черновая отделка', shell: 'без отделки',
+  new: 'дизайнерский ремонт', euro: 'евроремонт', good: 'косметический ремонт',
+  cosmetic: 'предчистовая отделка', rough: 'без отделки', shellcore: 'черновая отделка',
 };
 
 export function buildAutoPrompt(listing: Listing, marketData?: { median?: number; min?: number; max?: number; analogs?: number }): string {

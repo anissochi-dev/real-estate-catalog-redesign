@@ -17,6 +17,17 @@ from psycopg2.extras import RealDictCursor
 from ai_client import load_keys, chat_with_history, CHAT_MODEL, CHAT_MODEL_FAST
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
+
+# Единый словарь перевода состояния/отделки объекта (должен соответствовать
+# src/pages/admin/listings/types.ts CONDITIONS)
+CONDITION_RU = {
+    'new': 'дизайнерский ремонт',
+    'euro': 'евроремонт',
+    'good': 'косметический ремонт',
+    'cosmetic': 'предчистовая отделка',
+    'rough': 'без отделки',
+    'shellcore': 'черновая отделка',
+}
 # Алиасы для совместимости с существующим кодом
 YANDEX_MODEL_NAME  = CHAT_MODEL       # основная модель
 YANDEX_MODEL_SHORT = CHAT_MODEL_FAST  # быстрая/лёгкая модель
@@ -1236,7 +1247,7 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
             extra_parts = []
             if row.get('floor'): extra_parts.append(f"этаж {row['floor']}" + (f"/{row['total_floors']}" if row.get('total_floors') else ''))
             if row.get('ceiling_height'): extra_parts.append(f"высота потолков {row['ceiling_height']} м")
-            if row.get('condition'): extra_parts.append(f"состояние: {row['condition']}")
+            if row.get('condition'): extra_parts.append(f"состояние: {CONDITION_RU.get(row['condition'], row['condition'])}")
             if row.get('parking'): extra_parts.append(f"парковка: {row['parking']}")
             if row.get('building_year'): extra_parts.append(f"год постройки {row['building_year']}")
             extra = ', '.join(extra_parts)
@@ -4312,15 +4323,9 @@ def handler(event, context):
                     'free_purpose': 'свободного назначения', 'land': 'земельный участок',
                     'building': 'здание целиком', 'car_service': 'автосервис',
                 }
-                COND_RU = {
-                    'new': 'новое', 'euro': 'евроремонт', 'designer': 'дизайнерский ремонт',
-                    'good': 'хорошее', 'normal': 'рабочее', 'needs_repair': 'требует ремонта',
-                    'rough': 'черновая отделка', 'shell': 'без отделки',
-                }
-
                 deal = DEAL_RU.get(listing_data.get('deal', ''), listing_data.get('deal', '—'))
                 cat  = CAT_RU.get(listing_data.get('category', ''), listing_data.get('category', '—'))
-                cond = COND_RU.get(listing_data.get('condition', ''), listing_data.get('condition', 'не указано'))
+                cond = CONDITION_RU.get(listing_data.get('condition', ''), listing_data.get('condition', 'не указано'))
                 addr_parts = [
                     listing_data.get('address', ''),
                     listing_data.get('district', ''),
