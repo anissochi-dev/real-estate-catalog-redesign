@@ -61,6 +61,7 @@ export interface CianOfferRow {
   source: string;
   url: string | null;
   creation_date: string | null;
+  archived_at?: string | null;
   title: string | null;
   slug: string | null;
   category: string | null;
@@ -88,8 +89,10 @@ export interface CianData {
     total_calls: number;
     total_favorites: number;
     services_by_type: Record<string, number>;
+    archived_count: number;
   };
   offers: CianOfferRow[];
+  archived_offers: CianOfferRow[];
   synced_now?: boolean;
 }
 

@@ -925,28 +925,27 @@ def _cian_sync(cur, conn, token):
 
     for o in all_offers:
         cur.execute(f"""
-            INSERT INTO {SCHEMA}.cian_offers (id, status, source, creation_date, synced_at)
-            VALUES (%s,%s,%s,%s, NOW())
+            INSERT INTO {SCHEMA}.cian_offers (id, status, source, creation_date, synced_at, archived_at)
+            VALUES (%s,%s,%s,%s, NOW(), NULL)
             ON CONFLICT (id) DO UPDATE SET
                 status=EXCLUDED.status, source=EXCLUDED.source,
-                creation_date=EXCLUDED.creation_date, synced_at=NOW()
+                creation_date=EXCLUDED.creation_date, synced_at=NOW(),
+                archived_at=NULL
         """, (o.get('id'), o.get('status'), o.get('source'), o.get('creationDate')))
     offers_count = len(all_offers)
     offer_ids = [o['id'] for o in all_offers if o.get('id')]
 
-    # Удаляем из нашей БД объявления, которых больше нет в ответе ЦИАН (сняты с публикации,
-    # удалены вручную и т.п.) — чтобы дашборд не показывал устаревшие/удалённые объявления.
-    # Защита: если API вернул пустой список (сбой/ошибка авторизации), ничего не чистим.
+    # Объявления, которых больше нет в ответе ЦИАН (сняты с публикации, ушли в архив на
+    # стороне ЦИАН, удалены вручную и т.п.) — НЕ удаляем, а помечаем как архивные, сохраняя
+    # всю историю просмотров/звонков/услуг. Так они не засоряют активный дашборд, но
+    # статистика по ним не теряется — их можно посмотреть во вкладке «Архив».
+    # Защита: если API вернул пустой список (сбой/ошибка авторизации), ничего не трогаем.
     if offer_ids:
         keep_ids_sql = ','.join(str(oid) for oid in offer_ids)
-        cur.execute(f"SELECT id FROM {SCHEMA}.cian_offers WHERE id NOT IN ({keep_ids_sql})")
-        stale_ids = [r['id'] for r in cur.fetchall()]
-        if stale_ids:
-            stale_ids_sql = ','.join(str(oid) for oid in stale_ids)
-            cur.execute(f"DELETE FROM {SCHEMA}.cian_offer_stats WHERE offer_id IN ({stale_ids_sql})")
-            cur.execute(f"DELETE FROM {SCHEMA}.cian_offer_services WHERE offer_id IN ({stale_ids_sql})")
-            cur.execute(f"DELETE FROM {SCHEMA}.cian_calls WHERE offer_id IN ({stale_ids_sql})")
-            cur.execute(f"DELETE FROM {SCHEMA}.cian_offers WHERE id IN ({stale_ids_sql})")
+        cur.execute(f"""
+            UPDATE {SCHEMA}.cian_offers SET archived_at = NOW()
+            WHERE id NOT IN ({keep_ids_sql}) AND archived_at IS NULL
+        """)
 
     for batch in _cian_chunks(offer_ids, 50):
         qs = '&'.join(f'offerIds={oid}' for oid in batch)
@@ -1066,9 +1065,11 @@ def _cian_sync(cur, conn, token):
 
 
 def _cian_read_from_db(cur):
-    """Читает все данные кабинета ЦИАН из БД и возвращает в формате для фронтенда."""
+    """Читает все данные кабинета ЦИАН из БД и возвращает в формате для фронтенда.
+    Объявления делятся на активные (archived_at IS NULL) и архивные — история
+    просмотров/звонков/услуг сохраняется по обеим группам."""
     cur.execute(f"""
-        SELECT o.id, o.external_id, o.status, o.source, o.url, o.creation_date,
+        SELECT o.id, o.external_id, o.status, o.source, o.url, o.creation_date, o.archived_at,
                l.title, l.slug, l.category, l.deal, l.price, l.image,
                COALESCE(s.add_to_favorites, 0) AS add_to_favorites,
                COALESCE(s.calls, 0) AS calls,
@@ -1081,7 +1082,7 @@ def _cian_read_from_db(cur):
         LEFT JOIN {SCHEMA}.cian_offer_stats s ON s.offer_id = o.id
         ORDER BY o.id DESC
     """)
-    offers = [dict(r) for r in cur.fetchall()]
+    all_offers = [dict(r) for r in cur.fetchall()]
 
     cur.execute(f"SELECT offer_id, service_type, price, paid_till, auto_prolong FROM {SCHEMA}.cian_offer_services")
     services_by_offer = {}
@@ -1092,15 +1093,14 @@ def _cian_read_from_db(cur):
         service_type_counts[d['service_type']] = service_type_counts.get(d['service_type'], 0) + 1
 
     cur.execute(f"""
-        SELECT external_id, source_phone, duration, status, call_datetime
+        SELECT offer_id, external_id, source_phone, duration, status, call_datetime
         FROM {SCHEMA}.cian_calls
-        WHERE external_id IS NOT NULL
         ORDER BY call_datetime DESC
     """)
-    calls_by_listing = {}
+    calls_by_offer = {}
     for r in cur.fetchall():
         d = dict(r)
-        calls_by_listing.setdefault(d['external_id'], []).append(d)
+        calls_by_offer.setdefault(d['offer_id'], []).append(d)
 
     cur.execute(f"SELECT * FROM {SCHEMA}.cian_balance ORDER BY synced_at DESC LIMIT 1")
     balance = dict(cur.fetchone() or {})
@@ -1108,14 +1108,17 @@ def _cian_read_from_db(cur):
     cur.execute(f"SELECT * FROM {SCHEMA}.cian_sync_log ORDER BY synced_at DESC LIMIT 1")
     last_sync = dict(cur.fetchone() or {})
 
+    for o in all_offers:
+        o['services'] = services_by_offer.get(o['id'], [])
+        o['calls_list'] = calls_by_offer.get(o['id'], [])
+
+    offers = [o for o in all_offers if not o.get('archived_at')]
+    archived_offers = [o for o in all_offers if o.get('archived_at')]
+
     published = [o for o in offers if o.get('status') == 'published']
     total_views = sum(o.get('views', 0) for o in offers)
     total_calls = sum(o.get('calls', 0) for o in offers)
     total_favs = sum(o.get('add_to_favorites', 0) for o in offers)
-
-    for o in offers:
-        o['services'] = services_by_offer.get(o['id'], [])
-        o['calls_list'] = calls_by_listing.get(o.get('external_id'), []) if o.get('external_id') else []
 
     return {
         'ok': True,
@@ -1128,8 +1131,10 @@ def _cian_read_from_db(cur):
             'total_calls': total_calls,
             'total_favorites': total_favs,
             'services_by_type': service_type_counts,
+            'archived_count': len(archived_offers),
         },
         'offers': offers,
+        'archived_offers': archived_offers,
     }
 
 

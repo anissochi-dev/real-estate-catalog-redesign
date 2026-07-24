@@ -48,11 +48,89 @@ function ServiceBadges({ services }: { services: CianOfferRow['services'] }) {
   );
 }
 
+function OffersTable({ offers, fmt, isArchive }: { offers: CianOfferRow[]; fmt: (n: number) => string; isArchive: boolean }) {
+  return (
+    <div className="bg-white rounded-2xl border border-border overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-muted/40 text-xs text-muted-foreground">
+              <th className="text-left px-3 py-2.5 font-semibold">Объект</th>
+              <th className="text-left px-3 py-2.5 font-semibold">Статус</th>
+              <th className="text-right px-3 py-2.5 font-semibold">Просмотры</th>
+              <th className="text-right px-3 py-2.5 font-semibold">Звонки</th>
+              <th className="text-right px-3 py-2.5 font-semibold">Избранное</th>
+              {isArchive ? (
+                <th className="text-left px-3 py-2.5 font-semibold">В архиве с</th>
+              ) : (
+                <th className="text-left px-3 py-2.5 font-semibold">Продвижение</th>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {offers.map(o => {
+              const statusMeta = OFFER_STATUS_LABELS[o.status] || { label: o.status, cls: 'bg-muted text-muted-foreground' };
+              return (
+                <tr key={o.id} className="border-t border-border hover:bg-muted/20">
+                  <td className="px-3 py-2.5">
+                    {o.title ? (
+                      <div>
+                        <div className="font-medium">{o.title}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {o.category ? CATEGORY_LABELS[o.category] || o.category : ''}
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="text-muted-foreground italic">Не привязан к сайту</div>
+                        {o.url && (
+                          <a href={o.url} target="_blank" rel="noreferrer" className="text-xs text-brand-blue underline">
+                            Открыть в ЦИАН
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusMeta.cls}`}>
+                      {statusMeta.label}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-medium">{fmt(o.views)}</td>
+                  <td className="px-3 py-2.5 text-right">
+                    <div className="flex justify-end"><CallsPopover calls={o.calls_list} /></div>
+                  </td>
+                  <td className="px-3 py-2.5 text-right">{fmt(o.add_to_favorites)}</td>
+                  {isArchive ? (
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                      {o.archived_at ? new Date(o.archived_at).toLocaleDateString('ru') : '—'}
+                    </td>
+                  ) : (
+                    <td className="px-3 py-2.5"><ServiceBadges services={o.services} /></td>
+                  )}
+                </tr>
+              );
+            })}
+            {offers.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground text-sm">
+                  {isArchive ? 'Архив пуст' : 'Нет объявлений в кабинете ЦИАН'}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function CianCabinetTab() {
   const [data, setData] = useState<CianData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [view, setView] = useState<'active' | 'archive'>('active');
 
   const load = (sync = false) => {
     if (sync) setSyncing(true); else setLoading(true);
@@ -99,7 +177,7 @@ export default function CianCabinetTab() {
   }
 
   if (!data) return null;
-  const { summary, offers, last_sync } = data;
+  const { summary, offers, archived_offers, last_sync } = data;
 
   return (
     <div className="space-y-4">
@@ -151,68 +229,33 @@ export default function CianCabinetTab() {
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border border-border overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-muted/40 text-xs text-muted-foreground">
-                <th className="text-left px-3 py-2.5 font-semibold">Объект</th>
-                <th className="text-left px-3 py-2.5 font-semibold">Статус</th>
-                <th className="text-right px-3 py-2.5 font-semibold">Просмотры</th>
-                <th className="text-right px-3 py-2.5 font-semibold">Звонки</th>
-                <th className="text-right px-3 py-2.5 font-semibold">Избранное</th>
-                <th className="text-left px-3 py-2.5 font-semibold">Продвижение</th>
-              </tr>
-            </thead>
-            <tbody>
-              {offers.map(o => {
-                const statusMeta = OFFER_STATUS_LABELS[o.status] || { label: o.status, cls: 'bg-muted text-muted-foreground' };
-                return (
-                  <tr key={o.id} className="border-t border-border hover:bg-muted/20">
-                    <td className="px-3 py-2.5">
-                      {o.title ? (
-                        <div>
-                          <div className="font-medium">{o.title}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {o.category ? CATEGORY_LABELS[o.category] || o.category : ''}
-                          </div>
-                        </div>
-                      ) : (
-                        <div>
-                          <div className="text-muted-foreground italic">Не привязан к сайту</div>
-                          {o.url && (
-                            <a href={o.url} target="_blank" rel="noreferrer" className="text-xs text-brand-blue underline">
-                              Открыть в ЦИАН
-                            </a>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusMeta.cls}`}>
-                        {statusMeta.label}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-medium">{fmt(o.views)}</td>
-                    <td className="px-3 py-2.5 text-right">
-                      <div className="flex justify-end"><CallsPopover calls={o.calls_list} /></div>
-                    </td>
-                    <td className="px-3 py-2.5 text-right">{fmt(o.add_to_favorites)}</td>
-                    <td className="px-3 py-2.5"><ServiceBadges services={o.services} /></td>
-                  </tr>
-                );
-              })}
-              {offers.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground text-sm">
-                    Нет объявлений в кабинете ЦИАН
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      <div className="flex gap-1">
+        <button
+          onClick={() => setView('active')}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition ${
+            view === 'active' ? 'bg-brand-blue text-white shadow-sm' : 'bg-white border border-border text-foreground/70 hover:bg-muted/50'
+          }`}
+        >
+          <Icon name="List" size={13} /> Активные ({summary.offers_count})
+        </button>
+        <button
+          onClick={() => setView('archive')}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition ${
+            view === 'archive' ? 'bg-brand-blue text-white shadow-sm' : 'bg-white border border-border text-foreground/70 hover:bg-muted/50'
+          }`}
+        >
+          <Icon name="Archive" size={13} /> Архив ({summary.archived_count})
+        </button>
       </div>
+
+      {view === 'archive' && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs text-blue-800 flex items-start gap-2">
+          <Icon name="Info" size={14} className="shrink-0 mt-0.5" />
+          Сюда попадают объявления, снятые с публикации или удалённые в личном кабинете ЦИАН. История просмотров, звонков и услуг по ним сохраняется.
+        </div>
+      )}
+
+      <OffersTable offers={view === 'active' ? offers : archived_offers} fmt={fmt} isArchive={view === 'archive'} />
     </div>
   );
 }
