@@ -1,3 +1,6 @@
+// АКТИВНЫЙ компонент — используется в src/pages/PropertyPage.tsx (десктопный сайдбар объекта).
+// НЕ путать с другими файлами с похожим именем — прежде чем создавать PropertySidebar
+// где-то ещё, проверь grep -rl "PropertySidebar" src/, чтобы не плодить дубли-«мертвецы».
 import { useState } from 'react';
 import type { ListingDetail, Agent } from '@/lib/api';
 import Icon from '@/components/ui/icon';

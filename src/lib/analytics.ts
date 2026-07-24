@@ -17,15 +17,22 @@ const STATS_URL = 'https://functions.poehali.dev/1d84bd40-ef8c-4bd3-82c3-af294b1
 /**
  * Фиксирует клик по номеру телефона объекта в статистике (событие 'call').
  * Используется в сайдбаре объекта, карточке каталога и мобильной панели «Позвонить».
- * Отправляется через sendBeacon — событие гарантированно долетает до сервера,
- * даже если браузер сразу переключается на приложение-диалер.
+ *
+ * ВАЖНО: вызывается из onClick на <a href="tel:...">. Переход на tel: — это смена
+ * протокола, а не обычная навигация по сайту, поэтому и sendBeacon, и fetch с
+ * keepalive должны штатно долетать. Но на некоторых мобильных браузерах/вебвью и
+ * при агрессивных блокировщиках расширений фоновый запрос может не успеть уйти
+ * до переключения на приложение «Телефон». Поэтому отправляем ОБА канала сразу
+ * (sendBeacon — основной, fetch keepalive — подстраховка) вместо одного.
  */
 export function trackListingCall(listingId: number, source: string = 'site'): void {
   try {
     const payload = JSON.stringify({ listing_id: listingId, event_type: 'call', source });
+    let sent = false;
     if (typeof navigator.sendBeacon === 'function') {
-      navigator.sendBeacon(STATS_URL, new Blob([payload], { type: 'application/json' }));
-    } else {
+      sent = navigator.sendBeacon(STATS_URL, new Blob([payload], { type: 'application/json' }));
+    }
+    if (!sent) {
       fetch(STATS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: true }).catch(() => {});
     }
   } catch {
