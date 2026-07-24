@@ -76,8 +76,16 @@ function OffersTable({ offers, fmt, isArchive }: { offers: CianOfferRow[]; fmt: 
                     {o.title ? (
                       <div>
                         <div className="font-medium">{o.title}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {o.category ? CATEGORY_LABELS[o.category] || o.category : ''}
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <span>{o.category ? CATEGORY_LABELS[o.category] || o.category : ''}</span>
+                          {o.url && (
+                            <>
+                              {o.category && <span className="text-muted-foreground/40">·</span>}
+                              <a href={o.url} target="_blank" rel="noreferrer" className="text-brand-blue underline">
+                                Открыть на ЦИАН
+                              </a>
+                            </>
+                          )}
                         </div>
                       </div>
                     ) : (
