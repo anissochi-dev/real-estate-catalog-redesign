@@ -4842,16 +4842,21 @@ def _listings_bulk(cur, conn, event, user):
     if not ids or not op:
         return _err(400, 'ids и op обязательны')
     ids_sql = ', '.join(str(i) for i in ids)
+    # ВАЖНО: быстрые действия из общего списка объектов (архив/активность/новинка/
+    # видимость/XML-флаги/агент/категория/город) НЕ считаются редактированием карточки
+    # и НЕ должны трогать updated_at — иначе объект ошибочно "прыгает" в начало списка
+    # и выглядит как только что отредактированный. updated_at обновляется только при
+    # сохранении из полной формы редактора карточки (см. PUT /admin?resource=listings).
     if op == 'archive':
         cur.execute(
-            f"UPDATE {SCHEMA}.listings SET status = 'archived', updated_at = NOW() WHERE id IN ({ids_sql})"
+            f"UPDATE {SCHEMA}.listings SET status = 'archived' WHERE id IN ({ids_sql})"
         )
         for lid in ids:
             _write_history(cur, lid, user, 'archived', {})
         cur.execute(f"UPDATE {SCHEMA}.seo_artifacts SET urls_count = 0 WHERE kind = 'sitemap'")
     elif op == 'activate':
         cur.execute(
-            f"UPDATE {SCHEMA}.listings SET status = 'active', updated_at = NOW() WHERE id IN ({ids_sql})"
+            f"UPDATE {SCHEMA}.listings SET status = 'active' WHERE id IN ({ids_sql})"
         )
         for lid in ids:
             _write_history(cur, lid, user, 'restored', {})
@@ -4859,12 +4864,12 @@ def _listings_bulk(cur, conn, event, user):
     elif op == 'set_hot':
         val = _bool(body.get('value', True))
         cur.execute(
-            f"UPDATE {SCHEMA}.listings SET is_hot = {val}, updated_at = NOW() WHERE id IN ({ids_sql})"
+            f"UPDATE {SCHEMA}.listings SET is_hot = {val} WHERE id IN ({ids_sql})"
         )
     elif op == 'set_new':
         val = _bool(body.get('value', True))
         cur.execute(
-            f"UPDATE {SCHEMA}.listings SET is_new = {val}, updated_at = NOW() WHERE id IN ({ids_sql})"
+            f"UPDATE {SCHEMA}.listings SET is_new = {val} WHERE id IN ({ids_sql})"
         )
     elif op == 'delete':
         if user['role'] != 'admin':
@@ -4880,12 +4885,12 @@ def _listings_bulk(cur, conn, event, user):
     elif op == 'set_category':
         cat = _safe(body.get('value') or '', 50)
         cur.execute(
-            f"UPDATE {SCHEMA}.listings SET category = '{cat}', updated_at = NOW() WHERE id IN ({ids_sql})"
+            f"UPDATE {SCHEMA}.listings SET category = '{cat}' WHERE id IN ({ids_sql})"
         )
     elif op == 'set_city':
         city = _safe(body.get('value') or '', 100)
         cur.execute(
-            f"UPDATE {SCHEMA}.listings SET city = '{city}', updated_at = NOW() WHERE id IN ({ids_sql})"
+            f"UPDATE {SCHEMA}.listings SET city = '{city}' WHERE id IN ({ids_sql})"
         )
     elif op == 'set_broker':
         # Назначить брокера группе объектов — только админ/директор
@@ -4894,7 +4899,7 @@ def _listings_bulk(cur, conn, event, user):
         new_broker_id = body.get('value')
         if new_broker_id is None or new_broker_id == '':
             cur.execute(
-                f"UPDATE {SCHEMA}.listings SET broker_id = NULL, updated_at = NOW() "
+                f"UPDATE {SCHEMA}.listings SET broker_id = NULL "
                 f"WHERE id IN ({ids_sql})"
             )
         else:
@@ -4911,7 +4916,7 @@ def _listings_bulk(cur, conn, event, user):
             if not target:
                 return _err(404, 'Брокер не найден или отключён')
             cur.execute(
-                f"UPDATE {SCHEMA}.listings SET broker_id = {bid}, updated_at = NOW() "
+                f"UPDATE {SCHEMA}.listings SET broker_id = {bid} "
                 f"WHERE id IN ({ids_sql})"
             )
             for lid in ids:
@@ -4919,7 +4924,7 @@ def _listings_bulk(cur, conn, event, user):
     elif op == 'set_visible':
         val = _bool(body.get('value', True))
         cur.execute(
-            f"UPDATE {SCHEMA}.listings SET is_visible = {val}, updated_at = NOW() WHERE id IN ({ids_sql})"
+            f"UPDATE {SCHEMA}.listings SET is_visible = {val} WHERE id IN ({ids_sql})"
         )
         action_label = 'shown' if body.get('value', True) else 'hidden'
         for lid in ids:
@@ -4939,7 +4944,7 @@ def _listings_bulk(cur, conn, event, user):
         else:
             return _err(400, f'Неизвестная платформа: {platform}')
         cur.execute(
-            f"UPDATE {SCHEMA}.listings SET {fields_sql}, updated_at = NOW() WHERE id IN ({ids_sql})"
+            f"UPDATE {SCHEMA}.listings SET {fields_sql} WHERE id IN ({ids_sql})"
         )
     else:
         return _err(400, f'Неизвестная операция: {op}')
