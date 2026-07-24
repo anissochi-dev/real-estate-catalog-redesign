@@ -580,17 +580,19 @@ export function useListingsState() {
       const r = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(tok ? { 'X-Auth-Token': tok } : {}) },
-        body: JSON.stringify({ action: 'improve_listing', listing_id: editing.id, fields, auth_token: tok }),
+        // dry_run: true — ИИ только генерирует текст и возвращает его в ответе,
+        // но НЕ пишет в базу данных. Результат подставляется в форму, а фактически
+        // сохраняется только по нажатию «Сохранить», как и все остальные поля формы.
+        body: JSON.stringify({ action: 'improve_listing', listing_id: editing.id, fields, auth_token: tok, dry_run: true }),
       });
       const data = await r.json();
       if (data.error) { toast.error(data.error); return; }
       const patch: Partial<typeof editing> = {};
       if (data.seo_title) patch.seo_title = data.seo_title;
       if (data.seo_description) patch.seo_description = data.seo_description;
-      if (data.description) patch.description = data.description;
       if (data.faq) patch.faq = data.faq;
       setEditing({ ...editing, ...patch });
-      toast.success(`ИИ улучшил: ${fields.join(', ')}`);
+      toast.success(`ИИ улучшил: ${fields.join(', ')}. Не забудьте нажать «Сохранить»`);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Ошибка ИИ');
     } finally {

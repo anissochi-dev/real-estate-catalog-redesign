@@ -32,10 +32,12 @@ function generateHeadings(e: Partial<Listing>): SeoHeadings {
   };
 }
 
+// Основное описание объекта сюда намеренно НЕ включено — для него есть своя
+// отдельная кнопка «Улучшить с ИИ» на вкладке «Описание» (ListingEditorContentSection),
+// чтобы не путать с SEO-полями и не перезаписывать его случайно из этой панели.
 const IMPROVE_FIELDS = [
   { key: 'seo_title', label: 'SEO-заголовок' },
   { key: 'seo_description', label: 'SEO-описание' },
-  { key: 'description', label: 'Описание' },
   { key: 'faq', label: 'FAQ' },
 ];
 
@@ -56,7 +58,7 @@ export default function ListingEditorExtraSection({
   aiSeoLoading, aiImproveLoading, onGenerateSeo, onImproveWithAi, canEditSeo = true,
 }: Props) {
   const [improveOpen, setImproveOpen] = useState(false);
-  const [improveFields, setImproveFields] = useState<string[]>(['seo_title', 'seo_description', 'description', 'faq']);
+  const [improveFields, setImproveFields] = useState<string[]>(['seo_title', 'seo_description', 'faq']);
   const err = (field: string) => errors[field] ? 'border-red-400 bg-red-50' : '';
   const errWrap = (field: string) => errors[field] ? { 'data-field-error': 'true' as const } : {};
   const clearErr = (field: string) => setErrors?.(v => ({ ...v, [field]: false }));
