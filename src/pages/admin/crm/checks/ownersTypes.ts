@@ -15,12 +15,6 @@ export interface MethodMeta {
   risk: 'high' | 'medium' | 'low';
 }
 
-export interface CheckResponse {
-  result?: unknown;
-  from_cache?: boolean;
-  error?: string;
-}
-
 export const METHODS: MethodMeta[] = [
   {
     id: 'complex_by_passport',

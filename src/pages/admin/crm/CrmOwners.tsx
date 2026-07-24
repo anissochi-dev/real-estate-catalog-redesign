@@ -41,12 +41,12 @@ function InnResultCard({ data }: { data: Record<string, unknown> }) {
       </div>
       <div className={`text-xs font-semibold ${statusColor}`}>{status}</div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs mt-1">
-        {Boolean(data.ogrn) && <div><span className="text-muted-foreground">ОГРН:</span> {String(data.ogrn)}</div>}
-        {Boolean(data._type) && <div><span className="text-muted-foreground">Тип:</span> {data._type === 'ip' ? 'ИП' : 'Юрлицо'}</div>}
-        {Boolean(data.reg_date) && <div><span className="text-muted-foreground">Рег.:</span> {String(data.reg_date)}</div>}
-        {Boolean(data.director) && <div><span className="text-muted-foreground">Рук.:</span> {String(data.director)}</div>}
-        {Boolean(data.address) && <div className="col-span-2"><span className="text-muted-foreground">Адрес:</span> {String(data.address)}</div>}
-        {Boolean(data.okved) && <div className="col-span-2"><span className="text-muted-foreground">ОКВЭД:</span> {String(data.okved)}{data.okved_name ? ` — ${String(data.okved_name)}` : ''}</div>}
+        {data.ogrn && <div><span className="text-muted-foreground">ОГРН:</span> {String(data.ogrn)}</div>}
+        {data._type && <div><span className="text-muted-foreground">Тип:</span> {data._type === 'ip' ? 'ИП' : 'Юрлицо'}</div>}
+        {data.reg_date && <div><span className="text-muted-foreground">Рег.:</span> {String(data.reg_date)}</div>}
+        {data.director && <div><span className="text-muted-foreground">Рук.:</span> {String(data.director)}</div>}
+        {data.address && <div className="col-span-2"><span className="text-muted-foreground">Адрес:</span> {String(data.address)}</div>}
+        {data.okved && <div className="col-span-2"><span className="text-muted-foreground">ОКВЭД:</span> {String(data.okved)}{data.okved_name ? ` — ${String(data.okved_name)}` : ''}</div>}
       </div>
     </div>
   );
