@@ -262,6 +262,16 @@ export default function LeadsAdmin() {
         />
       )}
 
+      {/* Быстрый переход в начало списка */}
+      <button
+        type="button"
+        onClick={() => document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' })}
+        title="Прокрутить наверх"
+        className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 w-11 h-11 rounded-full bg-white text-brand-blue border border-border shadow-lg flex items-center justify-center hover:bg-muted transition"
+      >
+        <Icon name="ChevronUp" size={20} />
+      </button>
+
       {/* Быстрый переход в конец списка */}
       <button
         type="button"
