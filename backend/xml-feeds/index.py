@@ -776,8 +776,11 @@ def _build_cian(listings, company):
             out.append(f'<Lng>{l["lng"]}</Lng>')
             out.append('</Coordinates>')
 
-        # Площадь
-        if l.get('area'):
+        # Площадь: для категории «Здание» (продажа/аренда здания целиком) ЦИАН требует
+        # TotalArea внутри тега <Building>, а не на верхнем уровне объекта.
+        # Для остальных категорий (офис, склад и т.п.) — TotalArea остаётся плоским полем.
+        is_whole_building = category == 'building'
+        if l.get('area') and not is_whole_building:
             out.append(f'<TotalArea>{l["area"]}</TotalArea>')
         if l.get('min_area'):
             out.append(f'<MinArea>{l["min_area"]}</MinArea>')
@@ -791,11 +794,22 @@ def _build_cian(listings, company):
             if l.get('land_vri'):
                 out.append(f'<PermittedLandUse>{_xml_escape(str(l["land_vri"]))}</PermittedLandUse>')
 
-        # Этажи
+        # Этаж объекта — самостоятельный тег
         if l.get('floor') is not None:
             out.append(f'<FloorNumber>{l["floor"]}</FloorNumber>')
-        if l.get('total_floors') is not None:
+        # ЦИАН требует обёртку <Building> для коммерческих категорий (иначе фид не проходит
+        # валидацию: "Поле 'Building' обязательно"). Для категории «Здание» внутрь дополнительно
+        # кладём TotalArea (иначе "Поле 'Building.TotalArea' обязательно" для buildingSale).
+        if is_whole_building and l.get('area'):
+            out.append('<Building>')
+            out.append(f'<TotalArea>{l["area"]}</TotalArea>')
+            if l.get('total_floors') is not None:
+                out.append(f'<FloorsCount>{l["total_floors"]}</FloorsCount>')
+            out.append('</Building>')
+        elif l.get('total_floors') is not None:
+            out.append('<Building>')
             out.append(f'<FloorsCount>{l["total_floors"]}</FloorsCount>')
+            out.append('</Building>')
 
         # Высота потолков
         if l.get('ceiling_height'):
