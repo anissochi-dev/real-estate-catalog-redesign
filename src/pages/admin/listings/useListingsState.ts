@@ -211,6 +211,66 @@ export function useListingsState() {
     }
   };
 
+  // Копировать объект как новый — для брокера, который ведёт и аренду, и продажу одного
+  // и того же помещения. Тип сделки переключается на противоположный, цена/доходность/
+  // комиссия очищаются (требуют новых значений), заголовок авто-правится по шаблону.
+  // Открывает редактор БЕЗ id — в БД ничего не создаётся, пока брокер сам не нажмёт «Сохранить».
+  const TITLE_SWAP: [RegExp, string][] = [
+    [/аренда/gi, 'Продажа'], [/сдаю/gi, 'Продаю'], [/сдаётся/gi, 'Продаётся'], [/сдается/gi, 'Продаётся'],
+    [/продажа/gi, 'Аренда'], [/продаю/gi, 'Сдаю'], [/продаётся/gi, 'Сдаётся'], [/продается/gi, 'Сдаётся'],
+  ];
+  const swapDealInTitle = (title: string): string => {
+    let result = title;
+    for (const [re, replacement] of TITLE_SWAP) {
+      if (re.test(result)) { result = result.replace(re, replacement); break; }
+    }
+    return result;
+  };
+
+  const copyAsNew = (it: Listing) => {
+    egrnObjectsRef.current = null;
+    const applyCopy = (src: Listing) => {
+      const newDeal = src.deal === 'rent' ? 'sale' : 'rent';
+      const copy: Partial<Listing> = {
+        ...src,
+        id: undefined as unknown as number,
+        deal: newDeal,
+        title: swapDealInTitle(src.title || ''),
+        price: 0,
+        price_unit: 'total',
+        monthly_rent: null,
+        yearly_rent: null,
+        broker_commission: '',
+        status: 'active',
+        is_visible: true,
+        is_hot: false,
+        is_new: false,
+        export_yandex: false,
+        export_avito: false,
+        export_cian: false,
+        export_other: true,
+        slug: null,
+        created_at: undefined as unknown as string,
+        updated_at: undefined as unknown as string,
+        last_edited_at: null,
+        last_edited_by: null,
+        stats_views: 0,
+        stats_calls: 0,
+        stats_leads: 0,
+      };
+      setEditing(copy);
+      const imgs = splitImages(src.images);
+      if (!imgs.length && src.image) imgs.push(src.image);
+      setPhotos(imgs);
+    };
+    // Список содержит не все поля (нет description, seo_* и т.п.) — подгружаем полные данные.
+    applyCopy(it);
+    adminApi.getListing(it.id).then((res: { listing?: Listing } & Listing) => {
+      const detailed: Listing = res.listing || res;
+      if (detailed?.id) applyCopy(detailed);
+    }).catch(() => {});
+  };
+
   const setEgrnObjects = (objects: import('./types').EgrnStoredObject[]) => {
     egrnObjectsRef.current = objects;
     setEditing(prev => prev ? { ...prev, egrn_objects: objects } : prev);
@@ -560,7 +620,7 @@ export function useListingsState() {
     canCreate: !['office_manager', 'client'].includes(user?.role || ''),
     myOnly, toggleMyOnly,
     // actions
-    load, loadMore, switchTab, openEdit, save, archive, runBulk, bulkDelete, toggleSelect,
+    load, loadMore, switchTab, openEdit, copyAsNew, save, archive, runBulk, bulkDelete, toggleSelect,
     aiDescribe, aiTitle, generateTags, generateSeo, generateAll, improveWithAi,
     setEgrnObjects,
   };

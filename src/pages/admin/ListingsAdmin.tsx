@@ -108,6 +108,7 @@ export default function ListingsAdmin() {
       <ListingsTable
         items={s.filtered}
         onEdit={s.openEdit}
+        onCopy={s.copyAsNew}
         onArchive={s.archive}
         onHistory={it => s.setHistoryListing(it)}
         onPhotoDownload={it => s.setPhotoPickListing(it)}

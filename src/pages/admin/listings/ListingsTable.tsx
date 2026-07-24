@@ -6,6 +6,7 @@ import ListingsTableMobileCard from './ListingsTableMobileCard';
 interface Props {
   items: Listing[];
   onEdit: (it: Listing) => void;
+  onCopy?: (it: Listing) => void;
   onArchive: (id: number) => void;
   onHistory: (it: Listing) => void;
   onPhotoDownload: (it: Listing) => void;
@@ -25,7 +26,7 @@ interface Props {
 }
 
 export default function ListingsTable({
-  items, onEdit, onArchive, onHistory, onPhotoDownload, onInternalCard, onModerate, onShowMatching,
+  items, onEdit, onCopy, onArchive, onHistory, onPhotoDownload, onInternalCard, onModerate, onShowMatching,
   selected, onToggleSelect, onSelectAll, onDeselectAll,
   siteUrl,
   onBulk, onBulkDelete, bulkLoading = false, isAdmin = false,
@@ -87,6 +88,7 @@ export default function ListingsTable({
                 canSeeFullDetails={!!canSeeFullDetails}
                 onToggleSelect={onToggleSelect}
                 onEdit={onEdit}
+                onCopy={onCopy}
                 onArchive={onArchive}
                 onHistory={onHistory}
                 onInternalCard={onInternalCard}
@@ -102,6 +104,7 @@ export default function ListingsTable({
                 siteUrl={siteUrl}
                 onToggleSelect={onToggleSelect}
                 onEdit={onEdit}
+                onCopy={onCopy}
                 onHistory={onHistory}
                 onInternalCard={onInternalCard}
                 onShowMatching={onShowMatching}

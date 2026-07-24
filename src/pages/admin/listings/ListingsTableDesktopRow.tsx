@@ -14,6 +14,7 @@ interface Props {
   canSeeFullDetails: boolean;
   onToggleSelect: (id: number) => void;
   onEdit: (it: Listing) => void;
+  onCopy?: (it: Listing) => void;
   onArchive: (id: number) => void;
   onHistory: (it: Listing) => void;
   onInternalCard?: (it: Listing) => void;
@@ -23,7 +24,7 @@ interface Props {
 
 export default function ListingsTableDesktopRow({
   it, isSelected, canSelect, canEdit, showPhone, canSeeFullDetails,
-  onToggleSelect, onEdit, onArchive, onHistory, onInternalCard, onModerate, onShowMatching,
+  onToggleSelect, onEdit, onCopy, onArchive, onHistory, onInternalCard, onModerate, onShowMatching,
 }: Props) {
   const exitToPath = useExitToPath();
   const dealMeta = (d: string) => DEALS.find(x => x[0] === d);
@@ -142,6 +143,15 @@ export default function ListingsTableDesktopRow({
                 className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-brand-blue/10 hover:text-brand-blue transition-colors"
               >
                 <Icon name="Pencil" size={14} />
+              </button>
+            )}
+            {canEdit && onCopy && (
+              <button
+                onClick={() => onCopy(it)}
+                title={it.deal === 'rent' ? 'Копировать как продажу' : 'Копировать как аренду'}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+              >
+                <Icon name="Copy" size={14} />
               </button>
             )}
             {canEdit && (

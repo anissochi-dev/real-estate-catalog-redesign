@@ -14,6 +14,7 @@ interface Props {
   siteUrl?: string;
   onToggleSelect: (id: number) => void;
   onEdit: (it: Listing) => void;
+  onCopy?: (it: Listing) => void;
   onHistory: (it: Listing) => void;
   onInternalCard?: (it: Listing) => void;
   onShowMatching?: (id: number) => void;
@@ -21,7 +22,7 @@ interface Props {
 
 export default function ListingsTableMobileCard({
   it, isSelected, canSelect, canEdit, showPhone, siteUrl,
-  onToggleSelect, onEdit, onHistory, onInternalCard, onShowMatching,
+  onToggleSelect, onEdit, onCopy, onHistory, onInternalCard, onShowMatching,
 }: Props) {
   const exitToPath = useExitToPath();
   const dealMeta = (d: string) => DEALS.find(x => x[0] === d);
@@ -98,6 +99,11 @@ export default function ListingsTableMobileCard({
             {canEdit && (
               <button onClick={() => onEdit(it)} title="Редактировать" className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-brand-blue/10 hover:text-brand-blue transition-colors">
                 <Icon name="Pencil" size={13} />
+              </button>
+            )}
+            {canEdit && onCopy && (
+              <button onClick={() => onCopy(it)} title={it.deal === 'rent' ? 'Копировать как продажу' : 'Копировать как аренду'} className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-emerald-50 hover:text-emerald-600 transition-colors">
+                <Icon name="Copy" size={13} />
               </button>
             )}
           </div>
