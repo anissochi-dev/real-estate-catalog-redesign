@@ -81,7 +81,7 @@ export default function ListingEditorContentSection({
         <label className="text-sm font-semibold flex items-center gap-1.5">
           Что учесть при составлении описания (необязательно)
         </label>
-        <CharCount as="textarea" rows={2} max={500} warnAt={450}
+        <CharCount as="textarea" rows={2} max={2000} warnAt={1800}
           placeholder="Например: сделай акцент на панорамных окнах, упомяни близость к вокзалу, не пиши про соседей по этажу"
           value={editing.ai_notes || ''}
           onChange={e => setEditing({ ...editing, ai_notes: (e.target as HTMLTextAreaElement).value })} />
