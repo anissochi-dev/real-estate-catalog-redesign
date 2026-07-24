@@ -24,6 +24,12 @@ interface FieldDef {
   type?: 'text' | 'date';
 }
 
+interface CheckResponse {
+  result?: unknown;
+  from_cache?: boolean;
+  error?: string;
+}
+
 const METHODS: MethodMeta[] = [
   {
     id: 'complex_by_passport',
@@ -232,7 +238,7 @@ export default function NewDbTab({ newdbConnected }: { newdbConnected: boolean }
 
   const headers = { 'Content-Type': 'application/json', 'X-Auth-Token': token || '' };
 
-  const mutation = useMutation({
+  const mutation = useMutation<CheckResponse, Error, boolean>({
     mutationFn: async (force = false) => {
       const required = selectedMethod.fields.filter(f => f.required);
       const missing = required.filter(f => !fields[f.key]?.trim());
@@ -245,11 +251,11 @@ export default function NewDbTab({ newdbConnected }: { newdbConnected: boolean }
       const r = await fetch(`${CRM_CHECKS_URL}/`, { method: 'POST', headers, body: JSON.stringify(body) });
       const json = await r.json();
       if (!r.ok) throw new Error(json.error || 'Ошибка');
-      return json;
+      return json as CheckResponse;
     },
     onSuccess: (data) => {
       setResult(data.result);
-      setFromCache(data.from_cache);
+      setFromCache(!!data.from_cache);
       if (data.from_cache) toast.info('Результат из кэша (30 дней)');
     },
     onError: (e: Error) => toast.error(e.message),
@@ -355,7 +361,7 @@ export default function NewDbTab({ newdbConnected }: { newdbConnected: boolean }
                   ? <><Icon name="Loader2" size={15} className="animate-spin" />Проверяю...</>
                   : <><Icon name="Search" size={15} />Проверить</>}
               </button>
-              {result && (
+              {Boolean(result) && (
                 <button
                   onClick={() => mutation.mutate(true)}
                   disabled={mutation.isPending}
@@ -369,7 +375,7 @@ export default function NewDbTab({ newdbConnected }: { newdbConnected: boolean }
           </div>
 
           {/* Результат */}
-          {result && (
+          {Boolean(result) && (
             <div className="bg-white rounded-2xl border border-border overflow-hidden">
               <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-muted/30">
                 <div className="flex items-center gap-2">

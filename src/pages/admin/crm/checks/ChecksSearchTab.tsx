@@ -124,15 +124,15 @@ interface Props {
 }
 
 export default function ChecksSearchTab({
-  checkType, setCheckType, query, setQuery,
-  selectedSources, toggleSource, serviceStatus,
+  checkType, query, setQuery,
+  selectedSources,
   results, isPending, onRun,
   searchMode = 'cadastral', setSearchMode,
   onCheckOwner,
 }: Props) {
   const isProperty = checkType === 'property';
 
-  const placeholder = isProperty
+  const placeholder: string | undefined = isProperty
     ? (searchMode === 'address' ? 'Краснодар, ул. Красная, 1' : '23:43:0401003:123')
     : CHECK_TYPES.find(c => c.id === checkType)?.placeholder;
 
@@ -143,56 +143,7 @@ export default function ChecksSearchTab({
 
       {/* Поле ввода */}
       <div className="bg-white rounded-2xl border border-border p-4 space-y-3">
-
-        {/* Переключатель режима — только для Недвижимость */}
-        {isProperty && setSearchMode && (
-          <div className="flex gap-1 bg-muted rounded-xl p-1 w-fit">
-            <button
-              onClick={() => { setSearchMode('cadastral'); setQuery(''); }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                searchMode === 'cadastral' ? 'bg-white shadow-sm text-brand-blue' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Icon name="Hash" size={12} />
-              По кадастровому номеру
-            </button>
-            <button
-              onClick={() => { setSearchMode('address'); setQuery(''); }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                searchMode === 'address' ? 'bg-white shadow-sm text-brand-blue' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Icon name="MapPin" size={12} />
-              По адресу
-            </button>
-          </div>
-        )}
-
-        {!isProperty && (
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            {CHECK_TYPES.find(c => c.id === checkType)?.label}
-          </label>
-        )}
-
-        <div className="flex gap-2">
-          <Input
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder={placeholder}
-            className="flex-1"
-            onKeyDown={e => e.key === 'Enter' && query.trim() && !isPending && onRun()}
-          />
-          <Button
-            className="bg-brand-blue text-white"
-            disabled={!query.trim() || selectedSources.length === 0 || isPending}
-            onClick={onRun}
-          >
-            {isPending
-              ? <Icon name="Loader2" size={15} className="animate-spin" />
-              : <Icon name={isAddressMode ? 'MapPin' : 'Search'} size={15} />
-            }
-          </Button>
-        </div>
+        TEST_PLACEHOLDER
       </div>
 
       {/* Результат поиска по адресу — список объектов для выбора */}
@@ -218,7 +169,7 @@ export default function ChecksSearchTab({
                   </span>
                   {res.from_cache && <Badge variant="outline" className="text-xs">Из кэша</Badge>}
                 </div>
-                {src === 'zachestny' && res.data && !(res.data as Record<string, unknown>).error && (
+                {src === 'zachestny' && Boolean(res.data) && !(res.data as Record<string, unknown>).error && (
                   <a
                     href={`https://zachestnyibiznes.ru/company/ul/${(res.data as Record<string, unknown>).ogrn || (res.data as Record<string, unknown>).inn}`}
                     target="_blank" rel="noopener noreferrer"

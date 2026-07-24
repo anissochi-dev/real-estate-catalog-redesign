@@ -3,7 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
 import { CRM_CHECKS_URL } from '@/lib/adminApi';
-import { METHODS, RISK_COLORS, RISK_LABELS, MethodMeta } from './ownersTypes';
+import { METHODS, RISK_COLORS, RISK_LABELS, MethodMeta, CheckResponse } from './ownersTypes';
 import ResultValue from './OwnerResultValue';
 
 // Рекурсивно ищем кадастровый номер в объекте результата
@@ -41,16 +41,16 @@ export default function OwnerDetailedChecks({
         lastname:   parts[0] || '',
         firstname:  parts[1] || '',
         secondname: parts[2] || '',
-      };
+      } as Record<string, string>;
     }
-    return {};
+    return {} as Record<string, string>;
   });
   const [result, setResult] = useState<unknown>(null);
   const [fromCache, setFromCache] = useState(false);
 
   const headers = { 'Content-Type': 'application/json', 'X-Auth-Token': token };
 
-  const mutation = useMutation({
+  const mutation = useMutation<CheckResponse, Error, boolean>({
     mutationFn: async (force = false) => {
       const missing = selectedMethod.fields.filter(f => f.required && !fields[f.key]?.trim());
       if (missing.length) throw new Error(`Заполните: ${missing.map(f => f.label).join(', ')}`);
@@ -62,11 +62,11 @@ export default function OwnerDetailedChecks({
       const r = await fetch(`${CRM_CHECKS_URL}/`, { method: 'POST', headers, body: JSON.stringify(body) });
       const json = await r.json();
       if (!r.ok) throw new Error(json.error || 'Ошибка');
-      return json;
+      return json as CheckResponse;
     },
     onSuccess: (data) => {
       setResult(data.result);
-      setFromCache(data.from_cache);
+      setFromCache(!!data.from_cache);
       if (data.from_cache) toast.info('Результат из кэша (30 дней)');
       onPrefillUsed?.();
     },
@@ -156,7 +156,7 @@ export default function OwnerDetailedChecks({
                 ? <><Icon name="Loader2" size={15} className="animate-spin" />Проверяю...</>
                 : <><Icon name="Search" size={15} />Проверить</>}
             </button>
-            {result && (
+            {Boolean(result) && (
               <button
                 onClick={() => mutation.mutate(true)}
                 disabled={mutation.isPending}
@@ -169,7 +169,7 @@ export default function OwnerDetailedChecks({
           </div>
         </div>
 
-        {result && (
+        {Boolean(result) && (
           <div className="bg-white rounded-2xl border border-border overflow-hidden">
             <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-muted/30">
               <div className="flex items-center gap-2">
