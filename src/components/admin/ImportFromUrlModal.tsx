@@ -4,7 +4,7 @@ import { CATS, DEALS } from '@/pages/admin/listings/types';
 
 const IMPORT_URL = 'https://functions.poehali.dev/59ce84ce-c6bb-46e7-9223-5d893748615f';
 
-interface ImportedListing {
+export interface ImportedListing {
   title: string;
   description: string;
   price: number;

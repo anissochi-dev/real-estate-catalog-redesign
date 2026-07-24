@@ -28,6 +28,7 @@ export interface Listing {
   description: string;
   ai_notes?: string | null;
   image: string;
+  image_thumb?: string | null;
   images: string;
   tags: string[] | string;
   is_hot: boolean;

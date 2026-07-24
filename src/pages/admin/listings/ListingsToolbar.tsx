@@ -2,17 +2,7 @@ import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import { CATS } from './types';
 import { StatusFilter, clearDraft } from './useListingsState';
-import ImportFromUrlModal from '@/components/admin/ImportFromUrlModal';
-
-interface ImportedListing {
-  title: string;
-  description: string;
-  price: number;
-  area: number;
-  images: string[];
-  address: string;
-  source_url: string;
-}
+import ImportFromUrlModal, { ImportedListing } from '@/components/admin/ImportFromUrlModal';
 
 interface Props {
   statusFilter: StatusFilter;

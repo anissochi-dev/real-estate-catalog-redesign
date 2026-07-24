@@ -39,9 +39,9 @@ export function useAdminPolling(section: AdminSection) {
     return null;
   });
 
-  const logoutTimer    = useRef<number | null>(null);
-  const warningTimer   = useRef<number | null>(null);
-  const countdownTimer = useRef<number | null>(null);
+  const logoutTimer    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const warningTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadNavAndPerms = () => {
     if (!user) return;

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { Listing, City, LandVri, Purpose, CONDITION_TO_FINISHING } from './types';
 import ListingEditorPriceSection from './ListingEditorPriceSection';
 import ListingEditorDetailsSection from './ListingEditorDetailsSection';
@@ -14,7 +14,7 @@ import { geocodeAddress } from '@/lib/yandexGeocode';
 
 interface Props {
   editing: Partial<Listing>;
-  setEditing: (l: Partial<Listing> | ((prev: Partial<Listing>) => Partial<Listing>)) => void;
+  setEditing: Dispatch<SetStateAction<Partial<Listing> | null>>;
   photos: string[];
   setPhotos: (p: string[]) => void;
   cities: City[];
