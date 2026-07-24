@@ -112,18 +112,18 @@ export interface Purpose { id: number; name: string; slug: string; icon?: string
 export interface LandVri { id: number; name: string; slug: string; is_active?: boolean }
 
 export const CATS = [
-  ['office', 'Офис'],
-  ['retail', 'Магазин, торговое помещение'],
-  ['warehouse', 'Склад'],
-  ['restaurant', 'Общепит, кафе, ресторан'],
-  ['hotel', 'Гостиница'],
-  ['business', 'Готовый бизнес'],
-  ['gab', 'Готовый арендный бизнес (ГАБ)'],
-  ['production', 'Производственное помещение'],
-  ['land', 'Земельный участок'],
-  ['building', 'Отдельно стоящее здание'],
-  ['free_purpose', 'Помещение свободного назначения'],
   ['car_service', 'Автосервис'],
+  ['hotel', 'Гостиница'],
+  ['gab', 'Готовый арендный бизнес (ГАБ)'],
+  ['business', 'Готовый бизнес'],
+  ['land', 'Земельный участок'],
+  ['retail', 'Магазин, торговое помещение'],
+  ['restaurant', 'Общепит, кафе, ресторан'],
+  ['building', 'Отдельно стоящее здание'],
+  ['office', 'Офис'],
+  ['free_purpose', 'Помещение свободного назначения'],
+  ['production', 'Производственное помещение'],
+  ['warehouse', 'Склад'],
 ];
 export const DEALS: [string, string, string][] = [
   ['sale', 'Продажа', 'bg-emerald-100 text-emerald-700'],
