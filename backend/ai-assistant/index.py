@@ -28,6 +28,13 @@ CONDITION_RU = {
     'rough': 'без отделки',
     'shellcore': 'черновая отделка',
 }
+# Единый словарь перевода парковки (должен соответствовать
+# src/pages/admin/listings/types.ts PARKING)
+PARKING_RU = {
+    'none': 'нет',
+    'street': 'на улице',
+    'building': 'в здании',
+}
 # Алиасы для совместимости с существующим кодом
 YANDEX_MODEL_NAME  = CHAT_MODEL       # основная модель
 YANDEX_MODEL_SHORT = CHAT_MODEL_FAST  # быстрая/лёгкая модель
@@ -1248,7 +1255,7 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
             if row.get('floor'): extra_parts.append(f"этаж {row['floor']}" + (f"/{row['total_floors']}" if row.get('total_floors') else ''))
             if row.get('ceiling_height'): extra_parts.append(f"высота потолков {row['ceiling_height']} м")
             if row.get('condition'): extra_parts.append(f"состояние: {CONDITION_RU.get(row['condition'], row['condition'])}")
-            if row.get('parking'): extra_parts.append(f"парковка: {row['parking']}")
+            if row.get('parking'): extra_parts.append(f"парковка: {PARKING_RU.get(row['parking'], row['parking'])}")
             if row.get('building_year'): extra_parts.append(f"год постройки {row['building_year']}")
             extra = ', '.join(extra_parts)
 
@@ -4326,6 +4333,7 @@ def handler(event, context):
                 deal = DEAL_RU.get(listing_data.get('deal', ''), listing_data.get('deal', '—'))
                 cat  = CAT_RU.get(listing_data.get('category', ''), listing_data.get('category', '—'))
                 cond = CONDITION_RU.get(listing_data.get('condition', ''), listing_data.get('condition', 'не указано'))
+                parking = PARKING_RU.get(listing_data.get('parking', ''), listing_data.get('parking', 'не указана'))
                 addr_parts = [
                     listing_data.get('address', ''),
                     listing_data.get('district', ''),
@@ -4363,7 +4371,7 @@ def handler(event, context):
                     f"- Высота потолков: {listing_data.get('ceiling_height', 'не указана')} м\n"
                     f"- Электромощность: {listing_data.get('electricity_kw', 'не указана')} кВт\n"
                     f"- Коммуникации: {listing_data.get('utilities', 'не указаны')}\n"
-                    f"- Парковка: {listing_data.get('parking', 'не указана')}\n"
+                    f"- Парковка: {parking}\n"
                     f"- Арендатор: {listing_data.get('tenant_name') or 'нет'}\n"
                     f"- Доход: {income_str}\n"
                     f"- Окупаемость: {listing_data.get('payback', '—')} мес.\n"
