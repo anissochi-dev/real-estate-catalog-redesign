@@ -210,7 +210,7 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal):
     cur.execute(f"SELECT slug, name FROM {SCHEMA}.land_vri")
     _vri_map = {r['slug']: r['name'] for r in cur.fetchall()}
     for l in listings:
-        for k in ('created_at', 'updated_at'):
+        for k in ('created_at', 'updated_at', 'feed_bump_at'):
             if l.get(k):
                 l[k] = l[k].isoformat()
         if l.get('category') == 'land' and not l.get('land_area') and l.get('area'):
@@ -276,6 +276,44 @@ def _regenerate_static_feeds(cur, conn, force=False):
         results.append({'slug': feed['slug'], 'cdn_url': cdn_url, 'regenerated': True})
 
     return results
+
+
+def _bump_feed_dates(cur, conn):
+    """Раз в сутки, в окне settings.feed_bump_cron_hour/minute (UTC), проставляет
+    feed_bump_at = NOW() всем активным и видимым объектам, у которых включена
+    выгрузка хотя бы на одну площадку (Яндекс/Авито/ЦИАН/Разное). Это поднимает
+    дату объявления в фидах площадок, НЕ трогая updated_at — сортировка «новые/
+    обновлённые» на сайте и история редактирования в админке не затрагиваются.
+
+    По умолчанию: 06:23 UTC = 09:23 МСК.
+    """
+    cur.execute(
+        f"SELECT feed_bump_cron_enabled, feed_bump_cron_hour, feed_bump_cron_minute, "
+        f"feed_bump_cron_last_at FROM {SCHEMA}.settings ORDER BY id LIMIT 1"
+    )
+    s = cur.fetchone() or {}
+    if not s.get('feed_bump_cron_enabled', True):
+        return {'skipped': True, 'reason': 'disabled'}
+
+    now_utc = datetime.now(timezone.utc)
+    target_hour = int(s.get('feed_bump_cron_hour') if s.get('feed_bump_cron_hour') is not None else 6)
+    target_minute = int(s.get('feed_bump_cron_minute') if s.get('feed_bump_cron_minute') is not None else 23)
+    last_at = s.get('feed_bump_cron_last_at')
+    already_ran = last_at and hasattr(last_at, 'date') and last_at.date() >= now_utc.date()
+    time_ok = now_utc.hour == target_hour and abs(now_utc.minute - target_minute) <= 5
+
+    if not time_ok or already_ran:
+        return {'skipped': True, 'time_ok': time_ok, 'already_ran': already_ran}
+
+    cur.execute(
+        f"UPDATE {SCHEMA}.listings SET feed_bump_at = NOW() "
+        f"WHERE status = 'active' AND (is_visible IS NULL OR is_visible = TRUE) "
+        f"AND (export_yandex = TRUE OR export_avito = TRUE OR export_cian = TRUE OR export_other = TRUE)"
+    )
+    updated = cur.rowcount
+    cur.execute(f"UPDATE {SCHEMA}.settings SET feed_bump_cron_last_at = NOW() WHERE id = (SELECT id FROM {SCHEMA}.settings ORDER BY id LIMIT 1)")
+    conn.commit()
+    return {'skipped': False, 'updated': updated}
 
 
 def _split_images(row):
@@ -470,9 +508,11 @@ def _build_yandex(listings, company):
         commercial_type = YANDEX_COMMERCIAL_TYPE_MAP.get(l.get('category'), 'office')
         deal = deal_map.get(l.get('deal'), 'продажа')
 
-        # creation-date в строгом ISO 8601: YYYY-MM-DDTHH:mm:ss+00:00 (без микросекунд)
+        # creation-date в строгом ISO 8601: YYYY-MM-DDTHH:mm:ss+00:00 (без микросекунд).
+        # Берём feed_bump_at (дата авто-«поднятия» для площадок), если он проставлен,
+        # иначе — обычную дату создания объекта.
         creation_date = now
-        raw_created = l.get('created_at')
+        raw_created = l.get('feed_bump_at') or l.get('created_at')
         if raw_created:
             try:
                 dt = datetime.fromisoformat(str(raw_created).replace('Z', '+00:00'))
@@ -608,7 +648,10 @@ def _build_avito(listings, company):
         deal_map = {'sale': 'Продам', 'rent': 'Сдам', 'business': 'Продам'}
         out.append('<Ad>')
         out.append(f'<Id>{l["id"]}</Id>')
-        out.append(f'<DateBegin>{(l.get("created_at") or "")[:10]}</DateBegin>')
+        # Дата "поднятия" объявления для Авито: feed_bump_at (авто-обновление),
+        # иначе дата создания объекта.
+        date_begin = (l.get('feed_bump_at') or l.get('created_at') or '')[:10]
+        out.append(f'<DateBegin>{date_begin}</DateBegin>')
         out.append('<Category>Коммерческая недвижимость</Category>')
         out.append(f'<OperationType>{deal_map.get(l.get("deal"), "Продам")}</OperationType>')
         out.append(f'<ObjectType>{_xml_escape(AVITO_OBJECT_TYPE_MAP.get(l.get("category"), "Офисное помещение"))}</ObjectType>')
@@ -863,15 +906,16 @@ def _build_cian(listings, company):
             out.append('</Underground>')
             out.append('</Undergrounds>')
 
-        # Цена
+        # Цена: _total_price() ВСЕГДА возвращает итоговую сумму за объект целиком
+        # (даже если в БД цена изначально хранилась за м² — она уже умножена на площадь).
+        # Поэтому PriceType=squareMeter здесь передавать НЕЛЬЗЯ: ЦИАН при получении такого
+        # тега сам домножает Price на площадь ещё раз, завышая цену в разы.
         out.append('<BargainTerms>')
         price_val = _total_price(l)
         out.append(f'<Price>{price_val}</Price>')
         out.append('<Currency>rur</Currency>')
         if deal == 'rent':
             out.append('<PaymentPeriod>monthly</PaymentPeriod>')
-            if l.get('price_unit') == 'm2':
-                out.append('<PriceType>squareMeter</PriceType>')
         out.append('</BargainTerms>')
 
         # Фото
@@ -1366,7 +1410,9 @@ def handler(event, context):
             if method == 'GET' and params.get('action') == 'cron':
                 # Публичный пинг-крон: пересобирает статические файлы в S3 (раз в 10 мин)
                 # и параллельно синхронизирует кабинеты ЦИАН и Яндекс.Недвижимость (раз в 6 часов, если подключены).
-                results = _regenerate_static_feeds(cur, conn, force=False)
+                # Перед сборкой — проверяем окно авто-обновления даты объявлений (раз в сутки).
+                bump_result = _bump_feed_dates(cur, conn)
+                results = _regenerate_static_feeds(cur, conn, force=bump_result.get('updated', 0) > 0)
                 cur.execute(f"SELECT is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = 'cian' LIMIT 1")
                 row = cur.fetchone()
                 cian_result = None
@@ -1379,6 +1425,7 @@ def handler(event, context):
                     yandex_result = _yandex_calls_handle(cur, conn, {'action': 'yandex_cron'})
                 return _json({
                     'ok': True, 'results': results,
+                    'feed_bump': bump_result,
                     'cian': json.loads(cian_result['body']) if cian_result else None,
                     'yandex': json.loads(yandex_result['body']) if yandex_result else None,
                 })
