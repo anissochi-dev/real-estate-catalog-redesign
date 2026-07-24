@@ -4832,6 +4832,16 @@ def _hard_delete_listings(cur, ids: list):
                 cur.execute(f"DELETE FROM {SCHEMA}.{tbl} WHERE listing_id IN ({ids_sql})")
             except Exception:
                 pass
+    # s3_photo_refs — служебный учёт фото объекта в S3, listing_id тоже nullable.
+    # Не удаляем сами записи (файлы могут физически ещё лежать в хранилище) — отвязываем
+    # и помечаем «осиротевшими», дальше их подчистит фоновая задача photo-cleanup.
+    try:
+        cur.execute(
+            f"UPDATE {SCHEMA}.s3_photo_refs SET listing_id = NULL, is_orphan = TRUE "
+            f"WHERE listing_id IN ({ids_sql})"
+        )
+    except psycopg2.errors.UndefinedTable:
+        pass
     cur.execute(f"DELETE FROM {SCHEMA}.listings WHERE id IN ({ids_sql})")
 
 
