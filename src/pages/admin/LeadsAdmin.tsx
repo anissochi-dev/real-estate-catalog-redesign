@@ -267,7 +267,7 @@ export default function LeadsAdmin() {
         type="button"
         onClick={() => document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' })}
         title="Прокрутить наверх"
-        className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 w-11 h-11 rounded-full bg-white text-brand-blue border border-border shadow-lg flex items-center justify-center hover:bg-muted transition"
+        className="fixed bottom-20 left-4 sm:left-6 z-40 w-11 h-11 rounded-full bg-white text-brand-blue border border-border shadow-lg flex items-center justify-center hover:bg-muted transition"
       >
         <Icon name="ChevronUp" size={20} />
       </button>
@@ -277,7 +277,7 @@ export default function LeadsAdmin() {
         type="button"
         onClick={() => document.querySelector('main')?.scrollTo({ top: 999999, behavior: 'smooth' })}
         title="Прокрутить вниз"
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-11 h-11 rounded-full bg-brand-blue text-white shadow-lg flex items-center justify-center hover:bg-brand-blue/90 transition"
+        className="fixed bottom-6 left-4 sm:left-6 z-40 w-11 h-11 rounded-full bg-brand-blue text-white shadow-lg flex items-center justify-center hover:bg-brand-blue/90 transition"
       >
         <Icon name="ChevronDown" size={20} />
       </button>

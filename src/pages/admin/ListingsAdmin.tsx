@@ -126,15 +126,9 @@ export default function ListingsAdmin() {
         isAdmin={s.isAdmin}
       />
 
-      {/* Показать ещё */}
-      <div className="flex items-center justify-between pt-1 pb-2">
-        <span className="text-xs text-muted-foreground">
-          {(s.search || s.catFilter)
-            ? <>Показано <b>{s.filtered.length}</b> (фильтр) из {s.items.length} загружено / {s.total} всего</>
-            : <>Показано {s.items.length} из {s.total}</>
-          }
-        </span>
-        {hasMore && (
+      {/* Показать ещё — кнопка загрузки слева (с отступом от плавающих стрелок), счётчик справа */}
+      <div className="flex items-center justify-between gap-3 pt-1 pb-2 pl-16 sm:pl-20">
+        {hasMore ? (
           <button
             onClick={s.loadMore}
             disabled={s.loading}
@@ -143,7 +137,13 @@ export default function ListingsAdmin() {
             {s.loading ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="ChevronDown" size={13} />}
             Загрузить ещё 25
           </button>
-        )}
+        ) : <span />}
+        <span className="text-xs text-muted-foreground whitespace-nowrap">
+          {(s.search || s.catFilter)
+            ? <>Показано <b>{s.filtered.length}</b> (фильтр) из {s.items.length} загружено / {s.total} всего</>
+            : <>Показано {s.items.length} из {s.total}</>
+          }
+        </span>
       </div>
 
       {s.editing && (
@@ -215,7 +215,7 @@ export default function ListingsAdmin() {
         type="button"
         onClick={() => document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' })}
         title="Прокрутить наверх"
-        className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 w-11 h-11 rounded-full bg-white text-brand-blue border border-border shadow-lg flex items-center justify-center hover:bg-muted transition"
+        className="fixed bottom-20 left-4 sm:left-6 z-40 w-11 h-11 rounded-full bg-white text-brand-blue border border-border shadow-lg flex items-center justify-center hover:bg-muted transition"
       >
         <Icon name="ChevronUp" size={20} />
       </button>
@@ -225,7 +225,7 @@ export default function ListingsAdmin() {
         type="button"
         onClick={() => document.querySelector('main')?.scrollTo({ top: 999999, behavior: 'smooth' })}
         title="Прокрутить вниз"
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-11 h-11 rounded-full bg-brand-blue text-white shadow-lg flex items-center justify-center hover:bg-brand-blue/90 transition"
+        className="fixed bottom-6 left-4 sm:left-6 z-40 w-11 h-11 rounded-full bg-brand-blue text-white shadow-lg flex items-center justify-center hover:bg-brand-blue/90 transition"
       >
         <Icon name="ChevronDown" size={20} />
       </button>
