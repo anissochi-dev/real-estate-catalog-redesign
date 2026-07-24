@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import Icon from '@/components/ui/icon';
 import { City, ROAD_LINES } from './types';
 import { District } from '@/lib/api';
+import { groupByOkrug } from '@/lib/districts';
 import { Suggestion } from './cadastreTypes';
 import type { Listing } from './types';
 
@@ -173,18 +174,40 @@ export default function AddressInputRow({
           Район <span className="text-red-500">*</span>
           {districtError && <span className="ml-2 text-red-500 font-normal">— обязательное поле</span>}
         </label>
-        {districts.length > 0 ? (
-          <select
-            value={editing.district || ''}
-            onChange={e => setEditing({ ...editing, district: e.target.value })}
-            className={`w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none transition-colors ${districtError ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-border focus:border-brand-blue'}`}
-          >
-            <option value="">— выберите район —</option>
-            {districts.map(d => (
-              <option key={d.id} value={d.name}>{d.name}</option>
-            ))}
-          </select>
-        ) : (
+        {districts.length > 0 ? (() => {
+          const { groups, orphans } = groupByOkrug(districts, { sortBy: 'order' });
+          const knownNames = new Set([
+            ...groups.flatMap(g => g.children.map(d => d.name)),
+            ...orphans.map(d => d.name),
+          ]);
+          const currentUnknown = editing.district && !knownNames.has(editing.district);
+          return (
+            <select
+              value={editing.district || ''}
+              onChange={e => setEditing({ ...editing, district: e.target.value })}
+              className={`w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none transition-colors ${districtError ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-border focus:border-brand-blue'}`}
+            >
+              <option value="">— выберите район —</option>
+              {currentUnknown && (
+                <option value={editing.district}>{editing.district}</option>
+              )}
+              {groups.map(({ okrug, children }) => children.length > 0 && (
+                <optgroup key={okrug.id} label={okrug.name}>
+                  {children.map(d => (
+                    <option key={d.id} value={d.name}>{d.name}</option>
+                  ))}
+                </optgroup>
+              ))}
+              {orphans.length > 0 && (
+                <optgroup label="Другие районы">
+                  {orphans.map(d => (
+                    <option key={d.id} value={d.name}>{d.name}</option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          );
+        })() : (
           <input
             value={editing.district || ''}
             onChange={e => setEditing({ ...editing, district: e.target.value })}
