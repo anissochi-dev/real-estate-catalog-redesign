@@ -934,6 +934,20 @@ def _cian_sync(cur, conn, token):
     offers_count = len(all_offers)
     offer_ids = [o['id'] for o in all_offers if o.get('id')]
 
+    # Удаляем из нашей БД объявления, которых больше нет в ответе ЦИАН (сняты с публикации,
+    # удалены вручную и т.п.) — чтобы дашборд не показывал устаревшие/удалённые объявления.
+    # Защита: если API вернул пустой список (сбой/ошибка авторизации), ничего не чистим.
+    if offer_ids:
+        keep_ids_sql = ','.join(str(oid) for oid in offer_ids)
+        cur.execute(f"SELECT id FROM {SCHEMA}.cian_offers WHERE id NOT IN ({keep_ids_sql})")
+        stale_ids = [r['id'] for r in cur.fetchall()]
+        if stale_ids:
+            stale_ids_sql = ','.join(str(oid) for oid in stale_ids)
+            cur.execute(f"DELETE FROM {SCHEMA}.cian_offer_stats WHERE offer_id IN ({stale_ids_sql})")
+            cur.execute(f"DELETE FROM {SCHEMA}.cian_offer_services WHERE offer_id IN ({stale_ids_sql})")
+            cur.execute(f"DELETE FROM {SCHEMA}.cian_calls WHERE offer_id IN ({stale_ids_sql})")
+            cur.execute(f"DELETE FROM {SCHEMA}.cian_offers WHERE id IN ({stale_ids_sql})")
+
     for batch in _cian_chunks(offer_ids, 50):
         qs = '&'.join(f'offerIds={oid}' for oid in batch)
         data, err = _cian_get(f'/v1/get-my-offers-detail?{qs}', token)
