@@ -209,6 +209,16 @@ export default function ListingsAdmin() {
           }}
         />
       )}
+
+      {/* Быстрый переход в конец списка */}
+      <button
+        type="button"
+        onClick={() => document.querySelector('main')?.scrollTo({ top: 999999, behavior: 'smooth' })}
+        title="Прокрутить вниз"
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-11 h-11 rounded-full bg-brand-blue text-white shadow-lg flex items-center justify-center hover:bg-brand-blue/90 transition"
+      >
+        <Icon name="ChevronDown" size={20} />
+      </button>
     </div>
   );
 }
