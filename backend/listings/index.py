@@ -690,7 +690,7 @@ def handler(event: dict, context) -> dict:
                 )
                 # Без тяжёлых полей images / video_url — нужна только обложка
                 similar_cols = (
-                    "id, title, description, category, deal, price, price_per_m2, area, "
+                    "id, title, description, category, deal, price, price_per_m2, price_unit, area, "
                     "payback, profit, floor, total_floors, address, district, lat, lng, "
                     "image, tags, is_hot, is_new, is_exclusive, is_urgent, public_code, "
                     "tenant_name, monthly_rent, yearly_rent, purpose, finishing, "
@@ -816,7 +816,7 @@ def handler(event: dict, context) -> dict:
             # Карточкам нужна только обложка `image`. Доп. фото и галерея
             # подтягиваются на странице объекта через fetchListingById.
             cols = (
-                "l.id, l.title, LEFT(l.description, 200) AS description, l.category, l.deal, l.price, l.price_per_m2, l.area, "
+                "l.id, l.title, LEFT(l.description, 200) AS description, l.category, l.deal, l.price, l.price_per_m2, l.price_unit, l.area, "
                 "l.payback, l.profit, l.floor, l.total_floors, l.address, l.district, l.lat, l.lng, "
                 "l.image, l.image_thumb, l.tags, l.is_hot, l.is_new, l.is_exclusive, l.is_urgent, l.public_code, "
                 "l.tenant_name, l.monthly_rent, l.yearly_rent, l.rent_index_pct, l.purpose, l.finishing, "
@@ -872,7 +872,33 @@ def _make_slug(title: str, listing_id: int) -> str:
     return f"{s}-{listing_id}"
 
 
+def _normalize_price(row: dict) -> None:
+    """Приводит price/price_per_m2 к единому виду: price — всегда полная стоимость
+    объекта, price_per_m2 — всегда цена за м². В БД price хранится в единице,
+    заданной price_unit ('m2' — цена за метр, иначе — уже полная стоимость).
+    Защита от кривых данных: если price_unit='m2', но цена > 200 000 ₽,
+    считаем что в price уже полная стоимость (адекватная цена за м² коммерции — до 200 000 ₽).
+    """
+    try:
+        price = float(row.get('price') or 0)
+    except (TypeError, ValueError):
+        price = 0
+    try:
+        area = float(row.get('area') or 0)
+    except (TypeError, ValueError):
+        area = 0
+    unit = row.get('price_unit')
+    if unit == 'm2' and area > 0 and 0 < price <= 200_000:
+        row['price'] = int(round(price * area))
+        row['price_per_m2'] = int(round(price))
+    elif area > 0 and price > 0:
+        row.setdefault('price_per_m2', None)
+        if not row.get('price_per_m2'):
+            row['price_per_m2'] = int(round(price / area))
+
+
 def _serialize(row: dict) -> dict:
+    _normalize_price(row)
     if row.get('tags'):
         row['tags'] = [t.strip() for t in str(row['tags']).split(',') if t.strip()]
     else:
