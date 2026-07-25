@@ -1,5 +1,5 @@
 import Icon from '@/components/ui/icon';
-import { Listing, DEALS, fmtDate, perM2, splitImages } from './types';
+import { Listing, DEALS, fmtDate, getTotalPrice, getPerM2Price, splitImages } from './types';
 import { fmtListingId } from '@/lib/formatPrice';
 import { listingSlug } from '@/lib/slug';
 import { useExitToPath } from '../AdminLayout';
@@ -27,7 +27,8 @@ export default function ListingsTableMobileCard({
   const exitToPath = useExitToPath();
   const dealMeta = (d: string) => DEALS.find(x => x[0] === d);
   const dm = dealMeta(it.deal);
-  const m2 = perM2(it.price, it.area);
+  const totalPrice = getTotalPrice(it);
+  const m2 = getPerM2Price(it);
   const imgs = splitImages(it.images);
   const mainImg = it.image_thumb || imgs[0] || it.image;
   const isArchived = it.status === 'archived';
@@ -123,7 +124,7 @@ export default function ListingsTableMobileCard({
             <span className={`text-xs px-2 py-0.5 rounded-lg font-semibold ${dm[2]}`}>{dm[1]}</span>
           )}
           <span className="text-sm font-bold text-foreground leading-none">
-            {(it.price || 0).toLocaleString('ru')} ₽
+            {totalPrice.toLocaleString('ru')} ₽
           </span>
           {m2 > 0 && (
             <span className="text-xs text-muted-foreground">{m2.toLocaleString('ru')} ₽/м²</span>
@@ -138,12 +139,6 @@ export default function ListingsTableMobileCard({
             <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
               <Icon name="LayoutGrid" size={10} className="opacity-60" />
               {String((it as Record<string,unknown>).rooms)} комн.
-            </span>
-          ) : null}
-          {(it as Record<string,unknown>).property_rights ? (
-            <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
-              <Icon name="ShieldCheck" size={10} className="text-emerald-500 opacity-80" />
-              {({'ownership':'Собств.','lease':'Аренда','sublease':'Субаренда'} as Record<string,string>)[(it as Record<string,unknown>).property_rights as string] || String((it as Record<string,unknown>).property_rights)}
             </span>
           ) : null}
           {(it as Record<string,unknown>).has_furniture && (

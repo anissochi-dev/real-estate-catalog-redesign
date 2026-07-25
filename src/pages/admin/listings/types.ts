@@ -239,6 +239,25 @@ export const perM2 = (price: number, area: number) => {
   return Math.round(price / area);
 };
 
+// Полная цена объекта с учётом price_unit: если цена хранится за м² ('m2'),
+// умножаем на площадь; иначе (total/sotka/не указано) — считаем цену уже итоговой.
+export const getTotalPrice = (it: Pick<Listing, 'price' | 'area' | 'price_unit'>) => {
+  const price = +it.price || 0;
+  const area = +it.area || 0;
+  if (it.price_unit === 'm2' && area > 0) return Math.round(price * area);
+  return price;
+};
+
+// Цена за м² с учётом price_unit: если цена уже хранится за м² — возвращаем как есть,
+// иначе делим полную цену на площадь.
+export const getPerM2Price = (it: Pick<Listing, 'price' | 'area' | 'price_unit'>) => {
+  const price = +it.price || 0;
+  const area = +it.area || 0;
+  if (!price || !area) return 0;
+  if (it.price_unit === 'm2') return Math.round(price);
+  return Math.round(price / area);
+};
+
 export const detectVideoType = (url: string): string => {
   if (!url) return '';
   if (url.includes('vk.com') || url.includes('vkvideo')) return 'vk';

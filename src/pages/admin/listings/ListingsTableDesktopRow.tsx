@@ -1,5 +1,5 @@
 import Icon from '@/components/ui/icon';
-import { Listing, DEALS, fmtDate, perM2, splitImages } from './types';
+import { Listing, DEALS, fmtDate, getTotalPrice, getPerM2Price, splitImages } from './types';
 import { fmtListingId } from '@/lib/formatPrice';
 import { listingSlug } from '@/lib/slug';
 import { useExitToPath } from '../AdminLayout';
@@ -29,7 +29,8 @@ export default function ListingsTableDesktopRow({
   const exitToPath = useExitToPath();
   const dealMeta = (d: string) => DEALS.find(x => x[0] === d);
   const dm = dealMeta(it.deal);
-  const m2 = perM2(it.price, it.area);
+  const totalPrice = getTotalPrice(it);
+  const m2 = getPerM2Price(it);
   const imgs = splitImages(it.images);
   const mainImg = it.image_thumb || imgs[0] || it.image;
   const isArchived = it.status === 'archived';
@@ -215,7 +216,7 @@ export default function ListingsTableDesktopRow({
           )}
           <div>
             <span className="text-base font-bold text-foreground leading-none">
-              {(it.price || 0).toLocaleString('ru')} ₽
+              {totalPrice.toLocaleString('ru')} ₽
             </span>
             {m2 > 0 && (
               <span className="text-xs text-muted-foreground ml-1.5">
@@ -233,12 +234,6 @@ export default function ListingsTableDesktopRow({
             <span className="flex items-center gap-1 text-xs text-muted-foreground" title="Комнат">
               <Icon name="LayoutGrid" size={11} className="opacity-60" />
               {String((it as Record<string,unknown>).rooms)} комн.
-            </span>
-          ) : null}
-          {(it as Record<string,unknown>).property_rights ? (
-            <span className="flex items-center gap-1 text-xs text-muted-foreground" title="Права на объект">
-              <Icon name="ShieldCheck" size={11} className="text-emerald-500 opacity-80" />
-              {({'ownership':'Собств.','lease':'Аренда','sublease':'Субаренда'} as Record<string,string>)[(it as Record<string,unknown>).property_rights as string] || String((it as Record<string,unknown>).property_rights)}
             </span>
           ) : null}
           {(it as Record<string,unknown>).has_furniture ? (
