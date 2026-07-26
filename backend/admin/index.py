@@ -2402,6 +2402,45 @@ def _auto_district(cur, address: str, city: str = 'Краснодар') -> str:
 _LISTING_FAQ_URL = 'https://functions.poehali.dev/282b9c5f-29fa-41ea-bc42-0793bdf8950d'
 _PHONE_SUB_URL = 'https://functions.poehali.dev/6dfb5518-6954-4ea5-972b-c20e8d06a8ab'
 _SMART_SEARCH_URL = 'https://functions.poehali.dev/32925bd2-c418-4a8c-8e32-97b5385e67da'
+_XML_FEEDS_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7'
+
+
+def _trigger_feeds_regen():
+    """Немедленно пересобирает статические XML-фиды (ЦИАН, Авито, Яндекс и т.д.)
+    в фоне (fire-and-forget), чтобы изменения объекта (галочки экспорта, цена,
+    статус) попадали на площадки сразу, а не ждали плановый крон (раз в 10 мин).
+    Открывает СВОЁ соединение с БД — не переиспользует курсор основного запроса,
+    т.к. соединение psycopg2 нельзя безопасно использовать из другого потока."""
+    import threading as _threading
+    import urllib.request as _ureq
+
+    def _run():
+        conn2 = None
+        try:
+            conn2 = psycopg2.connect(os.environ['DATABASE_URL'])
+            with conn2.cursor(cursor_factory=RealDictCursor) as cur2:
+                # Берём токен активного admin/editor — эндпоинту generate_static нужна авторизация
+                cur2.execute(
+                    f"SELECT s.token FROM {SCHEMA}.sessions s "
+                    f"JOIN {SCHEMA}.users u ON u.id = s.user_id "
+                    f"WHERE u.role IN ('admin', 'editor') AND u.is_active = TRUE AND s.expires_at > NOW() "
+                    f"ORDER BY s.created_at DESC LIMIT 1"
+                )
+                session = cur2.fetchone()
+                if not session:
+                    return
+                token = session.get('token') or ''
+            url = f'{_XML_FEEDS_URL}?action=generate_static'
+            req = _ureq.Request(url, headers={'X-Auth-Token': token})
+            _ureq.urlopen(req, timeout=25)
+            print('[feeds] статические XML-фиды пересобраны')
+        except Exception as e:
+            print(f'[feeds] ошибка пересборки фидов: {e}')
+        finally:
+            if conn2:
+                conn2.close()
+
+    _threading.Thread(target=_run, daemon=True).start()
 
 
 def _notify_phone_subscribers(listing_id: int, body: dict, cur):
@@ -2838,6 +2877,8 @@ def _listings(cur, conn, method, rid, event, user):
         _trigger_reindex_async(new_id)
         if (body.get('status') or 'active') == 'active':
             _notify_indexnow(new_slug)
+        # Новый объект сразу может попасть в XML-фиды (если статус active и стоят галочки экспорта)
+        _trigger_feeds_regen()
         return _ok({'id': new_id, 'success': True, 'slug': new_slug, 'owner_phone_contact_id': owner_pc_id})
 
     if method == 'PUT' and rid:
@@ -3020,6 +3061,11 @@ def _listings(cur, conn, method, rid, event, user):
                 args=(int(rid), listing_slug),
                 daemon=True
             ).start()
+        # Пересобираем XML-фиды сразу, если изменилось что-то, влияющее на площадки:
+        # галочки экспорта, цена/единица цены, площадь, статус или видимость объекта
+        if any(k in body for k in ('export_yandex', 'export_avito', 'export_cian', 'export_other',
+                                    'status', 'is_visible', 'price', 'price_unit', 'area')):
+            _trigger_feeds_regen()
         return _ok({'success': True})
 
     if method == 'DELETE' and rid:
@@ -3048,6 +3094,8 @@ def _listings(cur, conn, method, rid, event, user):
             cur.execute(f"UPDATE {SCHEMA}.listings SET status = 'archived', is_visible = FALSE WHERE id = {int(rid)}")
         cur.execute(f"UPDATE {SCHEMA}.seo_artifacts SET urls_count = 0 WHERE kind = 'sitemap'")
         conn.commit()
+        # Объект ушёл в архив/удалён — сразу убираем его из XML-фидов площадок
+        _trigger_feeds_regen()
         return _ok({'success': True})
 
     return _err(400, 'Bad request')
@@ -4959,6 +5007,9 @@ def _listings_bulk(cur, conn, event, user):
     else:
         return _err(400, f'Неизвестная операция: {op}')
     conn.commit()
+    # Массовые операции, влияющие на площадки — сразу пересобираем XML-фиды
+    if op in ('archive', 'activate', 'delete', 'set_visible', 'set_export'):
+        _trigger_feeds_regen()
     return _ok({'success': True, 'affected': len(ids)})
 
 
