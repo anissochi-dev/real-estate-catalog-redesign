@@ -514,6 +514,9 @@ export function useListingsState() {
           .replace(/^Сдадим\b/i, 'Сдам')
           .replace(/^Продаётся\b/i, 'Продаю')
           .replace(/^Продаём\b/i, 'Продаю');
+        // Запятые в заголовке запрещены — если ИИ всё же вставил их, убираем
+        // (запятую и один пробел после неё заменяем одним пробелом), лишние пробелы схлопываем.
+        title = title.replace(/\s*,\s*/g, ' ').replace(/\s{2,}/g, ' ').trim();
         // Если длиннее 70 — обрезаем ТОЛЬКО по границе слова (никогда не разрубаем слово).
         if (title.length > 70) {
           const cut = title.slice(0, 70);
@@ -543,8 +546,10 @@ export function useListingsState() {
         let result = title;
         for (const fact of candidates) {
           if (result.length >= 60) break;
-          const sep = /[.!]$/.test(result) ? ' ' : ', ';
-          const withFact = `${result}${sep}${fact}`;
+          // Запятые в заголовке запрещены — разделяем факты пробелом и убираем
+          // запятые из самого значения факта (адрес/район в БД может их содержать).
+          const cleanFact = fact.replace(/\s*,\s*/g, ' ').replace(/\s{2,}/g, ' ').trim();
+          const withFact = `${result} ${cleanFact}`;
           if (withFact.length > 70) continue;
           result = withFact;
         }
