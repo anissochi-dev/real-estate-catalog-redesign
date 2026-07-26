@@ -802,12 +802,18 @@ def _clean_describe_text(text: str, source_prompt: str) -> str:
     # нет — заголовок запрещён (даже если модель сама его добавила).
     has_income = any(k in source_prompt for k in ('Доход в месяц:', 'Доход в год:', 'Чистая прибыль:'))
     has_tenant = 'Действующий арендатор:' in source_prompt
-    # Заголовок может прийти как отдельной строкой, так и слитно с текстом через
-    # двоеточие на той же строке («Финансовые перспективы и доходность: ...») —
-    # ловим оба варианта.
+    # Заголовок может прийти по-разному: отдельной строкой, слитно с текстом через
+    # двоеточие на той же строке, или с собственным пояснением модели в скобках
+    # («Финансовые перспективы и доходность (так как...):») — ловим весь диапазон
+    # вариантов: сам заголовок + любой хвост до конца строки (скобки/двоеточие/пояснение).
     heading_own_line_re = r'(?m)^Финансовые перспективы и доходность\s*$\n?'
     heading_inline_re = r'(?m)^Финансовые перспективы и доходность\s*:\s*'
-    has_heading = _re.search(heading_own_line_re, cleaned) or _re.search(heading_inline_re, cleaned)
+    heading_anytail_re = r'(?m)^Финансовые перспективы и доходность.*\n?'
+    has_heading = bool(
+        _re.search(heading_own_line_re, cleaned)
+        or _re.search(heading_inline_re, cleaned)
+        or _re.search(heading_anytail_re, cleaned)
+    )
 
     if has_income and has_tenant and not has_heading:
         paragraphs = cleaned.split('\n')
@@ -821,12 +827,14 @@ def _clean_describe_text(text: str, source_prompt: str) -> str:
         cleaned = '\n'.join(paragraphs)
     elif not (has_income and has_tenant) and has_heading:
         # Условие для блока не выполнено, а заголовок всё же есть — модель
-        # нарушила правило. Убираем только строку-заголовок (и двоеточие,
-        # если оно слито с текстом на той же строке), сам текст с фактами
-        # оставляем — в нём нет выдуманных данных, просто он больше не
-        # помечен как отдельный структурный блок.
-        cleaned = _re.sub(heading_own_line_re, '', cleaned)
-        cleaned = _re.sub(heading_inline_re, '', cleaned)
+        # нарушила правило. Убираем строку целиком (заголовок + любой хвост —
+        # двоеточие, пояснение модели в скобках и т.п.), сам остальной текст
+        # с фактами оставляем — в нём нет выдуманных данных, просто он больше
+        # не помечен как отдельный структурный блок.
+        cleaned = _re.sub(heading_anytail_re, '', cleaned)
+        # Схлопываем возможные 3+ переноса строк подряд (могли образоваться
+        # после вырезания заголовка) до стандартного разделителя абзацев.
+        cleaned = _re.sub(r'\n{3,}', '\n\n', cleaned)
 
     return cleaned
 
