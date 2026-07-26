@@ -4,6 +4,7 @@ interface BaseProps {
   max?: number;
   warnAt?: number;
   showCount?: boolean;
+  resize?: 'none' | 'vertical';
 }
 
 interface TextareaProps extends BaseProps, TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -19,7 +20,7 @@ type Props = TextareaProps | InputProps;
 
 const CharCount = forwardRef<HTMLTextAreaElement | HTMLInputElement, Props>(
   (props, ref) => {
-    const { max, warnAt, showCount = true, as = 'textarea', className = '', onChange, ...rest } = props;
+    const { max, warnAt, showCount = true, as = 'textarea', resize = 'none', className = '', onChange, ...rest } = props;
 
     const value = String(rest.value ?? '');
     // Обрезаем value до max для отображения
@@ -30,7 +31,8 @@ const CharCount = forwardRef<HTMLTextAreaElement | HTMLInputElement, Props>(
 
     const countColor = isWarn ? 'text-amber-500' : 'text-muted-foreground';
 
-    const baseClass = `w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30 resize-none transition ${className}`;
+    const resizeClass = resize === 'vertical' ? 'resize-y' : 'resize-none';
+    const baseClass = `w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30 ${resizeClass} transition ${className}`;
 
     // Перехватываем onChange и обрезаем до max
     const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => {

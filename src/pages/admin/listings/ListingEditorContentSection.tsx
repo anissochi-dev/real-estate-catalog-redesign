@@ -81,7 +81,7 @@ export default function ListingEditorContentSection({
         <label className="text-sm font-semibold flex items-center gap-1.5">
           Что учесть при составлении описания (необязательно)
         </label>
-        <CharCount as="textarea" rows={2} max={2000} warnAt={1800}
+        <CharCount as="textarea" rows={2} max={2000} warnAt={1800} resize="vertical"
           placeholder="Например: сделай акцент на панорамных окнах, упомяни близость к вокзалу, не пиши про соседей по этажу"
           value={editing.ai_notes || ''}
           onChange={e => setEditing({ ...editing, ai_notes: (e.target as HTMLTextAreaElement).value })} />
@@ -133,7 +133,7 @@ export default function ListingEditorContentSection({
           </div>
         ) : (
           <div className={descError ? 'rounded-lg ring-2 ring-red-300' : ''}>
-            <CharCount as="textarea" rows={6} max={3000} warnAt={2500}
+            <CharCount as="textarea" rows={6} max={3000} warnAt={2500} resize="vertical"
               value={editing.description || ''}
               onChange={e => {
                 setEditing({ ...editing, description: (e.target as HTMLTextAreaElement).value });
