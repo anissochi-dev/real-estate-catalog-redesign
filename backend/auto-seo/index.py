@@ -39,15 +39,36 @@ SEO_SYSTEM_PROMPT = (
 )
 
 DESC_SYSTEM_PROMPT = (
-    'Ты — опытный брокер коммерческой недвижимости агентства BIZNEST в Краснодаре. '
-    'Напиши продающее описание объекта на русском языке. '
-    'Структура: 1) Вводный абзац — тип объекта, площадь, район, общее впечатление. '
-    '2) Параметры и особенности — этаж, состояние, коммуникации, парковка. '
-    '3) Преимущества расположения — транспорт, инфраструктура, проходимость. '
-    '4) Для кого подходит — виды бизнеса, целевая аудитория. '
-    '5) Условия — тип сделки, цена, возможности торга. '
-    'Без markdown, без emoji, без цены в тексте (цену не упоминай). '
-    'Объём: 300–600 символов. '
+    'Ты — опытный коммерческий брокер с 15-летним стажем. Специализация — продажа и аренда коммерческой недвижимости. '
+    'На основе переданной карточки объекта создай продающее, детализированное и профессиональное описание для привлечения покупателя/арендатора.\n\n'
+    'ОСНОВНЫЕ ПРИНЦИПЫ:\n'
+    '- Деловой, уверенный, но уважительный стиль. Без рекламных клише и пустых восторгов.\n'
+    '- Каждый факт превращай в выгоду для клиента — явно указывай, какую пользу это даёт бизнесу.\n'
+    '- Все заполненные характеристики из карточки должны быть отражены в описании. Не выдумывай цифры, которых нет в данных, но дополняй рыночной аналитикой района и перспективами.\n'
+    '- Используй актуальную информацию о районе, инфраструктуре и транспортной доступности. Если есть данные о развитии территории, новых магистралях — обязательно упоминай как драйвер роста.\n\n'
+    'СТРУКТУРА (соблюдай неукоснительно, каждый блок начинай ТОЧНО с указанного заголовка на отдельной строке, где заголовок обозначен):\n\n'
+    'От собственника! Без комиссий и %!\n'
+    'Первая строка описания — всегда именно эта фраза, без изменений.\n\n'
+    'Далее — ОДИН цельный, связный, грамотный деловой текст (без подзаголовков внутри него), который последовательно раскрывает: '
+    'что за объект и под какие виды деятельности он подходит (с аргументацией); что именно предлагается — в аренду или в продажу; '
+    'локацию и район (адрес, престижность, транспортная доступность, трафик, инфраструктура — жилые массивы, бизнес-центры, торговые центры, '
+    'образовательные учреждения, тренды и перспективы развития территории, если есть данные); '
+    'характеристики объекта (площадь, этаж, планировка, высота потолков, входная группа, парковка, состояние отделки). '
+    'Изложение должно течь единой логической мыслью от абзаца к абзацу, а не разрозненными фактами. '
+    'Коммуникации (электричество, водоснабжение, канализация, отопление, вентиляция, связь) вплетай в этот же текст, только если данные о них есть в карточке. '
+    'Тон текста должен вызывать желание купить или снять объект — живая, но деловая подача, без канцелярита и без пустых восторгов.\n\n'
+    'Финансовые перспективы и доходность\n'
+    'Этот блок включай ТОЛЬКО если в карточке ОДНОВРЕМЕННО указаны и арендный доход/прибыль, И действующий арендатор. '
+    'Если хотя бы одного из двух нет — блок полностью пропускай (ни заголовок, ни текст). '
+    'Если включаешь: детализируй доход, расчётную доходность в % годовых, срок окупаемости, драйверы увеличения дохода.\n\n'
+    'Последним блоком, без заголовка — уникальное торговое предложение объекта и крючок, побуждающий к действию: позвонить прямо сейчас.\n\n'
+    'ВАЖНЫЕ ПРАВИЛА:\n'
+    '- Заголовки блоков (там, где они предусмотрены) пиши ТОЧНО как указано выше, на отдельной строке, без двоеточий, без markdown, без звёздочек * и без символа #.\n'
+    '- ЗАПРЕЩЕНО использовать ** вокруг заголовков или любого текста — никакого markdown форматирования.\n'
+    '- Если данных по какой-то характеристике нет (например, коммуникации или высота потолков) — нигде в тексте это не упоминай: ни как факт, ни как "(данные отсутствуют)", "(нет данных)" и подобное.\n'
+    '- НИКОГДА не указывай стоимость/цену объекта в описании.\n'
+    '- Каждое новое описание должно быть уникальным по формулировкам и построению фраз — не используй одни и те же шаблонные обороты от объекта к объекту.\n'
+    '- Объём — строго не более 3000 символов.\n'
     'Формат строго:\nDESCRIPTION: <текст описания>'
 )
 
@@ -147,13 +168,13 @@ def _load_keys(cur):
     ), os.environ.get('YANDEX_FOLDER_ID', '')
 
 
-def _gpt(system: str, user_text: str, api_key: str, folder_id: str) -> dict:
+def _gpt(system: str, user_text: str, api_key: str, folder_id: str, max_tokens: int = 800) -> dict:
     if not api_key:
         return {'error': 'YandexGPT не настроен'}
     model_uri = f'gpt://{folder_id}/{YANDEX_MODEL_NAME}' if folder_id else YANDEX_MODEL_NAME
     payload = {
         'modelUri': model_uri,
-        'completionOptions': {'stream': False, 'temperature': 0.4, 'maxTokens': '800'},
+        'completionOptions': {'stream': False, 'temperature': 0.4, 'maxTokens': str(max_tokens)},
         'messages': [{'role': 'system', 'text': system}, {'role': 'user', 'text': user_text}],
     }
     headers = {'Authorization': f'Api-Key {api_key}', 'Content-Type': 'application/json'}
@@ -189,7 +210,13 @@ def _gpt(system: str, user_text: str, api_key: str, folder_id: str) -> dict:
         return {'error': f'{type(e).__name__}: {str(e)[:200]}'}
 
 
-def _build_prompt(listing: dict) -> str:
+PARKING_RU = {'none': 'нет', 'street': 'на улице', 'building': 'в здании'}
+
+
+def _build_prompt(listing: dict, include_price: bool = True) -> str:
+    """Собирает контекст объекта для ИИ. include_price=False для генерации
+    описания (description) — цену в текст объекта включать запрещено правилами промпта,
+    поэтому её незачем передавать во входных данных, как и на фронтенде (buildListingContext)."""
     deal = DEAL_RU.get(listing.get('deal', ''), listing.get('deal', ''))
     cat = CAT_RU.get(listing.get('category', ''), listing.get('category', ''))
     area = listing.get('area') or ''
@@ -198,16 +225,33 @@ def _build_prompt(listing: dict) -> str:
     city = listing.get('city') or 'Краснодар'
     desc = (listing.get('description') or '')[:400]
     title = listing.get('title') or ''
+    parking = PARKING_RU.get(listing.get('parking') or '', listing.get('parking') or '')
 
     parts = [
         f'Тип сделки: {deal}',
         f'Тип объекта: {cat}',
-        f'Площадь: {area} м²' if area else '',
-        f'Цена: {price} ₽' if price else '',
-        f'Район: {district}' if district else '',
         f'Город: {city}',
+        f'Район: {district}' if district else '',
+        f'Адрес: {listing.get("address")}' if listing.get('address') else '',
+        f'Площадь: {area} м²' if area else '',
+        f'Площадь участка: {listing.get("land_area")} сот.' if listing.get('land_area') else '',
+        f'Этаж: {listing.get("floor")}' + (f' из {listing.get("total_floors")}' if listing.get('total_floors') else '') if listing.get('floor') else '',
+        f'Высота потолков: {listing.get("ceiling_height")} м' if listing.get('ceiling_height') else '',
+        f'Состояние: {listing.get("condition")}' if listing.get('condition') else '',
+        f'Отделка: {listing.get("finishing")}' if listing.get('finishing') else '',
+        f'Электричество: {listing.get("electricity_kw")} кВт' if listing.get('electricity_kw') else '',
+        f'Коммуникации: {listing.get("utilities")}' if listing.get('utilities') else '',
+        f'Парковка: {parking}' if parking else '',
+        f'Линия дороги: {listing.get("road_line")}' if listing.get('road_line') else '',
+        f'Назначение (направления использования): {listing.get("purpose")}' if listing.get('purpose') else '',
+        f'Доход в месяц: {listing.get("monthly_rent")} ₽' if listing.get('monthly_rent') else '',
+        f'Доход в год: {listing.get("yearly_rent")} ₽' if listing.get('yearly_rent') else '',
+        f'Чистая прибыль: {listing.get("profit")} ₽' if listing.get('profit') else '',
+        f'Окупаемость: {listing.get("payback")} мес.' if listing.get('payback') else '',
+        f'Действующий арендатор: {listing.get("tenant_name")}' if listing.get('tenant_name') else '',
+        f'Цена: {price} ₽' if price and include_price else '',
         f'Название: {title}' if title else '',
-        f'Описание: {desc}' if desc else '',
+        f'Текущее описание (для контекста, не копируй дословно): {desc}' if desc else '',
     ]
     return '\n'.join(p for p in parts if p)
 
@@ -224,10 +268,16 @@ def _parse_seo(text: str) -> tuple:
 
 
 def _parse_desc(text: str) -> str:
-    for line in text.splitlines():
-        line = line.strip()
-        if line.upper().startswith('DESCRIPTION:'):
-            return line[12:].strip()[:3000]
+    """Извлекает текст описания после маркера DESCRIPTION:. Описание теперь
+    многострочное (несколько абзацев со структурой) — нужно захватывать ВСЁ,
+    что идёт после маркера, а не только первую строку."""
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if line.strip().upper().startswith('DESCRIPTION:'):
+            first = line.strip()[len('DESCRIPTION:'):].strip()
+            rest = lines[i + 1:]
+            full = '\n'.join([first] + rest).strip() if rest else first
+            return full[:3000]
     # Если формат не соблюдён — берём весь текст
     return text.strip()[:3000]
 
@@ -273,9 +323,10 @@ def _process_listing(cur, conn, listing: dict, api_key: str, folder_id: str,
             result_data['seo_description'] = seo_desc
             updates['seo_description'] = _safe(seo_desc, 300)
 
-    # Описание объекта
+    # Описание объекта — цену в промпт не передаём (запрещена в тексте описания)
     if 'description' in fields:
-        r = _gpt(DESC_SYSTEM_PROMPT, prompt, api_key, folder_id)
+        desc_prompt = _build_prompt(listing, include_price=False)
+        r = _gpt(DESC_SYSTEM_PROMPT, desc_prompt, api_key, folder_id, max_tokens=2200)
         if 'error' in r:
             return {'id': lid, 'status': 'error', 'error': r['error']}
         desc = _parse_desc(r['text'])
@@ -338,13 +389,13 @@ def _run_batch(cur, conn, api_key: str, folder_id: str, limit: int, dry_run: boo
 
     if listing_id:
         cur.execute(
-            f"SELECT id, title, category, deal, price, area, district, city, description "
+            f"SELECT id, title, category, deal, price, area, district, city, description, address, land_area, floor, total_floors, ceiling_height, condition, finishing, electricity_kw, utilities, parking, road_line, purpose, monthly_rent, yearly_rent, profit, payback, tenant_name "
             f"FROM {SCHEMA}.listings WHERE id = {int(listing_id)} AND status = 'active'"
         )
     else:
         filter_clause = _build_filter_clause(fields)
         cur.execute(
-            f"SELECT id, title, category, deal, price, area, district, city, description "
+            f"SELECT id, title, category, deal, price, area, district, city, description, address, land_area, floor, total_floors, ceiling_height, condition, finishing, electricity_kw, utilities, parking, road_line, purpose, monthly_rent, yearly_rent, profit, payback, tenant_name "
             f"FROM {SCHEMA}.listings WHERE status = 'active' AND is_visible = TRUE "
             f"AND ({filter_clause}) "
             f"ORDER BY id DESC LIMIT {limit}"
@@ -729,7 +780,7 @@ def handler(event: dict, context) -> dict:
                     return _err(503, 'YandexGPT не настроен. Добавьте ключи в Настройки → Интеграции.')
 
                 cur.execute(
-                    f"SELECT id, title, category, deal, price, area, district, city, description "
+                    f"SELECT id, title, category, deal, price, area, district, city, description, address, land_area, floor, total_floors, ceiling_height, condition, finishing, electricity_kw, utilities, parking, road_line, purpose, monthly_rent, yearly_rent, profit, payback, tenant_name "
                     f"FROM {SCHEMA}.listings WHERE id = {int(listing_id)}"
                 )
                 row = cur.fetchone()
