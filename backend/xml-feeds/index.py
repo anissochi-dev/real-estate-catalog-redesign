@@ -908,12 +908,13 @@ def _build_cian(listings, company):
 
         # Цена: _total_price() ВСЕГДА возвращает итоговую сумму за объект целиком
         # (даже если в БД цена изначально хранилась за м² — она уже умножена на площадь).
-        # Поэтому PriceType=rub обязателен: без него ЦИАН для категорий аренды сам
-        # трактует Price как ставку за м² и домножает на площадь, завышая цену в разы.
+        # PriceType=all обязателен (по прямому указанию техподдержки ЦИАН): без него
+        # ЦИАН для коммерческой недвижимости трактует Price как ставку за м²
+        # и домножает на площадь сам, завышая цену в разы.
         out.append('<BargainTerms>')
         price_val = _total_price(l)
         out.append(f'<Price>{price_val}</Price>')
-        out.append('<PriceType>rub</PriceType>')
+        out.append('<PriceType>all</PriceType>')
         out.append('<Currency>rur</Currency>')
         if deal == 'rent':
             out.append('<PaymentPeriod>monthly</PaymentPeriod>')
