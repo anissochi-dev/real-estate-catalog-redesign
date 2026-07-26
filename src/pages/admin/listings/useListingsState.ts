@@ -3,7 +3,7 @@ import { adminApi, aiApi } from '@/lib/adminApi';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
-import { Listing, City, Purpose, LandVri, empty, detectVideoType, splitImages } from './types';
+import { Listing, City, Purpose, LandVri, empty, detectVideoType, splitImages, CATS } from './types';
 
 function toThumbUrl(src: string): string {
   if (!src || !src.includes('cdn.poehali.dev')) return src;
@@ -430,11 +430,18 @@ export function useListingsState() {
   // Собирает все заполненные поля объекта в текст для ИИ.
   // Пустые поля пропускаются. Цену для описания НЕ передаём (по требованию).
   const buildListingContext = (e: Partial<Listing>, includePrice: boolean): string => {
-    const dealLabel = e.deal === 'rent' ? 'аренда (сдаём)' : e.deal === 'business' ? 'готовый бизнес' : 'продажа (продаём)';
+    // Тип сделки: 'business' («готовый бизнес») в проекте неактуален — не выбирается
+    // ни в одном интерфейсе (только sale/rent), поэтому явно не обрабатывается,
+    // как и раньше по умолчанию попадает в ветку «Продажа».
+    const dealLabel = e.deal === 'rent' ? 'Аренда (сдаю, сдаётся)' : 'Продажа (продам, продаю)';
     const parkingLabel: Record<string, string> = { none: 'нет', street: 'на улице', building: 'в здании' };
+    // Категорию передаём человекочитаемым русским названием (по словарю CATS),
+    // а не техническим кодом из БД — иначе код (например "free_purpose", "gab")
+    // может дословно попасть в текст, сгенерированный ИИ.
+    const categoryLabel = CATS.find(c => c[0] === e.category)?.[1] || e.category;
     const parts: string[] = [];
     if (e.deal) parts.push(`Тип сделки: ${dealLabel}`);
-    if (e.category) parts.push(`Категория: ${e.category}`);
+    if (e.category) parts.push(`Категория: ${categoryLabel}`);
     if (e.city) parts.push(`Город: ${e.city}`);
     if (e.district) parts.push(`Район: ${e.district}`);
     if (e.address) parts.push(`Адрес: ${e.address}`);
