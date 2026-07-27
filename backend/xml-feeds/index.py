@@ -950,6 +950,10 @@ def _build_cian(listings, company):
         if not is_land and l.get('entrance') and l['entrance'] in CIAN_INPUT_TYPE:
             out.append(f'<InputType>{CIAN_INPUT_TYPE[l["entrance"]]}</InputType>')
 
+        # Витринные окна — актуально только для категории «Торговая площадь» (shoppingAreaSale/Rent)
+        if category == 'retail' and l.get('has_shop_windows'):
+            out.append('<HasShopWindows>true</HasShopWindows>')
+
         # Координаты — отдельный блок
         if l.get('lat') and l.get('lng'):
             out.append('<Coordinates>')
@@ -1055,10 +1059,9 @@ def _build_cian(listings, company):
         price_val = _total_price(l)
         out.append(f'<Price>{price_val}</Price>')
         if is_land:
-            # У земли (commercialLandSale/Rent) СВОЯ схема BargainTerms: для продажи —
-            # только Price/Currency/VatType (без PriceType/ClientFee/AgentFee), для аренды —
-            # похоже на обычную аренду, но без BargainAllowed/UtilitiesTerms, с обязательным
-            # VatType/LeaseType, а залог называется SecurityDeposit (не Deposit).
+            # У земли (commercialLandSale/Rent) своя схема BargainTerms: для продажи —
+            # только Price/Currency/VatType (без ContractType — у земли его нет), для аренды —
+            # совпадает с обычной арендой коммерции (см. ветку ниже), залог — SecurityDeposit.
             # Порядок строго по документации ЦИАН (xml_import/doc, «Коммерческая земля»).
             if deal == 'rent':
                 out.append('<PriceType>all</PriceType>')
@@ -1076,29 +1079,38 @@ def _build_cian(listings, company):
             else:
                 out.append('<Currency>rur</Currency>')
                 out.append('<VatType>included</VatType>')
-        else:
-            # PriceType=all обязателен (по прямому указанию техподдержки ЦИАН): без него
-            # ЦИАН для коммерческой недвижимости трактует Price как ставку за м²
-            # и домножает на площадь сам, завышая цену в разы.
+        elif deal == 'rent':
+            # Схема BargainTerms для аренды коммерческих категорий (офис/склад/здание/
+            # торговая площадь/производство/помещение своб. назначения) — сверено с офиц.
+            # документацией ЦИАН (xml_import/doc) для каждой из этих категорий: порядок строго
+            # Price → PriceType → Currency → PaymentPeriod → VatType → LeaseType → LeaseTermType →
+            # PrepayMonths → ClientFee → SecurityDeposit → AgentFee. Тегов BargainAllowed и
+            # UtilitiesTerms в этой схеме НЕТ ВООБЩЕ (это теги схемы жилой аренды flatRent) —
+            # раньше они ошибочно добавлялись сюда. VatType обязателен всегда, а не опционален.
             out.append('<PriceType>all</PriceType>')
-            if deal == 'rent' and l.get('utilities_included'):
-                out.append('<UtilitiesTerms><IncludedInPrice>true</IncludedInPrice></UtilitiesTerms>')
             out.append('<Currency>rur</Currency>')
-            # Торг у нас всегда возможен по решению компании — фиксированное значение для всех объектов.
-            out.append('<BargainAllowed>true</BargainAllowed>')
-            if deal == 'rent':
-                out.append('<PaymentPeriod>monthly</PaymentPeriod>')
-                # Срок аренды не хранится и не отображается в админке/на сайте — всегда «длительный».
-                out.append('<LeaseTermType>longTerm</LeaseTermType>')
-                if l.get('prepay_months'):
-                    out.append(f'<PrepayMonths>{l["prepay_months"]}</PrepayMonths>')
-                if l.get('deposit_amount'):
-                    out.append(f'<Deposit>{int(l["deposit_amount"])}</Deposit>')
+            out.append('<PaymentPeriod>monthly</PaymentPeriod>')
+            out.append('<VatType>included</VatType>')
+            out.append('<LeaseType>direct</LeaseType>')
+            # Срок аренды не хранится и не отображается в админке/на сайте — всегда «длительный».
+            out.append('<LeaseTermType>longTerm</LeaseTermType>')
+            if l.get('prepay_months'):
+                out.append(f'<PrepayMonths>{l["prepay_months"]}</PrepayMonths>')
             # Комиссия — служебное поле карточки объекта (broker_commission) не публикуется
             # в открытых фидах ни при каких условиях. Без явных ClientFee/AgentFee ЦИАН
             # сам подставляет 100%, поэтому всегда передаём 0.
             out.append('<ClientFee>0</ClientFee>')
+            if l.get('deposit_amount'):
+                out.append(f'<SecurityDeposit>{int(l["deposit_amount"])}</SecurityDeposit>')
             out.append('<AgentFee>0</AgentFee>')
+        else:
+            # Схема BargainTerms для ПРОДАЖИ коммерческих категорий — принципиально другая
+            # и НАМНОГО короче схемы аренды: только Price → Currency → VatType → ContractType.
+            # Здесь НЕТ PriceType/ClientFee/AgentFee/BargainAllowed — по документации ЦИАН
+            # (сверено для officeSale/warehouseSale/buildingSale/businessSale и т.д., единообразно).
+            out.append('<Currency>rur</Currency>')
+            out.append('<VatType>included</VatType>')
+            out.append('<ContractType>sale</ContractType>')
         out.append('</BargainTerms>')
 
         # Фото

@@ -2719,7 +2719,7 @@ def _listings(cur, conn, method, rid, event, user):
             "l.finishing, l.ceiling_height, l.electricity_kw, l.utilities, l.road_line, "
             "l.author_id, l.broker_id, l.is_visible, l.rooms, l.broker_commission, "
             "l.building_class, l.building_year, l.property_rights, l.min_area, "
-            "l.land_area, l.land_status, l.land_vri, l.driveway_type, l.is_apartments, "
+            "l.land_area, l.land_status, l.land_vri, l.driveway_type, l.has_shop_windows, l.is_apartments, "
             "l.has_furniture, l.has_equipment, l.owner_phone_contact_id, "
             "l.slug, l.public_code, l.lat, l.lng, "
             "l.created_at, l.updated_at, l.last_edited_at, l.last_edited_by, "
@@ -2810,7 +2810,7 @@ def _listings(cur, conn, method, rid, event, user):
 
         sql = (
             f"INSERT INTO {SCHEMA}.listings "
-            f"(title, description, ai_notes, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, export_other, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, broker_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, owner_phone_contact_id, owner_phone2_contact_id, cadastral_number, egrn_objects, image_thumb, rent_index_pct, prepay_months, deposit_amount, utilities_included, passenger_lifts, cargo_lifts, driveway_type) VALUES ("
+            f"(title, description, ai_notes, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, export_other, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, broker_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, has_shop_windows, owner_phone_contact_id, owner_phone2_contact_id, cadastral_number, egrn_objects, image_thumb, rent_index_pct, prepay_months, deposit_amount, utilities_included, passenger_lifts, cargo_lifts, driveway_type) VALUES ("
             f"{_str_or_null(body.get('title'), 255)}, {_str_or_null(body.get('description'), 5000)}, "
             f"{_str_or_null(body.get('ai_notes'), 2000)}, "
             f"{_str_or_null(body.get('category'), 50)}, {_str_or_null(body.get('deal'), 20)}, "
@@ -2846,7 +2846,7 @@ def _listings(cur, conn, method, rid, event, user):
             f"{_str_or_null(body.get('property_rights'), 30)}, {_num_or_null(body.get('min_area'))}, "
             f"{_num_or_null(body.get('land_area'))}, {_str_or_null(body.get('land_status'), 30)}, "
             f"{_str_or_null(body.get('land_vri'), 150)}, {_bool(body.get('is_apartments'))}, "
-            f"{_bool(body.get('has_furniture'))}, {_bool(body.get('has_equipment'))}, "
+            f"{_bool(body.get('has_furniture'))}, {_bool(body.get('has_equipment'))}, {_bool(body.get('has_shop_windows'))}, "
             f"{owner_pc_id if owner_pc_id else 'NULL'}, "
             f"{owner_pc2_id if owner_pc2_id else 'NULL'}, "
             f"{_str_or_null(body.get('cadastral_number'), 50)}, "
@@ -2907,7 +2907,7 @@ def _listings(cur, conn, method, rid, event, user):
             'tenant_name', 'monthly_rent', 'yearly_rent', 'finishing',
             'ceiling_height', 'electricity_kw', 'utilities', 'road_line',
             'prepay_months', 'deposit_amount', 'utilities_included',
-            'passenger_lifts', 'cargo_lifts', 'driveway_type',
+            'passenger_lifts', 'cargo_lifts', 'driveway_type', 'has_shop_windows',
             'is_hot', 'is_new', 'is_exclusive', 'is_urgent', 'is_visible',
             'use_watermark', 'export_yandex', 'export_avito', 'export_cian', 'export_other',
             'broker_commission', 'broker_id', 'lat', 'lng', 'image_thumb',
@@ -2981,7 +2981,7 @@ def _listings(cur, conn, method, rid, event, user):
                 v = body.get(f)
                 fields.append(f"{f} = " + ('NULL' if v is None or v == '' else str(float(v))))
         for f in ('is_hot', 'is_new', 'is_exclusive', 'is_urgent', 'is_visible',
-                  'has_furniture', 'has_equipment', 'is_apartments', 'utilities_included'):
+                  'has_furniture', 'has_equipment', 'has_shop_windows', 'is_apartments', 'utilities_included'):
             if f in body:
                 fields.append(f"{f} = {_bool(body.get(f))}")
         if 'rooms' in body:

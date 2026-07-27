@@ -86,6 +86,14 @@ export default function ListingRoomFeatures({ editing, setEditing, landVri = [],
                 <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0"><Icon name="Home" size={11} className="text-indigo-600" /></div>
                 <span className="text-sm">Апартаменты</span>
               </label>
+              {editing.category === 'retail' && (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={!!editing.has_shop_windows}
+                    onChange={e => setEditing({ ...editing, has_shop_windows: e.target.checked })} />
+                  <div className="w-5 h-5 rounded-full bg-cyan-100 flex items-center justify-center flex-shrink-0"><Icon name="AppWindow" size={11} className="text-cyan-600" /></div>
+                  <span className="text-sm">Витринные окна</span>
+                </label>
+              )}
             </div>
             <label className="text-xs text-muted-foreground block mb-2">Коммуникации</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
