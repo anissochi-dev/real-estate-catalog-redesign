@@ -138,6 +138,25 @@ def _xml_escape(s):
     return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
 
 
+_TITLE_DASH_RE = re.compile(r'[–—/]')
+_TITLE_STRIP_RE = re.compile(r'[№\\&*#@^_~`|<>{}\[\]]')
+
+
+def _clean_title(s):
+    """Убирает из названия объекта спецсимволы, запрещённые/проблемные для площадок
+    (ЦИАН, Авито и т.д.): «»→", тире –/— и слэш /→- (чтобы не терять номера домов вида
+    22/3), № \\ & и прочий XML-непригодный мусор — удаляются.
+    Используется единообразно во ВСЕХ фидах, чтобы название никогда не улетало со спецсимволами."""
+    if not s:
+        return ''
+    s = str(s)
+    s = s.replace('«', '"').replace('»', '"')
+    s = _TITLE_DASH_RE.sub('-', s)
+    s = _TITLE_STRIP_RE.sub('', s)
+    s = re.sub(r'\s+', ' ', s).strip()
+    return s
+
+
 def _get_user(cur, token):
     if not token:
         return None
@@ -657,7 +676,7 @@ def _build_avito(listings, company):
         out.append(f'<ObjectType>{_xml_escape(AVITO_OBJECT_TYPE_MAP.get(l.get("category"), "Офисное помещение"))}</ObjectType>')
 
         # Заголовок и описание
-        out.append(f'<Title>{_xml_escape(l.get("title", ""))}</Title>')
+        out.append(f'<Title>{_xml_escape(_clean_title(l.get("title", "")))}</Title>')
         out.append(f'<Description><![CDATA[{l.get("description", "")}]]></Description>')
 
         # Цена
@@ -803,7 +822,7 @@ def _build_cian(listings, company):
 
         # Заголовок (title)
         if l.get('title'):
-            out.append(f'<Title>{_xml_escape(l["title"])}</Title>')
+            out.append(f'<Title>{_xml_escape(_clean_title(l["title"]))}</Title>')
 
         # Адрес — плоская строка: "Город, Район, Улица"
         addr_parts = [l.get('city') or 'Краснодар']
