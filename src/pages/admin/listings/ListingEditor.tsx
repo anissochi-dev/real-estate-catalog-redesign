@@ -106,7 +106,9 @@ export default function ListingEditor({
     if (!editing.price) e.price = true;
     if (!editing.area) e.area = true;
     if (editing.category === 'office' && editing.floor == null) e.floor = true;
-    if (editing.category === 'office' && editing.total_floors == null) e.total_floors = true;
+    // Этажность обязательна для офиса и для категорий, где ЦИАН требует Building/FloorsCount
+    // в выгрузке (здание, склад, производство) — без неё фид не проходит модерацию.
+    if (['office', 'building', 'warehouse', 'production'].includes(editing.category || '') && editing.total_floors == null) e.total_floors = true;
     if (!editing.address?.trim() && !editing.district?.trim()) e.address = true;
     if (!editing.district?.trim()) e.district = true;
     const bc = (editing as Record<string, unknown>).broker_commission as string | undefined;
@@ -192,7 +194,7 @@ export default function ListingEditor({
       if (t === 'main') return !editing.title?.trim() || !editing.owner_name?.trim() || !editing.owner_phone?.trim() || !editing.category || !editing.deal || !editing.condition;
       if (t === 'photos') return !photos.length;
       if (t === 'location') return !editing.district?.trim();
-      if (t === 'details') return !editing.price || !editing.area || editing.floor == null || editing.total_floors == null || !bc?.trim() || (editing.category === 'land' && (!editing.land_status || !editing.land_vri));
+      if (t === 'details') return !editing.price || !editing.area || (editing.category === 'office' && editing.floor == null) || (['office', 'building', 'warehouse', 'production'].includes(editing.category || '') && editing.total_floors == null) || !bc?.trim() || (editing.category === 'land' && (!editing.land_status || !editing.land_vri));
       if (t === 'content') return !editing.description?.trim() || editing.description.trim().length < 30;
       if (t === 'extra') return !editing.building_class || !editing.building_year || !editing.property_rights;
       return false;

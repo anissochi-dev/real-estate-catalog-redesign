@@ -175,7 +175,7 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
         </div>
         <div>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-            <span className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0"><Icon name="Building" size={11} className="text-slate-600" /></span>Этажность{editing.category === 'office' ? ' *' : ''}
+            <span className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0"><Icon name="Building" size={11} className="text-slate-600" /></span>Этажность{['office', 'building', 'warehouse', 'production'].includes(editing.category || '') ? ' *' : ''}
           </label>
           <input type="number" className={`w-full px-3 py-2 border rounded-lg ${err('total_floors')}`}
             value={editing.total_floors ?? ''} onChange={e => { setEditing({ ...editing, total_floors: e.target.value === '' ? null : +e.target.value }); setErrors?.(v => ({ ...v, total_floors: false })); }} />
