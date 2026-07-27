@@ -460,6 +460,12 @@ CIAN_SPECIALTY = {
     'restaurant': 'publicCatering',
 }
 
+# Маппинг типа входа (наше поле entrance: street/yard) → тег InputType ЦИАН
+CIAN_INPUT_TYPE = {
+    'street': 'commonFromStreet',
+    'yard': 'commonFromYard',
+}
+
 LAND_STATUS_YANDEX = {
     'izhs': 'ИЖС',
     'lph': 'ЛПХ',
@@ -876,6 +882,15 @@ def _build_cian(listings, company):
         if l.get('address'):
             addr_parts.append(l['address'])
         out.append(f'<Address>{_xml_escape(", ".join(addr_parts))}</Address>')
+
+        # Кадастровый номер объекта
+        if l.get('cadastral_number'):
+            out.append(f'<CadastralNumber>{_xml_escape(l["cadastral_number"])}</CadastralNumber>')
+
+        # Тип входа в помещение
+        if l.get('entrance') and l['entrance'] in CIAN_INPUT_TYPE:
+            out.append(f'<InputType>{CIAN_INPUT_TYPE[l["entrance"]]}</InputType>')
+
         # Координаты — отдельный блок
         if l.get('lat') and l.get('lng'):
             out.append('<Coordinates>')
@@ -1005,6 +1020,17 @@ def _build_cian(listings, company):
             out.append('<Videos>')
             out.append(f'<VideoSchema><Url>{_xml_escape(_video_url)}</Url></VideoSchema>')
             out.append('</Videos>')
+
+        # Дополнительные данные для модератора ЦИАН (не публикуются в объявлении, ускоряют модерацию)
+        if l.get('owner_name') or l.get('owner_phone') or l.get('address'):
+            out.append('<ExtraData>')
+            if l.get('owner_name'):
+                out.append(f'<HomeOwnerName>{_xml_escape(l["owner_name"])}</HomeOwnerName>')
+            if l.get('owner_phone'):
+                out.append(f'<HomeOwnerPhone>{_xml_escape(l["owner_phone"])}</HomeOwnerPhone>')
+            if l.get('address'):
+                out.append(f'<ExactAddress>{_xml_escape(", ".join(addr_parts))}</ExactAddress>')
+            out.append('</ExtraData>')
 
         out.append('</object>')
 
