@@ -457,12 +457,21 @@ CIAN_CATEGORY_MAP_RENT = {
     'car_service': 'freeAppointmentObjectRent',
 }
 
-# Уточнение назначения (тег <Specialty>) для категорий "Помещение свободного назначения",
-# у которых нет отдельного значения Category в ЦИАН — назначение задаётся справочником
+# Уточнение назначения (тег <Specialty>) — задаётся справочником
 # https://www.cian.ru/xml_import/commercial-possible-appointments.xml
+# ОБЯЗАТЕЛЕН для freeAppointmentObjectRent/Sale (free_purpose/restaurant/hotel/car_service)
+# и для businessSale (business/gab) — без него ЦИАН отклоняет объявление на модерации.
+# Для office/retail — тег необязателен, но заполняем для точности фильтрации на площадке.
+# Для land/building/warehouse/production в схеме ЦИАН тега Specialty нет вообще.
 CIAN_SPECIALTY = {
     'car_service': 'carService',
     'restaurant': 'publicCatering',
+    'hotel': 'hotel',
+    'free_purpose': 'other',
+    'business': 'readyMadeBusiness',
+    'gab': 'rentalBusiness',
+    'retail': 'shop',
+    'office': 'office',
 }
 
 # Маппинг типа входа (наше поле entrance: street/yard) → тег InputType ЦИАН
@@ -905,7 +914,7 @@ def _build_cian(listings, company):
         out.append(f'<ExternalId>{l["id"]}</ExternalId>')
         out.append(f'<Category>{cian_cat}</Category>')
 
-        # Уточнение назначения для помещений свободного назначения (автосервис, общепит)
+        # Уточнение назначения (Specialty) — обязательно для части категорий, см. CIAN_SPECIALTY выше
         if category in CIAN_SPECIALTY:
             out.append('<Specialty>')
             out.append('<Types>')
