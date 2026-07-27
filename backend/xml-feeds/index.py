@@ -461,8 +461,10 @@ CIAN_CATEGORY_MAP_RENT = {
 # https://www.cian.ru/xml_import/commercial-possible-appointments.xml
 # ОБЯЗАТЕЛЕН для freeAppointmentObjectRent/Sale (free_purpose/restaurant/hotel/car_service)
 # и для businessSale (business/gab) — без него ЦИАН отклоняет объявление на модерации.
-# Для office/retail — тег необязателен, но заполняем для точности фильтрации на площадке.
-# Для land/building/warehouse/production в схеме ЦИАН тега Specialty нет вообще.
+# Для retail — тег необязателен, но заполняем для точности фильтрации на площадке.
+# ВЫВЕРЕНО по официальной документации ЦИАН (xml_import/doc, разделы по каждой категории):
+# у office/land/building/warehouse/production тега Specialty НЕТ ВООБЩЕ в схеме — раньше
+# он ошибочно добавлялся для office.
 CIAN_SPECIALTY = {
     'car_service': 'carService',
     'restaurant': 'publicCatering',
@@ -471,14 +473,57 @@ CIAN_SPECIALTY = {
     'business': 'readyMadeBusiness',
     'gab': 'rentalBusiness',
     'retail': 'shop',
-    'office': 'office',
 }
 
-# Маппинг типа входа (наше поле entrance: street/yard) → тег InputType ЦИАН
+# Маппинг типа входа (наше поле entrance: street/yard) → тег InputType ЦИАН.
+# ВЫВЕРЕНО по документации: тег InputType есть ТОЛЬКО у building/retail/free_purpose —
+# у office/warehouse/production/land в схеме его нет вообще.
 CIAN_INPUT_TYPE = {
     'street': 'commonFromStreet',
     'yard': 'commonFromYard',
 }
+CIAN_INPUT_TYPE_CATEGORIES = ('building', 'retail', 'free_purpose')
+
+# Состояние объекта (тег <ConditionType>) — заменяет ошибочно использовавшийся ранее
+# <Decoration> (тот существует ТОЛЬКО в схеме shoppingAreaSale — продажа торговой площади,
+# и больше нигде). У каждой категории СВОЙ ограниченный список допустимых значений
+# (сверено по офиц. документации ЦИАН для каждой категории аренды отдельно):
+#   office                        — cosmeticRepairsRequired/finishing/majorRepairsRequired/office
+#   retail, building              — cosmeticRepairsRequired/design/finishing/majorRepairsRequired/typical
+#   warehouse, production         — cosmeticRepairsRequired/majorRepairsRequired/typical (без чистовой/дизайнерской!)
+#   free_purpose                  — весь набор значений (все 6)
+# Наше поле condition/finishing даёт более широкую палитру, поэтому для каждой категории —
+# свой маппинг с проекцией на допустимый список (при отсутствии точного соответствия
+# берём наиболее близкое допустимое значение, а не то, что вызовет ошибку валидации).
+CIAN_CONDITION_TYPE_OFFICE = {
+    'new': 'office', 'euro': 'office', 'good': 'cosmeticRepairsRequired',
+    'cosmetic': 'finishing', 'rough': 'majorRepairsRequired', 'shellcore': 'majorRepairsRequired',
+}
+CIAN_CONDITION_TYPE_FULL = {  # retail, building
+    'new': 'design', 'euro': 'design', 'good': 'cosmeticRepairsRequired',
+    'cosmetic': 'finishing', 'rough': 'majorRepairsRequired', 'shellcore': 'typical',
+}
+CIAN_CONDITION_TYPE_INDUSTRIAL = {  # warehouse, production — нет finishing/design/office
+    'new': 'typical', 'euro': 'typical', 'good': 'cosmeticRepairsRequired',
+    'cosmetic': 'cosmeticRepairsRequired', 'rough': 'majorRepairsRequired', 'shellcore': 'majorRepairsRequired',
+}
+CIAN_CONDITION_TYPE_FREE_PURPOSE = {  # free_purpose — полный набор значений
+    'new': 'design', 'euro': 'design', 'good': 'cosmeticRepairsRequired',
+    'cosmetic': 'finishing', 'rough': 'majorRepairsRequired', 'shellcore': 'typical',
+}
+CIAN_CONDITION_TYPE_BY_CATEGORY = {
+    'office': CIAN_CONDITION_TYPE_OFFICE,
+    'retail': CIAN_CONDITION_TYPE_FULL,
+    'building': CIAN_CONDITION_TYPE_FULL,
+    'warehouse': CIAN_CONDITION_TYPE_INDUSTRIAL,
+    'production': CIAN_CONDITION_TYPE_INDUSTRIAL,
+    'free_purpose': CIAN_CONDITION_TYPE_FREE_PURPOSE,
+}
+
+# Линия домов (наше поле road_line: '1'/'2'/'3') → тег ЦИАН Building.HouseLineType.
+# По документации есть ТОЛЬКО у building и retail.
+CIAN_HOUSE_LINE_TYPE = {'1': 'first', '2': 'second', '3': 'other'}
+CIAN_HOUSE_LINE_TYPE_CATEGORIES = ('building', 'retail')
 
 LAND_STATUS_YANDEX = {
     'izhs': 'ИЖС',
@@ -954,13 +999,15 @@ def _build_cian(listings, company):
 
         is_land = category == 'land'
 
-        # Тип входа в помещение — к земельным участкам не относится (нет такого тега в схеме
-        # commercialLandSale/Rent).
-        if not is_land and l.get('entrance') and l['entrance'] in CIAN_INPUT_TYPE:
+        # Тип входа в помещение — ЕСТЬ ТОЛЬКО у building/retail/free_purpose (сверено по
+        # офиц. документации ЦИАН для каждой категории отдельно). У office/warehouse/
+        # production/land тега InputType в схеме нет вообще.
+        if category in CIAN_INPUT_TYPE_CATEGORIES and l.get('entrance') and l['entrance'] in CIAN_INPUT_TYPE:
             out.append(f'<InputType>{CIAN_INPUT_TYPE[l["entrance"]]}</InputType>')
 
-        # Витринные окна — актуально только для категории «Торговая площадь» (shoppingAreaSale/Rent)
-        if category == 'retail' and l.get('has_shop_windows'):
+        # Витринные окна — по документации есть у «Торговая площадь» И «Помещение свободного
+        # назначения» (не только retail, как было раньше).
+        if category in ('retail', 'free_purpose') and l.get('has_shop_windows'):
             out.append('<HasShopWindows>true</HasShopWindows>')
 
         # Координаты — отдельный блок
@@ -997,8 +1044,10 @@ def _build_cian(listings, company):
             if l.get('driveway_type') and l['driveway_type'] in CIAN_DRIVEWAY_TYPE:
                 out.append(f'<DrivewayType>{CIAN_DRIVEWAY_TYPE[l["driveway_type"]]}</DrivewayType>')
 
-        # Этаж объекта — самостоятельный тег (к земле не относится)
-        if not is_land and l.get('floor') is not None:
+        # Этаж объекта — самостоятельный тег. По документации ЦИАН тега FloorNumber НЕТ
+        # у категории «Здание» (buildingSale/Rent) — там передаётся только этажность всего
+        # здания через Building.FloorsCount. Land тоже не имеет этого тега.
+        if not is_land and category != 'building' and l.get('floor') is not None:
             out.append(f'<FloorNumber>{l["floor"]}</FloorNumber>')
 
         # ЦИАН требует обёртку <Building> для коммерческих категорий, КРОМЕ земли — у земли
@@ -1006,10 +1055,12 @@ def _build_cian(listings, company):
         # обязательно"). Все характеристики здания — этажность, высота потолков, класс,
         # год постройки, лифты, парковка — по документации ЦИАН идут ВНУТРИ этого тега.
         _building_class_map = {'A': 'a', 'A+': 'aPlus', 'B': 'b', 'B-': 'bMinus', 'B+': 'bPlus', 'C': 'c'}
+        _house_line = CIAN_HOUSE_LINE_TYPE.get(str(l.get('road_line') or '')) if category in CIAN_HOUSE_LINE_TYPE_CATEGORIES else None
         _has_building_data = not is_land and (
             (is_whole_building and l.get('area')) or l.get('total_floors') is not None or
             l.get('ceiling_height') or l.get('building_year') or l.get('building_class') or
-            l.get('passenger_lifts') or l.get('cargo_lifts') or l.get('parking') not in (None, '', 'none')
+            l.get('passenger_lifts') or l.get('cargo_lifts') or l.get('parking') not in (None, '', 'none') or
+            _house_line
         )
         if _has_building_data:
             out.append('<Building>')
@@ -1029,23 +1080,39 @@ def _build_cian(listings, company):
                 out.append('<Parking>')
                 out.append(f'<Type>{"underground" if l["parking"] == "building" else "open"}</Type>')
                 out.append('</Parking>')
+            # Линия домов — только у building/retail (см. CIAN_HOUSE_LINE_TYPE_CATEGORIES)
+            if _house_line:
+                out.append(f'<HouseLineType>{_house_line}</HouseLineType>')
             if l.get('building_class') in _building_class_map:
                 out.append(f'<ClassType>{_building_class_map[l["building_class"]]}</ClassType>')
             out.append('</Building>')
 
-        # Отделка: приоритет finishing, fallback — condition (к земле не относится)
-        _decoration = None
-        if not is_land:
+        # Состояние объекта — тег <ConditionType>, у каждой категории свой ограниченный
+        # список допустимых значений (см. CIAN_CONDITION_TYPE_BY_CATEGORY выше). Тег
+        # <Decoration> раньше ошибочно отправлялся для всех категорий, но по документации
+        # ЦИАН он существует ТОЛЬКО в схеме продажи торговой площади (shoppingAreaSale) —
+        # оставляем его только там, дополнительно к ConditionType.
+        _condition_map = CIAN_CONDITION_TYPE_BY_CATEGORY.get(category)
+        if _condition_map and l.get('condition') in _condition_map:
+            out.append(f'<ConditionType>{_condition_map[l["condition"]]}</ConditionType>')
+        if category == 'retail' and deal != 'rent':
+            _decoration = None
             if l.get('finishing') and l['finishing'] in FINISHING_CIAN:
                 _decoration = FINISHING_CIAN[l['finishing']]
             elif l.get('condition') and l['condition'] in CONDITION_TO_FINISHING_CIAN:
                 _decoration = CONDITION_TO_FINISHING_CIAN[l['condition']]
-        if _decoration:
-            out.append(f'<Decoration>{_decoration}</Decoration>')
+            if _decoration:
+                out.append(f'<Decoration>{_decoration}</Decoration>')
 
-        # Мебель
+        # Мебель — по документации ЦИАН тег РАЗНЫЙ по категориям: office использует enum
+        # <FurniturePresence>no/yes</FurniturePresence>, а building/retail — boolean
+        # <HasFurniture>true</HasFurniture>. У склада/производства/своб.назначения тега
+        # мебели в схеме нет вообще.
         if l.get('has_furniture'):
-            out.append('<FurniturePresence>yes</FurniturePresence>')
+            if category == 'office':
+                out.append('<FurniturePresence>yes</FurniturePresence>')
+            elif category in ('building', 'retail'):
+                out.append('<HasFurniture>true</HasFurniture>')
 
         # Апартаменты
         if l.get('is_apartments'):
