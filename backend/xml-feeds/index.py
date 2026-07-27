@@ -157,6 +157,34 @@ def _clean_title(s):
     return s
 
 
+_CIAN_DESC_DASH_RE = re.compile(r'–')
+_CIAN_DESC_STRIP_RE = re.compile(r'[№/\\]')
+CIAN_DESC_MIN_LEN = 15
+CIAN_DESC_MAX_LEN = 3000
+
+
+def _clean_cian_description(s):
+    """Приводит описание объекта к требованиям ЦИАН (см. документацию xml_import/doc):
+    объём 15–3000 символов; символ & запрещён — удаляется; « заменяется на ", – на -;
+    символы №, /, \\ удаляются. Возвращает None, если после очистки текст короче 15
+    символов (объект в этом случае не пройдёт модерацию ЦИАН из-за слишком короткого описания)."""
+    if not s:
+        return None
+    s = str(s)
+    s = s.replace('&', '')
+    s = s.replace('«', '"').replace('»', '"')
+    s = _CIAN_DESC_DASH_RE.sub('-', s)
+    s = _CIAN_DESC_STRIP_RE.sub('', s)
+    # ']]>' внутри текста преждевременно закрыл бы CDATA-секцию
+    s = s.replace(']]>', ']] >')
+    s = re.sub(r'\n{3,}', '\n\n', s).strip()
+    if len(s) > CIAN_DESC_MAX_LEN:
+        s = s[:CIAN_DESC_MAX_LEN].rstrip()
+    if len(s) < CIAN_DESC_MIN_LEN:
+        return None
+    return s
+
+
 def _get_user(cur, token):
     if not token:
         return None
@@ -832,9 +860,10 @@ def _build_cian(listings, company):
             out.append('</PhoneSchema>')
             out.append('</Phones>')
 
-        # Описание
-        if l.get('description'):
-            out.append(f'<Description><![CDATA[{l["description"]}]]></Description>')
+        # Описание — очищаем под требования ЦИАН (запрет &, замена «/–, удаление №//\\, длина 15-3000)
+        _cian_desc = _clean_cian_description(l.get('description'))
+        if _cian_desc:
+            out.append(f'<Description><![CDATA[{_cian_desc}]]></Description>')
 
         # Заголовок (title)
         if l.get('title'):
@@ -968,9 +997,14 @@ def _build_cian(listings, company):
                 out.append(f'<PhotoSchema><FullUrl>{_xml_escape(img)}</FullUrl></PhotoSchema>')
             out.append('</Photos>')
 
-        # Видео
-        if l.get('video_url'):
-            out.append(f'<Video><FullUrl>{_xml_escape(l["video_url"])}</FullUrl></Video>')
+        # Видео — ЦИАН принимает только ссылку на полноценное видео с VK (не VK Клип) или RUTUBE,
+        # структура тега строго <Videos><VideoSchema><Url> (см. документацию xml_import/doc).
+        _video_url = l.get('video_url') or ''
+        _is_vk_clip = 'vkvideo.ru/clip' in _video_url.lower() or 'vk.com/clip' in _video_url.lower()
+        if _video_url and not _is_vk_clip and ('vkvideo.ru' in _video_url.lower() or 'vk.com/video' in _video_url.lower() or 'rutube.ru' in _video_url.lower()):
+            out.append('<Videos>')
+            out.append(f'<VideoSchema><Url>{_xml_escape(_video_url)}</Url></VideoSchema>')
+            out.append('</Videos>')
 
         out.append('</object>')
 
