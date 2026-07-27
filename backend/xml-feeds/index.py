@@ -406,7 +406,7 @@ CIAN_CATEGORY_MAP_SALE = {
     'land': 'landSale',
     'building': 'buildingSale',
     'free_purpose': 'freeAppointmentObjectSale',
-    'car_service': 'industrySale',
+    'car_service': 'freeAppointmentObjectSale',
 }
 
 CIAN_CATEGORY_MAP_RENT = {
@@ -421,7 +421,15 @@ CIAN_CATEGORY_MAP_RENT = {
     'land': 'landRent',
     'building': 'buildingRent',
     'free_purpose': 'freeAppointmentObjectRent',
-    'car_service': 'industryRent',
+    'car_service': 'freeAppointmentObjectRent',
+}
+
+# Уточнение назначения (тег <Specialty>) для категорий "Помещение свободного назначения",
+# у которых нет отдельного значения Category в ЦИАН — назначение задаётся справочником
+# https://www.cian.ru/xml_import/commercial-possible-appointments.xml
+CIAN_SPECIALTY = {
+    'car_service': 'carService',
+    'restaurant': 'publicCatering',
 }
 
 LAND_STATUS_YANDEX = {
@@ -806,6 +814,14 @@ def _build_cian(listings, company):
         out.append('<object>')
         out.append(f'<ExternalId>{l["id"]}</ExternalId>')
         out.append(f'<Category>{cian_cat}</Category>')
+
+        # Уточнение назначения для помещений свободного назначения (автосервис, общепит)
+        if category in CIAN_SPECIALTY:
+            out.append('<Specialty>')
+            out.append('<Types>')
+            out.append(f'<String>{CIAN_SPECIALTY[category]}</String>')
+            out.append('</Types>')
+            out.append('</Specialty>')
 
         # Телефон агентства (обязательный тег ЦИАН)
         if cian_phone_number:
