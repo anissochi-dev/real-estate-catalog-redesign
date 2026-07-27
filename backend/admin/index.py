@@ -2810,7 +2810,7 @@ def _listings(cur, conn, method, rid, event, user):
 
         sql = (
             f"INSERT INTO {SCHEMA}.listings "
-            f"(title, description, ai_notes, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, export_other, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, broker_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, owner_phone_contact_id, owner_phone2_contact_id, cadastral_number, egrn_objects, image_thumb, rent_index_pct, prepay_months, deposit_amount, utilities_included) VALUES ("
+            f"(title, description, ai_notes, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, export_other, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, broker_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, owner_phone_contact_id, owner_phone2_contact_id, cadastral_number, egrn_objects, image_thumb, rent_index_pct, prepay_months, deposit_amount, utilities_included, passenger_lifts, cargo_lifts) VALUES ("
             f"{_str_or_null(body.get('title'), 255)}, {_str_or_null(body.get('description'), 5000)}, "
             f"{_str_or_null(body.get('ai_notes'), 2000)}, "
             f"{_str_or_null(body.get('category'), 50)}, {_str_or_null(body.get('deal'), 20)}, "
@@ -2853,7 +2853,8 @@ def _listings(cur, conn, method, rid, event, user):
             f"{_jsonb_or_null(body.get('egrn_objects'))}, "
             f"{_str_or_null(body.get('image_thumb'), 500)}, {_num_or_null(body.get('rent_index_pct'))}, "
             f"{_int_or_null(body.get('prepay_months'))}, {_num_or_null(body.get('deposit_amount'))}, "
-            f"{_bool(body.get('utilities_included'))}) RETURNING id"
+            f"{_bool(body.get('utilities_included'))}, "
+            f"{_int_or_null(body.get('passenger_lifts'))}, {_int_or_null(body.get('cargo_lifts'))}) RETURNING id"
         )
         cur.execute(sql)
         new_id = cur.fetchone()['id']
@@ -2905,6 +2906,7 @@ def _listings(cur, conn, method, rid, event, user):
             'tenant_name', 'monthly_rent', 'yearly_rent', 'finishing',
             'ceiling_height', 'electricity_kw', 'utilities', 'road_line',
             'prepay_months', 'deposit_amount', 'utilities_included',
+            'passenger_lifts', 'cargo_lifts',
             'is_hot', 'is_new', 'is_exclusive', 'is_urgent', 'is_visible',
             'use_watermark', 'export_yandex', 'export_avito', 'export_cian', 'export_other',
             'broker_commission', 'broker_id', 'lat', 'lng', 'image_thumb',
@@ -2964,7 +2966,7 @@ def _listings(cur, conn, method, rid, event, user):
         if 'egrn_objects' in body:
             fields.append(f"egrn_objects = {_jsonb_or_null(body.get('egrn_objects'))}")
         for f in ('price', 'price_per_m2', 'area', 'payback', 'profit', 'floor', 'total_floors',
-                  'building_year', 'subway_distance', 'prepay_months'):
+                  'building_year', 'subway_distance', 'prepay_months', 'passenger_lifts', 'cargo_lifts'):
             if f in body:
                 fields.append(f"{f} = {_int_or_null(body.get(f))}")
         for f in ('monthly_rent', 'yearly_rent', 'ceiling_height', 'electricity_kw', 'land_area', 'min_area', 'rent_index_pct', 'deposit_amount'):

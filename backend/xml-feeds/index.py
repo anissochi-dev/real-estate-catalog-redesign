@@ -919,35 +919,38 @@ def _build_cian(listings, company):
         # Этаж объекта — самостоятельный тег
         if l.get('floor') is not None:
             out.append(f'<FloorNumber>{l["floor"]}</FloorNumber>')
+
         # ЦИАН требует обёртку <Building> для коммерческих категорий (иначе фид не проходит
-        # валидацию: "Поле 'Building' обязательно"). Для категории «Здание» внутрь дополнительно
-        # кладём TotalArea (иначе "Поле 'Building.TotalArea' обязательно" для buildingSale).
-        if is_whole_building and l.get('area'):
+        # валидацию: "Поле 'Building' обязательно"). Все характеристики здания — этажность,
+        # высота потолков, класс, год постройки, лифты, парковка — по документации ЦИАН
+        # (xml_import/doc) идут ВНУТРИ этого тега, а не на верхнем уровне объекта.
+        _building_class_map = {'A': 'a', 'A+': 'aPlus', 'B': 'b', 'B-': 'bMinus', 'B+': 'bPlus', 'C': 'c'}
+        _has_building_data = (
+            (is_whole_building and l.get('area')) or l.get('total_floors') is not None or
+            l.get('ceiling_height') or l.get('building_year') or l.get('building_class') or
+            l.get('passenger_lifts') or l.get('cargo_lifts') or l.get('parking') not in (None, '', 'none')
+        )
+        if _has_building_data:
             out.append('<Building>')
-            out.append(f'<TotalArea>{l["area"]}</TotalArea>')
+            if is_whole_building and l.get('area'):
+                out.append(f'<TotalArea>{l["area"]}</TotalArea>')
             if l.get('total_floors') is not None:
                 out.append(f'<FloorsCount>{l["total_floors"]}</FloorsCount>')
+            if l.get('building_year'):
+                out.append(f'<BuildYear>{l["building_year"]}</BuildYear>')
+            if l.get('ceiling_height'):
+                out.append(f'<CeilingHeight>{l["ceiling_height"]}</CeilingHeight>')
+            if l.get('passenger_lifts'):
+                out.append(f'<PassengerLiftsCount>{int(l["passenger_lifts"])}</PassengerLiftsCount>')
+            if l.get('cargo_lifts'):
+                out.append(f'<CargoLiftsCount>{int(l["cargo_lifts"])}</CargoLiftsCount>')
+            if l.get('parking') in ('building', 'street'):
+                out.append('<Parking>')
+                out.append(f'<Type>{"underground" if l["parking"] == "building" else "open"}</Type>')
+                out.append('</Parking>')
+            if l.get('building_class') in _building_class_map:
+                out.append(f'<ClassType>{_building_class_map[l["building_class"]]}</ClassType>')
             out.append('</Building>')
-        elif l.get('total_floors') is not None:
-            out.append('<Building>')
-            out.append(f'<FloorsCount>{l["total_floors"]}</FloorsCount>')
-            out.append('</Building>')
-
-        # Высота потолков
-        if l.get('ceiling_height'):
-            out.append(f'<CeilingHeight>{l["ceiling_height"]}</CeilingHeight>')
-
-        # Класс здания
-        if l.get('building_class'):
-            out.append(f'<BuildingClassType>{_xml_escape(l["building_class"])}</BuildingClassType>')
-
-        # Год постройки
-        if l.get('building_year'):
-            out.append(f'<BuildYear>{l["building_year"]}</BuildYear>')
-
-        # Электричество
-        if l.get('electricity_kw'):
-            out.append(f'<ElectricPower>{l["electricity_kw"]}</ElectricPower>')
 
         # Отделка: приоритет finishing, fallback — condition
         _decoration = None
@@ -965,14 +968,6 @@ def _build_cian(listings, company):
         # Апартаменты
         if l.get('is_apartments'):
             out.append('<IsApartments>true</IsApartments>')
-
-        # Парковка
-        if l.get('parking') == 'building':
-            out.append('<HasParking>true</HasParking>')
-            out.append('<ParkingType>underground</ParkingType>')
-        elif l.get('parking') == 'street':
-            out.append('<HasParking>true</HasParking>')
-            out.append('<ParkingType>openAir</ParkingType>')
 
         # Метро
         if l.get('subway_station'):

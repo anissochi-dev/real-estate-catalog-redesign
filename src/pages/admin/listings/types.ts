@@ -96,6 +96,8 @@ export interface Listing {
   min_area?: number | null;
   building_year?: number | null;
   is_apartments?: boolean;
+  passenger_lifts?: number | null;
+  cargo_lifts?: number | null;
   prepay_months?: number | null;
   deposit_amount?: number | null;
   utilities_included?: boolean;
@@ -232,6 +234,7 @@ export const empty: Partial<Listing> = {
   building_class: null, subway_station: '', subway_distance: null,
   land_area: null, land_status: null, has_furniture: false, has_equipment: false,
   property_rights: null, min_area: null, building_year: null, is_apartments: false,
+  passenger_lifts: null, cargo_lifts: null,
   prepay_months: null, deposit_amount: null, utilities_included: false,
 };
 

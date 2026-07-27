@@ -118,6 +118,24 @@ export default function ListingEditorExtraSection({
           </div>
           <div>
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <span className="w-5 h-5 rounded-full bg-cyan-100 flex items-center justify-center flex-shrink-0"><Icon name="ArrowUpDown" size={11} className="text-cyan-600" /></span>Пассажирские лифты
+            </label>
+            <input type="number" min={0} max={20} className="w-full px-3 py-2 border rounded-lg"
+              placeholder="напр. 2"
+              value={editing.passenger_lifts ?? ''}
+              onChange={e => setEditing({ ...editing, passenger_lifts: e.target.value === '' ? null : +e.target.value })} />
+          </div>
+          <div>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <span className="w-5 h-5 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0"><Icon name="PackageSearch" size={11} className="text-orange-600" /></span>Грузовые лифты
+            </label>
+            <input type="number" min={0} max={20} className="w-full px-3 py-2 border rounded-lg"
+              placeholder="напр. 1"
+              value={editing.cargo_lifts ?? ''}
+              onChange={e => setEditing({ ...editing, cargo_lifts: e.target.value === '' ? null : +e.target.value })} />
+          </div>
+          <div>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
               <span className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0"><Icon name="SplitSquareHorizontal" size={11} className="text-slate-600" /></span>Мин. площадь нарезки, м²
             </label>
             <input type="number" min={1} className="w-full px-3 py-2 border rounded-lg"
