@@ -467,7 +467,7 @@ CIAN_SPECIALTY = {
     'car_service': 'carService',
     'restaurant': 'publicCatering',
     'hotel': 'hotel',
-    'free_purpose': 'other',
+    'free_purpose': 'flexiblePurpose',
     'business': 'readyMadeBusiness',
     'gab': 'rentalBusiness',
     'retail': 'shop',
