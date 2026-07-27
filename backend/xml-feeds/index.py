@@ -994,9 +994,19 @@ def _build_cian(listings, company):
         price_val = _total_price(l)
         out.append(f'<Price>{price_val}</Price>')
         out.append('<PriceType>all</PriceType>')
+        if deal == 'rent' and l.get('utilities_included'):
+            out.append('<UtilitiesTerms><IncludedInPrice>true</IncludedInPrice></UtilitiesTerms>')
         out.append('<Currency>rur</Currency>')
+        # Торг у нас всегда возможен по решению компании — фиксированное значение для всех объектов.
+        out.append('<BargainAllowed>true</BargainAllowed>')
         if deal == 'rent':
             out.append('<PaymentPeriod>monthly</PaymentPeriod>')
+            # Срок аренды не хранится и не отображается в админке/на сайте — всегда «длительный».
+            out.append('<LeaseTermType>longTerm</LeaseTermType>')
+            if l.get('prepay_months'):
+                out.append(f'<PrepayMonths>{l["prepay_months"]}</PrepayMonths>')
+            if l.get('deposit_amount'):
+                out.append(f'<Deposit>{int(l["deposit_amount"])}</Deposit>')
         # Комиссия — служебное поле карточки объекта (broker_commission) не публикуется
         # в открытых фидах ни при каких условиях. Без явных ClientFee/AgentFee ЦИАН
         # сам подставляет 100%, поэтому всегда передаём 0.

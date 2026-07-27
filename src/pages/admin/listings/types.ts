@@ -96,6 +96,9 @@ export interface Listing {
   min_area?: number | null;
   building_year?: number | null;
   is_apartments?: boolean;
+  prepay_months?: number | null;
+  deposit_amount?: number | null;
+  utilities_included?: boolean;
   cadastral_number?: string | null;
   egrn_objects?: EgrnStoredObject[] | null;
   rent_index_pct?: number | null;
@@ -229,6 +232,7 @@ export const empty: Partial<Listing> = {
   building_class: null, subway_station: '', subway_distance: null,
   land_area: null, land_status: null, has_furniture: false, has_equipment: false,
   property_rights: null, min_area: null, building_year: null, is_apartments: false,
+  prepay_months: null, deposit_amount: null, utilities_included: false,
 };
 
 export const fmtDate = (s: string | null) => {

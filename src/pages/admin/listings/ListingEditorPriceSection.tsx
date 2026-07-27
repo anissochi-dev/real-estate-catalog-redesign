@@ -218,6 +218,47 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
         </div>
       </div>
 
+      {/* ─── Условия аренды ─── */}
+      {editing.deal === 'rent' && (
+        <div className="space-y-3 border-t border-border pt-4">
+          <div className="text-sm font-semibold flex items-center gap-2">
+            <Icon name="FileText" size={15} className="text-brand-blue" />
+            Условия аренды
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                <span className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0"><Icon name="CalendarClock" size={11} className="text-emerald-600" /></span>Предоплата, мес
+              </label>
+              <input type="number" min="1" max="12" className="w-full px-3 py-2 border rounded-lg"
+                placeholder="напр. 2"
+                value={editing.prepay_months ?? ''}
+                onChange={e => setEditing({ ...editing, prepay_months: e.target.value === '' ? null : +e.target.value })} />
+            </div>
+            <div>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                <span className="w-5 h-5 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0"><Icon name="ShieldCheck" size={11} className="text-amber-600" /></span>Залог, ₽
+              </label>
+              <input type="number" min="0" className="w-full px-3 py-2 border rounded-lg"
+                placeholder="напр. 100 000"
+                value={editing.deposit_amount ?? ''}
+                onChange={e => setEditing({ ...editing, deposit_amount: e.target.value === '' ? null : +e.target.value })} />
+            </div>
+            <div className="flex items-end pb-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox"
+                  checked={!!editing.utilities_included}
+                  onChange={e => setEditing({ ...editing, utilities_included: e.target.checked })} />
+                <div className="w-5 h-5 rounded-full bg-sky-100 flex items-center justify-center flex-shrink-0">
+                  <Icon name="Zap" size={11} className="text-sky-600" />
+                </div>
+                <span className="text-sm">Коммуналка включена</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── Доходность и арендатор ─── */}
       <div className="space-y-3 border-t border-border pt-4">
         <div className="text-sm font-semibold flex items-center gap-2">
