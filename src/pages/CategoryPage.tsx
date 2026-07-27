@@ -50,6 +50,11 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
 
   useEffect(() => { fetchDistricts().then(setDistricts); }, []);
 
+  // Для категорий без аренды (готовый бизнес/ГАБ) сбрасываем фильтр «Аренда» на «Все»
+  useEffect(() => {
+    if ((type === 'business' || type === 'gab') && dealFilter === 'rent') setDealFilter('all');
+  }, [type, dealFilter]);
+
   const meta = type ? CATEGORY_META[type] : null;
 
   // Загружаем AI SEO-текст — один раз при заходе на категорию.
@@ -192,6 +197,7 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
       {/* Описание для поисковых систем */}
       <CategoryToolbar
         meta={meta}
+        categoryType={type}
         itemsCount={items.length}
         showFilters={showFilters}
         setShowFilters={setShowFilters}

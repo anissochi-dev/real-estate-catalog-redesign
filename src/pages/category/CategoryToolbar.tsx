@@ -4,8 +4,12 @@ import DistrictOptions from '@/components/DistrictOptions';
 import { District } from '@/lib/api';
 import { CatSort, CategoryMetaItem } from './categoryMeta';
 
+// Категории, для которых аренда не имеет смысла (готовый бизнес продаётся целиком)
+const SALE_ONLY_TYPES = ['business', 'gab'];
+
 interface CategoryToolbarProps {
   meta: CategoryMetaItem;
+  categoryType?: string;
   itemsCount: number;
   showFilters: boolean;
   setShowFilters: (fn: (v: boolean) => boolean) => void;
@@ -25,12 +29,13 @@ interface CategoryToolbarProps {
 }
 
 export default function CategoryToolbar({
-  meta, itemsCount, showFilters, setShowFilters, hasActiveFilters,
+  meta, categoryType, itemsCount, showFilters, setShowFilters, hasActiveFilters,
   dealFilter, setDealFilter, districtFilter, setDistrictFilter,
   minArea, setMinArea, maxPrice, setMaxPrice, sortBy, setSortBy,
   districts, resetFilters,
 }: CategoryToolbarProps) {
   const navigate = useNavigate();
+  const isSaleOnly = SALE_ONLY_TYPES.includes(categoryType || '');
 
   return (
     <div className="bg-white border-b border-border">
@@ -78,7 +83,7 @@ export default function CategoryToolbar({
                   className="w-full px-3 py-2 rounded-lg border border-border bg-white text-sm outline-none focus:border-brand-blue transition-colors">
                   <option value="all">Все</option>
                   <option value="sale">Продажа</option>
-                  <option value="rent">Аренда</option>
+                  {!isSaleOnly && <option value="rent">Аренда</option>}
                 </select>
               </div>
               {/* Район */}

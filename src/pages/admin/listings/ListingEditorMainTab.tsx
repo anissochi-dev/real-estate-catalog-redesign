@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import PhonePickerInput from '@/components/admin/PhonePickerInput';
-import { Listing, CATS, DEALS, CONDITIONS, PURPOSE_LIST, Purpose } from './types';
+import { Listing, CATS, DEALS, CONDITIONS, PURPOSE_LIST, Purpose, SALE_ONLY_CATEGORIES } from './types';
 
 interface Props {
   editing: Partial<Listing>;
@@ -116,7 +116,12 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
             <span className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0"><Icon name="Building2" size={11} className="text-brand-blue" /></span>Категория *
           </label>
           <select className={`w-full px-3 py-2 border rounded-lg text-sm ${err('category')}`} value={editing.category || ''}
-            onChange={e => { setEditing({ ...editing, category: e.target.value }); setErrors(v => ({ ...v, category: false })); }}>
+            onChange={e => {
+              const nextCategory = e.target.value;
+              const forceSale = SALE_ONLY_CATEGORIES.includes(nextCategory) && editing.deal === 'rent';
+              setEditing({ ...editing, category: nextCategory, ...(forceSale ? { deal: 'sale' } : {}) });
+              setErrors(v => ({ ...v, category: false }));
+            }}>
             <option value="">— Выберите категорию —</option>
             {CATS.map(c => <option key={c[0]} value={c[0]}>{c[1]}</option>)}
           </select>
@@ -129,8 +134,11 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
           <select className={`w-full px-3 py-2 border rounded-lg text-sm ${err('deal')}`} value={editing.deal || ''}
             onChange={e => { setEditing({ ...editing, deal: e.target.value }); setErrors(v => ({ ...v, deal: false })); }}>
             <option value="">— Выберите тип сделки —</option>
-            {DEALS.map(d => <option key={d[0]} value={d[0]}>{d[1]}</option>)}
+            {DEALS.filter(d => !(SALE_ONLY_CATEGORIES.includes(editing.category || '') && d[0] === 'rent')).map(d => <option key={d[0]} value={d[0]}>{d[1]}</option>)}
           </select>
+          {editing.category && SALE_ONLY_CATEGORIES.includes(editing.category) && (
+            <p className="text-xs text-muted-foreground mt-0.5">Для этой категории доступна только продажа</p>
+          )}
           {errMsg('deal', 'Выберите тип сделки')}
         </div>
         <div {...errWrap('condition')}>

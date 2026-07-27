@@ -129,6 +129,8 @@ export const DEALS: [string, string, string][] = [
   ['sale', 'Продажа', 'bg-emerald-100 text-emerald-700'],
   ['rent', 'Аренда', 'bg-blue-100 text-blue-700'],
 ];
+// Категории, для которых аренда не имеет смысла (готовый бизнес продаётся целиком, а не сдаётся)
+export const SALE_ONLY_CATEGORIES = ['business', 'gab'];
 export const CONDITIONS = [
   ['new', 'Дизайнерский ремонт'], ['euro', 'Евроремонт'], ['good', 'Косметический ремонт'],
   ['cosmetic', 'Предчистовая'], ['rough', 'Без отделки'], ['shellcore', 'Черновая отделка'],

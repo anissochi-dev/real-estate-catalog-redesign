@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import Icon from '@/components/ui/icon';
 import { District } from '@/lib/api';
 import DistrictOptions from '@/components/DistrictOptions';
@@ -9,6 +10,9 @@ const DEAL_TYPES = [
   { value: 'sale', label: 'Продажа' },
   { value: 'rent', label: 'Аренда' },
 ];
+
+// Категории, для которых аренда не имеет смысла (готовый бизнес продаётся целиком)
+const SALE_ONLY_TYPES = ['business', 'gab'];
 
 const PROPERTY_TYPES = [
   { value: 'all', label: 'Все типы' },
@@ -56,6 +60,13 @@ export default function CatalogFilters({
 }: CatalogFiltersProps) {
   const hasActiveFilters = dealFilter !== 'all' || typeFilter !== 'all' || !!minArea || !!maxPrice || districtFilter !== 'all';
   const activeCount = [dealFilter !== 'all', typeFilter !== 'all', !!minArea, !!maxPrice, districtFilter !== 'all'].filter(Boolean).length;
+  const isSaleOnly = SALE_ONLY_TYPES.includes(typeFilter);
+  const visibleDealTypes = DEAL_TYPES.filter(dt => !(isSaleOnly && dt.value === 'rent'));
+
+  // Если выбрана категория без аренды (готовый бизнес/ГАБ), а фильтр стоит на «Аренда» — сбрасываем на «Все»
+  useEffect(() => {
+    if (isSaleOnly && dealFilter === 'rent') onDealChange('all');
+  }, [isSaleOnly, dealFilter, onDealChange]);
 
   return (
     <div className="bg-white border-b border-border z-30">
@@ -64,7 +75,7 @@ export default function CatalogFilters({
         {/* Табы тип сделки + кнопки действий (десктоп — один ряд, мобильный — два ряда) */}
         <div className="flex flex-wrap items-center">
           <div className="flex items-center gap-0 overflow-x-auto scrollbar-none">
-            {DEAL_TYPES.map(dt => (
+            {visibleDealTypes.map(dt => (
               <button
                 key={dt.value}
                 onClick={() => onDealChange(dt.value)}
