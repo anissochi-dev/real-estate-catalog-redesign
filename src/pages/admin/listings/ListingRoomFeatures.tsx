@@ -1,5 +1,5 @@
 import Icon from '@/components/ui/icon';
-import { Listing, LandVri, LAND_STATUSES } from './types';
+import { Listing, LandVri, LAND_STATUSES, DRIVEWAY_TYPES } from './types';
 
 interface UtilityDef { key: string; label: string; icon: string; color: string; bg: string; options: string[] }
 
@@ -51,6 +51,17 @@ export default function ListingRoomFeatures({ editing, setEditing, landVri = [],
                   onChange={e => { setEditing({ ...editing, land_vri: e.target.value || null }); clearErr('land_vri'); }}>
                   <option value="">— Не указано —</option>
                   {landVri.map(v => <option key={v.id} value={v.slug}>{v.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                  <span className="w-5 h-5 rounded-full bg-lime-100 flex items-center justify-center flex-shrink-0"><Icon name="Route" size={11} className="text-lime-600" /></span>Подъездные пути
+                </label>
+                <select className="w-full px-3 py-2 border rounded-lg"
+                  value={editing.driveway_type || ''}
+                  onChange={e => setEditing({ ...editing, driveway_type: e.target.value || null })}>
+                  <option value="">— Не указано —</option>
+                  {DRIVEWAY_TYPES.map(d => <option key={d[0]} value={d[0]}>{d[1]}</option>)}
                 </select>
               </div>
             </>

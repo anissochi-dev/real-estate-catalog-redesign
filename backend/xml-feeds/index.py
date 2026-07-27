@@ -266,6 +266,9 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal):
             except (TypeError, ValueError):
                 pass
         if l.get('land_vri') and l['land_vri'] in _vri_map:
+            # Сохраняем исходный slug (нужен ЦИАН-фиду для маппинга на PermittedUseType),
+            # а само поле land_vri заменяем на человекочитаемое название для Яндекс/Авито.
+            l['_land_vri_slug'] = l['land_vri']
             l['land_vri'] = _vri_map[l['land_vri']]
 
     cur.execute(f"SELECT * FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
@@ -431,7 +434,9 @@ CIAN_CATEGORY_MAP_SALE = {
     'business': 'businessSale',
     'gab': 'businessSale',
     'production': 'industrySale',
-    'land': 'landSale',
+    # ВАЖНО: landSale/landRent — категория для ЗАГОРОДНОЙ (дачной/садовой) земли, у нас же
+    # исключительно коммерческая земля — правильная категория commercialLandSale/Rent.
+    'land': 'commercialLandSale',
     'building': 'buildingSale',
     'free_purpose': 'freeAppointmentObjectSale',
     'car_service': 'freeAppointmentObjectSale',
@@ -446,7 +451,7 @@ CIAN_CATEGORY_MAP_RENT = {
     'business': 'officeRent',
     'gab': 'officeRent',
     'production': 'industryRent',
-    'land': 'landRent',
+    'land': 'commercialLandRent',
     'building': 'buildingRent',
     'free_purpose': 'freeAppointmentObjectRent',
     'car_service': 'freeAppointmentObjectRent',
@@ -484,6 +489,46 @@ LAND_STATUS_AVITO = {
     'commercial': 'Коммерческое назначение',
     'agricultural': 'Сельскохозяйственное назначение',
     'industrial': 'Промышленное назначение',
+}
+
+# ЦИАН для категории «Коммерческая земля» (commercialLandSale/Rent) использует СВОЙ отдельный
+# классификатор статуса земли (тег Land.Status) — три значения вместо наших семи.
+# Соответствие подобрано по смыслу: наши бытовые статусы (ИЖС/ЛПХ/СНТ/ДНТ/коммерческое) — это
+# земли населённых пунктов, сельхоз — сельхозназначение, промышленное — промышленность/транспорт.
+CIAN_LAND_STATUS = {
+    'izhs': 'settlements',
+    'lph': 'settlements',
+    'snt': 'settlements',
+    'dni': 'settlements',
+    'commercial': 'settlements',
+    'agricultural': 'forAgriculturalPurposes',
+    'industrial': 'industryTransportCommunications',
+}
+
+# Наш справочник land_vri (см. таблицу land_vri) → фиксированный список ЦИАН PermittedUseType.
+CIAN_PERMITTED_USE_TYPE = {
+    'izhs': 'individualHousingConstruction',
+    'lph': 'agricultural',
+    'kfh': 'agricultural',
+    'agricultural': 'agricultural',
+    'commercial': 'businessManagement',
+    'office': 'businessManagement',
+    'trade': 'shoppingCenters',
+    'retail': 'shoppingCenters',
+    'industrial': 'industry',
+    'warehouse': 'warehouses',
+    'hospitality': 'hotelAmenities',
+    'multi': 'highriseBuildings',
+    'recreation': 'leisure',
+    'public_catering': 'publicUseOfCapitalConstruction',
+    'transport': 'serviceVehicles',
+}
+
+# Подъездные пути к земельному участку (наше поле driveway_type) → тег ЦИАН Land.DrivewayType
+CIAN_DRIVEWAY_TYPE = {
+    'asphalt': 'asphalt',
+    'ground': 'ground',
+    'none': 'no',
 }
 
 CONDITION_YANDEX = {
@@ -529,6 +574,9 @@ def _total_price(l):
     если price уже больше 200 000 ₽ (явно не цена за м²), считаем что это уже итоговая цена.
     Это предотвращает выгрузку нереальных сумм (миллиарды) при ошибочно проставленном
     price_unit на объектах с уже общей ценой.
+
+    Если price_unit == 'sotka' (актуально для земли) — умножаем на площадь участка в сотках
+    (land_area), с той же защитой от кривых данных.
     """
     raw = l.get('price') or 0
     try:
@@ -544,6 +592,14 @@ def _total_price(l):
         # Если price > 200 000 при unit=m2, значит данные кривые и в price уже итоговая сумма.
         if 0 < price <= 200_000 and area > 0:
             return int(price * area)
+    if l.get('price_unit') == 'sotka' and l.get('land_area'):
+        try:
+            sotki = float(l['land_area'])
+        except (TypeError, ValueError):
+            sotki = 0
+        # Адекватная цена за сотку — до 50 млн ₽. Если price выше, значит это уже итоговая сумма.
+        if 0 < price <= 50_000_000 and sotki > 0:
+            return int(price * sotki)
     return int(price)
 
 
@@ -887,8 +943,11 @@ def _build_cian(listings, company):
         if l.get('cadastral_number'):
             out.append(f'<CadastralNumber>{_xml_escape(l["cadastral_number"])}</CadastralNumber>')
 
-        # Тип входа в помещение
-        if l.get('entrance') and l['entrance'] in CIAN_INPUT_TYPE:
+        is_land = category == 'land'
+
+        # Тип входа в помещение — к земельным участкам не относится (нет такого тега в схеме
+        # commercialLandSale/Rent).
+        if not is_land and l.get('entrance') and l['entrance'] in CIAN_INPUT_TYPE:
             out.append(f'<InputType>{CIAN_INPUT_TYPE[l["entrance"]]}</InputType>')
 
         # Координаты — отдельный блок
@@ -899,33 +958,42 @@ def _build_cian(listings, company):
             out.append('</Coordinates>')
 
         # Площадь: для категории «Здание» (продажа/аренда здания целиком) ЦИАН требует
-        # TotalArea внутри тега <Building>, а не на верхнем уровне объекта.
-        # Для остальных категорий (офис, склад и т.п.) — TotalArea остаётся плоским полем.
+        # TotalArea внутри тега <Building>, а не на верхнем уровне объекта. Для земли площадь
+        # передаётся отдельным блоком <Land><Area> (ниже), TotalArea к ней не относится.
         is_whole_building = category == 'building'
-        if l.get('area') and not is_whole_building:
+        if l.get('area') and not is_whole_building and not is_land:
             out.append(f'<TotalArea>{l["area"]}</TotalArea>')
-        if l.get('min_area'):
+        if l.get('min_area') and not is_land:
             out.append(f'<MinArea>{l["min_area"]}</MinArea>')
 
-        # Земля
-        if category == 'land' and l.get('land_area'):
-            out.append(f'<LandArea>{l["land_area"]}</LandArea>')
-            if l.get('land_status'):
-                _ls = LAND_STATUS_AVITO.get(l['land_status'], l['land_status'])
-                out.append(f'<LandStatus>{_xml_escape(str(_ls))}</LandStatus>')
-            if l.get('land_vri'):
-                out.append(f'<PermittedLandUse>{_xml_escape(str(l["land_vri"]))}</PermittedLandUse>')
+        # Земельный участок (категория commercialLandSale/Rent) — своя отдельная схема,
+        # не пересекается с Building/InputType/FloorNumber. Порядок и вложенность строго
+        # по документации ЦИАН (xml_import/doc, раздел «Коммерческая земля»):
+        # <Land><Area><AreaUnitType><Status></Land>, затем PermittedUseType и DrivewayType
+        # уже ВНЕ тега Land, на верхнем уровне объекта.
+        if is_land and l.get('land_area'):
+            out.append('<Land>')
+            out.append(f'<Area>{l["land_area"]}</Area>')
+            out.append('<AreaUnitType>sotka</AreaUnitType>')
+            _cian_land_status = CIAN_LAND_STATUS.get(l.get('land_status') or '', 'settlements')
+            out.append(f'<Status>{_cian_land_status}</Status>')
+            out.append('</Land>')
+            _vri_slug = l.get('_land_vri_slug') or l.get('land_vri')
+            if _vri_slug and _vri_slug in CIAN_PERMITTED_USE_TYPE:
+                out.append(f'<PermittedUseType>{CIAN_PERMITTED_USE_TYPE[_vri_slug]}</PermittedUseType>')
+            if l.get('driveway_type') and l['driveway_type'] in CIAN_DRIVEWAY_TYPE:
+                out.append(f'<DrivewayType>{CIAN_DRIVEWAY_TYPE[l["driveway_type"]]}</DrivewayType>')
 
-        # Этаж объекта — самостоятельный тег
-        if l.get('floor') is not None:
+        # Этаж объекта — самостоятельный тег (к земле не относится)
+        if not is_land and l.get('floor') is not None:
             out.append(f'<FloorNumber>{l["floor"]}</FloorNumber>')
 
-        # ЦИАН требует обёртку <Building> для коммерческих категорий (иначе фид не проходит
-        # валидацию: "Поле 'Building' обязательно"). Все характеристики здания — этажность,
-        # высота потолков, класс, год постройки, лифты, парковка — по документации ЦИАН
-        # (xml_import/doc) идут ВНУТРИ этого тега, а не на верхнем уровне объекта.
+        # ЦИАН требует обёртку <Building> для коммерческих категорий, КРОМЕ земли — у земли
+        # своей схемы Building вообще нет (иначе фид не проходит валидацию: "Поле 'Building'
+        # обязательно"). Все характеристики здания — этажность, высота потолков, класс,
+        # год постройки, лифты, парковка — по документации ЦИАН идут ВНУТРИ этого тега.
         _building_class_map = {'A': 'a', 'A+': 'aPlus', 'B': 'b', 'B-': 'bMinus', 'B+': 'bPlus', 'C': 'c'}
-        _has_building_data = (
+        _has_building_data = not is_land and (
             (is_whole_building and l.get('area')) or l.get('total_floors') is not None or
             l.get('ceiling_height') or l.get('building_year') or l.get('building_class') or
             l.get('passenger_lifts') or l.get('cargo_lifts') or l.get('parking') not in (None, '', 'none')
@@ -952,12 +1020,13 @@ def _build_cian(listings, company):
                 out.append(f'<ClassType>{_building_class_map[l["building_class"]]}</ClassType>')
             out.append('</Building>')
 
-        # Отделка: приоритет finishing, fallback — condition
+        # Отделка: приоритет finishing, fallback — condition (к земле не относится)
         _decoration = None
-        if l.get('finishing') and l['finishing'] in FINISHING_CIAN:
-            _decoration = FINISHING_CIAN[l['finishing']]
-        elif l.get('condition') and l['condition'] in CONDITION_TO_FINISHING_CIAN:
-            _decoration = CONDITION_TO_FINISHING_CIAN[l['condition']]
+        if not is_land:
+            if l.get('finishing') and l['finishing'] in FINISHING_CIAN:
+                _decoration = FINISHING_CIAN[l['finishing']]
+            elif l.get('condition') and l['condition'] in CONDITION_TO_FINISHING_CIAN:
+                _decoration = CONDITION_TO_FINISHING_CIAN[l['condition']]
         if _decoration:
             out.append(f'<Decoration>{_decoration}</Decoration>')
 
@@ -981,32 +1050,55 @@ def _build_cian(listings, company):
             out.append('</Undergrounds>')
 
         # Цена: _total_price() ВСЕГДА возвращает итоговую сумму за объект целиком
-        # (даже если в БД цена изначально хранилась за м² — она уже умножена на площадь).
-        # PriceType=all обязателен (по прямому указанию техподдержки ЦИАН): без него
-        # ЦИАН для коммерческой недвижимости трактует Price как ставку за м²
-        # и домножает на площадь сам, завышая цену в разы.
+        # (даже если в БД цена изначально хранилась за м²/сотку — она уже умножена на площадь).
         out.append('<BargainTerms>')
         price_val = _total_price(l)
         out.append(f'<Price>{price_val}</Price>')
-        out.append('<PriceType>all</PriceType>')
-        if deal == 'rent' and l.get('utilities_included'):
-            out.append('<UtilitiesTerms><IncludedInPrice>true</IncludedInPrice></UtilitiesTerms>')
-        out.append('<Currency>rur</Currency>')
-        # Торг у нас всегда возможен по решению компании — фиксированное значение для всех объектов.
-        out.append('<BargainAllowed>true</BargainAllowed>')
-        if deal == 'rent':
-            out.append('<PaymentPeriod>monthly</PaymentPeriod>')
-            # Срок аренды не хранится и не отображается в админке/на сайте — всегда «длительный».
-            out.append('<LeaseTermType>longTerm</LeaseTermType>')
-            if l.get('prepay_months'):
-                out.append(f'<PrepayMonths>{l["prepay_months"]}</PrepayMonths>')
-            if l.get('deposit_amount'):
-                out.append(f'<Deposit>{int(l["deposit_amount"])}</Deposit>')
-        # Комиссия — служебное поле карточки объекта (broker_commission) не публикуется
-        # в открытых фидах ни при каких условиях. Без явных ClientFee/AgentFee ЦИАН
-        # сам подставляет 100%, поэтому всегда передаём 0.
-        out.append('<ClientFee>0</ClientFee>')
-        out.append('<AgentFee>0</AgentFee>')
+        if is_land:
+            # У земли (commercialLandSale/Rent) СВОЯ схема BargainTerms: для продажи —
+            # только Price/Currency/VatType (без PriceType/ClientFee/AgentFee), для аренды —
+            # похоже на обычную аренду, но без BargainAllowed/UtilitiesTerms, с обязательным
+            # VatType/LeaseType, а залог называется SecurityDeposit (не Deposit).
+            # Порядок строго по документации ЦИАН (xml_import/doc, «Коммерческая земля»).
+            if deal == 'rent':
+                out.append('<PriceType>all</PriceType>')
+                out.append('<Currency>rur</Currency>')
+                out.append('<PaymentPeriod>monthly</PaymentPeriod>')
+                out.append('<VatType>included</VatType>')
+                out.append('<LeaseType>direct</LeaseType>')
+                out.append('<LeaseTermType>longTerm</LeaseTermType>')
+                if l.get('prepay_months'):
+                    out.append(f'<PrepayMonths>{l["prepay_months"]}</PrepayMonths>')
+                out.append('<ClientFee>0</ClientFee>')
+                if l.get('deposit_amount'):
+                    out.append(f'<SecurityDeposit>{int(l["deposit_amount"])}</SecurityDeposit>')
+                out.append('<AgentFee>0</AgentFee>')
+            else:
+                out.append('<Currency>rur</Currency>')
+                out.append('<VatType>included</VatType>')
+        else:
+            # PriceType=all обязателен (по прямому указанию техподдержки ЦИАН): без него
+            # ЦИАН для коммерческой недвижимости трактует Price как ставку за м²
+            # и домножает на площадь сам, завышая цену в разы.
+            out.append('<PriceType>all</PriceType>')
+            if deal == 'rent' and l.get('utilities_included'):
+                out.append('<UtilitiesTerms><IncludedInPrice>true</IncludedInPrice></UtilitiesTerms>')
+            out.append('<Currency>rur</Currency>')
+            # Торг у нас всегда возможен по решению компании — фиксированное значение для всех объектов.
+            out.append('<BargainAllowed>true</BargainAllowed>')
+            if deal == 'rent':
+                out.append('<PaymentPeriod>monthly</PaymentPeriod>')
+                # Срок аренды не хранится и не отображается в админке/на сайте — всегда «длительный».
+                out.append('<LeaseTermType>longTerm</LeaseTermType>')
+                if l.get('prepay_months'):
+                    out.append(f'<PrepayMonths>{l["prepay_months"]}</PrepayMonths>')
+                if l.get('deposit_amount'):
+                    out.append(f'<Deposit>{int(l["deposit_amount"])}</Deposit>')
+            # Комиссия — служебное поле карточки объекта (broker_commission) не публикуется
+            # в открытых фидах ни при каких условиях. Без явных ClientFee/AgentFee ЦИАН
+            # сам подставляет 100%, поэтому всегда передаём 0.
+            out.append('<ClientFee>0</ClientFee>')
+            out.append('<AgentFee>0</AgentFee>')
         out.append('</BargainTerms>')
 
         # Фото

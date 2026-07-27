@@ -90,6 +90,7 @@ export interface Listing {
   land_area?: number | null;
   land_status?: string | null;
   land_vri?: string | null;
+  driveway_type?: string | null;
   has_furniture?: boolean;
   has_equipment?: boolean;
   property_rights?: string | null;
@@ -218,6 +219,12 @@ export const LAND_STATUSES = [
   ['industrial', 'Промышленное назначение'],
 ];
 
+export const DRIVEWAY_TYPES = [
+  ['asphalt', 'Асфальтированная дорога'],
+  ['ground', 'Грунтовая дорога'],
+  ['none', 'Нет подъездных путей'],
+];
+
 export const empty: Partial<Listing> = {
   title: '', category: '', deal: '', price: 0, area: 0,
   address: '', district: '', city: 'Краснодар', description: '', image: '', images: '', tags: '',
@@ -232,7 +239,7 @@ export const empty: Partial<Listing> = {
   utilities: '', road_line: '', payback: null, profit: null,
   is_exclusive: false, is_urgent: false,
   building_class: null, subway_station: '', subway_distance: null,
-  land_area: null, land_status: null, has_furniture: false, has_equipment: false,
+  land_area: null, land_status: null, driveway_type: null, has_furniture: false, has_equipment: false,
   property_rights: null, min_area: null, building_year: null, is_apartments: false,
   passenger_lifts: null, cargo_lifts: null,
   prepay_months: null, deposit_amount: null, utilities_included: false,
