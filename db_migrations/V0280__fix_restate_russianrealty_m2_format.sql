@@ -1,0 +1,1 @@
+UPDATE xml_feeds SET format = 'other' WHERE slug IN ('restate', 'russianrealty', 'm2') AND format = 'yandex';
