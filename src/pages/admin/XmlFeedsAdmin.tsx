@@ -120,7 +120,7 @@ export default function XmlFeedsAdmin() {
               <Icon name="RefreshCw" size={14} className={regenerating ? 'animate-spin' : ''} />
               {regenerating ? 'Обновляю…' : 'Обновить сейчас'}
             </button>
-            <button onClick={() => setEditing({ name: '', format: 'yandex', is_active: true })}
+            <button onClick={() => setEditing({ name: '', format: 'other', is_active: true })}
               className="btn-blue text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2">
               <Icon name="Plus" size={14} /> Добавить фид
             </button>
@@ -257,7 +257,7 @@ export default function XmlFeedsAdmin() {
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">Площадка (формат XML)</label>
-                <select className="w-full px-3 py-2 border rounded-lg" value={editing.format || 'yandex'}
+                <select className="w-full px-3 py-2 border rounded-lg" value={editing.format || 'other'}
                   onChange={e => setEditing({ ...editing, format: e.target.value })}>
                   {PLATFORMS.map(p => <option key={p[0]} value={p[0]}>{p[1]}</option>)}
                 </select>
