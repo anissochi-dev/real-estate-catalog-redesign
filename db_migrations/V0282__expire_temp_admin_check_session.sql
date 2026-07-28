@@ -1,0 +1,1 @@
+UPDATE sessions SET expires_at = NOW() - INTERVAL '1 day' WHERE token = 'temp_test_check_admin_token_xyz123';

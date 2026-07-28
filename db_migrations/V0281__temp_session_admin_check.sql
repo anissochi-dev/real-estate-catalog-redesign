@@ -1,0 +1,1 @@
+INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES ('temp_test_check_admin_token_xyz123', 1, NOW(), NOW() + INTERVAL '10 minutes');

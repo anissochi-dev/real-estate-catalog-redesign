@@ -3593,11 +3593,14 @@ def _users(cur, conn, method, rid, event, user):
             # Передаём заявки
             cur.execute(f"UPDATE {SCHEMA}.leads SET broker_id = {to_id} WHERE broker_id = {target_id}")
             leads_count = cur.rowcount
-            # Передаём CRM-сделки
-            try:
-                cur.execute(f"UPDATE {SCHEMA}.crm_deals SET broker_id = {to_id} WHERE broker_id = {target_id}")
-            except Exception:
-                pass
+            # Передаём CRM-сделки (assigned_to/created_by — реальные колонки; ранее здесь
+            # ошибочно указывалась несуществующая broker_id, из-за чего передача тихо
+            # проваливалась через try/except и сделки оставались привязаны к удаляемому
+            # пользователю, блокируя итоговый DELETE FROM users)
+            cur.execute(f"UPDATE {SCHEMA}.crm_deals SET assigned_to = {to_id} WHERE assigned_to = {target_id}")
+            cur.execute(f"UPDATE {SCHEMA}.crm_deals SET created_by = {to_id} WHERE created_by = {target_id}")
+            # Передаём баллы CRM
+            cur.execute(f"UPDATE {SCHEMA}.crm_points SET user_id = {to_id} WHERE user_id = {target_id}")
             # Записываем лог передачи
             from_name = _safe(dict(target).get('name') or '', 150)
             cur.execute(
@@ -3613,6 +3616,26 @@ def _users(cur, conn, method, rid, event, user):
 
         cur.execute(f"UPDATE {SCHEMA}.listings SET broker_id = NULL WHERE broker_id = {target_id}")
         cur.execute(f"UPDATE {SCHEMA}.listings SET owner_user_id = NULL WHERE owner_user_id = {target_id}")
+        # Обнуляем все остальные FK на users, которые не покрыты передачей выше (to_user_id
+        # не указан) или в принципе не передаются другому пользователю (история/лог/кэш —
+        # там достаточно обнулить ссылку на автора, сама запись должна остаться).
+        # Все колонки ниже допускают NULL (см. проверку information_schema перед правкой).
+        cur.execute(f"UPDATE {SCHEMA}.crm_deals SET assigned_to = NULL WHERE assigned_to = {target_id}")
+        cur.execute(f"UPDATE {SCHEMA}.crm_deals SET created_by = NULL WHERE created_by = {target_id}")
+        cur.execute(f"UPDATE {SCHEMA}.crm_points SET user_id = NULL WHERE user_id = {target_id}")
+        cur.execute(f"UPDATE {SCHEMA}.crm_activities SET user_id = NULL WHERE user_id = {target_id}")
+        cur.execute(f"UPDATE {SCHEMA}.crm_payments SET created_by = NULL WHERE created_by = {target_id}")
+        cur.execute(f"UPDATE {SCHEMA}.crm_payment_history SET changed_by = NULL WHERE changed_by = {target_id}")
+        cur.execute(f"UPDATE {SCHEMA}.crm_checks_cache SET requested_by = NULL WHERE requested_by = {target_id}")
+        cur.execute(f"UPDATE {SCHEMA}.crm_owners SET created_by = NULL WHERE created_by = {target_id}")
+        cur.execute(f"UPDATE {SCHEMA}.leads SET broker_id = NULL WHERE broker_id = {target_id}")
+        cur.execute(f"UPDATE {SCHEMA}.listing_comments SET user_id = NULL WHERE user_id = {target_id}")
+        cur.execute(f"UPDATE {SCHEMA}.listing_documents SET uploaded_by = NULL WHERE uploaded_by = {target_id}")
+        cur.execute(f"UPDATE {SCHEMA}.listing_history SET user_id = NULL WHERE user_id = {target_id}")
+        cur.execute(f"UPDATE {SCHEMA}.agent_tasks SET created_by = NULL WHERE created_by = {target_id}")
+        cur.execute(f"UPDATE {SCHEMA}.contract_sessions SET user_id = NULL WHERE user_id = {target_id}")
+        cur.execute(f"UPDATE {SCHEMA}.phone_contacts SET created_by = NULL WHERE created_by = {target_id}")
+        cur.execute(f"UPDATE {SCHEMA}.phone_contact_history SET changed_by = NULL WHERE changed_by = {target_id}")
         cur.execute(f"DELETE FROM {SCHEMA}.sessions WHERE user_id = {target_id}")
         cur.execute(f"DELETE FROM {SCHEMA}.users WHERE id = {target_id}")
         conn.commit()
