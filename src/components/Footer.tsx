@@ -199,6 +199,13 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
             </div>
           )}
 
+          {/* Реквизиты компании (ИНН, ОГРН и т.п.) — одной строкой, по центру */}
+          {settings.footer_legal_info && (
+            <div className="border-t border-white/10 mt-6 pt-5 text-center">
+              <p className="text-xs text-white/40">{settings.footer_legal_info}</p>
+            </div>
+          )}
+
           {/* Правовые документы — по центру */}
           {legalDocs.length > 0 && (
             <div className="border-t border-white/10 mt-6 pt-5">
