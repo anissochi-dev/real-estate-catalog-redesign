@@ -645,7 +645,12 @@ def handler(event: dict, context) -> dict:
                     return _ok({'done': True, 'processed': 0, 'created': 0, 'skipped': 0, 'errors': [], 'total': total, 'next_offset': offset})
 
                 s3_client = _s3()
+                # Фото с наложенным водяным знаком: .../photos/{token}_wm.webp
                 wm_re = re.compile(r'/bucket/photos/([A-Za-z0-9_\-]+)_wm\.webp$')
+                # Фото БЕЗ водяного знака, загруженное как есть: .../photos/{token}.webp
+                # (thumb/medium версии исключаем — это не отдельные оригиналы)
+                plain_re = re.compile(r'/bucket/photos/([A-Za-z0-9_\-]+)\.webp$')
+                exclude_re = re.compile(r'_(thumb|medium)$')
                 created = 0
                 skipped = 0
                 errors = []
@@ -659,7 +664,11 @@ def handler(event: dict, context) -> dict:
                     for url in all_urls:
                         m = wm_re.search(url)
                         if not m:
-                            continue  # не наше CDN фото с ВЗ (внешняя ссылка или без ВЗ) — пропускаем
+                            m = plain_re.search(url)
+                            if m and exclude_re.search(m.group(1)):
+                                m = None
+                        if not m:
+                            continue  # не наше CDN фото (внешняя ссылка) или это thumb/medium — пропускаем
                         token = m.group(1)
                         feed_key = f"xml-feeds-photos/{token}.jpg"
 

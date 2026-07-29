@@ -385,18 +385,28 @@ FEED_OVERRIDES = {
     '23estate': {'clean_photos': True},
 }
 
-_CLEAN_PHOTO_RE = re.compile(r'(/bucket/)photos/([A-Za-z0-9_\-]+)_wm\.webp$')
+# Фото с наложенным водяным знаком: .../photos/{token}_wm.webp
+_CLEAN_PHOTO_WM_RE = re.compile(r'/bucket/photos/([A-Za-z0-9_\-]+)_wm\.webp$')
+# Фото БЕЗ водяного знака, загруженное как есть: .../photos/{token}.webp
+# (исключаем _thumb.webp/_medium.webp — это уменьшенные версии, не отдельные оригиналы)
+_CLEAN_PHOTO_PLAIN_RE = re.compile(r'/bucket/photos/([A-Za-z0-9_\-]+)\.webp$')
+_CLEAN_PHOTO_EXCLUDE_RE = re.compile(r'_(thumb|medium)$')
 
 
 def _clean_photo_url(url):
-    """Для фото, загруженных с наложенным водяным знаком (.../photos/{token}_wm.webp),
-    возвращает ссылку на JPG-копию без логотипа из папки xml-feeds-photos/{token}.jpg
-    (сохраняется отдельно при загрузке фото, см. backend/upload).
-    Внешние ссылки и фото без водяного знака возвращает как есть — без изменений."""
-    m = _CLEAN_PHOTO_RE.search(url)
+    """Возвращает ссылку на JPG-копию без логотипа из папки xml-feeds-photos/{token}.jpg
+    (сохраняется отдельно при загрузке фото, см. backend/upload) — как для фото с
+    наложенным водяным знаком (_wm.webp), так и для фото, изначально загруженных
+    без него (обычный .webp). Внешние ссылки и не-photos пути возвращает как есть."""
+    m = _CLEAN_PHOTO_WM_RE.search(url)
+    if not m:
+        m = _CLEAN_PHOTO_PLAIN_RE.search(url)
+        if m and _CLEAN_PHOTO_EXCLUDE_RE.search(m.group(1)):
+            return url  # это _thumb/_medium версия, не отдельное фото — не трогаем
     if not m:
         return url
-    return _CLEAN_PHOTO_RE.sub(rf'\1xml-feeds-photos/{m.group(2)}.jpg', url)
+    token = m.group(1)
+    return re.sub(r'/bucket/photos/.*$', f'/bucket/xml-feeds-photos/{token}.jpg', url)
 
 
 def _split_images_for_feed(row, feed_slug):

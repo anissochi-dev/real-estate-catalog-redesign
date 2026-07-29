@@ -577,6 +577,23 @@ def handler(event, context):
                 key = f"{folder}/{token12}.{ext}"
                 s3.put_object(Bucket='files', Key=key, Body=data, ContentType=content_type, CacheControl='public, max-age=31536000')
                 url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{key}"
+
+                # Фото и так без логотипа — сразу кладём JPG-копию в xml-feeds-photos/
+                # (см. комментарий выше, для случая с водяным знаком)
+                if kind == 'photo':
+                    try:
+                        from PIL import Image as _PilFeed2
+                        feed_img = _PilFeed2.open(io.BytesIO(data)).convert('RGB')
+                        buf_feed = io.BytesIO()
+                        feed_img.save(buf_feed, format='JPEG', quality=88, optimize=True)
+                        feed_key = f"xml-feeds-photos/{token12}.jpg"
+                        s3.put_object(
+                            Bucket='files', Key=feed_key, Body=buf_feed.getvalue(),
+                            ContentType='image/jpeg', CacheControl='public, max-age=31536000'
+                        )
+                    except Exception:
+                        pass
+
                 try:
                     cur.execute(
                         f"INSERT INTO {SCHEMA}.s3_photo_refs (s3_key, cdn_url, is_orphan) "
