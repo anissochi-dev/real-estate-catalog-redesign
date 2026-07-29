@@ -3236,13 +3236,14 @@ def _leads(cur, conn, method, rid, action, event, user):
             f"{_int_or_null(body.get('budget_per_sqm_from'))}, {_int_or_null(body.get('budget_per_sqm_to'))}, "
             f"{district_ids_val}) RETURNING id"
         )
+        new_lead_id = cur.fetchone()['id']
         # Инвалидируем кэш sitemap — заявка публична по умолчанию (is_public/show_on_main),
         # попадает в карту сайта как отдельная страница /request/{slug}
         cur.execute(
             f"UPDATE {SCHEMA}.seo_artifacts SET urls_count = 0 WHERE kind = 'sitemap'"
         )
         conn.commit()
-        return _ok({'id': cur.fetchone()['id'], 'success': True})
+        return _ok({'id': new_lead_id, 'success': True})
 
     if method == 'PUT' and rid:
         if is_full_form:
