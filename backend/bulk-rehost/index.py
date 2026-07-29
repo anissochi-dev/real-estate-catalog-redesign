@@ -621,6 +621,97 @@ def handler(event: dict, context) -> dict:
                     'results': results,
                 })
 
+            # ── Разовая докладка чистых (без ВЗ) JPG-копий для XML-фида 23estate ──
+            # Обрабатывает уже загруженные РАНЕЕ фото объектов с export_other=TRUE:
+            # находит их оригинал без водяного знака (сохранён при первой загрузке
+            # рядом с _wm-версией) и кладёт JPG-копию в отдельную папку
+            # xml-feeds-photos/ (её использует ТОЛЬКО фид 23estate, см. FEED_OVERRIDES
+            # в backend/xml-feeds). Остальные фиды и сайт не затрагиваются.
+            elif action == 'feed_clean_photos_batch':
+                offset = int(params.get('offset') or body.get('offset') or 0)
+                batch_size = min(int(params.get('batch_size') or body.get('batch_size') or 5), 20)
+
+                cur.execute(
+                    f"SELECT id, image, images FROM {SCHEMA}.listings "
+                    f"WHERE export_other = TRUE AND status = 'active' "
+                    f"ORDER BY id ASC LIMIT {batch_size} OFFSET {offset}"
+                )
+                listings = cur.fetchall()
+
+                cur.execute(f"SELECT COUNT(*) as total FROM {SCHEMA}.listings WHERE export_other = TRUE AND status = 'active'")
+                total = cur.fetchone()['total']
+
+                if not listings:
+                    return _ok({'done': True, 'processed': 0, 'created': 0, 'skipped': 0, 'errors': [], 'total': total, 'next_offset': offset})
+
+                s3_client = _s3()
+                wm_re = re.compile(r'/bucket/photos/([A-Za-z0-9_\-]+)_wm\.webp$')
+                created = 0
+                skipped = 0
+                errors = []
+                results = []
+
+                for listing in listings:
+                    lid = listing['id']
+                    all_urls = _parse_images(listing.get('images') or '') or _parse_images(listing.get('image') or '')
+                    listing_created = 0
+                    listing_skipped = 0
+                    for url in all_urls:
+                        m = wm_re.search(url)
+                        if not m:
+                            continue  # не наше CDN фото с ВЗ (внешняя ссылка или без ВЗ) — пропускаем
+                        token = m.group(1)
+                        feed_key = f"xml-feeds-photos/{token}.jpg"
+
+                        try:
+                            s3_client.head_object(Bucket=BUCKET, Key=feed_key)
+                            listing_skipped += 1
+                            continue  # уже создана раньше
+                        except Exception:
+                            pass  # не найдена — создаём
+
+                        orig_bytes = None
+                        for orig_ext in ('webp', 'jpg', 'jpeg', 'png'):
+                            orig_key = f"photos/{token}.{orig_ext}"
+                            try:
+                                obj = s3_client.get_object(Bucket=BUCKET, Key=orig_key)
+                                orig_bytes = obj['Body'].read()
+                                break
+                            except Exception:
+                                continue
+
+                        if orig_bytes is None:
+                            errors.append(f"id={lid} {token}: оригинал без ВЗ не найден")
+                            continue
+
+                        try:
+                            from PIL import Image as _PilClean
+                            img = _PilClean.open(io.BytesIO(orig_bytes)).convert('RGB')
+                            buf = io.BytesIO()
+                            img.save(buf, format='JPEG', quality=88, optimize=True)
+                            s3_client.put_object(
+                                Bucket=BUCKET, Key=feed_key, Body=buf.getvalue(),
+                                ContentType='image/jpeg', CacheControl='public, max-age=31536000'
+                            )
+                            listing_created += 1
+                        except Exception as e:
+                            errors.append(f"id={lid} {token}: {str(e)[:120]}")
+
+                    created += listing_created
+                    skipped += listing_skipped
+                    results.append({'id': lid, 'created': listing_created, 'skipped': listing_skipped})
+
+                return _ok({
+                    'done': offset + batch_size >= total,
+                    'processed': len(listings),
+                    'created': created,
+                    'skipped': skipped,
+                    'errors': errors,
+                    'total': total,
+                    'next_offset': offset + batch_size,
+                    'results': results,
+                })
+
             # ── Проставить CacheControl: скачать байты → put_object заново ──
             elif action == 'fix_cache':
                 import re as _re
@@ -867,7 +958,7 @@ def handler(event: dict, context) -> dict:
                 })
 
             else:
-                return _err(400, f'Неизвестный action: {action}. Доступные: status, rehost_batch, remove_watermark')
+                return _err(400, f'Неизвестный action: {action}. Доступные: status, rehost_batch, remove_watermark, feed_clean_photos_batch')
 
     finally:
         conn.close()

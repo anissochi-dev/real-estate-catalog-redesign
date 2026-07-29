@@ -11,6 +11,12 @@
       "method": "GET",
       "path": "/?action=recompress_batch&offset=0&batch_size=1",
       "expectedStatus": 401
+    },
+    {
+      "name": "feed_clean_photos_batch без авторизации — 401",
+      "method": "GET",
+      "path": "/?action=feed_clean_photos_batch&offset=0&batch_size=1",
+      "expectedStatus": 401
     }
   ]
 }

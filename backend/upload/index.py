@@ -532,6 +532,24 @@ def handler(event, context):
                     orig_key = f"{folder}/{token12}.{original_ext}"
                     s3.put_object(Bucket='files', Key=orig_key, Body=original_data, ContentType=original_ct, CacheControl='public, max-age=31536000')
 
+                    # Отдельная JPG-копия без водяного знака — ТОЛЬКО для отдельных XML-фидов
+                    # площадок с индивидуальными настройками (см. FEED_OVERRIDES в xml-feeds).
+                    # Папка изолирована от photos/ — НЕ регистрируется в s3_photo_refs,
+                    # чтобы photo-cleanup (чистит "осиротевшие" файлы papки photos/) её не трогал.
+                    if kind == 'photo':
+                        try:
+                            from PIL import Image as _PilFeed
+                            feed_img = _PilFeed.open(io.BytesIO(original_data)).convert('RGB')
+                            buf_feed = io.BytesIO()
+                            feed_img.save(buf_feed, format='JPEG', quality=88, optimize=True)
+                            feed_key = f"xml-feeds-photos/{token12}.jpg"
+                            s3.put_object(
+                                Bucket='files', Key=feed_key, Body=buf_feed.getvalue(),
+                                ContentType='image/jpeg', CacheControl='public, max-age=31536000'
+                            )
+                        except Exception:
+                            pass
+
                     wm_applied = True
                     url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{wm_key}"
                     original_url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{orig_key}"

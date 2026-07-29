@@ -275,7 +275,7 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal):
     company = dict(cur.fetchone() or {})
 
     if fmt == 'yandex':
-        return _build_yandex(listings, company)
+        return _build_yandex(listings, company, feed_slug)
     if fmt == 'avito':
         return _build_avito(listings, company)
     if fmt == 'cian':
@@ -283,7 +283,10 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal):
     if fmt == 'other':
         # Площадки «Разное» без собственного формата — используем универсальную
         # yandex-схему (её принимает большинство каталогов недвижимости).
-        return _build_yandex(listings, company)
+        # feed_slug пробрасывается дальше — так у ОДНОЙ конкретной площадки (например
+        # 23estate) можно включить индивидуальную особенность через FEED_OVERRIDES,
+        # не затрагивая остальные площадки группы «Разное».
+        return _build_yandex(listings, company, feed_slug)
     return None
 
 
@@ -372,6 +375,36 @@ def _split_images(row):
     if row.get('image'):
         return [row['image']]
     return []
+
+
+# ── Индивидуальные настройки отдельных площадок группы «Разное» ────────────
+# По умолчанию все площадки используют общую (стандартную) схему _build_yandex.
+# Чтобы поменять поведение только для ОДНОЙ конкретной площадки — не трогая
+# остальные — добавь её slug сюда с нужными флагами.
+FEED_OVERRIDES = {
+    '23estate': {'clean_photos': True},
+}
+
+_CLEAN_PHOTO_RE = re.compile(r'(/bucket/)photos/([A-Za-z0-9_\-]+)_wm\.webp$')
+
+
+def _clean_photo_url(url):
+    """Для фото, загруженных с наложенным водяным знаком (.../photos/{token}_wm.webp),
+    возвращает ссылку на JPG-копию без логотипа из папки xml-feeds-photos/{token}.jpg
+    (сохраняется отдельно при загрузке фото, см. backend/upload).
+    Внешние ссылки и фото без водяного знака возвращает как есть — без изменений."""
+    m = _CLEAN_PHOTO_RE.search(url)
+    if not m:
+        return url
+    return _CLEAN_PHOTO_RE.sub(rf'\1xml-feeds-photos/{m.group(2)}.jpg', url)
+
+
+def _split_images_for_feed(row, feed_slug):
+    """Как _split_images, но применяет индивидуальные настройки площадки (FEED_OVERRIDES)."""
+    images = _split_images(row)
+    if FEED_OVERRIDES.get(feed_slug, {}).get('clean_photos'):
+        images = [_clean_photo_url(u) for u in images]
+    return images
 
 
 # ── Маппинги категорий ──────────────────────────────────────────────────────
@@ -657,7 +690,7 @@ def _total_price(l):
     return int(price)
 
 
-def _build_yandex(listings, company):
+def _build_yandex(listings, company, feed_slug=None):
     company_name = _xml_escape(company.get('company_name', 'BIZNEST'))
     email = _xml_escape(company.get('company_email', ''))
     site_url = (company.get('site_url') or '').rstrip('/')
@@ -795,7 +828,7 @@ def _build_yandex(listings, company):
             out.append(f'<description>{_xml_escape(l["description"])}</description>')
 
         # Фото — не меньше двух по требованиям Яндекса
-        images = _split_images(l)
+        images = _split_images_for_feed(l, feed_slug)
         for img in images:
             out.append(f'<image>{_xml_escape(img)}</image>')
 
