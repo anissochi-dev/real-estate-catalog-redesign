@@ -105,16 +105,20 @@ interface Props {
   listingDropOpen: boolean;
   setListingDropOpen: (v: boolean) => void;
   onSave: () => void;
+  /** Брокер задаёт телефон и имя клиента один раз — при повторном
+   * редактировании уже существующей заявки эти поля блокируются. */
+  lockContactFields?: boolean;
 }
 
 export default function LeadEditModal({
   editing, setEditing, listings, districts,
   listingSearch, setListingSearch,
   listingDropOpen, setListingDropOpen,
-  onSave,
+  onSave, lockContactFields = false,
 }: Props) {
   const listingDropRef = useRef<HTMLDivElement>(null);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
+  const contactLocked = lockContactFields && !!editing.id && !!editing.name && !!editing.phone;
 
   const filteredListings = listings.filter(l =>
     listingSearch.length < 1 ? true :
@@ -163,10 +167,11 @@ export default function LeadEditModal({
         </div>
         <div className="p-5 space-y-3 overflow-y-auto flex-1">
           <div className="relative">
-            <input className={`w-full px-3 py-2 border rounded-lg pr-16 ${errors.name ? 'border-red-400 bg-red-50' : ''}`} placeholder="Имя клиента"
+            <input className={`w-full px-3 py-2 border rounded-lg pr-16 ${errors.name ? 'border-red-400 bg-red-50' : ''} ${contactLocked ? 'bg-muted/50 text-muted-foreground cursor-not-allowed' : ''}`} placeholder="Имя клиента"
               maxLength={60}
               value={editing.name || ''}
-              onChange={e => setEditing({ ...editing, name: e.target.value })} />
+              readOnly={contactLocked}
+              onChange={e => !contactLocked && setEditing({ ...editing, name: e.target.value })} />
             <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs tabular-nums ${
               (editing.name?.length || 0) >= 55 ? 'text-red-500' : 'text-muted-foreground'
             }`}>
@@ -174,12 +179,16 @@ export default function LeadEditModal({
             </span>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Телефон</label>
+            <label className="text-xs text-muted-foreground">
+              Телефон
+              {contactLocked && <span className="ml-1.5 text-[10px] text-muted-foreground">(изменён быть не может)</span>}
+            </label>
             <div className={errors.phone ? 'rounded-lg ring-1 ring-red-400 bg-red-50' : ''}>
               <PhonePickerInput
                 value={editing.phone || ''}
                 onChange={(phone, name) => setEditing({ ...editing, phone, ...(name && !editing.name ? { name } : {}) })}
                 onNameChange={name => { if (!editing.name) setEditing({ ...editing, name }); }}
+                readOnly={contactLocked}
               />
             </div>
           </div>

@@ -259,6 +259,7 @@ export default function LeadsAdmin() {
           listingDropOpen={listingDropOpen}
           setListingDropOpen={setListingDropOpen}
           onSave={save}
+          lockContactFields={isBroker}
         />
       )}
 

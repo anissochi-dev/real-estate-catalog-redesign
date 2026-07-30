@@ -263,7 +263,9 @@ FALLBACK_PERMS = {
     'broker': {
         'stats':            ['read'],
         'listings':         ['read', 'create', 'update'],
-        'leads':            ['read', 'create'],
+        # update разрешён на уровне прав, но реально применяется только к своим
+        # заявкам (broker_id = свой id) — проверка внутри _leads()
+        'leads':            ['read', 'create', 'update'],
         'phones':           ['read', 'create'],
         'cities':           ['read'],
         'purposes':         ['read'],
@@ -3119,10 +3121,15 @@ def _mask_phone(phone: str) -> str:
 
 def _can_see_phone(lead: dict, user: dict) -> bool:
     """Правила видимости телефона клиента в лиде:
-    - admin, director, manager, editor, office_manager, broker — видят всегда
+    - admin, director, manager, editor, office_manager — видят всегда
+    - broker — видит только в своих заявках (lead.broker_id == user.id)
     """
     role = user.get('role', '')
-    return role in ('admin', 'director', 'manager', 'editor', 'office_manager', 'broker')
+    if role in ('admin', 'director', 'manager', 'editor', 'office_manager'):
+        return True
+    if role == 'broker':
+        return lead.get('broker_id') is not None and lead.get('broker_id') == user.get('id')
+    return False
 
 
 def _apply_phone_visibility(lead: dict, user: dict) -> dict:
@@ -3217,11 +3224,18 @@ def _leads(cur, conn, method, rid, action, event, user):
                 return _err(400, 'Заполните обязательные поля: ' + ', '.join(missing))
         raw_dids = body.get('district_ids')
         district_ids_val = 'ARRAY[' + ','.join(str(int(x)) for x in raw_dids) + ']::integer[]' if raw_dids else "'{}'"
+        # Брокер, создающий заявку в CRM, автоматически становится её ответственным —
+        # иначе после создания он не сможет её ни увидеть как «свою», ни вести.
+        # Для остальных ролей (admin/manager и т.п.) broker_id можно передать явно в body.
+        if user and user.get('role') == 'broker':
+            broker_id_val = str(int(user['id']))
+        else:
+            broker_id_val = _int_or_null(body.get('broker_id'))
         cur.execute(
             f"INSERT INTO {SCHEMA}.leads (name, phone, email, message, listing_id, status, source, "
             f"is_network_tenant, budget, budget_to, show_on_main, company, lead_type, "
             f"area_from, area_to, property_type, property_category, utilities, "
-            f"budget_per_sqm_from, budget_per_sqm_to, district_ids) VALUES ("
+            f"budget_per_sqm_from, budget_per_sqm_to, district_ids, broker_id) VALUES ("
             f"'{name}', '{phone}', {_str_or_null(body.get('email'), 100)}, "
             f"{_str_or_null(body.get('message'), 2000)}, {_int_or_null(body.get('listing_id'))}, "
             f"{_str_or_null(body.get('status') or 'new', 20)}, "
@@ -3234,7 +3248,7 @@ def _leads(cur, conn, method, rid, action, event, user):
             f"{_str_or_null(body.get('property_type'), 50)}, {_str_or_null(body.get('property_category'), 50)}, "
             f"{_str_or_null(body.get('utilities'), 500)}, "
             f"{_int_or_null(body.get('budget_per_sqm_from'))}, {_int_or_null(body.get('budget_per_sqm_to'))}, "
-            f"{district_ids_val}) RETURNING id"
+            f"{district_ids_val}, {broker_id_val}) RETURNING id"
         )
         new_lead_id = cur.fetchone()['id']
         # Инвалидируем кэш sitemap — заявка публична по умолчанию (is_public/show_on_main),
@@ -3250,14 +3264,34 @@ def _leads(cur, conn, method, rid, action, event, user):
             missing = _full_form_errors(body)
             if missing:
                 return _err(400, 'Заполните обязательные поля: ' + ', '.join(missing))
+
+        # Брокер может вести только СВОИ заявки (broker_id = его id).
+        # Чужие заявки для брокера полностью закрыты на редактирование.
+        is_broker_user = user and user.get('role') == 'broker'
+        current_lead = None
+        if is_broker_user:
+            cur.execute(f"SELECT broker_id, name, phone FROM {SCHEMA}.leads WHERE id = {int(rid)}")
+            current_lead = cur.fetchone()
+            if not current_lead:
+                return _err(404, 'Заявка не найдена')
+            if current_lead['broker_id'] != user['id']:
+                return _err(403, 'Вы можете редактировать только свои заявки')
+
         fields = []
         for f, length in [('status', 20), ('email', 100), ('message', 2000), ('name', 100),
                           ('phone', 30), ('company', 200), ('source', 50), ('lead_type', 20),
                           ('property_type', 50), ('property_category', 50), ('utilities', 500)]:
             if f in body:
+                # Телефон и имя клиента брокер задаёт один раз — как только заполнены,
+                # менять их дальше нельзя (защита от подмены контакта клиента).
+                if is_broker_user and f in ('name', 'phone') and current_lead and current_lead.get(f):
+                    continue
                 fields.append(f"{f} = {_str_or_null(body[f], length)}")
         for f in ('assigned_to', 'listing_id', 'budget', 'budget_to', 'broker_id', 'area_from', 'area_to', 'budget_per_sqm_from', 'budget_per_sqm_to'):
             if f in body:
+                # Брокер не может переназначить заявку на другого брокера
+                if is_broker_user and f == 'broker_id':
+                    continue
                 fields.append(f"{f} = {_int_or_null(body[f])}")
         for f in ('is_network_tenant', 'show_on_main'):
             if f in body:
@@ -3349,7 +3383,7 @@ def _matching(cur, event, user):
         cur.execute(
             f"SELECT l.id, l.name, l.phone, l.status, l.property_type, l.property_category, "
             f"l.budget, l.budget_to, l.area_from, l.area_to, l.district_ids, l.company, "
-            f"l.message, l.created_at, l.updated_at "
+            f"l.message, l.created_at, l.updated_at, l.broker_id "
             f"FROM {SCHEMA}.leads l "
             f"WHERE l.status IN ('new', 'in_progress') "
             f"AND l.property_type = '{deal}' AND l.property_category = '{category}' "
