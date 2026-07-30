@@ -45,6 +45,27 @@ def _make_slug(title: str, listing_id: int) -> str:
     return f"{s}-{listing_id}" if s else str(listing_id)
 
 
+# Формула должна совпадать с leadSlug() из src/lib/slug.ts
+_LEAD_TYPE_WORDS = {'rent': 'arenda', 'sale': 'prodazha'}
+_LEAD_CATEGORY_WORDS = {
+    'office': 'ofis', 'retail': 'magazin', 'warehouse': 'sklad',
+    'restaurant': 'obschepit', 'hotel': 'gostinitsa', 'business': 'gotovyi-biznes',
+    'gab': 'gab', 'production': 'proizvodstvo', 'land': 'zemlya', 'building': 'zdanie',
+    'free_purpose': 'svobodnogo-naznacheniya', 'car_service': 'avtoservis',
+}
+
+
+def _make_lead_slug(property_type, property_category, lead_id: int) -> str:
+    parts = []
+    if property_type and property_type in _LEAD_TYPE_WORDS:
+        parts.append(_LEAD_TYPE_WORDS[property_type])
+    if property_category and property_category in _LEAD_CATEGORY_WORDS:
+        parts.append(_LEAD_CATEGORY_WORDS[property_category])
+    if not parts:
+        parts.append('zayavka')
+    return f"{'-'.join(parts)}-{lead_id}"
+
+
 # Антиспам для уведомлений об ошибках: одинаковый текст не чаще раза в 5 минут.
 _ERROR_REPORT_LAST = {}
 
@@ -3251,13 +3272,17 @@ def _leads(cur, conn, method, rid, action, event, user):
             f"{district_ids_val}, {broker_id_val}) RETURNING id"
         )
         new_lead_id = cur.fetchone()['id']
+        # Слаг для страницы /request/{slug} — генерируем сразу, иначе заявка
+        # не будет открываться на сайте до ручного заполнения type/category.
+        new_slug = _make_lead_slug(body.get('property_type'), body.get('property_category'), new_lead_id)
+        cur.execute(f"UPDATE {SCHEMA}.leads SET slug = '{new_slug}' WHERE id = {new_lead_id}")
         # Инвалидируем кэш sitemap — заявка публична по умолчанию (is_public/show_on_main),
         # попадает в карту сайта как отдельная страница /request/{slug}
         cur.execute(
             f"UPDATE {SCHEMA}.seo_artifacts SET urls_count = 0 WHERE kind = 'sitemap'"
         )
         conn.commit()
-        return _ok({'id': new_lead_id, 'success': True})
+        return _ok({'id': new_lead_id, 'slug': new_slug, 'success': True})
 
     if method == 'PUT' and rid:
         if is_full_form:
@@ -3276,6 +3301,23 @@ def _leads(cur, conn, method, rid, action, event, user):
                 return _err(404, 'Заявка не найдена')
             if current_lead['broker_id'] != user['id']:
                 return _err(403, 'Вы можете редактировать только свои заявки')
+
+        # Слаг для /request/{slug} зависит от типа сделки и категории — пересчитываем,
+        # если они меняются, либо если у заявки его до сих пор нет (старые/битые записи).
+        needs_slug_check = 'property_type' in body or 'property_category' in body
+        if needs_slug_check:
+            cur.execute(f"SELECT slug, property_type, property_category FROM {SCHEMA}.leads WHERE id = {int(rid)}")
+            slug_row = cur.fetchone()
+        else:
+            cur.execute(f"SELECT slug FROM {SCHEMA}.leads WHERE id = {int(rid)}")
+            slug_row = cur.fetchone()
+        if not slug_row:
+            return _err(404, 'Заявка не найдена')
+        new_slug = None
+        if not slug_row.get('slug'):
+            new_ptype = body.get('property_type') if 'property_type' in body else slug_row.get('property_type')
+            new_pcat = body.get('property_category') if 'property_category' in body else slug_row.get('property_category')
+            new_slug = _make_lead_slug(new_ptype, new_pcat, int(rid))
 
         fields = []
         for f, length in [('status', 20), ('email', 100), ('message', 2000), ('name', 100),
@@ -3300,6 +3342,8 @@ def _leads(cur, conn, method, rid, action, event, user):
             raw_dids = body['district_ids']
             dids_val = 'ARRAY[' + ','.join(str(int(x)) for x in raw_dids) + ']::integer[]' if raw_dids else "'{}'"
             fields.append(f"district_ids = {dids_val}")
+        if new_slug:
+            fields.append(f"slug = '{new_slug}'")
         if not fields:
             return _err(400, 'Нет полей')
         # Помечаем заявку как «недавно отредактированную» — для сортировки на сайте

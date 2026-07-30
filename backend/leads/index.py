@@ -21,6 +21,27 @@ def _normalize_phone(phone):
     return digits
 
 
+# Формула должна совпадать с leadSlug() из src/lib/slug.ts и _make_lead_slug() в backend/admin
+_LEAD_TYPE_WORDS = {'rent': 'arenda', 'sale': 'prodazha'}
+_LEAD_CATEGORY_WORDS = {
+    'office': 'ofis', 'retail': 'magazin', 'warehouse': 'sklad',
+    'restaurant': 'obschepit', 'hotel': 'gostinitsa', 'business': 'gotovyi-biznes',
+    'gab': 'gab', 'production': 'proizvodstvo', 'land': 'zemlya', 'building': 'zdanie',
+    'free_purpose': 'svobodnogo-naznacheniya', 'car_service': 'avtoservis',
+}
+
+
+def _make_lead_slug(property_type, property_category, lead_id):
+    parts = []
+    if property_type and property_type in _LEAD_TYPE_WORDS:
+        parts.append(_LEAD_TYPE_WORDS[property_type])
+    if property_category and property_category in _LEAD_CATEGORY_WORDS:
+        parts.append(_LEAD_CATEGORY_WORDS[property_category])
+    if not parts:
+        parts.append('zayavka')
+    return f"{'-'.join(parts)}-{lead_id}"
+
+
 def _upsert_phone_contact(cur, phone, name=None):
     """Находит или создаёт запись в phone_contacts. Возвращает id или None."""
     if not phone:
@@ -175,6 +196,14 @@ def handler(event: dict, context) -> dict:
                 (name, phone, email, message, lid, source, initial_status, pc_id)
             )
             lead_id = cur.fetchone()[0]
+
+            # Слаг для страницы /request/{slug} — публичная форма не собирает
+            # тип сделки/категорию, поэтому получится общий вид zayavka-{id}.
+            lead_slug = _make_lead_slug(None, None, lead_id)
+            cur.execute(
+                f"UPDATE {SCHEMA_LEADS}.leads SET slug = %s WHERE id = %s",
+                (lead_slug, lead_id)
+            )
 
             # Связь phone_contact ↔ lead
             if pc_id:

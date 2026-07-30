@@ -181,11 +181,11 @@ export default function LeadDetailPage() {
           У меня есть подходящий объект
         </button>
 
-        {similar.length > 0 && (
+        {similar.filter(s => s.slug).length > 0 && (
           <div className="mt-10">
             <h2 className="font-display font-700 text-lg mb-3">Похожие заявки</h2>
             <ul className="flex flex-col gap-3 list-none p-0 m-0">
-              {similar.map(s => (
+              {similar.filter(s => s.slug).map(s => (
                 <li key={s.id}>
                   <Link
                     to={`/request/${s.slug}`}
