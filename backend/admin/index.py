@@ -2833,7 +2833,7 @@ def _listings(cur, conn, method, rid, event, user):
 
         sql = (
             f"INSERT INTO {SCHEMA}.listings "
-            f"(title, description, ai_notes, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, export_other, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, broker_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, has_shop_windows, owner_phone_contact_id, owner_phone2_contact_id, cadastral_number, egrn_objects, image_thumb, rent_index_pct, prepay_months, deposit_amount, utilities_included, passenger_lifts, cargo_lifts, driveway_type) VALUES ("
+            f"(title, description, ai_notes, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, export_other, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, broker_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, has_shop_windows, owner_phone_contact_id, owner_phone2_contact_id, cadastral_number, egrn_objects, image_thumb, rent_index_pct, prepay_months, deposit_amount, utilities_included, passenger_lifts, cargo_lifts, driveway_type, last_edited_at, last_edited_by) VALUES ("
             f"{_str_or_null(body.get('title'), 255)}, {_str_or_null(body.get('description'), 5000)}, "
             f"{_str_or_null(body.get('ai_notes'), 2000)}, "
             f"{_str_or_null(body.get('category'), 50)}, {_str_or_null(body.get('deal'), 20)}, "
@@ -2878,7 +2878,7 @@ def _listings(cur, conn, method, rid, event, user):
             f"{_int_or_null(body.get('prepay_months'))}, {_num_or_null(body.get('deposit_amount'))}, "
             f"{_bool(body.get('utilities_included'))}, "
             f"{_int_or_null(body.get('passenger_lifts'))}, {_int_or_null(body.get('cargo_lifts'))}, "
-            f"{_str_or_null(body.get('driveway_type'), 20)}) RETURNING id"
+            f"{_str_or_null(body.get('driveway_type'), 20)}, NOW(), {user['id']}) RETURNING id"
         )
         cur.execute(sql)
         new_id = cur.fetchone()['id']
