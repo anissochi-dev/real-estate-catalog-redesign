@@ -157,30 +157,33 @@ export default function LeadCard({ lead, districts, onContact, disableLink }: { 
         ))}
       </div>
 
-      {/* Параметры: бюджет, площадь, коммуникации */}
-      <div className="flex flex-wrap gap-x-5 gap-y-1.5 bg-slate-50 rounded-xl px-4 py-3 mb-4 text-sm">
-        <div className="flex items-center gap-2 text-foreground">
-          <Icon name="Wallet" size={14} className="text-muted-foreground" />
-          <span className="text-muted-foreground">Бюджет:</span>
-          <span className={`font-semibold ${budgetStr === 'Договорная' ? 'text-muted-foreground font-normal' : ''}`}>
-            {budgetStr}
-          </span>
-        </div>
-        <div className="flex items-center gap-2 text-foreground">
-          <Icon name="Maximize2" size={14} className="text-muted-foreground" />
-          <span className="text-muted-foreground">Площадь:</span>
-          <span className={`font-semibold ${areaStr === 'Не указана' ? 'text-muted-foreground font-normal' : ''}`}>
-            {areaStr}
-          </span>
-        </div>
-        {lead.utilities && (
+      {/* Параметры: бюджет, площадь, коммуникации — только на отдельной странице заявки,
+          в общем списке (/leads) эти данные скрыты */}
+      {disableLink && (
+        <div className="flex flex-wrap gap-x-5 gap-y-1.5 bg-slate-50 rounded-xl px-4 py-3 mb-4 text-sm">
           <div className="flex items-center gap-2 text-foreground">
-            <Icon name="Zap" size={14} className="text-muted-foreground" />
-            <span className="text-muted-foreground">Коммуникации:</span>
-            <span className="font-semibold">{lead.utilities}</span>
+            <Icon name="Wallet" size={14} className="text-muted-foreground" />
+            <span className="text-muted-foreground">Бюджет:</span>
+            <span className={`font-semibold ${budgetStr === 'Договорная' ? 'text-muted-foreground font-normal' : ''}`}>
+              {budgetStr}
+            </span>
           </div>
-        )}
-      </div>
+          <div className="flex items-center gap-2 text-foreground">
+            <Icon name="Maximize2" size={14} className="text-muted-foreground" />
+            <span className="text-muted-foreground">Площадь:</span>
+            <span className={`font-semibold ${areaStr === 'Не указана' ? 'text-muted-foreground font-normal' : ''}`}>
+              {areaStr}
+            </span>
+          </div>
+          {lead.utilities && (
+            <div className="flex items-center gap-2 text-foreground">
+              <Icon name="Zap" size={14} className="text-muted-foreground" />
+              <span className="text-muted-foreground">Коммуникации:</span>
+              <span className="font-semibold">{lead.utilities}</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Описание */}
       {lead.message && (

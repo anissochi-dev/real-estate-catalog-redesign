@@ -44,7 +44,9 @@ export default function LeadDetailPage() {
   }, [slug]);
 
   useEffect(() => {
-    fetchDistricts().then(list => setDistricts(list.filter(d => !d.is_okrug))).catch(() => {});
+    // Брокеры в CRM выбирают округа (is_okrug=true), поэтому список НЕ фильтруем —
+    // иначе название района заявки не находится и не отображается на карточке.
+    fetchDistricts().then(list => setDistricts(list)).catch(() => {});
   }, []);
 
   const openContact = () => {
