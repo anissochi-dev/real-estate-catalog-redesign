@@ -64,6 +64,22 @@ export default function LeadDetail({
             {active.budget && (
               <div className="text-xs text-muted-foreground">Бюджет: {active.budget.toLocaleString('ru')} ₽</div>
             )}
+            {canManage && active.extra_contacts && active.extra_contacts.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {active.extra_contacts.map((c, i) => (c.name || c.phone || c.phone2) && (
+                  <div key={i} className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                    <Icon name="User" size={11} />
+                    {c.name && <span>{c.name}</span>}
+                    {c.phone && (
+                      <a href={`tel:${c.phone}`} className="font-mono text-brand-blue hover:underline">{formatPhone(c.phone)}</a>
+                    )}
+                    {c.phone2 && (
+                      <a href={`tel:${c.phone2}`} className="font-mono text-brand-blue hover:underline">{formatPhone(c.phone2)}</a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
             {active.object_url && (
               <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Icon name="Link" size={12} className="text-brand-blue flex-shrink-0" />

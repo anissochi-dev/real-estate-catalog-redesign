@@ -1,3 +1,11 @@
+export interface LeadExtraContact {
+  name: string | null;
+  phone: string | null;
+  phone2: string | null;
+  phone_contact_id?: number | null;
+  phone2_contact_id?: number | null;
+}
+
 export interface Lead {
   id: number;
   name: string;
@@ -34,6 +42,7 @@ export interface Lead {
   district_ids?: number[] | null;
   // Кол-во активных объектов, подходящих заявке по критериям авто-подбора (тип, категория, цена ±10%, площадь ±10%, город)
   matching_listings_count?: number | null;
+  extra_contacts?: LeadExtraContact[] | null;
 }
 
 export const LEAD_TYPES: [string, string, string][] = [
@@ -88,5 +97,5 @@ export const empty: Partial<Lead> = {
   name: '', phone: '', email: '', message: '', status: 'new',
   is_network_tenant: false, show_on_main: true, budget: null, company: '',
   budget_to: null, area_from: null, area_to: null, property_type: null, property_category: null, utilities: null,
-  budget_per_sqm_from: null, budget_per_sqm_to: null, district_ids: [],
+  budget_per_sqm_from: null, budget_per_sqm_to: null, district_ids: [], extra_contacts: [],
 };

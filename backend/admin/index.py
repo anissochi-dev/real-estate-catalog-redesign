@@ -3175,6 +3175,11 @@ def _apply_phone_visibility(lead: dict, user: dict) -> dict:
     masked = dict(lead)
     masked['phone'] = _mask_phone(lead.get('phone') or '')
     masked['phone_hidden'] = True
+    if masked.get('extra_contacts'):
+        masked['extra_contacts'] = [
+            {**c, 'phone': _mask_phone(c.get('phone') or ''), 'phone2': _mask_phone(c.get('phone2') or '')}
+            for c in masked['extra_contacts']
+        ]
     return masked
 
 
@@ -3267,11 +3272,13 @@ def _leads(cur, conn, method, rid, action, event, user):
             broker_id_val = str(int(user['id']))
         else:
             broker_id_val = _int_or_null(body.get('broker_id'))
+        # Доп. контакты заявки — линковка будет доделана после получения new_lead_id
+        lead_extra_contacts = _process_lead_extra_contacts(cur, body.get('extra_contacts'), user['id'] if user else None)
         cur.execute(
             f"INSERT INTO {SCHEMA}.leads (name, phone, email, message, listing_id, status, source, "
             f"is_network_tenant, budget, budget_to, show_on_main, company, lead_type, "
             f"area_from, area_to, property_type, property_category, utilities, "
-            f"budget_per_sqm_from, budget_per_sqm_to, district_ids, broker_id) VALUES ("
+            f"budget_per_sqm_from, budget_per_sqm_to, district_ids, broker_id, extra_contacts) VALUES ("
             f"'{name}', '{phone}', {_str_or_null(body.get('email'), 100)}, "
             f"{_str_or_null(body.get('message'), 2000)}, {_int_or_null(body.get('listing_id'))}, "
             f"{_str_or_null(body.get('status') or 'new', 20)}, "
@@ -3284,13 +3291,20 @@ def _leads(cur, conn, method, rid, action, event, user):
             f"{_str_or_null(body.get('property_type'), 50)}, {_str_or_null(body.get('property_category'), 50)}, "
             f"{_str_or_null(body.get('utilities'), 500)}, "
             f"{_int_or_null(body.get('budget_per_sqm_from'))}, {_int_or_null(body.get('budget_per_sqm_to'))}, "
-            f"{district_ids_val}, {broker_id_val}) RETURNING id"
+            f"{district_ids_val}, {broker_id_val}, "
+            f"{_jsonb_or_null(lead_extra_contacts) if lead_extra_contacts else 'NULL'}) RETURNING id"
         )
         new_lead_id = cur.fetchone()['id']
         # Слаг для страницы /request/{slug} — генерируем сразу, иначе заявка
         # не будет открываться на сайте до ручного заполнения type/category.
         new_slug = _make_lead_slug(body.get('property_type'), body.get('property_category'), new_lead_id)
         cur.execute(f"UPDATE {SCHEMA}.leads SET slug = '{new_slug}' WHERE id = {new_lead_id}")
+        # Линкуем доп. контакты заявки с телефонной базой (для системы phonebook)
+        for extra in lead_extra_contacts:
+            if extra.get('phone_contact_id'):
+                _link_phone_to_lead(cur, extra['phone_contact_id'], new_lead_id, 'lead_extra')
+            if extra.get('phone2_contact_id'):
+                _link_phone_to_lead(cur, extra['phone2_contact_id'], new_lead_id, 'lead_extra')
         # Инвалидируем кэш sitemap — заявка публична по умолчанию (is_public/show_on_main),
         # попадает в карту сайта как отдельная страница /request/{slug}
         cur.execute(
@@ -3357,6 +3371,9 @@ def _leads(cur, conn, method, rid, action, event, user):
             raw_dids = body['district_ids']
             dids_val = 'ARRAY[' + ','.join(str(int(x)) for x in raw_dids) + ']::integer[]' if raw_dids else "'{}'"
             fields.append(f"district_ids = {dids_val}")
+        if 'extra_contacts' in body:
+            lead_extra_contacts = _process_lead_extra_contacts(cur, body.get('extra_contacts'), user['id'] if user else None, int(rid))
+            fields.append(f"extra_contacts = {_jsonb_or_null(lead_extra_contacts) if lead_extra_contacts else 'NULL'}")
         if new_slug:
             fields.append(f"slug = '{new_slug}'")
         if not fields:
@@ -5205,7 +5222,19 @@ def _link_phone_to_listing(cur, phone_contact_id, listing_id, role='owner'):
     )
 
 
+def _link_phone_to_lead(cur, phone_contact_id, lead_id, role='primary'):
+    """Создаёт связь phone_lead_links (если её ещё нет)."""
+    if not phone_contact_id or not lead_id:
+        return
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.phone_lead_links (phone_contact_id, lead_id, role) "
+        f"VALUES ({int(phone_contact_id)}, {int(lead_id)}, '{_safe(role, 50)}') "
+        f"ON CONFLICT (phone_contact_id, lead_id) DO NOTHING"
+    )
+
+
 MAX_OWNER_EXTRA_CONTACTS = 3
+MAX_LEAD_EXTRA_CONTACTS = 3
 
 
 def _process_owner_extra_contacts(cur, raw_contacts, user_id, listing_id=None):
@@ -5242,6 +5271,42 @@ def _process_owner_extra_contacts(cur, raw_contacts, user_id, listing_id=None):
                 _link_phone_to_listing(cur, pc_id, listing_id, 'owner_extra')
             if pc2_id:
                 _link_phone_to_listing(cur, pc2_id, listing_id, 'owner_extra')
+        result.append(entry)
+    return result
+
+
+def _process_lead_extra_contacts(cur, raw_contacts, user_id, lead_id=None):
+    """Аналог _process_owner_extra_contacts для заявок: приводит массив доп.
+    контактов заявки к единому виду и линкует их телефоны с единой телефонной
+    базой (phone_contacts/phone_lead_links, role='lead_extra'). Если lead_id
+    передан — сначала удаляет все прежние связи role='lead_extra' для этой
+    заявки, затем создаёт актуальные."""
+    if not isinstance(raw_contacts, list):
+        return []
+    if lead_id:
+        cur.execute(
+            f"DELETE FROM {SCHEMA}.phone_lead_links "
+            f"WHERE lead_id = {int(lead_id)} AND role = 'lead_extra'"
+        )
+    result = []
+    for item in raw_contacts[:MAX_LEAD_EXTRA_CONTACTS]:
+        if not isinstance(item, dict):
+            continue
+        name = (item.get('name') or '').strip()
+        phone = (item.get('phone') or '').strip()
+        phone2 = (item.get('phone2') or '').strip()
+        if not name and not phone and not phone2:
+            continue
+        entry = {'name': name or None, 'phone': phone or None, 'phone2': phone2 or None}
+        pc_id = _upsert_phone_contact(cur, phone, name, user_id) if phone else None
+        pc2_id = _upsert_phone_contact(cur, phone2, name, user_id) if phone2 else None
+        entry['phone_contact_id'] = pc_id
+        entry['phone2_contact_id'] = pc2_id
+        if lead_id:
+            if pc_id:
+                _link_phone_to_lead(cur, pc_id, lead_id, 'lead_extra')
+            if pc2_id:
+                _link_phone_to_lead(cur, pc2_id, lead_id, 'lead_extra')
         result.append(entry)
     return result
 
