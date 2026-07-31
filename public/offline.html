@@ -65,6 +65,16 @@
     .phone:hover { background: rgba(255,255,255,0.08); }
     .phone svg { width: 16px; height: 16px; flex-shrink: 0; }
     .phone-hint { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 10px; }
+    .messengers {
+      display: flex; align-items: center; justify-content: center; gap: 14px;
+      margin-top: 18px;
+    }
+    .messengers a {
+      flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+      transition: opacity .2s;
+    }
+    .messengers a:hover { opacity: 0.75; }
+    .messengers img { object-fit: contain; display: block; }
   </style>
 </head>
 <body>
@@ -89,7 +99,20 @@
       </svg>
       8-918-33-52-888
     </a>
-    <div class="phone-hint">Позвоните нам — телефонная связь работает независимо от интернета</div>
+
+    <div class="messengers">
+      <a href="https://wa.me/79183352888" target="_blank" rel="noopener noreferrer" title="WhatsApp">
+        <img src="/icons/whatsapp.svg" alt="WhatsApp" width="28" height="28">
+      </a>
+      <a href="https://t.me/+79183352888" target="_blank" rel="noopener noreferrer" title="Telegram">
+        <img src="/icons/telegram.svg" alt="Telegram" width="20" height="20">
+      </a>
+      <a href="https://max.ru/chat?phone=79183352888" target="_blank" rel="noopener noreferrer" title="MAX">
+        <img src="https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/bucket/3b8594d9-4849-40fd-91a3-7f3f41ed8708.png" alt="MAX" width="28" height="28">
+      </a>
+    </div>
+
+    <div class="phone-hint">Позвоните или напишите нам — мессенджеры и телефон работают независимо от интернета на сайте</div>
   </div>
 
   <script>
