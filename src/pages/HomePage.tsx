@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Property, Page } from '@/App';
+import { Link } from 'react-router-dom';
+import { Property } from '@/App';
 import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
 import { NEWS_URL } from '@/lib/adminApi';
@@ -30,16 +30,14 @@ interface HomePageProps {
   compareList: number[];
   onToggleFavorite: (id: number) => void;
   onToggleCompare: (id: number) => void;
-  onNavigate: (page: Page) => void;
 }
 
 const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
 
 const CATEGORIES = CATALOG_CATEGORIES;
 
-export default function HomePage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare, onNavigate }: HomePageProps) {
+export default function HomePage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare }: HomePageProps) {
   const { settings } = useSettings();
-  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
 
   // Инициализируем из prefetch если уже готово — нулевого мигания не будет
@@ -152,9 +150,6 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
     image: settings.logo_url,
     url: settings.site_url,
   }), [settings.company_name, settings.seo_description, settings.company_since_year, settings.company_address, settings.main_city, settings.company_phone, settings.company_email, settings.logo_url, settings.site_url]);
-
-  // Первый объект с фото — используем как og:image главной страницы
-  const lcpImage = newObjects.find(p => p.image)?.image;
 
   // Частые вопросы — данные берём из информации о компании.
   // Используются и в FAQPage Schema (для AI и поисковиков), и в видимом блоке.

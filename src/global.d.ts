@@ -12,3 +12,11 @@ declare global {
     dataLayer?: unknown[];
   }
 }
+
+// elementtiming — стандартный HTML-атрибут (Element Timing API) для замера LCP,
+// но в типах React его нет — добавляем через module augmentation.
+declare module 'react' {
+  interface HTMLAttributes<T> {
+    elementtiming?: string;
+  }
+}

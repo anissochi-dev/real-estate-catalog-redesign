@@ -50,7 +50,6 @@ export default function AppRoutes({
           compareList={compareList}
           onToggleFavorite={toggleFavorite}
           onToggleCompare={toggleCompare}
-          onNavigate={setCurrentPage}
         />
       } />
       <Route path="/catalog" element={
