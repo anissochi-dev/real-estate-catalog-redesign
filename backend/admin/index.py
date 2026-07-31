@@ -3194,7 +3194,7 @@ def _leads(cur, conn, method, rid, action, event, user):
             f"      (SELECT d.city FROM {SCHEMA}.districts d WHERE d.id = ANY(ld.district_ids) LIMIT 1), '{main_city}'"
             f"    )"
             f") mm ON ld.property_type IS NOT NULL AND ld.property_category IS NOT NULL "
-            f"ORDER BY ld.created_at DESC"
+            f"ORDER BY ld.created_at DESC LIMIT 300"
         )
         leads_list = [_apply_phone_visibility(dict(r), user) for r in cur.fetchall()]
         return _ok({'leads': leads_list})

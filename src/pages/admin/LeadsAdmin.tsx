@@ -33,9 +33,15 @@ export default function LeadsAdmin() {
   const [matchingLeadId, setMatchingLeadId] = useState<number | null>(null);
 
   const load = () =>
-    Promise.all([adminApi.listLeads(), adminApi.listListings()])
-      .then(([l, lg]) => {
+    // Запросы идут последовательно, а не через Promise.all — оба бьют в одну и ту же
+    // облачную функцию admin, и одновременный вызов провоцирует два холодных старта
+    // параллельно вместо одного тёплого контейнера для второго запроса.
+    adminApi.listLeads()
+      .then(l => {
         setLeads(l.leads);
+        return adminApi.listListings();
+      })
+      .then(lg => {
         setListings(lg.listings.map((x: Listing) => ({ id: x.id, title: x.title })));
       })
       .catch(() => toast.error('Не удалось загрузить заявки'));
