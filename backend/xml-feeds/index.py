@@ -383,6 +383,7 @@ def _split_images(row):
 # остальные — добавь её slug сюда с нужными флагами.
 FEED_OVERRIDES = {
     '23estate': {'clean_photos': True},
+    'gdeetotdom': {'clean_photos': True},
 }
 
 # Фото с наложенным водяным знаком: .../photos/{token}_wm.webp
@@ -415,6 +416,69 @@ def _split_images_for_feed(row, feed_slug):
     if FEED_OVERRIDES.get(feed_slug, {}).get('clean_photos'):
         images = [_clean_photo_url(u) for u in images]
     return images
+
+
+_TOKEN_FROM_URL_RE = re.compile(r'/bucket/photos/([A-Za-z0-9_\-]+?)(?:_wm)?\.webp$')
+
+
+def _backfill_feed_photos_jpg(cur, offset=0, batch_limit=60, dry_run=False):
+    """Для площадок с clean_photos=True (см. FEED_OVERRIDES) фид ссылается на JPG-копии
+    из папки xml-feeds-photos/{token}.jpg — они создаются автоматически при КАЖДОЙ новой
+    загрузке фото (см. backend/upload). Для фото, загруженных ДО того, как площадка попала
+    в FEED_OVERRIDES, копии могло не быть — эта функция досоздаёт JPG-файлы из уже имеющихся
+    в S3 webp-оригиналов, ничего не трогая в самой БД.
+    Хранилище (bucket.poehali.dev) не отдаёт список объектов (list_objects_v2 возвращает
+    пусто даже для заведомо непустых префиксов — судя по всему нет прав ListBucket), поэтому
+    проверить, каких JPG не хватает, нельзя — вместо этого функция идёт по ВСЕМ токенам
+    батчами со смещением (offset) и просто перезаписывает JPG (put_object идемпотентен,
+    лишние перезаписи безвредны). Вызывать повторно с новым offset, пока done=false."""
+    from PIL import Image
+    import io
+
+    cur.execute(
+        f"SELECT id, images, image FROM {SCHEMA}.listings "
+        f"WHERE (images IS NOT NULL AND images != '') OR (image IS NOT NULL AND image != '')"
+    )
+    rows = [dict(r) for r in cur.fetchall()]
+
+    tokens = {}
+    for row in rows:
+        for url in _split_images(row):
+            m = _TOKEN_FROM_URL_RE.search(url)
+            if m:
+                tokens[m.group(1)] = url
+
+    ordered = sorted(tokens.items())
+    total = len(ordered)
+
+    if dry_run:
+        return {'total_tokens': total, 'offset': offset, 'created': 0, 'failed': 0, 'done': True}
+
+    s3 = _s3_client()
+    batch = ordered[offset:offset + batch_limit]
+    created = 0
+    failed = 0
+    for token, source_url in batch:
+        try:
+            key = source_url.split('/bucket/', 1)[1]
+            obj = s3.get_object(Bucket=S3_BUCKET, Key=key)
+            data = obj['Body'].read()
+            img = Image.open(io.BytesIO(data)).convert('RGB')
+            buf = io.BytesIO()
+            img.save(buf, format='JPEG', quality=88, optimize=True)
+            s3.put_object(
+                Bucket=S3_BUCKET, Key=f"xml-feeds-photos/{token}.jpg", Body=buf.getvalue(),
+                ContentType='image/jpeg', CacheControl='public, max-age=31536000',
+            )
+            created += 1
+        except Exception:
+            failed += 1
+
+    next_offset = offset + len(batch)
+    return {
+        'total_tokens': total, 'offset': offset, 'next_offset': next_offset,
+        'created': created, 'failed': failed, 'done': next_offset >= total,
+    }
 
 
 # ── Маппинги категорий ──────────────────────────────────────────────────────
@@ -1769,6 +1833,23 @@ def handler(event, context):
                     return _json({'error': 'Нет прав'}, 403)
                 results = _regenerate_static_feeds(cur, conn, force=True)
                 return _json({'ok': True, 'results': results})
+
+            if method == 'GET' and params.get('action') in ('backfill_feed_photos', 'backfill_feed_photos_dry'):
+                # Разовое дозаполнение JPG-копий (xml-feeds-photos/) для фото, загруженных
+                # ДО включения clean_photos у площадки (например gdeetotdom) — без этого
+                # часть старых ссылок в её фиде вела бы на несуществующий файл.
+                headers = event.get('headers') or {}
+                token = headers.get('X-Auth-Token') or headers.get('x-auth-token') or ''
+                user = _get_user(cur, token)
+                if not user or user['role'] not in ('admin', 'editor'):
+                    return _json({'error': 'Нет прав'}, 403)
+                dry = params.get('action') == 'backfill_feed_photos_dry'
+                try:
+                    offset = int(params.get('offset') or 0)
+                except (TypeError, ValueError):
+                    offset = 0
+                result = _backfill_feed_photos_jpg(cur, offset=offset, dry_run=dry)
+                return _json({'ok': True, 'dry_run': dry, **result})
 
             if method == 'GET' and params.get('action') in ('cian_stats', 'cian_sync', 'cian_cron'):
                 # Статистика/баланс/услуги кабинета ЦИАН (объединено из backend/cian-api).
