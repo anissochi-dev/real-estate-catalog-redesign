@@ -70,7 +70,7 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
             </div>
             <button
               onClick={onPriceDropClick}
-              className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-blue hover:underline"
+              className="mt-2 w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-white bg-brand-blue hover:opacity-90 transition-opacity rounded-lg py-2"
             >
               <Icon name="BellRing" size={13} />
               Уведомить о снижении цены
@@ -117,14 +117,14 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
                             // WhatsApp: wa.me/79181234567
                             href: `https://wa.me/${phone}`,
                             title: 'WhatsApp',
-                            src: 'https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg',
+                            src: '/icons/whatsapp.svg',
                             cls: 'w-7 h-7',
                           },
                           {
                             // Telegram: t.me/+79181234567
                             href: `https://t.me/+${phone}`,
                             title: 'Telegram',
-                            src: 'https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg',
+                            src: '/icons/telegram.svg',
                             cls: 'w-5 h-5',
                           },
                           {

@@ -308,7 +308,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
                   </div>
                   <button
                     onClick={() => setPriceDropOpen(true)}
-                    className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-blue hover:underline"
+                    className="mt-2 w-full inline-flex items-center justify-center gap-1 text-[11px] font-semibold text-white bg-brand-blue hover:opacity-90 transition-opacity rounded-lg py-2"
                   >
                     <Icon name="BellRing" size={12} />
                     Уведомить о снижении цены
