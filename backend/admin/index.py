@@ -2680,6 +2680,10 @@ def _listings(cur, conn, method, rid, event, user):
                 if row_dict.get('broker_id') != uid and row_dict.get('author_id') != uid:
                     row_dict['owner_phone'] = None
                     row_dict['owner_phone2'] = None
+                    if row_dict.get('owner_extra_contacts'):
+                        row_dict['owner_extra_contacts'] = [
+                            {**c, 'phone': None, 'phone2': None} for c in row_dict['owner_extra_contacts']
+                        ]
             return _ok({'listing': _ser(row_dict)})
         qp = event.get('queryStringParameters') or {}
         limit = max(1, min(200, int(qp.get('limit') or 25)))
@@ -2830,10 +2834,12 @@ def _listings(cur, conn, method, rid, event, user):
         # Авто-линковка собственника с единой телефонной базой
         owner_pc_id = _upsert_phone_contact(cur, body.get('owner_phone'), body.get('owner_name'), user['id'])
         owner_pc2_id = _upsert_phone_contact(cur, body.get('owner_phone2'), body.get('owner_name'), user['id'])
+        # Доп. контакты собственника — линковка их телефонов будет доделана после получения new_id
+        owner_extra_contacts = _process_owner_extra_contacts(cur, body.get('owner_extra_contacts'), user['id'])
 
         sql = (
             f"INSERT INTO {SCHEMA}.listings "
-            f"(title, description, ai_notes, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, export_other, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, broker_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, has_shop_windows, owner_phone_contact_id, owner_phone2_contact_id, cadastral_number, egrn_objects, image_thumb, rent_index_pct, prepay_months, deposit_amount, utilities_included, passenger_lifts, cargo_lifts, driveway_type, last_edited_at, last_edited_by) VALUES ("
+            f"(title, description, ai_notes, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, export_other, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, broker_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, has_shop_windows, owner_phone_contact_id, owner_phone2_contact_id, owner_extra_contacts, cadastral_number, egrn_objects, image_thumb, rent_index_pct, prepay_months, deposit_amount, utilities_included, passenger_lifts, cargo_lifts, driveway_type, last_edited_at, last_edited_by) VALUES ("
             f"{_str_or_null(body.get('title'), 255)}, {_str_or_null(body.get('description'), 5000)}, "
             f"{_str_or_null(body.get('ai_notes'), 2000)}, "
             f"{_str_or_null(body.get('category'), 50)}, {_str_or_null(body.get('deal'), 20)}, "
@@ -2872,6 +2878,7 @@ def _listings(cur, conn, method, rid, event, user):
             f"{_bool(body.get('has_furniture'))}, {_bool(body.get('has_equipment'))}, {_bool(body.get('has_shop_windows'))}, "
             f"{owner_pc_id if owner_pc_id else 'NULL'}, "
             f"{owner_pc2_id if owner_pc2_id else 'NULL'}, "
+            f"{_jsonb_or_null(owner_extra_contacts) if owner_extra_contacts else 'NULL'}, "
             f"{_str_or_null(body.get('cadastral_number'), 50)}, "
             f"{_jsonb_or_null(body.get('egrn_objects'))}, "
             f"{_str_or_null(body.get('image_thumb'), 500)}, {_num_or_null(body.get('rent_index_pct'))}, "
@@ -2892,6 +2899,11 @@ def _listings(cur, conn, method, rid, event, user):
             _link_phone_to_listing(cur, owner_pc_id, new_id, 'owner')
         if owner_pc2_id:
             _link_phone_to_listing(cur, owner_pc2_id, new_id, 'owner')
+        for extra in owner_extra_contacts:
+            if extra.get('phone_contact_id'):
+                _link_phone_to_listing(cur, extra['phone_contact_id'], new_id, 'owner_extra')
+            if extra.get('phone2_contact_id'):
+                _link_phone_to_listing(cur, extra['phone2_contact_id'], new_id, 'owner_extra')
         # Инвалидируем кэш sitemap — новый объект попадёт при следующем запросе
         cur.execute(
             f"UPDATE {SCHEMA}.seo_artifacts SET urls_count = 0 WHERE kind = 'sitemap'"
@@ -2968,6 +2980,9 @@ def _listings(cur, conn, method, rid, event, user):
                     _link_phone_to_listing(cur, pc2_id, int(rid), 'owner')
             else:
                 fields.append("owner_phone2_contact_id = NULL")
+        if 'owner_extra_contacts' in body:
+            extra_contacts = _process_owner_extra_contacts(cur, body.get('owner_extra_contacts'), user['id'], int(rid))
+            fields.append(f"owner_extra_contacts = {_jsonb_or_null(extra_contacts) if extra_contacts else 'NULL'}")
 
         # Если изменился title — пересчитываем slug
         if 'title' in body and body.get('title'):
@@ -5188,6 +5203,40 @@ def _link_phone_to_listing(cur, phone_contact_id, listing_id, role='owner'):
         f"VALUES ({int(phone_contact_id)}, {int(listing_id)}, '{_safe(role, 50)}') "
         f"ON CONFLICT (phone_contact_id, listing_id) DO NOTHING"
     )
+
+
+MAX_OWNER_EXTRA_CONTACTS = 3
+
+
+def _process_owner_extra_contacts(cur, raw_contacts, user_id, listing_id=None):
+    """Приводит массив доп. контактов собственника к единому виду и линкует их
+    телефоны с единой телефонной базой (phone_contacts/phone_listing_links) —
+    так же, как это уже сделано для owner_phone/owner_phone2. Если listing_id
+    передан — сразу создаёт связи (используется при UPDATE, когда id уже известен;
+    при INSERT линковка делается отдельно после получения нового id)."""
+    if not isinstance(raw_contacts, list):
+        return []
+    result = []
+    for item in raw_contacts[:MAX_OWNER_EXTRA_CONTACTS]:
+        if not isinstance(item, dict):
+            continue
+        name = (item.get('name') or '').strip()
+        phone = (item.get('phone') or '').strip()
+        phone2 = (item.get('phone2') or '').strip()
+        if not name and not phone and not phone2:
+            continue
+        entry = {'name': name or None, 'phone': phone or None, 'phone2': phone2 or None}
+        pc_id = _upsert_phone_contact(cur, phone, name, user_id) if phone else None
+        pc2_id = _upsert_phone_contact(cur, phone2, name, user_id) if phone2 else None
+        entry['phone_contact_id'] = pc_id
+        entry['phone2_contact_id'] = pc2_id
+        if listing_id:
+            if pc_id:
+                _link_phone_to_listing(cur, pc_id, listing_id, 'owner_extra')
+            if pc2_id:
+                _link_phone_to_listing(cur, pc2_id, listing_id, 'owner_extra')
+        result.append(entry)
+    return result
 
 
 def _phones(cur, conn, method, rid, action, event, user):

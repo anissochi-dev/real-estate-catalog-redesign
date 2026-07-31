@@ -14,6 +14,14 @@ export interface EgrnStoredObject {
   fetched_at?: string;
 }
 
+export interface OwnerExtraContact {
+  name: string | null;
+  phone: string | null;
+  phone2: string | null;
+  phone_contact_id?: number | null;
+  phone2_contact_id?: number | null;
+}
+
 export interface Listing {
   id: number;
   title: string;
@@ -36,6 +44,7 @@ export interface Listing {
   owner_name: string | null;
   owner_phone: string | null;
   owner_phone2?: string | null;
+  owner_extra_contacts?: OwnerExtraContact[] | null;
   price_unit: 'm2' | 'sotka' | 'total' | string;
   purpose: string | null;
   condition: string | null;
@@ -230,7 +239,7 @@ export const empty: Partial<Listing> = {
   title: '', category: '', deal: '', price: 0, area: 0,
   address: '', district: '', city: 'Краснодар', description: '', image: '', images: '', tags: '',
   status: 'active', is_hot: false, is_new: false, is_visible: true,
-  owner_name: '', owner_phone: '', owner_phone2: '', price_unit: 'total',
+  owner_name: '', owner_phone: '', owner_phone2: '', owner_extra_contacts: [], price_unit: 'total',
   purpose: '', condition: '', parking: 'none', entrance: 'street',
   floor: null, total_floors: null, video_url: '', video_type: '',
   use_watermark: true, export_yandex: false, export_avito: false, export_cian: false, export_other: true,

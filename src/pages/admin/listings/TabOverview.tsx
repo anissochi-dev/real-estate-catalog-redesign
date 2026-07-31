@@ -46,8 +46,8 @@ function OverviewBlock({ title, icon, rows }: { title: string; icon: string; row
         <span className="text-sm font-semibold">{title}</span>
       </div>
       <div className="divide-y divide-border">
-        {rows.map(r => (
-          <div key={r.label} className="flex items-center justify-between px-4 py-2 text-sm">
+        {rows.map((r, i) => (
+          <div key={`${r.label}-${i}`} className="flex items-center justify-between px-4 py-2 text-sm">
             <span className="text-muted-foreground inline-flex items-center gap-1.5">
               {r.icon && <Icon name={r.icon} size={12} />}
               {r.label}
@@ -253,12 +253,24 @@ export function TabOverview({ listing, siteUrl }: { listing: Listing; siteUrl?: 
     listing.tenant_name ? { label: 'Текущий арендатор', value: listing.tenant_name } : null,
   ].filter(Boolean) as OverviewRow[];
 
+  const extraContactRows: OverviewRow[] = canSeeOwner
+    ? (listing.owner_extra_contacts || []).flatMap((c, idx) => {
+        if (!c.name && !c.phone && !c.phone2) return [];
+        const rows: OverviewRow[] = [];
+        if (c.name) rows.push({ label: `Контакт ${idx + 1}`, value: c.name });
+        if (c.phone) rows.push({ label: 'Телефон', value: c.phone });
+        if (c.phone2) rows.push({ label: 'Доп. телефон', value: c.phone2 });
+        return rows;
+      })
+    : [];
+
   const legal: OverviewRow[] = [
     listing.property_rights ? { label: 'Права собственности', value: translate(listing.property_rights, PROPERTY_RIGHTS) } : null,
     listing.broker_commission ? { label: 'Комиссия брокера', value: listing.broker_commission } : null,
     canSeeOwner ? { label: 'Собственник', value: listing.owner_name || '—' } : null,
     canSeeOwner ? { label: 'Телефон', value: listing.owner_phone || '—' } : null,
     canSeeOwner && listing.owner_phone2 ? { label: 'Доп. телефон', value: listing.owner_phone2 } : null,
+    ...extraContactRows,
   ].filter(Boolean) as OverviewRow[];
 
   const siteSlug = listing.slug;
