@@ -8,6 +8,15 @@ import { AuthProvider } from './contexts/AuthContext';
 import { SettingsProvider } from './contexts/SettingsContext';
 import './index.css';
 
+// Регистрируем Service Worker с офлайн-заглушкой: при следующих визитах,
+// если пропадёт интернет, вместо стандартной ошибки браузера покажется
+// наша страница «сайт работает, проверьте подключение».
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => { /* ignore */ });
+  });
+}
+
 window.addEventListener('vite:preloadError', (event) => {
   event.preventDefault();
   try {
