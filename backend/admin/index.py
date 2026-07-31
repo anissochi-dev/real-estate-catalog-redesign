@@ -5212,10 +5212,17 @@ def _process_owner_extra_contacts(cur, raw_contacts, user_id, listing_id=None):
     """Приводит массив доп. контактов собственника к единому виду и линкует их
     телефоны с единой телефонной базой (phone_contacts/phone_listing_links) —
     так же, как это уже сделано для owner_phone/owner_phone2. Если listing_id
-    передан — сразу создаёт связи (используется при UPDATE, когда id уже известен;
-    при INSERT линковка делается отдельно после получения нового id)."""
+    передан — сначала удаляет ВСЕ прежние связи role='owner_extra' для этого
+    объекта (чтобы не оставались осиротевшие записи при удалении/замене
+    контакта), затем создаёт актуальные (используется при UPDATE, когда id уже
+    известен; при INSERT линковка делается отдельно после получения нового id)."""
     if not isinstance(raw_contacts, list):
         return []
+    if listing_id:
+        cur.execute(
+            f"DELETE FROM {SCHEMA}.phone_listing_links "
+            f"WHERE listing_id = {int(listing_id)} AND role = 'owner_extra'"
+        )
     result = []
     for item in raw_contacts[:MAX_OWNER_EXTRA_CONTACTS]:
         if not isinstance(item, dict):
