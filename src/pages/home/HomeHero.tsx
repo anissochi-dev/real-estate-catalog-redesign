@@ -10,7 +10,16 @@ interface HomeHeroProps {
 
 export default function HomeHero({ totalCount, mainCity, searchQuery, setSearchQuery, setAiOpen }: HomeHeroProps) {
   return (
-    <section className="hero-bg text-white py-12 md:py-16">
+    <section className="hero-stars-bg text-white py-12 md:py-16">
+      <div className="hero-stars-nebula" aria-hidden="true" />
+      <div className="hero-stars-small" aria-hidden="true" />
+      <div className="hero-star hero-star-1" aria-hidden="true" />
+      <div className="hero-star hero-star-2" aria-hidden="true" />
+      <div className="hero-star hero-star-3" aria-hidden="true" />
+      <div className="hero-star hero-star-4" aria-hidden="true" />
+      <div className="hero-star hero-star-5" aria-hidden="true" />
+      <div className="hero-star hero-star-6" aria-hidden="true" />
+      <div className="hero-star hero-star-7" aria-hidden="true" />
       <div className="container mx-auto px-4 relative z-10">
         <div className="max-w-3xl">
           <h1 className="font-display font-900 text-2xl sm:text-3xl md:text-4xl leading-tight mb-3" elementtiming="lcp-heading">
