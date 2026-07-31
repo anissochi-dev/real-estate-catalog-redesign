@@ -15,7 +15,7 @@ interface HomeStatsBarProps {
 
 export default function HomeStatsBar({ statsView }: HomeStatsBarProps) {
   return (
-    <section className="bg-white border-b border-border py-3">
+    <section className="bg-white border-b border-border py-4">
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {statsView.map((stat, i) => {

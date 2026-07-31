@@ -15,7 +15,7 @@ interface HomeNewsSectionProps {
 
 export default function HomeNewsSection({ latestNews, homeNewsLimit }: HomeNewsSectionProps) {
   return (
-    <section className="py-6 bg-muted/30 border-t border-border">
+    <section className="py-8 md:py-10 bg-muted/30 border-t border-border">
       <div className="container mx-auto px-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <div className="flex items-center gap-2">

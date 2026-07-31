@@ -10,7 +10,7 @@ interface HomeHeroProps {
 
 export default function HomeHero({ totalCount, mainCity, searchQuery, setSearchQuery, setAiOpen }: HomeHeroProps) {
   return (
-    <section className="hero-bg text-white py-10 md:py-14">
+    <section className="hero-bg text-white py-12 md:py-16">
       <div className="container mx-auto px-4 relative z-10">
         <div className="max-w-3xl">
           <h1 className="font-display font-900 text-2xl sm:text-3xl md:text-4xl leading-tight mb-3" elementtiming="lcp-heading">

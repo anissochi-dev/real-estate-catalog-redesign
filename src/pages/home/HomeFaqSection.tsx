@@ -11,7 +11,7 @@ interface HomeFaqSectionProps {
 
 export default function HomeFaqSection({ faqItems }: HomeFaqSectionProps) {
   return (
-    <section className="py-4 bg-white" aria-labelledby="faq-title">
+    <section className="py-6 md:py-8 bg-white" aria-labelledby="faq-title">
       <div className="container mx-auto px-4 max-w-5xl">
         <h2 id="faq-title" className="font-display font-800 text-lg sm:text-xl text-foreground mb-3 text-center">
           Частые вопросы
