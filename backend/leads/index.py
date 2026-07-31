@@ -119,7 +119,7 @@ def handler(event: dict, context) -> dict:
 
     # Проверка captcha_token от SmartCaptcha (формат: sc_<ts>_<rand>_<scoreHex>)
     # Только для публичных заявок с сайта
-    SITE_SOURCES_CAPTCHA = ('site', 'property-page', 'offer-to-lead', 'callback', 'hero', 'catalog', 'leads-page')
+    SITE_SOURCES_CAPTCHA = ('site', 'property-page', 'offer-to-lead', 'callback', 'hero', 'catalog', 'leads-page', 'price-drop')
     if source in SITE_SOURCES_CAPTCHA:
         if not captcha_token or not captcha_token.startswith('sc_'):
             return _err(403, 'Требуется подтверждение капчи')
@@ -160,7 +160,7 @@ def handler(event: dict, context) -> dict:
 
     # Лиды с сайта проходят модерацию: статус 'pending'
     # Внутренние лиды (created_by_admin, crm и др.) сразу 'new'
-    SITE_SOURCES = ('site', 'property-page', 'offer-to-lead', 'callback', 'hero', 'catalog', 'leads-page')
+    SITE_SOURCES = ('site', 'property-page', 'offer-to-lead', 'callback', 'hero', 'catalog', 'leads-page', 'price-drop')
     initial_status = 'pending' if source in SITE_SOURCES else 'new'
 
     # listing_id — только целое число
@@ -230,7 +230,7 @@ def handler(event: dict, context) -> dict:
             except Exception:
                 pass
             try:
-                _notify_max(name, phone, message, lead_id, dsn)
+                _notify_max(name, phone, message, lead_id, dsn, source)
             except Exception:
                 pass
             try:
@@ -255,7 +255,7 @@ def handler(event: dict, context) -> dict:
     }
 
 
-def _notify_max(name: str, phone: str, message, lead_id: int, dsn: str):
+def _notify_max(name: str, phone: str, message, lead_id: int, dsn: str, source: str = ''):
     """
     Отправляет уведомление о новой заявке через MAX Bot API
     всем сотрудникам с max_user_id в разрешённых ролях.
@@ -302,7 +302,10 @@ def _notify_max(name: str, phone: str, message, lead_id: int, dsn: str):
         return
 
     company = company_name or 'Система'
-    text = f'🔔 Новая заявка — {company}\n\n👤 {name}\n📞 {phone}'
+    if source == 'price-drop':
+        text = f'💰 Хочет узнать о снижении цены — {company}\n\n👤 {name}\n📞 {phone}'
+    else:
+        text = f'🔔 Новая заявка — {company}\n\n👤 {name}\n📞 {phone}'
     if message:
         text += f'\n💬 {message[:200]}'
     text += f'\n\n🆔 Заявка #{lead_id}'

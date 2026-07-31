@@ -1,0 +1,1 @@
+UPDATE t_p71821556_real_estate_catalog_.leads SET status = 'archived', message = '[ТЕСТ, можно удалить] Хочет узнать о снижении цены на объект' WHERE id = 67 AND source = 'price-drop';

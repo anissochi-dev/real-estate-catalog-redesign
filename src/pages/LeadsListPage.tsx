@@ -264,6 +264,7 @@ export default function LeadsListPage() {
           form={contactForm}
           sending={contactSending}
           sent={contactSent}
+          captcha={captcha}
           captchaKey={captchaKey}
           onFormChange={setContactForm}
           onCaptcha={setCaptcha}

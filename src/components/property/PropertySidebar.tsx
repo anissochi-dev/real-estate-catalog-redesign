@@ -23,9 +23,10 @@ interface Props {
   captcha: CaptchaResult | null;
   setCaptcha: (v: CaptchaResult | null) => void;
   captchaKey: number;
+  onPriceDropClick: () => void;
 }
 
-export default function PropertySidebar({ item, agents, sent, sending, form, setForm, onSubmit, captcha, setCaptcha, captchaKey }: Props) {
+export default function PropertySidebar({ item, agents, sent, sending, form, setForm, onSubmit, captcha, setCaptcha, captchaKey, onPriceDropClick }: Props) {
   const agent = agents[0] || null;
   const ppm2 = item.pricePerM2 || (item.area && item.area > 0 ? Math.round(item.price / item.area) : null);
   const [chatOpen, setChatOpen] = useState(false);
@@ -67,6 +68,13 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
                 <span className="text-sm font-semibold text-muted-foreground whitespace-nowrap">{ppm2.toLocaleString('ru')} ₽/м²</span>
               ) : null}
             </div>
+            <button
+              onClick={onPriceDropClick}
+              className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-blue hover:underline"
+            >
+              <Icon name="BellRing" size={13} />
+              Уведомить о снижении цены
+            </button>
           </div>
           <div className="px-4 py-1.5 bg-muted/40 border-t border-border flex items-center gap-1.5">
             <Icon name="Hash" size={11} className="text-muted-foreground" />

@@ -219,6 +219,7 @@ export default function LeadDetailPage() {
           form={form}
           sending={sending}
           sent={sent}
+          captcha={captcha}
           captchaKey={captchaKey}
           onFormChange={setForm}
           onCaptcha={setCaptcha}

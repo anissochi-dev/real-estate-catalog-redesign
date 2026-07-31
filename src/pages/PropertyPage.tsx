@@ -11,6 +11,7 @@ import Icon from '@/components/ui/icon';
 import PropertyMediaGallery from '@/components/property/PropertyMediaGallery';
 import PropertyMainContent from '@/components/property/PropertyMainContent';
 import PropertySidebar from '@/components/property/PropertySidebar';
+import PriceDropModal from '@/components/property/PriceDropModal';
 import PropertyTopBar from '@/components/property/PropertyTopBar';
 import PropertyFaqSection from '@/components/property/PropertyFaqSection';
 import { TYPE_LABELS, DEAL_LABELS } from '@/components/property/propertyLabels';
@@ -48,6 +49,12 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   const [captcha, setCaptcha] = useState<CaptchaResult | null>(null);
   const [captchaKey, setCaptchaKey] = useState(0);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
+  const [priceDropOpen, setPriceDropOpen] = useState(false);
+  const [priceDropForm, setPriceDropForm] = useState({ name: '', phone: '' });
+  const [priceDropSent, setPriceDropSent] = useState(false);
+  const [priceDropSending, setPriceDropSending] = useState(false);
+  const [priceDropCaptcha, setPriceDropCaptcha] = useState<CaptchaResult | null>(null);
+  const [priceDropCaptchaKey, setPriceDropCaptchaKey] = useState(0);
 
   const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
 
@@ -170,6 +177,37 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
     }
   };
 
+  const submitPriceDrop = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!priceDropCaptcha?.passed) return;
+    setPriceDropSending(true);
+    try {
+      await sendLead({
+        name: priceDropForm.name || 'Не указано',
+        phone: priceDropForm.phone,
+        message: 'Хочет узнать о снижении цены на объект',
+        listing_id: item.id,
+        source: 'price-drop',
+        object_url: window.location.href,
+        captcha_token: priceDropCaptcha.token,
+      });
+      setPriceDropSent(true);
+      fireLeadConversion();
+      setPriceDropCaptcha(null);
+      setPriceDropCaptchaKey(k => k + 1);
+    } finally {
+      setPriceDropSending(false);
+    }
+  };
+
+  const closePriceDrop = () => {
+    setPriceDropOpen(false);
+    setPriceDropSent(false);
+    setPriceDropForm({ name: '', phone: '' });
+    setPriceDropCaptcha(null);
+    setPriceDropCaptchaKey(k => k + 1);
+  };
+
   const siteUrl = getSiteUrl(settings.site_url);
   const pageUrl = `${siteUrl}/object/${slug}`;
 
@@ -268,6 +306,13 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
                       </div>
                     ) : null}
                   </div>
+                  <button
+                    onClick={() => setPriceDropOpen(true)}
+                    className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-blue hover:underline"
+                  >
+                    <Icon name="BellRing" size={12} />
+                    Уведомить о снижении цены
+                  </button>
                 </div>
                 );
               })()}
@@ -328,6 +373,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
             captcha={captcha}
             setCaptcha={setCaptcha}
             captchaKey={captchaKey}
+            onPriceDropClick={() => setPriceDropOpen(true)}
           />
         </div>
 
@@ -347,6 +393,20 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
           listingId={item.id}
           listingTitle={item.title}
           onClose={() => setMobileChatOpen(false)}
+        />
+      )}
+
+      {priceDropOpen && (
+        <PriceDropModal
+          form={priceDropForm}
+          sending={priceDropSending}
+          sent={priceDropSent}
+          captcha={priceDropCaptcha}
+          captchaKey={priceDropCaptchaKey}
+          onFormChange={setPriceDropForm}
+          onCaptcha={setPriceDropCaptcha}
+          onSubmit={submitPriceDrop}
+          onClose={closePriceDrop}
         />
       )}
 
