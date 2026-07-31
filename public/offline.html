@@ -54,6 +54,17 @@
     button:hover { opacity: 0.9; }
     button:active { opacity: 0.75; }
     .status { margin-top: 16px; font-size: 12px; color: rgba(255,255,255,0.5); min-height: 16px; }
+    .company { font-size: 13px; font-weight: 700; letter-spacing: .01em; margin-bottom: 4px; }
+    .company-sub { font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 20px; }
+    .phone {
+      display: inline-flex; align-items: center; gap: 8px;
+      color: #fff; text-decoration: none; font-size: 16px; font-weight: 700;
+      margin-top: 20px; padding: 10px 20px; border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 12px; transition: background .2s;
+    }
+    .phone:hover { background: rgba(255,255,255,0.08); }
+    .phone svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .phone-hint { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 10px; }
   </style>
 </head>
 <body>
@@ -64,11 +75,21 @@
         <path d="M9 22V12h6v10"/>
       </svg>
     </div>
+    <div class="company">Бизнес. Маркетинг. Недвижимость.</div>
+    <div class="company-sub">Коммерческая недвижимость Краснодара</div>
     <div class="badge"><span class="dot"></span> Сайт работает в штатном режиме</div>
     <h1>Похоже, пропало интернет-соединение</h1>
     <p>Наш сайт работает исправно — проблема на стороне вашего интернет-подключения. Проверьте Wi-Fi или мобильные данные и повторите попытку.</p>
     <button onclick="retry()">Повторить попытку</button>
     <div class="status" id="status"></div>
+
+    <a class="phone" href="tel:+79183352888">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+      </svg>
+      8-918-33-52-888
+    </a>
+    <div class="phone-hint">Позвоните нам — телефонная связь работает независимо от интернета</div>
   </div>
 
   <script>
