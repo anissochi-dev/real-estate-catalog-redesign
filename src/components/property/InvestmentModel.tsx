@@ -150,7 +150,7 @@ export default function InvestmentModel({ listingId, price, area, deal, rentInde
               {/* Дисклеймер */}
               <div className="text-[10px] text-muted-foreground border-t border-border/60 pt-2 leading-relaxed">
                 Модель носит ориентировочный характер и не является инвестиционной рекомендацией.
-                Бенчмарки оценены ИИ на основе среднерыночных данных Краснодара. Для сделки запросите due diligence.
+                Бенчмарки оценены ИИ на основе среднерыночных данных Краснодара. Для сделки запросите комплексную проверку объекта.
               </div>
             </>
           )}
