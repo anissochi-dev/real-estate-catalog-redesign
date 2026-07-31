@@ -12,16 +12,25 @@ const MESSENGERS = [
   { label: 'Email', icon: 'Mail', color: 'text-muted-foreground', href: (url: string, name: string) => `mailto:?subject=${encodeURIComponent(name)}&body=${encodeURIComponent(url)}` },
 ];
 
+interface UploadItem {
+  key: string;
+  name: string;
+  status: 'pending' | 'error';
+  error?: string;
+}
+
 export function TabDocuments({ listingId }: { listingId: number }) {
   const { user } = useAuth();
   const [docs, setDocs] = useState<DbDoc[]>([]);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
+  const [uploadQueue, setUploadQueue] = useState<UploadItem[]>([]);
+  const [dragOver, setDragOver] = useState(false);
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renamingVal, setRenamingVal] = useState('');
   const [shareDocId, setShareDocId] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const uploading = uploadQueue.some(u => u.status === 'pending');
   const canUpload = user?.role && ['admin', 'director', 'broker', 'office_manager'].includes(user.role);
 
   const loadDocs = () => {
@@ -32,18 +41,30 @@ export function TabDocuments({ listingId }: { listingId: number }) {
 
   useEffect(() => { loadDocs(); }, [listingId]);
 
-  const handleFile = async (file: File) => {
-    setUploading(true);
-    try {
-      const url = await uploadFile(file, 'document');
-      await adminApi.addListingDocument(listingId, file.name, url);
-      loadDocs();
-    } catch (e: unknown) {
-      alert('Ошибка загрузки: ' + (e instanceof Error ? e.message : ''));
-    } finally {
-      setUploading(false);
-    }
+  // Массовая загрузка: каждый файл грузится независимо, ошибка одного
+  // не блокирует остальные. Прогресс каждого файла отражается в очереди.
+  const handleFiles = async (files: FileList | File[]) => {
+    const list = Array.from(files);
+    if (list.length === 0) return;
+    const items: UploadItem[] = list.map(f => ({ key: `${f.name}-${f.size}-${Math.random()}`, name: f.name, status: 'pending' }));
+    setUploadQueue(q => [...q, ...items]);
+
+    await Promise.all(list.map(async (file, idx) => {
+      const key = items[idx].key;
+      try {
+        const url = await uploadFile(file, 'document');
+        await adminApi.addListingDocument(listingId, file.name, url);
+        setUploadQueue(q => q.filter(u => u.key !== key));
+        loadDocs();
+      } catch (e: unknown) {
+        setUploadQueue(q => q.map(u => u.key === key
+          ? { ...u, status: 'error', error: e instanceof Error ? e.message : 'Ошибка загрузки' }
+          : u));
+      }
+    }));
   };
+
+  const dismissError = (key: string) => setUploadQueue(q => q.filter(u => u.key !== key));
 
   const deleteDoc = async (docId: number) => {
     if (!confirm('Удалить документ?')) return;
@@ -79,31 +100,71 @@ export function TabDocuments({ listingId }: { listingId: number }) {
 
   if (loading) return <Spinner />;
 
+  const acceptExt = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.zip,.rar,.jpg,.jpeg,.png,.webp,.heic';
+
   return (
-    <div className="p-6 space-y-4">
+    <div
+      className={`p-6 space-y-4 rounded-2xl transition-colors ${dragOver ? 'bg-brand-blue/5 ring-2 ring-brand-blue/40 ring-inset' : ''}`}
+      onDragOver={e => { if (canUpload) { e.preventDefault(); setDragOver(true); } }}
+      onDragLeave={e => { if (e.currentTarget === e.target) setDragOver(false); }}
+      onDrop={e => {
+        if (!canUpload) return;
+        e.preventDefault();
+        setDragOver(false);
+        if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+      }}
+    >
       <div className="flex items-center justify-between">
         <div>
           <div className="text-sm font-semibold">Документы объекта</div>
-          <div className="text-xs text-muted-foreground mt-0.5">Видны только в административной панели</div>
+          <div className="text-xs text-muted-foreground mt-0.5">Фото и документы любых форматов — можно выбрать сразу несколько</div>
         </div>
         {canUpload && (
           <button onClick={() => inputRef.current?.click()} disabled={uploading}
             className="btn-blue text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-60">
             <Icon name={uploading ? 'Loader2' : 'Upload'} size={15} className={uploading ? 'animate-spin' : ''} />
-            {uploading ? 'Загрузка...' : 'Добавить'}
+            {uploading ? 'Загрузка...' : 'Добавить файлы'}
           </button>
         )}
-        <input ref={inputRef} type="file" className="hidden"
-          accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip"
-          onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }} />
+        <input ref={inputRef} type="file" multiple className="hidden"
+          accept={acceptExt}
+          onChange={e => { if (e.target.files) handleFiles(e.target.files); e.target.value = ''; }} />
       </div>
 
+      {uploadQueue.length > 0 && (
+        <div className="space-y-1.5">
+          {uploadQueue.map(u => (
+            <div key={u.key} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs ${u.status === 'error' ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-muted/40 text-muted-foreground'}`}>
+              <Icon name={u.status === 'error' ? 'AlertCircle' : 'Loader2'} size={13} className={u.status === 'pending' ? 'animate-spin shrink-0' : 'shrink-0'} />
+              <span className="truncate flex-1">{u.name}</span>
+              {u.status === 'error' ? (
+                <>
+                  <span className="shrink-0">{u.error}</span>
+                  <button onClick={() => dismissError(u.key)} className="shrink-0 hover:text-red-900"><Icon name="X" size={13} /></button>
+                </>
+              ) : (
+                <span className="shrink-0">Загрузка…</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {docs.length === 0 ? (
-        <div className="py-10 text-center text-sm text-muted-foreground border-2 border-dashed border-border rounded-xl"
+        <div
+          className={`py-10 text-center text-sm text-muted-foreground border-2 border-dashed rounded-xl transition-colors ${dragOver ? 'border-brand-blue bg-brand-blue/5' : 'border-border'}`}
           onClick={() => canUpload && inputRef.current?.click()}
+          onDragOver={e => { if (canUpload) { e.preventDefault(); setDragOver(true); } }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={e => {
+            if (!canUpload) return;
+            e.preventDefault();
+            setDragOver(false);
+            if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+          }}
           style={{ cursor: canUpload ? 'pointer' : 'default' }}>
           <Icon name="FileText" size={28} className="mx-auto mb-2 opacity-30" />
-          Нет прикреплённых документов{canUpload ? ' — нажмите для добавления' : ''}
+          {canUpload ? 'Перетащите файлы сюда или нажмите для добавления' : 'Нет прикреплённых документов'}
         </div>
       ) : (
         <div className="space-y-2">
@@ -129,7 +190,7 @@ export function TabDocuments({ listingId }: { listingId: number }) {
                   )}
                   <div className="text-xs text-muted-foreground mt-0.5">
                     {new Date(doc.created_at).toLocaleDateString('ru')}
-                    {doc.uploaded_by_name ? ` · ${doc.uploaded_by_name}` : ''}
+                    {doc.uploader_name ? ` · ${doc.uploader_name}` : ''}
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">

@@ -327,8 +327,15 @@ def handler(event, context):
                     'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                     'xls': 'application/vnd.ms-excel',
                     'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'ppt': 'application/vnd.ms-powerpoint',
+                    'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                    'txt': 'text/plain',
+                    'csv': 'text/csv',
+                    'rtf': 'application/rtf',
                     'zip': 'application/zip',
+                    'rar': 'application/vnd.rar',
                     'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
+                    'webp': 'image/webp', 'heic': 'image/heic', 'heif': 'image/heif',
                 }
                 if doc_ext not in DOC_ALLOWED:
                     return _err(400, 'Неподдерживаемый тип файла для документа')
