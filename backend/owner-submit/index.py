@@ -13,6 +13,7 @@
 """
 import base64
 import hashlib
+import io
 import json
 import os
 import random
@@ -108,25 +109,170 @@ def _verify_token(token: str) -> tuple[bool, str, int]:
     return True, token_id, ts
 
 
-def _upload_photo(b64: str, idx: int):
+_WM_CACHE: dict = {}
+
+
+def _apply_watermark(image_bytes, settings):
+    """Копия логики из backend/upload — накладывает водяной знак на фото.
+    Держим объекты, добавленные собственниками, в одном стандарте с админкой."""
+    try:
+        from PIL import Image
+    except Exception:
+        return image_bytes
+    if not settings or not settings.get('watermark_enabled') or not settings.get('watermark_url'):
+        return image_bytes
+    try:
+        wm_url = settings['watermark_url']
+        if wm_url in _WM_CACHE:
+            wm_bytes = _WM_CACHE[wm_url]
+        else:
+            wm_resp = urllib.request.urlopen(wm_url, timeout=10)
+            wm_bytes = wm_resp.read()
+            _WM_CACHE[wm_url] = wm_bytes
+
+        base_img = Image.open(io.BytesIO(image_bytes)).convert('RGBA')
+        wm = Image.open(io.BytesIO(wm_bytes)).convert('RGBA')
+        ratio = (base_img.width * 0.2) / wm.width
+        wm = wm.resize((int(wm.width * ratio), int(wm.height * ratio)), Image.LANCZOS)
+        opacity = int(settings.get('watermark_opacity', 50)) / 100
+        alpha = wm.split()[3]
+        alpha = alpha.point(lambda p: int(p * opacity))
+        wm.putalpha(alpha)
+        margin = 20
+        pos = settings.get('watermark_position', 'bottom-right')
+        if pos == 'bottom-right':
+            xy = (base_img.width - wm.width - margin, base_img.height - wm.height - margin)
+        elif pos == 'bottom-left':
+            xy = (margin, base_img.height - wm.height - margin)
+        elif pos == 'top-right':
+            xy = (base_img.width - wm.width - margin, margin)
+        elif pos == 'top-left':
+            xy = (margin, margin)
+        elif pos == 'center':
+            xy = ((base_img.width - wm.width) // 2, (base_img.height - wm.height) // 2)
+        else:
+            xy = (base_img.width - wm.width - margin, base_img.height - wm.height - margin)
+        base_img.paste(wm, xy, wm)
+        out = io.BytesIO()
+        base_img.convert('RGB').save(out, format='WEBP', quality=82, method=4)
+        return out.getvalue()
+    except Exception:
+        return image_bytes
+
+
+def _load_watermark_settings(cur):
+    try:
+        cur.execute(
+            f"SELECT watermark_enabled, watermark_url, watermark_opacity, watermark_position "
+            f"FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
+        )
+        row = cur.fetchone()
+        if row and row.get('watermark_enabled') and row.get('watermark_url'):
+            return dict(row)
+    except Exception:
+        pass
+    return None
+
+
+def _upload_photo(b64: str, idx: int, wm_settings=None):
+    """Обрабатывает фото от собственника в ТОМ ЖЕ стандарте, что и загрузка через
+    админку (backend/upload): конвертация HEIC, сжатие до 1920px, WebP, thumb 400px,
+    водяной знак — чтобы объект после одобрения ничем не отличался от заведённых брокером.
+    Возвращает (url основного фото, url thumb) или (None, None) при ошибке."""
     try:
         if ',' in b64:
             b64 = b64.split(',', 1)[1]
         data = base64.b64decode(b64)
         if len(data) > MAX_PHOTO_BYTES:
-            return None
+            return None, None
+
         token = f"owner_{int(time.time())}_{idx}_{os.urandom(4).hex()}"
-        key = f"photos/{token}.jpg"
+        ext = 'jpg'
+        content_type = 'image/jpeg'
+        thumb_data = None
+
+        try:
+            from PIL import Image as PilImage
+
+            # HEIC/HEIF (фото с iPhone) — конвертируем в JPEG перед обработкой
+            if data[:4] == b'\x00\x00\x00\x18' or data[4:12] == b'ftypheic' or data[4:12] == b'ftypheif':
+                try:
+                    import pillow_heif
+                    pillow_heif.register_heif_opener()
+                except Exception:
+                    pass
+
+            img = PilImage.open(io.BytesIO(data))
+            max_side = 1920
+            w, h = img.size
+            if max(w, h) > max_side:
+                scale = max_side / max(w, h)
+                img = img.resize((int(w * scale), int(h * scale)), PilImage.LANCZOS)
+            img = img.convert('RGB')
+
+            buf_webp = io.BytesIO()
+            img.save(buf_webp, format='WEBP', quality=82, method=4)
+            webp_data = buf_webp.getvalue()
+            if len(webp_data) < len(data):
+                data = webp_data
+                ext = 'webp'
+                content_type = 'image/webp'
+            else:
+                buf_jpg = io.BytesIO()
+                img.save(buf_jpg, format='JPEG', quality=85, optimize=True)
+                jpg_data = buf_jpg.getvalue()
+                if len(jpg_data) < len(data):
+                    data = jpg_data
+
+            # Thumb 400px — для списков в админке и каталоге
+            THUMB_SIDE = 400
+            tw, th = img.size
+            if max(tw, th) > THUMB_SIDE:
+                t_scale = THUMB_SIDE / max(tw, th)
+                thumb_img = img.resize((int(tw * t_scale), int(th * t_scale)), PilImage.LANCZOS)
+            else:
+                thumb_img = img
+            buf_thumb = io.BytesIO()
+            thumb_img.save(buf_thumb, format='WEBP', quality=72, method=4)
+            thumb_data = buf_thumb.getvalue()
+        except Exception:
+            pass  # если Pillow не смог обработать — грузим оригинал как есть
+
         s3 = boto3.client(
             's3',
             endpoint_url='https://bucket.poehali.dev',
             aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
             aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
         )
-        s3.put_object(Bucket='files', Key=key, Body=data, ContentType='image/jpeg', CacheControl='public, max-age=31536000')
-        return f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
+        aws_key = os.environ['AWS_ACCESS_KEY_ID']
+
+        # Водяной знак — накладываем на основное фото и thumb, если включён в настройках
+        main_data, main_ext, main_ct = data, ext, content_type
+        if wm_settings:
+            wm_main = _apply_watermark(data, wm_settings)
+            if wm_main and wm_main != data:
+                main_data, main_ext, main_ct = wm_main, 'webp', 'image/webp'
+            if thumb_data:
+                wm_thumb = _apply_watermark(thumb_data, wm_settings)
+                if wm_thumb and wm_thumb != thumb_data:
+                    thumb_data = wm_thumb
+
+        key = f"photos/{token}.{main_ext}"
+        s3.put_object(Bucket='files', Key=key, Body=main_data, ContentType=main_ct, CacheControl='public, max-age=31536000')
+        url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{key}"
+
+        thumb_url = None
+        if thumb_data:
+            thumb_key = f"photos/{token}_thumb.webp"
+            try:
+                s3.put_object(Bucket='files', Key=thumb_key, Body=thumb_data, ContentType='image/webp', CacheControl='public, max-age=31536000')
+                thumb_url = f"https://cdn.poehali.dev/projects/{aws_key}/bucket/{thumb_key}"
+            except Exception:
+                thumb_url = None
+
+        return url, thumb_url
     except Exception:
-        return None
+        return None, None
 
 
 def _notify_new_submission(listing_id: int, owner_name: str, owner_phone: str,
@@ -368,14 +514,19 @@ def handler(event: dict, context) -> dict:
             )
             conn.commit()
 
-            # ── Загрузка фото на S3 ───────────────────────────────────────────
+            # ── Загрузка фото на S3 (тот же стандарт обработки, что и в админке:
+            # сжатие, WebP, thumb 400px, водяной знак) ────────────────────────
+            wm_settings = _load_watermark_settings(cur)
             photo_urls = []
+            main_thumb_url = ''
             for idx, b64 in enumerate(photos_b64):
                 if not b64:
                     continue
-                url = _upload_photo(b64, idx)
+                url, thumb_url = _upload_photo(b64, idx, wm_settings)
                 if url:
                     photo_urls.append(url)
+                    if not main_thumb_url and thumb_url:
+                        main_thumb_url = thumb_url
 
             images_str = '|'.join(photo_urls)
             main_image = photo_urls[0] if photo_urls else ''
@@ -395,13 +546,13 @@ def handler(event: dict, context) -> dict:
             cur.execute(f"""
                 INSERT INTO {SCHEMA}.listings
                     (title, category, deal, price, area, address, city, description,
-                     image, images, status, is_visible, is_hot, is_new, use_watermark,
+                     image, images, image_thumb, status, is_visible, is_hot, is_new, use_watermark,
                      owner_name, owner_phone, owner_phone2,
                      floor, total_floors, condition, ceiling_height, electricity_kw,
                      finishing, parking, entrance, video_url,
                      export_yandex, export_avito, export_cian,
                      price_unit, created_at, updated_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
                         'moderation',false,false,false,true,
                         %s,%s,NULL,
                         %s,%s,%s,%s,%s,%s,%s,%s,%s,
@@ -409,7 +560,7 @@ def handler(event: dict, context) -> dict:
                 RETURNING id
             """, (
                 title, category, deal, price, area, address, city, description,
-                main_image, images_str,
+                main_image, images_str, main_thumb_url or None,
                 owner_name, owner_phone,
                 floor, total_floors, condition, ceiling_height, electricity_kw,
                 finishing, parking, entrance, video_url,
@@ -425,9 +576,9 @@ def handler(event: dict, context) -> dict:
                 row = cur.fetchone()
                 if not row:
                     cur.execute(
-                        f"INSERT INTO {SCHEMA}.phone_contacts (phone, phone_normalized, name, email) "
-                        f"VALUES (%s,%s,%s,%s) RETURNING id",
-                        (owner_phone, norm_phone, owner_name, owner_email)
+                        f"INSERT INTO {SCHEMA}.phone_contacts (phone, phone_normalized, name) "
+                        f"VALUES (%s,%s,%s) RETURNING id",
+                        (owner_phone, norm_phone, owner_name)
                     )
 
             # ── Upsert клиентского аккаунта (role=client) ────────────────────

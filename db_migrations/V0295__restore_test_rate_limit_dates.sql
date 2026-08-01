@@ -1,0 +1,1 @@
+UPDATE t_p71821556_real_estate_catalog_.submit_attempts SET attempted_at = attempted_at + INTERVAL '2 days' WHERE ip = '62.84.123.152' AND attempted_at < '2026-08-01';

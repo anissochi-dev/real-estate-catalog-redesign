@@ -104,7 +104,14 @@ export default function TabPhotos({ listing }: Props) {
                  className="group relative bg-muted rounded-xl overflow-hidden border border-border">
               <button onClick={() => setPreview(url)} className="block w-full">
                 <img src={toThumbUrl(url)} alt={`Фото ${idx + 1}`}
-                     className="w-full aspect-[4/3] object-cover" loading="lazy" />
+                     className="w-full aspect-[4/3] object-cover" loading="lazy"
+                     onError={e => {
+                       // Превью (_thumb.webp) может отсутствовать — например, для фото,
+                       // добавленных через старую форму владельца без генерации миниатюр.
+                       // В этом случае показываем оригинал вместо битой иконки.
+                       const img = e.currentTarget;
+                       if (img.src !== url) img.src = url;
+                     }} />
               </button>
               {isMain && (
                 <span className="absolute top-2 left-2 bg-brand-blue text-white text-[10px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1">
