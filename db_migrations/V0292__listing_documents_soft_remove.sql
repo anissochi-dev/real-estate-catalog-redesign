@@ -1,0 +1,2 @@
+ALTER TABLE t_p71821556_real_estate_catalog_.listing_documents ADD COLUMN removed_at timestamptz NULL;
+CREATE INDEX idx_listing_documents_removed_at ON t_p71821556_real_estate_catalog_.listing_documents(removed_at);

@@ -1,0 +1,1 @@
+UPDATE t_p71821556_real_estate_catalog_.listing_documents SET removed_at = created_at WHERE name LIKE '[%УДАЛЁН%' AND removed_at IS NULL;

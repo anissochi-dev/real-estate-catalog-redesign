@@ -5600,7 +5600,7 @@ def _listing_documents(cur, conn, method, rid, action, event, user):
             f"SELECT d.id, d.listing_id, d.name, d.url, d.created_at, u.name AS uploader_name "
             f"FROM {SCHEMA}.listing_documents d "
             f"LEFT JOIN {SCHEMA}.users u ON u.id = d.uploaded_by "
-            f"WHERE d.listing_id = {lid} ORDER BY d.created_at DESC"
+            f"WHERE d.listing_id = {lid} AND d.removed_at IS NULL ORDER BY d.created_at DESC"
         )
         docs = []
         for r in cur.fetchall():
@@ -5625,18 +5625,15 @@ def _listing_documents(cur, conn, method, rid, action, event, user):
         return _ok({'id': new_id, 'success': True})
 
     if method == 'DELETE' and rid:
-        cur.execute(f"SELECT id, uploaded_by FROM {SCHEMA}.listing_documents WHERE id = {int(rid)}")
+        cur.execute(f"SELECT id, uploaded_by, removed_at FROM {SCHEMA}.listing_documents WHERE id = {int(rid)}")
         doc = cur.fetchone()
-        if not doc:
+        if not doc or doc['removed_at']:
             return _err(404, 'Документ не найден')
         if user['role'] not in ('admin', 'director') and doc['uploaded_by'] != user['id']:
             return _err(403, 'Нельзя удалить чужой документ')
-        cur.execute(f"UPDATE {SCHEMA}.listing_documents SET url = url WHERE id = {int(rid)}")
-        cur.execute(
-            f"INSERT INTO {SCHEMA}.listing_documents (listing_id, uploaded_by, name, url) "
-            f"SELECT listing_id, uploaded_by, '[УДАЛЁН] ' || name, url FROM {SCHEMA}.listing_documents WHERE id = {int(rid)}"
-        )
-        cur.execute(f"DELETE FROM {SCHEMA}.listing_documents WHERE id = {int(rid)}")
+        # Мягкое удаление: помечаем removed_at, запись остаётся в истории,
+        # но пропадает из списка (GET фильтрует removed_at IS NULL).
+        cur.execute(f"UPDATE {SCHEMA}.listing_documents SET removed_at = NOW() WHERE id = {int(rid)}")
         conn.commit()
         return _ok({'success': True})
 
