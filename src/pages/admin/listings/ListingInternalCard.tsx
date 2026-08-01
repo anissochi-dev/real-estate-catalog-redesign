@@ -19,7 +19,7 @@ interface Props {
 
 // radar — первая вкладка, остальные основные, «Ещё» — служебные
 const PRIMARY_TABS: TabId[] = ['radar', 'overview', 'photos', 'leads', 'comments'];
-const MORE_TABS: TabId[] = ['price_history', 'stats', 'documents', 'broker', 'qr_banner'];
+const MORE_TABS: TabId[] = ['price_history', 'documents', 'broker', 'qr_banner'];
 
 export default function ListingInternalCard({ listingId, onClose, onBrokerChanged, onEdit }: Props) {
   const { user } = useAuth();

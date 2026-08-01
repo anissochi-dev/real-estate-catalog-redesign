@@ -8,7 +8,7 @@ Haversine вместо PostGIS: расстояние между двумя то�
 
 import json
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
 CACHE_TTL_DAYS = 30   # инфраструктура меняется редко
@@ -341,7 +341,7 @@ def handle_location_score(event: dict, cur, conn) -> dict:
             (listing_id,)
         )
         cached = cur.fetchone()
-        if cached and cached['expires_at'] > datetime.utcnow():
+        if cached and cached['expires_at'] > datetime.now(timezone.utc):
             return _ok({
                 **cached['score_breakdown'],
                 'infra_nearby': cached['infra_nearby'],
@@ -368,7 +368,7 @@ def handle_location_score(event: dict, cur, conn) -> dict:
 
     # Кешируем
     if listing_id:
-        expires = datetime.utcnow() + timedelta(days=CACHE_TTL_DAYS)
+        expires = datetime.now(timezone.utc) + timedelta(days=CACHE_TTL_DAYS)
         cur.execute(f"""
             INSERT INTO {SCHEMA}.location_score_cache
                 (listing_id, score, score_breakdown, infra_nearby, expires_at)

@@ -5,6 +5,7 @@ import { Listing, fmtDate } from './types';
 import { StatData, InternalCardLead, HistoryRow, LEAD_STATUS, fmt } from './internalCardTypes';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Spinner } from './TabOverview';
+import LocationScoreWidget from '@/components/property/LocationScoreWidget';
 
 const SMART_BUDGET_URL = 'https://functions.poehali.dev/3e599d66-bb63-498f-bf23-4069c3a06660';
 const STATS_URL = 'https://functions.poehali.dev/1d84bd40-ef8c-4bd3-82c3-af294b1ec0b1';
@@ -426,6 +427,16 @@ export function TabRadar({ listingId, listing }: { listingId: number; listing: L
           )}
         </RadarBlock>
       </div>
+
+      {/* ── Скоринг локации ── */}
+      {!!listing.lat && !!listing.lng && (
+        <LocationScoreWidget
+          listingId={listingId}
+          lat={listing.lat}
+          lng={listing.lng}
+          category={listing.category}
+        />
+      )}
 
       {/* ── Строка 5: Последние изменения ── */}
       <RadarBlock icon="Clock" title="Последние изменения объекта">

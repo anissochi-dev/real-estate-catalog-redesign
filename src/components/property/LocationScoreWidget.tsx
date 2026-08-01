@@ -57,6 +57,29 @@ const INFRA_COLORS: Record<string, string> = {
   hospital:        'bg-red-100 text-red-700',
 };
 
+// Русские названия категорий — подставляются, если в OSM нет собственного имени объекта
+const INFRA_LABELS: Record<string, string> = {
+  tram_stop:       'Трамвайная остановка',
+  bus_stop:        'Автобусная остановка',
+  subway_entrance: 'Метро / электрозаправка',
+  railway_station: 'ЖД-вокзал / платформа',
+  shopping_mall:   'Торговый центр',
+  supermarket:     'Супермаркет',
+  market:          'Рынок',
+  business_center: 'Бизнес-центр',
+  park:            'Парк / сквер',
+  school:          'Школа',
+  hospital:        'Больница / клиника',
+};
+
+// Если имя объекта совпадает с техническим кодом типа (нет русского названия в OSM) — показываем перевод
+function displayName(obj: { infra_type: string; name: string }) {
+  if (obj.name === obj.infra_type) {
+    return INFRA_LABELS[obj.infra_type] || obj.name;
+  }
+  return obj.name;
+}
+
 function scoreColor(score: number) {
   if (score >= 75) return 'text-emerald-600';
   if (score >= 50) return 'text-brand-blue';
@@ -245,7 +268,7 @@ export default function LocationScoreWidget({ listingId, lat, lng, category }: P
                             <Icon name={iconName} size={15} />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className="text-sm font-medium truncate">{obj.name}</div>
+                            <div className="text-sm font-medium truncate">{displayName(obj)}</div>
                             <div className="text-xs text-muted-foreground">
                               {formatDist(obj.distance_m)} · {formatWalk(obj.distance_m)}
                             </div>
