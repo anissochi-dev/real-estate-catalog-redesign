@@ -27,11 +27,11 @@ CDN_BASE = 'https://cdn.poehali.dev'
 STATIC_REGEN_MINUTES = 10
 
 CIAN_BASE = 'https://public-api.cian.ru'
-CIAN_SYNC_INTERVAL_HOURS = 6
+CIAN_SYNC_INTERVAL_HOURS = 1
 
 YANDEX_REALTY_API_BASE = 'https://api.realty.yandex.net/2.0'
 YANDEX_REALTY_PARTNER_TOKEN = 'public-partner-ak0hmqjjk1thu3eutxy8hd1i56mhprpfbb6575qw'
-YANDEX_REALTY_SYNC_INTERVAL_HOURS = 6
+YANDEX_REALTY_SYNC_INTERVAL_HOURS = 1
 
 CONTROL_CHARS_RE = re.compile(r'[\x00-\x08\x0B\x0C\x0E-\x1F]')
 XML_DECL_RE = re.compile(r'^<\?xml[^?]*\?>', re.IGNORECASE)
@@ -1828,7 +1828,7 @@ def _yandex_calls_handle(cur, conn, params):
 # без синхронизации объявлений (публикация объектов остаётся через XML-фид).
 
 AVITO_BASE = 'https://api.avito.ru'
-AVITO_SYNC_INTERVAL_HOURS = 6
+AVITO_SYNC_INTERVAL_HOURS = 1
 
 
 def _avito_get_token(client_id, client_secret):
@@ -1995,8 +1995,10 @@ def handler(event, context):
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             if method == 'GET' and params.get('action') == 'cron':
-                # Публичный пинг-крон: пересобирает статические файлы в S3 (раз в 10 мин)
-                # и параллельно синхронизирует кабинеты ЦИАН и Яндекс.Недвижимость (раз в 6 часов, если подключены).
+                # Публичный пинг-крон: вызывается автоматически платформой раз в час (см. function.json)
+                # + дублируется пингом из браузера (useCrons.ts) как подстраховка.
+                # Пересобирает статические файлы в S3 (раз в 10 мин) и параллельно синхронизирует
+                # кабинеты ЦИАН, Яндекс.Недвижимость и Авито (раз в час, если подключены и включены).
                 # Перед сборкой — проверяем окно авто-обновления даты объявлений (раз в сутки).
                 bump_result = _bump_feed_dates(cur, conn)
                 results = _regenerate_static_feeds(cur, conn, force=bump_result.get('updated', 0) > 0)
