@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
-import { CIAN_API_URL, CianData, OTHER_PLATFORMS_API_URL, OtherPlatformRow, PlatformCard, SERVICE_TYPE_LABELS, YANDEX_CALLS_API_URL, YandexCallsData } from './types';
+import { AVITO_API_URL, AvitoData, CIAN_API_URL, CianData, OTHER_PLATFORMS_API_URL, OtherPlatformRow, PlatformCard, SERVICE_TYPE_LABELS, YANDEX_CALLS_API_URL, YandexCallsData } from './types';
 
 interface Props {
   onOpenPlatform: (key: string) => void;
@@ -66,6 +66,8 @@ function PlatformCardView({ card, onClick }: { card: PlatformCard; onClick: () =
           <div className="text-xs text-muted-foreground">
             {card.key === 'yandex_realty'
               ? `${card.callsCount || 0} звонков за 30 дней`
+              : card.key === 'avito'
+              ? `Подключено${card.balance !== null ? ` · ${card.balance.toLocaleString('ru')} ₽` : ''}`
               : `${card.offersCount} объявл.${card.balance !== null ? ` · ${card.balance.toLocaleString('ru')} ₽` : ''}`}
           </div>
           {card.services.length > 0 && (
@@ -119,6 +121,7 @@ function OtherPlatformCardView({ platforms, onClick }: { platforms: OtherPlatfor
 export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
   const [cian, setCian] = useState<CianData | null>(null);
   const [yandex, setYandex] = useState<YandexCallsData | null>(null);
+  const [avito, setAvito] = useState<AvitoData | null>(null);
   const [otherPlatforms, setOtherPlatforms] = useState<OtherPlatformRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -128,15 +131,19 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
     if (sync) setSyncing(true); else setLoading(true);
     const cianUrl = sync ? `${CIAN_API_URL}&sync=1` : CIAN_API_URL;
     const yandexUrl = sync ? `${YANDEX_CALLS_API_URL}&sync=1` : YANDEX_CALLS_API_URL;
+    const avitoUrl = sync ? `${AVITO_API_URL}&sync=1` : AVITO_API_URL;
     Promise.all([
       fetch(cianUrl).then(r => r.json()).catch(() => ({ error: 'network' })),
       fetch(yandexUrl).then(r => r.json()).catch(() => ({ error: 'network' })),
+      fetch(avitoUrl).then(r => r.json()).catch(() => ({ error: 'network' })),
       fetch(OTHER_PLATFORMS_API_URL).then(r => r.json()).catch(() => ({ platforms: [] })),
-    ]).then(([cianData, yandexData, otherData]) => {
+    ]).then(([cianData, yandexData, avitoData, otherData]) => {
       if (cianData.error) { setError(cianData.error); setCian(null); }
       else { setCian(cianData); setError(null); }
       if (!yandexData.error) setYandex(yandexData);
       else setYandex(null);
+      if (!avitoData.error) setAvito(avitoData);
+      else setAvito(null);
       setOtherPlatforms(otherData.platforms || []);
     }).finally(() => { setLoading(false); setSyncing(false); });
   };
@@ -168,6 +175,17 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
         status: yandex.summary.total_calls > 0 ? 'active' : 'paused',
         services: [],
         callsCount: yandex.summary.total_calls,
+      };
+    }
+    if (key === 'avito' && avito) {
+      const connected = avito.connected && !avito.last_sync?.error;
+      return {
+        key, label: 'Авито', icon: '', color: '',
+        connected,
+        offersCount: 0,
+        balance: connected ? Number(avito.last_sync?.balance_real || 0) : null,
+        status: connected ? 'active' : 'not_connected',
+        services: [],
       };
     }
     return {

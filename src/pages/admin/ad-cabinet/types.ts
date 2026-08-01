@@ -1,5 +1,6 @@
 export const CIAN_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=cian_stats';
 export const YANDEX_CALLS_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=yandex_stats';
+export const AVITO_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=avito_stats';
 export const OTHER_PLATFORMS_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=other_platforms';
 
 export interface OtherPlatformListing {
@@ -149,5 +150,21 @@ export interface YandexCallsData {
     unique_objects: number;
   };
   calls: YandexCallRow[];
+  synced_now?: boolean;
+}
+
+export interface AvitoLastSync {
+  synced_at?: string;
+  account_id?: number | null;
+  account_name?: string | null;
+  balance_real?: string | number | null;
+  balance_bonus?: string | number | null;
+  error?: string | null;
+}
+
+export interface AvitoData {
+  ok: boolean;
+  connected: boolean;
+  last_sync: AvitoLastSync | null;
   synced_now?: boolean;
 }

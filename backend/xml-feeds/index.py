@@ -1,7 +1,8 @@
 """
 Business: XML-фиды для выгрузки объектов на Яндекс.Недвижимость, Авито, ЦИАН (статические файлы в S3+CDN,
 обновляются по крону) + импорт объектов из XML Яндекс.Недвижимости + синхронизация статистики/баланса
-кабинета ЦИАН (объединено из backend/cian-api).
+кабинета ЦИАН (объединено из backend/cian-api) + синхронизация звонков Яндекс.Недвижимость +
+проверка подключения/баланса кабинета Авито (Core API).
 Args: event с httpMethod GET/POST, queryStringParameters {action, sync}
 Returns: XML текст или JSON, в зависимости от action
 """
@@ -1781,6 +1782,157 @@ def _yandex_calls_handle(cur, conn, params):
     return _json(_yandex_calls_read_from_db(cur))
 
 
+# ── Авито: проверка подключения + баланс кошелька через api.avito.ru ────────
+# Этап 1: только авторизация (OAuth client_credentials) и чтение баланса —
+# без синхронизации объявлений (публикация объектов остаётся через XML-фид).
+
+AVITO_BASE = 'https://api.avito.ru'
+AVITO_SYNC_INTERVAL_HOURS = 6
+
+
+def _avito_get_token(client_id, client_secret):
+    """Получает OAuth-токен Авито (grant_type=client_credentials, живёт 24 часа)."""
+    body = urllib.parse.urlencode({
+        'grant_type': 'client_credentials',
+        'client_id': client_id,
+        'client_secret': client_secret,
+    }).encode()
+    req = urllib.request.Request(
+        f'{AVITO_BASE}/token/', data=body, method='POST',
+        headers={'Content-Type': 'application/x-www-form-urlencoded'},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            data = json.loads(r.read().decode())
+            return data.get('access_token'), None
+    except urllib.error.HTTPError as e:
+        try:
+            err_body = e.read().decode()[:300]
+        except Exception:
+            err_body = ''
+        return None, f'HTTP {e.code}: {err_body}'
+    except Exception as e:
+        return None, str(e)
+
+
+def _avito_get(path, token):
+    req = urllib.request.Request(f'{AVITO_BASE}{path}', headers={'Authorization': f'Bearer {token}'})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return json.loads(r.read().decode()), None
+    except urllib.error.HTTPError as e:
+        try:
+            body = json.loads(e.read().decode())
+        except Exception:
+            body = {}
+        return None, f'HTTP {e.code}: {body}'
+    except Exception as e:
+        return None, str(e)
+
+
+def _avito_sync(cur, conn, client_id, client_secret):
+    """Проверяет ключи Авито: получает токен, данные аккаунта и баланс кошелька → БД."""
+    token, err = _avito_get_token(client_id, client_secret)
+    if err or not token:
+        cur.execute(f"""
+            INSERT INTO {SCHEMA}.avito_sync_log (synced_at, error)
+            VALUES (NOW(), %s)
+        """, (err[:500] if err else 'Не удалось получить токен',))
+        conn.commit()
+        return {'error': err or 'Не удалось получить токен'}
+
+    account, acc_err = _avito_get('/core/v1/accounts/self', token)
+    if acc_err or not account:
+        cur.execute(f"""
+            INSERT INTO {SCHEMA}.avito_sync_log (synced_at, error)
+            VALUES (NOW(), %s)
+        """, (acc_err[:500] if acc_err else 'Не удалось получить данные аккаунта',))
+        conn.commit()
+        return {'error': acc_err or 'Не удалось получить данные аккаунта'}
+
+    account_id = account.get('id')
+    account_name = account.get('name') or account.get('email') or ''
+
+    balance_real = None
+    balance_bonus = None
+    balance_data = None
+    if account_id:
+        balance_data, bal_err = _avito_get(f'/core/v1/accounts/{account_id}/balance/', token)
+        if balance_data and not bal_err:
+            balance_real = balance_data.get('real')
+            balance_bonus = balance_data.get('bonus')
+
+    cur.execute(f"""
+        INSERT INTO {SCHEMA}.avito_sync_log
+            (synced_at, account_id, account_name, balance_real, balance_bonus, raw_response)
+        VALUES (NOW(), %s, %s, %s, %s, %s)
+    """, (account_id, account_name, balance_real, balance_bonus,
+          json.dumps({'account': account, 'balance': balance_data})))
+    conn.commit()
+
+    return {
+        'account_id': account_id,
+        'account_name': account_name,
+        'balance_real': balance_real,
+        'balance_bonus': balance_bonus,
+    }
+
+
+def _avito_read_from_db(cur):
+    """Читает последнюю проверку подключения Авито из БД для фронтенда."""
+    cur.execute(f"SELECT * FROM {SCHEMA}.avito_sync_log ORDER BY synced_at DESC LIMIT 1")
+    last = cur.fetchone()
+    if not last:
+        return {'ok': True, 'connected': False, 'last_sync': None}
+    last = dict(last)
+    last['synced_at'] = last['synced_at'].isoformat() if last.get('synced_at') else None
+    return {
+        'ok': True,
+        'connected': bool(last.get('account_id')) and not last.get('error'),
+        'last_sync': last,
+    }
+
+
+def _avito_handle(cur, conn, params):
+    """Обрабатывает action=avito_stats|avito_sync|avito_cron: проверяет подключение и баланс Авито."""
+    action = params.get('action', '')
+    force_sync = params.get('sync') == '1'
+
+    cur.execute(f"SELECT api_key, api_secret, is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = 'avito' LIMIT 1")
+    row = cur.fetchone()
+    client_id = (row.get('api_key') or '').strip() if row else ''
+    client_secret = (row.get('api_secret') or '').strip() if row else ''
+    is_active = bool(row.get('is_active')) if row else False
+
+    if not client_id or not client_secret:
+        return _json({'error': 'Авито не настроено: заполните Client ID и Client Secret в Настройках → Интеграции → Площадки'}, 400)
+
+    if action == 'avito_cron' or force_sync:
+        if action == 'avito_cron':
+            if not is_active:
+                return _json({'ok': True, 'skipped': True, 'reason': 'Интеграция выключена'})
+            cur.execute(f"SELECT synced_at FROM {SCHEMA}.avito_sync_log ORDER BY synced_at DESC LIMIT 1")
+            last = cur.fetchone()
+            if last and last['synced_at']:
+                elapsed = (datetime.now(last['synced_at'].tzinfo) - last['synced_at']).total_seconds() / 3600
+                if elapsed < AVITO_SYNC_INTERVAL_HOURS:
+                    return _json({'ok': True, 'skipped': True, 'reason': f'Последняя синхронизация {round(elapsed, 1)}ч назад'})
+
+        result = _avito_sync(cur, conn, client_id, client_secret)
+        data = _avito_read_from_db(cur)
+        return _json({**data, 'synced_now': True, 'sync_result': result})
+
+    cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.avito_sync_log")
+    never_synced = cur.fetchone()['c'] == 0
+
+    if never_synced:
+        result = _avito_sync(cur, conn, client_id, client_secret)
+        data = _avito_read_from_db(cur)
+        return _json({**data, 'synced_now': True, 'sync_result': result})
+
+    return _json(_avito_read_from_db(cur))
+
+
 def handler(event, context):
     method = event.get('httpMethod', 'GET')
     params = event.get('queryStringParameters') or {}
@@ -1817,11 +1969,17 @@ def handler(event, context):
                 yandex_result = None
                 if row and row.get('is_active'):
                     yandex_result = _yandex_calls_handle(cur, conn, {'action': 'yandex_cron'})
+                cur.execute(f"SELECT is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = 'avito' LIMIT 1")
+                row = cur.fetchone()
+                avito_result = None
+                if row and row.get('is_active'):
+                    avito_result = _avito_handle(cur, conn, {'action': 'avito_cron'})
                 return _json({
                     'ok': True, 'results': results,
                     'feed_bump': bump_result,
                     'cian': json.loads(cian_result['body']) if cian_result else None,
                     'yandex': json.loads(yandex_result['body']) if yandex_result else None,
+                    'avito': json.loads(avito_result['body']) if avito_result else None,
                 })
 
             if method == 'GET' and params.get('action') == 'generate_static':
@@ -1858,6 +2016,10 @@ def handler(event, context):
             if method == 'GET' and params.get('action') in ('yandex_stats', 'yandex_sync', 'yandex_cron'):
                 # Статистика звонков кабинета Яндекс.Недвижимость (Public Partner API).
                 return _yandex_calls_handle(cur, conn, params)
+
+            if method == 'GET' and params.get('action') in ('avito_stats', 'avito_sync', 'avito_cron'):
+                # Проверка подключения и баланс кошелька кабинета Авито (Core API).
+                return _avito_handle(cur, conn, params)
 
             if method == 'GET' and params.get('action') == 'other_platforms':
                 # Вкладка «Разное»: список площадок формата 'other' (realtymag, rucountry и т.п.)

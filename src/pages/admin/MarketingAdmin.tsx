@@ -8,6 +8,7 @@ import VkAdsTab from '@/pages/admin/marketing/VkAdsTab';
 import AdCabinetDashboard from '@/pages/admin/ad-cabinet/AdCabinetDashboard';
 import CianCabinetTab from '@/pages/admin/ad-cabinet/CianCabinetTab';
 import YandexCallsTab from '@/pages/admin/ad-cabinet/YandexCallsTab';
+import AvitoCabinetTab from '@/pages/admin/ad-cabinet/AvitoCabinetTab';
 import OtherPlatformsTab from '@/pages/admin/ad-cabinet/OtherPlatformsTab';
 
 type Tab = 'ad-cabinet' | 'dashboard' | 'pricing' | 'utm' | 'social' | 'vk-ads';
@@ -42,7 +43,7 @@ export default function MarketingAdmin() {
       </div>
 
       {tab === 'ad-cabinet' && (
-        adPlatform === 'cian' || adPlatform === 'yandex_realty' || adPlatform === 'other' ? (
+        adPlatform === 'cian' || adPlatform === 'yandex_realty' || adPlatform === 'avito' || adPlatform === 'other' ? (
           <div className="space-y-3">
             <button
               onClick={() => setAdPlatform(null)}
@@ -50,7 +51,7 @@ export default function MarketingAdmin() {
             >
               <Icon name="ArrowLeft" size={14} /> Назад к дашборду
             </button>
-            {adPlatform === 'cian' ? <CianCabinetTab /> : adPlatform === 'yandex_realty' ? <YandexCallsTab /> : <OtherPlatformsTab />}
+            {adPlatform === 'cian' ? <CianCabinetTab /> : adPlatform === 'yandex_realty' ? <YandexCallsTab /> : adPlatform === 'avito' ? <AvitoCabinetTab /> : <OtherPlatformsTab />}
           </div>
         ) : (
           <AdCabinetDashboard onOpenPlatform={setAdPlatform} />
