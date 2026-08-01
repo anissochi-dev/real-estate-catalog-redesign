@@ -522,16 +522,73 @@ AVITO_OBJECT_TYPE_MAP = {
     'office': 'Офисное помещение',
     'retail': 'Торговое помещение',
     'warehouse': 'Складское помещение',
-    'restaurant': 'Помещение свободного назначения',
+    'restaurant': 'Помещение общественного питания',
     'hotel': 'Гостиница',
-    'business': 'Готовый бизнес',
-    'gab': 'Готовый арендный бизнес',
+    'business': 'Помещение свободного назначения',
+    'gab': 'Помещение свободного назначения',
     'production': 'Производственное помещение',
-    'land': 'Земельный участок',
+    'land': 'Помещение свободного назначения',
     'building': 'Здание',
     'free_purpose': 'Помещение свободного назначения',
     'car_service': 'Автосервис',
 }
+
+# ── Актуальная схема Авито (XML formatVersion=3, категория «Коммерческая
+# недвижимость»), сверено с официальными шаблонами Авито от 01.08.2026
+# (документы «авито аренда.docx» / «авито продажа.docx»).
+
+# PropertyRights в новой схеме — «кто размещает» (Собственник/Посредник),
+# а НЕ право собственности как было раньше.
+AVITO_PROPERTY_RIGHTS = {
+    'ownership': 'Собственник',
+    'lease': 'Посредник',
+    'sublease': 'Посредник',
+}
+
+AVITO_ENTRANCE_MAP = {
+    'street': 'С улицы',
+    'yard': 'Со двора',
+}
+
+AVITO_PARKING_TYPE_MAP = {
+    'none': 'Нет',
+    'street': 'На улице',
+    'building': 'В здании',
+}
+
+# Decoration — обязателен для большинства категорий, допустимо 3 значения.
+AVITO_DECORATION_MAP = {
+    'new': 'Офисная', 'euro': 'Офисная', 'good': 'Чистовая',
+    'cosmetic': 'Чистовая', 'rough': 'Без отделки', 'shellcore': 'Без отделки',
+    'none': 'Без отделки',
+}
+
+# BuildingType — обязателен, допустимо 5 значений. Своего поля под тип здания
+# у нас нет — по умолчанию берём «Другой» (безопасное значение из справочника).
+AVITO_BUILDING_TYPE_DEFAULT = 'Другой'
+
+_HEATING_RE = re.compile(r'Отопление:\s*([^,]+)')
+AVITO_HEATING_MAP = {
+    'центральное': 'Центральное',
+    'автономное': 'Автономное',
+    'газовое': 'Газовое',
+    'электрическое': 'Электрическое',
+    'печное': 'Печное',
+}
+
+
+def _avito_heating(l):
+    """Извлекает тип отопления из текстового поля utilities (см. _HEATING_RE) и
+    сопоставляет с допустимым значением Авито. Возвращает None, если не удалось определить."""
+    utilities = l.get('utilities') or ''
+    m = _HEATING_RE.search(utilities)
+    if not m:
+        return None
+    val = m.group(1).strip().lower()
+    for key, mapped in AVITO_HEATING_MAP.items():
+        if key in val:
+            return mapped
+    return None
 
 CIAN_CATEGORY_MAP_SALE = {
     'office': 'officeSale',
@@ -643,16 +700,6 @@ LAND_STATUS_YANDEX = {
     'industrial': 'Промышленное',
 }
 
-LAND_STATUS_AVITO = {
-    'izhs': 'ИЖС',
-    'lph': 'ЛПХ',
-    'snt': 'СНТ',
-    'dni': 'ДНТ',
-    'commercial': 'Коммерческое назначение',
-    'agricultural': 'Сельскохозяйственное назначение',
-    'industrial': 'Промышленное назначение',
-}
-
 # ЦИАН для категории «Коммерческая земля» (commercialLandSale/Rent) использует СВОЙ отдельный
 # классификатор статуса земли (тег Land.Status) — три значения вместо наших семи.
 # Соответствие подобрано по смыслу: наши бытовые статусы (ИЖС/ЛПХ/СНТ/ДНТ/коммерческое) — это
@@ -720,12 +767,6 @@ CONDITION_TO_FINISHING_CIAN = {
     'cosmetic': 'roughFinish',  # Предчистовая
     'rough': 'no',          # Без отделки
     'shellcore': 'rough',   # Черновая
-}
-
-PROPERTY_RIGHTS_AVITO = {
-    'ownership': 'Собственность',
-    'lease': 'Аренда',
-    'sublease': 'Субаренда',
 }
 
 
@@ -920,107 +961,30 @@ def _build_yandex(listings, company, feed_slug=None):
 
 
 def _build_avito(listings, company):
+    """Строит XML-фид Авито (formatVersion=3, категория «Коммерческая недвижимость»)
+    по актуальной схеме площадки (сверено с официальными шаблонами Авито от 01.08.2026:
+    «авито аренда.docx» / «авито продажа.docx»). Схема для Сдам/Продам отличается набором
+    полей условий сделки (RentalType/LeaseDeposit для аренды, TransactionType для продажи),
+    остальные поля — общие."""
     out = ['<?xml version="1.0" encoding="UTF-8"?>']
     out.append('<Ads formatVersion="3" target="Avito.ru">')
 
     for l in listings:
-        deal_map = {'sale': 'Продам', 'rent': 'Сдам', 'business': 'Продам'}
+        is_rent = l.get('deal') == 'rent'
         out.append('<Ad>')
         out.append(f'<Id>{l["id"]}</Id>')
         # Дата "поднятия" объявления для Авито: feed_bump_at (авто-обновление),
         # иначе дата создания объекта.
         date_begin = (l.get('feed_bump_at') or l.get('created_at') or '')[:10]
         out.append(f'<DateBegin>{date_begin}</DateBegin>')
-        out.append('<Category>Коммерческая недвижимость</Category>')
-        out.append(f'<OperationType>{deal_map.get(l.get("deal"), "Продам")}</OperationType>')
-        out.append(f'<ObjectType>{_xml_escape(AVITO_OBJECT_TYPE_MAP.get(l.get("category"), "Офисное помещение"))}</ObjectType>')
-
-        # Заголовок и описание
-        out.append(f'<Title>{_xml_escape(_clean_title(l.get("title", "")))}</Title>')
-        out.append(f'<Description><![CDATA[{l.get("description", "")}]]></Description>')
-
-        # Цена
-        price_val = _total_price(l)
-        out.append(f'<Price>{price_val}</Price>')
-
-        # Адрес
-        out.append('<Address>')
-        out.append(f'<City>{_xml_escape(l.get("city") or "Краснодар")}</City>')
-        if l.get('district'):
-            out.append(f'<District>{_xml_escape(l["district"])}</District>')
-        if l.get('address'):
-            out.append(f'<Street>{_xml_escape(l["address"])}</Street>')
-        if l.get('lat') and l.get('lng'):
-            out.append(f'<Latitude>{l["lat"]}</Latitude>')
-            out.append(f'<Longitude>{l["lng"]}</Longitude>')
-        out.append('</Address>')
-
-        # Параметры площади
-        if l.get('area'):
-            out.append(f'<Square>{l["area"]}</Square>')
-        if l.get('min_area'):
-            out.append(f'<MinSquare>{l["min_area"]}</MinSquare>')
-
-        # Земля
-        if l.get('category') == 'land':
-            if l.get('land_area'):
-                out.append(f'<LandSquare>{l["land_area"]}</LandSquare>')
-            if l.get('land_status') and l['land_status'] in LAND_STATUS_AVITO:
-                out.append(f'<LandStatus>{_xml_escape(LAND_STATUS_AVITO[l["land_status"]])}</LandStatus>')
-            if l.get('land_vri'):
-                out.append(f'<PermittedLandUse>{_xml_escape(str(l["land_vri"]))}</PermittedLandUse>')
-
-        # Этажи
-        if l.get('floor') is not None:
-            out.append(f'<Floor>{l["floor"]}</Floor>')
-        if l.get('total_floors') is not None:
-            out.append(f'<Floors>{l["total_floors"]}</Floors>')
-
-        # Высота потолков
-        if l.get('ceiling_height'):
-            out.append(f'<CeilingHeight>{l["ceiling_height"]}</CeilingHeight>')
-
-        # Класс здания
-        if l.get('building_class'):
-            out.append(f'<BuildingClass>{_xml_escape(l["building_class"])}</BuildingClass>')
-
-        # Год постройки
-        if l.get('building_year'):
-            out.append(f'<BuildingYear>{l["building_year"]}</BuildingYear>')
-
-        # Электричество
-        if l.get('electricity_kw'):
-            out.append(f'<Power>{l["electricity_kw"]}</Power>')
-
-        # Права на объект
-        if l.get('property_rights') and l['property_rights'] in PROPERTY_RIGHTS_AVITO:
-            out.append(f'<PropertyRights>{PROPERTY_RIGHTS_AVITO[l["property_rights"]]}</PropertyRights>')
-
-        # Мебель и оборудование
-        if l.get('has_furniture'):
-            out.append('<Furniture>Да</Furniture>')
-        if l.get('has_equipment'):
-            out.append('<Equipment>Да</Equipment>')
-
-        # Парковка
-        parking_map = {'street': 'Открытая', 'building': 'Подземная'}
-        if l.get('parking') and l['parking'] != 'none':
-            out.append(f'<Parking>{parking_map.get(l["parking"], "Есть")}</Parking>')
-
-        # Метро
-        if l.get('subway_station'):
-            out.append(f'<Metro>{_xml_escape(l["subway_station"])}</Metro>')
-            if l.get('subway_distance'):
-                out.append(f'<MetroDistance>{l["subway_distance"]}</MetroDistance>')
-
-        # Тип аренды
-        if l.get('deal') == 'rent':
-            out.append('<LeaseType>На длительный срок</LeaseType>')
 
         # Контакт
         company_phone = company.get('company_phone', '')
         if company_phone:
             out.append(f'<ContactPhone>{_xml_escape(company_phone)}</ContactPhone>')
+
+        # Заголовок и описание
+        out.append(f'<Description><![CDATA[{l.get("description", "")}]]></Description>')
 
         # Фото
         imgs = _split_images(l)
@@ -1033,6 +997,83 @@ def _build_avito(listings, company):
         # Видео
         if l.get('video_url'):
             out.append(f'<VideoURL>{_xml_escape(l["video_url"])}</VideoURL>')
+
+        # Адрес (новая схема: строка целиком + отдельные плоские координаты)
+        addr_parts = [p for p in [l.get('city') or 'Краснодар', l.get('district'), l.get('address')] if p]
+        out.append(f'<Address>{_xml_escape(", ".join(addr_parts))}</Address>')
+        if l.get('lat') and l.get('lng'):
+            out.append(f'<Longitude>{l["lng"]}</Longitude>')
+            out.append(f'<Latitude>{l["lat"]}</Latitude>')
+
+        out.append('<Category>Коммерческая недвижимость</Category>')
+        if l.get('title'):
+            out.append(f'<Title>{_xml_escape(_clean_title(l["title"]))}</Title>')
+
+        # Цена
+        price_val = _total_price(l)
+        out.append(f'<Price>{price_val}</Price>')
+
+        out.append(f'<OperationType>{"Сдам" if is_rent else "Продам"}</OperationType>')
+        object_type = AVITO_OBJECT_TYPE_MAP.get(l.get('category'), 'Помещение свободного назначения')
+        out.append(f'<ObjectType>{_xml_escape(object_type)}</ObjectType>')
+
+        # Права размещения (Собственник/Посредник) — обязательное поле
+        rights = AVITO_PROPERTY_RIGHTS.get(l.get('property_rights'), 'Собственник')
+        out.append(f'<PropertyRights>{rights}</PropertyRights>')
+
+        # Вход
+        entrance = AVITO_ENTRANCE_MAP.get(l.get('entrance'))
+        if entrance:
+            out.append(f'<Entrance>{entrance}</Entrance>')
+
+        # Этаж
+        if l.get('floor') is not None:
+            out.append(f'<Floor>{l["floor"]}</Floor>')
+
+        # Площадь
+        if l.get('area'):
+            out.append(f'<Square>{l["area"]}</Square>')
+
+        # Высота потолков
+        if l.get('ceiling_height'):
+            out.append(f'<CeilingHeight>{l["ceiling_height"]}</CeilingHeight>')
+
+        # Отделка — обязательна для большинства категорий
+        decoration = AVITO_DECORATION_MAP.get(l.get('finishing') or l.get('condition'))
+        if decoration:
+            out.append(f'<Decoration>{decoration}</Decoration>')
+
+        # Электросеть
+        if l.get('electricity_kw'):
+            try:
+                out.append(f'<PowerGridCapacity>{int(float(l["electricity_kw"]))}</PowerGridCapacity>')
+            except (TypeError, ValueError):
+                pass
+
+        # Отопление/освещение/розетки
+        heating = _avito_heating(l)
+        if heating:
+            out.append(f'<Heating>{heating}</Heating>')
+
+        # Тип здания — обязателен для большинства категорий (нет отдельного поля,
+        # используем безопасное значение по умолчанию из справочника)
+        out.append(f'<BuildingType>{AVITO_BUILDING_TYPE_DEFAULT}</BuildingType>')
+
+        # Класс здания (только office/warehouse по схеме, но площадка игнорирует
+        # тег для остальных категорий без ошибки — оставляем как есть при наличии данных)
+        if l.get('building_class') and l.get('category') in ('office', 'warehouse'):
+            out.append(f'<BuildingClass>{_xml_escape(l["building_class"])}</BuildingClass>')
+
+        # Парковка — обязательна для большинства категорий
+        parking_type = AVITO_PARKING_TYPE_MAP.get(l.get('parking'), 'Нет')
+        out.append(f'<ParkingType>{parking_type}</ParkingType>')
+
+        if is_rent:
+            # Аренда: тип аренды обязателен, залог — опционален
+            out.append('<RentalType>Прямая</RentalType>')
+        else:
+            # Продажа: тип сделки обязателен
+            out.append('<TransactionType>Продажа</TransactionType>')
 
         out.append('</Ad>')
 
