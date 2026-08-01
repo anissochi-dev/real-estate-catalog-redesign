@@ -20,6 +20,11 @@ export default function HomeHero({ totalCount, mainCity, searchQuery, setSearchQ
       <div className="hero-star hero-star-5" aria-hidden="true" />
       <div className="hero-star hero-star-6" aria-hidden="true" />
       <div className="hero-star hero-star-7" aria-hidden="true" />
+      <div className="hero-star hero-star-8" aria-hidden="true" />
+      <div className="hero-star hero-star-9" aria-hidden="true" />
+      <div className="hero-star hero-star-10" aria-hidden="true" />
+      <div className="hero-star hero-star-11" aria-hidden="true" />
+      <div className="hero-star hero-star-12" aria-hidden="true" />
       <div className="container mx-auto px-4 relative z-10">
         <div className="max-w-3xl">
           <h1 className="font-display font-900 text-2xl sm:text-3xl md:text-4xl leading-tight mb-3" elementtiming="lcp-heading">

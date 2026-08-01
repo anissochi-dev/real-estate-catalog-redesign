@@ -422,6 +422,11 @@
 .hero-star-5 { bottom: 12%; left: 6%; width: 7px; height: 7px; animation-delay: 2.5s; }
 .hero-star-6 { top: 65%; left: 45%; width: 8px; height: 8px; animation-delay: 0.3s; }
 .hero-star-7 { bottom: 20%; right: 28%; width: 9px; height: 9px; animation-delay: 2s; }
+.hero-star-8 { top: 32%; left: 48%; width: 10px; height: 10px; animation-delay: 0.9s; }
+.hero-star-9 { top: 48%; left: 60%; width: 8px; height: 8px; animation-delay: 1.5s; }
+.hero-star-10 { top: 26%; left: 58%; width: 13px; height: 13px; animation-delay: 2.2s; }
+.hero-star-11 { bottom: 30%; left: 50%; width: 9px; height: 9px; animation-delay: 0.4s; }
+.hero-star-12 { top: 60%; left: 40%; width: 11px; height: 11px; animation-delay: 1.7s; }
 
 @keyframes heroNebulaPulse {
   0% { opacity: 0.6; transform: scale(1); }
