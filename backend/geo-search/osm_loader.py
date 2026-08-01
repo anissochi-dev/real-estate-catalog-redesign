@@ -14,6 +14,21 @@ OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
 # Запасной Overpass-сервер
 OVERPASS_URL_FALLBACK = 'https://overpass.kumi.systems/api/interpreter'
 
+# Русские названия категорий — подставляются, если у объекта в OSM нет собственного имени
+INFRA_LABELS_RU = {
+    'tram_stop':       'Трамвайная остановка',
+    'bus_stop':        'Автобусная остановка',
+    'subway_entrance': 'Метро / электрозаправка',
+    'railway_station': 'ЖД-вокзал / платформа',
+    'shopping_mall':   'Торговый центр',
+    'supermarket':     'Супермаркет',
+    'market':          'Рынок',
+    'business_center': 'Бизнес-центр',
+    'park':            'Парк / сквер',
+    'school':          'Школа',
+    'hospital':        'Больница / клиника',
+}
+
 # Bounding box Краснодара — компактный, только город
 KRD_BBOX = '44.97,38.91,45.13,39.12'  # south, west, north, east (плотная городская зона)
 
@@ -158,7 +173,7 @@ def load_infra_type(cur, conn, infra_type: str, ql: str) -> dict:
             tags.get('name:ru')
             or tags.get('name')
             or tags.get('ref')
-            or infra_type
+            or INFRA_LABELS_RU.get(infra_type, infra_type)
         )[:300]
         meta = {}
         for k in ('brand', 'operator', 'opening_hours', 'website', 'addr:street', 'addr:housenumber'):
