@@ -4,6 +4,7 @@ import Icon from '@/components/ui/icon';
 import { Listing } from './types';
 import { StatData, fmt } from './internalCardTypes';
 import { Spinner } from './TabOverview';
+import LocationScoreWidget from '@/components/property/LocationScoreWidget';
 
 export function TabStats({ listingId, listing }: { listingId: number; listing: Listing }) {
   const [stats, setStats] = useState<StatData | null>(null);
@@ -55,6 +56,18 @@ export function TabStats({ listingId, listing }: { listingId: number; listing: L
           ))}
         </div>
       </div>
+
+      {!!listing.lat && !!listing.lng && (
+        <div>
+          <div className="text-sm font-semibold mb-2">Локация</div>
+          <LocationScoreWidget
+            listingId={listingId}
+            lat={listing.lat}
+            lng={listing.lng}
+            category={listing.category}
+          />
+        </div>
+      )}
     </div>
   );
 }

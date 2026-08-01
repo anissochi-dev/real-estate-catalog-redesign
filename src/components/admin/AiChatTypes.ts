@@ -298,8 +298,6 @@ export function detectSuggestion(text: string, action?: AiAction, currentText?: 
   if (action === 'reply_lead') return { kind: 'reply', after: cleanedText };
   if (action === 'seo') return { kind: 'seo', after: cleanedText };
   if (action === 'auto_tags') return { kind: 'tags', after: cleanedText };
-  if (action === 'analytics') return { kind: 'analytics', after: cleanedText };
-  if (action === 'moderate') return { kind: 'generic', after: cleanedText };
   return undefined;
 }
 

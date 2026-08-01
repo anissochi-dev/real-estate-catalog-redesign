@@ -548,7 +548,7 @@ export async function removeWatermark(
   return { url: data.url as string, detected: Boolean(data.detected) };
 }
 
-export type AiAction = 'describe' | 'title' | 'reply_lead' | 'seo' | 'moderate' | 'analytics' | 'admin' | 'admin_ops' | 'add_city' | 'auto_tags' | 'agent' | 'security' | 'marketing' | 'analytics_full' | 'modernize' | 'db_check' | 'seo_listing' | 'get_memory';
+export type AiAction = 'describe' | 'title' | 'reply_lead' | 'seo' | 'admin' | 'admin_ops' | 'add_city' | 'auto_tags' | 'agent' | 'marketing' | 'seo_listing' | 'get_memory';
 
 export interface AgentAction {
   type: string;
