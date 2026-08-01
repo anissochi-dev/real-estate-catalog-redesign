@@ -168,9 +168,10 @@ export default function AdPlatformsTab() {
                 </div>
                 <button
                   onClick={() => toggleActive(p)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${p.is_active ? 'bg-brand-blue' : 'bg-muted'}`}
+                  title={p.is_active ? 'Выключить площадку' : 'Включить площадку'}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full border transition-colors ${p.is_active ? 'bg-brand-blue border-brand-blue' : 'bg-gray-300 border-gray-300'}`}
                 >
-                  <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${p.is_active ? 'translate-x-6' : 'translate-x-1'}`} />
+                  <span className={`inline-block h-4 w-4 rounded-full bg-white shadow-md transition-transform ${p.is_active ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>
               </div>
 
