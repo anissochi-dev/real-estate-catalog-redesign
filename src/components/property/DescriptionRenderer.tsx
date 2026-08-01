@@ -1,7 +1,7 @@
 import React from 'react';
 
 const SECTION_HEADERS = [
-  'От собственника',
+  'Представитель собственника',
   'Общие параметры и назначение',
   'Локация и район',
   'Характеристики объекта',
@@ -69,7 +69,7 @@ export default function DescriptionRenderer({ text, className = '' }: Props) {
     <div className={`space-y-4 text-sm leading-relaxed text-foreground/80 ${className}`}>
       {sections.map((section, i) => (
         <div key={i}>
-          {section.header && section.header !== 'От собственника' && section.header !== 'Призыв к действию' && (
+          {section.header && section.header !== 'Представитель собственника' && section.header !== 'Призыв к действию' && (
             <div className="flex items-center gap-2 mb-1.5 mt-2">
               {HEADER_ICONS[section.header] && (
                 <span className="text-base">{HEADER_ICONS[section.header]}</span>
@@ -79,12 +79,12 @@ export default function DescriptionRenderer({ text, className = '' }: Props) {
               </span>
             </div>
           )}
-          {section.header === 'От собственника' && (
+          {section.header === 'Представитель собственника' && (
             <div className="inline-flex items-center gap-1.5 bg-brand-orange/10 text-brand-orange text-xs font-semibold px-3 py-1 rounded-full mb-1">
-              ✦ {section.lines.filter(l => l.trim()).join(' ') || 'От собственника! Без комиссий и %'}
+              ✦ {section.lines.filter(l => l.trim()).join(' ') || 'Представитель собственника! Без комиссий и %'}
             </div>
           )}
-          {section.header !== 'От собственника' && (
+          {section.header !== 'Представитель собственника' && (
             <div className="space-y-1">
               {section.lines.map((line, j) =>
                 line.trim() ? (

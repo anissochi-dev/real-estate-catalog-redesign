@@ -5,7 +5,7 @@ import { Listing, fmtDate } from './types';
 import VoiceInputButton, { VoiceFields } from '@/components/admin/VoiceInputButton';
 
 const SECTION_HEADERS = [
-  'От собственника! Без комиссий и %!',
+  'Представитель собственника! Без комиссий и %!',
   'Общие параметры и назначение',
   'Локация и район',
   'Характеристики объекта',
