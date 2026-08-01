@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
-import { AVITO_API_URL, AvitoData } from './types';
+import { AVITO_API_URL, AvitoData, AVITO_STATUS_STYLES } from './types';
+
+const DEAL_LABELS: Record<string, string> = { sale: 'Продажа', rent: 'Аренда' };
 
 export default function AvitoCabinetTab() {
   const [data, setData] = useState<AvitoData | null>(null);
@@ -111,10 +113,87 @@ export default function AvitoCabinetTab() {
             </div>
           </div>
 
-          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800 flex items-start gap-2">
-            <Icon name="Info" size={14} className="shrink-0 mt-0.5" />
-            Публикация объектов на Авито пока идёт через XML-выгрузку (галочка «Авито» в карточке объекта). Статистика по объявлениям появится следующим шагом.
-          </div>
+          {data.last_report && (
+            <div className="bg-white rounded-2xl border border-border p-4">
+              <h3 className="font-semibold text-sm flex items-center gap-2 mb-3">
+                <Icon name="FileText" size={16} className="text-brand-blue" />
+                Отчёт по автозагрузке
+              </h3>
+              {data.last_report.error ? (
+                <div className="text-sm text-red-600">{data.last_report.error}</div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div>
+                    <div className="text-sm font-bold">{data.last_report.status_label || '—'}</div>
+                    <div className="text-xs text-muted-foreground">Статус последней выгрузки</div>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold">{data.last_report.total_ads ?? '—'}</div>
+                    <div className="text-xs text-muted-foreground">Объявлений обработано</div>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold">
+                      {data.last_report.finished_at ? new Date(data.last_report.finished_at).toLocaleString('ru') : '—'}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Завершено</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!!data.items?.length && (
+            <div className="bg-white rounded-2xl border border-border p-4 overflow-x-auto">
+              <h3 className="font-semibold text-sm flex items-center gap-2 mb-3">
+                <Icon name="ListChecks" size={16} className="text-brand-blue" />
+                Объявления на Авито
+              </h3>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-muted-foreground border-b border-border">
+                    <th className="pb-2 pr-3 font-medium">Объект</th>
+                    <th className="pb-2 pr-3 font-medium">Сделка</th>
+                    <th className="pb-2 pr-3 font-medium">Статус</th>
+                    <th className="pb-2 pr-3 font-medium text-right">Просмотры</th>
+                    <th className="pb-2 pr-3 font-medium text-right">Обращения</th>
+                    <th className="pb-2 pr-3 font-medium text-right">Избранное</th>
+                    <th className="pb-2 font-medium"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.items.map((item) => {
+                    const style = AVITO_STATUS_STYLES[item.status || ''] || { cls: 'bg-gray-100 text-gray-500' };
+                    return (
+                      <tr key={item.listing_id} className="border-b border-border/50 last:border-0">
+                        <td className="py-2 pr-3 max-w-[220px] truncate" title={item.title || ''}>{item.title || '—'}</td>
+                        <td className="py-2 pr-3">{DEAL_LABELS[item.deal || ''] || item.deal || '—'}</td>
+                        <td className="py-2 pr-3">
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] ${style.cls}`}>
+                            {item.status_label || '—'}
+                          </span>
+                          {item.status_message && (
+                            <div className="text-[10px] text-muted-foreground mt-0.5 max-w-[200px] truncate" title={item.status_message}>
+                              {item.status_message}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-2 pr-3 text-right">{fmt(item.uniq_views || 0)}</td>
+                        <td className="py-2 pr-3 text-right">{fmt(item.uniq_contacts || 0)}</td>
+                        <td className="py-2 pr-3 text-right">{fmt(item.uniq_favorites || 0)}</td>
+                        <td className="py-2">
+                          {item.url && (
+                            <a href={item.url} target="_blank" rel="noreferrer" className="text-brand-blue hover:underline">
+                              <Icon name="ExternalLink" size={13} />
+                            </a>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </>
       )}
     </div>

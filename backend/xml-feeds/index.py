@@ -1871,6 +1871,26 @@ def _avito_get(path, token):
         return None, str(e)
 
 
+def _avito_post(path, token, payload):
+    """POST-запрос к Авито API (используется для статистики по объявлениям)."""
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        f'{AVITO_BASE}{path}', data=data, method='POST',
+        headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=25) as r:
+            return json.loads(r.read().decode()), None
+    except urllib.error.HTTPError as e:
+        try:
+            body = json.loads(e.read().decode())
+        except Exception:
+            body = {}
+        return None, f'HTTP {e.code}: {body}'
+    except Exception as e:
+        return None, str(e)
+
+
 def _avito_sync(cur, conn, client_id, client_secret):
     """Проверяет ключи Авито: получает токен, данные аккаунта и баланс кошелька → БД."""
     token, err = _avito_get_token(client_id, client_secret)
@@ -1919,14 +1939,182 @@ def _avito_sync(cur, conn, client_id, client_secret):
     }
 
 
+# ── Авито: отчёт по автозагрузке (фиду) ──────────────────────────────────────
+# GET /autoload/v3/reports/last_completed_report — сводка по последнему завершённому
+# циклу обработки XML-фида (без user_id в пути — определяется по токену).
+# GET /autoload/v2/reports/items?query=id1,id2,... — статус конкретных объявлений
+# по их Id из фида (ad_id = наш listing.id), до 100 штук за запрос.
+
+AVITO_STATUS_LABELS = {
+    'active': 'Активно на Авито',
+    'old': 'Истёк срок размещения',
+    'blocked': 'Заблокировано',
+    'rejected': 'Отклонено (нарушения)',
+    'archived': 'В архиве',
+    'removed': 'Удалено навсегда',
+}
+
+AVITO_REPORT_STATUS_LABELS = {
+    'processing': 'Обрабатывается',
+    'success': 'Загружено без ошибок',
+    'success_warning': 'Загружено, есть замечания',
+    'error': 'Загрузка не удалась',
+}
+
+
+def _avito_fetch_report(cur, conn, token):
+    """Запрашивает сводный отчёт последней автозагрузки (v3) и статусы объявлений,
+    выгружаемых на Авито (v2 reports/items, по спискам Id из нашей БД, максимум 100
+    за запрос) — сохраняет всё в avito_report_log + avito_item_status."""
+    summary, err = _avito_get('/autoload/v3/reports/last_completed_report', token)
+    if err:
+        cur.execute(f"""
+            INSERT INTO {SCHEMA}.avito_report_log (fetched_at, error)
+            VALUES (NOW(), %s)
+        """, (err[:500],))
+        conn.commit()
+        return {'error': err}
+
+    section_stats = (summary or {}).get('section_stats') or {}
+    events = (summary or {}).get('events') or []
+    cur.execute(f"""
+        INSERT INTO {SCHEMA}.avito_report_log
+            (fetched_at, report_status, started_at, finished_at, total_ads, messages)
+        VALUES (NOW(), %s, %s, %s, %s, %s)
+    """, (
+        (summary or {}).get('status'), (summary or {}).get('started_at'), (summary or {}).get('finished_at'),
+        section_stats.get('count'), json.dumps({'section_stats': section_stats, 'events': events}, default=str),
+    ))
+    conn.commit()
+
+    cur.execute(f"SELECT id FROM {SCHEMA}.listings WHERE export_avito = TRUE AND status = 'active'")
+    listing_ids = [r['id'] for r in cur.fetchall()]
+    if not listing_ids:
+        return {
+            'status': (summary or {}).get('status'), 'total_ads': section_stats.get('count'),
+            'items_checked': 0,
+        }
+
+    checked = 0
+    for i in range(0, len(listing_ids), 100):
+        batch = listing_ids[i:i + 100]
+        query = ','.join(str(x) for x in batch)
+        data, ierr = _avito_get(f'/autoload/v2/reports/items?query={urllib.parse.quote(query)}', token)
+        if ierr or not data:
+            continue
+        for item in (data.get('items') or []):
+            ad_id = item.get('ad_id')
+            if not ad_id or not str(ad_id).isdigit():
+                continue
+            msgs = item.get('messages') or []
+            msg_text = '; '.join(m.get('description', '') for m in msgs if m.get('description'))
+            section = item.get('section') or {}
+            cur.execute(f"""
+                INSERT INTO {SCHEMA}.avito_item_status
+                    (listing_id, avito_id, url, status, status_detail, status_message, checked_at)
+                VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                ON CONFLICT (listing_id) DO UPDATE SET
+                    avito_id = EXCLUDED.avito_id, url = EXCLUDED.url,
+                    status = EXCLUDED.status, status_detail = EXCLUDED.status_detail,
+                    status_message = EXCLUDED.status_message, checked_at = NOW()
+            """, (int(ad_id), item.get('avito_id'), item.get('url'),
+                  item.get('avito_status'), section.get('title'), msg_text or None))
+            checked += 1
+    conn.commit()
+
+    return {
+        'status': (summary or {}).get('status'), 'total_ads': section_stats.get('count'),
+        'items_checked': checked,
+    }
+
+
+def _avito_fetch_stats(cur, conn, token, account_id):
+    """Запрашивает статистику просмотров/контактов по всем объявлениям, у которых есть
+    avito_id (из avito_item_status), за последние 30 дней, и обновляет счётчики."""
+    cur.execute(f"SELECT listing_id, avito_id FROM {SCHEMA}.avito_item_status WHERE avito_id IS NOT NULL")
+    rows = [dict(r) for r in cur.fetchall()]
+    if not rows:
+        return {'skipped': True, 'reason': 'Нет объявлений с avito_id — сначала выполните fetch_report'}
+
+    id_to_listing = {int(r['avito_id']): r['listing_id'] for r in rows}
+    item_ids = list(id_to_listing.keys())[:200]  # лимит API — не более 200 за раз
+
+    date_to = datetime.now(timezone.utc).date()
+    date_from = date_to - timedelta(days=30)
+    payload = {
+        'dateFrom': date_from.isoformat(),
+        'dateTo': date_to.isoformat(),
+        'itemIds': item_ids,
+        'fields': ['uniqViews', 'uniqContacts', 'uniqFavorites'],
+        'periodGrouping': 'month',
+    }
+    data, err = _avito_post(f'/stats/v1/accounts/{account_id}/items', token, payload)
+    if err or not data:
+        return {'error': err or 'Пустой ответ'}
+
+    result_items = ((data.get('result') or {}).get('items')) or []
+    updated = 0
+    for item in result_items:
+        avito_id = item.get('itemId') or item.get('item_id')
+        listing_id = id_to_listing.get(int(avito_id)) if avito_id else None
+        if not listing_id:
+            continue
+        stats_list = item.get('stats') or []
+        views = sum(int(s.get('uniqViews') or s.get('uniq_views') or 0) for s in stats_list)
+        contacts = sum(int(s.get('uniqContacts') or s.get('uniq_contacts') or 0) for s in stats_list)
+        favorites = sum(int(s.get('uniqFavorites') or s.get('uniq_favorites') or 0) for s in stats_list)
+        cur.execute(f"""
+            UPDATE {SCHEMA}.avito_item_status
+            SET uniq_views = %s, uniq_contacts = %s, uniq_favorites = %s
+            WHERE listing_id = %s
+        """, (views, contacts, favorites, listing_id))
+        updated += 1
+    conn.commit()
+    return {'updated': updated, 'requested': len(item_ids)}
+
+
 def _avito_read_from_db(cur):
-    """Читает последнюю проверку подключения Авито из БД для фронтенда."""
+    """Читает последнюю проверку подключения Авито + последний отчёт автозагрузки +
+    статусы/статистику по объявлениям из БД для фронтенда."""
     cur.execute(f"SELECT * FROM {SCHEMA}.avito_sync_log ORDER BY synced_at DESC LIMIT 1")
     last = cur.fetchone()
     if not last:
-        return {'ok': True, 'connected': False, 'last_sync': None}
+        return {'ok': True, 'connected': False, 'last_sync': None, 'last_report': None, 'items': []}
     last = dict(last)
     last['synced_at'] = last['synced_at'].isoformat() if last.get('synced_at') else None
+    last.pop('raw_response', None)
+
+    cur.execute(f"SELECT * FROM {SCHEMA}.avito_report_log ORDER BY fetched_at DESC LIMIT 1")
+    report = cur.fetchone()
+    if report:
+        report = dict(report)
+        report['fetched_at'] = report['fetched_at'].isoformat() if report.get('fetched_at') else None
+        report['started_at'] = report['started_at'].isoformat() if report.get('started_at') else None
+        report['finished_at'] = report['finished_at'].isoformat() if report.get('finished_at') else None
+        report['status_label'] = AVITO_REPORT_STATUS_LABELS.get(report.get('report_status'), report.get('report_status'))
+
+    cur.execute(f"""
+        SELECT s.listing_id, s.avito_id, s.url, s.status, s.status_detail, s.status_message,
+               s.uniq_views, s.uniq_contacts, s.uniq_favorites, s.checked_at,
+               l.title, l.city, l.category, l.deal
+        FROM {SCHEMA}.avito_item_status s
+        JOIN {SCHEMA}.listings l ON l.id = s.listing_id
+        ORDER BY s.checked_at DESC
+    """)
+    items = []
+    for r in cur.fetchall():
+        d = dict(r)
+        d['checked_at'] = d['checked_at'].isoformat() if d.get('checked_at') else None
+        d['status_label'] = AVITO_STATUS_LABELS.get(d.get('status'), d.get('status'))
+        items.append(d)
+
+    return {
+        'ok': True,
+        'connected': bool(last.get('account_id')) and not last.get('error'),
+        'last_sync': last,
+        'last_report': report,
+        'items': items,
+    }
     return {
         'ok': True,
         'connected': bool(last.get('account_id')) and not last.get('error'),
@@ -1934,8 +2122,26 @@ def _avito_read_from_db(cur):
     }
 
 
+def _avito_full_sync(cur, conn, client_id, client_secret):
+    """Полная синхронизация: баланс кошелька + отчёт по автозагрузке (статусы объявлений) +
+    статистика просмотров/контактов. Токен запрашивается один раз и переиспользуется."""
+    sync_result = _avito_sync(cur, conn, client_id, client_secret)
+    if sync_result.get('error') or not sync_result.get('account_id'):
+        return {'sync': sync_result}
+
+    account_id = sync_result['account_id']
+    token, err = _avito_get_token(client_id, client_secret)
+    if err or not token:
+        return {'sync': sync_result, 'report': {'error': err or 'Не удалось получить токен'}}
+
+    report_result = _avito_fetch_report(cur, conn, token)
+    stats_result = _avito_fetch_stats(cur, conn, token, account_id)
+    return {'sync': sync_result, 'report': report_result, 'stats': stats_result}
+
+
 def _avito_handle(cur, conn, params):
-    """Обрабатывает action=avito_stats|avito_sync|avito_cron: проверяет подключение и баланс Авито."""
+    """Обрабатывает action=avito_stats|avito_sync|avito_cron: проверяет подключение, баланс,
+    отчёт по автозагрузке и статистику просмотров/контактов Авито."""
     action = params.get('action', '')
     force_sync = params.get('sync') == '1'
 
@@ -1959,17 +2165,17 @@ def _avito_handle(cur, conn, params):
                 if elapsed < AVITO_SYNC_INTERVAL_HOURS:
                     return _json({'ok': True, 'skipped': True, 'reason': f'Последняя синхронизация {round(elapsed, 1)}ч назад'})
 
-        result = _avito_sync(cur, conn, client_id, client_secret)
+        full_result = _avito_full_sync(cur, conn, client_id, client_secret)
         data = _avito_read_from_db(cur)
-        return _json({**data, 'synced_now': True, 'sync_result': result})
+        return _json({**data, 'synced_now': True, 'sync_result': full_result})
 
     cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.avito_sync_log")
     never_synced = cur.fetchone()['c'] == 0
 
     if never_synced:
-        result = _avito_sync(cur, conn, client_id, client_secret)
+        full_result = _avito_full_sync(cur, conn, client_id, client_secret)
         data = _avito_read_from_db(cur)
-        return _json({**data, 'synced_now': True, 'sync_result': result})
+        return _json({**data, 'synced_now': True, 'sync_result': full_result})
 
     return _json(_avito_read_from_db(cur))
 

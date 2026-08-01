@@ -162,9 +162,48 @@ export interface AvitoLastSync {
   error?: string | null;
 }
 
+export interface AvitoReportLog {
+  fetched_at?: string;
+  report_status?: string | null;
+  status_label?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  total_ads?: number | null;
+  error?: string | null;
+}
+
+export const AVITO_STATUS_STYLES: Record<string, { cls: string }> = {
+  active: { cls: 'bg-emerald-100 text-emerald-700' },
+  old: { cls: 'bg-gray-100 text-gray-500' },
+  blocked: { cls: 'bg-red-100 text-red-700' },
+  rejected: { cls: 'bg-red-100 text-red-700' },
+  archived: { cls: 'bg-gray-100 text-gray-500' },
+  removed: { cls: 'bg-gray-100 text-gray-500' },
+};
+
+export interface AvitoItemRow {
+  listing_id: number;
+  avito_id: number | null;
+  url: string | null;
+  status: string | null;
+  status_detail?: string | null;
+  status_message: string | null;
+  uniq_views: number | null;
+  uniq_contacts: number | null;
+  uniq_favorites: number | null;
+  checked_at: string | null;
+  title: string | null;
+  city: string | null;
+  category: string | null;
+  deal: string | null;
+  status_label?: string | null;
+}
+
 export interface AvitoData {
   ok: boolean;
   connected: boolean;
   last_sync: AvitoLastSync | null;
+  last_report?: AvitoReportLog | null;
+  items?: AvitoItemRow[];
   synced_now?: boolean;
 }
