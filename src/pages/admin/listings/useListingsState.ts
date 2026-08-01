@@ -506,14 +506,6 @@ export function useListingsState() {
 
       const normalize = (raw: string): string => {
         let title = (raw || '').split('\n')[0].trim().replace(/^["«]|["»]$/g, '');
-        // Подстраховка: если ИИ всё же вернул запрещённую форму глагола — приводим
-        // к разрешённой («Сдаю»/«Сдам» для аренды, «Продаю»/«Продам» для продажи).
-        title = title
-          .replace(/^Сдаётся\b/i, 'Сдаю')
-          .replace(/^Сдаём\b/i, 'Сдаю')
-          .replace(/^Сдадим\b/i, 'Сдам')
-          .replace(/^Продаётся\b/i, 'Продаю')
-          .replace(/^Продаём\b/i, 'Продаю');
         // Запятые в заголовке запрещены — если ИИ всё же вставил их, убираем
         // (запятую и один пробел после неё заменяем одним пробелом), лишние пробелы схлопываем.
         title = title.replace(/\s*,\s*/g, ' ').replace(/\s{2,}/g, ' ').trim();
@@ -526,51 +518,9 @@ export function useListingsState() {
         return title;
       };
 
-      // Если ИИ вернул заголовок короче 60 символов — дотягиваем РЕАЛЬНЫМИ фактами
-      // из карточки объекта (без выдумывания данных), пока не наберём 60 символов
-      // или не кончатся доступные факты. Каждый факт добавляется только если его
-      // ещё нет в тексте (по смыслу) — так заголовок не дублирует сам себя.
-      const padWithFacts = (title: string): string => {
-        if (title.length >= 60) return title;
-        const lower = title.toLowerCase();
-        const candidates: string[] = [];
-        if (editing.condition && !lower.includes('состояни')) candidates.push(`состояние ${editing.condition}`);
-        if (editing.floor && !lower.includes('этаж')) candidates.push(`${editing.floor} этаж${editing.total_floors ? ` из ${editing.total_floors}` : ''}`);
-        if (editing.parking && !lower.includes('парков')) {
-          const parkingLabel: Record<string, string> = { none: '', street: 'парковка на улице', building: 'парковка в здании' };
-          if (parkingLabel[editing.parking]) candidates.push(parkingLabel[editing.parking]);
-        }
-        if (editing.ceiling_height && !lower.includes('потолк')) candidates.push(`потолки ${editing.ceiling_height} м`);
-        if (editing.district && !lower.includes(editing.district.toLowerCase().slice(0, 6))) candidates.push(String(editing.district));
-        if (editing.address && !lower.includes(editing.address.toLowerCase().slice(0, 6))) candidates.push(String(editing.address));
-        let result = title;
-        for (const fact of candidates) {
-          if (result.length >= 60) break;
-          // Запятые в заголовке запрещены — разделяем факты пробелом и убираем
-          // запятые из самого значения факта (адрес/район в БД может их содержать).
-          const cleanFact = fact.replace(/\s*,\s*/g, ' ').replace(/\s{2,}/g, ' ').trim();
-          const withFact = `${result} ${cleanFact}`;
-          if (withFact.length > 70) continue;
-          result = withFact;
-        }
-        return result;
-      };
-
-      // ИИ не всегда попадает в требуемый диапазон 60-70 символов с первой попытки —
-      // делаем до 3 попыток и берём первую, что укладывается в требования (60-70,
-      // корректный глагол уже гарантирован normalize()). Если ни одна не подошла —
-      // дотягиваем лучшую попытку реальными фактами объекта (padWithFacts).
-      let best = '';
-      let bestDiff = Infinity;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const r = await aiApi.ask('title', prompt);
-        const title = normalize(r.text || '');
-        if (title.length >= 60 && title.length <= 70) { best = title; bestDiff = 0; break; }
-        const diff = title.length < 60 ? 60 - title.length : title.length - 70;
-        if (diff < bestDiff) { best = title; bestDiff = diff; }
-      }
-      if (best.length < 60) best = padWithFacts(best);
-      setEditing({ ...editing, title: best });
+      const r = await aiApi.ask('title', prompt);
+      const title = normalize(r.text || '');
+      setEditing({ ...editing, title });
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Ошибка ИИ');
     } finally {
