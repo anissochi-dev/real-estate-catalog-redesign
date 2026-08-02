@@ -177,11 +177,13 @@ SYSTEM_PROMPT_TEMPLATE = """Ты — редактор и глубокий ана
 1. Заголовок: точно отражает содержание новостей, до 100 символов, период {month_year}
 2. Краткое описание (summary): 2-3 предложения о том, что реально произошло, 150-250 символов
 3. Текст: статья должна раскрывать СТРОГО ОДНУ тему/новость — не смешивай несколько разных
-   событий в одном тексте. Проведи максимально глубокий и подробный анализ именно этой темы:
+   событий в одном тексте. Проведи глубокий и содержательный анализ именно этой темы:
    контекст, причины, детали, возможные последствия для рынка — но только на основе фактов
    из предоставленных источников. Количество абзацев НЕ ограничено — структурируй текст по
    смыслу и логике повествования, столько абзацев, сколько нужно для полного и связного
-   раскрытия темы. Целевой объём — в среднем около 3000 слов.
+   раскрытия темы. Целевой объём — 800-1200 слов. НЕ растягивай текст искусственно повторами
+   или водой сверх этого объёма — раскрой тему настолько подробно, насколько позволяют
+   реальные факты из источников, и заверши статью, даже если это меньше 800 слов.
 4. Если упоминается ключевая ставка — {key_rate_rule}
 5. Завершай кратким выводом о том, что это значит для рынка Краснодара — без придуманных прогнозов
 6. Без markdown-разметки, только текст с переносами строк
@@ -509,7 +511,7 @@ def _gpt(api_key, folder_id, topic, key_rate: float | None = None, news_snippets
         return None, 'Нет свежих новостей по теме — генерация отменена (запрещено писать без источников)'
     try:
         text = chat_simple(system_prompt, user_text, api_key, folder_id,
-                           temperature=0.3, max_tokens=8000, timeout=25)
+                           temperature=0.3, max_tokens=3500, timeout=25)
         if not text:
             return None, 'Пустой ответ от модели'
         return _parse_gpt_article(text, topic), None
@@ -945,67 +947,36 @@ def _pick_fresh_topics(cur, pool: list, count: int, cooldown_days: int = 30) -> 
     return chosen[:count]
 
 
-def _find_fresh_business_topic(cur, api_key: str, folder_id: str):
+_RU_STOPWORDS = {
+    'и', 'в', 'на', 'с', 'по', 'для', 'из', 'от', 'к', 'о', 'об', 'за', 'до', 'при',
+    'не', 'что', 'это', 'как', 'а', 'но', 'или', 'же', 'бы', 'ли', 'у', 'да', 'нет',
+    'краснодар', 'краснодара', 'краснодаре', 'краснодарского', 'краснодарском', 'края', 'крае',
+}
+
+
+def _find_similar_snippets(target: dict, pool: list, exclude_idx: int, limit: int = 3) -> list:
     """
-    Широкий поиск: сначала ищем свежие новости о бизнесе/коммерческой недвижимости
-    Краснодарского края "с нуля" (без привязки к конкретной теме из каталога).
-    Одним запросом к ИИ: 1) проверяем, какие из найденных новостей реально относятся
-    к бизнесу/коммерческой недвижимости региона, 2) сверяем с историей уже опубликованных
-    статей, чтобы не повторяться, 3) выбираем одну самую значимую ещё не освещённую новость.
-
-    Возвращает (topic, snippets) — тема для статьи и найденные сниппеты по ней,
-    или (None, None), если среди свежих новостей нет ничего релевантного и ещё не освещённого.
+    Простое сравнение по пересечению ключевых слов заголовка (без доп. вызова ИИ — дёшево
+    и быстро). Нужно, чтобы найти в общем списке новости, вероятно рассказывающие о том же
+    событии из других источников — их стоит добавить как доп. фактуру к основному сниппету.
     """
-    if not api_key or not folder_id:
-        return None, None
-    snippets, _src = _fetch_news_snippets(
-        'бизнес коммерческая недвижимость Краснодар Краснодарский край', limit=15
-    )
-    local = _fetch_local_news_snippets('бизнес коммерческая недвижимость', limit=5)
-    seen = {s['url'] for s in snippets}
-    snippets += [s for s in local if s['url'] not in seen]
-    if not snippets:
-        return None, None
-
-    try:
-        cur.execute(f"SELECT title FROM {SCHEMA}.news ORDER BY created_at DESC LIMIT 50")
-        recent_titles = [r['title'] for r in cur.fetchall() if r.get('title')]
-    except Exception:
-        recent_titles = []
-
-    news_list = '\n'.join(f'{i + 1}. {s["title"]} — {s["snippet"][:150]}' for i, s in enumerate(snippets))
-    recent_block = '\n'.join(f'- {t}' for t in recent_titles) or '(пока пусто)'
-
-    system = (
-        'Ты — редактор новостей о бизнесе и коммерческой недвижимости Краснодарского края. '
-        'Тебе дан пронумерованный список свежих новостных заголовков со сниппетами и список '
-        'уже опубликованных на сайте статей. Найди в списке свежих новостей ОДНУ, которая: '
-        '1) реально и однозначно относится к бизнесу, предпринимательству, торговле, производству '
-        'или коммерческой недвижимости Краснодара/Краснодарского края (не общие федеральные темы, '
-        'не жильё для физлиц, не политика без связи с бизнесом); '
-        '2) по сути ещё НЕ была освещена в списке уже опубликованных статей (не дублирует то же событие). '
-        'Если такая новость есть — ответь СТРОГО в формате: НОМЕР|Короткая ёмкая тема статьи по этой новости\n'
-        'Если ни одна новость не подходит под оба условия — ответь СТРОГО одним словом: НЕТ'
-    )
-    user = f'СВЕЖИЕ НОВОСТИ:\n{news_list}\n\nУЖЕ ОПУБЛИКОВАНО НА САЙТЕ (не повторять по сути):\n{recent_block}'
-
-    try:
-        resp = chat_simple(system, user, api_key, folder_id, temperature=0.2, max_tokens=150, timeout=30)
-    except Exception as e:
-        print(f'[news] _find_fresh_business_topic ошибка запроса: {e}')
-        return None, None
-
-    resp = (resp or '').strip()
-    if not resp or resp.upper().startswith('НЕТ'):
-        return None, None
-    m = re.match(r'\s*(\d+)\s*\|\s*(.+)', resp, re.DOTALL)
-    if not m:
-        return None, None
-    idx = int(m.group(1)) - 1
-    topic = m.group(2).strip().split('\n')[0][:200]
-    if idx < 0 or idx >= len(snippets) or not topic:
-        return None, None
-    return topic, snippets
+    def _words(text: str) -> set:
+        return {
+            w for w in re.findall(r'[а-яё]{4,}', (text or '').lower())
+            if w not in _RU_STOPWORDS
+        }
+    target_words = _words(target.get('title', ''))
+    if not target_words:
+        return []
+    scored = []
+    for i, s in enumerate(pool):
+        if i == exclude_idx:
+            continue
+        overlap = len(target_words & _words(s.get('title', '')))
+        if overlap > 0:
+            scored.append((overlap, s))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [s for _, s in scored[:limit]]
 
 
 def _check_article_unique(cur, api_key: str, folder_id: str, article: dict) -> bool:
@@ -1177,15 +1148,22 @@ def _advance_job(cur, conn, job: dict, api_key: str, folder_id: str) -> dict:
             print(f'[news] search_wide_ai ошибка запроса: {e}')
         m = re.match(r'\s*(\d+)\s*\|\s*(.+)', resp, re.DOTALL) if resp and not resp.upper().startswith('НЕТ') else None
         found_topic = None
+        matched_snippet = None
         if m:
             idx = int(m.group(1)) - 1
             cand = m.group(2).strip().split('\n')[0][:200]
             if 0 <= idx < len(snippets) and cand:
                 found_topic = cand
-        if found_topic:
-            key_rate = _extract_key_rate_from_snippets(snippets)
+                matched_snippet = snippets[idx]
+        if found_topic and matched_snippet:
+            # Статья должна раскрывать СТРОГО эту одну новость — передаём модели только
+            # найденный сниппет + 2-3 других из списка, которые по словам заголовка похожи
+            # на него (вероятно, о том же событии из разных источников). Раньше передавался
+            # весь список из 15-20 разнородных новостей, и статья "расползалась" по темам.
+            focused = [matched_snippet] + _find_similar_snippets(matched_snippet, snippets, exclude_idx=idx, limit=3)
+            key_rate = _extract_key_rate_from_snippets(focused)
             _job_set(cur, conn, jid, status='pending', topic=found_topic,
-                     snippets_raw=snippets[:8], key_rate=key_rate)
+                     snippets_raw=focused, key_rate=key_rate)
         else:
             _job_set(cur, conn, jid, status='catalog_search', snippets_raw=[])
         return _job_get(cur, jid)
@@ -1231,7 +1209,7 @@ def _advance_job(cur, conn, job: dict, api_key: str, folder_id: str) -> dict:
             return _job_get(cur, jid)
         try:
             op_id = chat_async_start(system_prompt, user_text, api_key, folder_id,
-                                      temperature=0.3, max_tokens=8000, timeout=15)
+                                      temperature=0.3, max_tokens=3500, timeout=15)
         except Exception as e:
             _job_set(cur, conn, jid, status='error', error=str(e)[:300])
             return _job_get(cur, jid)
@@ -1342,7 +1320,7 @@ def handler(event: dict, context) -> dict:
 
                 # ── Автогенерация новостей (асинхронный джоб, 1 короткий шаг за вызов) ──
                 # Реальный лимит выполнения Cloud Function ~30 сек — генерация статьи в
-                # 3000 слов (поиск темы + запрос к ИИ + проверка уникальности) не укладывается
+                # ~1000 слов (поиск темы + запрос к ИИ + проверка уникальности) не укладывается
                 # в один вызов. Поэтому весь процесс разбит на джоб с состояниями, и каждый
                 # ping_cron продвигает активный джоб ровно на один шаг вперёд.
                 cur.execute(f"SELECT * FROM {SCHEMA}.news_schedule ORDER BY id LIMIT 1")
@@ -1768,7 +1746,7 @@ def handler(event: dict, context) -> dict:
                 return _ok({'ok': True})
 
             # ── ГЕНЕРАЦИЯ СТАТЬИ (запуск джоба) ───────────────────────────
-            # Статья в ~3000 слов не укладывается в лимит выполнения функции (~30 сек),
+            # Генерация статьи (поиск + запрос к ИИ) не укладывается в лимит выполнения (~30 сек),
             # поэтому генерация асинхронная: запускаем джоб здесь, фронт опрашивает
             # готовность через action=generate_poll (тот же паттерн, что импорт XLSX
             # и обновление рыночных цен в этом проекте).

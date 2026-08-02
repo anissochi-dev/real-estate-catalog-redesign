@@ -47,31 +47,66 @@ export function NewsAdminCreate({ headers, onCreated, onTabChange }: Props) {
     }
   };
 
+  // Генерация статьи асинхронная (job): запуск возвращает job_id, дальше опрашиваем
+  // готовность короткими вызовами generate_poll, пока не done/error. Нужно, потому что
+  // статья пишется в несколько шагов (поиск источников + запрос к ИИ) и не укладывается
+  // в один быстрый HTTP-вызов.
+  const [genStatus, setGenStatus] = useState('');
+
   const generate = async () => {
     const topic = customTopic.trim() || selectedTopic;
     setGenerating(true);
+    setGenStatus('Запуск генерации...');
     try {
       const r = await fetch(NEWS_URL, { method: 'POST', headers, body: JSON.stringify({ action: 'generate', topic, auto_publish: true }) });
       const d = await r.json();
       if (d.error) { toast.error(d.error); return; }
-      toast.success(`Статья "${d.title}" создана`);
-      onCreated();
-      onTabChange('list');
+      const jobId = d.job_id;
+      while (true) {
+        await new Promise(res => setTimeout(res, 2500));
+        const pr = await fetch(NEWS_URL, { method: 'POST', headers, body: JSON.stringify({ action: 'generate_poll', job_id: jobId }) });
+        const pd = await pr.json();
+        if (pd.error) { toast.error(pd.error); return; }
+        setGenStatus(pd.status);
+        if (pd.status === 'done') {
+          toast.success(`Статья "${pd.title}" создана`);
+          onCreated();
+          onTabChange('list');
+          return;
+        }
+        if (pd.status === 'error') { toast.error(pd.error || 'Не удалось сгенерировать статью'); return; }
+      }
     } finally {
       setGenerating(false);
+      setGenStatus('');
     }
   };
 
   const runAuto = async () => {
     setRunningAuto(true);
+    setGenStatus('Запуск генерации...');
     try {
       const r = await fetch(NEWS_URL, { method: 'POST', headers, body: JSON.stringify({ action: 'run_auto', count: autoCount }) });
       const d = await r.json();
       if (d.error) { toast.error(d.error); return; }
-      toast.success(`Сгенерировано статей: ${d.generated}`);
-      onCreated();
+      const jobIds: number[] = d.job_ids || [];
+      if (!jobIds.length) { toast.error('Не удалось запустить генерацию'); return; }
+      while (true) {
+        await new Promise(res => setTimeout(res, 2500));
+        const pr = await fetch(NEWS_URL, { method: 'POST', headers, body: JSON.stringify({ action: 'run_auto_poll', job_ids: jobIds }) });
+        const pd = await pr.json();
+        if (pd.error) { toast.error(pd.error); return; }
+        const done = (pd.results || []).filter((x: { status: string }) => x.status === 'done').length;
+        setGenStatus(`Готово ${done} из ${jobIds.length}...`);
+        if (pd.all_finished) {
+          toast.success(`Сгенерировано статей: ${pd.generated}`);
+          onCreated();
+          return;
+        }
+      }
     } finally {
       setRunningAuto(false);
+      setGenStatus('');
     }
   };
 
@@ -156,6 +191,9 @@ export function NewsAdminCreate({ headers, onCreated, onTabChange }: Props) {
           {generating ? <Icon name="Loader2" size={15} className="animate-spin" /> : <Icon name="Sparkles" size={15} />}
           {generating ? 'Генерация...' : 'Сгенерировать статью'}
         </button>
+        {generating && genStatus && (
+          <div className="text-xs text-muted-foreground text-center">Статус: {genStatus}</div>
+        )}
 
         <div className="border-t border-border pt-4">
           <div className="text-sm font-semibold mb-3">Пакетная генерация</div>
@@ -169,6 +207,9 @@ export function NewsAdminCreate({ headers, onCreated, onTabChange }: Props) {
             {runningAuto ? <Icon name="Loader2" size={15} className="animate-spin" /> : <Icon name="Zap" size={15} />}
             {runningAuto ? 'Генерация...' : `Сгенерировать ${autoCount} статей`}
           </button>
+          {runningAuto && genStatus && (
+            <div className="text-xs text-muted-foreground text-center mt-2">{genStatus}</div>
+          )}
         </div>
       </div>
     </div>
