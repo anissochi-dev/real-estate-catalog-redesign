@@ -149,6 +149,78 @@ def chat(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# chat_async_start() / chat_async_poll() — асинхронная генерация для ДОЛГИХ ответов
+# (длинные статьи), когда один вызов chat() не укладывается в лимит выполнения
+# Cloud Function (~30 сек). Тот же принцип, что и генерация изображений YandexART
+# в этом проекте: запуск операции → короткий опрос готовности отдельными вызовами.
+# ─────────────────────────────────────────────────────────────────────────────
+_CHAT_ASYNC_URL = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completionAsync'
+_OPERATION_URL = 'https://llm.api.cloud.yandex.net/operations/{}'
+
+
+def chat_async_start(
+    system: str,
+    user: str,
+    api_key: str,
+    folder_id: str,
+    *,
+    model: str | None = None,
+    temperature: float = 0.3,
+    max_tokens: int = 8000,
+    timeout: int = 15,
+) -> str:
+    """Запускает асинхронную генерацию, возвращает operation_id (без ожидания результата)."""
+    messages = []
+    if system:
+        messages.append({'role': 'system', 'text': system})
+    messages.append({'role': 'user', 'text': user})
+
+    mdl = model or CHAT_MODEL
+    model_uri = f'gpt://{folder_id}/{mdl}' if folder_id else mdl
+    payload = {
+        'modelUri': model_uri,
+        'completionOptions': {
+            'stream': False,
+            'temperature': temperature,
+            'maxTokens': str(max_tokens),
+        },
+        'messages': messages,
+    }
+    req = urllib.request.Request(
+        _CHAT_ASYNC_URL,
+        data=json.dumps(payload, ensure_ascii=False).encode(),
+        headers=_headers(api_key, folder_id),
+        method='POST',
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        op = json.loads(resp.read().decode())
+    return op.get('id', '')
+
+
+def chat_async_poll(operation_id: str, api_key: str, folder_id: str, timeout: int = 15) -> dict:
+    """
+    Проверяет готовность асинхронной операции.
+    Возвращает {'done': bool, 'text': str, 'error': str|None}.
+    """
+    if not operation_id:
+        return {'done': True, 'text': '', 'error': 'Пустой operation_id'}
+    headers = {'Authorization': f'Api-Key {api_key}'}
+    if folder_id:
+        headers['x-folder-id'] = folder_id
+    req = urllib.request.Request(_OPERATION_URL.format(operation_id), headers=headers, method='GET')
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        op = json.loads(resp.read().decode())
+    if not op.get('done'):
+        return {'done': False, 'text': '', 'error': None}
+    if op.get('error'):
+        return {'done': True, 'text': '', 'error': str(op['error'])[:300]}
+    response = op.get('response') or {}
+    alternatives = response.get('alternatives') or []
+    text = ((alternatives[0].get('message') or {}).get('text') or '').strip() if alternatives else ''
+    return {'done': True, 'text': text, 'error': None if text else 'Пустой ответ модели'}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # chat_simple() — удобная обёртка: system + user → строка ответа
 # ─────────────────────────────────────────────────────────────────────────────
 def chat_simple(

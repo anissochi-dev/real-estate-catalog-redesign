@@ -32,14 +32,14 @@ import boto3
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-from ai_client import load_keys, chat_simple
+from ai_client import load_keys, chat_simple, chat_async_start, chat_async_poll
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token, X-Authorization, Authorization, X-User-Id, X-Session-Id',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token, X-Authorization, Authorization, X-User-Id, X-Session-Id, X-Cron-Token',
 }
 
 ALLOWED_ROLES = ('admin', 'editor', 'manager', 'director')
@@ -428,9 +428,8 @@ def _build_news_context(snippets: list[dict]) -> str:
     return '\n'.join(lines)
 
 
-def _gpt(api_key, folder_id, topic, key_rate: float | None = None, news_snippets: list | None = None):
-    if not api_key or not folder_id:
-        return None, 'YandexGPT не настроен'
+def _build_article_prompts(topic: str, key_rate: float | None, news_snippets: list) -> tuple[str, str] | tuple[None, None]:
+    """Собирает (system_prompt, user_text) для генерации статьи. Возвращает (None, None), если новостей нет."""
     now = datetime.now(timezone.utc)
     MONTHS_RU = ['января','февраля','марта','апреля','мая','июня',
                  'июля','августа','сентября','октября','ноября','декабря']
@@ -448,10 +447,9 @@ def _gpt(api_key, folder_id, topic, key_rate: float | None = None, news_snippets
         key_rate_block=key_rate_block,
         key_rate_rule=key_rate_rule,
     )
-    # Если нет новостей — отказываемся генерировать (запрещено выдумывать)
     news_snippets = news_snippets or []
     if not news_snippets:
-        return None, 'Нет свежих новостей по теме — генерация отменена (запрещено писать без источников)'
+        return None, None
     news_block = _build_news_context(news_snippets)
     user_text = (
         f'Тема: {topic}\n'
@@ -460,46 +458,61 @@ def _gpt(api_key, folder_id, topic, key_rate: float | None = None, news_snippets
         f'Напиши статью, пересказав эти новости своими словами. '
         f'Используй только факты из источников выше. Не придумывай цифры и данные которых нет в новостях.'
     )
+    return system_prompt, user_text
+
+
+def _strip_md(s: str) -> str:
+    s = re.sub(r'\*{1,3}([^*]+)\*{1,3}', r'\1', s)
+    s = re.sub(r'#{1,6}\s+', '', s)
+    s = re.sub(r'_{1,2}([^_]+)_{1,2}', r'\1', s)
+    return s
+
+
+def _parse_gpt_article(text: str, topic: str) -> dict | None:
+    """Парсит JSON-статью из сырого ответа GPT (с fallback на построчный разбор)."""
+    if not text:
+        return None
+    text = text.strip()
+    if text.startswith('```'):
+        text = re.sub(r'^```\w*\n?', '', text)
+        text = re.sub(r'\n?```$', '', text)
+    try:
+        parsed = json.loads(text)
+        parsed['content'] = _strip_md(parsed.get('content', ''))
+        parsed['title'] = _strip_md(parsed.get('title', ''))
+        return parsed
+    except Exception:
+        m = re.search(r'\{.*\}', text, re.DOTALL)
+        if m:
+            try:
+                parsed = json.loads(m.group(0))
+                parsed['content'] = _strip_md(parsed.get('content', ''))
+                parsed['title'] = _strip_md(parsed.get('title', ''))
+                return parsed
+            except Exception:
+                pass
+        lines = text.split('\n', 2)
+        return {
+            'title': _strip_md(lines[0][:200] if lines else topic),
+            'summary': lines[1][:300] if len(lines) > 1 else '',
+            'content': _strip_md('\n'.join(lines[2:]) if len(lines) > 2 else text),
+        }
+
+
+def _gpt(api_key, folder_id, topic, key_rate: float | None = None, news_snippets: list | None = None):
+    """Синхронная генерация статьи (используется только там, где укладывается в короткий лимит —
+    например, для служебных коротких текстов). Для основной статьи используется асинхронный job."""
+    if not api_key or not folder_id:
+        return None, 'YandexGPT не настроен'
+    system_prompt, user_text = _build_article_prompts(topic, key_rate, news_snippets or [])
+    if system_prompt is None:
+        return None, 'Нет свежих новостей по теме — генерация отменена (запрещено писать без источников)'
     try:
         text = chat_simple(system_prompt, user_text, api_key, folder_id,
-                           temperature=0.3, max_tokens=8000, timeout=120)
+                           temperature=0.3, max_tokens=8000, timeout=25)
         if not text:
             return None, 'Пустой ответ от модели'
-        # Парсим JSON из ответа
-        text = text.strip()
-        if text.startswith('```'):
-            text = re.sub(r'^```\w*\n?', '', text)
-            text = re.sub(r'\n?```$', '', text)
-        # Убираем markdown если GPT добавил
-        def _strip_md(s):
-            s = re.sub(r'\*{1,3}([^*]+)\*{1,3}', r'\1', s)
-            s = re.sub(r'#{1,6}\s+', '', s)
-            s = re.sub(r'_{1,2}([^_]+)_{1,2}', r'\1', s)
-            return s
-
-        try:
-            parsed = json.loads(text)
-            parsed['content'] = _strip_md(parsed.get('content', ''))
-            parsed['title'] = _strip_md(parsed.get('title', ''))
-            return parsed, None
-        except Exception:
-            # Пробуем вытащить JSON из текста
-            m = re.search(r'\{.*\}', text, re.DOTALL)
-            if m:
-                try:
-                    parsed = json.loads(m.group(0))
-                    parsed['content'] = _strip_md(parsed.get('content', ''))
-                    parsed['title'] = _strip_md(parsed.get('title', ''))
-                    return parsed, None
-                except Exception:
-                    pass
-            # Если не JSON — формируем структуру из текста
-            lines = text.split('\n', 2)
-            return {
-                'title': _strip_md(lines[0][:200] if lines else topic),
-                'summary': lines[1][:300] if len(lines) > 1 else '',
-                'content': _strip_md('\n'.join(lines[2:]) if len(lines) > 2 else text),
-            }, None
+        return _parse_gpt_article(text, topic), None
     except Exception as e:
         return None, str(e)[:300]
 
@@ -1034,6 +1047,236 @@ def _check_article_unique(cur, api_key: str, folder_id: str, article: dict) -> b
         return True
 
 
+def _job_create(cur, conn, *, status='pending', topic='', snippets=None, key_rate=None,
+                 auto_publish=False, is_auto=False, created_by=None):
+    """Создаёт запись асинхронного джоба генерации статьи, возвращает его id."""
+    snippets_json = json.dumps(snippets or [], ensure_ascii=False).replace("'", "''")
+    topic_safe = _safe(topic, 299)
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.news_gen_jobs (status, topic, snippets, key_rate, auto_publish, is_auto, created_by) "
+        f"VALUES ('{status}', '{topic_safe}', '{snippets_json}'::jsonb, "
+        f"{key_rate if key_rate is not None else 'NULL'}, {auto_publish}, {is_auto}, "
+        f"{int(created_by) if created_by else 'NULL'}) RETURNING id"
+    )
+    jid = cur.fetchone()['id']
+    conn.commit()
+    return jid
+
+
+def _job_get(cur, job_id):
+    cur.execute(f"SELECT * FROM {SCHEMA}.news_gen_jobs WHERE id = {int(job_id)}")
+    return cur.fetchone()
+
+
+def _job_set(cur, conn, job_id, **fields):
+    """Обновляет произвольные поля джоба. snippets_raw/article_raw сериализуются в JSONB."""
+    sets = []
+    for k, v in fields.items():
+        if k == 'snippets_raw':
+            js = v if isinstance(v, str) else json.dumps(v, ensure_ascii=False)
+            sets.append(f"snippets = '{js.replace(chr(39), chr(39)*2)}'::jsonb")
+        elif k == 'article_raw':
+            js = v if isinstance(v, str) else json.dumps(v, ensure_ascii=False)
+            sets.append(f"article = '{js.replace(chr(39), chr(39)*2)}'::jsonb")
+        elif v is None:
+            sets.append(f"{k} = NULL")
+        elif isinstance(v, bool):
+            sets.append(f"{k} = {v}")
+        elif isinstance(v, (int, float)):
+            sets.append(f"{k} = {v}")
+        else:
+            sets.append(f"{k} = '{_safe(str(v), 4000)}'")
+    sets.append('updated_at = NOW()')
+    cur.execute(f"UPDATE {SCHEMA}.news_gen_jobs SET {', '.join(sets)} WHERE id = {int(job_id)}")
+    conn.commit()
+
+
+def _advance_job(cur, conn, job: dict, api_key: str, folder_id: str) -> dict:
+    """
+    Продвигает джоб генерации статьи РОВНО НА ОДИН короткий шаг — вписывается в лимит
+    выполнения функции (~30 сек). Каждый шаг делает МАКСИМУМ одну сетевую операцию —
+    даже широкий поиск/подбор темы разбит на отдельные под-шаги, иначе несколько
+    последовательных запросов внутри одного шага сами по себе превышают лимит.
+
+    Цепочка для автопоиска (без заданной темы):
+      search_wide → search_wide_local → search_wide_ai →
+        (нашли тему) → pending
+        (не нашли)   → catalog_search → catalog_local → catalog_daily → pending
+    Цепочка при заданной теме (ручная генерация):
+      topic_given → topic_given_local → pending
+    Финал (общий для обеих цепочек):
+      pending → polling (может повторяться) → checking_unique → done/error
+    """
+    jid = job['id']
+    status = job['status']
+    snippets = job.get('snippets') or []
+
+    # ── Ручная тема (задана пользователем) ────────────────────────────────
+    if status == 'topic_given':
+        topic = job.get('topic') or ''
+        topic_news, _src = _fetch_news_snippets(f'{topic} Краснодар', limit=8)
+        if not topic_news:
+            topic_news, _src = _fetch_news_snippets('коммерческая недвижимость Краснодар', limit=8)
+        _job_set(cur, conn, jid, status='topic_given_local', snippets_raw=topic_news)
+        return _job_get(cur, jid)
+
+    if status == 'topic_given_local':
+        topic = job.get('topic') or ''
+        local_news = _fetch_local_news_snippets(topic, limit=3)
+        seen = {s['url'] for s in snippets}
+        combined = snippets + [s for s in local_news if s['url'] not in seen]
+        if not combined:
+            _job_set(cur, conn, jid, status='error', error='Нет свежих новостей по этой теме')
+            return _job_get(cur, jid)
+        key_rate = _extract_key_rate_from_snippets(combined)
+        _job_set(cur, conn, jid, status='pending', snippets_raw=combined[:8], key_rate=key_rate)
+        return _job_get(cur, jid)
+
+    # ── Автопоиск: широкий поиск свежих бизнес-новостей "с нуля" ──────────
+    if status == 'search_wide':
+        wide, _src = _fetch_news_snippets(
+            'бизнес коммерческая недвижимость Краснодар Краснодарский край', limit=15
+        )
+        _job_set(cur, conn, jid, status='search_wide_local', snippets_raw=wide)
+        return _job_get(cur, jid)
+
+    if status == 'search_wide_local':
+        local = _fetch_local_news_snippets('бизнес коммерческая недвижимость', limit=5)
+        seen = {s['url'] for s in snippets}
+        combined = snippets + [s for s in local if s['url'] not in seen]
+        if not combined:
+            _job_set(cur, conn, jid, status='catalog_search', snippets_raw=[])
+            return _job_get(cur, jid)
+        _job_set(cur, conn, jid, status='search_wide_ai', snippets_raw=combined)
+        return _job_get(cur, jid)
+
+    if status == 'search_wide_ai':
+        try:
+            cur.execute(f"SELECT title FROM {SCHEMA}.news ORDER BY created_at DESC LIMIT 50")
+            recent_titles = [r['title'] for r in cur.fetchall() if r.get('title')]
+        except Exception:
+            recent_titles = []
+        news_list = '\n'.join(f'{i + 1}. {s["title"]} — {s["snippet"][:150]}' for i, s in enumerate(snippets))
+        recent_block = '\n'.join(f'- {t}' for t in recent_titles) or '(пока пусто)'
+        system = (
+            'Ты — редактор новостей о бизнесе и коммерческой недвижимости Краснодарского края. '
+            'Тебе дан пронумерованный список свежих новостных заголовков со сниппетами и список '
+            'уже опубликованных на сайте статей. Найди в списке свежих новостей ОДНУ, которая: '
+            '1) реально и однозначно относится к бизнесу, предпринимательству, торговле, производству '
+            'или коммерческой недвижимости Краснодара/Краснодарского края (не общие федеральные темы, '
+            'не жильё для физлиц, не политика без связи с бизнесом); '
+            '2) по сути ещё НЕ была освещена в списке уже опубликованных статей (не дублирует то же событие). '
+            'Если такая новость есть — ответь СТРОГО в формате: НОМЕР|Короткая ёмкая тема статьи по этой новости\n'
+            'Если ни одна новость не подходит под оба условия — ответь СТРОГО одним словом: НЕТ'
+        )
+        user = f'СВЕЖИЕ НОВОСТИ:\n{news_list}\n\nУЖЕ ОПУБЛИКОВАНО НА САЙТЕ (не повторять по сути):\n{recent_block}'
+        try:
+            resp = (chat_simple(system, user, api_key, folder_id, temperature=0.2, max_tokens=150, timeout=20) or '').strip()
+        except Exception as e:
+            resp = ''
+            print(f'[news] search_wide_ai ошибка запроса: {e}')
+        m = re.match(r'\s*(\d+)\s*\|\s*(.+)', resp, re.DOTALL) if resp and not resp.upper().startswith('НЕТ') else None
+        found_topic = None
+        if m:
+            idx = int(m.group(1)) - 1
+            cand = m.group(2).strip().split('\n')[0][:200]
+            if 0 <= idx < len(snippets) and cand:
+                found_topic = cand
+        if found_topic:
+            key_rate = _extract_key_rate_from_snippets(snippets)
+            _job_set(cur, conn, jid, status='pending', topic=found_topic,
+                     snippets_raw=snippets[:8], key_rate=key_rate)
+        else:
+            _job_set(cur, conn, jid, status='catalog_search', snippets_raw=[])
+        return _job_get(cur, jid)
+
+    # ── Автопоиск: не нашли свежую новость "с нуля" — берём тему из каталога ─
+    if status == 'catalog_search':
+        cur.execute(f"SELECT topics FROM {SCHEMA}.news_schedule ORDER BY id LIMIT 1")
+        sch_row = cur.fetchone()
+        custom_topics_raw = ((sch_row or {}).get('topics') or '').strip()
+        pool = [t.strip() for t in custom_topics_raw.splitlines() if t.strip()] if custom_topics_raw else AUTO_TOPICS
+        picked = _pick_fresh_topics(cur, pool, 1, cooldown_days=30)
+        topic = picked[0] if picked else pool[0]
+        topic_news, _src = _fetch_news_snippets(f'{topic} Краснодар', limit=5)
+        _job_set(cur, conn, jid, status='catalog_local', topic=topic, snippets_raw=topic_news)
+        return _job_get(cur, jid)
+
+    if status == 'catalog_local':
+        topic = job.get('topic') or ''
+        local_news = _fetch_local_news_snippets(topic, limit=3)
+        seen = {s['url'] for s in snippets}
+        combined = snippets + [s for s in local_news if s['url'] not in seen]
+        _job_set(cur, conn, jid, status='catalog_daily', snippets_raw=combined)
+        return _job_get(cur, jid)
+
+    if status == 'catalog_daily':
+        daily_news, _ = _fetch_news_snippets('коммерческая недвижимость Краснодар новости сегодня', limit=10)
+        seen = {s['url'] for s in snippets}
+        combined = snippets + [s for s in daily_news if s['url'] not in seen]
+        if not combined:
+            _job_set(cur, conn, jid, status='error', error='Не найдено свежих новостей ни по одной теме')
+            return _job_get(cur, jid)
+        key_rate = _extract_key_rate_from_snippets(combined)
+        _job_set(cur, conn, jid, status='pending', snippets_raw=combined[:8], key_rate=key_rate)
+        return _job_get(cur, jid)
+
+    if status == 'pending':
+        snippets = job.get('snippets') or []
+        topic = job.get('topic') or ''
+        key_rate = float(job['key_rate']) if job.get('key_rate') is not None else None
+        system_prompt, user_text = _build_article_prompts(topic, key_rate, snippets)
+        if system_prompt is None:
+            _job_set(cur, conn, jid, status='error', error='Нет свежих новостей по теме — генерация отменена')
+            return _job_get(cur, jid)
+        try:
+            op_id = chat_async_start(system_prompt, user_text, api_key, folder_id,
+                                      temperature=0.3, max_tokens=8000, timeout=15)
+        except Exception as e:
+            _job_set(cur, conn, jid, status='error', error=str(e)[:300])
+            return _job_get(cur, jid)
+        if not op_id:
+            _job_set(cur, conn, jid, status='error', error='Не удалось запустить генерацию статьи')
+            return _job_get(cur, jid)
+        _job_set(cur, conn, jid, status='polling', operation_id=op_id)
+        return _job_get(cur, jid)
+
+    if status == 'polling':
+        try:
+            poll = chat_async_poll(job.get('operation_id') or '', api_key, folder_id, timeout=15)
+        except Exception as e:
+            _job_set(cur, conn, jid, status='error', error=str(e)[:300])
+            return _job_get(cur, jid)
+        if not poll['done']:
+            return job
+        if poll.get('error'):
+            _job_set(cur, conn, jid, status='error', error=poll['error'])
+            return _job_get(cur, jid)
+        article = _parse_gpt_article(poll['text'], job.get('topic') or '')
+        if not article or not _is_valid_article(article):
+            _job_set(cur, conn, jid, status='error', error='Модель отказалась писать статью или вернула пустой текст')
+            return _job_get(cur, jid)
+        _job_set(cur, conn, jid, status='checking_unique', article_raw=article)
+        return _job_get(cur, jid)
+
+    if status == 'checking_unique':
+        article = job.get('article') or {}
+        unique = _check_article_unique(cur, api_key, folder_id, article)
+        if not unique:
+            _job_set(cur, conn, jid, status='error', error='Статья дублирует уже опубликованный материал')
+            return _job_get(cur, jid)
+        key_rate = float(job['key_rate']) if job.get('key_rate') is not None else None
+        news_id, slug = _save_article(
+            cur, conn, article, job.get('is_auto', False),
+            job.get('created_by'), auto_publish=job.get('auto_publish', False),
+            key_rate=key_rate, topic=job.get('topic') or '',
+        )
+        _job_set(cur, conn, jid, status='done', news_id=news_id, slug=slug)
+        return _job_get(cur, jid)
+
+    return job  # done/error — терминальные состояния, дальше продвигать нечего
+
+
 def _row_to_dict(r):
     return {
         'id': r['id'],
@@ -1073,6 +1316,18 @@ def handler(event: dict, context) -> dict:
 
     action = qs.get('action') or body.get('action', '')
 
+    # Платформенный крон (function.json → "cron") вызывает функцию GET без query-параметров.
+    # Раньше автопубликация зависела ТОЛЬКО от захода посетителей на сайт (см. useCrons.ts,
+    # троттлинг 10 мин), из-за чего процесс мог растягиваться на дни при низком трафике.
+    # X-Cron-Token — доверенный заголовок платформы (используется так же в price-predict) —
+    # если он совпал, считаем вызов равносильным ?action=ping_cron.
+    headers_lc = {k.lower(): v for k, v in headers.items()}
+    cron_token = headers_lc.get('x-cron-token') or ''
+    expected_cron_token = os.environ.get('CRON_SECRET', '')
+    is_platform_cron = bool(expected_cron_token) and cron_token == expected_cron_token
+    if is_platform_cron and not action:
+        action = 'ping_cron'
+
     dsn = os.environ['DATABASE_URL']
     conn = psycopg2.connect(dsn)
     try:
@@ -1085,90 +1340,78 @@ def handler(event: dict, context) -> dict:
                 now_utc = datetime.now(timezone.utc)
                 result = {'hour': now_utc.hour, 'minute': now_utc.minute}
 
-                # ── Автогенерация новостей ────────────────────────────────
+                # ── Автогенерация новостей (асинхронный джоб, 1 короткий шаг за вызов) ──
+                # Реальный лимит выполнения Cloud Function ~30 сек — генерация статьи в
+                # 3000 слов (поиск темы + запрос к ИИ + проверка уникальности) не укладывается
+                # в один вызов. Поэтому весь процесс разбит на джоб с состояниями, и каждый
+                # ping_cron продвигает активный джоб ровно на один шаг вперёд.
                 cur.execute(f"SELECT * FROM {SCHEMA}.news_schedule ORDER BY id LIMIT 1")
                 sch = cur.fetchone()
                 news_generated = 0
+                job_progress = None
                 if sch and sch.get('is_enabled'):
-                    last_run = sch.get('last_run_at')
-                    # Публикуем если прошло ≥24 часов с последнего успешного запуска.
-                    # Раньше проверялось "текущий час >= run_hour И сегодня не запускали" —
-                    # если в узкое окно часов не заходил ни один посетитель (пинг идёт с фронта),
-                    # публикация срывалась на несколько дней подряд. Интервальная проверка
-                    # не зависит от конкретного часа и не пропускает сутки целиком.
-                    due_by_interval = (
-                        not last_run or not hasattr(last_run, 'date')
-                        or (now_utc - last_run) >= timedelta(hours=24)
-                    )
-                    if due_by_interval:
-                        # Отмечаем "запуск начался" СРАЗУ, до долгой генерации — иначе при таймауте
-                        # функции (генерация статьи с ИИ + поиск занимают время) отметка не успевала
-                        # обновиться, и каждый следующий заход посетителя (раз в 10 минут) заново
-                        # запускал всю дорогую цепочку с нуля, не экономя вызовы ИИ.
-                        ts_start = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')
-                        cur.execute(
-                            f"UPDATE {SCHEMA}.news_schedule SET last_run_at = '{ts_start}' WHERE id = {sch['id']}"
-                        )
-                        conn.commit()
-                        api_key, folder_id = _load_gpt_keys(cur)
-                        if not api_key or not folder_id:
-                            print('[news] CRON: YandexGPT не настроен — пропускаем генерацию')
+                    active_job_id = sch.get('active_job_id')
+                    active_job = _job_get(cur, active_job_id) if active_job_id else None
+                    just_finished = False
+
+                    if active_job and active_job['status'] in ('done', 'error'):
+                        # Джоб завершился (успешно или с ошибкой) — фиксируем результат и
+                        # освобождаем слот для следующего запуска через 24 часа. ВАЖНО: не
+                        # создаём новый джоб в ЭТОМ ЖЕ вызове — иначе он проскакивал бы сразу
+                        # следом, так как only что обновлённый last_run_at ещё не виден в уже
+                        # прочитанной ранее переменной sch. Новый джоб появится на следующем
+                        # ping_cron, который прочитает свежий last_run_at из БД.
+                        if active_job['status'] == 'done':
+                            news_generated = 1
                         else:
-                            count = 1  # одна полноценная глубокая статья за автозапуск (было до 3 коротких)
-
-                            # ── Шаг 1: сначала пробуем найти СВЕЖУЮ, ещё не освещённую бизнес-новость
-                            # напрямую (без привязки к теме из каталога) ──────────────────────────
-                            found_topic, found_snippets = _find_fresh_business_topic(cur, api_key, folder_id)
-
-                            if found_topic:
-                                topics_to_try = [(found_topic, found_snippets)]
-                            else:
-                                # ── Шаг 2: свежего не нашли — берём тему из каталога/расписания
-                                # и ищем новости конкретно под неё, как раньше ──────────────────
-                                custom_topics_raw = (sch.get('topics') or '').strip()
-                                pool = [t.strip() for t in custom_topics_raw.splitlines() if t.strip()] if custom_topics_raw else AUTO_TOPICS
-                                # Исключаем темы, публиковавшиеся последние 30 дней — защита от повторов
-                                picked_topics = _pick_fresh_topics(cur, pool, min(count, len(pool)), cooldown_days=30)
-                                daily_news, _ = _fetch_news_snippets(
-                                    'коммерческая недвижимость Краснодар новости сегодня', limit=10
-                                )
-                                topics_to_try = []
-                                for topic in picked_topics:
-                                    topic_news, src = _fetch_news_snippets(f'{topic} Краснодар', limit=5)
-                                    local_news = _fetch_local_news_snippets(topic, limit=3)
-                                    seen_urls = {s['url'] for s in topic_news}
-                                    combined = topic_news + [s for s in local_news if s['url'] not in seen_urls]
-                                    seen_urls |= {s['url'] for s in local_news}
-                                    combined += [s for s in daily_news if s['url'] not in seen_urls]
-                                    topics_to_try.append((topic, combined))
-
-                            for topic, combined in topics_to_try:
-                                combined = combined or []
-                                key_rate = _extract_key_rate_from_snippets(combined)
-                                article, err = _gpt(
-                                    api_key, folder_id, topic,
-                                    key_rate=key_rate,
-                                    news_snippets=combined[:8],
-                                )
-                                if not article:
-                                    print(f'[news] Пропущена тема (нет новостей): {topic[:80]}')
-                                    continue
-                                if not _is_valid_article(article):
-                                    print(f'[news] Отклонена статья (отказ модели): {article.get("title", "")[:80]}')
-                                    continue
-                                # Проверка уникальности текста относительно всей истории новостей
-                                if not _check_article_unique(cur, api_key, folder_id, article):
-                                    print(f'[news] Отклонена статья (дублирует уже опубликованное): {article.get("title", "")[:80]}')
-                                    continue
-                                _save_article(cur, conn, article, True, auto_publish=True, key_rate=key_rate, topic=topic)
-                                news_generated += 1
-                        ts = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')
+                            print(f"[news] Джоб #{active_job['id']} завершился с ошибкой: {active_job.get('error')}")
+                        ts_done = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')
                         cur.execute(
-                            f"UPDATE {SCHEMA}.news_schedule SET last_run_at = '{ts}', "
-                            f"last_run_count = {news_generated}, updated_at = '{ts}' WHERE id = {sch['id']}"
+                            f"UPDATE {SCHEMA}.news_schedule SET last_run_at = '{ts_done}', "
+                            f"last_run_count = {news_generated}, active_job_id = NULL, updated_at = '{ts_done}' "
+                            f"WHERE id = {sch['id']}"
                         )
                         conn.commit()
+                        active_job = None
+                        just_finished = True
+
+                    if active_job:
+                        # Есть незавершённый джоб — продолжаем его, не создавая новый и не
+                        # трогая last_run_at (запуск уже был засчитан при создании джоба).
+                        api_key, folder_id = _load_gpt_keys(cur)
+                        if api_key and folder_id:
+                            job_progress = _advance_job(cur, conn, active_job, api_key, folder_id)
+                    elif just_finished:
+                        pass  # джоб только что завершён — новый запуск начнётся через 24ч на следующем ping_cron
+                    else:
+                        last_run = sch.get('last_run_at')
+                        # Публикуем если прошло ≥24 часов с последнего завершённого запуска.
+                        # Раньше проверялось "текущий час >= run_hour И сегодня не запускали" —
+                        # если в узкое окно часов не заходил ни один посетитель (пинг идёт с
+                        # фронта), публикация срывалась на несколько дней подряд.
+                        due_by_interval = (
+                            not last_run or not hasattr(last_run, 'date')
+                            or (now_utc - last_run) >= timedelta(hours=24)
+                        )
+                        if due_by_interval:
+                            api_key, folder_id = _load_gpt_keys(cur)
+                            if not api_key or not folder_id:
+                                print('[news] CRON: YandexGPT не настроен — пропускаем генерацию')
+                            else:
+                                # Создаём новый джоб и сразу отмечаем "запуск начался" — иначе
+                                # при коротком лимите каждый следующий заход посетителя (раз в
+                                # 10 минут) заново создавал бы джоб с нуля, не продолжая старый.
+                                jid = _job_create(cur, conn, status='search_wide', is_auto=True, auto_publish=True)
+                                ts_start = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')
+                                cur.execute(
+                                    f"UPDATE {SCHEMA}.news_schedule SET last_run_at = '{ts_start}', "
+                                    f"active_job_id = {jid} WHERE id = {sch['id']}"
+                                )
+                                conn.commit()
+                                job_progress = _advance_job(cur, conn, _job_get(cur, jid), api_key, folder_id)
                 result['news_generated'] = news_generated
+                if job_progress:
+                    result['news_job_status'] = job_progress.get('status')
 
                 # ── Автопереобучение ВБ (независимо от новостей) ─────────
                 vb_retrained = False
@@ -1524,59 +1767,78 @@ def handler(event: dict, context) -> dict:
                 conn.commit()
                 return _ok({'ok': True})
 
-            # ── ГЕНЕРАЦИЯ СТАТЬИ ──────────────────────────────────────────
+            # ── ГЕНЕРАЦИЯ СТАТЬИ (запуск джоба) ───────────────────────────
+            # Статья в ~3000 слов не укладывается в лимит выполнения функции (~30 сек),
+            # поэтому генерация асинхронная: запускаем джоб здесь, фронт опрашивает
+            # готовность через action=generate_poll (тот же паттерн, что импорт XLSX
+            # и обновление рыночных цен в этом проекте).
             if action == 'generate':
                 topic = body.get('topic', '').strip()
-                if not topic:
-                    # Тема не указана вручную — выбираем свежую (не публиковавшуюся 30 дней)
-                    picked = _pick_fresh_topics(cur, AUTO_TOPICS, 1, cooldown_days=30)
-                    topic = picked[0] if picked else AUTO_TOPICS[0]
-                api_key, folder_id = _load_gpt_keys(cur)
                 auto_pub = bool(body.get('auto_publish', False))
-                # Ищем свежие новости — без них генерация запрещена
-                news_snippets, src = _fetch_news_snippets(f'{topic} Краснодар', limit=8)
-                if not news_snippets:
-                    news_snippets, src = _fetch_news_snippets('коммерческая недвижимость Краснодар', limit=8)
-                # Доп. локальная фактура с Юга.ру / MK Кубань
-                local_news = _fetch_local_news_snippets(topic, limit=3)
-                seen_urls = {s['url'] for s in news_snippets}
-                news_snippets += [s for s in local_news if s['url'] not in seen_urls]
-                # Ставку ЦБ берём только если она реально упомянута в найденных новостях
-                key_rate = _extract_key_rate_from_snippets(news_snippets)
-                article, err = _gpt(api_key, folder_id, topic, key_rate=key_rate, news_snippets=news_snippets)
-                if err:
-                    return _err(f'Ошибка генерации: {err}')
-                if not _is_valid_article(article):
-                    return _err(f'Модель отказалась писать статью на тему: {topic}')
-                nid, slug = _save_article(cur, conn, article, True, user['id'], auto_publish=auto_pub, key_rate=key_rate, topic=topic)
-                return _ok({'id': nid, 'slug': slug, 'title': article.get('title'), 'topic': topic, 'cb_key_rate': key_rate, 'news_source': src, 'news_count': len(news_snippets)})
+                jid = _job_create(
+                    cur, conn,
+                    status='topic_given' if topic else 'search_wide',
+                    topic=topic, auto_publish=auto_pub, is_auto=False, created_by=user['id'],
+                )
+                return _ok({'job_id': jid, 'status': 'topic_given' if topic else 'search_wide'})
 
-            # ── АВТОЗАПУСК ВРУЧНУЮ ────────────────────────────────────────
+            if action == 'generate_poll':
+                jid = int(body.get('job_id') or qs.get('job_id') or 0)
+                if not jid:
+                    return _err('job_id обязателен')
+                job = _job_get(cur, jid)
+                if not job:
+                    return _err('Джоб не найден', 404)
+                if job['status'] not in ('done', 'error'):
+                    api_key, folder_id = _load_gpt_keys(cur)
+                    if not api_key or not folder_id:
+                        return _err('YandexGPT не настроен')
+                    job = _advance_job(cur, conn, job, api_key, folder_id)
+                resp = {'status': job['status'], 'topic': job.get('topic')}
+                if job['status'] == 'done':
+                    resp.update({'id': job.get('news_id'), 'slug': job.get('slug'),
+                                 'title': (job.get('article') or {}).get('title'), 'cb_key_rate': job.get('key_rate')})
+                elif job['status'] == 'error':
+                    resp['error'] = job.get('error')
+                return _ok(resp)
+
+            # ── АВТОЗАПУСК ВРУЧНУЮ (пакетная генерация, каждая статья — свой джоб) ──
             if action == 'run_auto':
-                api_key, folder_id = _load_gpt_keys(cur)
-                count = min(int(body.get('count', 3)), 10)
+                count = min(int(body.get('count', 1)), 10)
                 auto_pub = bool(body.get('auto_publish', True))
-                # Исключаем темы, публиковавшиеся последние 14 дней — защита от повторов
+                # Исключаем темы, публиковавшиеся последние 30 дней — защита от повторов
                 topics = _pick_fresh_topics(cur, AUTO_TOPICS, min(count, len(AUTO_TOPICS)), cooldown_days=30)
-                # Общий дайджест новостей на случай если по теме ничего нет
-                daily_news, _ = _fetch_news_snippets('коммерческая недвижимость Краснодар новости', limit=10)
-                results = []
+                job_ids = []
                 for topic in topics:
-                    topic_news, src = _fetch_news_snippets(f'{topic} Краснодар', limit=5)
-                    local_news = _fetch_local_news_snippets(topic, limit=3)
-                    seen = {s['url'] for s in topic_news}
-                    combined = topic_news + [s for s in local_news if s['url'] not in seen]
-                    seen |= {s['url'] for s in local_news}
-                    combined += [s for s in daily_news if s['url'] not in seen]
-                    # Ставку ЦБ берём только если она реально упомянута в найденных новостях
-                    key_rate = _extract_key_rate_from_snippets(combined)
-                    article, err = _gpt(api_key, folder_id, topic, key_rate=key_rate, news_snippets=combined[:8])
-                    if article and _is_valid_article(article):
-                        nid, slug = _save_article(cur, conn, article, True, user['id'], auto_publish=auto_pub, key_rate=key_rate, topic=topic)
-                        results.append({'id': nid, 'slug': slug, 'title': article.get('title'), 'topic': topic, 'cb_key_rate': key_rate})
-                    else:
-                        results.append({'error': err or 'Модель отказалась писать статью', 'topic': topic})
-                return _ok({'results': results, 'generated': len([r for r in results if 'id' in r])})
+                    jid = _job_create(cur, conn, status='topic_given', topic=topic,
+                                       auto_publish=auto_pub, is_auto=True, created_by=user['id'])
+                    job_ids.append(jid)
+                return _ok({'job_ids': job_ids})
+
+            if action == 'run_auto_poll':
+                ids_raw = body.get('job_ids') or []
+                jids = [int(i) for i in ids_raw if str(i).isdigit()]
+                if not jids:
+                    return _err('job_ids обязателен')
+                api_key, folder_id = _load_gpt_keys(cur)
+                results = []
+                for jid in jids:
+                    job = _job_get(cur, jid)
+                    if not job:
+                        results.append({'job_id': jid, 'status': 'error', 'error': 'Джоб не найден'})
+                        continue
+                    if job['status'] not in ('done', 'error') and api_key and folder_id:
+                        job = _advance_job(cur, conn, job, api_key, folder_id)
+                    item = {'job_id': jid, 'status': job['status'], 'topic': job.get('topic')}
+                    if job['status'] == 'done':
+                        item.update({'id': job.get('news_id'), 'slug': job.get('slug'),
+                                     'title': (job.get('article') or {}).get('title')})
+                    elif job['status'] == 'error':
+                        item['error'] = job.get('error')
+                    results.append(item)
+                done_count = len([r for r in results if r['status'] == 'done'])
+                all_finished = all(r['status'] in ('done', 'error') for r in results)
+                return _ok({'results': results, 'generated': done_count, 'all_finished': all_finished})
 
             # ── РАСПИСАНИЕ GET ───────────────────────────────────────────
             if action == 'schedule' and method == 'GET':
