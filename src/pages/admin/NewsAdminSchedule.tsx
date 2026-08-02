@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NEWS_URL } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
-import { Schedule, HOURS, MINUTES, AUTO_TOPICS_GROUPS, WEEK_DAYS, fmtDate } from './newsAdminTypes';
+import { Schedule, AUTO_TOPICS_GROUPS, WEEK_DAYS, fmtDate } from './newsAdminTypes';
 
 interface Props {
   schedule: Schedule;
@@ -48,10 +48,7 @@ export function NewsAdminSchedule({ schedule, schedSaved, headers, onScheduleCha
         Расписание автогенерации
       </div>
       <div className="text-sm text-muted-foreground">
-        Копирайтер анализирует свежие новости и публикует статьи автоматически.
-        {schedule.id && (
-          <> Сейчас: <strong>{String((schedule.run_hour + 3) % 24).padStart(2, '0')}:{String(schedule.run_minute || 0).padStart(2, '0')} МСК</strong>, {schedule.articles_per_run} {schedule.articles_per_run === 1 ? 'статья' : 'статьи'} в день.</>
-        )}
+        Копирайтер ищет свежие бизнес-новости региона (а если их нет — берёт тему из каталога) и раз в сутки публикует одну глубокую аналитическую статью (~3000 слов).
       </div>
 
       <label className="flex items-center gap-3 cursor-pointer">
@@ -61,29 +58,8 @@ export function NewsAdminSchedule({ schedule, schedSaved, headers, onScheduleCha
         <span className="font-medium">Включить автозапуск</span>
       </label>
 
-      <div>
-        <label className="text-xs text-muted-foreground block mb-1">Время запуска (МСК)</label>
-        <div className="flex gap-2 items-center">
-          <select value={schedule.run_hour} onChange={e => onScheduleChange(s => ({ ...s, run_hour: +e.target.value }))}
-            className="flex-1 px-3 py-2 border rounded-lg text-sm">
-            {HOURS.map(h => <option key={h.value} value={h.value}>{h.label}</option>)}
-          </select>
-          <span className="text-muted-foreground font-bold">:</span>
-          <select value={schedule.run_minute ?? 0} onChange={e => onScheduleChange(s => ({ ...s, run_minute: +e.target.value }))}
-            className="w-24 px-3 py-2 border rounded-lg text-sm">
-            {MINUTES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-          </select>
-        </div>
-        <div className="text-xs text-muted-foreground mt-1">
-          Запуск в {String((schedule.run_hour + 3) % 24).padStart(2, '0')}:{String(schedule.run_minute ?? 0).padStart(2, '0')} по московскому времени.
-        </div>
-      </div>
-
-      <div>
-        <label className="text-xs text-muted-foreground block mb-1">Статей за один запуск</label>
-        <input type="number" min={1} max={10} value={schedule.articles_per_run}
-          onChange={e => onScheduleChange(s => ({ ...s, articles_per_run: +e.target.value }))}
-          className="w-full px-3 py-2 border rounded-lg text-sm" />
+      <div className="text-xs text-muted-foreground bg-muted/40 rounded-xl px-4 py-3">
+        Статья публикуется автоматически, как только пройдёт 24 часа с момента предыдущей публикации — точное время запуска не привязано к конкретному часу, это исключает пропуски дней.
       </div>
 
       {/* Темы */}

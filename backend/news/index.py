@@ -27,7 +27,7 @@ import os
 import re
 import urllib.request
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import boto3
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -161,7 +161,7 @@ def _is_valid_article(article: dict) -> bool:
     return True
 
 
-SYSTEM_PROMPT_TEMPLATE = """Ты — редактор новостного издания о коммерческой недвижимости Краснодара и Краснодарского края.
+SYSTEM_PROMPT_TEMPLATE = """Ты — редактор и глубокий аналитик издания о коммерческой недвижимости и бизнесе Краснодара и Краснодарского края.
 
 СЕГОДНЯШНЯЯ ДАТА: {today}.
 {key_rate_block}
@@ -176,7 +176,12 @@ SYSTEM_PROMPT_TEMPLATE = """Ты — редактор новостного из�
 ФОРМАТ СТАТЬИ:
 1. Заголовок: точно отражает содержание новостей, до 100 символов, период {month_year}
 2. Краткое описание (summary): 2-3 предложения о том, что реально произошло, 150-250 символов
-3. Текст: 4-6 абзацев, только факты из источников, профессиональный тон, 500-800 слов
+3. Текст: статья должна раскрывать СТРОГО ОДНУ тему/новость — не смешивай несколько разных
+   событий в одном тексте. Проведи максимально глубокий и подробный анализ именно этой темы:
+   контекст, причины, детали, возможные последствия для рынка — но только на основе фактов
+   из предоставленных источников. Количество абзацев НЕ ограничено — структурируй текст по
+   смыслу и логике повествования, столько абзацев, сколько нужно для полного и связного
+   раскрытия темы. Целевой объём — в среднем около 3000 слов.
 4. Если упоминается ключевая ставка — {key_rate_rule}
 5. Завершай кратким выводом о том, что это значит для рынка Краснодара — без придуманных прогнозов
 6. Без markdown-разметки, только текст с переносами строк
@@ -185,6 +190,7 @@ SYSTEM_PROMPT_TEMPLATE = """Ты — редактор новостного из�
 - Все факты и цифры — только из предоставленных новостей
 - Переформулируй своими словами, НЕ копируй дословно
 - Указывай временные рамки только если они есть в источниках
+- Раскрывай ОДНУ заявленную тему глубоко и подробно, не распыляйся на несколько несвязанных новостей
 
 Формат ответа (строго JSON):
 {{
@@ -456,7 +462,7 @@ def _gpt(api_key, folder_id, topic, key_rate: float | None = None, news_snippets
     )
     try:
         text = chat_simple(system_prompt, user_text, api_key, folder_id,
-                           temperature=0.3, max_tokens=3000, timeout=55)
+                           temperature=0.3, max_tokens=8000, timeout=120)
         if not text:
             return None, 'Пустой ответ от модели'
         # Парсим JSON из ответа
@@ -896,11 +902,11 @@ def _save_article(cur, conn, article, is_auto, user_id=None, auto_publish=False,
     return news_id, slug
 
 
-def _pick_fresh_topics(cur, pool: list, count: int, cooldown_days: int = 14) -> list:
+def _pick_fresh_topics(cur, pool: list, count: int, cooldown_days: int = 30) -> list:
     """
     Выбирает случайные темы из pool, исключая те, что уже использовались
-    в последние cooldown_days дней — защита от повторов вида
-    "Новые тенденции на рынке недвижимости Кубани" 3 раза за неделю.
+    в последние cooldown_days дней (по умолчанию 30 — тема не повторяется в течение месяца) —
+    защита от повторов вида "Новые тенденции на рынке недвижимости Кубани" несколько раз подряд.
     Если после исключения тем не хватает — добираем из оставшихся (лучше похожая тема,
     чем полный простой генерации).
     """
@@ -924,6 +930,108 @@ def _pick_fresh_topics(cur, pool: list, count: int, cooldown_days: int = 14) -> 
     random.shuffle(remaining)
     chosen += remaining[:max(0, count - len(chosen))]
     return chosen[:count]
+
+
+def _find_fresh_business_topic(cur, api_key: str, folder_id: str):
+    """
+    Широкий поиск: сначала ищем свежие новости о бизнесе/коммерческой недвижимости
+    Краснодарского края "с нуля" (без привязки к конкретной теме из каталога).
+    Одним запросом к ИИ: 1) проверяем, какие из найденных новостей реально относятся
+    к бизнесу/коммерческой недвижимости региона, 2) сверяем с историей уже опубликованных
+    статей, чтобы не повторяться, 3) выбираем одну самую значимую ещё не освещённую новость.
+
+    Возвращает (topic, snippets) — тема для статьи и найденные сниппеты по ней,
+    или (None, None), если среди свежих новостей нет ничего релевантного и ещё не освещённого.
+    """
+    if not api_key or not folder_id:
+        return None, None
+    snippets, _src = _fetch_news_snippets(
+        'бизнес коммерческая недвижимость Краснодар Краснодарский край', limit=15
+    )
+    local = _fetch_local_news_snippets('бизнес коммерческая недвижимость', limit=5)
+    seen = {s['url'] for s in snippets}
+    snippets += [s for s in local if s['url'] not in seen]
+    if not snippets:
+        return None, None
+
+    try:
+        cur.execute(f"SELECT title FROM {SCHEMA}.news ORDER BY created_at DESC LIMIT 50")
+        recent_titles = [r['title'] for r in cur.fetchall() if r.get('title')]
+    except Exception:
+        recent_titles = []
+
+    news_list = '\n'.join(f'{i + 1}. {s["title"]} — {s["snippet"][:150]}' for i, s in enumerate(snippets))
+    recent_block = '\n'.join(f'- {t}' for t in recent_titles) or '(пока пусто)'
+
+    system = (
+        'Ты — редактор новостей о бизнесе и коммерческой недвижимости Краснодарского края. '
+        'Тебе дан пронумерованный список свежих новостных заголовков со сниппетами и список '
+        'уже опубликованных на сайте статей. Найди в списке свежих новостей ОДНУ, которая: '
+        '1) реально и однозначно относится к бизнесу, предпринимательству, торговле, производству '
+        'или коммерческой недвижимости Краснодара/Краснодарского края (не общие федеральные темы, '
+        'не жильё для физлиц, не политика без связи с бизнесом); '
+        '2) по сути ещё НЕ была освещена в списке уже опубликованных статей (не дублирует то же событие). '
+        'Если такая новость есть — ответь СТРОГО в формате: НОМЕР|Короткая ёмкая тема статьи по этой новости\n'
+        'Если ни одна новость не подходит под оба условия — ответь СТРОГО одним словом: НЕТ'
+    )
+    user = f'СВЕЖИЕ НОВОСТИ:\n{news_list}\n\nУЖЕ ОПУБЛИКОВАНО НА САЙТЕ (не повторять по сути):\n{recent_block}'
+
+    try:
+        resp = chat_simple(system, user, api_key, folder_id, temperature=0.2, max_tokens=150, timeout=30)
+    except Exception as e:
+        print(f'[news] _find_fresh_business_topic ошибка запроса: {e}')
+        return None, None
+
+    resp = (resp or '').strip()
+    if not resp or resp.upper().startswith('НЕТ'):
+        return None, None
+    m = re.match(r'\s*(\d+)\s*\|\s*(.+)', resp, re.DOTALL)
+    if not m:
+        return None, None
+    idx = int(m.group(1)) - 1
+    topic = m.group(2).strip().split('\n')[0][:200]
+    if idx < 0 or idx >= len(snippets) or not topic:
+        return None, None
+    return topic, snippets
+
+
+def _check_article_unique(cur, api_key: str, folder_id: str, article: dict) -> bool:
+    """
+    Проверяет через ИИ, что черновик статьи не повторяет по сути уже опубликованные материалы.
+    Сравнивает со ВСЕЙ историей новостей (без ограничения по сроку) — заголовки + краткие описания.
+    Возвращает True, если статья уникальна (можно публиковать), False — если это по сути повтор
+    уже вышедшей статьи (тогда тема пропускается, берётся следующий кандидат).
+    Если ИИ недоступен — не блокируем публикацию (возвращаем True), чтобы не остановить весь процесс.
+    """
+    if not api_key or not folder_id:
+        return True
+    try:
+        cur.execute(f"SELECT title, summary FROM {SCHEMA}.news ORDER BY created_at DESC LIMIT 80")
+        rows = cur.fetchall()
+    except Exception:
+        rows = []
+    if not rows:
+        return True
+
+    history = '\n'.join(f'- {r["title"]}: {(r["summary"] or "")[:150]}' for r in rows)
+    system = (
+        'Ты — редактор, проверяющий новости на дубли. Тебе дан черновик новой статьи и список уже '
+        'опубликованных на сайте заголовков с кратким описанием. Ответь СТРОГО одним словом: '
+        'УНИКАЛЬНА — если черновик рассказывает о другом событии/факте, не дублирующем по сути ни одну '
+        'из уже опубликованных статей; ПОВТОР — если черновик пересказывает то же самое событие или факт, '
+        'что уже освещался ранее (пусть и другими словами).'
+    )
+    user = (
+        f'ЧЕРНОВИК НОВОЙ СТАТЬИ:\nЗаголовок: {article.get("title", "")}\n'
+        f'Описание: {article.get("summary", "")}\n\n'
+        f'УЖЕ ОПУБЛИКОВАНО НА САЙТЕ:\n{history}'
+    )
+    try:
+        resp = chat_simple(system, user, api_key, folder_id, temperature=0.0, max_tokens=10, timeout=20)
+        return not (resp or '').strip().upper().startswith('ПОВТОР')
+    except Exception as e:
+        print(f'[news] _check_article_unique ошибка запроса: {e}')
+        return True
 
 
 def _row_to_dict(r):
@@ -982,55 +1090,78 @@ def handler(event: dict, context) -> dict:
                 sch = cur.fetchone()
                 news_generated = 0
                 if sch and sch.get('is_enabled'):
-                    run_hour = sch.get('run_hour', 9)
-                    run_minute = sch.get('run_minute', 0)
                     last_run = sch.get('last_run_at')
-                    # Публикуем если: текущий час >= нужного И сегодня ещё не публиковали
-                    time_ok = now_utc.hour >= run_hour
-                    already_ran = (
-                        last_run and hasattr(last_run, 'date')
-                        and last_run.date() >= now_utc.date()
+                    # Публикуем если прошло ≥24 часов с последнего успешного запуска.
+                    # Раньше проверялось "текущий час >= run_hour И сегодня не запускали" —
+                    # если в узкое окно часов не заходил ни один посетитель (пинг идёт с фронта),
+                    # публикация срывалась на несколько дней подряд. Интервальная проверка
+                    # не зависит от конкретного часа и не пропускает сутки целиком.
+                    due_by_interval = (
+                        not last_run or not hasattr(last_run, 'date')
+                        or (now_utc - last_run) >= timedelta(hours=24)
                     )
-                    if time_ok and not already_ran:
+                    if due_by_interval:
+                        # Отмечаем "запуск начался" СРАЗУ, до долгой генерации — иначе при таймауте
+                        # функции (генерация статьи с ИИ + поиск занимают время) отметка не успевала
+                        # обновиться, и каждый следующий заход посетителя (раз в 10 минут) заново
+                        # запускал всю дорогую цепочку с нуля, не экономя вызовы ИИ.
+                        ts_start = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')
+                        cur.execute(
+                            f"UPDATE {SCHEMA}.news_schedule SET last_run_at = '{ts_start}' WHERE id = {sch['id']}"
+                        )
+                        conn.commit()
                         api_key, folder_id = _load_gpt_keys(cur)
                         if not api_key or not folder_id:
                             print('[news] CRON: YandexGPT не настроен — пропускаем генерацию')
                         else:
-                            count = int(sch.get('articles_per_run', 3))
-                            # Берём темы из расписания если заданы, иначе из AUTO_TOPICS
-                            custom_topics_raw = (sch.get('topics') or '').strip()
-                            if custom_topics_raw:
-                                pool = [t.strip() for t in custom_topics_raw.splitlines() if t.strip()]
+                            count = 1  # одна полноценная глубокая статья за автозапуск (было до 3 коротких)
+
+                            # ── Шаг 1: сначала пробуем найти СВЕЖУЮ, ещё не освещённую бизнес-новость
+                            # напрямую (без привязки к теме из каталога) ──────────────────────────
+                            found_topic, found_snippets = _find_fresh_business_topic(cur, api_key, folder_id)
+
+                            if found_topic:
+                                topics_to_try = [(found_topic, found_snippets)]
                             else:
-                                pool = AUTO_TOPICS
-                            # Исключаем темы, публиковавшиеся последние 14 дней — защита от повторов
-                            topics = _pick_fresh_topics(cur, pool, min(count, len(pool)), cooldown_days=14)
-                            # Один раз ищем общий дайджест новостей Краснодара за сегодня
-                            daily_news, _ = _fetch_news_snippets(
-                                'коммерческая недвижимость Краснодар новости сегодня', limit=10
-                            )
-                            for topic in topics:
-                                topic_news, src = _fetch_news_snippets(f'{topic} Краснодар', limit=5)
-                                # Доп. локальная фактура с Юга.ру / MK Кубань — более региональные новости
-                                local_news = _fetch_local_news_snippets(topic, limit=3)
-                                seen_urls = {s['url'] for s in topic_news}
-                                combined = topic_news + [s for s in local_news if s['url'] not in seen_urls]
-                                seen_urls |= {s['url'] for s in local_news}
-                                combined += [s for s in daily_news if s['url'] not in seen_urls]
-                                # Ставку ЦБ берём только если она реально упомянута в найденных новостях
+                                # ── Шаг 2: свежего не нашли — берём тему из каталога/расписания
+                                # и ищем новости конкретно под неё, как раньше ──────────────────
+                                custom_topics_raw = (sch.get('topics') or '').strip()
+                                pool = [t.strip() for t in custom_topics_raw.splitlines() if t.strip()] if custom_topics_raw else AUTO_TOPICS
+                                # Исключаем темы, публиковавшиеся последние 30 дней — защита от повторов
+                                picked_topics = _pick_fresh_topics(cur, pool, min(count, len(pool)), cooldown_days=30)
+                                daily_news, _ = _fetch_news_snippets(
+                                    'коммерческая недвижимость Краснодар новости сегодня', limit=10
+                                )
+                                topics_to_try = []
+                                for topic in picked_topics:
+                                    topic_news, src = _fetch_news_snippets(f'{topic} Краснодар', limit=5)
+                                    local_news = _fetch_local_news_snippets(topic, limit=3)
+                                    seen_urls = {s['url'] for s in topic_news}
+                                    combined = topic_news + [s for s in local_news if s['url'] not in seen_urls]
+                                    seen_urls |= {s['url'] for s in local_news}
+                                    combined += [s for s in daily_news if s['url'] not in seen_urls]
+                                    topics_to_try.append((topic, combined))
+
+                            for topic, combined in topics_to_try:
+                                combined = combined or []
                                 key_rate = _extract_key_rate_from_snippets(combined)
                                 article, err = _gpt(
                                     api_key, folder_id, topic,
                                     key_rate=key_rate,
                                     news_snippets=combined[:8],
                                 )
-                                if article and _is_valid_article(article):
-                                    _save_article(cur, conn, article, True, auto_publish=True, key_rate=key_rate, topic=topic)
-                                    news_generated += 1
-                                elif article:
-                                    print(f'[news] Отклонена статья (отказ модели): {article.get("title", "")[:80]}')
-                                else:
+                                if not article:
                                     print(f'[news] Пропущена тема (нет новостей): {topic[:80]}')
+                                    continue
+                                if not _is_valid_article(article):
+                                    print(f'[news] Отклонена статья (отказ модели): {article.get("title", "")[:80]}')
+                                    continue
+                                # Проверка уникальности текста относительно всей истории новостей
+                                if not _check_article_unique(cur, api_key, folder_id, article):
+                                    print(f'[news] Отклонена статья (дублирует уже опубликованное): {article.get("title", "")[:80]}')
+                                    continue
+                                _save_article(cur, conn, article, True, auto_publish=True, key_rate=key_rate, topic=topic)
+                                news_generated += 1
                         ts = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')
                         cur.execute(
                             f"UPDATE {SCHEMA}.news_schedule SET last_run_at = '{ts}', "
@@ -1397,8 +1528,8 @@ def handler(event: dict, context) -> dict:
             if action == 'generate':
                 topic = body.get('topic', '').strip()
                 if not topic:
-                    # Тема не указана вручную — выбираем свежую (не публиковавшуюся 14 дней)
-                    picked = _pick_fresh_topics(cur, AUTO_TOPICS, 1, cooldown_days=14)
+                    # Тема не указана вручную — выбираем свежую (не публиковавшуюся 30 дней)
+                    picked = _pick_fresh_topics(cur, AUTO_TOPICS, 1, cooldown_days=30)
                     topic = picked[0] if picked else AUTO_TOPICS[0]
                 api_key, folder_id = _load_gpt_keys(cur)
                 auto_pub = bool(body.get('auto_publish', False))
@@ -1426,7 +1557,7 @@ def handler(event: dict, context) -> dict:
                 count = min(int(body.get('count', 3)), 10)
                 auto_pub = bool(body.get('auto_publish', True))
                 # Исключаем темы, публиковавшиеся последние 14 дней — защита от повторов
-                topics = _pick_fresh_topics(cur, AUTO_TOPICS, min(count, len(AUTO_TOPICS)), cooldown_days=14)
+                topics = _pick_fresh_topics(cur, AUTO_TOPICS, min(count, len(AUTO_TOPICS)), cooldown_days=30)
                 # Общий дайджест новостей на случай если по теме ничего нет
                 daily_news, _ = _fetch_news_snippets('коммерческая недвижимость Краснодар новости', limit=10)
                 results = []
