@@ -1,10 +1,13 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
 import { PhotoResult, S3Result, XmlResult, XmlQualityResult, CleanAction } from './siteHealthTypes';
 import { getToken } from '@/lib/adminApi';
 import S3OrphanAudit from './S3OrphanAudit';
 import XmlFeedsTab from './XmlFeedsTab';
 import XmlQualityTab from './XmlQualityTab';
+
+const XML_FEEDS_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7';
 
 interface PhotoSectionProps {
   photos: PhotoResult | null;
@@ -150,6 +153,42 @@ interface XmlSectionProps {
 
 export function XmlSection({ xml, xmlLoading, loadXml, xmlQuality, xmlQualityLoading, loadXmlQuality }: XmlSectionProps) {
   const [tab, setTab] = useState<'feeds' | 'quality'>('feeds');
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillProgress, setBackfillProgress] = useState('');
+
+  // Дозаполнение JPG-копий фото (xml-feeds-photos/{token}.jpg) для площадок с
+  // clean_photos=True (23estate, gdeetotdom, remospro) — нужно один раз после
+  // подключения площадки, чтобы старые фото тоже получили jpg-версию для фида.
+  const runBackfillFeedPhotos = async () => {
+    setBackfilling(true);
+    setBackfillProgress('Запуск…');
+    try {
+      const token = getToken();
+      let offset = 0;
+      let totalCreated = 0;
+      let totalFailed = 0;
+      while (true) {
+        const r = await fetch(`${XML_FEEDS_URL}?action=backfill_feed_photos&offset=${offset}&auth_token=${encodeURIComponent(token)}`, {
+          headers: { 'X-Auth-Token': token },
+        });
+        const d = await r.json();
+        if (d.error) { toast.error(d.error); return; }
+        totalCreated += d.created || 0;
+        totalFailed += d.failed || 0;
+        setBackfillProgress(`Обработано ${d.next_offset ?? offset} из ${d.total_tokens ?? '?'} (создано: ${totalCreated})`);
+        if (d.done) {
+          toast.success(`Готово — создано JPG-копий: ${totalCreated}${totalFailed ? `, ошибок: ${totalFailed}` : ''}`);
+          return;
+        }
+        offset = d.next_offset ?? offset + 60;
+      }
+    } catch {
+      toast.error('Ошибка дозаполнения фото');
+    } finally {
+      setBackfilling(false);
+      setBackfillProgress('');
+    }
+  };
 
   return (
     <div className="bg-white rounded-2xl p-5 shadow-sm border border-border space-y-4">
@@ -189,7 +228,21 @@ export function XmlSection({ xml, xmlLoading, loadXml, xmlQuality, xmlQualityLoa
       </div>
 
       {/* ТАБ: Доступность фидов */}
-      {tab === 'feeds' && <XmlFeedsTab xml={xml} />}
+      {tab === 'feeds' && (
+        <div className="space-y-3">
+          <XmlFeedsTab xml={xml} />
+          <div className="px-4 py-3 bg-muted/30 border border-border rounded-xl space-y-2">
+            <div className="text-xs text-muted-foreground">
+              Для площадок с JPG-фото (23estate, gdeetotdom, remospro) — досоздать JPG-копии для фото, загруженных раньше. Нужно запускать один раз после подключения новой такой площадки.
+            </div>
+            <button onClick={runBackfillFeedPhotos} disabled={backfilling}
+              className="w-full py-2 rounded-lg text-xs font-semibold bg-white border border-border hover:bg-muted/50 disabled:opacity-50 inline-flex items-center justify-center gap-2">
+              <Icon name={backfilling ? 'Loader2' : 'ImagePlus'} size={14} className={backfilling ? 'animate-spin' : ''} />
+              {backfilling ? (backfillProgress || 'Обработка…') : 'Досоздать JPG-копии фото'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ТАБ: Качество объектов */}
       {tab === 'quality' && (
