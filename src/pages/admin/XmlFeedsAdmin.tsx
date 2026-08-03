@@ -60,6 +60,7 @@ export default function XmlFeedsAdmin() {
   const [marketCategoryMap, setMarketCategoryMap] = useState<Record<string, string>>({});
   const [marketSaving, setMarketSaving] = useState(false);
   const [marketCreating, setMarketCreating] = useState(false);
+  const [marketCategoriesOpen, setMarketCategoriesOpen] = useState(false);
   const marketFeed = items.find(f => f.format === 'market') || null;
 
   useEffect(() => {
@@ -366,31 +367,41 @@ export default function XmlFeedsAdmin() {
           </button>
         ) : (
           <>
-            <div className="text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
-              Для каждой категории укажите номер категории (market_category_id) из вашего кабинета продавца на Яндекс.Маркете — без номера объекты этой категории не попадут в фид.
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {LISTING_CATEGORIES.map(([slug, label]) => (
-                <div key={slug} className="flex items-center gap-2">
-                  <span className="text-sm flex-1 min-w-0 truncate">{label}</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="ID категории"
-                    className="w-32 px-2 py-1.5 border rounded-lg text-sm"
-                    value={marketCategoryMap[slug] || ''}
-                    onChange={e => setMarketCategoryMap({ ...marketCategoryMap, [slug]: e.target.value })}
-                  />
-                </div>
-              ))}
-            </div>
-
-            <button onClick={saveMarketCategoryMap} disabled={marketSaving}
-              className="btn-blue text-white px-5 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50">
-              <Icon name="Save" size={14} />
-              {marketSaving ? 'Сохраняем...' : 'Сохранить категории'}
+            <button onClick={() => setMarketCategoriesOpen(v => !v)}
+              className="text-xs text-brand-blue inline-flex items-center gap-1 font-semibold">
+              <Icon name={marketCategoriesOpen ? 'ChevronUp' : 'ChevronDown'} size={14} />
+              {marketCategoriesOpen ? 'Скрыть категории' : 'Изменить категории'}
             </button>
+
+            {marketCategoriesOpen && (
+              <>
+                <div className="text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
+                  Для каждой категории укажите номер категории (market_category_id) из вашего кабинета продавца на Яндекс.Маркете — без номера объекты этой категории не попадут в фид.
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {LISTING_CATEGORIES.map(([slug, label]) => (
+                    <div key={slug} className="flex items-center gap-2">
+                      <span className="text-sm flex-1 min-w-0 truncate">{label}</span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="ID категории"
+                        className="w-32 px-2 py-1.5 border rounded-lg text-sm"
+                        value={marketCategoryMap[slug] || ''}
+                        onChange={e => setMarketCategoryMap({ ...marketCategoryMap, [slug]: e.target.value })}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <button onClick={saveMarketCategoryMap} disabled={marketSaving}
+                  className="btn-blue text-white px-5 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50">
+                  <Icon name="Save" size={14} />
+                  {marketSaving ? 'Сохраняем...' : 'Сохранить категории'}
+                </button>
+              </>
+            )}
 
             <div className="mt-2 flex flex-col gap-2 overflow-hidden">
               {marketFeed.cdn_url ? (
