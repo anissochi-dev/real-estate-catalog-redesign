@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
+import { FEEDS_SEARCH_HANDOFF_KEY } from './settings/SettingsSearch';
 
 const XML_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7';
 
@@ -35,6 +36,7 @@ function timeAgo(iso: string | null): string {
 
 export default function XmlFeedsAdmin() {
   const [items, setItems] = useState<F[]>([]);
+  const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<Partial<F> | null>(null);
   const [importing, setImporting] = useState(false);
   const [importText, setImportText] = useState('');
@@ -44,6 +46,20 @@ export default function XmlFeedsAdmin() {
 
   const load = () => adminApi.listFeeds().then(d => setItems(d.feeds));
   useEffect(() => { load(); }, []);
+
+  // Если перешли сюда из общего поиска настроек (нашли конкретный фид по имени) —
+  // подставляем текст поиска, чтобы список сразу отфильтровался на нужный фид.
+  useEffect(() => {
+    try {
+      const handoff = sessionStorage.getItem(FEEDS_SEARCH_HANDOFF_KEY);
+      if (handoff) {
+        setSearch(handoff);
+        sessionStorage.removeItem(FEEDS_SEARCH_HANDOFF_KEY);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  const filteredItems = items.filter(f => f.name.toLowerCase().includes(search.trim().toLowerCase()));
 
   const save = async () => {
     if (!editing) return;
@@ -131,8 +147,24 @@ export default function XmlFeedsAdmin() {
           Файлы генерируются в готовые ссылки и обновляются автоматически каждые 10 минут (при заходе посетителей на сайт), либо мгновенно по кнопке «Обновить сейчас».
         </div>
 
+        {items.length > 0 && (
+          <div className="relative mb-3">
+            <Icon name="Search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Поиск по названию фида..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm"
+            />
+          </div>
+        )}
+
         <div className="space-y-2">
-          {items.map(f => (
+          {filteredItems.length === 0 && search && (
+            <div className="text-sm text-muted-foreground text-center py-4">Ничего не найдено по «{search}»</div>
+          )}
+          {filteredItems.map(f => (
             <div key={f.id} className="p-3 bg-muted/30 rounded-lg">
               <div className="flex justify-between items-start gap-2">
                 <div className="min-w-0 flex-1">

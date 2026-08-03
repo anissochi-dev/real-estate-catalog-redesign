@@ -4807,6 +4807,9 @@ def _xml_feeds(cur, conn, method, rid, event, user):
             return _err(400, 'Название и площадка обязательны')
         if fmt not in XML_FEED_FORMATS:
             return _err(400, f'Неизвестная площадка: {fmt}')
+        cur.execute(f"SELECT 1 FROM {SCHEMA}.xml_feeds WHERE LOWER(name) = LOWER('{_safe(name, 100)}') LIMIT 1")
+        if cur.fetchone():
+            return _err(409, f'Фид с названием «{name}» уже существует')
         slug = _make_feed_slug(cur, name, fmt)
         cat_s = "NULL" if not filter_category else f"'{filter_category}'"
         deal_s = "NULL" if not filter_deal else f"'{filter_deal}'"
@@ -4821,6 +4824,14 @@ def _xml_feeds(cur, conn, method, rid, event, user):
     if method == 'PUT' and rid:
         fields = []
         # slug больше не редактируется вручную — это технический идентификатор файла
+        if 'name' in body and body['name']:
+            new_name = _safe(body['name'], 100)
+            cur.execute(
+                f"SELECT 1 FROM {SCHEMA}.xml_feeds WHERE LOWER(name) = LOWER('{new_name}') "
+                f"AND id != {int(rid)} LIMIT 1"
+            )
+            if cur.fetchone():
+                return _err(409, f'Фид с названием «{body["name"]}» уже существует')
         for f, length in [('name', 100), ('format', 20), ('filter_category', 50), ('filter_deal', 20)]:
             if f in body:
                 if f == 'format' and body[f] and body[f] not in XML_FEED_FORMATS:
