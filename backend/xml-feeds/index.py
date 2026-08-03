@@ -230,7 +230,7 @@ def _cdn_url(key):
     return f"{CDN_BASE}/projects/{project_id}/bucket/{key}"
 
 
-def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal):
+def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_category_map=None):
     """Собирает XML для одной площадки из текущего состояния БД.
     Набор объектов зависит от ФОРМАТА (fmt), а не от slug — так несколько фидов
     с разными названиями (например «М2» и «Яндекс.Недвижимость») могут использовать
@@ -250,6 +250,10 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal):
         # Площадки группы «Разное» (realtymag, rucountry и т.п.) — универсальные бесплатные
         # каталоги без API. Один общий флаг «Р» на объекте включает выгрузку сразу во ВСЕ
         # такие площадки одновременно (в отличие от Я/А/Ц, у каждой из которых свой флаг).
+        where.append("export_other = TRUE")
+    elif fmt == 'market':
+        # YML-фид товаров для Яндекс.Маркета — использует тот же флаг, что и группа «Разное»
+        # (отдельного флага на объекте не заводим, чтобы не плодить галочки в карточке).
         where.append("export_other = TRUE")
 
     cur.execute(f"SELECT * FROM {SCHEMA}.listings WHERE {' AND '.join(where)} ORDER BY created_at DESC")
@@ -288,6 +292,8 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal):
         # 23estate) можно включить индивидуальную особенность через FEED_OVERRIDES,
         # не затрагивая остальные площадки группы «Разное».
         return _build_yandex(listings, company, feed_slug)
+    if fmt == 'market':
+        return _build_yandex_market(listings, company, market_category_map or {})
     return None
 
 
@@ -307,7 +313,17 @@ def _regenerate_static_feeds(cur, conn, force=False):
                 results.append({'slug': feed['slug'], 'skipped': True, 'reason': f'{round(elapsed_min, 1)}m ago'})
                 continue
 
-        xml_content = _build_feed_xml(cur, feed['slug'], feed['format'], feed.get('filter_category'), feed.get('filter_deal'))
+        market_category_map = {}
+        if feed['format'] == 'market' and feed.get('market_category_map'):
+            try:
+                market_category_map = json.loads(feed['market_category_map'])
+            except (ValueError, TypeError):
+                market_category_map = {}
+
+        xml_content = _build_feed_xml(
+            cur, feed['slug'], feed['format'], feed.get('filter_category'), feed.get('filter_deal'),
+            market_category_map=market_category_map,
+        )
         if xml_content is None:
             results.append({'slug': feed['slug'], 'error': 'Неизвестный формат'})
             continue
@@ -958,6 +974,74 @@ def _build_yandex(listings, company, feed_slug=None):
         out.append('</offer>')
 
     out.append('</realty-feed>')
+    return '\n'.join(out)
+
+
+def _build_yandex_market(listings, company, category_map):
+    """Строит YML-фид (Yandex Market Language) для выгрузки объектов недвижимости как
+    товаров в кабинет продавца Яндекс.Маркета. Формат отличается от realty-фида Яндекс.
+    Недвижимости — это отдельный «товарный» стандарт (см. yandex.ru/support/marketplace).
+    category_map — словарь {category объекта: market_category_id из кабинета продавца},
+    задаётся пользователем в настройках фида (обязателен для каждой встречающейся категории:
+    объекты без соответствия в словаре пропускаются)."""
+    company_name = _xml_escape(company.get('company_name') or 'Магазин')
+    site_url = (company.get('site_url') or '').rstrip('/')
+    now = datetime.utcnow().strftime('%Y-%m-%d %H:%M')
+
+    out = ['<?xml version="1.0" encoding="UTF-8"?>']
+    out.append(f'<yml_catalog date="{now}">')
+    out.append('<shop>')
+    out.append(f'<name>{company_name}</name>')
+    out.append(f'<company>{company_name}</company>')
+    if site_url:
+        out.append(f'<url>{_xml_escape(site_url)}</url>')
+    out.append('<currencies><currency id="RUB" rate="1"/></currencies>')
+    out.append('<offers>')
+
+    for l in listings:
+        market_cat_id = category_map.get(l.get('category'))
+        if not market_cat_id:
+            continue  # без соответствия категории пропускаем — иначе Маркет отклонит офер
+
+        out.append(f'<offer id="{l["id"]}" available="true">')
+        if site_url and l.get('slug'):
+            out.append(f'<url>{_xml_escape(site_url)}/object/{l["slug"]}</url>')
+
+        price_val = _total_price(l)
+        if price_val > 0:
+            out.append(f'<price>{price_val}</price>')
+        out.append('<currencyId>RUB</currencyId>')
+        out.append(f'<market_category_id>{_xml_escape(str(market_cat_id))}</market_category_id>')
+
+        images = _split_images(l)
+        for img in images[:10]:
+            out.append(f'<picture>{_xml_escape(img)}</picture>')
+
+        title = _clean_title(l.get('title') or '')
+        if title:
+            out.append(f'<name>{_xml_escape(title)}</name>')
+
+        if l.get('description'):
+            desc = _xml_escape(l['description'])[:3000]
+            out.append(f'<description>{desc}</description>')
+
+        # Параметры объекта как товарные характеристики
+        if l.get('area'):
+            out.append(f'<param name="Площадь">{l["area"]} м²</param>')
+        if l.get('floor') is not None:
+            out.append(f'<param name="Этаж">{l["floor"]}</param>')
+        if l.get('city'):
+            out.append(f'<param name="Город">{_xml_escape(l["city"])}</param>')
+        if l.get('district'):
+            out.append(f'<param name="Район">{_xml_escape(l["district"])}</param>')
+        deal_label = 'Аренда' if l.get('deal') == 'rent' else 'Продажа'
+        out.append(f'<param name="Тип сделки">{deal_label}</param>')
+
+        out.append('</offer>')
+
+    out.append('</offers>')
+    out.append('</shop>')
+    out.append('</yml_catalog>')
     return '\n'.join(out)
 
 

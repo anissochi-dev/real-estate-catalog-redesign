@@ -4769,7 +4769,7 @@ def _districts(cur, conn, method, rid, event, user):
     return _err(400, 'Bad request')
 
 
-XML_FEED_FORMATS = ('yandex', 'avito', 'cian', 'other')
+XML_FEED_FORMATS = ('yandex', 'avito', 'cian', 'other', 'market')
 
 
 def _make_feed_slug(cur, name: str, fmt: str) -> str:
@@ -4813,9 +4813,12 @@ def _xml_feeds(cur, conn, method, rid, event, user):
         slug = _make_feed_slug(cur, name, fmt)
         cat_s = "NULL" if not filter_category else f"'{filter_category}'"
         deal_s = "NULL" if not filter_deal else f"'{filter_deal}'"
+        market_map_s = "NULL"
+        if fmt == 'market' and body.get('market_category_map') is not None:
+            market_map_s = f"'{_safe(json.dumps(body['market_category_map'], ensure_ascii=False), 5000)}'"
         cur.execute(
-            f"INSERT INTO {SCHEMA}.xml_feeds (name, slug, format, filter_category, filter_deal) "
-            f"VALUES ('{name}', '{slug}', '{fmt}', {cat_s}, {deal_s}) RETURNING id, slug"
+            f"INSERT INTO {SCHEMA}.xml_feeds (name, slug, format, filter_category, filter_deal, market_category_map) "
+            f"VALUES ('{name}', '{slug}', '{fmt}', {cat_s}, {deal_s}, {market_map_s}) RETURNING id, slug"
         )
         conn.commit()
         row = cur.fetchone()
@@ -4837,6 +4840,9 @@ def _xml_feeds(cur, conn, method, rid, event, user):
                 if f == 'format' and body[f] and body[f] not in XML_FEED_FORMATS:
                     return _err(400, f'Неизвестная площадка: {body[f]}')
                 fields.append(f"{f} = {_str_or_null(body[f], length)}")
+        if 'market_category_map' in body:
+            map_json = json.dumps(body['market_category_map'], ensure_ascii=False) if body['market_category_map'] is not None else None
+            fields.append(f"market_category_map = {_str_or_null(map_json, 5000)}")
         if 'is_active' in body:
             fields.append(f"is_active = {_bool(body['is_active'])}")
         if not fields:
