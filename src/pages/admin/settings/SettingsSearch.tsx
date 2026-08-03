@@ -8,6 +8,18 @@ export const FEEDS_SEARCH_HANDOFF_KEY = 'settings_search_feeds_query';
 
 interface LiveFeed { id: number; name: string; format: string; }
 
+/** Живой поиск по реальным записям справочников (не только по названиям разделов).
+ * Каждая сущность грузится один раз (лениво, при первом фокусе на поиске) и
+ * фильтруется на лету — это позволяет находить, например, город «Геленджик»
+ * или назначение «Склад», добавленные пользователем, а не только пункт меню. */
+interface LiveEntityConfig {
+  tab: string;
+  icon: string;
+  badge: string;
+  badgeColor: string;
+  load: () => Promise<{ id: number; name: string }[]>;
+}
+
 export interface SearchItem {
   label: string;
   description: string;
@@ -113,6 +125,33 @@ export const SETTINGS_INDEX: SearchItem[] = [
   { label: 'Районы', description: 'Районы города для фильтрации объектов', tab: 'districts', group: 'Районы', keywords: ['районы', 'district', 'округ', 'геолокация'] },
 ];
 
+// Справочники, у которых есть отдельный CRUD-раздел в настройках — их реальные
+// записи (не только пункт меню) должны находиться живым поиском.
+const LIVE_ENTITIES: Record<string, LiveEntityConfig> = {
+  cities: {
+    tab: 'cities', icon: 'MapPin', badge: 'Город', badgeColor: 'bg-blue-50 text-blue-700',
+    load: () => adminApi.listCities().then(d => d.cities || []),
+  },
+  purposes: {
+    tab: 'purposes', icon: 'Tag', badge: 'Назначение', badgeColor: 'bg-violet-50 text-violet-700',
+    load: () => adminApi.listPurposes().then(d => d.purposes || []),
+  },
+  'land-vri': {
+    tab: 'land-vri', icon: 'Sprout', badge: 'ВРИ земли', badgeColor: 'bg-emerald-50 text-emerald-700',
+    load: () => adminApi.listLandVri().then(d => d.land_vri || []),
+  },
+  districts: {
+    tab: 'districts', icon: 'MapPin', badge: 'Район', badgeColor: 'bg-brand-blue/10 text-brand-blue',
+    load: () => adminApi.listDistricts().then(d => d.districts || []),
+  },
+  pages: {
+    tab: 'pages', icon: 'FileText', badge: 'Страница', badgeColor: 'bg-violet-50 text-violet-700',
+    load: () => adminApi.listPages().then(d => (Array.isArray(d.pages) ? d.pages : []).map((p: { id: number; title: string }) => ({ id: p.id, name: p.title }))),
+  },
+};
+
+interface LiveHit { entityKey: string; id: number; name: string; }
+
 interface Props {
   onNavigate: (tab: string) => void;
   /** Если задано — в результатах поиска показываются только вкладки из этого списка. */
@@ -134,6 +173,17 @@ export default function SettingsSearch({ onNavigate, allowedTabs }: Props) {
     adminApi.listFeeds().then(d => setFeeds(d.feeds || [])).catch(() => {});
   }, [canSearchFeeds]);
 
+  // Живые данные справочников (города, назначения, ВРИ, районы, страницы) —
+  // грузим каждый доступный по правам справочник один раз при монтировании.
+  const [liveData, setLiveData] = useState<Record<string, { id: number; name: string }[]>>({});
+  useEffect(() => {
+    Object.entries(LIVE_ENTITIES).forEach(([key, cfg]) => {
+      if (allowedTabs && !allowedTabs.includes(cfg.tab)) return;
+      cfg.load().then(list => setLiveData(prev => ({ ...prev, [key]: list }))).catch(() => {});
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const results = query.trim().length < 1 ? [] : SETTINGS_INDEX.filter(item => {
     if (allowedTabs && !allowedTabs.includes(item.tab)) return false;
     const q = query.toLowerCase();
@@ -147,6 +197,15 @@ export default function SettingsSearch({ onNavigate, allowedTabs }: Props) {
   const feedResults = query.trim().length < 1 || !canSearchFeeds ? [] : feeds
     .filter(f => f.name.toLowerCase().includes(query.trim().toLowerCase()))
     .slice(0, 5);
+
+  const liveResults: LiveHit[] = query.trim().length < 1 ? [] : Object.entries(LIVE_ENTITIES).flatMap(([key, cfg]) => {
+    if (allowedTabs && !allowedTabs.includes(cfg.tab)) return [];
+    const q = query.trim().toLowerCase();
+    return (liveData[key] || [])
+      .filter(item => item.name?.toLowerCase().includes(q))
+      .slice(0, 4)
+      .map(item => ({ entityKey: key, id: item.id, name: item.name }));
+  }).slice(0, 6);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -168,6 +227,13 @@ export default function SettingsSearch({ onNavigate, allowedTabs }: Props) {
   const handleSelectFeed = (feed: LiveFeed) => {
     try { sessionStorage.setItem(FEEDS_SEARCH_HANDOFF_KEY, feed.name); } catch { /* ignore */ }
     onNavigate('feeds');
+    setQuery('');
+    setOpen(false);
+    inputRef.current?.blur();
+  };
+
+  const handleSelectLive = (hit: LiveHit) => {
+    onNavigate(LIVE_ENTITIES[hit.entityKey].tab);
     setQuery('');
     setOpen(false);
     inputRef.current?.blur();
@@ -218,7 +284,7 @@ export default function SettingsSearch({ onNavigate, allowedTabs }: Props) {
         )}
       </div>
 
-      {open && (results.length > 0 || feedResults.length > 0) && (
+      {open && (results.length > 0 || feedResults.length > 0 || liveResults.length > 0) && (
         <div className="absolute top-full mt-1 left-0 right-0 z-50 bg-white border border-border rounded-xl shadow-lg overflow-hidden">
           {feedResults.map(feed => (
             <button
@@ -242,6 +308,31 @@ export default function SettingsSearch({ onNavigate, allowedTabs }: Props) {
               <Icon name="ArrowRight" size={14} className="text-muted-foreground shrink-0 mt-1" />
             </button>
           ))}
+          {liveResults.map(hit => {
+            const cfg = LIVE_ENTITIES[hit.entityKey];
+            return (
+              <button
+                key={`live-${hit.entityKey}-${hit.id}`}
+                type="button"
+                onClick={() => handleSelectLive(hit)}
+                className="w-full text-left px-4 py-3 hover:bg-muted/50 transition flex items-start gap-3 border-b border-border last:border-0"
+              >
+                <div className="shrink-0 mt-0.5">
+                  <Icon name={cfg.icon} size={14} className="text-muted-foreground" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-sm">{highlight(hit.name)}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${cfg.badgeColor}`}>
+                      {cfg.badge}
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5 truncate">Открыть «{hit.name}»</div>
+                </div>
+                <Icon name="ArrowRight" size={14} className="text-muted-foreground shrink-0 mt-1" />
+              </button>
+            );
+          })}
           {results.map((item, i) => (
             <button
               key={i}
@@ -267,7 +358,7 @@ export default function SettingsSearch({ onNavigate, allowedTabs }: Props) {
         </div>
       )}
 
-      {open && query.trim().length > 1 && results.length === 0 && feedResults.length === 0 && (
+      {open && query.trim().length > 1 && results.length === 0 && feedResults.length === 0 && liveResults.length === 0 && (
         <div className="absolute top-full mt-1 left-0 right-0 z-50 bg-white border border-border rounded-xl shadow-lg px-4 py-3 text-sm text-muted-foreground">
           Ничего не найдено по «{query}»
         </div>

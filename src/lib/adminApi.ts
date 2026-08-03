@@ -290,13 +290,6 @@ export const adminApi = {
       body: JSON.stringify({ comment }),
     }),
 
-  // users
-  listUsers: () => req(`${ADMIN_URL}?resource=users`),
-  createUser: (data: Record<string, unknown>) =>
-    req(`${ADMIN_URL}?resource=users`, { method: 'POST', body: JSON.stringify(data) }),
-  updateUser: (id: number, data: Record<string, unknown>) =>
-    req(`${ADMIN_URL}?resource=users&id=${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-
   // pages
   listPages: () => req(`${ADMIN_URL}?resource=pages`),
   createPage: (data: Record<string, unknown>) =>
@@ -308,6 +301,9 @@ export const adminApi = {
   getSettings: () => req(`${ADMIN_URL}?resource=settings`),
   updateSettings: (data: Record<string, unknown>) =>
     req(`${ADMIN_URL}?resource=settings`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  // districts (только чтение — CRUD у districts свой, через buildUrl в DistrictsTypes)
+  listDistricts: () => req(`${ADMIN_URL}?resource=districts`),
 
   // cities
   listCities: () => req(`${ADMIN_URL}?resource=cities`),
