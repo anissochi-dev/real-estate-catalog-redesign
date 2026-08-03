@@ -1057,6 +1057,8 @@ def _build_yandex_market(listings, company, category_map):
             out.append(f'<param name="Район">{_xml_escape(l["district"])}</param>')
         deal_label = 'Аренда' if l.get('deal') == 'rent' else 'Продажа'
         out.append(f'<param name="Тип сделки">{deal_label}</param>')
+        if company.get('company_phone'):
+            out.append(f'<param name="Телефон">{_xml_escape(company["company_phone"])}</param>')
 
         out.append('</offer>')
 
