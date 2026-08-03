@@ -1,0 +1,3 @@
+UPDATE t_p71821556_real_estate_catalog_.xml_feeds
+SET last_generated_at = NOW() - INTERVAL '1 hour'
+WHERE format = 'market';

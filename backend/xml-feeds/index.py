@@ -977,13 +977,24 @@ def _build_yandex(listings, company, feed_slug=None):
     return '\n'.join(out)
 
 
+# Справочник категорий Яндекс.Бизнеса (карточка на Картах, раздел «Товары и услуги»),
+# нужен для блока <categories> в шапке фида — id берём из category_map, названия отсюда.
+YANDEX_BUSINESS_CATEGORY_NAMES = {
+    '41': 'Офис', '42': 'Торговое помещение', '43': 'Помещение свободного назначения',
+    '44': 'Склад', '45': 'Производственное помещение', '46': 'Участок коммерческого назначения',
+    '47': 'Общепит', '48': 'Автосервис', '49': 'Гостиница', '50': 'Готовый бизнес',
+    '51': 'Юридический адрес', '6': 'Коммерческое помещение',
+}
+
+
 def _build_yandex_market(listings, company, category_map):
-    """Строит YML-фид (Yandex Market Language) для выгрузки объектов недвижимости как
-    товаров в кабинет продавца Яндекс.Маркета. Формат отличается от realty-фида Яндекс.
-    Недвижимости — это отдельный «товарный» стандарт (см. yandex.ru/support/marketplace).
-    category_map — словарь {category объекта: market_category_id из кабинета продавца},
-    задаётся пользователем в настройках фида (обязателен для каждой встречающейся категории:
-    объекты без соответствия в словаре пропускаются)."""
+    """Строит YML-фид для выгрузки объектов недвижимости как товаров в Яндекс.Бизнес
+    (карточка на Яндекс.Картах, раздел «Товары и услуги»). Тег категории — <categoryId>
+    (не <market_category_id>, это отдельный от «взрослого» Маркета формат), сами категории
+    нужно заранее объявить в блоке <categories>. Одно фото на товар — сервис всё равно
+    использует только первое, лишние ссылки только раздувают файл.
+    category_map — словарь {category объекта: categoryId из кабинета}, задаётся
+    пользователем в настройках фида (объекты без соответствия в фид не попадают)."""
     company_name = _xml_escape(company.get('company_name') or 'Магазин')
     site_url = (company.get('site_url') or '').rstrip('/')
     now = datetime.utcnow().strftime('%Y-%m-%d %H:%M')
@@ -996,12 +1007,22 @@ def _build_yandex_market(listings, company, category_map):
     if site_url:
         out.append(f'<url>{_xml_escape(site_url)}</url>')
     out.append('<currencies><currency id="RUB" rate="1"/></currencies>')
+
+    # Блок категорий — только те, что реально используются (по значениям category_map)
+    used_cat_ids = sorted(set(str(v) for v in category_map.values() if v))
+    if used_cat_ids:
+        out.append('<categories>')
+        for cat_id in used_cat_ids:
+            cat_name = _xml_escape(YANDEX_BUSINESS_CATEGORY_NAMES.get(cat_id, f'Категория {cat_id}'))
+            out.append(f'<category id="{_xml_escape(cat_id)}">{cat_name}</category>')
+        out.append('</categories>')
+
     out.append('<offers>')
 
     for l in listings:
         market_cat_id = category_map.get(l.get('category'))
         if not market_cat_id:
-            continue  # без соответствия категории пропускаем — иначе Маркет отклонит офер
+            continue  # без соответствия категории пропускаем — иначе фид отклонят
 
         out.append(f'<offer id="{l["id"]}" available="true">')
         if site_url and l.get('slug'):
@@ -1011,11 +1032,11 @@ def _build_yandex_market(listings, company, category_map):
         if price_val > 0:
             out.append(f'<price>{price_val}</price>')
         out.append('<currencyId>RUB</currencyId>')
-        out.append(f'<market_category_id>{_xml_escape(str(market_cat_id))}</market_category_id>')
+        out.append(f'<categoryId>{_xml_escape(str(market_cat_id))}</categoryId>')
 
         images = _split_images(l)
-        for img in images[:10]:
-            out.append(f'<picture>{_xml_escape(img)}</picture>')
+        if images:
+            out.append(f'<picture>{_xml_escape(images[0])}</picture>')
 
         title = _clean_title(l.get('title') or '')
         if title:
