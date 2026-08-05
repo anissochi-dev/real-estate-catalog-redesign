@@ -1,0 +1,92 @@
+# Бизнес. Маркетинг. Недвижимость.
+> Коммерческая недвижимость и готовый бизнес — город Краснодар: аренда, продажа, каталог объектов, аналитика рынка.
+
+Сайт Бизнес. Маркетинг. Недвижимость. — каталог коммерческой недвижимости, город Краснодар: офисы, торговые помещения, склады, рестораны, гостиницы, готовый бизнес, готовый арендный бизнес (ГАБ), производство, земельные участки, здания, помещения свободного назначения, автосервисы. Также раздел заявок (лента спроса от арендаторов и покупателей) и новости рынка коммерческой недвижимости.
+
+## Каталог
+- [Каталог всех объектов](https://bmn.su/catalog): актуальные предложения коммерческой недвижимости, город Краснодар
+- [Здания](https://bmn.su/catalog/building): 52 объектов в категории «здания»
+- [Свободного назначения](https://bmn.su/catalog/free_purpose): 29 объектов в категории «свободного назначения»
+- [Офисы](https://bmn.su/catalog/office): 19 объектов в категории «офисы»
+- [Гостиницы](https://bmn.su/catalog/hotel): 7 объектов в категории «гостиницы»
+- [Торговые помещения](https://bmn.su/catalog/retail): 5 объектов в категории «торговые помещения»
+- [Готовый арендный бизнес](https://bmn.su/catalog/gab): 4 объектов в категории «готовый арендный бизнес»
+- [Автосервисы](https://bmn.su/catalog/car_service): 3 объектов в категории «автосервисы»
+- [Рестораны](https://bmn.su/catalog/restaurant): 3 объектов в категории «рестораны»
+- [Готовый бизнес](https://bmn.su/catalog/business): 2 объектов в категории «готовый бизнес»
+- [Склады](https://bmn.su/catalog/warehouse): 1 объектов в категории «склады»
+
+## Районы
+- [Центральный (ЦМР)](https://bmn.su/district/tsentralnyy-tsmr): 44 объектов
+- [Фестивальный (ФМР)](https://bmn.su/district/festivalnyy-fmr): 12 объектов
+- [Гидростроителей (ГМР)](https://bmn.su/district/gidrostroiteley-gmr): 5 объектов
+- [Школьный (ШМР)](https://bmn.su/district/shkolnyy-shmr): 5 объектов
+- [Юбилейный (ЮМР)](https://bmn.su/district/yubileynyy-yumr): 4 объектов
+- [Дубинка](https://bmn.su/district/dubinka): 4 объектов
+- [Комсомольский (КМР)](https://bmn.su/district/komsomolskiy-kmr): 4 объектов
+- [Краевая клиническая больница (ККБ)](https://bmn.su/district/kraevaya-klinicheskaya-bolnitsa-kkb): 4 объектов
+- [Музыкальный](https://bmn.su/district/muzykalnyy): 3 объектов
+- [40 лет Победы](https://bmn.su/district/40-let-pobedy): 3 объектов
+- [Индустриальный п.](https://bmn.su/district/industrialnyy-p): 3 объектов
+- [Российский п.](https://bmn.su/district/rossiyskiy-p): 3 объектов
+- [Черёмушки (ЧМР)](https://bmn.su/district/cheremushki-chmr): 3 объектов
+- [Красная площадь](https://bmn.su/district/krasnaya-ploschad): 2 объектов
+- [Табачная фабрика (Табачка)](https://bmn.su/district/tabachnaya-fabrika-tabachka): 2 объектов
+- [Микрохирургия глаза (МХГ)](https://bmn.su/district/mikrohirurgiya-glaza-mhg): 2 объектов
+- [Хлопчато-бумажный комбинат (ХБК)](https://bmn.su/district/hlopchato-bumazhnyy-kombinat-hbk): 2 объектов
+- [Завод измерительных приборов (ЗИП)](https://bmn.su/district/zavod-izmeritelnyh-priborov-zip): 2 объектов
+- [Славянский (СМР)](https://bmn.su/district/slavyanskiy-smr): 2 объектов
+- [Восточно-Кругликовский](https://bmn.su/district/vostochno-kruglikovskiy): 2 объектов
+- [Кожевенный завод (Кожзавод)](https://bmn.su/district/kozhevennyy-zavod-kozhzavod): 2 объектов
+- [Покровка](https://bmn.su/district/pokrovka): 1 объектов
+- [Горхутор](https://bmn.su/district/gorhutor): 1 объектов
+- [Ростовское шоссе](https://bmn.su/district/rostovskoe-shosse): 1 объектов
+- [Немецкая деревня](https://bmn.su/district/nemetskaya-derevnya): 1 объектов
+- [Пашковский (ПМР)](https://bmn.su/district/pashkovskiy-pmr): 1 объектов
+- [Камвольно-суконный комбинат (КСК)](https://bmn.su/district/kamvolno-sukonnyy-kombinat-ksk): 1 объектов
+- [Московский](https://bmn.su/district/moskovskiy): 1 объектов
+- [Сельскохозяйственный институт (СХИ)](https://bmn.su/district/selskohozyaystvennyy-institut-shi): 1 объектов
+- [Северный п.](https://bmn.su/district/severnyy-p): 1 объектов
+- [Образцово](https://bmn.su/district/obraztsovo): 1 объектов
+
+## Объекты
+
+Последние актуальные объявления:
+- [Сдаю склад 800-1600 м² с высотой потолков 5 м на Западном обходе](https://bmn.su/object/sdayu-sklad-800-1600-m-s-vysotoy-potolkov-5-m-na-zapadnom-obkhode-225)
+- [Сдам отдельно стоящее здание 1077 м² с парковкой на Уральской 180/2](https://bmn.su/object/sdam-otdelno-stoyashchee-zdanie-1077-m-s-parkovkoy-na-uralskoy-180-2-218)
+- [Продам отдельно стоящее здание 1077 м² Уральская улица, 180/2](https://bmn.su/object/prodam-otdelno-stoyashchee-zdanie-1077-m-uralskaya-ulitsa-180-2-219)
+- [Сдам отдельно стоящее здание 821 м² в Российском п. ул. Куликово Поле](https://bmn.su/object/sdam-otdelno-stoyashchee-zdanie-821-m-v-rossiyskom-p-ul-kulikovo-pole-216)
+- [Продам отдельно стоящее здание 821 м² в Российском п. ул.Куликово Поле](https://bmn.su/object/prodam-otdelno-stoyashchee-zdanie-821-m-v-rossiyskom-p-ul-kulikovo-pole-217)
+- [Сдаём здание 1362 м² в Индустриальном п. под отель](https://bmn.su/object/sdayom-zdanie-1362-m-v-industrialnom-p-pod-otel-202)
+- [Продам здание 1362 м² в Индустриальном п.](https://bmn.su/object/prodam-zdanie-1362-m-v-industrialnom-p-215)
+- [Сдам помещение свободного назначения 400 м² в ЦМР на Ставропольской](https://bmn.su/object/sdam-pomeshchenie-svobodnogo-naznacheniya-400-m-v-tsmr-na-stavropolskoy-214)
+- [Сдам под автосервис 320 м² с парковкой на Большевистской улице 285](https://bmn.su/object/sdam-pod-avtoservis-320-m-s-parkovkoy-na-bolshevistskoy-ulitse-285-213)
+- [Сдаю автокомплекс, кафе и магазин с выходом на автовокзал Краснодар 2](https://bmn.su/object/sdayu-avtokompleks-kafe-i-magazin-s-vykhodom-na-avtovokzal-krasnodar-2-183)
+- [Продам торговое помещение 660 м² на улице 70 лет Октября 20к3](https://bmn.su/object/prodam-torgovoe-pomeshchenie-660-m-na-ulitse-70-let-oktyabrya-20k3-193)
+- [Продажа помещения 154 м² ул. Митрофана Седина](https://bmn.su/object/prodazha-pomeshcheniya-154-m-ul-mitrofana-sedina-194)
+- [Продам бар 165 м² в Краснодаре Восточно-Кругликовская ул. 22 -1 этаж](https://bmn.su/object/prodam-bar-165-m-v-krasnodare-vostochno-kruglikovskaya-ul-22-1-etazh-150)
+- [Сдам отдельно стоящее здание 2500 м² в ФМР на Красных Партизан](https://bmn.su/object/sdam-otdelno-stoyashchee-zdanie-2500-m-v-fmr-na-krasnykh-partizan-141)
+- [Сдам отдельно стоящее здание 1400 м² на Сормовской улице 1/7 ХБК](https://bmn.su/object/sdam-otdelno-stoyashchee-zdanie-1400-m-na-sormovskoy-ulitse-1-7-khbk-212)
+- [Сдам офис 1800 м² в бизнес-центре на Нефтяников шоссе, в центре города](https://bmn.su/object/sdam-ofis-1800-m-v-biznes-tsentre-na-neftyanikov-shosse-v-tsentre-goroda-113)
+- [Сдам отдельно стоящее здание 1100 м² на улице им. В.Н. Мачуги 19к1](https://bmn.su/object/sdam-otdelno-stoyashchee-zdanie-1100-m-na-ulitse-im-v-n-machugi-19k1-211)
+- [Сдам отдельно стоящее здание 3000 м² в районе Пашковского](https://bmn.su/object/sdam-otdelno-stoyashchee-zdanie-3000-m-v-rayone-pashkovskogo-138)
+- [Сдам отдельно стоящее здание 1283 м² на Российской 2-й улице 388](https://bmn.su/object/sdam-otdelno-stoyashchee-zdanie-1283-m-na-rossiyskoy-2-y-ulitse-388-135)
+- [Продам отдельно стоящее здание 400 м² на улице Мачуги 49 в ГМР](https://bmn.su/object/prodam-otdelno-stoyashchee-zdanie-400-m-na-ulitse-machugi-49-v-gmr-210)
+
+## Заявки
+- [Лента заявок на аренду и покупку](https://bmn.su/leads): актуальный спрос от арендаторов и покупателей коммерческой недвижимости
+
+## Новости
+- [В кубанском филиале МТС назначен новый директор по работе с бизнес-рынком](https://bmn.su/news/v-kubanskom-filiale-mts-naznachen-novyy-direktor-po-rabote-s-104): В кубанском филиале МТС появился директор по работе с бизнес-рынком. Это событие происходит на фоне изменений в бизнес-среде региона, включа…
+- [Налог на коммерческую недвижимость в Краснодаре повышен](https://bmn.su/news/nalog-na-kommercheskuyu-nedvizhimost-v-krasnodare-povyshen-103): В Краснодаре произошло повышение налога на коммерческую недвижимость до 2%.
+- [Тенденции и вызовы на рынке коммерческой недвижимости Краснодара в августе 2026 года](https://bmn.su/news/tendentsii-i-vyzovy-na-rynke-kommercheskoy-nedvizhimosti-kra-102): В Краснодарском крае наблюдаются изменения в сфере коммерческой недвижимости: сокращение регистраций юридических лиц, закрытие малого бизнес…
+- [Изменения на рынке коммерческой недвижимости Краснодара в июле](https://bmn.su/news/izmeneniya-na-rynke-kommercheskoy-nedvizhimosti-krasnodara-v-99): В Краснодаре и Краснодарском крае произошли изменения на рынке коммерческой недвижимости. Отмечается рост предложения аренды складов и увели…
+- [В Краснодаре активно развивается строительство складских комплексов](https://bmn.su/news/v-krasnodare-aktivno-razvivaetsya-stroitelstvo-skladskih-kom-98): В Краснодаре планируется строительство новых складских комплексов для крупных маркетплейсов. ВТБ предоставит девелоперу DOGMA финансирование…
+- [Инвестиционные соглашения и новые производства в Краснодарском крае](https://bmn.su/news/investitsionnye-soglasheniya-i-novye-proizvodstva-v-krasnoda-97): В Краснодарском крае активно развивается промышленность: открываются новые заводы, модернизируются существующие предприятия. Регион привлека…
+- [Тенденции рынка недвижимости Краснодара и Краснодарского края в июле 2026 года](https://bmn.su/news/tendentsii-rynka-nedvizhimosti-krasnodara-i-krasnodarskogo-k-94): В Краснодарском крае наблюдаются изменения в предпочтениях покупателей недвижимости. Спрос смещается в сторону более доступных вариантов, а …
+- [Новостные тенденции на рынке недвижимости Краснодара и Краснодарского края](https://bmn.su/news/novostnye-tendentsii-na-rynke-nedvizhimosti-krasnodara-i-kra-93): В Краснодарском крае стартовали продажи в новом жилом комплексе. Также обсуждаются вопросы незаконного накопления активов и изменения в сфер…
+- [Рынок коммерческой недвижимости Краснодара: рост аренды и цен на недвижимость](https://bmn.su/news/rynok-kommercheskoy-nedvizhimosti-krasnodara-rost-arendy-i-t-92): В Краснодарском крае наблюдается увеличение предложения по аренде коммерческих складов. Одновременно с этим стоимость квадратного метра комм…
+- [Развитие туристической инфраструктуры на юге России: новые проекты и инвестиции](https://bmn.su/news/razvitie-turisticheskoy-infrastruktury-na-yuge-rossii-novye--91): В Краснодаре прошла выставка-форум ОТПУСК ЭКСПО&ФЕСТ 2026, обсуждались инвестиции в туризм и развитие инфраструктуры на юге России. В Сочи п…
+
+## Контакты
+- Сайт: https://bmn.su
