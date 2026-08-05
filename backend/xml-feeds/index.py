@@ -230,7 +230,7 @@ def _cdn_url(key):
     return f"{CDN_BASE}/projects/{project_id}/bucket/{key}"
 
 
-def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_category_map=None):
+def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_category_map=None, use_jpg_photos=None):
     """Собирает XML для одной площадки из текущего состояния БД.
     Набор объектов зависит от ФОРМАТА (fmt), а не от slug — так несколько фидов
     с разными названиями (например «М2» и «Яндекс.Недвижимость») могут использовать
@@ -280,7 +280,7 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_ca
     company = dict(cur.fetchone() or {})
 
     if fmt == 'yandex':
-        return _build_yandex(listings, company, feed_slug)
+        return _build_yandex(listings, company, feed_slug, use_jpg_photos)
     if fmt == 'avito':
         return _build_avito(listings, company)
     if fmt == 'cian':
@@ -290,8 +290,9 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_ca
         # yandex-схему (её принимает большинство каталогов недвижимости).
         # feed_slug пробрасывается дальше — так у ОДНОЙ конкретной площадки (например
         # 23estate) можно включить индивидуальную особенность через FEED_OVERRIDES,
-        # не затрагивая остальные площадки группы «Разное».
-        return _build_yandex(listings, company, feed_slug)
+        # не затрагивая остальные площадки группы «Разное». use_jpg_photos — тот же
+        # переключатель, но задаётся пользователем из настроек фида (приоритетнее).
+        return _build_yandex(listings, company, feed_slug, use_jpg_photos)
     if fmt == 'market':
         return _build_yandex_market(listings, company, market_category_map or {})
     return None
@@ -322,7 +323,7 @@ def _regenerate_static_feeds(cur, conn, force=False):
 
         xml_content = _build_feed_xml(
             cur, feed['slug'], feed['format'], feed.get('filter_category'), feed.get('filter_deal'),
-            market_category_map=market_category_map,
+            market_category_map=market_category_map, use_jpg_photos=feed.get('use_jpg_photos'),
         )
         if xml_content is None:
             results.append({'slug': feed['slug'], 'error': 'Неизвестный формат'})
@@ -429,10 +430,14 @@ def _clean_photo_url(url):
     return re.sub(r'/bucket/photos/.*$', f'/bucket/xml-feeds-photos/{token}.jpg', url)
 
 
-def _split_images_for_feed(row, feed_slug):
-    """Как _split_images, но применяет индивидуальные настройки площадки (FEED_OVERRIDES)."""
+def _split_images_for_feed(row, feed_slug, use_jpg_photos=None):
+    """Как _split_images, но переключает на чистые JPG-копии (без ватермарки и webp) —
+    либо по флагу use_jpg_photos, заданному пользователем в настройках фида (приоритет),
+    либо по старому зашитому списку FEED_OVERRIDES (для площадок, настроенных до того,
+    как появился флаг в БД — их поведение остаётся прежним без миграции данных)."""
     images = _split_images(row)
-    if FEED_OVERRIDES.get(feed_slug, {}).get('clean_photos'):
+    clean = use_jpg_photos if use_jpg_photos is not None else FEED_OVERRIDES.get(feed_slug, {}).get('clean_photos')
+    if clean:
         images = [_clean_photo_url(u) for u in images]
     return images
 
@@ -824,7 +829,7 @@ def _total_price(l):
     return int(price)
 
 
-def _build_yandex(listings, company, feed_slug=None):
+def _build_yandex(listings, company, feed_slug=None, use_jpg_photos=None):
     company_name = _xml_escape(company.get('company_name', 'BIZNEST'))
     email = _xml_escape(company.get('company_email', ''))
     site_url = (company.get('site_url') or '').rstrip('/')
@@ -962,7 +967,7 @@ def _build_yandex(listings, company, feed_slug=None):
             out.append(f'<description>{_xml_escape(l["description"])}</description>')
 
         # Фото — не меньше двух по требованиям Яндекса
-        images = _split_images_for_feed(l, feed_slug)
+        images = _split_images_for_feed(l, feed_slug, use_jpg_photos)
         for img in images:
             out.append(f'<image>{_xml_escape(img)}</image>')
 

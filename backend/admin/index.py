@@ -4816,9 +4816,10 @@ def _xml_feeds(cur, conn, method, rid, event, user):
         market_map_s = "NULL"
         if fmt == 'market' and body.get('market_category_map') is not None:
             market_map_s = f"'{_safe(json.dumps(body['market_category_map'], ensure_ascii=False), 5000)}'"
+        use_jpg_s = _bool(bool(body.get('use_jpg_photos')))
         cur.execute(
-            f"INSERT INTO {SCHEMA}.xml_feeds (name, slug, format, filter_category, filter_deal, market_category_map) "
-            f"VALUES ('{name}', '{slug}', '{fmt}', {cat_s}, {deal_s}, {market_map_s}) RETURNING id, slug"
+            f"INSERT INTO {SCHEMA}.xml_feeds (name, slug, format, filter_category, filter_deal, market_category_map, use_jpg_photos) "
+            f"VALUES ('{name}', '{slug}', '{fmt}', {cat_s}, {deal_s}, {market_map_s}, {use_jpg_s}) RETURNING id, slug"
         )
         conn.commit()
         row = cur.fetchone()
@@ -4845,6 +4846,8 @@ def _xml_feeds(cur, conn, method, rid, event, user):
             fields.append(f"market_category_map = {_str_or_null(map_json, 5000)}")
         if 'is_active' in body:
             fields.append(f"is_active = {_bool(body['is_active'])}")
+        if 'use_jpg_photos' in body:
+            fields.append(f"use_jpg_photos = {_bool(bool(body['use_jpg_photos']))}")
         if not fields:
             return _err(400, 'Нет полей')
         cur.execute(f"UPDATE {SCHEMA}.xml_feeds SET {', '.join(fields)} WHERE id = {int(rid)}")

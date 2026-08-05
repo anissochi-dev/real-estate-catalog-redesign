@@ -16,6 +16,7 @@ interface F {
   cdn_url: string | null;
   last_generated_at: string | null;
   market_category_map: string | null;
+  use_jpg_photos?: boolean;
 }
 
 const PLATFORMS = [
@@ -244,6 +245,11 @@ export default function XmlFeedsAdmin() {
                     <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${f.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-muted'}`}>
                       {f.is_active ? 'Активен' : 'Выкл'}
                     </span>
+                    {f.use_jpg_photos && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0 bg-blue-100 text-blue-700">
+                        JPG-фото
+                      </span>
+                    )}
                   </div>
                   <div className="text-xs text-muted-foreground">
                     Площадка: {PLATFORMS.find(p => p[0] === f.format)?.[1] || f.format} · {timeAgo(f.last_generated_at)}
@@ -473,6 +479,14 @@ export default function XmlFeedsAdmin() {
                   onChange={e => setEditing({ ...editing, is_active: e.target.checked })} />
                 Активен
               </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={!!editing.use_jpg_photos}
+                  onChange={e => setEditing({ ...editing, use_jpg_photos: e.target.checked })} />
+                Фото в JPG (без водяного знака)
+              </label>
+              <div className="text-[11px] text-muted-foreground -mt-2">
+                Для площадок, которые не принимают WEBP-формат фото (например Akula, 23Estate). Ссылки на фото в фиде заменятся на JPG-копии.
+              </div>
             </div>
             <div className="p-5 border-t border-border flex justify-end gap-3">
               <button onClick={() => setEditing(null)} className="px-4 py-2 rounded-xl text-sm">Отмена</button>
