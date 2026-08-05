@@ -1,6 +1,7 @@
 /sitemap.xml         https://functions.poehali.dev/7db3cce2-3ae0-4bbb-bece-5c6076691344?action=sitemap_xml    200
 /sitemap_index.xml   https://functions.poehali.dev/7db3cce2-3ae0-4bbb-bece-5c6076691344?action=sitemap_xml    200
 /robots.txt          https://functions.poehali.dev/7db3cce2-3ae0-4bbb-bece-5c6076691344?action=robots_txt     200
+/llms.txt            https://functions.poehali.dev/7db3cce2-3ae0-4bbb-bece-5c6076691344?action=llms_txt       200
 
 # ── Prerender: все страницы получают готовый HTML с мета-тегами и SEO-контентом.
 # React подхватывает HTML и оживляет его (hydration) — сайт полностью интерактивен.

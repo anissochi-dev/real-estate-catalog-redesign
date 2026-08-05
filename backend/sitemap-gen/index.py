@@ -208,6 +208,130 @@ def _build_sitemap_xml(cur) -> tuple:
     return '\n'.join(parts), len(urls)
 
 
+CATEGORY_LABELS = {
+    'office': 'Офисы',
+    'retail': 'Торговые помещения',
+    'warehouse': 'Склады',
+    'restaurant': 'Рестораны',
+    'hotel': 'Гостиницы',
+    'business': 'Готовый бизнес',
+    'gab': 'Готовый арендный бизнес',
+    'production': 'Производство',
+    'land': 'Земельные участки',
+    'building': 'Здания',
+    'free_purpose': 'Свободного назначения',
+    'car_service': 'Автосервисы',
+}
+
+
+def _build_llms_txt(cur) -> str:
+    """Собирает Markdown-навигатор для ИИ-систем (llms.txt).
+    Источники те же, что у sitemap: settings, listings, districts, news, leads —
+    файл всегда синхронизирован с реальным состоянием сайта, ничего не хардкодится."""
+    base = _site_base_url(cur)
+
+    cur.execute(f"SELECT company_name, main_city FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
+    s = cur.fetchone() or {}
+    company_name = (s.get('company_name') or 'Бизнес. Маркетинг. Недвижимость.').strip()
+    city = (s.get('main_city') or 'Краснодар').strip()
+
+    lines = [
+        f'# {company_name}',
+        f'> Коммерческая недвижимость и готовый бизнес — город {city}: аренда, продажа, каталог объектов, аналитика рынка.',
+        '',
+        f'Сайт {company_name} — каталог коммерческой недвижимости, город {city}: офисы, торговые помещения, склады, '
+        f'рестораны, гостиницы, готовый бизнес, готовый арендный бизнес (ГАБ), производство, земельные участки, '
+        f'здания, помещения свободного назначения, автосервисы. Также раздел заявок (лента спроса от арендаторов '
+        f'и покупателей) и новости рынка коммерческой недвижимости.',
+        '',
+        '## Каталог',
+        f'- [Каталог всех объектов]({base}/catalog): актуальные предложения коммерческой недвижимости, город {city}',
+    ]
+
+    cur.execute(
+        f"SELECT category, COUNT(id) as cnt FROM {SCHEMA}.listings "
+        f"WHERE status = 'active' AND is_visible = TRUE "
+        f"GROUP BY category HAVING COUNT(id) > 0 ORDER BY cnt DESC"
+    )
+    for r in cur.fetchall():
+        cat = r.get('category') or ''
+        if not cat:
+            continue
+        label = CATEGORY_LABELS.get(cat, cat)
+        cnt = r.get('cnt') or 0
+        lines.append(f'- [{label}]({base}/catalog/{cat}): {cnt} объектов в категории «{label.lower()}»')
+
+    lines += ['', '## Районы']
+    cur.execute(
+        f"SELECT d.name as d_name, d.slug as d_slug, COUNT(l.id) as cnt "
+        f"FROM {SCHEMA}.districts d "
+        f"INNER JOIN {SCHEMA}.listings l ON l.district = d.name "
+        f"  AND l.status = 'active' AND l.is_visible = TRUE "
+        f"WHERE d.slug IS NOT NULL AND d.slug != '' AND d.is_active = TRUE AND d.is_okrug = FALSE "
+        f"GROUP BY d.name, d.slug ORDER BY cnt DESC"
+    )
+    for r in cur.fetchall():
+        d_slug = r.get('d_slug') or ''
+        d_name = r.get('d_name') or d_slug
+        if not d_slug:
+            continue
+        cnt = r.get('cnt') or 0
+        lines.append(f'- [{d_name}]({base}/district/{d_slug}): {cnt} объектов')
+
+    lines += ['', '## Объекты', '', 'Последние актуальные объявления:']
+    cur.execute(
+        f"SELECT slug, title, id FROM {SCHEMA}.listings "
+        f"WHERE status = 'active' AND is_visible = TRUE "
+        f"ORDER BY updated_at DESC NULLS LAST LIMIT 20"
+    )
+    for r in cur.fetchall():
+        lid = r.get('id')
+        slug = r.get('slug') or _make_slug(r.get('title') or '', lid)
+        title = (r.get('title') or 'Объект').strip()
+        lines.append(f'- [{title}]({base}/object/{slug})')
+
+    lines += [
+        '',
+        '## Заявки',
+        f'- [Лента заявок на аренду и покупку]({base}/leads): актуальный спрос от арендаторов и покупателей '
+        f'коммерческой недвижимости',
+        '',
+        '## Новости',
+    ]
+    cur.execute(
+        f"SELECT slug, title, summary FROM {SCHEMA}.news "
+        f"WHERE is_published = TRUE AND slug IS NOT NULL AND slug != '' "
+        f"ORDER BY published_at DESC NULLS LAST LIMIT 10"
+    )
+    for r in cur.fetchall():
+        slug = r.get('slug')
+        title = (r.get('title') or 'Новость').strip()
+        summary = (r.get('summary') or '').strip()
+        summary = (summary[:140] + '…') if len(summary) > 140 else summary
+        suffix = f': {summary}' if summary else ''
+        lines.append(f'- [{title}]({base}/news/{slug}){suffix}')
+
+    # Дополнительные разделы (услуги и т.п.), добавляемые вручную по мере появления
+    # на сайте — таблица llms_sections. Пусто, пока разделов нет.
+    cur.execute(
+        f"SELECT name, url, description FROM {SCHEMA}.llms_sections "
+        f"WHERE is_active = TRUE ORDER BY sort_order ASC, id ASC"
+    )
+    extra = cur.fetchall()
+    if extra:
+        lines += ['', '## Другое']
+        for r in extra:
+            name = (r.get('name') or '').strip()
+            url = (r.get('url') or '').strip()
+            desc = (r.get('description') or '').strip()
+            suffix = f': {desc}' if desc else ''
+            lines.append(f'- [{name}]({url}){suffix}')
+
+    lines += ['', '## Контакты', f'- Сайт: {base}']
+
+    return '\n'.join(lines) + '\n'
+
+
 def _build_robots_txt(cur) -> str:
     base = _site_base_url(cur)
     # Извлекаем домен для директивы Host
@@ -247,6 +371,18 @@ def _save_sitemap(cur, conn) -> dict:
     )
     conn.commit()
     return {'urls_count': count, 'xml_length': len(xml)}
+
+
+def _save_llms_txt(cur, conn) -> dict:
+    txt = _build_llms_txt(cur)
+    safe = txt.replace("'", "''")[:2_000_000]
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.seo_artifacts (kind, content, urls_count, updated_at) "
+        f"VALUES ('llms_txt', '{safe}', 0, NOW()) "
+        f"ON CONFLICT (kind) DO UPDATE SET content = EXCLUDED.content, updated_at = NOW()"
+    )
+    conn.commit()
+    return {'length': len(txt)}
 
 
 def _get_user(cur, token):
@@ -309,6 +445,38 @@ def handler(event: dict, context) -> dict:
                     'body': _build_robots_txt(cur),
                 }
 
+            if action == 'llms_txt':
+                from datetime import datetime, timezone
+                cur.execute(f"SELECT content, updated_at FROM {SCHEMA}.seo_artifacts WHERE kind='llms_txt'")
+                row = cur.fetchone()
+                cache_age_minutes = None
+                if row and row.get('updated_at'):
+                    try:
+                        upd = row['updated_at']
+                        if upd.tzinfo is None:
+                            upd = upd.replace(tzinfo=timezone.utc)
+                        cache_age_minutes = (datetime.now(timezone.utc) - upd).total_seconds() / 60
+                    except Exception:
+                        cache_age_minutes = None
+
+                cache_stale = (
+                    not row
+                    or not row.get('content')
+                    or (cache_age_minutes is not None and cache_age_minutes > 60)
+                )
+                if cache_stale:
+                    _save_llms_txt(cur, conn)
+                    cur.execute(f"SELECT content FROM {SCHEMA}.seo_artifacts WHERE kind='llms_txt'")
+                    fresh = cur.fetchone()
+                    txt = fresh['content'] if fresh else ''
+                else:
+                    txt = row['content']
+                return {
+                    'statusCode': 200,
+                    'headers': {**CORS, 'Content-Type': 'text/markdown; charset=utf-8', 'Cache-Control': 'public, max-age=3600'},
+                    'body': txt,
+                }
+
             if action == 'sitemap_xml':
                 from datetime import datetime, timezone, timedelta
                 cur.execute(
@@ -352,6 +520,7 @@ def handler(event: dict, context) -> dict:
 
             if action == 'rebuild':
                 result = _save_sitemap(cur, conn)
+                _save_llms_txt(cur, conn)
                 return _ok({'ok': True, **result})
 
             if action == 'status':
