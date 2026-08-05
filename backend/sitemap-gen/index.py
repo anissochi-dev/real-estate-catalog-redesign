@@ -329,7 +329,10 @@ def _build_llms_txt(cur) -> str:
 
     lines += ['', '## Контакты', f'- Сайт: {base}']
 
-    return '\n'.join(lines) + '\n'
+    # BOM (\ufeff) в начале — статические CDN-раздатчики иногда отдают .txt без
+    # charset в Content-Type, и браузер начинает угадывать кодировку сам. BOM
+    # заставляет его надёжно распознать UTF-8 независимо от заголовков сервера.
+    return '\ufeff' + '\n'.join(lines) + '\n'
 
 
 def _build_robots_txt(cur) -> str:
