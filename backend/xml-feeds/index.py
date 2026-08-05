@@ -402,6 +402,7 @@ FEED_OVERRIDES = {
     '23estate': {'clean_photos': True},
     'gdeetotdom': {'clean_photos': True},
     'remospro': {'clean_photos': True},
+    'akula': {'clean_photos': True},
 }
 
 # Фото с наложенным водяным знаком: .../photos/{token}_wm.webp
