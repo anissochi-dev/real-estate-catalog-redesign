@@ -50,7 +50,7 @@ export default function GeneralTab({ tab, s, setS, cities, saved, save }: Props)
   if (tab === 'general') {
     return (
       <div className="space-y-4">
-        <div className="bg-white rounded-2xl p-6 shadow-sm space-y-3">
+        <div id="section-logo" className="bg-white rounded-2xl p-6 shadow-sm space-y-3">
           <div className="font-display font-700 text-lg mb-2">Логотип</div>
           <ImageUploader
             value={s.logo_url ? [s.logo_url] : []}
@@ -62,7 +62,7 @@ export default function GeneralTab({ tab, s, setS, cities, saved, save }: Props)
           {field('company_name', 'Название компании')}
         </div>
 
-        <div className="bg-white rounded-2xl p-6 shadow-sm space-y-3">
+        <div id="section-contacts" className="bg-white rounded-2xl p-6 shadow-sm space-y-3">
           <div className="font-display font-700 text-lg mb-2">Контакты</div>
           {field('company_phone', 'Телефон')}
           {field('company_email', 'Email')}
@@ -76,7 +76,7 @@ export default function GeneralTab({ tab, s, setS, cities, saved, save }: Props)
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-6 shadow-sm space-y-3">
+        <div id="section-hero" className="bg-white rounded-2xl p-6 shadow-sm space-y-3">
           <div className="font-display font-700 text-lg mb-2">Главная страница</div>
           {field('hero_title', 'Заголовок Hero')}
           {field('hero_subtitle', 'Подзаголовок Hero', true)}
@@ -84,7 +84,7 @@ export default function GeneralTab({ tab, s, setS, cities, saved, save }: Props)
           {field('home_seo_text', 'SEO-текст главной страницы', true, 8)}
         </div>
 
-        <div className="bg-white rounded-2xl p-6 shadow-sm space-y-4">
+        <div id="section-counts" className="bg-white rounded-2xl p-6 shadow-sm space-y-4">
           <div className="font-display font-700 text-lg mb-2">Количество объектов</div>
           <div className="grid grid-cols-2 gap-3">
             <div>

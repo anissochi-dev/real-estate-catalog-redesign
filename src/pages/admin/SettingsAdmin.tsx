@@ -22,6 +22,7 @@ import NotificationsTab from './settings/NotificationsTab';
 import SiteHealthTab from './settings/SiteHealthTab';
 import VerificationTab from './settings/VerificationTab';
 import SettingsSearch from './settings/SettingsSearch';
+import { useSettingsAnchorListener } from './settings/settingsAnchor';
 import VBKnowledgeAdmin from './VBKnowledgeAdmin';
 import UsersAdmin from './UsersAdmin';
 import PhoneBook from './PhoneBook';
@@ -208,6 +209,10 @@ export default function SettingsAdmin() {
     window.addEventListener('settings:open-tab', handler);
     return () => window.removeEventListener('settings:open-tab', handler);
   }, []);
+
+  // Скролл+подсветка к найденному в поиске полю (settingsAnchor.ts) — работает
+  // как при смене вкладки, так и если нужный раздел уже открыт.
+  useSettingsAnchorListener();
 
   const save = async () => {
     try {

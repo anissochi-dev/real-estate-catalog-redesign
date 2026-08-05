@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { adminApi } from '@/lib/adminApi';
-import { FEEDS_SEARCH_HANDOFF_KEY } from './settings/SettingsSearch';
+import { useSettingsSearchHandoff } from './settings/settingsAnchor';
 import { F, XML_URL } from './xml-feeds/shared';
 import XmlFeedsListCard from './xml-feeds/XmlFeedsListCard';
 import XmlImportCard from './xml-feeds/XmlImportCard';
@@ -18,15 +18,7 @@ export default function XmlFeedsAdmin() {
 
   // Если перешли сюда из общего поиска настроек (нашли конкретный фид по имени) —
   // подставляем текст поиска, чтобы список сразу отфильтровался на нужный фид.
-  useEffect(() => {
-    try {
-      const handoff = sessionStorage.getItem(FEEDS_SEARCH_HANDOFF_KEY);
-      if (handoff) {
-        setSearch(handoff);
-        sessionStorage.removeItem(FEEDS_SEARCH_HANDOFF_KEY);
-      }
-    } catch { /* ignore */ }
-  }, []);
+  useSettingsSearchHandoff(setSearch);
 
   const save = async () => {
     if (!editing) return;

@@ -380,8 +380,16 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse at 20% 50%, hsla(215, 85%, 45%, 0.3) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 20%, hsla(28, 95%, 52%, 0.12) 0%, transparent 50%);
+    radial-gradient(
+      ellipse at 20% 50%,
+      hsla(215, 85%, 45%, 0.3) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse at 80% 20%,
+      hsla(28, 95%, 52%, 0.12) 0%,
+      transparent 50%
+    );
   animation: heroNebulaPulse 10s ease-in-out infinite alternate;
   pointer-events: none;
 }
@@ -409,44 +417,150 @@
   width: 12px;
   height: 12px;
   background: #ffffff;
-  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  clip-path: polygon(
+    50% 0%,
+    61% 35%,
+    98% 35%,
+    68% 57%,
+    79% 91%,
+    50% 70%,
+    21% 91%,
+    32% 57%,
+    2% 35%,
+    39% 35%
+  );
   filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.8));
   animation: heroStarTwinkle 3.5s ease-in-out infinite alternate;
   pointer-events: none;
 }
 
-.hero-star-1 { top: 12%; left: 8%; width: 12px; height: 12px; animation-delay: 0s; }
-.hero-star-2 { top: 22%; right: 12%; width: 9px; height: 9px; animation-delay: 1.2s; }
-.hero-star-3 { bottom: 55%; left: 30%; width: 15px; height: 15px; animation-delay: 0.6s; }
-.hero-star-4 { top: 55%; right: 6%; width: 10px; height: 10px; animation-delay: 1.8s; }
-.hero-star-5 { bottom: 12%; left: 6%; width: 7px; height: 7px; animation-delay: 2.5s; }
-.hero-star-6 { top: 65%; left: 45%; width: 8px; height: 8px; animation-delay: 0.3s; }
-.hero-star-7 { bottom: 20%; right: 28%; width: 9px; height: 9px; animation-delay: 2s; }
-.hero-star-8 { top: 32%; left: 48%; width: 10px; height: 10px; animation-delay: 0.9s; }
-.hero-star-9 { top: 48%; left: 60%; width: 8px; height: 8px; animation-delay: 1.5s; }
-.hero-star-10 { top: 26%; left: 58%; width: 13px; height: 13px; animation-delay: 2.2s; }
-.hero-star-11 { bottom: 30%; left: 50%; width: 9px; height: 9px; animation-delay: 0.4s; }
-.hero-star-12 { top: 60%; left: 40%; width: 11px; height: 11px; animation-delay: 1.7s; }
+.hero-star-1 {
+  top: 12%;
+  left: 8%;
+  width: 12px;
+  height: 12px;
+  animation-delay: 0s;
+}
+.hero-star-2 {
+  top: 22%;
+  right: 12%;
+  width: 9px;
+  height: 9px;
+  animation-delay: 1.2s;
+}
+.hero-star-3 {
+  bottom: 55%;
+  left: 30%;
+  width: 15px;
+  height: 15px;
+  animation-delay: 0.6s;
+}
+.hero-star-4 {
+  top: 55%;
+  right: 6%;
+  width: 10px;
+  height: 10px;
+  animation-delay: 1.8s;
+}
+.hero-star-5 {
+  bottom: 12%;
+  left: 6%;
+  width: 7px;
+  height: 7px;
+  animation-delay: 2.5s;
+}
+.hero-star-6 {
+  top: 65%;
+  left: 45%;
+  width: 8px;
+  height: 8px;
+  animation-delay: 0.3s;
+}
+.hero-star-7 {
+  bottom: 20%;
+  right: 28%;
+  width: 9px;
+  height: 9px;
+  animation-delay: 2s;
+}
+.hero-star-8 {
+  top: 32%;
+  left: 48%;
+  width: 10px;
+  height: 10px;
+  animation-delay: 0.9s;
+}
+.hero-star-9 {
+  top: 48%;
+  left: 60%;
+  width: 8px;
+  height: 8px;
+  animation-delay: 1.5s;
+}
+.hero-star-10 {
+  top: 26%;
+  left: 58%;
+  width: 13px;
+  height: 13px;
+  animation-delay: 2.2s;
+}
+.hero-star-11 {
+  bottom: 30%;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  animation-delay: 0.4s;
+}
+.hero-star-12 {
+  top: 60%;
+  left: 40%;
+  width: 11px;
+  height: 11px;
+  animation-delay: 1.7s;
+}
 
 @keyframes heroNebulaPulse {
-  0% { opacity: 0.6; transform: scale(1); }
-  100% { opacity: 1; transform: scale(1.05); }
+  0% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
 }
 
 @keyframes heroStarsTwinkle {
-  0% { opacity: 0.3; }
-  100% { opacity: 0.8; }
+  0% {
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 0.8;
+  }
 }
 
 @keyframes heroStarTwinkle {
-  0% { transform: scale(0.6) rotate(0deg); opacity: 0.35; filter: drop-shadow(0 0 2px #fff); }
-  50% { transform: scale(1.2) rotate(45deg); opacity: 0.95; filter: drop-shadow(0 0 10px #6fb2ff); }
-  100% { transform: scale(0.8) rotate(90deg); opacity: 0.5; filter: drop-shadow(0 0 4px #fff); }
+  0% {
+    transform: scale(0.6) rotate(0deg);
+    opacity: 0.35;
+    filter: drop-shadow(0 0 2px #fff);
+  }
+  50% {
+    transform: scale(1.2) rotate(45deg);
+    opacity: 0.95;
+    filter: drop-shadow(0 0 10px #6fb2ff);
+  }
+  100% {
+    transform: scale(0.8) rotate(90deg);
+    opacity: 0.5;
+    filter: drop-shadow(0 0 4px #fff);
+  }
 }
 
 /* На мобильных прячем часть звёзд — легче и меньше визуального шума */
 @media (max-width: 640px) {
-  .hero-star-3, .hero-star-6 {
+  .hero-star-3,
+  .hero-star-6 {
     display: none;
   }
 }
@@ -552,5 +666,38 @@
     background: hsl(215, 85%, 55%);
     border-radius: 7px;
     border: none;
+  }
+}
+
+/* Подсветка блока настроек после перехода из поиска: рамка + мягкая заливка,
+   плавно затухающие за 2 секунды (settingsAnchor.ts). */
+@keyframes settingsHighlightFade {
+  0% {
+    box-shadow:
+      0 0 0 2px hsl(215, 85%, 45%),
+      0 0 0 6px hsla(215, 85%, 45%, 0.15);
+    background-color: hsla(215, 85%, 45%, 0.08);
+  }
+  70% {
+    box-shadow:
+      0 0 0 2px hsl(215, 85%, 45%),
+      0 0 0 6px hsla(215, 85%, 45%, 0.15);
+    background-color: hsla(215, 85%, 45%, 0.08);
+  }
+  100% {
+    box-shadow:
+      0 0 0 0 hsla(215, 85%, 45%, 0),
+      0 0 0 0 hsla(215, 85%, 45%, 0);
+    background-color: transparent;
+  }
+}
+.settings-highlight {
+  animation: settingsHighlightFade 2s ease-out;
+  border-radius: 1rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings-highlight {
+    animation: none;
+    box-shadow: 0 0 0 2px hsl(215, 85%, 45%);
   }
 }

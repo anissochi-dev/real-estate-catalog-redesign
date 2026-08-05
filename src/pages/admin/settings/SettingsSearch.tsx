@@ -1,10 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Icon from '@/components/ui/icon';
 import { adminApi } from '@/lib/adminApi';
-
-/** Ключ sessionStorage, через который SettingsSearch передаёт вкладке «XML фиды»
- * текст поиска, чтобы список сразу отфильтровался на нужный фид. */
-export const FEEDS_SEARCH_HANDOFF_KEY = 'settings_search_feeds_query';
+import { setSettingsHandoff } from './settingsAnchor';
 
 interface LiveFeed { id: number; name: string; format: string; }
 
@@ -26,19 +23,23 @@ export interface SearchItem {
   tab: string;
   group: string;
   keywords: string[];
+  /** id DOM-элемента внутри вкладки, к которому нужно проскроллить и подсветить
+   * после перехода (см. settingsAnchor.ts). Необязательное — расставляется
+   * постепенно, начиная с самых частых разделов. */
+  anchor?: string;
 }
 
 export const SETTINGS_INDEX: SearchItem[] = [
   // ── Компания: general ────────────────────────────────────────────────
-  { label: 'Логотип', description: 'Загрузить или изменить логотип компании', tab: 'general', group: 'Компания', keywords: ['логотип', 'logo', 'лого', 'изображение компании'] },
-  { label: 'Название компании', description: 'Официальное название и описание', tab: 'general', group: 'Компания', keywords: ['название', 'компания', 'company', 'имя'] },
-  { label: 'Телефон и контакты', description: 'Контактный телефон, email, адрес офиса', tab: 'general', group: 'Компания', keywords: ['телефон', 'контакты', 'phone', 'email', 'адрес'] },
-  { label: 'Главная страница (Hero)', description: 'Заголовок, подзаголовок и фон главного экрана', tab: 'general', group: 'Компания', keywords: ['главная', 'hero', 'заголовок сайта', 'баннер', 'фон'] },
-  { label: 'О компании (текст)', description: 'Текст описания компании на главной странице', tab: 'general', group: 'Компания', keywords: ['о компании', 'about', 'описание', 'текст главной'] },
-  { label: 'Основной город', description: 'Город по умолчанию для SEO и поиска', tab: 'general', group: 'Компания', keywords: ['город', 'city', 'краснодар', 'регион'] },
-  { label: 'Количество объектов на страницах', description: 'Лимиты объектов на главной, в каталоге, категориях', tab: 'general', group: 'Компания', keywords: ['количество', 'лимит', 'объектов на странице', 'пагинация', 'каталог'] },
-  { label: 'Блок новостей на сайте', description: 'Включить/выключить блок новостей и его размер', tab: 'general', group: 'Компания', keywords: ['новости', 'блок новостей', 'главная страница'] },
-  { label: 'Блок заявок клиентов', description: 'Включить/выключить публичный блок последних заявок', tab: 'general', group: 'Компания', keywords: ['заявки клиентов', 'отзывы', 'блок заявок'] },
+  { label: 'Логотип', description: 'Загрузить или изменить логотип компании', tab: 'general', group: 'Компания', keywords: ['логотип', 'logo', 'лого', 'изображение компании'], anchor: 'section-logo' },
+  { label: 'Название компании', description: 'Официальное название и описание', tab: 'general', group: 'Компания', keywords: ['название', 'компания', 'company', 'имя'], anchor: 'section-logo' },
+  { label: 'Телефон и контакты', description: 'Контактный телефон, email, адрес офиса', tab: 'general', group: 'Компания', keywords: ['телефон', 'контакты', 'phone', 'email', 'адрес'], anchor: 'section-contacts' },
+  { label: 'Главная страница (Hero)', description: 'Заголовок, подзаголовок и фон главного экрана', tab: 'general', group: 'Компания', keywords: ['главная', 'hero', 'заголовок сайта', 'баннер', 'фон'], anchor: 'section-hero' },
+  { label: 'О компании (текст)', description: 'Текст описания компании на главной странице', tab: 'general', group: 'Компания', keywords: ['о компании', 'about', 'описание', 'текст главной'], anchor: 'section-hero' },
+  { label: 'Основной город', description: 'Город по умолчанию для SEO и поиска', tab: 'general', group: 'Компания', keywords: ['город', 'city', 'краснодар', 'регион'], anchor: 'section-contacts' },
+  { label: 'Количество объектов на страницах', description: 'Лимиты объектов на главной, в каталоге, категориях', tab: 'general', group: 'Компания', keywords: ['количество', 'лимит', 'объектов на странице', 'пагинация', 'каталог'], anchor: 'section-counts' },
+  { label: 'Блок новостей на сайте', description: 'Включить/выключить блок новостей и его размер', tab: 'general', group: 'Компания', keywords: ['новости', 'блок новостей', 'главная страница'], anchor: 'section-counts' },
+  { label: 'Блок заявок клиентов', description: 'Включить/выключить публичный блок последних заявок', tab: 'general', group: 'Компания', keywords: ['заявки клиентов', 'отзывы', 'блок заявок'], anchor: 'section-counts' },
 
   // ── Компания: brand-kit ──────────────────────────────────────────────
   { label: 'Цвета бренда', description: 'Первичный, вторичный и акцентный цвета', tab: 'brand-kit', group: 'Компания', keywords: ['цвета', 'цвет', 'бренд', 'brand', 'palette', 'палитра', 'синий', 'оформление'] },
@@ -218,6 +219,7 @@ export default function SettingsSearch({ onNavigate, allowedTabs }: Props) {
   }, []);
 
   const handleSelect = (item: SearchItem) => {
+    if (item.anchor) setSettingsHandoff({ anchor: item.anchor });
     onNavigate(item.tab);
     setQuery('');
     setOpen(false);
@@ -225,7 +227,7 @@ export default function SettingsSearch({ onNavigate, allowedTabs }: Props) {
   };
 
   const handleSelectFeed = (feed: LiveFeed) => {
-    try { sessionStorage.setItem(FEEDS_SEARCH_HANDOFF_KEY, feed.name); } catch { /* ignore */ }
+    setSettingsHandoff({ search: feed.name });
     onNavigate('feeds');
     setQuery('');
     setOpen(false);
