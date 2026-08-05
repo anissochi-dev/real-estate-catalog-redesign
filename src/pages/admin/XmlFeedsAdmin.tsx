@@ -17,6 +17,7 @@ interface F {
   last_generated_at: string | null;
   market_category_map: string | null;
   use_jpg_photos?: boolean;
+  max_listings?: number | null;
 }
 
 const PLATFORMS = [
@@ -248,6 +249,11 @@ export default function XmlFeedsAdmin() {
                     {f.use_jpg_photos && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0 bg-blue-100 text-blue-700">
                         JPG-фото
+                      </span>
+                    )}
+                    {!!f.max_listings && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0 bg-amber-100 text-amber-700">
+                        До {f.max_listings} объектов
                       </span>
                     )}
                   </div>
@@ -486,6 +492,16 @@ export default function XmlFeedsAdmin() {
               </label>
               <div className="text-[11px] text-muted-foreground -mt-2">
                 Для площадок, которые не принимают WEBP-формат фото (например Akula, 23Estate). Ссылки на фото в фиде заменятся на JPG-копии.
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Максимум объектов в фиде</label>
+                <input type="number" min={1} className="w-full px-3 py-2 border rounded-lg"
+                  placeholder="Без ограничений"
+                  value={editing.max_listings ?? ''}
+                  onChange={e => setEditing({ ...editing, max_listings: e.target.value ? Number(e.target.value) : null })} />
+                <div className="text-[11px] text-muted-foreground mt-1">
+                  Для площадок с лимитом (например Doska.ru — 100). В фид попадут только самые свежие объекты — при появлении новых старые автоматически выпадут из выгрузки.
+                </div>
               </div>
             </div>
             <div className="p-5 border-t border-border flex justify-end gap-3">

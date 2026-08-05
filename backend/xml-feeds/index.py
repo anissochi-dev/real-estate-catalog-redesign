@@ -230,7 +230,7 @@ def _cdn_url(key):
     return f"{CDN_BASE}/projects/{project_id}/bucket/{key}"
 
 
-def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_category_map=None, use_jpg_photos=None):
+def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_category_map=None, use_jpg_photos=None, max_listings=None):
     """Собирает XML для одной площадки из текущего состояния БД.
     Набор объектов зависит от ФОРМАТА (fmt), а не от slug — так несколько фидов
     с разными названиями (например «М2» и «Яндекс.Недвижимость») могут использовать
@@ -258,6 +258,11 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_ca
 
     cur.execute(f"SELECT * FROM {SCHEMA}.listings WHERE {' AND '.join(where)} ORDER BY created_at DESC")
     listings = [dict(r) for r in cur.fetchall()]
+    if max_listings:
+        # Ограничение площадки на количество объектов в фиде (например Doska.ru — 100):
+        # берём самые свежие (список уже отсортирован по created_at DESC) — по мере
+        # появления новых объектов старые автоматически перестают попадать в выгрузку.
+        listings = listings[:max_listings]
 
     cur.execute(f"SELECT slug, name FROM {SCHEMA}.land_vri")
     _vri_map = {r['slug']: r['name'] for r in cur.fetchall()}
@@ -324,6 +329,7 @@ def _regenerate_static_feeds(cur, conn, force=False):
         xml_content = _build_feed_xml(
             cur, feed['slug'], feed['format'], feed.get('filter_category'), feed.get('filter_deal'),
             market_category_map=market_category_map, use_jpg_photos=feed.get('use_jpg_photos'),
+            max_listings=feed.get('max_listings'),
         )
         if xml_content is None:
             results.append({'slug': feed['slug'], 'error': 'Неизвестный формат'})
