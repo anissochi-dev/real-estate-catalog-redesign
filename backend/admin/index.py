@@ -4822,9 +4822,10 @@ def _xml_feeds(cur, conn, method, rid, event, user):
             max_listings_s = str(int(max_listings_raw)) if max_listings_raw not in (None, '') else "NULL"
         except (TypeError, ValueError):
             return _err(400, 'Максимум объектов должен быть числом')
+        custom_phone_s = _str_or_null(body.get('custom_phone'), 20)
         cur.execute(
-            f"INSERT INTO {SCHEMA}.xml_feeds (name, slug, format, filter_category, filter_deal, market_category_map, use_jpg_photos, max_listings) "
-            f"VALUES ('{name}', '{slug}', '{fmt}', {cat_s}, {deal_s}, {market_map_s}, {use_jpg_s}, {max_listings_s}) RETURNING id, slug"
+            f"INSERT INTO {SCHEMA}.xml_feeds (name, slug, format, filter_category, filter_deal, market_category_map, use_jpg_photos, max_listings, custom_phone) "
+            f"VALUES ('{name}', '{slug}', '{fmt}', {cat_s}, {deal_s}, {market_map_s}, {use_jpg_s}, {max_listings_s}, {custom_phone_s}) RETURNING id, slug"
         )
         conn.commit()
         row = cur.fetchone()
@@ -4859,6 +4860,8 @@ def _xml_feeds(cur, conn, method, rid, event, user):
                 fields.append(f"max_listings = {int(raw) if raw not in (None, '') else 'NULL'}")
             except (TypeError, ValueError):
                 return _err(400, 'Максимум объектов должен быть числом')
+        if 'custom_phone' in body:
+            fields.append(f"custom_phone = {_str_or_null(body['custom_phone'], 20)}")
         if not fields:
             return _err(400, 'Нет полей')
         cur.execute(f"UPDATE {SCHEMA}.xml_feeds SET {', '.join(fields)} WHERE id = {int(rid)}")

@@ -11,6 +11,9 @@ export interface F {
   market_category_map: string | null;
   use_jpg_photos?: boolean;
   max_listings?: number | null;
+  /** Подменный телефон для этого фида — если задан, в выгрузке показывается он
+   * вместо основного телефона компании (например для отслеживания звонков с площадки). */
+  custom_phone?: string | null;
 }
 
 export const XML_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7';

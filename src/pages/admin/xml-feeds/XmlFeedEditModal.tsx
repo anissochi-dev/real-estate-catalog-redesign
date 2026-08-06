@@ -59,6 +59,16 @@ export default function XmlFeedEditModal({ editing, setEditing, save }: Props) {
               Для площадок с лимитом (например Doska.ru — 100). В фид попадут только самые свежие объекты — при появлении новых старые автоматически выпадут из выгрузки.
             </div>
           </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Подменный телефон</label>
+            <input type="tel" className="w-full px-3 py-2 border rounded-lg"
+              placeholder="+7 900 000-00-00"
+              value={editing.custom_phone ?? ''}
+              onChange={e => setEditing({ ...editing, custom_phone: e.target.value || null })} />
+            <div className="text-[11px] text-muted-foreground mt-1">
+              Если указан — во всех объявлениях этого фида вместо телефона компании (Настройки → Общие) будет показан этот номер. Удобно для отслеживания звонков с конкретной площадки. Если оставить пустым — используется телефон компании.
+            </div>
+          </div>
         </div>
         <div className="p-5 border-t border-border flex justify-end gap-3">
           <button onClick={() => setEditing(null)} className="px-4 py-2 rounded-xl text-sm">Отмена</button>

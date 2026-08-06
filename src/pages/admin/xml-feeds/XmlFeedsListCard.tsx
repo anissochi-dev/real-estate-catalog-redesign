@@ -78,6 +78,11 @@ export default function XmlFeedsListCard({
                       До {f.max_listings} объектов
                     </span>
                   )}
+                  {!!f.custom_phone && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0 bg-violet-100 text-violet-700 inline-flex items-center gap-1">
+                      <Icon name="Phone" size={10} /> {f.custom_phone}
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs text-muted-foreground">
                   Площадка: {PLATFORMS.find(p => p[0] === f.format)?.[1] || f.format} · {timeAgo(f.last_generated_at)}

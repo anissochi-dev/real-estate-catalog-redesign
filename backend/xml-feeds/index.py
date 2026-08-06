@@ -230,7 +230,7 @@ def _cdn_url(key):
     return f"{CDN_BASE}/projects/{project_id}/bucket/{key}"
 
 
-def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_category_map=None, use_jpg_photos=None, max_listings=None):
+def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_category_map=None, use_jpg_photos=None, max_listings=None, custom_phone=None):
     """Собирает XML для одной площадки из текущего состояния БД.
     Набор объектов зависит от ФОРМАТА (fmt), а не от slug — так несколько фидов
     с разными названиями (например «М2» и «Яндекс.Недвижимость») могут использовать
@@ -283,6 +283,12 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_ca
 
     cur.execute(f"SELECT * FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1")
     company = dict(cur.fetchone() or {})
+    # Подменный телефон конкретного фида (например для отслеживания звонков с площадки) —
+    # если указан, все генераторы формата (_build_yandex/_build_avito/_build_cian/
+    # _build_yandex_market) используют его вместо основного телефона компании, т.к. они
+    # уже читают company.get('company_phone') — отдельно каждую функцию не меняем.
+    if custom_phone:
+        company['company_phone'] = custom_phone
 
     if fmt == 'yandex':
         return _build_yandex(listings, company, feed_slug, use_jpg_photos)
@@ -329,7 +335,7 @@ def _regenerate_static_feeds(cur, conn, force=False):
         xml_content = _build_feed_xml(
             cur, feed['slug'], feed['format'], feed.get('filter_category'), feed.get('filter_deal'),
             market_category_map=market_category_map, use_jpg_photos=feed.get('use_jpg_photos'),
-            max_listings=feed.get('max_listings'),
+            max_listings=feed.get('max_listings'), custom_phone=feed.get('custom_phone'),
         )
         if xml_content is None:
             results.append({'slug': feed['slug'], 'error': 'Неизвестный формат'})
