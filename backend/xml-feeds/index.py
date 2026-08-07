@@ -784,6 +784,17 @@ CONDITION_YANDEX = {
     'shellcore': 'требует ремонта',
 }
 
+# YML-фид недвижимости (param "Отделка") принимает только 3 значения:
+# Черновая / Чистовая / Под ключ — используется в _build_yandex_market.
+CONDITION_TO_FINISHING_MARKET = {
+    'new': 'Под ключ',
+    'euro': 'Под ключ',
+    'good': 'Чистовая',
+    'cosmetic': 'Чистовая',
+    'rough': 'Черновая',
+    'shellcore': 'Черновая',
+}
+
 FINISHING_CIAN = {
     'none': 'no',
     'rough': 'rough',
@@ -1005,12 +1016,37 @@ YANDEX_BUSINESS_CATEGORY_NAMES = {
 }
 
 
+def _market_conversion_score(l):
+    """«Конверсия» — обязательный параметр YML-фида недвижимости Яндекса: произвольное
+    число, чем больше, тем заметнее показывается предложение. Реальной статистики
+    конверсии у нас нет, поэтому считаем условный рейтинг качества карточки —
+    чем больше у объекта заполненных полей и фото, тем выше число (базовые 30 + бонусы)."""
+    score = 30
+    images = _split_images(l)
+    score += min(len(images), 10) * 3  # до +30 за фото
+    if l.get('description') and len(l['description']) > 200:
+        score += 10
+    if l.get('area'):
+        score += 5
+    if l.get('address'):
+        score += 5
+    if l.get('lat') and l.get('lng'):
+        score += 5
+    if l.get('subway_station'):
+        score += 5
+    if l.get('floor') is not None and l.get('total_floors'):
+        score += 5
+    if l.get('building_year'):
+        score += 5
+    return score
+
+
 def _build_yandex_market(listings, company, category_map):
-    """Строит YML-фид для выгрузки объектов недвижимости как товаров в Яндекс.Бизнес
-    (карточка на Яндекс.Картах, раздел «Товары и услуги»). Тег категории — <categoryId>
-    (не <market_category_id>, это отдельный от «взрослого» Маркета формат), сами категории
-    нужно заранее объявить в блоке <categories>. Одно фото на товар — сервис всё равно
-    использует только первое, лишние ссылки только раздувают файл.
+    """Строит YML-фид недвижимости для Яндекса (раздел «Недвижимость» в поиске —
+    https://yandex.ru/support/webmaster/search-appearance/realty.html), а НЕ фид
+    Яндекс.Бизнеса. Формат требует обязательный блок <sets> и привязку каждого offer
+    к сету через set-ids, param «Тип предложения» (Продажа/Аренда) и param «Конверсия».
+    Тег категории — <categoryId> (объявляется в <categories>), до 10 фото на offer.
     category_map — словарь {category объекта: categoryId из кабинета}, задаётся
     пользователем в настройках фида (объекты без соответствия в фид не попадают)."""
     company_name = _xml_escape(company.get('company_name') or 'Магазин')
@@ -1035,6 +1071,10 @@ def _build_yandex_market(listings, company, category_map):
             out.append(f'<category id="{_xml_escape(cat_id)}">{cat_name}</category>')
         out.append('</categories>')
 
+    # Один общий сет на весь фид — сет обязателен, но в отличие от category
+    # у offer может быть привязка сразу к нескольким сетам через запятую в set-ids.
+    out.append('<sets><set id="1"><name>Коммерческая недвижимость</name></set></sets>')
+
     out.append('<offers>')
 
     for l in listings:
@@ -1051,10 +1091,12 @@ def _build_yandex_market(listings, company, category_map):
             out.append(f'<price>{price_val}</price>')
         out.append('<currencyId>RUB</currencyId>')
         out.append(f'<categoryId>{_xml_escape(str(market_cat_id))}</categoryId>')
+        out.append('<set-ids>1</set-ids>')
 
-        images = _split_images(l)
-        if images:
-            out.append(f'<picture>{_xml_escape(images[0])}</picture>')
+        # Все фото объекта, до 10 штук (ограничение формата)
+        images = _split_images(l)[:10]
+        for img in images:
+            out.append(f'<picture>{_xml_escape(img)}</picture>')
 
         title = _clean_title(l.get('title') or '')
         if title:
@@ -1064,19 +1106,52 @@ def _build_yandex_market(listings, company, category_map):
             desc = _xml_escape(l['description'])[:3000]
             out.append(f'<description>{desc}</description>')
 
-        # Параметры объекта как товарные характеристики
+        out.append(f'<param name="Конверсия">{_market_conversion_score(l)}</param>')
+        deal_label = 'Аренда' if l.get('deal') == 'rent' else 'Продажа'
+        out.append(f'<param name="Тип предложения">{deal_label}</param>')
+
+        # Параметры объекта
         if l.get('area'):
-            out.append(f'<param name="Площадь">{l["area"]} м²</param>')
+            out.append(f'<param name="Площадь">{l["area"]}</param>')
+        if l.get('category') == 'land' and l.get('land_area'):
+            out.append(f'<param name="Площадь участка" unit="сотки">{l["land_area"]}</param>')
+        if l.get('address'):
+            addr = l['address']
+            if l.get('city') and l['city'] not in addr:
+                addr = f'{l["city"]}, {addr}'
+            out.append(f'<param name="Адрес">{_xml_escape(addr)}</param>')
+        elif l.get('city'):
+            out.append(f'<param name="Адрес">{_xml_escape(l["city"])}</param>')
+        if l.get('lat') and l.get('lng'):
+            out.append(f'<param name="Широта">{l["lat"]}</param>')
+            out.append(f'<param name="Долгота">{l["lng"]}</param>')
+        if l.get('building_year'):
+            out.append(f'<param name="Год постройки">{l["building_year"]}</param>')
         if l.get('floor') is not None:
             out.append(f'<param name="Этаж">{l["floor"]}</param>')
-        if l.get('city'):
-            out.append(f'<param name="Город">{_xml_escape(l["city"])}</param>')
-        if l.get('district'):
-            out.append(f'<param name="Район">{_xml_escape(l["district"])}</param>')
-        deal_label = 'Аренда' if l.get('deal') == 'rent' else 'Продажа'
-        out.append(f'<param name="Тип сделки">{deal_label}</param>')
+        if l.get('total_floors') is not None:
+            out.append(f'<param name="Число этажей">{l["total_floors"]}</param>')
+        if l.get('rooms') is not None:
+            out.append(f'<param name="Число комнат">{l["rooms"]}</param>')
+        if l.get('subway_station'):
+            unit_attr = ' unit="Пешком"' if l.get('subway_distance') else ''
+            out.append(f'<param name="Расстояние до метро"{unit_attr}>{l.get("subway_distance") or ""}</param>')
+        if l.get('condition') and l['condition'] in CONDITION_TO_FINISHING_MARKET:
+            out.append(f'<param name="Отделка">{CONDITION_TO_FINISHING_MARKET[l["condition"]]}</param>')
+        if l.get('created_at'):
+            try:
+                dt = datetime.fromisoformat(str(l['created_at']).replace('Z', '+00:00'))
+                out.append(f'<param name="Дата публикации">{dt.strftime("%Y-%m-%dT%H:%M:%S%z") or dt.isoformat()}</param>')
+            except (ValueError, TypeError):
+                pass
+        if l.get('owner_name'):
+            out.append(f'<param name="Название риелтора">{_xml_escape(l["owner_name"])}</param>')
+        if l.get('owner_phone'):
+            out.append(f'<param name="Телефон риелтора">{_xml_escape(l["owner_phone"])}</param>')
         if company.get('company_phone'):
-            out.append(f'<param name="Телефон">{_xml_escape(company["company_phone"])}</param>')
+            out.append(f'<param name="Телефон объекта">{_xml_escape(company["company_phone"])}</param>')
+        if site_url:
+            out.append(f'<param name="Сайт объекта">{_xml_escape(site_url)}</param>')
 
         out.append('</offer>')
 
