@@ -565,12 +565,30 @@
   }
 }
 
-/* Уважаем системную настройку "уменьшить анимации" */
+/* Уважаем системную настройку "уменьшить анимации" (в т.ч. режим энергосбережения
+   Яндекс.Браузера, который тоже транслирует prefers-reduced-motion: reduce) —
+   вместо полной остановки оставляем медленное плавное мерцание без вращения
+   и масштабирования, чтобы небо не выглядело "замёрзшим", но было мягче. */
 @media (prefers-reduced-motion: reduce) {
-  .hero-stars-nebula,
-  .hero-stars-small,
+  .hero-stars-nebula {
+    animation: heroNebulaPulse 16s ease-in-out infinite alternate;
+  }
+  .hero-stars-small {
+    animation: heroStarsTwinkle 8s ease-in-out infinite alternate;
+  }
   .hero-star {
-    animation: none;
+    animation: heroStarTwinkleSoft 7s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes heroStarTwinkleSoft {
+  0% {
+    opacity: 0.35;
+    filter: drop-shadow(0 0 2px #fff);
+  }
+  100% {
+    opacity: 0.95;
+    filter: drop-shadow(0 0 8px #6fb2ff);
   }
 }
 
