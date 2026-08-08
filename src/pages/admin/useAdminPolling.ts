@@ -14,7 +14,7 @@ const SOCIAL_PARSER_URL = 'https://functions.poehali.dev/5d1bb364-c893-4d73-a003
 const ROLE_DEFAULTS: Record<string, string[]> = {
   director:       ['dashboard', 'listings', 'leads', 'news', 'pages', 'settings', 'marketing', 'crm-kanban', 'crm-gamification', 'crm-checks', 'crm-payments', 'users', 'phones'],
   manager:        ['dashboard', 'listings', 'leads', 'news', 'marketing', 'crm-kanban', 'crm-gamification', 'crm-checks', 'crm-payments', 'phones'],
-  editor:         ['dashboard', 'listings', 'leads', 'news', 'pages', 'settings', 'marketing', 'market-import', 'phones', 'seo', 'districts'],
+  editor:         ['dashboard', 'listings', 'leads', 'news', 'pages', 'settings', 'marketing', 'market-import', 'phones', 'seo', 'districts', 'category-texts'],
   broker:         ['dashboard', 'listings', 'leads', 'crm-gamification', 'crm-checks'],
   office_manager: ['dashboard', 'listings', 'leads', 'crm-kanban', 'crm-payments', 'phones'],
   client:         [],

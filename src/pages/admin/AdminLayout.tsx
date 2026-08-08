@@ -30,7 +30,7 @@ export const AdminPermsCtx = createContext<AdminPerms | null>(null);
 export const useAdminPerms = () => useContext(AdminPermsCtx);
 
 /** Разделы, вложенные вкладками в «Настройки», но сохраняющие собственные права роли. */
-export const MANAGEMENT_TAB_IDS = ['users', 'phones', 'seo', 'districts'];
+export const MANAGEMENT_TAB_IDS = ['users', 'phones', 'seo', 'districts', 'category-texts'];
 
 const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; group?: string }[] = [
   { id: 'dashboard',        label: 'Дашборд',          icon: 'LayoutDashboard', roles: ['admin', 'editor', 'manager', 'director', 'broker', 'office_manager'] },

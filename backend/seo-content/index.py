@@ -245,9 +245,13 @@ def handler(event: dict, context) -> dict:
             if not text:
                 return _err('GPT вернул пустой ответ', 502)
 
+            # Регенерация всегда возвращает текст под управление ИИ (is_manual=FALSE) —
+            # если админ хочет вручную поправленный текст, он не должен перетираться
+            # обычной (не форсированной) загрузкой, но явный force=true — осознанное действие.
             cur.execute(
-                f"INSERT INTO {SCHEMA}category_seo_cache (category, city, seo_text) VALUES (%s, %s, %s) "
-                "ON CONFLICT (category, city) DO UPDATE SET seo_text = EXCLUDED.seo_text, created_at = NOW()",
+                f"INSERT INTO {SCHEMA}category_seo_cache (category, city, seo_text, is_manual) "
+                "VALUES (%s, %s, %s, FALSE) "
+                "ON CONFLICT (category, city) DO UPDATE SET seo_text = EXCLUDED.seo_text, is_manual = FALSE, created_at = NOW()",
                 (cache_key, city, text),
             )
             conn.commit()

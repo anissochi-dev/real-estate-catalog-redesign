@@ -393,6 +393,8 @@ def handler(event, context):
                 return _land_vri(cur, conn, method, rid, event, user)
             if resource == 'districts':
                 return _districts(cur, conn, method, rid, event, user)
+            if resource == 'category_texts':
+                return _category_texts(cur, conn, method, rid, event, user)
             if resource == 'xml_feeds':
                 return _xml_feeds(cur, conn, method, rid, event, user)
             if resource == 'stats':
@@ -4763,6 +4765,60 @@ def _districts(cur, conn, method, rid, event, user):
 
     if method == 'DELETE' and rid:
         cur.execute(f"DELETE FROM {SCHEMA}.districts WHERE id = {int(rid)}")
+        conn.commit()
+        return _ok({'success': True})
+
+    return _err(400, 'Bad request')
+
+
+def _category_texts(cur, conn, method, rid, event, user):
+    """Тексты страниц категорий каталога (/catalog/office и т.п.) — заголовки H1-H5,
+    описание, особенности (category_texts) + большой AI-абзац категории, который можно
+    отредактировать вручную (category_seo_cache, cache_key = category_type, is_manual=TRUE
+    защищает ручную правку от перезаписи автогенерацией). rid — category_type, не числовой id."""
+    if method == 'GET':
+        cur.execute(
+            f"SELECT category_type, h1, h2, h3, h4, h5, description, features, updated_at "
+            f"FROM {SCHEMA}.category_texts ORDER BY category_type ASC"
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+        cur.execute(
+            f"SELECT category AS category_type, seo_text, is_manual FROM {SCHEMA}.category_seo_cache "
+            f"WHERE category IN ({', '.join(chr(39) + r['category_type'] + chr(39) for r in rows)})"
+        ) if rows else None
+        seo_map = {r['category_type']: r for r in cur.fetchall()} if rows else {}
+        for r in rows:
+            seo = seo_map.get(r['category_type'])
+            r['seo_text'] = seo['seo_text'] if seo else ''
+            r['seo_is_manual'] = bool(seo['is_manual']) if seo else False
+        return _ok({'category_texts': rows})
+
+    if method == 'PUT' and rid:
+        body = json.loads(event.get('body') or '{}')
+        fields = []
+        for f in ('h1', 'h2', 'h3', 'h4', 'h5', 'description'):
+            if f in body:
+                fields.append(f"{f} = {_str_or_null(body[f], 500)}")
+        if 'features' in body:
+            feats = body['features'] if isinstance(body['features'], list) else []
+            fields.append(f"features = {_jsonb_or_null([str(x)[:200] for x in feats][:10])}")
+        if fields:
+            fields.append('updated_at = NOW()')
+            cur.execute(
+                f"UPDATE {SCHEMA}.category_texts SET {', '.join(fields)} WHERE category_type = '{_safe(rid, 50)}'"
+            )
+
+        if 'seo_text' in body:
+            seo_text = _safe(str(body['seo_text'] or ''), 5000)
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.category_seo_cache (category, city, seo_text, is_manual) "
+                f"VALUES ('{_safe(rid, 50)}', 'Краснодар', '{seo_text}', TRUE) "
+                f"ON CONFLICT (category, city) DO UPDATE SET seo_text = EXCLUDED.seo_text, is_manual = TRUE, created_at = NOW()"
+            )
+
+        if not fields and 'seo_text' not in body:
+            return _err(400, 'Нет полей для обновления')
+
         conn.commit()
         return _ok({'success': True})
 

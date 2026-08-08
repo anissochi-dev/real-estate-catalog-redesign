@@ -28,6 +28,7 @@ import UsersAdmin from './UsersAdmin';
 import PhoneBook from './PhoneBook';
 import SeoHubAdmin from './SeoHubAdmin';
 import DistrictsAdmin from './DistrictsAdmin';
+import CategoryTextsAdmin from './CategoryTextsAdmin';
 import { useAdminPerms, MANAGEMENT_TAB_IDS } from './AdminLayout';
 import { ROLE_DEFAULTS } from './useAdminPolling';
 
@@ -42,7 +43,7 @@ export default function SettingsAdmin() {
   type TabId = 'general' | 'watermark' | 'brand-kit' | 'footer' | 'legal'
     | 'integrations' | 'ad-platforms' | 'autoposting' | 'feeds' | 'notifications'
     | 'cities' | 'purposes' | 'land-vri' | 'pages' | 'roles' | 'migration' | 'photo-optimize' | 'site-health' | 'verification'
-    | 'vb-knowledge' | 'users' | 'phones' | 'seo' | 'districts';
+    | 'vb-knowledge' | 'users' | 'phones' | 'seo' | 'districts' | 'category-texts';
 
   // Есть ли доступ к «обычным» настройкам (компания/сайт/интеграции/администрирование/база знаний)
   const hasFullSettingsAccess = (() => {
@@ -308,6 +309,7 @@ export default function SettingsAdmin() {
     ['phones', 'Телефонная база', 'Phone'],
     ['seo', 'SEO', 'TrendingUp'],
     ['districts', 'Районы', 'MapPin'],
+    ['category-texts', 'Тексты категорий', 'FileText'],
   ] as TabDef[])
     .filter(([id]) => hasManagementAccess(id))
     .map(([id, label, icon]) => ({ id, label, icon, tabs: [[id, label, icon]] as TabDef[] }));
@@ -410,6 +412,7 @@ export default function SettingsAdmin() {
       {tab === 'phones' && <PhoneBook />}
       {tab === 'seo' && <SeoHubAdmin />}
       {tab === 'districts' && <DistrictsAdmin />}
+      {tab === 'category-texts' && <CategoryTextsAdmin />}
     </div>
   );
 }

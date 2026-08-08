@@ -514,3 +514,29 @@ export async function fetchDistricts(city?: string): Promise<District[]> {
     return [];
   }
 }
+
+export interface CategoryTextItem {
+  category_type: string;
+  h1: string; h2: string; h3: string; h4: string; h5: string;
+  description: string;
+  features: string[];
+}
+
+let _categoryTextsCache: Record<string, CategoryTextItem> | null = null;
+
+/** Тексты страниц категорий (h1-h5, описание, особенности), редактируемые в админке.
+ * Используется как переопределение поверх дефолтов из categoryMeta.ts. */
+export async function fetchCategoryTexts(): Promise<Record<string, CategoryTextItem>> {
+  if (_categoryTextsCache) return _categoryTextsCache;
+  try {
+    const res = await fetchWithTimeout(`${LISTINGS_URL}?resource=category_texts`);
+    if (!res.ok) return {};
+    const data = await res.json();
+    const map: Record<string, CategoryTextItem> = {};
+    (data.category_texts || []).forEach((c: CategoryTextItem) => { map[c.category_type] = c; });
+    _categoryTextsCache = map;
+    return map;
+  } catch {
+    return {};
+  }
+}

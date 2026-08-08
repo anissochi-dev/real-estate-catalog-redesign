@@ -247,6 +247,14 @@ def handler(event: dict, context) -> dict:
                     d['listings_count'] = counts_map.get(d['name'], 0)
                 return _ok({'districts': districts}, cache='public, max-age=300, stale-while-revalidate=60')
 
+            if params.get('resource') == 'category_texts':
+                cur.execute(
+                    "SELECT category_type, h1, h2, h3, h4, h5, description, features "
+                    "FROM t_p71821556_real_estate_catalog_.category_texts"
+                )
+                rows = [dict(r) for r in cur.fetchall()]
+                return _ok({'category_texts': rows}, cache='public, max-age=600, stale-while-revalidate=300')
+
             if params.get('resource') == 'public_purposes':
                 cur.execute(
                     "SELECT id, name, slug, icon FROM t_p71821556_real_estate_catalog_.purposes "

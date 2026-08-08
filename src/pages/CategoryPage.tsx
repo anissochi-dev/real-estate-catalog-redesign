@@ -7,7 +7,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import AIMatchModal from '@/components/AIMatchModal';
 import SchemaOrg, { makeItemListSchema, makeBreadcrumbSchema } from '@/components/SchemaOrg';
 import { getSiteUrl } from '@/lib/siteUrl';
-import { fetchDistricts, District } from '@/lib/api';
+import { fetchDistricts, District, fetchCategoryTexts, CategoryTextItem } from '@/lib/api';
 import { getOkrugChildNames } from '@/lib/districts';
 import { CATEGORY_META, CATEGORY_SEO_URL, CatSort } from './category/categoryMeta';
 import CategoryHero from './category/CategoryHero';
@@ -47,15 +47,22 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [mapSelected, setMapSelected] = useState<Property | null>(null);
   const [mapFullscreen, setMapFullscreen] = useState(false);
+  const [categoryTexts, setCategoryTexts] = useState<Record<string, CategoryTextItem>>({});
 
   useEffect(() => { fetchDistricts().then(setDistricts); }, []);
+  useEffect(() => { fetchCategoryTexts().then(setCategoryTexts); }, []);
 
   // Для категорий без аренды (готовый бизнес/ГАБ) сбрасываем фильтр «Аренда» на «Все»
   useEffect(() => {
     if ((type === 'business' || type === 'gab') && dealFilter === 'rent') setDealFilter('all');
   }, [type, dealFilter]);
 
-  const meta = type ? CATEGORY_META[type] : null;
+  // Тексты из БД (редактируются в админке) переопределяют дефолты из categoryMeta.ts —
+  // если в БД для категории ещё нет записи (например добралась новая категория),
+  // используем встроенный текст, чтобы страница не осталась пустой.
+  const baseMeta = type ? CATEGORY_META[type] : null;
+  const dbText = type ? categoryTexts[type] : null;
+  const meta = baseMeta ? (dbText ? { ...baseMeta, ...dbText, labelRu: baseMeta.labelRu } : baseMeta) : null;
 
   // Загружаем AI SEO-текст — один раз при заходе на категорию.
   // Текст кешируется на сервере, поэтому GPT вызывается только при первом посещении.
