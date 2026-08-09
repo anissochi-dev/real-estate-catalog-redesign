@@ -41,54 +41,8 @@
     <link rel="icon" type="image/png" href="https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/favicon-1780486766400.png">
     <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
 
-    <!-- Organization Schema (статично в HTML — видно поисковикам и AI без JS) -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "RealEstateAgent",
-      "name": "Бизнес. Маркетинг. Недвижимость.",
-      "url": "https://bmn.su/",
-      "logo": "https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/favicon-1779570860558.png",
-      "image": "https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/og-image-1779575751349.png",
-      "description": "Каталог коммерческой недвижимости и готового бизнеса в Краснодаре с 2007 года. Офисы, торговые площади, склады, рестораны, производства.",
-      "foundingDate": "2007",
-      "openingHours": ["Mo-Fr 09:00-19:00", "Sa 10:00-16:00"],
-      "priceRange": "₽₽",
-      "areaServed": [
-        { "@type": "City", "name": "Краснодар" },
-        { "@type": "State", "name": "Краснодарский край" }
-      ],
-      "address": {
-        "@type": "PostalAddress",
-        "addressLocality": "Краснодар",
-        "addressCountry": "RU"
-      },
-      "contactPoint": {
-        "@type": "ContactPoint",
-        "contactType": "customer service",
-        "availableLanguage": "Russian"
-      }
-    }
-    </script>
-
-    <!-- WebSite Schema с SearchAction — позволяет Google показывать поисковую строку в SERP -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "WebSite",
-      "name": "Бизнес. Маркетинг. Недвижимость.",
-      "url": "https://bmn.su/",
-      "inLanguage": "ru-RU",
-      "potentialAction": {
-        "@type": "SearchAction",
-        "target": {
-          "@type": "EntryPoint",
-          "urlTemplate": "https://bmn.su/catalog?search={search_term_string}"
-        },
-        "query-input": "required name=search_term_string"
-      }
-    }
-    </script>
+    <!-- Organization и WebSite Schema генерируются динамически в App.tsx (SchemaOrg id="org"/"website") —
+         единый источник правды из настроек сайта, без дублирования статичной версии здесь. -->
 
     <link rel="preconnect" href="https://cdn.poehali.dev">
     <link rel="preconnect" href="https://functions.poehali.dev">

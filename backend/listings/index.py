@@ -213,7 +213,7 @@ def handler(event: dict, context) -> dict:
                     "home_listings_limit, catalog_page_size, news_list_limit, category_page_size, leads_page_size, "
                     "show_news_on_home, home_news_limit, show_leads_on_home, home_leads_limit, "
                     "yandex_webmaster_verification, google_search_console_verification, "
-                    "home_seo_text "
+                    "home_seo_text, favicon_url, apple_touch_icon_url, og_image_url "
                     "FROM t_p71821556_real_estate_catalog_.settings ORDER BY id ASC LIMIT 1"
                 )
                 row = cur.fetchone()

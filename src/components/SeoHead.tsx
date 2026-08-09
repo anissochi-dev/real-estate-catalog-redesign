@@ -28,6 +28,8 @@ interface SeoHeadProps {
   keywords?: string;
   /** OG-изображение. */
   ogImage?: string;
+  /** Тип контента для og:type (по умолчанию 'website'; для статей — 'article'). */
+  ogType?: string;
 }
 
 const CACHE_TTL = 5 * 60 * 1000; // 5 минут
@@ -101,7 +103,7 @@ function setLinkCanonical(href: string) {
 }
 
 export default function SeoHead({
-  path, title, description, h1, noindex, keywords, ogImage,
+  path, title, description, h1, noindex, keywords, ogImage, ogType,
 }: SeoHeadProps) {
   const location = useLocation();
   const { settings } = useSettings();
@@ -124,7 +126,7 @@ export default function SeoHead({
     const finalTitle = clip(String(rawTitle || ''), 68);
     const finalDesc = clip(description ?? remote?.description ?? '', 160);
     const finalKw = keywords ?? remote?.keywords ?? '';
-    const finalOg = ogImage ?? remote?.og_image ?? '';
+    const finalOg = ogImage ?? remote?.og_image ?? settings.og_image_url ?? '';
     const finalNoindex = noindex || !!remote?.noindex;
 
     if (finalTitle) document.title = String(finalTitle);
@@ -135,7 +137,7 @@ export default function SeoHead({
     setMeta('og:title', finalTitle ? String(finalTitle) : null, true);
     setMeta('og:description', finalDesc || null, true);
     if (finalOg) setMeta('og:image', finalOg, true);
-    setMeta('og:type', 'website', true);
+    setMeta('og:type', ogType || 'website', true);
     setMeta('og:url', (siteOrigin || window.location.origin) + effectivePath, true);
 
     // Twitter
@@ -150,7 +152,7 @@ export default function SeoHead({
     // canonical (без query)
     setLinkCanonical((siteOrigin || window.location.origin) + effectivePath);
   }, [
-    effectivePath, remote, title, description, h1, noindex, keywords, ogImage, siteOrigin,
+    effectivePath, remote, title, description, h1, noindex, keywords, ogImage, ogType, siteOrigin, settings.og_image_url,
   ]);
 
   return null;

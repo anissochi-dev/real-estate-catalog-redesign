@@ -235,6 +235,7 @@ export function NewsArticlePage() {
     url: articlePageUrl,
     image: article.image_url || undefined,
     publishedAt: article.published_at || article.created_at,
+    updatedAt: article.updated_at || undefined,
     authorName: article.source_name || undefined,
     publisherName: settings.company_name || 'Бизнес. Маркетинг. Недвижимость.',
     publisherLogo: settings.logo_url || undefined,
@@ -242,7 +243,7 @@ export function NewsArticlePage() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-3xl">
-      <SeoHead title={articleTitle} description={articleDesc} h1={h1} ogImage={articleImage} />
+      <SeoHead title={articleTitle} description={articleDesc} h1={h1} ogImage={articleImage} ogType="article" />
       <SchemaOrg schema={articleSchema} id={`article-${article.id}`} />
       <SchemaOrg schema={articleBcSchema} id={`article-bc-${article.id}`} />
       <div className="mb-3">

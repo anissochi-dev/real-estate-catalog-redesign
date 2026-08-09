@@ -133,24 +133,6 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
     { value: `с ${settings.company_since_year || 2007}`, label: 'На рынке', icon: 'Award', deal: null },
   ];
 
-  const orgLdJson = useMemo(() => JSON.stringify({
-    '@context': 'https://schema.org',
-    '@type': 'RealEstateAgent',
-    name: settings.company_name || 'Бизнес. Маркетинг. Недвижимость.',
-    description: settings.seo_description || 'Коммерческая недвижимость и готовый бизнес в Краснодаре',
-    foundingDate: String(settings.company_since_year || 2007),
-    address: settings.company_address ? {
-      '@type': 'PostalAddress',
-      streetAddress: settings.company_address,
-      addressLocality: settings.main_city || 'Краснодар',
-      addressCountry: 'RU',
-    } : undefined,
-    telephone: settings.company_phone,
-    email: settings.company_email,
-    image: settings.logo_url,
-    url: settings.site_url,
-  }), [settings.company_name, settings.seo_description, settings.company_since_year, settings.company_address, settings.main_city, settings.company_phone, settings.company_email, settings.logo_url, settings.site_url]);
-
   // Частые вопросы — данные берём из информации о компании.
   // Используются и в FAQPage Schema (для AI и поисковиков), и в видимом блоке.
   const cityName = mainCity || 'Краснодар';
@@ -185,10 +167,6 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   return (
     <div>
       <SeoHead ogImage="https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/og-image-1779575751349.png" />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: orgLdJson }}
-      />
 
       {/* Hero — компактный */}
       <HomeHero

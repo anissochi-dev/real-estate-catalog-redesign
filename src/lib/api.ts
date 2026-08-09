@@ -332,6 +332,9 @@ export interface PublicSettings {
   home_leads_limit?: number;
   yandex_webmaster_verification?: string;
   google_search_console_verification?: string;
+  favicon_url?: string;
+  apple_touch_icon_url?: string;
+  og_image_url?: string;
 }
 
 export async function fetchPublicSettings(): Promise<PublicSettings> {

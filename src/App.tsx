@@ -44,6 +44,7 @@ import ScrollToTop from './components/ScrollToTop';
 import ConsentBanner from './components/ConsentBanner';
 import SeoHead from './components/SeoHead';
 import SchemaOrg, { makeOrganizationSchema, makeWebSiteSchema } from './components/SchemaOrg';
+import { getSiteUrl } from './lib/siteUrl';
 import { useSettings } from './contexts/SettingsContext';
 import { useAuth } from './contexts/AuthContext';
 
@@ -93,6 +94,23 @@ export default function App() {
 
   const currentPage: Page = pageFromPath(location.pathname);
   const setCurrentPage = (p: Page) => navigate(PATH_BY_PAGE[p]);
+
+  // Favicon и Apple Touch Icon из настроек сайта (BrandKitTab в админке) —
+  // подменяют статичные иконки из index.html, если админ загрузил свои.
+  useEffect(() => {
+    const setIcon = (rel: string, href?: string) => {
+      if (!href) return;
+      let link = document.head.querySelector<HTMLLinkElement>(`link[rel="${rel}"]`);
+      if (!link) {
+        link = document.createElement('link');
+        link.setAttribute('rel', rel);
+        document.head.appendChild(link);
+      }
+      link.setAttribute('href', href);
+    };
+    setIcon('icon', settings.favicon_url);
+    setIcon('apple-touch-icon', settings.apple_touch_icon_url);
+  }, [settings.favicon_url, settings.apple_touch_icon_url]);
 
   // SPA redirect: восстанавливаем путь после 404.html редиректа
   useEffect(() => {
@@ -210,19 +228,21 @@ export default function App() {
         id="org"
         schema={makeOrganizationSchema({
           name: settings.company_name || 'Бизнес. Маркетинг. Недвижимость.',
-          url: settings.site_url || 'https://bmn.su',
+          url: getSiteUrl(settings.site_url),
           phone: settings.company_phone,
           email: settings.company_email,
           address: settings.company_address,
           city: settings.main_city || 'Краснодар',
           logo: settings.logo_url,
+          description: settings.seo_description,
+          foundingYear: settings.company_since_year,
         })}
       />
       <SchemaOrg
         id="website"
         schema={makeWebSiteSchema({
           name: settings.company_name || 'Бизнес. Маркетинг. Недвижимость.',
-          url: settings.site_url || 'https://bmn.su',
+          url: getSiteUrl(settings.site_url),
         })}
       />
       <Navbar

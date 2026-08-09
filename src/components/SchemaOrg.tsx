@@ -50,6 +50,8 @@ export function makeOrganizationSchema(opts: {
   address?: string;
   city?: string;
   logo?: string;
+  description?: string;
+  foundingYear?: string | number;
 }) {
   return {
     '@context': 'https://schema.org',
@@ -57,9 +59,23 @@ export function makeOrganizationSchema(opts: {
     '@id': `${opts.url}/#organization`,
     name: opts.name,
     url: opts.url,
-    ...(opts.logo ? { logo: { '@type': 'ImageObject', url: opts.logo } } : {}),
+    ...(opts.description ? { description: opts.description } : {}),
+    ...(opts.logo ? { logo: { '@type': 'ImageObject', url: opts.logo }, image: opts.logo } : {}),
     ...(opts.phone ? { telephone: opts.phone } : {}),
     ...(opts.email ? { email: opts.email } : {}),
+    ...(opts.foundingYear ? { foundingDate: String(opts.foundingYear) } : {}),
+    priceRange: '₽₽',
+    openingHours: ['Mo-Fr 09:00-19:00', 'Sa 10:00-16:00'],
+    areaServed: [
+      { '@type': 'City', name: opts.city || 'Краснодар' },
+      { '@type': 'State', name: 'Краснодарский край' },
+    ],
+    contactPoint: {
+      '@type': 'ContactPoint',
+      contactType: 'customer service',
+      availableLanguage: 'Russian',
+      ...(opts.phone ? { telephone: opts.phone } : {}),
+    },
     ...(opts.address || opts.city ? {
       address: {
         '@type': 'PostalAddress',
@@ -81,7 +97,7 @@ export function makeWebSiteSchema(opts: { name: string; url: string }) {
     inLanguage: 'ru-RU',
     potentialAction: {
       '@type': 'SearchAction',
-      target: { '@type': 'EntryPoint', urlTemplate: `${opts.url}/catalog?q={search_term_string}` },
+      target: { '@type': 'EntryPoint', urlTemplate: `${opts.url}/catalog?search={search_term_string}` },
       'query-input': 'required name=search_term_string',
     },
   };
