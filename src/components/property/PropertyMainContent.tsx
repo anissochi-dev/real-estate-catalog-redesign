@@ -32,13 +32,13 @@ interface Props {
 
 function ParamCard({ icon, label, value }: { icon: string; label: string; value: string }) {
   return (
-    <div className="flex items-center gap-2 bg-muted/40 rounded-lg px-2.5 py-2">
+    <div className="flex items-start gap-2 bg-muted/40 rounded-lg px-2.5 py-2">
       <div className="w-6 h-6 rounded-md bg-white flex items-center justify-center flex-shrink-0 shadow-sm">
         <Icon name={icon} size={12} className="text-brand-blue" />
       </div>
       <div className="min-w-0">
         <div className="text-[10px] text-muted-foreground leading-none">{label}</div>
-        <div className="font-display font-700 text-xs leading-tight mt-0.5 truncate">{value}</div>
+        <div className="font-display font-700 text-xs leading-tight mt-0.5 line-clamp-2">{value}</div>
       </div>
     </div>
   );
@@ -145,13 +145,13 @@ export default function PropertyMainContent({
                 const [key, val] = u.includes(':') ? u.split(':').map(s => s.trim()) : [u, ''];
                 const icon = UTILITY_ICONS[key] || 'Plug';
                 return (
-                  <div key={u} className="flex items-center gap-2 bg-muted/40 rounded-lg px-2.5 py-2">
+                  <div key={u} className="flex items-start gap-2 bg-muted/40 rounded-lg px-2.5 py-2">
                     <div className="w-6 h-6 rounded-md bg-white flex items-center justify-center flex-shrink-0 shadow-sm">
                       <Icon name={icon} size={12} className="text-brand-blue" />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-[10px] text-muted-foreground leading-tight truncate">{key}</div>
-                      {val && <div className="font-600 text-xs leading-tight truncate">{val}</div>}
+                      <div className="text-[10px] text-muted-foreground leading-tight line-clamp-2">{key}</div>
+                      {val && <div className="font-600 text-xs leading-tight line-clamp-2">{val}</div>}
                     </div>
                   </div>
                 );
