@@ -1,16 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '@/components/ui/icon';
-import Breadcrumbs from '@/components/Breadcrumbs';
-import { categoryLabel, catalogCategoryUrl } from '@/lib/categories';
+import Breadcrumbs, { Crumb } from '@/components/Breadcrumbs';
 
 interface PropertyTopBarProps {
-  itemType: string;
   itemTitle: string;
   shareUrl: string;
+  breadcrumbs: Crumb[];
 }
 
-export default function PropertyTopBar({ itemType, itemTitle, shareUrl }: PropertyTopBarProps) {
+export default function PropertyTopBar({ itemTitle, shareUrl, breadcrumbs }: PropertyTopBarProps) {
   const navigate = useNavigate();
   const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -49,12 +48,7 @@ export default function PropertyTopBar({ itemType, itemTitle, shareUrl }: Proper
   return (
     <div className="flex items-center justify-between gap-3 mb-3">
       <div className="hidden md:block min-w-0 flex-1">
-        <Breadcrumbs items={[
-          { label: 'Главная', to: '/' },
-          { label: 'Каталог', to: '/catalog' },
-          { label: categoryLabel(itemType), to: catalogCategoryUrl(itemType) },
-          { label: itemTitle },
-        ]} />
+        <Breadcrumbs items={breadcrumbs} />
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
         <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground whitespace-nowrap">

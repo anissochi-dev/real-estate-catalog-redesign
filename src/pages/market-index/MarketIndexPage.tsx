@@ -1,8 +1,9 @@
 import Icon from '@/components/ui/icon';
 import SeoHead, { useSeoH1 } from '@/components/SeoHead';
-import SchemaOrg, { makeBreadcrumbSchema, makeFaqSchema } from '@/components/SchemaOrg';
+import SchemaOrg, { makeFaqSchema } from '@/components/SchemaOrg';
 import PropertyFaqSection from '@/components/property/PropertyFaqSection';
-import { getSiteUrl } from '@/lib/siteUrl';
+import Breadcrumbs from '@/components/Breadcrumbs';
+import { useBreadcrumbs } from '@/hooks/useBreadcrumbs';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useMarketIndexData } from './useMarketIndexData';
 import MarketIndexHero from './MarketIndexHero';
@@ -21,10 +22,9 @@ export default function MarketIndexPage() {
     availableCats, trendData, supplyData, compareData, totalAnalogs, updatedAt, data,
   } = useMarketIndexData();
 
-  const siteUrl = getSiteUrl(settings.site_url);
-  const bcSchema = makeBreadcrumbSchema([
-    { name: 'Главная', url: siteUrl },
-    { name: 'Индекс цен', url: `${siteUrl}/market-index` },
+  const { items: breadcrumbs, schema: bcSchema } = useBreadcrumbs([
+    { label: 'Главная', to: '/' },
+    { label: 'Индекс цен', to: '/market-index' },
   ]);
   const faqSchema = makeFaqSchema(MARKET_INDEX_FAQ);
 
@@ -41,6 +41,10 @@ export default function MarketIndexPage() {
       />
       <SchemaOrg schema={bcSchema} id="market-index-bc" />
       <SchemaOrg schema={faqSchema} id="market-index-faq" />
+
+      <div className="mb-4">
+        <Breadcrumbs items={breadcrumbs} />
+      </div>
 
       <MarketIndexHero updatedAt={updatedAt} totalAnalogs={totalAnalogs} />
 

@@ -6,13 +6,14 @@ import { CaptchaResult } from '@/components/SmartCaptcha';
 import { fetchPublicLeads, aiSearchLeads, sendLead, PublicLead, fetchDistricts, District } from '@/lib/api';
 import { useSeoH1 } from '@/components/SeoHead';
 import SeoHead from '@/components/SeoHead';
-import SchemaOrg, { makeBreadcrumbSchema, makeItemListSchema } from '@/components/SchemaOrg';
+import SchemaOrg, { makeItemListSchema } from '@/components/SchemaOrg';
 import LeadCard, { CATEGORY_LABELS } from './leads/LeadCard';
 import LeadAiSearch from './leads/LeadAiSearch';
 import LeadContactModal from './leads/LeadContactModal';
 import LeadsFaq from './leads/LeadsFaq';
 import { useSettings } from '@/contexts/SettingsContext';
 import { getSiteUrl } from '@/lib/siteUrl';
+import { useBreadcrumbs } from '@/hooks/useBreadcrumbs';
 
 const OG_IMAGE = 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/bucket/f8de2a72-faf3-4f8b-aaa2-0ee00c7e16dc.png';
 
@@ -84,9 +85,10 @@ export default function LeadsListPage() {
   const leads = allLeads;
   const hasMore = allLeads.length < total;
 
-  const breadcrumbSchema = useMemo(() => makeBreadcrumbSchema([
-    { name: 'Заявки клиентов', url: `${SITE_URL}/leads` },
-  ]), [SITE_URL]);
+  const { items: breadcrumbs, schema: breadcrumbSchema } = useBreadcrumbs([
+    { label: 'Главная', to: '/' },
+    { label: 'Заявки клиентов', to: '/leads' },
+  ]);
 
   const itemListSchema = useMemo(() => makeItemListSchema(
     allLeads.slice(0, 50).map(lead => ({
@@ -178,7 +180,7 @@ export default function LeadsListPage() {
 
       <div className="container mx-auto px-4 py-6 max-w-5xl">
         <div className="mb-3">
-          <Breadcrumbs items={[{ label: 'Главная', to: '/' }, { label: 'Заявки клиентов' }]} />
+          <Breadcrumbs items={breadcrumbs} />
         </div>
 
         <h1 className="font-display font-900 text-2xl md:text-3xl text-foreground mb-2">{h1}</h1>

@@ -5,10 +5,9 @@ import MaxSubscribeWidget from '@/components/MaxSubscribeWidget';
 import SeoHead, { useSeoH1 } from '@/components/SeoHead';
 import AIMatchModal from '@/components/AIMatchModal';
 import { useSettings } from '@/contexts/SettingsContext';
-import { makeBreadcrumbSchema } from '@/components/SchemaOrg';
 import { fetchDistricts, District } from '@/lib/api';
 import { getOkrugChildNames } from '@/lib/districts';
-import { getSiteUrl } from '@/lib/siteUrl';
+import { useBreadcrumbs } from '@/hooks/useBreadcrumbs';
 import { formatPrice } from '@/components/PropertyCard';
 import CatalogHero from './catalog/CatalogHero';
 import CatalogFilters from './catalog/CatalogFilters';
@@ -165,14 +164,13 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
   const pageItems = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
   const hasMore = visibleCount < filtered.length;
 
-  const siteUrl = getSiteUrl(settings.site_url);
-  const catalogBreadcrumbs = [
+  const { items: catalogBreadcrumbs, schema: catalogBreadcrumbSchema } = useBreadcrumbs([
+    { label: 'Главная', to: '/' },
     ...(typeFilter !== 'all' || dealFilter !== 'all'
-      ? [{ name: 'Каталог', url: `${siteUrl}/catalog` }]
+      ? [{ label: 'Каталог', to: '/catalog' }]
       : []),
-    { name: h1 },
-  ];
-  const catalogBreadcrumbSchema = makeBreadcrumbSchema(catalogBreadcrumbs);
+    { label: h1 },
+  ]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -240,9 +238,8 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
             visibleCount={visibleCount}
             hasMore={hasMore}
             allLoaded={allLoaded}
-            dealFilter={dealFilter}
-            typeFilter={typeFilter}
-            catalogBreadcrumbSchema={catalogBreadcrumbSchema}
+            breadcrumbs={catalogBreadcrumbs}
+            breadcrumbSchema={catalogBreadcrumbSchema}
             loadStep={LOAD_STEP}
             hoveredId={hoveredId}
             onToggleFavorite={onToggleFavorite}

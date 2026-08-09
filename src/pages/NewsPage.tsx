@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { NEWS_URL } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
+import Breadcrumbs from '@/components/Breadcrumbs';
 import { useSettings } from '@/contexts/SettingsContext';
-import SchemaOrg, { makeNewsArticleSchema, makeItemListSchema, makeBreadcrumbSchema } from '@/components/SchemaOrg';
+import SchemaOrg, { makeNewsArticleSchema, makeItemListSchema } from '@/components/SchemaOrg';
 import { getSiteUrl } from '@/lib/siteUrl';
+import { useBreadcrumbs } from '@/hooks/useBreadcrumbs';
 import SeoHead, { useSeoH1 } from '@/components/SeoHead';
 
 interface NewsItem {
@@ -62,8 +64,9 @@ export function NewsListPage() {
       )
     : null;
 
-  const newsBcSchema = makeBreadcrumbSchema([
-    { name: 'Новости', url: `${siteUrl}/news` },
+  const { items: newsBreadcrumbs, schema: newsBcSchema } = useBreadcrumbs([
+    { label: 'Главная', to: '/' },
+    { label: 'Новости', to: '/news' },
   ]);
 
   return (
@@ -71,6 +74,9 @@ export function NewsListPage() {
       <SeoHead path="/news" h1={h1} />
       {newsListSchema && <SchemaOrg schema={newsListSchema} id="news-list" />}
       <SchemaOrg schema={newsBcSchema} id="news-list-bc" />
+      <div className="mb-3">
+        <Breadcrumbs items={newsBreadcrumbs} />
+      </div>
       <div className="mb-8">
         <h1 className="font-display font-800 text-3xl text-foreground mb-1">{h1}</h1>
         <h2 className="font-display font-600 text-lg text-brand-blue mb-2">Аналитика и обзоры рынка Краснодара и Краснодарского края</h2>
@@ -184,6 +190,17 @@ export function NewsArticlePage() {
   const articleDesc = article ? (article.summary || article.content || '').slice(0, 160) : undefined;
   const articleImage = article?.image_url || undefined;
 
+  // Хук вызывается безусловно, до early return ниже (loading / !article) — того требуют
+  // Rules of Hooks. Пока article ещё не загружена, крошки просто без последнего элемента.
+  const { items: articleBreadcrumbs, schema: articleBcSchema } = useBreadcrumbs(article ? [
+    { label: 'Главная', to: '/' },
+    { label: 'Новости', to: '/news' },
+    { label: article.title, to: `/news/${article.slug}` },
+  ] : [
+    { label: 'Главная', to: '/' },
+    { label: 'Новости', to: '/news' },
+  ]);
+
   if (loading) return (
     <div className="container mx-auto px-4 py-20 text-center text-muted-foreground">Загрузка...</div>
   );
@@ -209,7 +226,7 @@ export function NewsArticlePage() {
   const h4text = article.seo_h4 ? clip(article.seo_h4, 50) : null;
   const h5text = article.seo_h5 ? clip(article.seo_h5, 50) : null;
 
-  const articleSiteUrl = settings.site_url || 'https://bmn.su';
+  const articleSiteUrl = getSiteUrl(settings.site_url);
   const articlePageUrl = `${articleSiteUrl}/news/${article.slug}`;
 
   const articleSchema = makeNewsArticleSchema({
@@ -223,16 +240,14 @@ export function NewsArticlePage() {
     publisherLogo: settings.logo_url || undefined,
   });
 
-  const articleBcSchema = makeBreadcrumbSchema([
-    { name: 'Новости', url: `${articleSiteUrl}/news` },
-    { name: article.title, url: articlePageUrl },
-  ]);
-
   return (
     <div className="container mx-auto px-4 py-8 max-w-3xl">
       <SeoHead title={articleTitle} description={articleDesc} h1={h1} ogImage={articleImage} />
       <SchemaOrg schema={articleSchema} id={`article-${article.id}`} />
       <SchemaOrg schema={articleBcSchema} id={`article-bc-${article.id}`} />
+      <div className="mb-3">
+        <Breadcrumbs items={articleBreadcrumbs} />
+      </div>
       <button
         onClick={() => navigate('/news')}
         className="flex items-center gap-2 text-sm text-muted-foreground hover:text-brand-blue transition mb-6"

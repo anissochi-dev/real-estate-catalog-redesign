@@ -18,7 +18,8 @@ import { TYPE_LABELS, DEAL_LABELS } from '@/components/property/propertyLabels';
 import { categoryLabel, catalogCategoryUrl } from '@/lib/categories';
 import AIMatchModal from '@/components/AIMatchModal';
 import AIChatWidget from '@/components/property/AIChatWidget';
-import SchemaOrg, { makeRealEstateSchema, makeBreadcrumbSchema, makeVideoObjectSchema, makeFaqSchema } from '@/components/SchemaOrg';
+import SchemaOrg, { makeRealEstateSchema, makeVideoObjectSchema, makeFaqSchema } from '@/components/SchemaOrg';
+import { useBreadcrumbs } from '@/hooks/useBreadcrumbs';
 import SeoHead from '@/components/SeoHead';
 
 interface Props {
@@ -106,6 +107,18 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   const mainImage = item ? ((item.images && item.images[0]) || item.image || FALLBACK_OG) : undefined;
   const seoTitle = item ? (item.seoTitle || `${item.title} — ${item.city || 'Краснодар'}`) : undefined;
   const seoDesc = item ? (item.seoDescription || (item.description || '')).slice(0, 160) : undefined;
+
+  // Хук вызывается безусловно, до early return ниже (loading / !item) — того требуют
+  // Rules of Hooks. Пока item ещё не загружен, крошки просто без последнего элемента.
+  const { items: breadcrumbs, schema: breadcrumbSchema } = useBreadcrumbs(item ? [
+    { label: 'Главная', to: '/' },
+    { label: 'Каталог', to: '/catalog' },
+    { label: categoryLabel(item.type), to: catalogCategoryUrl(item.type) },
+    { label: item.title, to: `/object/${slug}` },
+  ] : [
+    { label: 'Главная', to: '/' },
+    { label: 'Каталог', to: '/catalog' },
+  ]);
 
   if (loading) {
     return (
@@ -234,12 +247,6 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
     videoType: item.videoType || undefined,
   });
 
-  const breadcrumbSchema = makeBreadcrumbSchema([
-    { name: 'Каталог', url: `${siteUrl}/catalog` },
-    { name: categoryLabel(item.type), url: `${siteUrl}${catalogCategoryUrl(item.type)}` },
-    { name: item.title, url: pageUrl },
-  ]);
-
   const videoSchema = item.videoUrl ? makeVideoObjectSchema({
     name: item.title,
     description: (item.description || '').slice(0, 300),
@@ -260,7 +267,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
       {faqSchema && <SchemaOrg schema={faqSchema} id="faq" />}
 
       <div className="container mx-auto px-4 py-4">
-        <PropertyTopBar itemType={item.type} itemTitle={item.title} shareUrl={shareUrl} />
+        <PropertyTopBar itemTitle={item.title} shareUrl={shareUrl} breadcrumbs={breadcrumbs} />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 space-y-3">

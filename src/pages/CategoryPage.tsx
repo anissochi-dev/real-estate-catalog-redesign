@@ -5,10 +5,12 @@ import PropertyCard from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
 import AIMatchModal from '@/components/AIMatchModal';
-import SchemaOrg, { makeItemListSchema, makeBreadcrumbSchema } from '@/components/SchemaOrg';
+import SchemaOrg, { makeItemListSchema } from '@/components/SchemaOrg';
 import { getSiteUrl } from '@/lib/siteUrl';
 import { fetchDistricts, District, fetchCategoryTexts, CategoryTextItem } from '@/lib/api';
 import { getOkrugChildNames } from '@/lib/districts';
+import { useBreadcrumbs } from '@/hooks/useBreadcrumbs';
+import { catalogCategoryUrl } from '@/lib/categories';
 import { CATEGORY_META, CATEGORY_SEO_URL, CatSort } from './category/categoryMeta';
 import CategoryHero from './category/CategoryHero';
 import CategoryToolbar from './category/CategoryToolbar';
@@ -63,6 +65,13 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
   const baseMeta = type ? CATEGORY_META[type] : null;
   const dbText = type ? categoryTexts[type] : null;
   const meta = baseMeta ? (dbText ? { ...baseMeta, ...dbText, labelRu: baseMeta.labelRu } : baseMeta) : null;
+
+  // Хук вызывается безусловно (до early return ниже) — так того требуют Rules of Hooks.
+  const { items: breadcrumbs, schema: breadcrumbSchema } = useBreadcrumbs([
+    { label: 'Главная', to: '/' },
+    { label: 'Каталог', to: '/catalog' },
+    { label: meta?.labelRu || '', to: type ? catalogCategoryUrl(type) : '' },
+  ]);
 
   // Загружаем AI SEO-текст — один раз при заходе на категорию.
   // Текст кешируется на сервере, поэтому GPT вызывается только при первом посещении.
@@ -172,11 +181,6 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
     meta.h1,
   );
 
-  const breadcrumbSchema = makeBreadcrumbSchema([
-    { name: 'Каталог', url: `${siteUrl}/catalog` },
-    { name: meta.labelRu, url: `${siteUrl}/catalog/${type}` },
-  ]);
-
   return (
     <div className="min-h-screen bg-background">
       <SeoHead
@@ -193,6 +197,7 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
       <CategoryHero
         meta={meta}
         type={type}
+        breadcrumbs={breadcrumbs}
         aiQuery={aiQuery}
         setAiQuery={setAiQuery}
         setAiOpen={setAiOpen}

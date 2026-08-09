@@ -1,4 +1,4 @@
-import Breadcrumbs from '@/components/Breadcrumbs';
+import Breadcrumbs, { Crumb } from '@/components/Breadcrumbs';
 import Icon from '@/components/ui/icon';
 
 interface DistrictHeroProps {
@@ -8,23 +8,17 @@ interface DistrictHeroProps {
   placeLabel: string;
   city: string;
   itemsCount: number;
+  breadcrumbs: Crumb[];
 }
 
 export default function DistrictHero({
-  placeTitle, displayName, isOkrug, placeLabel, city, itemsCount,
+  placeTitle, displayName, isOkrug, placeLabel, city, itemsCount, breadcrumbs,
 }: DistrictHeroProps) {
   return (
     <div className="bg-gradient-to-br from-slate-700 to-slate-900 text-white">
       <div className="container mx-auto px-4 py-10 md:py-14">
         <div className="mb-4">
-          <Breadcrumbs
-            items={[
-              { label: 'Главная', to: '/' },
-              { label: 'Каталог', to: '/catalog' },
-              { label: placeTitle },
-            ]}
-            light
-          />
+          <Breadcrumbs items={breadcrumbs} light />
         </div>
         <div className="flex items-start gap-5">
           <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0">

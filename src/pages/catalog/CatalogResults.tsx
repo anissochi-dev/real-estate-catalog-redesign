@@ -1,6 +1,6 @@
 import { Property } from '@/App';
 import PropertyCard from '@/components/PropertyCard';
-import Breadcrumbs from '@/components/Breadcrumbs';
+import Breadcrumbs, { Crumb } from '@/components/Breadcrumbs';
 import SchemaOrg from '@/components/SchemaOrg';
 import Icon from '@/components/ui/icon';
 
@@ -13,9 +13,8 @@ interface CatalogResultsProps {
   visibleCount: number;
   hasMore: boolean;
   allLoaded: boolean;
-  dealFilter: string;
-  typeFilter: string;
-  catalogBreadcrumbSchema: object;
+  breadcrumbs: Crumb[];
+  breadcrumbSchema: Record<string, unknown>;
   loadStep: number;
   hoveredId?: number | null;
   onToggleFavorite: (id: number) => void;
@@ -26,21 +25,15 @@ interface CatalogResultsProps {
 
 export default function CatalogResults({
   h1, filtered, pageItems, favorites, compareList,
-  visibleCount, hasMore, allLoaded, dealFilter, typeFilter,
-  catalogBreadcrumbSchema, loadStep, hoveredId,
+  visibleCount, hasMore, allLoaded,
+  breadcrumbs, breadcrumbSchema, loadStep, hoveredId,
   onToggleFavorite, onToggleCompare, onLoadMore, onHover,
 }: CatalogResultsProps) {
   return (
     <section className="container mx-auto px-3 py-4" aria-label="Каталог объектов">
-      <SchemaOrg schema={catalogBreadcrumbSchema} id="catalog-breadcrumb" />
+      <SchemaOrg schema={breadcrumbSchema} id="catalog-breadcrumb" />
       <div className="mb-4">
-        <Breadcrumbs items={[
-          { label: 'Главная', to: '/' },
-          ...(typeFilter !== 'all' || dealFilter !== 'all'
-            ? [{ label: 'Каталог', to: '/catalog' }]
-            : []),
-          { label: h1 },
-        ]} />
+        <Breadcrumbs items={breadcrumbs} />
       </div>
       <h1 className="font-display font-900 text-2xl md:text-3xl text-foreground mb-4">{h1}</h1>
       <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">

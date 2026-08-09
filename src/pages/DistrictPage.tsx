@@ -4,10 +4,11 @@ import type { Property } from '@/App';
 import PropertyCard from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
-import SchemaOrg, { makeItemListSchema, makeBreadcrumbSchema } from '@/components/SchemaOrg';
+import SchemaOrg, { makeItemListSchema } from '@/components/SchemaOrg';
 import { fetchDistricts, District } from '@/lib/api';
 import { getOkrugChildNames, matchesDistrictNames } from '@/lib/districts';
 import { getSiteUrl } from '@/lib/siteUrl';
+import { useBreadcrumbs } from '@/hooks/useBreadcrumbs';
 import DistrictHero from './district/DistrictHero';
 import DistrictStatsBar from './district/DistrictStatsBar';
 import DistrictSeoBlock from './district/DistrictSeoBlock';
@@ -129,9 +130,10 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
   // для района — «<Название> район»
   const placeTitle = isOkrug ? displayName : `${displayName} район`;
 
-  const breadcrumbSchema = makeBreadcrumbSchema([
-    { name: 'Каталог', url: `${siteUrl}/catalog` },
-    { name: placeTitle },
+  const { items: breadcrumbs, schema: breadcrumbSchema } = useBreadcrumbs([
+    { label: 'Главная', to: '/' },
+    { label: 'Каталог', to: '/catalog' },
+    { label: placeTitle },
   ]);
 
   const itemListSchema = makeItemListSchema(
@@ -181,6 +183,7 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
         placeLabel={placeLabel}
         city={city}
         itemsCount={items.length}
+        breadcrumbs={breadcrumbs}
       />
 
       {/* Панель статистики */}

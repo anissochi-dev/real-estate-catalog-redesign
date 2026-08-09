@@ -1,29 +1,22 @@
-import Breadcrumbs from '@/components/Breadcrumbs';
+import Breadcrumbs, { Crumb } from '@/components/Breadcrumbs';
 import Icon from '@/components/ui/icon';
-import { catalogCategoryUrl } from '@/lib/categories';
 import { CategoryMetaItem } from './categoryMeta';
 
 interface CategoryHeroProps {
   meta: CategoryMetaItem;
   type?: string;
+  breadcrumbs: Crumb[];
   aiQuery: string;
   setAiQuery: (v: string) => void;
   setAiOpen: (v: boolean) => void;
 }
 
-export default function CategoryHero({ meta, type, aiQuery, setAiQuery, setAiOpen }: CategoryHeroProps) {
+export default function CategoryHero({ meta, breadcrumbs, aiQuery, setAiQuery, setAiOpen }: CategoryHeroProps) {
   return (
     <div className={`bg-gradient-to-br ${meta.gradient} text-white`}>
       <div className="container mx-auto px-4 py-10 md:py-14">
         <div className="mb-4">
-          <Breadcrumbs
-            items={[
-              { label: 'Главная', to: '/' },
-              { label: 'Каталог', to: '/catalog' },
-              { label: meta.labelRu, to: catalogCategoryUrl(type!) },
-            ]}
-            light
-          />
+          <Breadcrumbs items={breadcrumbs} light />
         </div>
         <div className="flex items-start gap-5">
           <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0">

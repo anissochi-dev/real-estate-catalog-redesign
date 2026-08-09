@@ -6,11 +6,12 @@ import Breadcrumbs from '@/components/Breadcrumbs';
 import { CaptchaResult } from '@/components/SmartCaptcha';
 import { fetchPublicLeadBySlug, sendLead, PublicLead, fetchDistricts, District } from '@/lib/api';
 import SeoHead from '@/components/SeoHead';
-import SchemaOrg, { makeBreadcrumbSchema, makeServiceSchema } from '@/components/SchemaOrg';
+import SchemaOrg, { makeServiceSchema } from '@/components/SchemaOrg';
 import LeadCard, { CATEGORY_LABELS, fmtBudget, fmtArea, fmtDate } from './LeadCard';
 import LeadContactModal from './LeadContactModal';
 import { useSettings } from '@/contexts/SettingsContext';
 import { getSiteUrl } from '@/lib/siteUrl';
+import { useBreadcrumbs } from '@/hooks/useBreadcrumbs';
 
 const OG_IMAGE = 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/bucket/f8de2a72-faf3-4f8b-aaa2-0ee00c7e16dc.png';
 
@@ -87,6 +88,29 @@ export default function LeadDetailPage() {
     }
   };
 
+  const typeLabel = lead?.property_type === 'sale' ? 'Продажа' : lead?.property_type === 'rent' ? 'Аренда' : '';
+  const cat = lead?.property_category || lead?.request_category;
+  const catLabel = cat ? CATEGORY_LABELS[cat] || cat : '';
+  const districtNames = (lead?.district_ids || [])
+    .map(id => districts.find(d => d.id === id)?.name)
+    .filter(Boolean) as string[];
+
+  const titleParts = [typeLabel, catLabel, districtNames[0]].filter(Boolean);
+  const h1 = lead ? (titleParts.length > 0
+    ? `${titleParts.join(' · ')} — заявка клиента`
+    : `Заявка клиента №${lead.id}`) : '';
+
+  // Хук вызывается безусловно, до early return ниже (loading / notFound) — того требуют
+  // Rules of Hooks. Пока lead ещё не загружен, крошки просто без последнего элемента.
+  const { items: breadcrumbs, schema: breadcrumbSchema } = useBreadcrumbs(lead ? [
+    { label: 'Главная', to: '/' },
+    { label: 'Заявки клиентов', to: '/leads' },
+    { label: h1, to: `/request/${lead.slug || slug}` },
+  ] : [
+    { label: 'Главная', to: '/' },
+    { label: 'Заявки клиентов', to: '/leads' },
+  ]);
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-6 max-w-3xl animate-pulse">
@@ -110,32 +134,15 @@ export default function LeadDetailPage() {
     );
   }
 
-  const typeLabel = lead.property_type === 'sale' ? 'Продажа' : lead.property_type === 'rent' ? 'Аренда' : '';
-  const cat = lead.property_category || lead.request_category;
-  const catLabel = cat ? CATEGORY_LABELS[cat] || cat : '';
-  const districtNames = (lead.district_ids || [])
-    .map(id => districts.find(d => d.id === id)?.name)
-    .filter(Boolean) as string[];
   const budgetStr = fmtBudget(lead.budget, lead.budget_to);
   const areaStr = fmtArea(lead.area_from, lead.area_to);
   const isUpdated = lead.updated_at && lead.updated_at !== lead.created_at;
   const displayDate = fmtDate(isUpdated ? lead.updated_at! : lead.created_at);
 
-  const titleParts = [typeLabel, catLabel, districtNames[0]].filter(Boolean);
-  const h1 = titleParts.length > 0
-    ? `${titleParts.join(' · ')} — заявка клиента`
-    : `Заявка клиента №${lead.id}`;
-
   const seoTitle = `${h1} в Краснодаре`;
   const seoDescParts = [typeLabel, catLabel].filter(Boolean).join(' · ');
   const seoDesc = `${seoDescParts ? seoDescParts + '. ' : ''}${(lead.message || '').slice(0, 140)}`.slice(0, 160);
-
   const pageUrl = `${SITE_URL}/request/${lead.slug || slug}`;
-
-  const breadcrumbSchema = makeBreadcrumbSchema([
-    { name: 'Заявки клиентов', url: `${SITE_URL}/leads` },
-    { name: h1, url: pageUrl },
-  ]);
 
   const serviceSchema = makeServiceSchema({
     name: h1,
@@ -159,11 +166,7 @@ export default function LeadDetailPage() {
 
       <div className="container mx-auto px-4 py-6 max-w-3xl">
         <div className="mb-3">
-          <Breadcrumbs items={[
-            { label: 'Главная', to: '/' },
-            { label: 'Заявки клиентов', to: '/leads' },
-            { label: h1 },
-          ]} />
+          <Breadcrumbs items={breadcrumbs} />
         </div>
 
         <h1 className="font-display font-900 text-2xl md:text-3xl text-foreground mb-4">{h1}</h1>

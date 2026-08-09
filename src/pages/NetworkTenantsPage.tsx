@@ -3,9 +3,8 @@ import Icon from '@/components/ui/icon';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import { fireLeadConversion } from '@/lib/analytics';
 import SeoHead, { useSeoH1 } from '@/components/SeoHead';
-import SchemaOrg, { makeBreadcrumbSchema } from '@/components/SchemaOrg';
-import { useSettings } from '@/contexts/SettingsContext';
-import { getSiteUrl } from '@/lib/siteUrl';
+import SchemaOrg from '@/components/SchemaOrg';
+import { useBreadcrumbs } from '@/hooks/useBreadcrumbs';
 
 const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
 const LEADS_URL = 'https://functions.poehali.dev/45673fe4-a39d-4193-b529-174d4c8c8f97';
@@ -22,8 +21,6 @@ interface T {
 }
 
 export default function NetworkTenantsPage() {
-  const { settings } = useSettings();
-  const siteUrl = getSiteUrl(settings.site_url);
   const h1 = useSeoH1('Сетевые арендаторы');
   const [items, setItems] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,8 +56,9 @@ export default function NetworkTenantsPage() {
     }, 1500);
   };
 
-  const breadcrumbSchema = makeBreadcrumbSchema([
-    { name: h1, url: `${siteUrl}/network-tenants` },
+  const { items: breadcrumbs, schema: breadcrumbSchema } = useBreadcrumbs([
+    { label: 'Главная', to: '/' },
+    { label: h1, to: '/network-tenants' },
   ]);
 
   return (
@@ -73,7 +71,7 @@ export default function NetworkTenantsPage() {
       <section className="bg-gradient-to-r from-brand-blue to-brand-blue-dark text-white py-14">
         <div className="container mx-auto px-4">
           <div className="mb-4">
-            <Breadcrumbs items={[{ label: 'Главная', to: '/' }, { label: h1 }]} light />
+            <Breadcrumbs items={breadcrumbs} light />
           </div>
           <h1 className="font-display font-900 text-3xl md:text-5xl mb-3">{h1}</h1>
           <p className="text-white/80 max-w-2xl">
