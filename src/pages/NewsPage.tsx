@@ -63,7 +63,6 @@ export function NewsListPage() {
     : null;
 
   const newsBcSchema = makeBreadcrumbSchema([
-    { name: 'Главная', url: siteUrl },
     { name: 'Новости', url: `${siteUrl}/news` },
   ]);
 
@@ -225,7 +224,6 @@ export function NewsArticlePage() {
   });
 
   const articleBcSchema = makeBreadcrumbSchema([
-    { name: 'Главная', url: articleSiteUrl },
     { name: 'Новости', url: `${articleSiteUrl}/news` },
     { name: article.title, url: articlePageUrl },
   ]);

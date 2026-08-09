@@ -11,11 +11,14 @@ import LeadCard, { CATEGORY_LABELS } from './leads/LeadCard';
 import LeadAiSearch from './leads/LeadAiSearch';
 import LeadContactModal from './leads/LeadContactModal';
 import LeadsFaq from './leads/LeadsFaq';
+import { useSettings } from '@/contexts/SettingsContext';
+import { getSiteUrl } from '@/lib/siteUrl';
 
-const SITE_URL = 'https://bmn.su';
 const OG_IMAGE = 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/bucket/f8de2a72-faf3-4f8b-aaa2-0ee00c7e16dc.png';
 
 export default function LeadsListPage() {
+  const { settings } = useSettings();
+  const SITE_URL = getSiteUrl(settings.site_url);
   const h1 = useSeoH1('Заявки клиентов');
   const LOAD_STEP = 20;
   const SEO_TITLE = 'Заявки клиентов на коммерческую недвижимость в Краснодаре';
@@ -82,9 +85,8 @@ export default function LeadsListPage() {
   const hasMore = allLeads.length < total;
 
   const breadcrumbSchema = useMemo(() => makeBreadcrumbSchema([
-    { name: 'Главная', url: `${SITE_URL}/` },
     { name: 'Заявки клиентов', url: `${SITE_URL}/leads` },
-  ]), []);
+  ]), [SITE_URL]);
 
   const itemListSchema = useMemo(() => makeItemListSchema(
     allLeads.slice(0, 50).map(lead => ({
@@ -93,7 +95,7 @@ export default function LeadsListPage() {
       description: lead.message?.slice(0, 160) || undefined,
     })),
     'Заявки клиентов на коммерческую недвижимость'
-  ), [allLeads]);
+  ), [allLeads, SITE_URL]);
 
   const runAiSearch = async () => {
     const q = aiQuery.trim();

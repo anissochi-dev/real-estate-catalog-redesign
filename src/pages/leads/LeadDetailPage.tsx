@@ -9,13 +9,16 @@ import SeoHead from '@/components/SeoHead';
 import SchemaOrg, { makeBreadcrumbSchema, makeServiceSchema } from '@/components/SchemaOrg';
 import LeadCard, { CATEGORY_LABELS, fmtBudget, fmtArea, fmtDate } from './LeadCard';
 import LeadContactModal from './LeadContactModal';
+import { useSettings } from '@/contexts/SettingsContext';
+import { getSiteUrl } from '@/lib/siteUrl';
 
-const SITE_URL = 'https://bmn.su';
 const OG_IMAGE = 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/bucket/f8de2a72-faf3-4f8b-aaa2-0ee00c7e16dc.png';
 
 export default function LeadDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const { settings } = useSettings();
+  const SITE_URL = getSiteUrl(settings.site_url);
   const [lead, setLead] = useState<PublicLead | null>(null);
   const [similar, setSimilar] = useState<PublicLead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -130,7 +133,6 @@ export default function LeadDetailPage() {
   const pageUrl = `${SITE_URL}/request/${lead.slug || slug}`;
 
   const breadcrumbSchema = makeBreadcrumbSchema([
-    { name: 'Главная', url: `${SITE_URL}/` },
     { name: 'Заявки клиентов', url: `${SITE_URL}/leads` },
     { name: h1, url: pageUrl },
   ]);

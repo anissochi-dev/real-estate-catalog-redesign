@@ -130,7 +130,6 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
   const placeTitle = isOkrug ? displayName : `${displayName} район`;
 
   const breadcrumbSchema = makeBreadcrumbSchema([
-    { name: 'Главная', url: siteUrl },
     { name: 'Каталог', url: `${siteUrl}/catalog` },
     { name: placeTitle },
   ]);

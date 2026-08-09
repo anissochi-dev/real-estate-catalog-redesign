@@ -235,7 +235,6 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   });
 
   const breadcrumbSchema = makeBreadcrumbSchema([
-    { name: 'Главная', url: siteUrl },
     { name: 'Каталог', url: `${siteUrl}/catalog` },
     { name: categoryLabel(item.type), url: `${siteUrl}${catalogCategoryUrl(item.type)}` },
     { name: item.title, url: pageUrl },

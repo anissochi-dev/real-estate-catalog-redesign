@@ -173,7 +173,6 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
   );
 
   const breadcrumbSchema = makeBreadcrumbSchema([
-    { name: 'Главная', url: siteUrl },
     { name: 'Каталог', url: `${siteUrl}/catalog` },
     { name: meta.labelRu, url: `${siteUrl}/catalog/${type}` },
   ]);

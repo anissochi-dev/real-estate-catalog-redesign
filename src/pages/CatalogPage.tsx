@@ -167,7 +167,6 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
 
   const siteUrl = getSiteUrl(settings.site_url);
   const catalogBreadcrumbs = [
-    { name: 'Главная', url: siteUrl },
     ...(typeFilter !== 'all' || dealFilter !== 'all'
       ? [{ name: 'Каталог', url: `${siteUrl}/catalog` }]
       : []),
