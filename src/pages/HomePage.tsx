@@ -8,7 +8,6 @@ import SeoHead from '@/components/SeoHead';
 import SchemaOrg, { makeFaqSchema } from '@/components/SchemaOrg';
 import { CATALOG_CATEGORIES, catalogCategoryUrl } from '@/lib/categories';
 import HomeHero from './home/HomeHero';
-import HomeStatsBar from './home/HomeStatsBar';
 import HomeNewListings from './home/HomeNewListings';
 import HomeNewsSection, { NewsPreview } from './home/HomeNewsSection';
 import HomeFaqSection from './home/HomeFaqSection';
@@ -126,13 +125,6 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
     return () => { added.forEach(l => l.remove()); };
   }, [newObjects]);
 
-  const STATS_VIEW = [
-    { value: totalCount > 0 ? `${totalCount}+` : '…', label: 'Объектов в базе', icon: 'Building2', deal: null },
-    { value: leadsCount > 0 ? `${leadsCount}+` : '…', label: 'Заявок от клиентов', icon: 'MessageSquare', deal: null },
-    { value: '98%', label: 'Успешных сделок', icon: 'TrendingUp', deal: null },
-    { value: `с ${settings.company_since_year || 2007}`, label: 'На рынке', icon: 'Award', deal: null },
-  ];
-
   // Частые вопросы — данные берём из информации о компании.
   // Используются и в FAQPage Schema (для AI и поисковиков), и в видимом блоке.
   const cityName = mainCity || 'Краснодар';
@@ -176,9 +168,6 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
         setSearchQuery={setSearchQuery}
         setAiOpen={setAiOpen}
       />
-
-      {/* Stats — компактная горизонтальная панель */}
-      <HomeStatsBar statsView={STATS_VIEW} />
 
       {/* Categories */}
       <section className="py-6 bg-background hidden">
