@@ -89,10 +89,10 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
     const big = cnt >= 10;
     const mid = cnt >= 3 && cnt < 10;
     return big
-      ? 'bg-white/10 border border-white/15 text-white/85 hover:bg-white/18 hover:text-white'
+      ? 'bg-white text-brand-blue-dark hover:bg-white/90 shadow-sm'
       : mid
-      ? 'bg-white/5 border border-white/8 text-white/65 hover:bg-white/10 hover:text-white/90'
-      : 'text-white/45 hover:text-white/75';
+      ? 'bg-white/80 text-brand-blue-dark hover:bg-white'
+      : 'bg-white/40 text-brand-blue-dark hover:bg-white/60';
   };
 
   const legalDocs = [
@@ -156,17 +156,17 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
                     </Link>
 
                     {/* Районы округа */}
-                    <div className="flex flex-wrap gap-x-1 gap-y-1 min-w-0">
+                    <div className="flex flex-wrap gap-2 min-w-0">
                       {children.map(d => {
                         const cnt = d.listings_count ?? 0;
                         return (
                           <Link
                             key={d.id}
                             to={`/district/${d.slug}`}
-                            className={`inline-flex items-center gap-1 rounded-md transition-colors text-[11px] px-2 py-1 ${chipClass(cnt)}`}
+                            className={`inline-flex items-center gap-1 rounded-full transition-colors text-[12px] font-medium px-3 py-1.5 ${chipClass(cnt)}`}
                           >
                             {d.name}
-                            <span className={`${cnt >= 10 ? 'text-white/50' : 'text-white/30'} tabular-nums`}>{cnt}</span>
+                            <span className="text-brand-blue-dark/50 tabular-nums">{cnt}</span>
                           </Link>
                         );
                       })}
@@ -178,17 +178,17 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
                 {orphanDistricts.length > 0 && (
                   <div className="flex flex-col sm:flex-row sm:items-baseline gap-x-3 gap-y-1.5">
                     <span className="shrink-0 text-[12px] font-semibold text-white/60 sm:w-48">Другие районы</span>
-                    <div className="flex flex-wrap gap-x-1 gap-y-1 min-w-0">
+                    <div className="flex flex-wrap gap-2 min-w-0">
                       {orphanDistricts.map(d => {
                         const cnt = d.listings_count ?? 0;
                         return (
                           <Link
                             key={d.id}
                             to={`/district/${d.slug}`}
-                            className={`inline-flex items-center gap-1 rounded-md transition-colors text-[11px] px-2 py-1 ${chipClass(cnt)}`}
+                            className={`inline-flex items-center gap-1 rounded-full transition-colors text-[12px] font-medium px-3 py-1.5 ${chipClass(cnt)}`}
                           >
                             {d.name}
-                            <span className={`${cnt >= 10 ? 'text-white/50' : 'text-white/30'} tabular-nums`}>{cnt}</span>
+                            <span className="text-brand-blue-dark/50 tabular-nums">{cnt}</span>
                           </Link>
                         );
                       })}

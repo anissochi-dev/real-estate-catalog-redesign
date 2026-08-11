@@ -1,3 +1,5 @@
+import ExpandableText from '@/components/ExpandableText';
+
 interface DistrictSeoBlockProps {
   displayName: string;
   isOkrug: boolean;
@@ -11,7 +13,7 @@ export default function DistrictSeoBlock({
   displayName, isOkrug, city, aiText, aiLoading, description,
 }: DistrictSeoBlockProps) {
   return (
-    <div className="mt-12 p-6 bg-white rounded-2xl border border-border">
+    <div className="mt-12 py-10 px-6 bg-white rounded-2xl border border-border">
       <h2 className="font-display font-700 text-lg mb-3">
         О коммерческой недвижимости: {isOkrug ? displayName : `район ${displayName}`}
       </h2>
@@ -22,9 +24,11 @@ export default function DistrictSeoBlock({
           ))}
         </div>
       ) : (
-        <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
-          {aiText || description || `Актуальные объекты коммерческой недвижимости в ${isOkrug ? displayName : `районе ${displayName}`}, ${city} — офисы, торговые площади, склады, производственные помещения и готовый бизнес.`}
-        </p>
+        <ExpandableText>
+          <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
+            {aiText || description || `Актуальные объекты коммерческой недвижимости в ${isOkrug ? displayName : `районе ${displayName}`}, ${city} — офисы, торговые площади, склады, производственные помещения и готовый бизнес.`}
+          </p>
+        </ExpandableText>
       )}
     </div>
   );

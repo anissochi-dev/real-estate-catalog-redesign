@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { catalogCategoryUrl } from '@/lib/categories';
 import { CATEGORY_META, CategoryMetaItem } from './categoryMeta';
+import ExpandableText from '@/components/ExpandableText';
 
 interface CategorySeoBlockProps {
   meta: CategoryMetaItem;
@@ -17,7 +18,7 @@ export default function CategorySeoBlock({
   const navigate = useNavigate();
 
   return (
-    <div className="mt-12 p-6 bg-white rounded-2xl border border-border">
+    <div className="mt-12 py-10 px-6 bg-white rounded-2xl border border-border">
       <h2 className="font-display font-700 text-lg mb-1">{meta.h2}</h2>
       <h5 className="text-sm text-brand-blue font-medium mb-3">{meta.h5}</h5>
 
@@ -28,16 +29,22 @@ export default function CategorySeoBlock({
             <div key={i} className={`h-3.5 bg-muted rounded animate-pulse ${i === 3 ? 'w-2/3' : 'w-full'}`} />
           ))}
         </div>
-      ) : aiSeoText ? (
-        <div className="text-sm text-muted-foreground leading-relaxed mb-4 whitespace-pre-line">
-          {aiSeoText}
-        </div>
       ) : (
-        <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-          {meta.description} Наша компания специализируется на подборе коммерческой недвижимости
-          в {city}е с {companySinceYear || 2007} года. Мы помогаем как покупателям,
-          так и арендаторам найти оптимальный объект с учётом бюджета, требований к площади и расположению.
-        </p>
+        <div className="mb-4">
+          <ExpandableText>
+            {aiSeoText ? (
+              <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
+                {aiSeoText}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {meta.description} Наша компания специализируется на подборе коммерческой недвижимости
+                в {city}е с {companySinceYear || 2007} года. Мы помогаем как покупателям,
+                так и арендаторам найти оптимальный объект с учётом бюджета, требований к площади и расположению.
+              </p>
+            )}
+          </ExpandableText>
+        </div>
       )}
 
       <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Другие категории</h4>
