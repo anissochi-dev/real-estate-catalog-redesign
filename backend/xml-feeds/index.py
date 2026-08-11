@@ -1231,6 +1231,10 @@ def _build_avito(listings, company):
         object_type = AVITO_OBJECT_TYPE_MAP.get(l.get('category'), 'Помещение свободного назначения')
         out.append(f'<ObjectType>{_xml_escape(object_type)}</ObjectType>')
 
+        # Что сдаёте — обязательное поле Авито для категории «Офисное помещение»
+        if l.get('category') == 'office':
+            out.append('<OfficeType>Помещение под офис</OfficeType>')
+
         # Права размещения (Собственник/Посредник) — обязательное поле
         rights = AVITO_PROPERTY_RIGHTS.get(l.get('property_rights'), 'Собственник')
         out.append(f'<PropertyRights>{rights}</PropertyRights>')
