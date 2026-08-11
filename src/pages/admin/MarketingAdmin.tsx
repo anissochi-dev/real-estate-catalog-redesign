@@ -10,13 +10,15 @@ import CianCabinetTab from '@/pages/admin/ad-cabinet/CianCabinetTab';
 import YandexCallsTab from '@/pages/admin/ad-cabinet/YandexCallsTab';
 import AvitoCabinetTab from '@/pages/admin/ad-cabinet/AvitoCabinetTab';
 import OtherPlatformsTab from '@/pages/admin/ad-cabinet/OtherPlatformsTab';
+import ExportPricingTab from '@/pages/admin/marketing/ExportPricingTab';
 
-type Tab = 'ad-cabinet' | 'dashboard' | 'pricing' | 'utm' | 'social' | 'vk-ads';
+type Tab = 'ad-cabinet' | 'dashboard' | 'pricing' | 'utm' | 'social' | 'vk-ads' | 'export-pricing';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'ad-cabinet', label: 'Рекламный кабинет', icon: 'Megaphone' },
   { id: 'dashboard', label: 'Пульт',       icon: 'LayoutDashboard' },
   { id: 'pricing',   label: 'Оценка цен',  icon: 'Sparkles' },
+  { id: 'export-pricing', label: 'Прайс размещения', icon: 'Tag' },
   { id: 'utm',       label: 'UTM-ссылки',  icon: 'Link' },
   { id: 'social',    label: 'Соцсети',     icon: 'Share2' },
   { id: 'vk-ads',   label: 'VK Ads',      icon: 'Megaphone' },
@@ -59,6 +61,7 @@ export default function MarketingAdmin() {
       )}
       {tab === 'dashboard' && <MarketingDashboard />}
       {tab === 'pricing'   && <PriceAssessmentTab />}
+      {tab === 'export-pricing' && <ExportPricingTab />}
       {tab === 'utm'       && <UtmTab />}
       {tab === 'social'    && <SocialParserTab />}
       {tab === 'vk-ads'   && <VkAdsTab />}

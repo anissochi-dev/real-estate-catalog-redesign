@@ -4308,6 +4308,9 @@ def _settings(cur, conn, method, event, user):
                 vf = []
             vf_json = json.dumps(vf, ensure_ascii=False).replace("'", "''")
             fields.append(f"verification_files = '{vf_json}'::jsonb")
+        if 'export_pricing_notes' in body:
+            notes = _safe(body.get('export_pricing_notes') or '', 5000)
+            fields.append(f"export_pricing_notes = '{notes}'")
         if not fields:
             return _err(400, 'Нет полей')
         fields.append("updated_at = NOW()")

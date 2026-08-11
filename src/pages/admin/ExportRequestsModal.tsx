@@ -10,6 +10,20 @@ const PLATFORM_LABEL: Record<string, string> = {
   avito: 'Авито',
 };
 
+// Формат совпадает с ExportPricingTab: "cian: описание||domclick: описание||..."
+function parsePricingNotes(raw: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (!raw) return result;
+  raw.split('||').forEach(chunk => {
+    const idx = chunk.indexOf(':');
+    if (idx === -1) return;
+    const key = chunk.slice(0, idx).trim();
+    const val = chunk.slice(idx + 1).trim();
+    if (key && val) result[key] = val;
+  });
+  return result;
+}
+
 interface ExportRequestRow {
   id: number;
   listing_id: number;
@@ -34,6 +48,7 @@ export default function ExportRequestsModal({ onClose, onHandled, onOpenListing 
   const [processingId, setProcessingId] = useState<number | null>(null);
   const [rejectingId, setRejectingId] = useState<number | null>(null);
   const [rejectComment, setRejectComment] = useState('');
+  const [pricingNotes, setPricingNotes] = useState<Record<string, string>>({});
 
   const load = () => {
     setLoading(true);
@@ -43,7 +58,12 @@ export default function ExportRequestsModal({ onClose, onHandled, onOpenListing 
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    adminApi.getSettings()
+      .then(d => setPricingNotes(parsePricingNotes(d.settings?.export_pricing_notes || '')))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -137,6 +157,16 @@ export default function ExportRequestsModal({ onClose, onHandled, onOpenListing 
                     </span>
                   ))}
                 </div>
+
+                {it.platforms.some(p => pricingNotes[p]) && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-0.5">
+                    {it.platforms.filter(p => pricingNotes[p]).map(p => (
+                      <div key={p} className="text-xs text-amber-800">
+                        <span className="font-semibold">{PLATFORM_LABEL[p] || p}:</span> {pricingNotes[p]}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {rejectingId === it.id ? (
                   <div className="space-y-2">
