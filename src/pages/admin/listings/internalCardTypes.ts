@@ -1,4 +1,4 @@
-export type TabId = 'overview' | 'photos' | 'price_history' | 'stats' | 'leads' | 'comments' | 'ai' | 'documents' | 'broker' | 'qr_banner' | 'radar';
+export type TabId = 'overview' | 'photos' | 'price_history' | 'stats' | 'leads' | 'comments' | 'ai' | 'documents' | 'broker' | 'qr_banner' | 'radar' | 'export';
 
 export interface HistoryRow {
   id: number;
@@ -71,6 +71,7 @@ export const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'documents',    label: 'Документы',    icon: 'FileText' },
   { id: 'broker',       label: 'Брокер',       icon: 'UserCheck' },
   { id: 'qr_banner',    label: 'QR Баннер',    icon: 'QrCode' },
+  { id: 'export',       label: 'Выгрузка',     icon: 'UploadCloud' },
 ];
 
 export function fmt(n: number) { return n.toLocaleString('ru'); }

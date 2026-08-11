@@ -25,6 +25,12 @@
       "method": "GET",
       "path": "/?resource=matching&type=leads_for_listing&id=1",
       "expectedStatus": 401
+    },
+    {
+      "name": "Заявки на выгрузку без токена",
+      "method": "GET",
+      "path": "/?resource=export_requests",
+      "expectedStatus": 401
     }
   ]
 }

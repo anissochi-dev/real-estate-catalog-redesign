@@ -252,6 +252,7 @@ FALLBACK_PERMS = {
         'crm-gamification': ['read'],
         'crm-checks':       ['read', 'create'],
         'crm-payments':     ['read', 'create', 'update'],
+        'export_requests':  ['read', 'update'],
     },
     'manager': {
         'stats':            ['read'],
@@ -294,6 +295,7 @@ FALLBACK_PERMS = {
         'xml_feeds':        ['read'],
         'crm-gamification': ['read'],
         'crm-checks':       ['read'],
+        'export_requests':  ['read', 'create'],
     },
     'office_manager': {
         'stats':            ['read'],
@@ -437,6 +439,8 @@ def handler(event, context):
                 return _user_profile(cur, method, rid, user)
             if resource == 'moderation':
                 return _moderation(cur, conn, method, rid, event, user)
+            if resource == 'export_requests':
+                return _export_requests(cur, conn, method, rid, event, user)
             if resource == 'matching':
                 return _matching(cur, event, user)
 
@@ -3988,6 +3992,131 @@ def _moderation(cur, conn, method, rid, event, user):
                     listing['owner_user_id'], lid, 'rejected',
                     listing.get('owner_name') or '', comment, conn
                 )
+            return _ok({'success': True, 'action': 'rejected'})
+
+        return _err(400, 'action должен быть approve или reject')
+
+    return _err(400, 'Bad request')
+
+
+_EXPORT_PLATFORM_COLUMN = {
+    'cian': 'export_cian',
+    'domclick': 'export_domclick',
+    'yandex': 'export_yandex',
+    'avito': 'export_avito',
+}
+_EXPORT_PLATFORM_LABEL = {
+    'cian': 'Циан',
+    'domclick': 'ДомКлик',
+    'yandex': 'Яндекс.Недвижимость',
+    'avito': 'Авито',
+}
+
+
+def _export_requests(cur, conn, method, rid, event, user):
+    """Запросы брокеров на платную выгрузку объекта на внешние площадки
+    (Циан, ДомКлик, Яндекс.Недвижимость, Авито). Брокер создаёт заявку,
+    admin/director/office_manager одобряют или отклоняют."""
+    role = user.get('role')
+    ALLOWED_REVIEW = ('admin', 'director', 'office_manager')
+
+    if method == 'GET':
+        if role in ALLOWED_REVIEW:
+            status_filter = (event.get('queryStringParameters') or {}).get('status') or ''
+            where = f"WHERE er.status = '{_safe(status_filter, 20)}'" if status_filter else ''
+        elif role == 'broker':
+            where = f"WHERE er.broker_id = {int(user['id'])}"
+        else:
+            return _err(403, 'Доступ запрещён')
+
+        cur.execute(f"""
+            SELECT er.id, er.listing_id, er.broker_id, er.platforms, er.status,
+                   er.comment, er.reviewed_by, er.reviewed_at, er.created_at,
+                   l.title AS listing_title, l.address AS listing_address,
+                   l.image AS listing_image,
+                   b.name AS broker_name,
+                   rv.name AS reviewed_by_name
+            FROM {SCHEMA}.export_requests er
+            LEFT JOIN {SCHEMA}.listings l ON l.id = er.listing_id
+            LEFT JOIN {SCHEMA}.users b ON b.id = er.broker_id
+            LEFT JOIN {SCHEMA}.users rv ON rv.id = er.reviewed_by
+            {where}
+            ORDER BY er.created_at DESC
+            LIMIT 200
+        """)
+        items = [dict(r) for r in cur.fetchall()]
+        for it in items:
+            it['platforms'] = (it['platforms'] or '').split(',') if it.get('platforms') else []
+        pending_count = sum(1 for it in items if it['status'] == 'pending') if role in ALLOWED_REVIEW else None
+        resp = {'items': items, 'total': len(items)}
+        if pending_count is not None:
+            resp['pending_count'] = pending_count
+        return _ok(resp)
+
+    if method == 'POST':
+        body = json.loads(event.get('body') or '{}')
+        listing_id = body.get('listing_id')
+        platforms = body.get('platforms') or []
+        if not listing_id or not isinstance(platforms, list) or not platforms:
+            return _err(400, 'Укажите объект и хотя бы одну площадку')
+        platforms = [p for p in platforms if p in _EXPORT_PLATFORM_COLUMN]
+        if not platforms:
+            return _err(400, 'Неизвестные площадки')
+
+        cur.execute(f"SELECT id, broker_id, author_id, title FROM {SCHEMA}.listings WHERE id = {int(listing_id)}")
+        listing = cur.fetchone()
+        if not listing:
+            return _err(404, 'Объект не найден')
+        listing = dict(listing)
+
+        if role == 'broker' and listing.get('broker_id') != user['id'] and listing.get('author_id') != user['id']:
+            return _err(403, 'Можно запрашивать выгрузку только своих объектов')
+
+        platforms_str = ','.join(platforms)
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.export_requests (listing_id, broker_id, platforms, status) "
+            f"VALUES ({int(listing_id)}, {int(user['id'])}, '{_safe(platforms_str, 100)}', 'pending') "
+            f"RETURNING id"
+        )
+        new_id = cur.fetchone()['id']
+        conn.commit()
+        return _ok({'success': True, 'id': new_id}, 201)
+
+    if method == 'PUT' and rid:
+        if role not in ALLOWED_REVIEW:
+            return _err(403, 'Доступ только для admin/director/office_manager')
+        body = json.loads(event.get('body') or '{}')
+        action = (body.get('action') or '').strip()
+        req_id = int(rid)
+
+        cur.execute(f"SELECT id, listing_id, platforms, status FROM {SCHEMA}.export_requests WHERE id = {req_id}")
+        row = cur.fetchone()
+        if not row:
+            return _err(404, 'Заявка не найдена')
+        row = dict(row)
+        if row['status'] != 'pending':
+            return _err(400, 'Заявка уже обработана')
+
+        if action == 'approve':
+            platforms = (row['platforms'] or '').split(',')
+            columns = [_EXPORT_PLATFORM_COLUMN[p] for p in platforms if p in _EXPORT_PLATFORM_COLUMN]
+            if columns:
+                set_cols = ', '.join(f"{c} = TRUE" for c in columns)
+                cur.execute(f"UPDATE {SCHEMA}.listings SET {set_cols}, updated_at = NOW() WHERE id = {int(row['listing_id'])}")
+            cur.execute(
+                f"UPDATE {SCHEMA}.export_requests SET status = 'approved', reviewed_by = {int(user['id'])}, "
+                f"reviewed_at = NOW() WHERE id = {req_id}"
+            )
+            conn.commit()
+            return _ok({'success': True, 'action': 'approved'})
+
+        if action == 'reject':
+            comment = _safe(body.get('comment') or '', 500)
+            cur.execute(
+                f"UPDATE {SCHEMA}.export_requests SET status = 'rejected', reviewed_by = {int(user['id'])}, "
+                f"reviewed_at = NOW(), comment = {_str_or_null(comment, 500)} WHERE id = {req_id}"
+            )
+            conn.commit()
             return _ok({'success': True, 'action': 'rejected'})
 
         return _err(400, 'action должен быть approve или reject')

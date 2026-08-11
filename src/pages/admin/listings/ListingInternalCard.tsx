@@ -7,7 +7,7 @@ import { Listing, CATS, DEALS } from './types';
 import { TabId, TABS } from './internalCardTypes';
 import { Spinner, TabOverview, TabPriceHistory, TabStats, TabLeads, TabComments, TabRadar } from './InternalCardTabs1';
 import { fmtListingId } from '@/lib/formatPrice';
-import { TabAi, TabDocuments, TabBroker, TabQrBanner } from './InternalCardTabs2';
+import { TabAi, TabDocuments, TabBroker, TabQrBanner, TabExport } from './InternalCardTabs2';
 import TabPhotos from './TabPhotos';
 
 interface Props {
@@ -19,7 +19,7 @@ interface Props {
 
 // radar — первая вкладка, остальные основные, «Ещё» — служебные
 const PRIMARY_TABS: TabId[] = ['radar', 'overview', 'photos', 'leads', 'comments'];
-const MORE_TABS: TabId[] = ['price_history', 'documents', 'broker', 'qr_banner'];
+const MORE_TABS: TabId[] = ['price_history', 'documents', 'broker', 'qr_banner', 'export'];
 
 export default function ListingInternalCard({ listingId, onClose, onBrokerChanged, onEdit }: Props) {
   const { user } = useAuth();
@@ -203,6 +203,7 @@ export default function ListingInternalCard({ listingId, onClose, onBrokerChange
           {tab === 'documents' && <TabDocuments listingId={listingId} />}
           {tab === 'broker' && <TabBroker listing={listing} onSaved={() => { onBrokerChanged?.(); }} currentUserId={user?.id} />}
           {tab === 'qr_banner' && <TabQrBanner listing={listing} siteUrl={settings.site_url} />}
+          {tab === 'export' && <TabExport listing={listing} />}
         </div>
       </div>
     </div>

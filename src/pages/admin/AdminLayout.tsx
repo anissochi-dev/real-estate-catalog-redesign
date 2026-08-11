@@ -55,6 +55,7 @@ export default function AdminLayout({ section, setSection, onExit, onExitToPath,
     socialPending,
     newLeadsCount,      setNewLeadsCount,
     newModerationCount, setNewModerationCount,
+    newExportRequestsCount, setNewExportRequestsCount,
     idleWarning,
     secondsLeft,
     rolePerms,
@@ -126,6 +127,8 @@ export default function AdminLayout({ section, setSection, onExit, onExitToPath,
           setSidebarOpen={setSidebarOpen}
           onExit={onExit}
           onOpenAi={() => setAiOpen(true)}
+          newExportRequestsCount={newExportRequestsCount}
+          setNewExportRequestsCount={setNewExportRequestsCount}
         />
         <div className="p-4 lg:p-8">{children}</div>
       </main>

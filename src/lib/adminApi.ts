@@ -215,6 +215,16 @@ export const adminApi = {
   rejectModeration: (id: number, comment: string) =>
     req(`${ADMIN_URL}?resource=moderation&id=${id}`, { method: 'PUT', body: JSON.stringify({ action: 'reject', comment }) }),
 
+  // export_requests — запросы брокеров на платную выгрузку объекта на площадки
+  listExportRequests: (status?: string) =>
+    req(`${ADMIN_URL}?resource=export_requests${status ? `&status=${status}` : ''}`),
+  createExportRequest: (listingId: number, platforms: string[]) =>
+    req(`${ADMIN_URL}?resource=export_requests`, { method: 'POST', body: JSON.stringify({ listing_id: listingId, platforms }) }),
+  approveExportRequest: (id: number) =>
+    req(`${ADMIN_URL}?resource=export_requests&id=${id}`, { method: 'PUT', body: JSON.stringify({ action: 'approve' }) }),
+  rejectExportRequest: (id: number, comment?: string) =>
+    req(`${ADMIN_URL}?resource=export_requests&id=${id}`, { method: 'PUT', body: JSON.stringify({ action: 'reject', comment }) }),
+
   // listings
   listListings: (offset = 0, limit = 25, tab = 'active', myOnly = false, search = '') => req(`${ADMIN_URL}?resource=listings&limit=${limit}&offset=${offset}&tab=${tab}${myOnly ? '&my=1' : ''}${search ? `&search=${encodeURIComponent(search)}` : ''}`),
   getListing: (id: number) => req(`${ADMIN_URL}?resource=listings&id=${id}`),

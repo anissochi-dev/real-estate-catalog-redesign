@@ -28,6 +28,7 @@ export function useAdminPolling(section: AdminSection) {
   const [socialPending,      setSocialPending]      = useState(0);
   const [newLeadsCount,      setNewLeadsCount]      = useState(0);
   const [newModerationCount, setNewModerationCount] = useState(0);
+  const [newExportRequestsCount, setNewExportRequestsCount] = useState(0);
   const [idleWarning,        setIdleWarning]        = useState(false);
   const [secondsLeft,        setSecondsLeft]        = useState(IDLE_WARNING_MS / 1000);
   const [rolePerms,          setRolePerms]          = useState<Record<string, Record<string, boolean>> | null>(null);
@@ -114,6 +115,15 @@ export function useAdminPolling(section: AdminSection) {
         );
       }
 
+      // Заявки брокеров на платную выгрузку — admin/director/office_manager
+      if (['admin', 'director', 'office_manager'].includes(user.role)) {
+        tasks.push(
+          adminApi.listExportRequests('pending')
+            .then(d => setNewExportRequestsCount(d.pending_count ?? (d.items || []).length ?? 0))
+            .catch(() => {})
+        );
+      }
+
       Promise.all(tasks);
     };
 
@@ -186,6 +196,7 @@ export function useAdminPolling(section: AdminSection) {
     socialPending,
     newLeadsCount,      setNewLeadsCount,
     newModerationCount, setNewModerationCount,
+    newExportRequestsCount, setNewExportRequestsCount,
     idleWarning,
     secondsLeft,
     rolePerms,
