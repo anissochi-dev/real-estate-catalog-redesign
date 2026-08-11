@@ -27,13 +27,13 @@ export default function HomeNewListings({
           </div>
           <Link
             to="/catalog"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 sm:justify-start px-4 py-2.5 sm:px-0 sm:py-0 rounded-xl sm:rounded-none border border-brand-blue/30 sm:border-0 bg-brand-blue/5 sm:bg-transparent text-brand-blue font-semibold text-sm sm:hover:gap-3 transition-all duration-200 shrink-0"
+            className="hidden sm:inline-flex items-center justify-start gap-1.5 text-brand-blue font-semibold text-sm hover:gap-3 transition-all duration-200 shrink-0"
           >
             Смотреть все объекты <Icon name="ArrowRight" size={14} />
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {newObjects.map((property, i) => (
             <PropertyCard
               key={property.id}
@@ -57,6 +57,13 @@ export default function HomeNewListings({
             </div>
           ))}
         </div>
+
+        <Link
+          to="/catalog"
+          className="sm:hidden mt-4 w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-brand-blue/30 bg-brand-blue/5 text-brand-blue font-semibold text-sm transition-all duration-200"
+        >
+          Смотреть все объекты <Icon name="ArrowRight" size={14} />
+        </Link>
       </div>
     </section>
   );
