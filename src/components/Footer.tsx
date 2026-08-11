@@ -148,22 +148,22 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
                     {/* Округ — кликабельный заголовок */}
                     <Link
                       to={`/district/${okrug.slug}`}
-                      className="inline-flex items-center gap-1 shrink-0 text-[12px] font-semibold text-white/90 hover:text-white transition-colors sm:w-48"
+                      className="inline-flex items-center gap-1 shrink-0 text-[12px] font-bold text-white hover:text-white/80 transition-colors sm:w-48"
                     >
-                      <Icon name="ChevronRight" size={12} className="text-white/40" />
+                      <Icon name="ChevronRight" size={12} className="text-white/60" />
                       {okrug.name}
-                      <span className="text-white/40 tabular-nums font-normal">{total}</span>
+                      <span className="text-white/50 tabular-nums font-normal">{total}</span>
                     </Link>
 
                     {/* Районы округа */}
-                    <div className="flex flex-wrap gap-2 min-w-0">
+                    <div className="flex flex-wrap gap-2.5 min-w-0">
                       {children.map(d => {
                         const cnt = d.listings_count ?? 0;
                         return (
                           <Link
                             key={d.id}
                             to={`/district/${d.slug}`}
-                            className={`inline-flex items-center gap-1 rounded-full transition-colors text-[12px] font-medium px-3 py-1.5 ${chipClass(cnt)}`}
+                            className={`inline-flex items-center gap-1 rounded-full transition-colors text-[12px] font-medium px-3 py-2 ${chipClass(cnt)}`}
                           >
                             {d.name}
                             <span className="text-brand-blue-dark/50 tabular-nums">{cnt}</span>
@@ -178,14 +178,14 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
                 {orphanDistricts.length > 0 && (
                   <div className="flex flex-col sm:flex-row sm:items-baseline gap-x-3 gap-y-1.5">
                     <span className="shrink-0 text-[12px] font-semibold text-white/60 sm:w-48">Другие районы</span>
-                    <div className="flex flex-wrap gap-2 min-w-0">
+                    <div className="flex flex-wrap gap-2.5 min-w-0">
                       {orphanDistricts.map(d => {
                         const cnt = d.listings_count ?? 0;
                         return (
                           <Link
                             key={d.id}
                             to={`/district/${d.slug}`}
-                            className={`inline-flex items-center gap-1 rounded-full transition-colors text-[12px] font-medium px-3 py-1.5 ${chipClass(cnt)}`}
+                            className={`inline-flex items-center gap-1 rounded-full transition-colors text-[12px] font-medium px-3 py-2 ${chipClass(cnt)}`}
                           >
                             {d.name}
                             <span className="text-brand-blue-dark/50 tabular-nums">{cnt}</span>
