@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import CharCount from '@/components/ui/CharCount';
-import { Listing, BUILDING_CLASSES, PROPERTY_RIGHTS, FINISHING } from './types';
+import { Listing, BUILDING_CLASSES, PROPERTY_RIGHTS, FINISHING, OFFICE_LAYOUTS } from './types';
 import SeoHeadingsBlock, { SeoHeadings } from '@/components/admin/SeoHeadingsBlock';
 
 const DEAL_LABEL: Record<string, string> = {
@@ -116,6 +116,19 @@ export default function ListingEditorExtraSection({
               {PROPERTY_RIGHTS.map(r => <option key={r[0]} value={r[0]}>{r[1]}</option>)}
             </select>
           </div>
+          {editing.category === 'office' && (
+            <div {...errWrap('office_layout')}>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                <span className="w-5 h-5 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0"><Icon name="LayoutGrid" size={11} className="text-violet-600" /></span>Планировка *
+              </label>
+              <select className={`w-full px-3 py-2 border rounded-lg ${err('office_layout')}`}
+                value={editing.office_layout || ''}
+                onChange={e => { setEditing({ ...editing, office_layout: e.target.value || null }); clearErr('office_layout'); }}>
+                <option value="">— Не выбрано —</option>
+                {OFFICE_LAYOUTS.map(o => <option key={o[0]} value={o[0]}>{o[1]}</option>)}
+              </select>
+            </div>
+          )}
           <div>
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
               <span className="w-5 h-5 rounded-full bg-cyan-100 flex items-center justify-center flex-shrink-0"><Icon name="ArrowUpDown" size={11} className="text-cyan-600" /></span>Пассажирские лифты

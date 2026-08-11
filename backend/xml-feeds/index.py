@@ -595,6 +595,12 @@ AVITO_PARKING_TYPE_MAP = {
     'building': 'В здании',
 }
 
+# Планировка — обязательна для категории «Офисное помещение».
+AVITO_LAYOUT_MAP = {
+    'cabinet': 'Кабинетная',
+    'open': 'Открытая',
+}
+
 # Decoration — обязателен для большинства категорий, допустимо 3 значения.
 AVITO_DECORATION_MAP = {
     'new': 'Офисная', 'euro': 'Офисная', 'good': 'Чистовая',
@@ -1231,9 +1237,12 @@ def _build_avito(listings, company):
         object_type = AVITO_OBJECT_TYPE_MAP.get(l.get('category'), 'Помещение свободного назначения')
         out.append(f'<ObjectType>{_xml_escape(object_type)}</ObjectType>')
 
-        # Что сдаёте — обязательное поле Авито для категории «Офисное помещение»
+        # Что сдаёте / Планировка — обязательные поля Авито для категории «Офисное помещение»
         if l.get('category') == 'office':
             out.append('<OfficeType>Помещение под офис</OfficeType>')
+            layout = AVITO_LAYOUT_MAP.get(l.get('office_layout'))
+            if layout:
+                out.append(f'<Layout>{layout}</Layout>')
 
         # Права размещения (Собственник/Посредник) — обязательное поле
         rights = AVITO_PROPERTY_RIGHTS.get(l.get('property_rights'), 'Собственник')

@@ -702,7 +702,7 @@ def handler(event: dict, context) -> dict:
                     "payback, profit, floor, total_floors, address, district, lat, lng, "
                     "image, tags, is_hot, is_new, is_exclusive, is_urgent, public_code, "
                     "tenant_name, monthly_rent, yearly_rent, purpose, finishing, "
-                    "ceiling_height, electricity_kw, utilities, road_line, "
+                    "ceiling_height, electricity_kw, utilities, road_line, office_layout, "
                     "updated_at, created_at, last_edited_at"
                 )
                 cur.execute(

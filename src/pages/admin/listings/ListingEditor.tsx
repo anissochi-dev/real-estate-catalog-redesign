@@ -91,7 +91,7 @@ export default function ListingEditor({
     location: !!(errors.address || errors.district),
     details:  !!(errors.price || errors.area || errors.floor || errors.total_floors || errors.broker_commission || errors.land_status || errors.land_vri),
     content:  !!errors.description,
-    extra:    !!(errors.finishing || errors.building_class || errors.building_year || errors.property_rights),
+    extra:    !!(errors.finishing || errors.building_class || errors.building_year || errors.property_rights || errors.office_layout),
   } : {};
 
   const validate = (): boolean => {
@@ -118,6 +118,8 @@ export default function ListingEditor({
     if (!editing.building_class) e.building_class = true;
     if (!editing.building_year) e.building_year = true;
     if (!editing.property_rights) e.property_rights = true;
+    // Планировка обязательна для офисов — требование Авито (Layout)
+    if (editing.category === 'office' && !editing.office_layout) e.office_layout = true;
     // Для земельного участка обязательны категория земли и ВРИ
     if (editing.category === 'land') {
       if (!editing.land_status) e.land_status = true;

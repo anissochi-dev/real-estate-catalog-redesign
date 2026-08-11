@@ -94,6 +94,7 @@ export interface Listing {
   rooms?: number | null;
   broker_commission?: string | null;
   building_class?: string | null;
+  office_layout?: string | null;
   subway_station?: string | null;
   subway_distance?: number | null;
   land_area?: number | null;
@@ -219,6 +220,11 @@ export const PROPERTY_RIGHTS = [
   ['sublease', 'Субаренда'],
 ];
 
+export const OFFICE_LAYOUTS = [
+  ['cabinet', 'Кабинетная'],
+  ['open', 'Открытая'],
+];
+
 export const LAND_STATUSES = [
   ['izhs', 'ИЖС'],
   ['lph', 'ЛПХ'],
@@ -248,7 +254,7 @@ export const empty: Partial<Listing> = {
   finishing: '', ceiling_height: null, electricity_kw: null,
   utilities: '', road_line: '', payback: null, profit: null,
   is_exclusive: false, is_urgent: false,
-  building_class: null, subway_station: '', subway_distance: null,
+  building_class: null, office_layout: null, subway_station: '', subway_distance: null,
   land_area: null, land_status: null, driveway_type: null, has_furniture: false, has_equipment: false, has_shop_windows: false,
   property_rights: null, min_area: null, building_year: null, is_apartments: false,
   passenger_lifts: null, cargo_lifts: null,
