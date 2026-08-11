@@ -1240,9 +1240,14 @@ def _build_avito(listings, company):
         if entrance:
             out.append(f'<Entrance>{entrance}</Entrance>')
 
-        # Этаж
-        if l.get('floor') is not None:
-            out.append(f'<Floor>{l["floor"]}</Floor>')
+        # Этаж — обязательное поле Авито для большинства категорий коммерции.
+        # Если этаж не указан, но здание одноэтажное — подставляем 1 (единственно
+        # возможный вариант), иначе оставляем как есть (реальный этаж неизвестен).
+        avito_floor = l.get('floor')
+        if avito_floor is None and l.get('total_floors') == 1:
+            avito_floor = 1
+        if avito_floor is not None:
+            out.append(f'<Floor>{avito_floor}</Floor>')
 
         # Площадь
         if l.get('area'):
