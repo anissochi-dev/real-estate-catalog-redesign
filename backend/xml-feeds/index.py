@@ -291,7 +291,9 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_ca
         company['company_phone'] = custom_phone
 
     if fmt == 'yandex':
-        return _build_yandex(listings, company, feed_slug, use_jpg_photos)
+        cur.execute(f"SELECT name, region FROM {SCHEMA}.cities WHERE region IS NOT NULL")
+        city_region_map = {r['name']: r['region'] for r in cur.fetchall()}
+        return _build_yandex(listings, company, feed_slug, use_jpg_photos, city_region_map)
     if fmt == 'avito':
         return _build_avito(listings, company)
     if fmt == 'cian':
@@ -303,7 +305,9 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_ca
         # 23estate) можно включить индивидуальную особенность через FEED_OVERRIDES,
         # не затрагивая остальные площадки группы «Разное». use_jpg_photos — тот же
         # переключатель, но задаётся пользователем из настроек фида (приоритетнее).
-        return _build_yandex(listings, company, feed_slug, use_jpg_photos)
+        cur.execute(f"SELECT name, region FROM {SCHEMA}.cities WHERE region IS NOT NULL")
+        city_region_map = {r['name']: r['region'] for r in cur.fetchall()}
+        return _build_yandex(listings, company, feed_slug, use_jpg_photos, city_region_map)
     if fmt == 'market':
         return _build_yandex_market(listings, company, market_category_map or {})
     return None
@@ -852,11 +856,12 @@ def _total_price(l):
     return int(price)
 
 
-def _build_yandex(listings, company, feed_slug=None, use_jpg_photos=None):
+def _build_yandex(listings, company, feed_slug=None, use_jpg_photos=None, city_region_map=None):
     company_name = _xml_escape(company.get('company_name', 'BIZNEST'))
     email = _xml_escape(company.get('company_email', ''))
     site_url = (company.get('site_url') or '').rstrip('/')
     now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S+00:00')
+    city_region_map = city_region_map or {}
 
     # Телефон строго в формате +7XXXXXXXXXX (только цифры, код страны + 10 цифр)
     raw_phone = company.get('company_phone', '') or ''
@@ -902,7 +907,11 @@ def _build_yandex(listings, company, feed_slug=None, use_jpg_photos=None):
         # Адрес, геолокация и метро — всё внутри <location>
         out.append('<location>')
         out.append('<country>Россия</country>')
-        out.append(f'<locality-name>{_xml_escape(l.get("city") or "Краснодар")}</locality-name>')
+        city_name = l.get('city') or 'Краснодар'
+        region_name = city_region_map.get(city_name)
+        if region_name:
+            out.append(f'<region>{_xml_escape(region_name)}</region>')
+        out.append(f'<locality-name>{_xml_escape(city_name)}</locality-name>')
         if l.get('district'):
             out.append(f'<sub-locality-name>{_xml_escape(l["district"])}</sub-locality-name>')
         if l.get('address'):
@@ -927,6 +936,10 @@ def _build_yandex(listings, company, feed_slug=None, use_jpg_photos=None):
             out.append(f'<email>{email}</email>')
         out.append('<category>agency</category>')
         out.append('</sales-agent>')
+
+        # Ссылка на карточку объекта на сайте
+        if site_url and l.get('slug'):
+            out.append(f'<url>{_xml_escape(site_url)}/object/{l["slug"]}</url>')
 
         # Цена (unit не передаём — value всегда итоговая сумма, а не цена за м²)
         out.append('<price>')
