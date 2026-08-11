@@ -10,7 +10,12 @@ const PLATFORMS = [
   { id: 'avito', label: 'Авито', icon: 'ShoppingBag' },
 ];
 
-// Формат хранения в одном текстовом поле: "cian: описание||domclick: описание||..."
+const DEAL_TYPES = [
+  { id: 'rent', label: 'Аренда' },
+  { id: 'sale', label: 'Продажа' },
+] as const;
+
+// Формат хранения в одном текстовом поле: "cian_rent: описание||cian_sale: описание||..."
 function parseNotes(raw: string): Record<string, string> {
   const result: Record<string, string> = {};
   if (!raw) return result;
@@ -73,26 +78,36 @@ export default function ExportPricingTab() {
           <div>
             <h3 className="font-semibold text-sm">Прайс размещения на площадках</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Ни одна площадка не отдаёт точную цену размещения по API — заполните ориентировочные тарифы вручную.
-              Эти заметки будут видны директору в окне одобрения заявки брокера на платную выгрузку.
+              Ни одна площадка не отдаёт точную цену размещения по API — заполните ориентировочные тарифы вручную,
+              отдельно для аренды и продажи. Эти заметки будут видны директору в окне одобрения заявки брокера.
             </p>
           </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-border p-4 space-y-3">
+      <div className="bg-white rounded-2xl border border-border p-4 space-y-5">
         {PLATFORMS.map(p => (
           <div key={p.id}>
-            <label className="flex items-center gap-2 text-sm font-semibold mb-1.5">
+            <label className="flex items-center gap-2 text-sm font-semibold mb-2">
               <Icon name={p.icon} size={14} className="text-brand-blue" />
               {p.label}
             </label>
-            <input
-              value={notes[p.id] || ''}
-              onChange={e => setNotes(n => ({ ...n, [p.id]: e.target.value }))}
-              placeholder="например: подсветка от 500 ₽/мес, топ-3 от 1500 ₽/мес"
-              className="w-full px-3 py-2.5 border border-border rounded-xl text-sm"
-            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {DEAL_TYPES.map(d => {
+                const key = `${p.id}_${d.id}`;
+                return (
+                  <div key={key}>
+                    <div className="text-xs text-muted-foreground mb-1">{d.label}</div>
+                    <input
+                      value={notes[key] || ''}
+                      onChange={e => setNotes(n => ({ ...n, [key]: e.target.value }))}
+                      placeholder={d.id === 'rent' ? 'например: подсветка от 500 ₽/мес' : 'например: топ-3 от 1500 ₽/мес'}
+                      className="w-full px-3 py-2.5 border border-border rounded-xl text-sm"
+                    />
+                  </div>
+                );
+              })}
+            </div>
           </div>
         ))}
 

@@ -4033,7 +4033,7 @@ def _export_requests(cur, conn, method, rid, event, user):
             SELECT er.id, er.listing_id, er.broker_id, er.platforms, er.status,
                    er.comment, er.reviewed_by, er.reviewed_at, er.created_at,
                    l.title AS listing_title, l.address AS listing_address,
-                   l.image AS listing_image,
+                   l.image AS listing_image, l.deal AS listing_deal,
                    b.name AS broker_name,
                    rv.name AS reviewed_by_name
             FROM {SCHEMA}.export_requests er

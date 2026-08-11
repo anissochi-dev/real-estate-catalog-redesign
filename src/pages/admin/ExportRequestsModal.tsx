@@ -24,12 +24,15 @@ function parsePricingNotes(raw: string): Record<string, string> {
   return result;
 }
 
+const DEAL_LABEL: Record<string, string> = { rent: 'Аренда', sale: 'Продажа' };
+
 interface ExportRequestRow {
   id: number;
   listing_id: number;
   listing_title: string | null;
   listing_address: string | null;
   listing_image: string | null;
+  listing_deal: 'rent' | 'sale' | null;
   broker_name: string | null;
   platforms: string[];
   status: 'pending' | 'approved' | 'rejected';
@@ -150,7 +153,14 @@ export default function ExportRequestsModal({ onClose, onHandled, onOpenListing 
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex items-center flex-wrap gap-1.5">
+                  {it.listing_deal && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      it.listing_deal === 'rent' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'
+                    }`}>
+                      {DEAL_LABEL[it.listing_deal] || it.listing_deal}
+                    </span>
+                  )}
                   {it.platforms.map(p => (
                     <span key={p} className="text-xs px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue font-medium">
                       {PLATFORM_LABEL[p] || p}
@@ -158,15 +168,20 @@ export default function ExportRequestsModal({ onClose, onHandled, onOpenListing 
                   ))}
                 </div>
 
-                {it.platforms.some(p => pricingNotes[p]) && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-0.5">
-                    {it.platforms.filter(p => pricingNotes[p]).map(p => (
-                      <div key={p} className="text-xs text-amber-800">
-                        <span className="font-semibold">{PLATFORM_LABEL[p] || p}:</span> {pricingNotes[p]}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {(() => {
+                  const dealKey = it.listing_deal || '';
+                  const withPrice = dealKey ? it.platforms.filter(p => pricingNotes[`${p}_${dealKey}`]) : [];
+                  if (withPrice.length === 0) return null;
+                  return (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-0.5">
+                      {withPrice.map(p => (
+                        <div key={p} className="text-xs text-amber-800">
+                          <span className="font-semibold">{PLATFORM_LABEL[p] || p}:</span> {pricingNotes[`${p}_${dealKey}`]}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
 
                 {rejectingId === it.id ? (
                   <div className="space-y-2">
