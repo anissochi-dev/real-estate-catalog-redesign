@@ -411,8 +411,8 @@ export default function PropertyCard({
                 {property.price.toLocaleString('ru')} ₽{property.deal === 'rent' ? '/мес' : ''}
               </span>
               {ppm2 && (
-                <span className="text-[11px] text-muted-foreground flex items-center gap-0.5 whitespace-nowrap">
-                  <Icon name="Scaling" size={10} className="text-muted-foreground/50" />
+                <span className="text-[13px] font-medium text-slate-600 flex items-center gap-0.5 whitespace-nowrap">
+                  <Icon name="Scaling" size={11} className="text-slate-500" />
                   {ppm2.toLocaleString('ru')} ₽/м²
                 </span>
               )}
