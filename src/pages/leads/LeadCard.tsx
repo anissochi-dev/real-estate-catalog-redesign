@@ -39,15 +39,6 @@ function initials(name: string): string {
   return name.slice(0, 2).toUpperCase();
 }
 
-const AVATAR_COLORS = [
-  '#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#be185d',
-];
-function avatarColor(name: string): string {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
-  return AVATAR_COLORS[h % AVATAR_COLORS.length];
-}
-
 export const CATEGORY_LABELS: Record<string, string> = {
   office: 'Офис',
   retail: 'Магазин / торговое',
@@ -80,7 +71,6 @@ const CATEGORY_ICONS: Record<string, string> = {
 
 export default function LeadCard({ lead, districts, onContact, disableLink }: { lead: PublicLead; districts: District[]; onContact: () => void; disableLink?: boolean }) {
   const displayName = lead.name || `Клиент #${lead.id}`;
-  const color = avatarColor(displayName);
   const typeLabel = lead.property_type === 'sale' ? 'Продажа' : lead.property_type === 'rent' ? 'Аренда' : null;
   const typeSale = lead.property_type === 'sale';
   const cat = lead.property_category || lead.request_category;
@@ -107,11 +97,8 @@ export default function LeadCard({ lead, districts, onContact, disableLink }: { 
     <article className="bg-white rounded-2xl border border-border shadow-sm hover:shadow-md hover:border-brand-blue/25 transition-all duration-200 p-6">
       {/* Шапка: аватар + название */}
       <div className="flex items-center gap-3 mb-4">
-        <div
-          className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shrink-0"
-          style={{ background: color }}
-        >
-          <Icon name="User" size={20} />
+        <div className="w-12 h-12 rounded-full flex items-center justify-center bg-white border-2 border-brand-orange shrink-0">
+          <Icon name="User" size={20} className="text-brand-orange" />
         </div>
         <div className="min-w-0">
           <div className="font-bold text-[17px] text-foreground leading-tight">
