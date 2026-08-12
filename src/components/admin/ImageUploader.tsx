@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { uploadFileEx, getOriginalPhotoUrl, getToken, REMOVE_WM_URL } from '@/lib/adminApi';
+import { uploadFileEx } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
 import ImageUploaderLightbox from './ImageUploaderLightbox';
@@ -17,7 +17,6 @@ interface Props {
   className?: string;
   hint?: string;
   compress?: boolean;
-  allowDownload?: boolean;
   applyWatermark?: boolean;
 }
 
@@ -69,7 +68,6 @@ export default function ImageUploader({
   className = '',
   hint,
   compress,
-  allowDownload = true,
   applyWatermark = false,
 }: Props) {
   const safeValue: string[] = Array.isArray(value)
@@ -85,7 +83,6 @@ export default function ImageUploader({
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const [ghostPos, setGhostPos] = useState<{ x: number; y: number } | null>(null);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
-  const [wmState, setWmState] = useState<Record<number, string>>({});
 
   // ── Pointer-drag (мышь + тач) — всё через refs, нет stale closure ──────────
   const gridRef = useRef<HTMLDivElement>(null);
@@ -231,51 +228,6 @@ export default function ImageUploader({
     }
   };
 
-  const download = async (url: string, opts: { original?: boolean } = {}) => {
-    const targetUrl = opts.original ? getOriginalPhotoUrl(url) : url;
-    try {
-      const res = await fetch(targetUrl, { mode: 'cors' });
-      const blob = await res.blob();
-      const a = document.createElement('a');
-      const fname = targetUrl.split('/').pop() || 'photo.jpg';
-      a.href = URL.createObjectURL(blob);
-      a.download = fname;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    } catch {
-      window.open(targetUrl, '_blank');
-    }
-  };
-
-  // Удаление чужого водяного знака через Яндекс Vision API
-  const removeWatermark = async (i: number, url: string) => {
-    setWmState(s => ({ ...s, [i]: 'loading' }));
-    try {
-      const token = getToken();
-      const r = await fetch(REMOVE_WM_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
-        body: JSON.stringify({ action: 'remove_watermark', url }),
-      });
-      const data = await r.json();
-      if (data.url) {
-        const next = [...value];
-        next[i] = data.url;
-        onChange(next);
-        setWmState(s => ({ ...s, [i]: 'done' }));
-        setTimeout(() => setWmState(s => ({ ...s, [i]: 'idle' })), 2000);
-      } else {
-        setWmState(s => ({ ...s, [i]: 'error' }));
-        setTimeout(() => setWmState(s => ({ ...s, [i]: 'idle' })), 2000);
-      }
-    } catch {
-      setWmState(s => ({ ...s, [i]: 'error' }));
-      setTimeout(() => setWmState(s => ({ ...s, [i]: 'idle' })), 2000);
-    }
-  };
-
   const remove = (i: number) => onChange(value.filter((_, idx) => idx !== i));
 
   const makeMain = (i: number) => {
@@ -323,15 +275,10 @@ export default function ImageUploader({
                 url={url}
                 index={i}
                 multiple={multiple}
-                allowDownload={allowDownload}
-                wmStatus={(wmState[i] || 'idle') as 'idle' | 'loading' | 'done' | 'error'}
                 isDragging={dragIdx === i}
                 isOver={dragOverIdx === i}
                 onPointerDown={e => handlePointerDown(e, i)}
                 onZoom={() => setLightboxIdx(i)}
-                onDownload={() => download(url)}
-                onDownloadOriginal={() => download(url, { original: true })}
-                onRemoveWatermark={() => removeWatermark(i, url)}
                 onRemove={() => remove(i)}
                 onMakeMain={multiple ? () => makeMain(i) : undefined}
               />
