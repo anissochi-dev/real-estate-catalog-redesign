@@ -227,12 +227,12 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
 
       {/* SEO-текст главной страницы */}
       {settings.home_seo_text && (
-        <section className="py-10 bg-muted/30">
+        <section className="py-12 md:py-16 bg-muted/30">
           <div className="container mx-auto px-4 max-w-6xl">
-            <div className="bg-white rounded-2xl border border-border py-10 px-6">
-              <ExpandableText collapsedHeight={230}>
+            <div className="bg-white rounded-2xl border border-border py-10 md:py-12 px-6 md:px-10">
+              <ExpandableText collapsedHeight={260}>
                 <div
-                  className="prose prose-sm max-w-none text-muted-foreground text-[13px] leading-relaxed [&_h2]:font-display [&_h2]:font-700 [&_h2]:text-base [&_h2]:text-foreground [&_h2]:mt-5 [&_h2]:mb-2 [&_h3]:font-semibold [&_h3]:text-sm [&_h3]:text-foreground [&_h3]:mt-3 [&_h3]:mb-1 [&_p]:mb-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-2 [&_li]:mb-0.5 [&_strong]:text-foreground [&_strong]:font-semibold"
+                  className="prose prose-sm max-w-none text-muted-foreground text-sm leading-relaxed [&_h2]:font-display [&_h2]:font-700 [&_h2]:text-lg [&_h2]:text-foreground [&_h2]:mt-6 [&_h2]:mb-3 [&_h3]:font-semibold [&_h3]:text-base [&_h3]:text-foreground [&_h3]:mt-4 [&_h3]:mb-1.5 [&_p]:mb-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-3 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-3 [&_li]:mb-1 [&_strong]:text-foreground [&_strong]:font-semibold"
                   dangerouslySetInnerHTML={{ __html: settings.home_seo_text }}
                 />
               </ExpandableText>

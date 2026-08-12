@@ -102,19 +102,19 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
   return (
     <>
       <footer className="bg-brand-blue-dark text-white/80 mt-12">
-        <div className="container mx-auto px-4 py-8 md:py-10">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-6 md:gap-8">
+        <div className="container mx-auto px-4 py-10 md:py-14">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-8 md:gap-10">
 
             {/* Компания */}
             <div className="md:col-span-1">
-              <h3 className="font-display font-800 text-white text-lg mb-2">{company}</h3>
+              <h3 className="font-display font-800 text-white text-xl mb-3">{company}</h3>
               <div className="text-sm leading-relaxed mb-3">{description}</div>
             </div>
 
             {/* Категории — 4 колонки */}
             <div className="md:col-span-4">
-              <h3 className="font-semibold text-white mb-3">Категории</h3>
-              <ul className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-sm">
+              <h3 className="font-semibold text-white text-base mb-4">Категории</h3>
+              <ul className="grid grid-cols-2 sm:grid-cols-4 gap-x-5 gap-y-3 text-sm">
                 {(categoryLinks || DEFAULT_CATEGORIES).map(item => (
                   <li key={item.href}>
                     <Link to={item.href} className="hover:text-white transition-colors">{item.label}</Link>
@@ -126,21 +126,21 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
 
           {/* Районы города — SEO-ссылки, иерархия округ → районы */}
           {hasDistrictBlock && (
-            <div className="border-t border-white/10 mt-6 pt-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Icon name="MapPin" size={14} className="text-white/60" />
+            <div className="border-t border-white/10 mt-8 pt-6">
+              <div className="flex items-center gap-2 mb-5">
+                <Icon name="MapPin" size={15} className="text-white/60" />
                 <h3 className="font-semibold text-white/80 text-sm">
                   Коммерческая недвижимость по районам — {city}
                 </h3>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {okrugGroups.map(({ okrug, children, total }) => (
-                  <div key={okrug.id} className="flex flex-col sm:flex-row sm:items-baseline gap-x-3 gap-y-1.5">
+                  <div key={okrug.id} className="flex flex-col sm:flex-row sm:items-baseline gap-x-3 gap-y-2">
                     {/* Округ — кликабельный заголовок */}
                     <Link
                       to={`/district/${okrug.slug}`}
-                      className="inline-flex items-center gap-1 shrink-0 text-[12px] font-medium text-white/60 hover:text-white/90 transition-colors sm:w-48"
+                      className="inline-flex items-center gap-1 shrink-0 text-[13px] font-medium text-white/60 hover:text-white/90 transition-colors sm:w-48"
                     >
                       <Icon name="ChevronRight" size={12} className="text-white/40" />
                       {okrug.name}
@@ -148,14 +148,14 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
                     </Link>
 
                     {/* Районы округа */}
-                    <div className="flex flex-wrap gap-2.5 min-w-0">
+                    <div className="flex flex-wrap gap-3 min-w-0">
                       {children.map(d => {
                         const cnt = d.listings_count ?? 0;
                         return (
                           <Link
                             key={d.id}
                             to={`/district/${d.slug}`}
-                            className={`inline-flex items-center gap-1 rounded-full transition-colors text-[12px] font-medium px-3 py-2 ${chipClass()}`}
+                            className={`inline-flex items-center gap-1 rounded-full transition-colors text-[13px] font-medium px-3.5 py-2 ${chipClass()}`}
                           >
                             {d.name}
                             <span className="text-white/40 tabular-nums">{cnt}</span>
@@ -168,16 +168,16 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
 
                 {/* Районы без округа */}
                 {orphanDistricts.length > 0 && (
-                  <div className="flex flex-col sm:flex-row sm:items-baseline gap-x-3 gap-y-1.5">
-                    <span className="shrink-0 text-[12px] font-medium text-white/60 sm:w-48">Другие районы</span>
-                    <div className="flex flex-wrap gap-2.5 min-w-0">
+                  <div className="flex flex-col sm:flex-row sm:items-baseline gap-x-3 gap-y-2">
+                    <span className="shrink-0 text-[13px] font-medium text-white/60 sm:w-48">Другие районы</span>
+                    <div className="flex flex-wrap gap-3 min-w-0">
                       {orphanDistricts.map(d => {
                         const cnt = d.listings_count ?? 0;
                         return (
                           <Link
                             key={d.id}
                             to={`/district/${d.slug}`}
-                            className={`inline-flex items-center gap-1 rounded-full transition-colors text-[12px] font-medium px-3 py-2 ${chipClass()}`}
+                            className={`inline-flex items-center gap-1 rounded-full transition-colors text-[13px] font-medium px-3.5 py-2 ${chipClass()}`}
                           >
                             {d.name}
                             <span className="text-white/40 tabular-nums">{cnt}</span>
@@ -193,8 +193,8 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
 
           {/* Реквизиты компании (ИНН, ОГРН и т.п.) — одной строкой, по центру */}
           {settings.footer_legal_info && (
-            <div className="border-t border-white/10 mt-6 pt-5 text-center">
-              <p className="text-xs text-white/40">{settings.footer_legal_info}</p>
+            <div className="border-t border-white/10 mt-8 pt-6 text-center">
+              <p className="text-sm text-white/40">{settings.footer_legal_info}</p>
             </div>
           )}
 
@@ -206,7 +206,7 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
                   <button
                     key={doc.label}
                     onClick={() => setModal({ title: doc.label, content: doc.content })}
-                    className="text-xs text-white/50 hover:text-white/80 active:text-white/90 underline underline-offset-2 transition-colors text-center min-h-[28px]"
+                    className="text-sm text-white/50 hover:text-white/80 active:text-white/90 underline underline-offset-2 transition-colors text-center min-h-[28px]"
                   >
                     {doc.label}
                   </button>
@@ -216,12 +216,12 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
           )}
 
           {/* Правовое уведомление + копирайт — по центру на всех экранах */}
-          <div className="border-t border-white/10 mt-5 pt-4 pb-[max(4px,env(safe-area-inset-bottom))] text-center space-y-1.5">
-            <p className="text-[11px] sm:text-xs text-white/40 leading-relaxed max-w-6xl mx-auto">
+          <div className="border-t border-white/10 mt-6 pt-5 pb-[max(4px,env(safe-area-inset-bottom))] text-center space-y-2">
+            <p className="text-xs sm:text-sm text-white/40 leading-relaxed max-w-6xl mx-auto">
               Все материалы сайта принадлежат: Бизнес. Маркетинг. Недвижимость. (Б.М.Н.). При перепечатке ссылка на данный сайт обязательна.<br />
               Вся информация, опубликованная на сайте, носит исключительно информационный характер и не является публичной офертой, определяемой положениями ст.&nbsp;437 ГК РФ.
             </p>
-            <div className="text-[11px] sm:text-xs text-white/40 leading-relaxed inline-flex flex-wrap items-center justify-center gap-x-1">
+            <div className="text-xs sm:text-sm text-white/40 leading-relaxed inline-flex flex-wrap items-center justify-center gap-x-1">
               <span>© {new Date().getFullYear()} {company}.</span>
               <span className="whitespace-nowrap inline-flex items-center gap-1">
                 Все права защищены.

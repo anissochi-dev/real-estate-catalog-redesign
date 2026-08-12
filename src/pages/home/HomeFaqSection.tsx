@@ -16,14 +16,14 @@ export default function HomeFaqSection({ faqItems }: HomeFaqSectionProps) {
         <h2 id="faq-title" className="font-display font-800 text-2xl md:text-3xl text-foreground mb-6 md:mb-8 text-center">
           Частые вопросы
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-x-4 md:gap-y-2 md:items-start">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-x-5 md:gap-y-3 md:items-start">
           {faqItems.map((f, i) => (
-            <details key={i} className="group bg-muted/30 rounded-lg border border-border px-3 py-2">
-              <summary className="flex items-center justify-between cursor-pointer list-none font-medium text-[13px] text-foreground">
+            <details key={i} className="group bg-muted/30 rounded-xl border border-border px-4 py-3.5">
+              <summary className="flex items-center justify-between cursor-pointer list-none font-medium text-sm text-foreground">
                 {f.question}
-                <Icon name="ChevronDown" size={15} className="text-muted-foreground transition-transform group-open:rotate-180 shrink-0 ml-2" />
+                <Icon name="ChevronDown" size={16} className="text-muted-foreground transition-transform group-open:rotate-180 shrink-0 ml-2" />
               </summary>
-              <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">{f.answer}</p>
+              <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{f.answer}</p>
             </details>
           ))}
         </div>
