@@ -36,7 +36,7 @@ export default function LeadAiSearch({
         <button
           type="submit"
           disabled={aiLoading || !aiQuery.trim()}
-          className="btn-orange text-white px-5 py-2 rounded-xl font-semibold text-sm inline-flex items-center justify-center gap-2 disabled:opacity-60 min-h-[40px]"
+          className="btn-orange px-5 py-2 rounded-xl font-semibold text-sm inline-flex items-center justify-center gap-2 disabled:opacity-60 min-h-[40px]"
         >
           <Icon name={aiLoading ? 'Loader2' : 'Sparkles'} size={14} className={aiLoading ? 'animate-spin' : ''} />
           {aiLoading ? 'Ищу…' : 'Найти'}

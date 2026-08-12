@@ -127,7 +127,7 @@ export function GalleryMainImage({
       <div className="absolute top-3 left-3 flex gap-1.5 pointer-events-none flex-wrap">
         <span className="text-xs font-semibold px-2 py-1 rounded-full bg-brand-blue text-white">{dealLabel}</span>
         <span className="text-xs font-semibold px-2 py-1 rounded-full bg-black/40 text-white backdrop-blur-sm">{typeLabel}</span>
-        {item.isHot && <span className="text-xs font-semibold px-2 py-1 rounded-full btn-orange text-white">🔥 Горячее</span>}
+        {item.isHot && <span className="text-xs font-semibold px-2 py-1 rounded-full bg-brand-orange text-white">🔥 Горячее</span>}
         {item.isExclusive && <span className="text-xs font-semibold px-2 py-1 rounded-full bg-amber-500 text-white">Эксклюзив</span>}
       </div>
 

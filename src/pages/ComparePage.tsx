@@ -172,7 +172,7 @@ export default function ComparePage({ properties, onRemove, onNavigate }: Compar
                       <Icon name="X" size={14} />
                     </button>
                     {property.isHot && (
-                      <div className="absolute top-3 left-3 px-2 py-0.5 rounded-full btn-orange text-white text-[11px] font-semibold">
+                      <div className="absolute top-3 left-3 px-2 py-0.5 rounded-full bg-brand-orange text-white text-[11px] font-semibold">
                         🔥 Горячее
                       </div>
                     )}
@@ -227,7 +227,7 @@ export default function ComparePage({ properties, onRemove, onNavigate }: Compar
                 <div key={property.id} className="w-72 flex-shrink-0 flex gap-2">
                   <button
                     onClick={() => navigate(`/object/${listingSlug(property.title, property.id)}`)}
-                    className="flex-1 btn-orange text-white py-3 rounded-xl font-semibold font-display text-sm"
+                    className="flex-1 btn-orange py-3 rounded-xl font-semibold font-display text-sm"
                   >
                     Подробнее
                   </button>

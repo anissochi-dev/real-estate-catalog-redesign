@@ -11,7 +11,7 @@ export default function CompareBar({ count, onCompare, onClear }: CompareBarProp
     <div className="fixed bottom-0 left-0 right-0 z-50 compare-bar px-3 sm:px-4 py-2 sm:py-3 pb-[max(8px,env(safe-area-inset-bottom))] animate-fade-in-up">
       <div className="container mx-auto flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl btn-orange flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-brand-orange flex items-center justify-center shrink-0">
             <Icon name="GitCompare" size={18} className="text-white" />
           </div>
           <div className="min-w-0">

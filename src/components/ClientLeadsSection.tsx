@@ -122,7 +122,7 @@ function HomeLeadCard({ lead }: { lead: PublicLead }) {
       {/* Кнопка */}
       <Link
         to={lead.slug ? `/request/${lead.slug}` : '/leads'}
-        className="btn-orange text-white px-4 py-2.5 rounded-xl text-sm font-semibold font-display inline-flex items-center justify-center gap-2 mt-auto shadow-sm"
+        className="btn-orange px-4 py-2.5 rounded-xl text-sm font-semibold font-display inline-flex items-center justify-center gap-2 mt-auto shadow-sm"
       >
         <Icon name="ArrowRight" size={15} />
         Подробнее о заявке

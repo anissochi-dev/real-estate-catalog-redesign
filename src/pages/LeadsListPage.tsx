@@ -247,7 +247,7 @@ export default function LeadsListPage() {
                 <button
                   onClick={loadMore}
                   disabled={loadingMore}
-                  className="btn-orange text-white px-8 py-3 rounded-xl text-sm font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity shadow-sm disabled:opacity-60"
+                  className="btn-orange px-8 py-3 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm disabled:opacity-60"
                 >
                   <Icon name={loadingMore ? 'Loader2' : 'ChevronDown'} size={16} className={loadingMore ? 'animate-spin' : ''} />
                   {loadingMore ? 'Загрузка…' : `Показать ещё ${Math.min(LOAD_STEP, total - allLeads.length)} заявок`}

@@ -81,7 +81,7 @@ export default function CatalogResults({
             <div className="flex flex-col items-center gap-2 mt-10">
               <button
                 onClick={onLoadMore}
-                className="btn-orange text-white px-8 py-3 rounded-xl text-sm font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity shadow-sm"
+                className="btn-orange px-8 py-3 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm"
               >
                 <Icon name="ChevronDown" size={16} />
                 Показать ещё {Math.min(loadStep, filtered.length - visibleCount)} объектов

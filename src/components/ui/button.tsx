@@ -18,8 +18,8 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
-        /* Первичная кнопка сайта — оранжевый градиент, для главных действий */
-        cta: "btn-orange text-white font-display font-semibold rounded-xl shadow-sm hover:-translate-y-0.5",
+        /* Первичная кнопка сайта — светлая с оранжевой обводкой, для главных действий */
+        cta: "btn-orange font-display font-semibold rounded-xl shadow-sm hover:-translate-y-0.5",
         /* Вторичная кнопка сайта — синий контур, для дополнительных действий */
         ctaOutline:
           "border-2 border-brand-blue text-brand-blue font-display font-semibold rounded-xl bg-white hover:bg-brand-blue hover:text-white transition-colors",

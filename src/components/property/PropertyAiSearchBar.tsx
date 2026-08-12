@@ -30,7 +30,7 @@ export default function PropertyAiSearchBar({ aiQuery, setAiQuery, setAiOpen, it
         )}
         <button
           type="submit"
-          className="flex-shrink-0 btn-orange text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1.5"
+          className="flex-shrink-0 btn-orange text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1.5"
         >
           <Icon name="Sparkles" size={12} />
           Найти с ИИ

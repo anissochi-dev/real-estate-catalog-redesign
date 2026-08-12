@@ -108,7 +108,7 @@ export default function FavoritesPage({ properties, favorites, compareList, onTo
               </div>
               <button
                 onClick={goToCatalog}
-                className="btn-orange text-white px-5 py-2.5 rounded-xl text-sm font-semibold font-display flex-shrink-0"
+                className="btn-orange px-5 py-2.5 rounded-xl text-sm font-semibold font-display flex-shrink-0"
               >
                 Смотреть рекомендации
               </button>

@@ -63,7 +63,7 @@ export default function HomeHero({ totalCount, mainCity, searchQuery, setSearchQ
             <button
               type="submit"
               aria-label="Найти с ИИ"
-              className="btn-orange text-white w-full sm:w-auto px-3 sm:px-5 py-3 sm:py-2.5 rounded-xl font-semibold font-display text-base sm:text-sm flex-shrink-0 inline-flex items-center justify-center gap-1.5 min-h-[48px] sm:min-h-[44px]"
+              className="btn-orange w-full sm:w-auto px-3 sm:px-5 py-3 sm:py-2.5 rounded-xl font-semibold font-display text-base sm:text-sm flex-shrink-0 inline-flex items-center justify-center gap-1.5 min-h-[48px] sm:min-h-[44px]"
             >
               <Icon name="Search" size={16} />
               Найти

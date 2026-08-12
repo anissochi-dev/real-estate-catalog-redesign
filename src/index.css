@@ -592,15 +592,21 @@
   }
 }
 
-/* Orange gradient button */
+/* Orange outline button — primary action, light style */
 .btn-orange {
-  background: linear-gradient(135deg, hsl(28, 95%, 52%), hsl(20, 95%, 48%));
+  background: hsl(0, 0%, 100%);
+  border: 2px solid hsl(28, 95%, 52%);
+  color: hsl(28, 95%, 52%);
   transition: all 0.2s ease;
 }
 .btn-orange:hover {
-  background: linear-gradient(135deg, hsl(28, 95%, 58%), hsl(20, 95%, 54%));
-  box-shadow: 0 8px 24px hsla(28, 95%, 52%, 0.4);
+  background: hsl(28, 95%, 52%);
+  color: hsl(0, 0%, 100%);
+  box-shadow: 0 8px 24px hsla(28, 95%, 52%, 0.3);
   transform: translateY(-1px);
+}
+.btn-orange:hover :is(svg, [class*="icon"]) {
+  color: hsl(0, 0%, 100%);
 }
 
 /* Blue gradient button */

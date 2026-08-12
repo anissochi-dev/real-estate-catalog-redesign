@@ -33,7 +33,7 @@ export default function CatalogHero({ aiQuery, onAiQueryChange, onAiSubmit }: Ca
           </div>
           <button
             type="submit"
-            className="btn-orange text-white px-4 sm:px-5 py-2.5 rounded-xl font-semibold font-display text-sm flex-shrink-0 inline-flex items-center gap-1.5 min-h-[44px]"
+            className="btn-orange px-4 sm:px-5 py-2.5 rounded-xl font-semibold font-display text-sm flex-shrink-0 inline-flex items-center gap-1.5 min-h-[44px]"
           >
             <Icon name="Sparkles" size={14} />
             <span className="hidden sm:inline">Найти с ИИ</span>

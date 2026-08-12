@@ -108,7 +108,7 @@ export default function NetworkTenantsPage() {
                   {t.message || 'Запрос на коммерческое помещение.'}
                 </div>
                 <button onClick={() => setOffer(t)}
-                  className="btn-orange text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2">
+                  className="btn-orange px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2">
                   <Icon name="HandHeart" size={16} />
                   Предложить помещение
                 </button>

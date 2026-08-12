@@ -201,7 +201,7 @@ export default function LeadCard({ lead, districts, onContact, disableLink }: { 
         <button
           onClick={onContact}
           aria-label={`Связаться по заявке №${lead.id}`}
-          className="btn-orange text-white px-5 py-2.5 rounded-xl font-semibold font-display text-sm inline-flex items-center gap-2 shadow-sm"
+          className="btn-orange px-5 py-2.5 rounded-xl font-semibold font-display text-sm inline-flex items-center gap-2 shadow-sm"
         >
           <Icon name="Phone" size={14} />
           Связаться
