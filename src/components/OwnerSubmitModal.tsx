@@ -261,7 +261,7 @@ export default function OwnerSubmitModal({ onClose }: Props) {
                 </div>
               </div>
               <button onClick={onClose}
-                className="mt-4 px-8 py-2.5 bg-brand-blue text-white rounded-xl font-semibold hover:bg-brand-blue/90 transition">
+                className="btn-orange mt-4 px-8 py-2.5 text-white rounded-xl font-semibold font-display shadow-sm">
                 Закрыть
               </button>
             </div>
@@ -332,7 +332,7 @@ export default function OwnerSubmitModal({ onClose }: Props) {
                 else handleSubmit();
               }}
               disabled={submitting}
-              className="flex-1 flex items-center justify-center gap-2 bg-brand-blue text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-brand-blue/90 transition disabled:opacity-60"
+              className="btn-orange flex-1 flex items-center justify-center gap-2 text-white py-2.5 rounded-xl text-sm font-semibold font-display shadow-sm disabled:opacity-60"
             >
               {submitting
                 ? <><Icon name="Loader2" size={15} className="animate-spin" /> Отправляем…</>
