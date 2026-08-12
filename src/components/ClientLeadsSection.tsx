@@ -48,17 +48,17 @@ function HomeLeadCard({ lead }: { lead: PublicLead }) {
   const cardTitle = titleParts.length > 0 ? titleParts.join(' · ') : null;
 
   return (
-    <article className="bg-white rounded-2xl border border-border shadow-sm hover:shadow-md hover:border-brand-blue/25 transition-all duration-200 p-5 flex flex-col h-full">
+    <article className="bg-white rounded-2xl border border-border shadow-sm hover:shadow-md hover:border-brand-blue/25 transition-all duration-200 p-6 flex flex-col h-full">
       {/* Шапка */}
-      <div className="flex items-center gap-3 mb-3">
+      <div className="flex items-center gap-3 mb-4">
         <div
-          className="w-10 h-10 rounded-full flex items-center justify-center text-white shrink-0"
+          className="w-11 h-11 rounded-full flex items-center justify-center text-white shrink-0"
           style={{ background: color }}
         >
-          <Icon name="User" size={16} />
+          <Icon name="User" size={18} />
         </div>
         <div className="min-w-0">
-          <div className="font-bold text-[15px] text-foreground leading-tight truncate">
+          <div className="font-bold text-base text-foreground leading-tight truncate">
             {lead.slug ? (
               <Link to={`/request/${lead.slug}`} className="hover:text-brand-blue transition-colors">
                 {cardTitle || `Заявка #${lead.id}`}
@@ -94,16 +94,16 @@ function HomeLeadCard({ lead }: { lead: PublicLead }) {
       </div>
 
       {/* Параметры */}
-      <div className="flex flex-wrap gap-x-4 gap-y-1 bg-slate-50 rounded-xl px-3 py-2 mb-3 text-xs">
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5 bg-slate-50 rounded-xl px-4 py-3 mb-4 text-[13px]">
         <div className="flex items-center gap-1.5 text-foreground">
-          <Icon name="Wallet" size={12} className="text-muted-foreground" />
+          <Icon name="Wallet" size={13} className="text-muted-foreground" />
           <span className="text-muted-foreground">Бюджет:</span>
           <span className={`font-semibold ${budgetStr === 'Договорная' ? 'text-muted-foreground font-normal' : ''}`}>
             {budgetStr}
           </span>
         </div>
         <div className="flex items-center gap-1.5 text-foreground">
-          <Icon name="Maximize2" size={12} className="text-muted-foreground" />
+          <Icon name="Maximize2" size={13} className="text-muted-foreground" />
           <span className="text-muted-foreground">Площадь:</span>
           <span className={`font-semibold ${areaStr === 'Не указана' ? 'text-muted-foreground font-normal' : ''}`}>
             {areaStr}
@@ -113,7 +113,7 @@ function HomeLeadCard({ lead }: { lead: PublicLead }) {
 
       {/* Описание */}
       {lead.message && (
-        <div className="text-[13px] leading-relaxed text-foreground/80 mb-4 flex-1 line-clamp-4">
+        <div className="text-sm leading-relaxed text-foreground/80 mb-5 flex-1 line-clamp-4">
           {lead.message}
         </div>
       )}
@@ -172,7 +172,7 @@ export default function ClientLeadsSection({ limit = 6 }: Props) {
           </Link>
         </div>
 
-        <ul className="grid grid-cols-1 md:grid-cols-2 gap-4 list-none p-0 m-0">
+        <ul className="grid grid-cols-1 md:grid-cols-2 gap-5 list-none p-0 m-0">
           {leads.slice(0, limit).map(lead => (
             <li key={lead.id}>
               <HomeLeadCard lead={lead} />

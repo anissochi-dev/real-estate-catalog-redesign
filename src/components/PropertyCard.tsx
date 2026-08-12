@@ -317,13 +317,13 @@ export default function PropertyCard({
         </div>
 
         {/* ── Правая колонка: контент ── */}
-        <div className={`flex flex-col justify-between min-w-0 flex-1 ${isCompact ? 'p-2.5 gap-1.5' : 'p-4 gap-3'}`}>
+        <div className={`flex flex-col justify-between min-w-0 flex-1 ${isCompact ? 'p-2.5 gap-1.5' : 'p-5 gap-3.5'}`}>
 
           {/* Верхний блок */}
           <div className="space-y-1.5 min-w-0">
 
             {/* Название */}
-            <h3 className={`font-display font-800 text-foreground leading-snug line-clamp-2 group-hover:text-brand-blue transition-colors ${isHome ? 'text-[18px] sm:text-[20px]' : isCompact ? 'font-700 text-[12px]' : 'font-700 text-[14px] sm:text-[15px]'}`}>
+            <h3 className={`font-display font-800 text-foreground leading-snug line-clamp-2 group-hover:text-brand-blue transition-colors ${isHome ? 'text-[19px] sm:text-[21px]' : isCompact ? 'font-700 text-[12px]' : 'font-700 text-[15px] sm:text-[16px]'}`}>
               {property.title}
             </h3>
 
@@ -332,47 +332,47 @@ export default function PropertyCard({
               <button
                 type="button"
                 onClick={e => { e.stopPropagation(); setMapOpen(true); }}
-                className="flex items-start gap-1 text-[12px] text-muted-foreground hover:text-brand-blue transition-colors text-left w-full group/addr"
+                className="flex items-start gap-1 text-[13px] text-muted-foreground hover:text-brand-blue transition-colors text-left w-full group/addr"
               >
-                <Icon name="MapPin" size={11} className="flex-shrink-0 text-brand-blue/40 group-hover/addr:text-brand-blue mt-0.5 transition-colors" />
+                <Icon name="MapPin" size={12} className="flex-shrink-0 text-brand-blue/40 group-hover/addr:text-brand-blue mt-0.5 transition-colors" />
                 <span className="break-words">{addressLine}</span>
               </button>
             ) : property.district ? (
               <button
                 type="button"
                 onClick={e => { e.stopPropagation(); navigate(`/catalog?search=${encodeURIComponent(property.district || '')}`); }}
-                className="inline-flex items-center gap-1 text-[12px] text-muted-foreground hover:text-brand-blue transition-colors"
+                className="inline-flex items-center gap-1 text-[13px] text-muted-foreground hover:text-brand-blue transition-colors"
               >
-                <Icon name="MapPin" size={11} className="text-brand-blue/40" />
+                <Icon name="MapPin" size={12} className="text-brand-blue/40" />
                 {property.district}
               </button>
             ) : null}
           </div>
 
           {/* Характеристики */}
-          <div className={`flex flex-wrap items-center bg-muted/50 rounded-lg ${isCompact ? 'gap-x-2 gap-y-1 px-2 py-1' : 'gap-x-3 gap-y-1.5 rounded-xl px-3 py-2'}`}>
+          <div className={`flex flex-wrap items-center bg-muted/50 rounded-lg ${isCompact ? 'gap-x-2 gap-y-1 px-2 py-1' : 'gap-x-3 gap-y-1.5 rounded-xl px-3.5 py-2.5'}`}>
             {/* Категория с иконкой */}
-            <div className="flex items-center gap-1.5 text-[12px] font-semibold text-brand-blue">
-              <Icon name={TYPE_ICONS[property.type] || 'Building2'} size={12} className="text-brand-blue" />
+            <div className={`flex items-center gap-1.5 font-semibold text-brand-blue ${isCompact ? 'text-[12px]' : 'text-[13px]'}`}>
+              <Icon name={TYPE_ICONS[property.type] || 'Building2'} size={13} className="text-brand-blue" />
               {TYPE_LABELS[property.type] || property.type}
             </div>
             <span className="text-border text-[10px]">|</span>
-            <div className="flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
-              <Icon name="Maximize" size={12} className="text-brand-blue/50" />
+            <div className={`flex items-center gap-1.5 font-semibold text-foreground ${isCompact ? 'text-[12px]' : 'text-[13px]'}`}>
+              <Icon name="Maximize" size={13} className="text-brand-blue/50" />
               {property.area} м²
             </div>
             {property.landArea ? (
               <>
                 <span className="text-border text-[10px]">|</span>
-                <div className="flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
-                  <Icon name="Trees" size={12} className="text-brand-blue/50" />
+                <div className={`flex items-center gap-1.5 font-semibold text-foreground ${isCompact ? 'text-[12px]' : 'text-[13px]'}`}>
+                  <Icon name="Trees" size={13} className="text-brand-blue/50" />
                   {property.landArea} сот.
                 </div>
               </>
             ) : null}
             {(property.floor || property.totalFloors) ? (
-              <div className="flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
-                <Icon name="Layers" size={12} className="text-brand-blue/50" />
+              <div className={`flex items-center gap-1.5 font-semibold text-foreground ${isCompact ? 'text-[12px]' : 'text-[13px]'}`}>
+                <Icon name="Layers" size={13} className="text-brand-blue/50" />
                 {property.floor
                   ? `${property.floor}${property.totalFloors ? `/${property.totalFloors}` : ''} эт.`
                   : `${property.totalFloors} эт.`}
@@ -405,9 +405,9 @@ export default function PropertyCard({
           })()}
 
           {/* Цена */}
-          <div className={`border-t border-border/60 ${isCompact ? 'pt-1.5' : 'pt-3'}`}>
+          <div className={`border-t border-border/60 ${isCompact ? 'pt-1.5' : 'pt-3.5'}`}>
             <div className="flex items-baseline gap-2 flex-wrap">
-              <span className={`font-display font-900 leading-none tracking-tight text-foreground ${isHome ? 'text-[24px] sm:text-[28px]' : isCompact ? 'text-[15px]' : 'text-[20px] sm:text-[22px]'}`}>
+              <span className={`font-display font-900 leading-none tracking-tight text-foreground ${isHome ? 'text-[26px] sm:text-[30px]' : isCompact ? 'text-[15px]' : 'text-[21px] sm:text-[24px]'}`}>
                 {property.price.toLocaleString('ru')} ₽{property.deal === 'rent' ? '/мес' : ''}
               </span>
               {ppm2 && (

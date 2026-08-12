@@ -29,11 +29,11 @@ export default function HomeNewsSection({ latestNews, homeNewsLimit }: HomeNewsS
             Смотреть все новости <Icon name="ArrowRight" size={14} />
           </Link>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
           {latestNews === null
             ? Array.from({ length: Math.min(homeNewsLimit, 5) }).map((_, i) => (
               <div key={i} className="bg-white rounded-xl overflow-hidden border border-border">
-                <div className="p-3 space-y-2">
+                <div className="p-4 space-y-2">
                   <div className="h-2.5 bg-muted rounded w-1/3" />
                   <div className="h-3 bg-muted rounded w-full" />
                   <div className="h-3 bg-muted rounded w-3/4" />
@@ -42,12 +42,12 @@ export default function HomeNewsSection({ latestNews, homeNewsLimit }: HomeNewsS
             ))
             : latestNews.slice(0, homeNewsLimit).map(n => (
               <article key={n.id} className="group bg-white rounded-xl overflow-hidden border border-border hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                <Link to={`/news/${n.slug}`} className="p-3 flex flex-col gap-1.5 h-full">
-                  <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                <Link to={`/news/${n.slug}`} className="p-4 flex flex-col gap-2 h-full">
+                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                     <Icon name="Newspaper" size={12} className="text-brand-blue/50 shrink-0" />
                     {new Date(n.published_at || n.created_at).toLocaleDateString('ru', { day: 'numeric', month: 'short' })}
                   </div>
-                  <h3 className="font-medium text-xs leading-snug line-clamp-3 group-hover:text-brand-blue transition-colors">{n.title}</h3>
+                  <h3 className="font-medium text-sm leading-snug line-clamp-3 group-hover:text-brand-blue transition-colors">{n.title}</h3>
                 </Link>
               </article>
             ))
