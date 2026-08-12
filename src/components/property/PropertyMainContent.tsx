@@ -135,31 +135,21 @@ export default function PropertyMainContent({
           {item.tenantName ? <ParamCard icon="Users" label="Арендатор" value={item.tenantName} /> : null}
           {itemExt.rentIndexPct ? <ParamCard icon="Percent" label="Индексация аренды" value={`+${itemExt.rentIndexPct}% / год`} /> : null}
         </div>
-
-        {/* Коммуникации */}
-        {item.utilities && (
-          <div className="mt-3 pt-3 border-t border-border">
-            <h3 className="font-display font-700 text-sm mb-2">{h4comms || 'Коммуникации'}</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {item.utilities.split(',').map(u => u.trim()).filter(Boolean).map(u => {
-                const [key, val] = u.includes(':') ? u.split(':').map(s => s.trim()) : [u, ''];
-                const icon = UTILITY_ICONS[key] || 'Plug';
-                return (
-                  <div key={u} className="flex items-start gap-2 bg-muted/40 rounded-lg px-2.5 py-2">
-                    <div className="w-6 h-6 rounded-md bg-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                      <Icon name={icon} size={12} className="text-brand-blue" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[10px] text-muted-foreground leading-tight line-clamp-2">{key}</div>
-                      {val && <div className="font-600 text-xs leading-tight line-clamp-2">{val}</div>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Коммуникации */}
+      {item.utilities && (
+        <div className="bg-white rounded-2xl px-4 py-3 shadow-sm">
+          <h2 className="font-display font-700 text-base mb-3">{h4comms || 'Коммуникации'}</h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {item.utilities.split(',').map(u => u.trim()).filter(Boolean).map(u => {
+              const [key, val] = u.includes(':') ? u.split(':').map(s => s.trim()) : [u, ''];
+              const icon = UTILITY_ICONS[key] || 'Plug';
+              return <ParamCard key={u} icon={icon} label={key} value={val || '—'} />;
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Назначение — отдельный блок */}
       {item.purpose && (
