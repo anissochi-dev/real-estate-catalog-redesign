@@ -18,12 +18,12 @@ export default function HomeNewListings({
   onToggleFavorite, onToggleCompare,
 }: HomeNewListingsProps) {
   return (
-    <section className="py-8 md:py-10 bg-muted/40">
+    <section className="py-12 md:py-16 bg-muted/40">
       <div className="container mx-auto px-4">
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-3">
-          <div className="flex items-center gap-2">
-            <Icon name="Building2" size={16} className="text-brand-blue" />
-            <h2 className="font-display font-700 text-base text-foreground">Аренда и продажа коммерческой недвижимости в Краснодаре</h2>
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-6 md:mb-8">
+          <div className="flex items-center gap-2.5">
+            <Icon name="Building2" size={22} className="text-brand-blue" />
+            <h2 className="font-display font-800 text-2xl md:text-3xl text-foreground">Аренда и продажа коммерческой недвижимости в Краснодаре</h2>
           </div>
           <Link
             to="/catalog"

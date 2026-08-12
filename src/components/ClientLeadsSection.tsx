@@ -151,15 +151,15 @@ export default function ClientLeadsSection({ limit = 6 }: Props) {
   if (!leads.length) return null;
 
   return (
-    <section className="py-8 md:py-10 bg-white">
+    <section className="py-12 md:py-16 bg-white">
       <div className="container mx-auto px-4">
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-6 md:mb-8">
           <div>
-            <h2 className="font-display font-700 text-base text-foreground flex items-center gap-2 mb-1">
-              <Icon name="Users" size={16} className="text-brand-blue" />
+            <h2 className="font-display font-800 text-2xl md:text-3xl text-foreground flex items-center gap-2.5 mb-2">
+              <Icon name="Users" size={22} className="text-brand-blue" />
               Куплю и сниму недвижимость в Краснодаре — актуальные заявки
             </h2>
-            <p className="text-xs text-muted-foreground max-w-xl">
+            <p className="text-sm text-muted-foreground max-w-xl">
               Есть подходящий объект? Предложите его клиенту — заявка попадёт нашему менеджеру.
             </p>
           </div>

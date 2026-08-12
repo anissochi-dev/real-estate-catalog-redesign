@@ -11,9 +11,9 @@ interface HomeFaqSectionProps {
 
 export default function HomeFaqSection({ faqItems }: HomeFaqSectionProps) {
   return (
-    <section className="py-6 md:py-8 bg-white" aria-labelledby="faq-title">
+    <section className="py-12 md:py-16 bg-white" aria-labelledby="faq-title">
       <div className="container mx-auto px-4 max-w-5xl">
-        <h2 id="faq-title" className="font-display font-800 text-lg sm:text-xl text-foreground mb-3 text-center">
+        <h2 id="faq-title" className="font-display font-800 text-2xl md:text-3xl text-foreground mb-6 md:mb-8 text-center">
           Частые вопросы
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-x-4 md:gap-y-2 md:items-start">
