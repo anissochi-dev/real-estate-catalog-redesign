@@ -69,7 +69,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   car_service: 'Car',
 };
 
-export default function LeadCard({ lead, districts, onContact, disableLink }: { lead: PublicLead; districts: District[]; onContact: () => void; disableLink?: boolean }) {
+export default function LeadCard({ lead, districts, onContact, disableLink, hideContactButton }: { lead: PublicLead; districts: District[]; onContact: () => void; disableLink?: boolean; hideContactButton?: boolean }) {
   const displayName = lead.name || `Клиент #${lead.id}`;
   const typeLabel = lead.property_type === 'sale' ? 'Продажа' : lead.property_type === 'rent' ? 'Аренда' : null;
   const typeSale = lead.property_type === 'sale';
@@ -185,14 +185,16 @@ export default function LeadCard({ lead, districts, onContact, disableLink }: { 
           <Icon name="Clock" size={13} />
           {dateLabel} {displayDate}
         </div>
-        <button
-          onClick={onContact}
-          aria-label={`Связаться по заявке №${lead.id}`}
-          className="btn-orange px-5 py-2.5 rounded-xl font-semibold font-display text-sm inline-flex items-center gap-2 shadow-sm"
-        >
-          <Icon name="Phone" size={14} />
-          Связаться
-        </button>
+        {!hideContactButton && (
+          <button
+            onClick={onContact}
+            aria-label={`Связаться по заявке №${lead.id}`}
+            className="btn-orange px-5 py-2.5 rounded-xl font-semibold font-display text-sm inline-flex items-center gap-2 shadow-sm"
+          >
+            <Icon name="Phone" size={14} />
+            Связаться
+          </button>
+        )}
       </div>
     </article>
   );

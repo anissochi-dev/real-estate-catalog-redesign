@@ -171,7 +171,7 @@ export default function LeadDetailPage() {
 
         <h1 className="font-display font-900 text-2xl md:text-3xl text-foreground mb-4">{h1}</h1>
 
-        <LeadCard lead={lead} districts={districts} onContact={openContact} disableLink />
+        <LeadCard lead={lead} districts={districts} onContact={openContact} disableLink hideContactButton />
 
         <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mt-5 text-sm text-muted-foreground leading-relaxed">
           <h2 className="font-semibold text-foreground text-[15px] mb-1">Есть подходящий объект?</h2>
@@ -182,7 +182,7 @@ export default function LeadDetailPage() {
 
         <button
           onClick={openContact}
-          className="w-full sm:w-auto mt-4 btn-blue text-white px-6 py-3 rounded-xl font-semibold text-sm inline-flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+          className="btn-orange w-full sm:w-auto mt-4 px-6 py-3 rounded-xl font-semibold font-display text-sm inline-flex items-center justify-center gap-2 shadow-sm"
         >
           <Icon name="Phone" size={15} />
           У меня есть подходящий объект
