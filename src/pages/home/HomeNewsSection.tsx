@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import Icon from '@/components/ui/icon';
+import { Button } from '@/components/ui/button';
 
 interface NewsPreview {
   id: number; title: string; slug: string; summary?: string;
@@ -54,12 +55,11 @@ export default function HomeNewsSection({ latestNews, homeNewsLimit }: HomeNewsS
           }
         </div>
 
-        <Link
-          to="/news"
-          className="sm:hidden mt-4 w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-brand-blue/30 bg-brand-blue/5 text-brand-blue font-semibold text-sm transition-all duration-200"
-        >
-          Смотреть все новости <Icon name="ArrowRight" size={14} />
-        </Link>
+        <Button variant="ctaOutline" size="ctaLg" asChild className="sm:hidden mt-4 w-full">
+          <Link to="/news">
+            Смотреть все новости <Icon name="ArrowRight" size={14} />
+          </Link>
+        </Button>
       </div>
     </section>
   );

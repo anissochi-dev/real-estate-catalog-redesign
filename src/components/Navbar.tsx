@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Page } from '@/App';
 import Icon from '@/components/ui/icon';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { prefetchPage } from '@/app/lazyPages';
@@ -128,22 +129,26 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
               </a>
 
               {/* Кнопка "Разместить объект" */}
-              <button
+              <Button
+                variant="cta"
+                size="cta"
                 onClick={() => setOwnerModalOpen(true)}
-                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-orange text-white text-sm font-semibold hover:bg-brand-orange/90 transition-all duration-200 shrink-0"
+                className="hidden md:inline-flex shrink-0"
               >
                 <Icon name="PlusCircle" size={15} />
                 Разместить объект
-              </button>
+              </Button>
 
               {compareCount > 0 && (
-                <button
+                <Button
+                  variant="ctaOutline"
+                  size="cta"
                   onClick={() => handleNav('compare')}
-                  className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 border-brand-orange text-brand-orange text-sm font-semibold hover:bg-brand-orange hover:text-white transition-all duration-200"
+                  className="hidden md:inline-flex"
                 >
                   <Icon name="GitCompare" size={15} />
                   <span>Сравнить ({compareCount})</span>
-                </button>
+                </Button>
               )}
               {/* Телефон — mobile */}
               <a
@@ -207,13 +212,15 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
         {/* Drawer nav */}
         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
           {/* Кнопка "Разместить объект" — мобиль */}
-          <button
+          <Button
+            variant="cta"
+            size="ctaLg"
             onClick={() => { setOwnerModalOpen(true); setDrawerOpen(false); }}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold bg-brand-orange text-white hover:bg-brand-orange/90 transition mb-1"
+            className="w-full mb-1"
           >
             <Icon name="PlusCircle" size={18} />
             Разместить объект
-          </button>
+          </Button>
 
           {navItems.map((item) => (
             <button
@@ -232,16 +239,18 @@ export default function Navbar({ currentPage, setCurrentPage, favoritesCount, co
           ))}
 
           {compareCount > 0 && (
-            <button
+            <Button
+              variant="ctaOutline"
+              size="ctaLg"
               onClick={() => { handleNav('compare'); }}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium border-2 border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white transition-all duration-200"
+              className="w-full justify-start"
             >
               <Icon name="GitCompare" size={18} />
-              <span className="flex-1">Сравнить</span>
-              <span className="w-5 h-5 rounded-full bg-brand-orange text-white text-[11px] font-bold flex items-center justify-center">
+              <span className="flex-1 text-left">Сравнить</span>
+              <span className="w-5 h-5 rounded-full bg-brand-blue text-white text-[11px] font-bold flex items-center justify-center">
                 {compareCount}
               </span>
-            </button>
+            </Button>
           )}
         </nav>
 

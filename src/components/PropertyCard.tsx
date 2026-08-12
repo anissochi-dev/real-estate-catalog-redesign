@@ -168,7 +168,7 @@ function PhoneRevealButton({ phone, listingId }: { phone: string | null; listing
       <a
         href={`tel:${phone}`}
         onClick={e => { e.stopPropagation(); trackListingCall(listingId, 'catalog_card'); }}
-        className="w-full bg-brand-blue text-white text-[13px] font-bold font-display py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-sm hover:bg-brand-blue/90 transition-colors"
+        className="btn-orange w-full text-white text-[13px] font-semibold font-display py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-sm"
       >
         <Icon name="Phone" size={14} /> {phone}
       </a>
@@ -178,7 +178,7 @@ function PhoneRevealButton({ phone, listingId }: { phone: string | null; listing
     <button
       type="button"
       onClick={e => { e.stopPropagation(); setRevealed(true); }}
-      className="w-full border-2 border-brand-blue text-brand-blue text-[13px] font-bold font-display py-2.5 rounded-xl flex items-center justify-center gap-2 hover:bg-brand-blue/5 transition-colors"
+      className="btn-orange w-full text-white text-[13px] font-semibold font-display py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-sm"
     >
       <Icon name="Phone" size={14} /> Показать номер
     </button>

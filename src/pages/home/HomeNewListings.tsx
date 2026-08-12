@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Property } from '@/App';
 import PropertyCard from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
+import { Button } from '@/components/ui/button';
 
 interface HomeNewListingsProps {
   newObjects: Property[];
@@ -58,12 +59,11 @@ export default function HomeNewListings({
           ))}
         </div>
 
-        <Link
-          to="/catalog"
-          className="sm:hidden mt-4 w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-brand-blue/30 bg-brand-blue/5 text-brand-blue font-semibold text-sm transition-all duration-200"
-        >
-          Смотреть все объекты <Icon name="ArrowRight" size={14} />
-        </Link>
+        <Button variant="ctaOutline" size="ctaLg" asChild className="sm:hidden mt-4 w-full">
+          <Link to="/catalog">
+            Смотреть все объекты <Icon name="ArrowRight" size={14} />
+          </Link>
+        </Button>
       </div>
     </section>
   );

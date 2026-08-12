@@ -95,7 +95,7 @@ export default function CatalogFilters({
             {onSubscribe && (
               <button
                 onClick={onSubscribe}
-                className="flex-1 lg:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all border border-brand-blue text-brand-blue hover:bg-brand-blue hover:text-white"
+                className="flex-1 lg:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors border-2 border-brand-blue text-brand-blue hover:bg-brand-blue hover:text-white"
               >
                 <Icon name="Bell" size={14} />
                 <span className="hidden sm:inline">Уведомления в MAX</span>
@@ -105,10 +105,10 @@ export default function CatalogFilters({
             {/* Кнопка карты — только на мобильном, на ПК карта всегда видна */}
             <button
               onClick={onToggleMap}
-              className={`lg:hidden flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all border
+              className={`lg:hidden flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors border-2
                 ${showMap
-                  ? 'border-brand-orange bg-brand-orange text-white'
-                  : 'border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white'
+                  ? 'border-brand-blue bg-brand-blue text-white'
+                  : 'border-brand-blue text-brand-blue hover:bg-brand-blue hover:text-white'
                 }`}
             >
               <Icon name="Map" size={14} />
@@ -117,16 +117,16 @@ export default function CatalogFilters({
             {/* Кнопка фильтров справа */}
             <button
               onClick={onToggleFilters}
-              className={`lg:hidden flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all border
+              className={`lg:hidden flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors border-2
                 ${showFilters || hasActiveFilters
-                  ? 'border-brand-orange bg-brand-orange text-white'
-                  : 'border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white'
+                  ? 'border-brand-blue bg-brand-blue text-white'
+                  : 'border-brand-blue text-brand-blue hover:bg-brand-blue hover:text-white'
                 }`}
             >
               <Icon name="SlidersHorizontal" size={14} />
               Фильтры
               {hasActiveFilters && (
-                <span className="w-4 h-4 rounded-full bg-white text-brand-orange text-[10px] flex items-center justify-center font-bold">
+                <span className="w-4 h-4 rounded-full bg-white text-brand-blue text-[10px] flex items-center justify-center font-bold">
                   {activeCount}
                 </span>
               )}

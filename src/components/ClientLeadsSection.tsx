@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '@/components/ui/icon';
+import { Button } from '@/components/ui/button';
 import { fetchPublicLeads, PublicLead } from '@/lib/api';
 import { fmtBudget, fmtArea, CATEGORY_LABELS } from '@/pages/leads/LeadCard';
 
@@ -121,7 +122,7 @@ function HomeLeadCard({ lead }: { lead: PublicLead }) {
       {/* Кнопка */}
       <Link
         to={lead.slug ? `/request/${lead.slug}` : '/leads'}
-        className="btn-orange text-white px-4 py-2 rounded-xl text-sm font-semibold font-display inline-flex items-center justify-center gap-2 mt-auto"
+        className="btn-orange text-white px-4 py-2.5 rounded-xl text-sm font-semibold font-display inline-flex items-center justify-center gap-2 mt-auto shadow-sm"
       >
         <Icon name="ArrowRight" size={15} />
         Подробнее о заявке
@@ -180,13 +181,11 @@ export default function ClientLeadsSection({ limit = 6 }: Props) {
           ))}
         </ul>
 
-        <Link
-          to="/leads"
-          aria-label="Смотреть все заявки клиентов"
-          className="sm:hidden mt-4 w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-brand-blue/30 bg-brand-blue/5 text-brand-blue font-semibold text-sm transition-all duration-200"
-        >
-          Смотреть все заявки <Icon name="ArrowRight" size={14} />
-        </Link>
+        <Button variant="ctaOutline" size="ctaLg" asChild className="sm:hidden mt-4 w-full">
+          <Link to="/leads" aria-label="Смотреть все заявки клиентов">
+            Смотреть все заявки <Icon name="ArrowRight" size={14} />
+          </Link>
+        </Button>
       </div>
     </section>
   );

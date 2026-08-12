@@ -187,7 +187,7 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
                 className="w-full px-3 py-2.5 border rounded-lg text-sm" />
               <SmartCaptcha key={captchaKey} fieldCount={3} onVerify={setCaptcha} />
               <button type="submit" disabled={sending || !captcha?.passed}
-                className="w-full btn-blue text-white py-3 rounded-xl font-semibold disabled:opacity-50 text-sm">
+                className="w-full btn-orange text-white py-3 rounded-xl font-semibold font-display disabled:opacity-50 text-sm shadow-sm">
                 {sending ? 'Отправка...' : 'Заказать просмотр'}
               </button>
             </form>

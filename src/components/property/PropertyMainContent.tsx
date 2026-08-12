@@ -215,7 +215,7 @@ export default function PropertyMainContent({
               <SmartCaptcha key={captchaKey} fieldCount={3} onVerify={setCaptcha} />
             </div>
             <button type="submit" disabled={sending || !captcha?.passed}
-              className="sm:col-span-2 w-full btn-blue text-white py-2.5 rounded-xl font-semibold disabled:opacity-50 text-sm">
+              className="sm:col-span-2 w-full btn-orange text-white py-2.5 rounded-xl font-semibold font-display disabled:opacity-50 text-sm shadow-sm">
               {sending ? 'Отправка...' : 'Заказать просмотр'}
             </button>
           </form>
