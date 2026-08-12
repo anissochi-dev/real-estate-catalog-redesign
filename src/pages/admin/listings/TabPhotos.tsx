@@ -16,35 +16,45 @@ function toThumbUrl(src: string): string {
   return src.replace(/(_wm)?\.(webp|jpe?g|png)$/i, '_thumb.webp');
 }
 
-/** Преобразует URL с водяным знаком в оригинал.
- * Бэкенд upload/ сохраняет original в `original_url` + `image_url` с ВЗ.
- * Для уже-сохранённого `images` — пробуем по соглашению:
- *   /photos/.../watermarked/img.jpg  →  /photos/.../img.jpg
- *   ?watermark=1                     →  убираем параметр
- *   /wm/                             →  убираем сегмент
- */
+/** Преобразует URL фото с водяным знаком в URL оригинала (тот же формат, без ВЗ).
+ * Бэкенд upload/ сохраняет файл с ВЗ как `{token}_wm.{ext}`, а оригинал — `{token}.{ext}`. */
 function toOriginalUrl(url: string): string {
   if (!url) return url;
-  let u = url;
-  u = u.replace(/\/watermarked\//g, '/');
-  u = u.replace(/[?&]watermark=1/g, '');
-  u = u.replace(/\/wm\//g, '/');
-  u = u.replace(/\/marked\//g, '/');
-  return u;
+  return url.replace(/_wm(\.(webp|jpe?g|png))$/i, '$1');
+}
+
+/** Строит URL JPG-копии без логотипа из отдельной папки xml-feeds-photos/
+ * (создаётся бэкендом автоматически при загрузке каждого фото объекта).
+ * Возвращает null, если URL не из папки photos/ — тогда используем оригинал как фолбэк. */
+function toNoLogoJpgUrl(url: string): string | null {
+  const m = url.match(/\/photos\/([a-zA-Z0-9]+)(?:_wm)?\.(?:webp|jpe?g|png)$/i);
+  if (!m) return null;
+  return url.replace(/\/photos\/[a-zA-Z0-9]+(?:_wm)?\.(?:webp|jpe?g|png)$/i, `/xml-feeds-photos/${m[1]}.jpg`);
+}
+
+function triggerBlobDownload(blob: Blob, filename: string) {
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(objectUrl);
+}
+
+/** Скачивает файл без fallback на window.open — используется, когда нужно
+ * молча попробовать альтернативный URL при неудаче (без побочных эффектов). */
+async function fetchAndDownload(url: string, filename: string) {
+  const res = await fetch(url, { mode: 'cors' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const blob = await res.blob();
+  triggerBlobDownload(blob, filename);
 }
 
 async function downloadUrl(url: string, filename: string) {
   try {
-    const res = await fetch(url, { mode: 'cors' });
-    const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = objectUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(objectUrl);
+    await fetchAndDownload(url, filename);
   } catch (e) {
     // fallback — открыть в новой вкладке
     window.open(url, '_blank');
@@ -62,11 +72,33 @@ export default function TabPhotos({ listing }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
 
-  const handleDownloadOriginal = async (url: string, idx: number) => {
-    setBusy(`download-${idx}`);
-    const original = toOriginalUrl(url);
+  const handleDownloadWithLogo = async (url: string, idx: number) => {
+    setBusy(`logo-${idx}`);
     try {
-      await downloadUrl(original, `listing-${listing.id}-photo-${idx + 1}.jpg`);
+      await downloadUrl(url, `listing-${listing.id}-photo-${idx + 1}-logo.jpg`);
+      toast.success('Фото скачано с логотипом');
+    } catch {
+      toast.error('Не удалось скачать', { description: 'Ссылка открыта в новой вкладке' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleDownloadNoLogo = async (url: string, idx: number) => {
+    setBusy(`nologo-${idx}`);
+    const filename = `listing-${listing.id}-photo-${idx + 1}.jpg`;
+    const noLogoUrl = toNoLogoJpgUrl(url);
+    try {
+      if (noLogoUrl) {
+        try {
+          await fetchAndDownload(noLogoUrl, filename);
+          toast.success('Фото скачано без логотипа');
+          return;
+        } catch {
+          // Копии в xml-feeds-photos/ может не быть для старых фото — используем оригинал
+        }
+      }
+      await downloadUrl(toOriginalUrl(url), filename);
       toast.success('Фото скачано без логотипа');
     } catch {
       toast.error('Не удалось скачать', { description: 'Ссылка открыта в новой вкладке' });
@@ -91,7 +123,7 @@ export default function TabPhotos({ listing }: Props) {
         <div>
           <h3 className="font-semibold">Фотографии объекта</h3>
           <div className="text-xs text-muted-foreground">
-            Всего: {photos.length} · Скачивание происходит без водяного знака
+            Всего: {photos.length} · Наведите на фото, чтобы скачать — с логотипом или без
           </div>
         </div>
       </div>
@@ -121,13 +153,21 @@ export default function TabPhotos({ listing }: Props) {
               {/* Hover overlay */}
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-end opacity-0 group-hover:opacity-100">
                 <div className="w-full p-2 flex flex-wrap gap-1.5">
-                  <button onClick={() => handleDownloadOriginal(url, idx)}
-                          disabled={busy === `download-${idx}`}
+                  <button onClick={() => handleDownloadWithLogo(url, idx)}
+                          disabled={busy === `logo-${idx}`}
                           className="flex-1 min-w-[110px] text-xs bg-white/95 hover:bg-white text-foreground px-2.5 py-1.5 rounded-lg inline-flex items-center justify-center gap-1 font-medium disabled:opacity-60">
-                    {busy === `download-${idx}`
+                    {busy === `logo-${idx}`
                       ? <Icon name="Loader2" size={12} className="animate-spin" />
                       : <Icon name="Download" size={12} />}
-                    Скачать
+                    С логотипом
+                  </button>
+                  <button onClick={() => handleDownloadNoLogo(url, idx)}
+                          disabled={busy === `nologo-${idx}`}
+                          className="flex-1 min-w-[110px] text-xs bg-brand-blue/95 hover:bg-brand-blue text-white px-2.5 py-1.5 rounded-lg inline-flex items-center justify-center gap-1 font-medium disabled:opacity-60">
+                    {busy === `nologo-${idx}`
+                      ? <Icon name="Loader2" size={12} className="animate-spin" />
+                      : <Icon name="Download" size={12} />}
+                    Без логотипа
                   </button>
                 </div>
               </div>
