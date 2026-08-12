@@ -20,19 +20,11 @@ const CATEGORY_ICONS: Record<string, string> = {
   car_service: 'Car',
 };
 
-const AVATAR_COLORS = [
-  '#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#be185d',
-];
-function avatarColor(id: number): string {
-  return AVATAR_COLORS[id % AVATAR_COLORS.length];
-}
-
 interface Props {
   limit?: number;
 }
 
 function HomeLeadCard({ lead }: { lead: PublicLead }) {
-  const color = avatarColor(lead.id);
   const typeLabel = lead.property_type === 'sale' ? 'Продажа' : lead.property_type === 'rent' ? 'Аренда' : null;
   const typeSale = lead.property_type === 'sale';
   const cat = lead.property_category || lead.request_category;
@@ -52,11 +44,8 @@ function HomeLeadCard({ lead }: { lead: PublicLead }) {
     <article className="bg-white rounded-2xl border border-border shadow-sm hover:shadow-md hover:border-brand-blue/25 transition-all duration-200 p-6 flex flex-col h-full">
       {/* Шапка */}
       <div className="flex items-center gap-3 mb-4">
-        <div
-          className="w-11 h-11 rounded-full flex items-center justify-center text-white shrink-0"
-          style={{ background: color }}
-        >
-          <Icon name="User" size={18} />
+        <div className="w-11 h-11 rounded-full flex items-center justify-center bg-white border-2 border-brand-orange shrink-0">
+          <Icon name="User" size={18} className="text-brand-orange" />
         </div>
         <div className="min-w-0">
           <div className="font-bold text-base text-foreground leading-tight truncate">
