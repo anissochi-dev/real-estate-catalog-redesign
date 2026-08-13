@@ -13,8 +13,11 @@ export default function HomeHero({ totalCount, mainCity, searchQuery, setSearchQ
     <section className="hero-stars-bg text-white min-h-screen flex items-center justify-center py-12 md:py-16">
       <div className="hero-stars-nebula" aria-hidden="true" />
       <div
-        className="absolute inset-x-0 bottom-0 h-40 md:h-56 z-[5] pointer-events-none"
-        style={{ background: 'linear-gradient(to bottom, transparent, hsl(var(--muted)))' }}
+        className="absolute inset-x-0 bottom-0 h-64 md:h-80 z-[5] pointer-events-none"
+        style={{
+          background:
+            'linear-gradient(to bottom, transparent 0%, hsla(220, 20%, 97%, 0.08) 35%, hsla(220, 20%, 97%, 0.35) 60%, hsla(220, 20%, 97%, 0.75) 82%, hsl(var(--muted)) 100%)',
+        }}
         aria-hidden="true"
       />
       <div className="container mx-auto px-4 relative z-10">
