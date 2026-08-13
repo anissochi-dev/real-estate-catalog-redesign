@@ -13,7 +13,7 @@ export default function HomeHero({ totalCount, mainCity, searchQuery, setSearchQ
     <section className="hero-stars-bg text-white min-h-screen flex items-center justify-center py-12 md:py-16">
       <div className="hero-stars-nebula" aria-hidden="true" />
       <div className="container mx-auto px-4 relative z-10">
-        <div className="max-w-3xl">
+        <div className="max-w-3xl -translate-y-14 sm:-translate-y-16 md:-translate-y-20">
           <h1 className="font-display font-900 text-2xl sm:text-3xl md:text-4xl leading-tight mb-3" elementtiming="lcp-heading">
             Коммерческая недвижимость и готовый бизнес в Краснодаре
           </h1>
