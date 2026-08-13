@@ -4594,8 +4594,16 @@ def handler(event, context):
                 )
 
                 # ── Извлекаем числовые ID из запроса ─────────────────────────────
+                # ВАЖНО: короткое число (3-6 цифр) без явного маркера id/#/№ считаем
+                # обычным числом запроса (площадь, бюджет, "офис 200 м²" и т.п.),
+                # а НЕ идентификатором объекта — иначе "аренда офиса 200 м²" ошибочно
+                # ищет объект с id=200 вместо подбора по параметрам.
                 import re as _re
-                id_matches = _re.findall(r'(?:id|#|№)?\s*(\d{3,9})', user_text, _re.IGNORECASE)
+                explicit_id_matches = _re.findall(r'(?:id|#|№)\s*(\d{3,9})', user_text, _re.IGNORECASE)
+                # Полный ID (9+ цифр, например 300626200) распознаём и без маркера —
+                # его невозможно спутать с площадью/бюджетом/этажом.
+                bare_full_id_matches = _re.findall(r'(?<!\d)(\d{7,9})(?!\d)', user_text)
+                id_matches = explicit_id_matches + bare_full_id_matches
                 id_filter_parts = []
                 for id_str in id_matches[:3]:
                     num = int(id_str)
@@ -4603,7 +4611,7 @@ def handler(event, context):
                         # Полный ID
                         id_filter_parts.append(f"id = {num}")
                     else:
-                        # Короткий ID — последние цифры
+                        # Короткий ID — только если был явный маркер id/#/№
                         id_filter_parts.append(f"(id % 1000000 = {num} OR id % 10000 = {num % 10000})")
                 id_filter = f" AND ({' OR '.join(id_filter_parts)})" if id_filter_parts else ''
 
