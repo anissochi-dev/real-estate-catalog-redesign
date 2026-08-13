@@ -178,7 +178,7 @@ function PhoneRevealButton({ phone, listingId }: { phone: string | null; listing
     <button
       type="button"
       onClick={e => { e.stopPropagation(); setRevealed(true); }}
-      className="btn-gold w-full text-[13px] font-semibold font-display py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-sm"
+      className="btn-orange w-full text-[13px] font-semibold font-display py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-sm"
     >
       <Icon name="Phone" size={14} /> Показать номер
     </button>

@@ -592,37 +592,20 @@
   }
 }
 
-/* Orange outline button — primary action, light style */
+/* Gold outline button — цвет стрелки логотипа, primary action, light style */
 .btn-orange {
-  background: hsl(0, 0%, 100%);
-  border: 2px solid hsl(28, 95%, 52%);
-  color: hsl(28, 95%, 52%);
-  transition: all 0.2s ease;
-}
-.btn-orange:hover {
-  background: hsl(28, 95%, 52%);
-  color: hsl(0, 0%, 100%);
-  box-shadow: 0 8px 24px hsla(28, 95%, 52%, 0.3);
-  transform: translateY(-1px);
-}
-.btn-orange:hover :is(svg, [class*="icon"]) {
-  color: hsl(0, 0%, 100%);
-}
-
-/* Gold outline button — цвет стрелки логотипа, для теста */
-.btn-gold {
   background: hsl(0, 0%, 100%);
   border: 2px solid hsl(39, 56%, 51%);
   color: hsl(39, 56%, 51%);
   transition: all 0.2s ease;
 }
-.btn-gold:hover {
+.btn-orange:hover {
   background: hsl(39, 56%, 51%);
   color: hsl(0, 0%, 100%);
   box-shadow: 0 8px 24px hsla(39, 56%, 51%, 0.3);
   transform: translateY(-1px);
 }
-.btn-gold:hover :is(svg, [class*="icon"]) {
+.btn-orange:hover :is(svg, [class*="icon"]) {
   color: hsl(0, 0%, 100%);
 }
 
