@@ -44,8 +44,8 @@ function HomeLeadCard({ lead }: { lead: PublicLead }) {
     <article className="bg-white rounded-2xl border border-border shadow-sm hover:shadow-md hover:border-brand-blue/25 transition-all duration-200 p-6 flex flex-col h-full">
       {/* Шапка */}
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-11 h-11 rounded-full flex items-center justify-center bg-white border-2 border-brand-orange shrink-0">
-          <Icon name="User" size={18} className="text-brand-orange" />
+        <div className="w-11 h-11 rounded-full flex items-center justify-center bg-white border-2 border-brand-gold shrink-0">
+          <Icon name="User" size={18} className="text-brand-gold" />
         </div>
         <div className="min-w-0">
           <div className="font-bold text-base text-foreground leading-tight truncate">
@@ -69,7 +69,7 @@ function HomeLeadCard({ lead }: { lead: PublicLead }) {
       <div className="flex flex-wrap gap-1.5 mb-3">
         {typeLabel && (
           <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-            typeSale ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-700'
+            typeSale ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700'
           }`}>
             <Icon name={typeSale ? 'TrendingUp' : 'Handshake'} size={11} />
             {typeLabel}

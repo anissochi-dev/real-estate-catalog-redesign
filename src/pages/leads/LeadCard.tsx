@@ -97,8 +97,8 @@ export default function LeadCard({ lead, districts, onContact, disableLink, hide
     <article className="bg-white rounded-2xl border border-border shadow-sm hover:shadow-md hover:border-brand-blue/25 transition-all duration-200 p-6">
       {/* Шапка: аватар + название */}
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-12 h-12 rounded-full flex items-center justify-center bg-white border-2 border-brand-orange shrink-0">
-          <Icon name="User" size={20} className="text-brand-orange" />
+        <div className="w-12 h-12 rounded-full flex items-center justify-center bg-white border-2 border-brand-gold shrink-0">
+          <Icon name="User" size={20} className="text-brand-gold" />
         </div>
         <div className="min-w-0">
           <div className="font-bold text-[17px] text-foreground leading-tight">
@@ -124,7 +124,7 @@ export default function LeadCard({ lead, districts, onContact, disableLink, hide
       <div className="flex flex-wrap gap-2 mb-3">
         {typeLabel && (
           <span className={`inline-flex items-center gap-1.5 text-[13px] font-semibold px-3 py-1 rounded-full ${
-            typeSale ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-700'
+            typeSale ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700'
           }`}>
             <Icon name={typeSale ? 'TrendingUp' : 'Handshake'} size={13} />
             {typeLabel}
