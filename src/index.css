@@ -364,13 +364,16 @@
   pointer-events: none;
 }
 
-/* Starry night hero background (главная страница) */
+/* Hero главной страницы: один ровный вертикальный переход
+   от синего цвета логотипа к фону страницы — без наложенных слоёв,
+   которые давали "ступеньки" на стыке. */
 .hero-stars-bg {
   background: linear-gradient(
-    145deg,
-    hsl(215, 85%, 14%) 0%,
-    hsl(215, 85%, 24%) 55%,
-    hsl(215, 85%, 34%) 100%
+    to bottom,
+    hsl(215, 85%, 16%) 0%,
+    hsl(215, 85%, 22%) 45%,
+    hsl(220, 60%, 55%) 85%,
+    hsl(var(--background)) 100%
   );
   position: relative;
   overflow: hidden;
@@ -379,27 +382,23 @@
 .hero-stars-nebula {
   position: absolute;
   inset: 0;
+  top: 0;
+  height: 60%;
   background:
     radial-gradient(
-      ellipse at 20% 50%,
+      ellipse at 20% 30%,
       hsla(215, 85%, 45%, 0.3) 0%,
       transparent 60%
     ),
     radial-gradient(
-      ellipse at 80% 20%,
+      ellipse at 80% 10%,
       hsla(28, 95%, 52%, 0.12) 0%,
       transparent 50%
     );
-  opacity: 0.85;
-  /* Гасим туманность до начала зоны перехода в белый — иначе радиальные пятна
-     просвечивают сквозь полупрозрачный градиент и выглядят как "облака" */
-  mask-image: linear-gradient(to bottom, black 0%, black 55%, transparent 78%);
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    black 0%,
-    black 55%,
-    transparent 78%
-  );
+  /* Плавно гасим туманность к низу своей же зоны, чтобы она не пересекалась
+     с переходом в белый и не образовывала пятен */
+  mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
   pointer-events: none;
 }
 
