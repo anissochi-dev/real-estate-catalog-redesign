@@ -12,19 +12,6 @@ export default function HomeHero({ totalCount, mainCity, searchQuery, setSearchQ
   return (
     <section className="hero-stars-bg text-white min-h-screen flex items-center justify-center py-12 md:py-16">
       <div className="hero-stars-nebula" aria-hidden="true" />
-      <div className="hero-stars-small" aria-hidden="true" />
-      <div className="hero-star hero-star-1" aria-hidden="true" />
-      <div className="hero-star hero-star-2" aria-hidden="true" />
-      <div className="hero-star hero-star-3" aria-hidden="true" />
-      <div className="hero-star hero-star-4" aria-hidden="true" />
-      <div className="hero-star hero-star-5" aria-hidden="true" />
-      <div className="hero-star hero-star-6" aria-hidden="true" />
-      <div className="hero-star hero-star-7" aria-hidden="true" />
-      <div className="hero-star hero-star-8" aria-hidden="true" />
-      <div className="hero-star hero-star-9" aria-hidden="true" />
-      <div className="hero-star hero-star-10" aria-hidden="true" />
-      <div className="hero-star hero-star-11" aria-hidden="true" />
-      <div className="hero-star hero-star-12" aria-hidden="true" />
       <div
         className="absolute inset-x-0 bottom-0 h-40 md:h-56 z-[5] pointer-events-none"
         style={{ background: 'linear-gradient(to bottom, transparent, hsl(var(--muted)))' }}
