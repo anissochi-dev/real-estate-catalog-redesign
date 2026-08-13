@@ -391,6 +391,15 @@
       transparent 50%
     );
   opacity: 0.85;
+  /* Гасим туманность до начала зоны перехода в белый — иначе радиальные пятна
+     просвечивают сквозь полупрозрачный градиент и выглядят как "облака" */
+  mask-image: linear-gradient(to bottom, black 0%, black 55%, transparent 78%);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    black 0%,
+    black 55%,
+    transparent 78%
+  );
   pointer-events: none;
 }
 

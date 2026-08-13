@@ -13,10 +13,10 @@ export default function HomeHero({ totalCount, mainCity, searchQuery, setSearchQ
     <section className="hero-stars-bg text-white min-h-screen flex items-center justify-center py-12 md:py-16">
       <div className="hero-stars-nebula" aria-hidden="true" />
       <div
-        className="absolute inset-x-0 bottom-0 h-64 md:h-80 z-[5] pointer-events-none"
+        className="absolute inset-x-0 bottom-0 h-72 md:h-96 z-[5] pointer-events-none"
         style={{
           background:
-            'linear-gradient(to bottom, transparent 0%, hsla(220, 20%, 97%, 0.08) 35%, hsla(220, 20%, 97%, 0.35) 60%, hsla(220, 20%, 97%, 0.75) 82%, hsl(var(--muted)) 100%)',
+            'linear-gradient(to bottom, transparent 0%, hsla(220, 17%, 95%, 0.06) 25%, hsla(220, 17%, 95%, 0.22) 45%, hsla(220, 17%, 95%, 0.48) 62%, hsla(220, 17%, 95%, 0.78) 78%, hsl(220, 17%, 95%) 100%)',
         }}
         aria-hidden="true"
       />
