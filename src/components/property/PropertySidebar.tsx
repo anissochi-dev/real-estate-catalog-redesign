@@ -91,20 +91,21 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
               <div className="border border-border rounded-xl px-3 py-2.5 space-y-2.5">
                 {/* Телефон + иконки мессенджеров */}
                 <div className="flex items-center gap-2">
-                  <Icon name="Phone" size={16} className="text-brand-blue flex-shrink-0" />
                   {phoneRevealed ? (
                     <a href={`tel:${agent.phone}`}
                       onClick={() => trackListingCall(item.id, 'sidebar')}
-                      className="text-base font-bold text-brand-blue hover:underline flex-1 min-w-0 truncate">
-                      {formatPhone(agent.phone)}
+                      className="btn-orange flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 text-sm font-bold px-3 py-2 rounded-lg">
+                      <Icon name="Phone" size={14} className="flex-shrink-0" />
+                      <span className="truncate">{formatPhone(agent.phone)}</span>
                     </a>
                   ) : (
                     <button
                       onClick={() => setPhoneRevealed(true)}
-                      className="text-base font-bold text-brand-blue hover:underline flex-1 min-w-0 text-left"
+                      className="btn-orange flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 text-sm font-bold px-3 py-2 rounded-lg"
                       title="Нажмите, чтобы показать номер"
                     >
-                      {maskedPhone(agent.phone)}
+                      <Icon name="Phone" size={14} className="flex-shrink-0" />
+                      <span className="truncate">{maskedPhone(agent.phone)}</span>
                     </button>
                   )}
                   {/* Мессенджеры */}
