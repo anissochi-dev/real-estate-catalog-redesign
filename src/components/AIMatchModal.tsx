@@ -19,52 +19,6 @@ const TYPE_LABEL: Record<string, string> = {
 };
 const DEAL_LABEL: Record<string, string> = { sale: 'Продажа', rent: 'Аренда', business: 'Бизнес' };
 
-// ── Быстрые фильтры ────────────────────────────────────────────────────────
-const QUICK_FILTERS = {
-  deal: [
-    { label: 'Купить', value: 'продажа' },
-    { label: 'Арендовать', value: 'аренда' },
-  ],
-  category: [
-    { label: '🏢 Офис', value: 'офис' },
-    { label: '🛍 Торговое', value: 'торговое помещение' },
-    { label: '🏭 Склад', value: 'склад' },
-    { label: '☕ Общепит', value: 'кафе ресторан' },
-    { label: '🏗 Производство', value: 'производство' },
-    { label: '🏠 Здание', value: 'здание' },
-    { label: '🌿 Земля', value: 'земельный участок' },
-    { label: '📦 Своб. назначение', value: 'свободного назначения' },
-    { label: '🚗 Автосервис', value: 'автосервис' },
-    { label: '🏨 Гостиница', value: 'гостиница' },
-    { label: '💼 ГАБ', value: 'готовый арендный бизнес' },
-  ],
-  area: [
-    { label: 'до 50 м²', value: 'до 50 м²' },
-    { label: '50–150 м²', value: 'от 50 до 150 м²' },
-    { label: '150–500 м²', value: 'от 150 до 500 м²' },
-    { label: '500–1000 м²', value: 'от 500 до 1000 м²' },
-    { label: 'от 1000 м²', value: 'от 1000 м²' },
-  ],
-  budget: [
-    { label: 'до 5 млн', value: 'бюджет до 5 млн рублей' },
-    { label: 'до 15 млн', value: 'бюджет до 15 млн рублей' },
-    { label: 'до 30 млн', value: 'бюджет до 30 млн рублей' },
-    { label: 'до 50 млн', value: 'бюджет до 50 млн рублей' },
-    { label: 'от 50 млн', value: 'бюджет от 50 млн рублей' },
-  ],
-  features: [
-    { label: '🅿 Парковка', value: 'с парковкой' },
-    { label: '1-я линия', value: 'первая линия домов' },
-    { label: '⚡ Высокая мощность', value: 'высокая электромощность от 100 кВт' },
-    { label: '🏔 Высокие потолки', value: 'высокие потолки от 4 метров' },
-    { label: '🚪 Вход с улицы', value: 'отдельный вход с улицы' },
-    { label: '📈 Доходность', value: 'с арендатором и подтверждённым доходом' },
-    { label: '⏱ Окупаемость до 7 лет', value: 'окупаемость до 84 месяцев' },
-    { label: '🔧 Под ремонт', value: 'без отделки или под ремонт' },
-    { label: '✨ Готово к работе', value: 'готово к работе, хороший ремонт' },
-  ],
-};
-
 const EXAMPLES = [
   'Офис 100 м² в центре до 15 млн ₽',
   'Торговое помещение под кофейню с трафиком',
@@ -92,21 +46,12 @@ export default function AIMatchModal({ open, onClose, initialPrompt, autoSubmit 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [activeFilters, setActiveFilters] = useState<string[]>([]);
-  const [showFilters, setShowFilters] = useState(false);
-  const [filterTab, setFilterTab] = useState<keyof typeof QUICK_FILTERS>('deal');
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const hasResult = messages.some(m => m.result);
-  const lastResult = [...messages].reverse().find(m => m.result)?.result;
 
   const scrollBottom = () => setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-
-  const buildPrompt = (text: string): string => {
-    const filters = activeFilters.length > 0 ? ` (${activeFilters.join(', ')})` : '';
-    return text + filters;
-  };
 
   const buildHistory = () =>
     messages.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', text: m.text }));
@@ -114,14 +59,13 @@ export default function AIMatchModal({ open, onClose, initialPrompt, autoSubmit 
   const submit = async (text?: string) => {
     const q = (text ?? input).trim();
     if (!q || loading) return;
-    const fullPrompt = buildPrompt(q);
-    setMessages(prev => [...prev, { role: 'user', text: q + (activeFilters.length ? ` [${activeFilters.join(', ')}]` : '') }]);
+    setMessages(prev => [...prev, { role: 'user', text: q }]);
     setInput('');
     setError(null);
     setLoading(true);
     scrollBottom();
     try {
-      const r = await aiMatch(fullPrompt, buildHistory());
+      const r = await aiMatch(q, buildHistory());
       setMessages(prev => [...prev, { role: 'ai', text: r.reasoning, result: r }]);
       scrollBottom();
     } catch (e) {
@@ -143,28 +87,12 @@ export default function AIMatchModal({ open, onClose, initialPrompt, autoSubmit 
       setMessages([]);
       setInput('');
       setError(null);
-      setActiveFilters([]);
-      setShowFilters(false);
     }
   }, [open]);
-
-  const toggleFilter = (value: string) => {
-    setActiveFilters(prev =>
-      prev.includes(value) ? prev.filter(f => f !== value) : [...prev, value]
-    );
-  };
 
   const close = () => { if (!loading) onClose(); };
 
   if (!open) return null;
-
-  const FILTER_TABS: { key: keyof typeof QUICK_FILTERS; label: string }[] = [
-    { key: 'deal', label: 'Сделка' },
-    { key: 'category', label: 'Тип' },
-    { key: 'area', label: 'Площадь' },
-    { key: 'budget', label: 'Бюджет' },
-    { key: 'features', label: 'Параметры' },
-  ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm"
@@ -188,7 +116,7 @@ export default function AIMatchModal({ open, onClose, initialPrompt, autoSubmit 
           <div className="flex items-center gap-1.5">
             {hasResult && (
               <button
-                onClick={() => { setMessages([]); setActiveFilters([]); setError(null); }}
+                onClick={() => { setMessages([]); setError(null); }}
                 className="text-xs text-muted-foreground hover:text-foreground px-2.5 py-1.5 rounded-lg hover:bg-muted transition flex items-center gap-1"
               >
                 <Icon name="RefreshCw" size={12} /> Новый поиск
@@ -246,7 +174,14 @@ export default function AIMatchModal({ open, onClose, initialPrompt, autoSubmit 
                         <div className="ml-9 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700">
                           <div className="font-semibold mb-0.5">Ничего не нашлось</div>
                           {msg.result.advice && <div className="text-xs">{msg.result.advice}</div>}
-                          <div className="text-xs mt-1 text-amber-600">Уточните запрос или измените критерии</div>
+                          <div className="text-xs mt-1 text-amber-600">Уточните запрос или воспользуйтесь фильтром в каталоге</div>
+                          <button
+                            onClick={() => { navigate('/catalog'); close(); }}
+                            className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-blue hover:underline"
+                          >
+                            <Icon name="SlidersHorizontal" size={12} />
+                            Смотреть все объекты с фильтром в каталоге
+                          </button>
                         </div>
                       ) : msg.result ? (
                         <div className="ml-9 space-y-2">
@@ -320,64 +255,9 @@ export default function AIMatchModal({ open, onClose, initialPrompt, autoSubmit 
           )}
         </div>
 
-        {/* Фильтры */}
-        {showFilters && (
-          <div className="border-t border-border px-4 py-3 bg-muted/20 flex-shrink-0">
-            {/* Табы фильтров */}
-            <div className="flex gap-1 mb-2.5 overflow-x-auto pb-0.5">
-              {FILTER_TABS.map(t => (
-                <button key={t.key} onClick={() => setFilterTab(t.key)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors shrink-0 ${filterTab === t.key ? 'bg-brand-blue text-white' : 'bg-muted text-muted-foreground hover:text-foreground'}`}>
-                  {t.label}
-                </button>
-              ))}
-            </div>
-            {/* Чипы фильтров */}
-            <div className="flex flex-wrap gap-1.5">
-              {QUICK_FILTERS[filterTab].map(f => (
-                <button key={f.value} onClick={() => toggleFilter(f.value)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${activeFilters.includes(f.value) ? 'bg-brand-blue text-white' : 'bg-white dark:bg-muted border border-border hover:border-brand-blue text-foreground'}`}>
-                  {f.label}
-                </button>
-              ))}
-            </div>
-            {activeFilters.length > 0 && (
-              <button onClick={() => setActiveFilters([])} className="mt-2 text-[11px] text-muted-foreground hover:text-foreground underline">
-                Сбросить фильтры ({activeFilters.length})
-              </button>
-            )}
-          </div>
-        )}
-
         {/* Input area */}
         <div className="px-4 pb-4 pt-2 border-t border-border flex-shrink-0">
-          {/* Активные фильтры-теги */}
-          {activeFilters.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-2">
-              {activeFilters.map(f => (
-                <span key={f} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue text-[11px] font-medium">
-                  {f}
-                  <button onClick={() => toggleFilter(f)} className="hover:text-red-500 transition-colors">
-                    <Icon name="X" size={10} />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-
           <div className="flex gap-2 items-end">
-            <button
-              onClick={() => setShowFilters(v => !v)}
-              className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-colors relative ${showFilters ? 'bg-brand-blue text-white' : 'bg-muted hover:bg-muted/80 text-muted-foreground'}`}
-              title="Фильтры"
-            >
-              <Icon name="SlidersHorizontal" size={16} />
-              {activeFilters.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand-orange text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-                  {activeFilters.length}
-                </span>
-              )}
-            </button>
             <textarea
               ref={textareaRef}
               value={input}
