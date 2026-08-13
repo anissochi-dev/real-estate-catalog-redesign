@@ -409,12 +409,18 @@ SYSTEM_PROMPTS = {
         '- purpose (назначение: под магазин, под офис, под производство и т.д.)\n'
         '- building_class, building_year, description\n'
         '- payback (мес окупаемости), profit (руб/мес), monthly_rent, yearly_rent, tenant_name\n'
-        '- _keyword_match: true — совпадение по ключевым словам запроса\n\n'
+        '- _keyword_match: true — совпадение по ключевым словам запроса (в названии/районе/адресе/назначении/описании)\n'
+        '- _category_mismatch: true — категория объекта НЕ совпадает с запрошенным типом, но объект попал в выборку, '
+        'потому что его название, назначение (purpose) или описание явно упоминают запрошенный тип '
+        '(например торговое помещение, у которого в назначении указано «Офис»)\n\n'
         'СТРОГИЕ ПРАВИЛА ОТБОРА:\n'
         '1. ID: если клиент назвал ID объекта (полностью "300626200" или коротко "200", "#200", "id 200") — '
         'найди объект у которого id оканчивается на эти цифры и верни ТОЛЬКО его.\n'
-        '2. КАТЕГОРИЯ: если клиент указал тип объекта — включай ТОЛЬКО объекты с совпадающей category. '
-        'Никогда не предлагай склад вместо офиса, гостиницу вместо ресторана и т.п.\n'
+        '2. КАТЕГОРИЯ: если клиент указал тип объекта — в приоритете объекты с точно совпадающей category. '
+        'Объекты с _category_mismatch:true включай ТОЛЬКО если их title/purpose/description действительно '
+        'подтверждают, что помещение подходит под запрошенный тип (например «Офис» указан в назначении) — '
+        'и ставь их НИЖЕ объектов с точной категорией. Никогда не предлагай склад вместо офиса, '
+        'гостиницу вместо ресторана и т.п., если это не подтверждено назначением/названием/описанием.\n'
         '3. ТИП СДЕЛКИ: на сайте только два типа — аренда и продажа. '
         '"снять/аренда/арендовать/снимаю" → только deal=rent; '
         '"купить/продажа/приобрести/куплю" → только deal=sale. '
@@ -4535,8 +4541,19 @@ def handler(event, context):
                         detected_category = cat
                         break
 
-                # SQL фильтр по категории если определена
-                cat_filter = f" AND category = '{detected_category}'" if detected_category else ''
+                # SQL фильтр по категории если определена: НЕ отсекаем объекты других категорий
+                # жёстко — берём category=X ИЛИ объекты любой категории, у которых название/назначение/
+                # описание явно подтверждают, что помещение подходит под запрошенный тип
+                # (например торговое помещение с «Офис» в назначении по запросу «офис»).
+                cat_filter = ''
+                if detected_category:
+                    or_parts = [f"category = '{detected_category}'"]
+                    for kw in CATEGORY_KEYWORDS[detected_category]:
+                        kwq = kw.replace("'", "''")
+                        or_parts.append(f"LOWER(COALESCE(title,'')) LIKE LOWER('%{kwq}%')")
+                        or_parts.append(f"LOWER(COALESCE(purpose,'')) LIKE LOWER('%{kwq}%')")
+                        or_parts.append(f"LOWER(COALESCE(description,'')) LIKE LOWER('%{kwq}%')")
+                    cat_filter = f" AND ({' OR '.join(or_parts)})"
 
                 # Инициализируем keyword_ids — будет заполнен ниже если поиск не по ID
                 keyword_ids = set()
@@ -4668,6 +4685,8 @@ def handler(event, context):
                     }
                     if is_keyword_match:
                         obj['_keyword_match'] = True
+                    if detected_category and r['category'] != detected_category:
+                        obj['_category_mismatch'] = True
                     if r.get('price_per_m2'):   obj['price_per_m2'] = r['price_per_m2']
                     if r.get('yearly_rent'):    obj['yearly_rent'] = r['yearly_rent']
                     if r.get('tenant_name'):    obj['tenant_name'] = r['tenant_name']
