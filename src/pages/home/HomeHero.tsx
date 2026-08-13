@@ -31,7 +31,7 @@ export default function HomeHero({ totalCount, mainCity, searchQuery, setSearchQ
             className="flex flex-col sm:flex-row gap-2 animate-fade-in-up stagger-3"
           >
             <div className="w-full sm:flex-1 flex items-center gap-2 bg-white/10 border border-white/25 rounded-xl px-3 py-3 sm:py-2 backdrop-blur-sm focus-within:border-white/60 transition-colors">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-gold to-amber-700 flex items-center justify-center flex-shrink-0">
                 <Icon name="Sparkles" size={14} className="text-white" />
               </div>
               <input

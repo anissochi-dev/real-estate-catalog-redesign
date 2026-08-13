@@ -15,7 +15,7 @@ export default function CatalogHero({ aiQuery, onAiQueryChange, onAiSubmit }: Ca
           className="flex gap-2 max-w-2xl"
         >
           <div className="flex-1 flex items-center gap-2 bg-white/10 border border-white/25 rounded-xl px-3 py-2.5 backdrop-blur-sm focus-within:border-white/60 transition-colors">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-orange to-rose-500 flex items-center justify-center flex-shrink-0">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-gold to-amber-700 flex items-center justify-center flex-shrink-0">
               <Icon name="Sparkles" size={14} className="text-white" />
             </div>
             <input

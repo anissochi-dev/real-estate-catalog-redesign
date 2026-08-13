@@ -14,7 +14,7 @@ export default function PropertyAiSearchBar({ aiQuery, setAiQuery, setAiOpen, it
         onSubmit={e => { e.preventDefault(); setAiOpen(true); }}
         className="flex items-center gap-2"
       >
-        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-orange to-rose-500 flex items-center justify-center flex-shrink-0">
+        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-gold to-amber-700 flex items-center justify-center flex-shrink-0">
           <Icon name="Sparkles" size={14} className="text-white" />
         </div>
         <input

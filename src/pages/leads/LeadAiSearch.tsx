@@ -17,7 +17,7 @@ export default function LeadAiSearch({
   return (
     <div className="bg-gradient-to-br from-brand-blue/5 to-brand-orange/5 border border-brand-blue/15 rounded-2xl p-4 sm:p-5 mb-5">
       <div className="flex items-center gap-2 mb-3">
-        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-orange to-rose-500 flex items-center justify-center shrink-0">
+        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-gold to-amber-700 flex items-center justify-center shrink-0">
           <Icon name="Sparkles" size={16} className="text-white" />
         </div>
         <div>
