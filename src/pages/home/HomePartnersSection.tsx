@@ -34,7 +34,7 @@ export default function HomePartnersSection() {
 
   return (
     <section className="py-10 md:py-14 bg-background border-t border-border">
-      <div className="container mx-auto px-4 max-w-6xl">
+      <div className="container mx-auto px-4">
         <div className="text-center mb-6 md:mb-8">
           <h2 className="font-display font-800 text-2xl md:text-3xl text-foreground">Наши партнёры</h2>
         </div>
