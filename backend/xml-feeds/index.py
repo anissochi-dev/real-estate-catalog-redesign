@@ -24,7 +24,7 @@ SCHEMA = 't_p71821556_real_estate_catalog_'
 S3_BUCKET = 'files'
 S3_ENDPOINT = 'https://bucket.poehali.dev'
 CDN_BASE = 'https://cdn.poehali.dev'
-STATIC_REGEN_MINUTES = 10
+STATIC_REGEN_MINUTES = 20
 
 CIAN_BASE = 'https://public-api.cian.ru'
 CIAN_SYNC_INTERVAL_HOURS = 1

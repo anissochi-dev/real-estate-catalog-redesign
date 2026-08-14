@@ -45,10 +45,10 @@ export function useCrons() {
             });
           }
         }
-        // xml-feeds?action=cron обновляет статические файлы фидов (раз в 10 мин)
+        // xml-feeds?action=cron обновляет статические файлы фидов (раз в 20 мин)
         // и синхронизацию кабинета ЦИАН (раз в 6 часов) — единый пинг для обоих.
         const xmlFeedsLast = parseInt(localStorage.getItem('xml_feeds_cron_last_ping') || '0', 10);
-        if (Date.now() - xmlFeedsLast > 10 * 60 * 1000) {
+        if (Date.now() - xmlFeedsLast > 20 * 60 * 1000) {
           localStorage.setItem('xml_feeds_cron_last_ping', String(Date.now()));
           fireCron('https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=cron');
         }
