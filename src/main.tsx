@@ -6,6 +6,7 @@ import { Toaster } from 'sonner';
 import App from './App';
 import { AuthProvider } from './contexts/AuthContext';
 import { SettingsProvider } from './contexts/SettingsContext';
+import { TooltipProvider } from './components/ui/tooltip';
 import './index.css';
 
 // Регистрируем Service Worker с офлайн-заглушкой: при следующих визитах,
@@ -36,8 +37,10 @@ createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <SettingsProvider>
         <AuthProvider>
-          <App />
-          <Toaster position="top-right" richColors closeButton />
+          <TooltipProvider delayDuration={200}>
+            <App />
+            <Toaster position="top-right" richColors closeButton />
+          </TooltipProvider>
         </AuthProvider>
       </SettingsProvider>
     </QueryClientProvider>

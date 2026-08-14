@@ -398,7 +398,7 @@ export default function PropertyCard({
                 <Icon name={isFact ? 'CheckCircle2' : 'TrendingUp'} size={13} className={isFact ? 'text-emerald-500' : 'text-blue-500'} />
                 {label}: +{(income / 1000).toFixed(0)} тыс/мес
                 {paybackYears ? (
-                  <span className="text-muted-foreground font-normal">· окупаемость ~{paybackYears.toFixed(1)} лет</span>
+                  <span className="text-muted-foreground font-normal">· окупаемость по цене ~{paybackYears.toFixed(1)} лет</span>
                 ) : null}
               </div>
             );

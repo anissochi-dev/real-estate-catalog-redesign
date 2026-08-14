@@ -133,7 +133,7 @@ export default function InvestmentModel({ listingId, price, area, deal, rentInde
               )}
 
               {/* KPI */}
-              <KpiCards result={liveResult} objectType={data.listing.type} />
+              <KpiCards result={liveResult} objectType={data.listing.type} params={params} />
 
               {/* Параметры + график */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">

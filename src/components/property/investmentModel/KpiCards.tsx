@@ -1,10 +1,12 @@
 import Icon from '@/components/ui/icon';
-import { ModelResult } from './types';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ModelResult, UserParams } from './types';
 import { fmtMoney } from './modelMath';
 
 interface Props {
   result: ModelResult;
   objectType?: string;
+  params?: UserParams;
 }
 
 /** Вердикт по Cap Rate с учётом типа объекта */
@@ -61,10 +63,14 @@ function getOverallVerdict(result: ModelResult, type?: string): {
   return                  { label: '🔴 Слабо',          desc: 'Низкая доходность или отрицательный NPV. Высокий риск', color: 'text-red-800', bg: 'bg-red-50', border: 'border-red-300', icon: 'ThumbsDown' };
 }
 
-export default function KpiCards({ result, objectType }: Props) {
+export default function KpiCards({ result, objectType, params }: Props) {
   const capVerdict = getCapRateVerdict(result.cap_rate_pct, objectType);
   const overall = getOverallVerdict(result, objectType);
   const isLand = objectType === 'land';
+
+  const paybackTooltip = params
+    ? `Считается с учётом кредита ${params.ltv_pct}%, вакантности ${params.vacancy_pct}%, расходов ${params.opex_per_m2} ₽/м²/мес и роста аренды ${params.avg_indexation_pct}%/год. Отличается от «окупаемости по цене» в карточках объекта — там простой расчёт цена/аренда без этих факторов.`
+    : 'Учитывает кредит, вакантность, расходы и индексацию аренды — отличается от простой «окупаемости по цене» в карточках объекта.';
 
   const items = [
     {
@@ -102,7 +108,7 @@ export default function KpiCards({ result, objectType }: Props) {
       hint: result.irr_pct >= 20 ? 'Отлично' : result.irr_pct >= 12 ? 'Хорошо' : 'Ниже ожидаемого',
     },
     {
-      label: 'Окупаемость',
+      label: 'Окупаемость вложений',
       value: result.payback_years != null
         ? `${Number.isInteger(result.payback_years) ? result.payback_years : result.payback_years.toFixed(1)} лет`
         : '>30 лет',
@@ -135,9 +141,21 @@ export default function KpiCards({ result, objectType }: Props) {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
         {items.map(it => (
           <div key={it.label} className={`rounded-xl border p-3 ${it.color}`}>
-            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide font-semibold opacity-80">
+            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide font-semibold opacity-80">
               <Icon name={it.icon} size={11} />
-              {it.label}
+              <span>{it.label}</span>
+              {it.label === 'Окупаемость вложений' && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button type="button" onClick={e => e.stopPropagation()} className="cursor-help opacity-70 hover:opacity-100">
+                      <Icon name="Info" size={11} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[260px] text-xs normal-case font-normal leading-snug">
+                    {paybackTooltip}
+                  </TooltipContent>
+                </Tooltip>
+              )}
             </div>
             <div className="font-display font-700 text-lg leading-tight mt-0.5">{it.value}</div>
             <div className="text-[10px] opacity-70 mt-0.5">{it.hint}</div>
