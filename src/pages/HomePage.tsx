@@ -11,6 +11,7 @@ import HomeHero from './home/HomeHero';
 import HomeNewListings from './home/HomeNewListings';
 import HomeNewsSection, { NewsPreview } from './home/HomeNewsSection';
 import HomeFaqSection from './home/HomeFaqSection';
+import HomePartnersSection from './home/HomePartnersSection';
 import ExpandableText from '@/components/ExpandableText';
 
 const ClientLeadsSection = lazy(() => import('@/components/ClientLeadsSection'));
@@ -220,6 +221,9 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
           homeNewsLimit={homeNewsLimit}
         />
       )}
+
+      {/* Партнёры */}
+      <HomePartnersSection />
 
       {/* Частые вопросы — FAQ Schema + видимый блок (полезно для AI и поиска) */}
       <SchemaOrg id="faq" schema={makeFaqSchema(faqItems)} />

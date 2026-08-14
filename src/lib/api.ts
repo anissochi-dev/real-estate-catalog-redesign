@@ -278,6 +278,7 @@ export interface LeadInput {
   email?: string;
   message?: string;
   listing_id?: number;
+  partner_id?: number;
   source?: string;
   object_url?: string;
   captcha_token?: string;
@@ -512,6 +513,28 @@ export async function fetchDistricts(city?: string): Promise<District[]> {
     const data = await res.json();
     const list: District[] = data.districts || [];
     _districtsCache.set(key, list);
+    return list;
+  } catch {
+    return [];
+  }
+}
+
+export interface PublicPartner {
+  id: number;
+  name: string;
+  logo_url: string | null;
+}
+
+let _partnersCache: PublicPartner[] | null = null;
+
+export async function fetchPublicPartners(): Promise<PublicPartner[]> {
+  if (_partnersCache) return _partnersCache;
+  try {
+    const res = await fetchWithTimeout(`${LISTINGS_URL}?resource=public_partners`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    const list: PublicPartner[] = data.partners || [];
+    _partnersCache = list;
     return list;
   } catch {
     return [];
