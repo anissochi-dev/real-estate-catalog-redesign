@@ -55,10 +55,10 @@ export default function HomePartnersSection() {
                 key={p.id}
                 onClick={() => setSelected(p)}
                 title={p.name}
-                className="group relative shrink-0 basis-[47%] sm:basis-[31%] md:basis-[23%] lg:basis-[calc(20%-13px)] bg-white rounded-2xl shadow-sm h-32 md:h-36 flex items-center justify-center p-5 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all"
+                className="group relative shrink-0 bg-white rounded-2xl shadow-sm h-32 md:h-36 flex items-center justify-center px-6 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all"
               >
                 {p.logo_url ? (
-                  <img src={p.logo_url} alt={p.name} className="max-w-full max-h-full object-contain" loading="lazy" />
+                  <img src={p.logo_url} alt={p.name} className="h-full w-auto max-w-none object-contain py-5" loading="lazy" />
                 ) : (
                   <span className="text-sm font-semibold text-muted-foreground truncate">{p.name}</span>
                 )}
