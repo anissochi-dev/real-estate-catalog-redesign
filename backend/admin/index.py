@@ -2863,7 +2863,7 @@ def _listings(cur, conn, method, rid, event, user):
             f"{_str_or_null(body.get('owner_name'), 150)}, {_str_or_null(body.get('owner_phone'), 30)}, "
             f"{_str_or_null(body.get('owner_phone2'), 30)}, "
             f"{_str_or_null(body.get('price_unit') or 'total', 10)}, "
-            f"{_str_or_null(body.get('purpose'), 100)}, {_str_or_null(body.get('condition'), 50)}, "
+            f"{_str_or_null(body.get('purpose'), 500)}, {_str_or_null(body.get('condition'), 50)}, "
             f"{_str_or_null(body.get('parking'), 20)}, {_str_or_null(body.get('entrance'), 20)}, "
             f"{_str_or_null(body.get('video_url'), 500)}, {_str_or_null(body.get('video_type'), 20)}, "
             f"{_bool(body.get('use_watermark', True))}, {_bool(body.get('export_yandex'))}, "
@@ -2999,7 +2999,7 @@ def _listings(cur, conn, method, rid, event, user):
                           ('address', 255), ('district', 100), ('city', 100), ('image', 500),
                           ('images', 5000), ('tags', 1000), ('status', 20),
                           ('owner_name', 150), ('owner_phone', 30), ('owner_phone2', 30), ('price_unit', 10),
-                          ('purpose', 100), ('condition', 50), ('parking', 20), ('entrance', 20),
+                          ('purpose', 500), ('condition', 50), ('parking', 20), ('entrance', 20),
                           ('video_url', 500), ('video_type', 20), ('tenant_name', 200),
                           ('finishing', 100), ('utilities', 500), ('road_line', 50),
                           # Дополнительные поля из вкладки «Дополнительное»
