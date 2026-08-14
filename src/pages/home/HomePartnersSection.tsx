@@ -24,10 +24,13 @@ export default function HomePartnersSection() {
 
   if (partners.length === 0) return null;
 
-  // embla loop корректно анимирует переход последний→первый слайд только если слайдов
-  // достаточно много. При малом числе партнёров дублируем список для плавного зацикливания
-  // (реальные данные/клики не меняются — просто карусель "видит" больше карточек)
-  const slides = partners.length < 6 ? [...partners, ...partners, ...partners] : partners;
+  // embla loop корректно анимирует переход последний→первый слайд (в т.ч. при ручном
+  // перетаскивании) только если общая ширина слайдов минимум в 2-3 раза больше видимой
+  // области. При малом числе партнёров повторяем список нужное число раз, чтобы точно
+  // хватило ширины (на широких экранах видно до 5 карточек — берём запас x3)
+  const minSlides = 18;
+  const repeat = Math.max(1, Math.ceil(minSlides / partners.length));
+  const slides = repeat > 1 ? Array.from({ length: repeat }, () => partners).flat() : partners;
 
   return (
     <section className="py-10 md:py-14 bg-background border-t border-border">
