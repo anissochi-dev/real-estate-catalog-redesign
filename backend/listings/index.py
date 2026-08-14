@@ -262,6 +262,13 @@ def handler(event: dict, context) -> dict:
                 )
                 return _ok({'purposes': [dict(r) for r in cur.fetchall()]}, cache='public, max-age=3600, stale-while-revalidate=300')
 
+            if params.get('resource') == 'public_partners':
+                cur.execute(
+                    "SELECT id, name, logo_url FROM t_p71821556_real_estate_catalog_.partners "
+                    "WHERE is_active = TRUE ORDER BY sort_order ASC, name ASC"
+                )
+                return _ok({'partners': [dict(r) for r in cur.fetchall()]}, cache='public, max-age=600, stale-while-revalidate=300')
+
             if params.get('resource') == 'public_land_vri':
                 cur.execute(
                     "SELECT id, name, slug FROM t_p71821556_real_estate_catalog_.land_vri "

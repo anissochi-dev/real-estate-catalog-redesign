@@ -106,6 +106,7 @@ def handler(event: dict, context) -> dict:
     if message:
         message = message[:1500]
     listing_id = body.get('listing_id')
+    partner_id = body.get('partner_id')
     source = (body.get('source') or 'site').strip()[:50]
     captcha_token = (body.get('captcha_token') or '').strip()
 
@@ -119,7 +120,7 @@ def handler(event: dict, context) -> dict:
 
     # Проверка captcha_token от SmartCaptcha (формат: sc_<ts>_<rand>_<scoreHex>)
     # Только для публичных заявок с сайта
-    SITE_SOURCES_CAPTCHA = ('site', 'property-page', 'offer-to-lead', 'callback', 'hero', 'catalog', 'leads-page', 'price-drop')
+    SITE_SOURCES_CAPTCHA = ('site', 'property-page', 'offer-to-lead', 'callback', 'hero', 'catalog', 'leads-page', 'price-drop', 'partner-carousel')
     if source in SITE_SOURCES_CAPTCHA:
         if not captcha_token or not captcha_token.startswith('sc_'):
             return _err(403, 'Требуется подтверждение капчи')
@@ -160,7 +161,7 @@ def handler(event: dict, context) -> dict:
 
     # Лиды с сайта проходят модерацию: статус 'pending'
     # Внутренние лиды (created_by_admin, crm и др.) сразу 'new'
-    SITE_SOURCES = ('site', 'property-page', 'offer-to-lead', 'callback', 'hero', 'catalog', 'leads-page', 'price-drop')
+    SITE_SOURCES = ('site', 'property-page', 'offer-to-lead', 'callback', 'hero', 'catalog', 'leads-page', 'price-drop', 'partner-carousel')
     initial_status = 'pending' if source in SITE_SOURCES else 'new'
 
     # listing_id — только целое число
@@ -170,6 +171,14 @@ def handler(event: dict, context) -> dict:
             lid = int(listing_id)
         except (ValueError, TypeError):
             lid = None
+
+    # partner_id — только целое число
+    pid = None
+    if partner_id is not None:
+        try:
+            pid = int(partner_id)
+        except (ValueError, TypeError):
+            pid = None
 
     dsn = os.environ['DATABASE_URL']
     conn = psycopg2.connect(dsn)
@@ -188,12 +197,26 @@ def handler(event: dict, context) -> dict:
             # Авто-линковка к телефонной базе (единый источник имени/телефона)
             pc_id = _upsert_phone_contact(cur, phone, name)
 
+            # Если заявка пришла с карусели партнёров — подтягиваем название
+            # партнёра в поле company для отображения в списке заявок
+            partner_company = None
+            if pid:
+                cur.execute(
+                    f"SELECT name FROM {SCHEMA_LEADS}.partners WHERE id = %s AND is_active = TRUE",
+                    (pid,)
+                )
+                prow = cur.fetchone()
+                if prow:
+                    partner_company = prow[0]
+                else:
+                    pid = None
+
             # Параметризованный INSERT — защита от SQL-инъекций
             cur.execute(
                 f"INSERT INTO {SCHEMA_LEADS}.leads "
-                "(name, phone, email, message, listing_id, source, status, phone_contact_id) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
-                (name, phone, email, message, lid, source, initial_status, pc_id)
+                "(name, phone, email, message, listing_id, source, status, phone_contact_id, partner_id, company) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                (name, phone, email, message, lid, source, initial_status, pc_id, pid, partner_company)
             )
             lead_id = cur.fetchone()[0]
 

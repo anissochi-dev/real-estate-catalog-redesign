@@ -253,6 +253,7 @@ FALLBACK_PERMS = {
         'crm-checks':       ['read', 'create'],
         'crm-payments':     ['read', 'create', 'update'],
         'export_requests':  ['read', 'update'],
+        'partners':         ['read', 'create', 'update', 'delete'],
     },
     'manager': {
         'stats':            ['read'],
@@ -281,6 +282,7 @@ FALLBACK_PERMS = {
         'purposes':         ['read', 'create', 'update'],
         'xml_feeds':        ['read', 'create', 'update'],
         'land_vri':         ['read', 'create', 'update'],
+        'partners':         ['read', 'create', 'update'],
     },
     'broker': {
         'stats':            ['read'],
@@ -391,6 +393,8 @@ def handler(event, context):
                 return _cities(cur, conn, method, rid, event, user)
             if resource == 'purposes':
                 return _purposes(cur, conn, method, rid, event, user)
+            if resource == 'partners':
+                return _partners(cur, conn, method, rid, event, user)
             if resource == 'land_vri':
                 return _land_vri(cur, conn, method, rid, event, user)
             if resource == 'districts':
@@ -4781,6 +4785,49 @@ def _purposes(cur, conn, method, rid, event, user):
 
     if method == 'DELETE' and rid:
         cur.execute(f"DELETE FROM {SCHEMA}.purposes WHERE id = {int(rid)}")
+        conn.commit()
+        return _ok({'success': True})
+
+    return _err(400, 'Bad request')
+
+
+def _partners(cur, conn, method, rid, event, user):
+    if method == 'GET':
+        cur.execute(f"SELECT * FROM {SCHEMA}.partners ORDER BY sort_order ASC, name ASC")
+        return _ok({'partners': [dict(r) for r in cur.fetchall()]})
+
+    body = json.loads(event.get('body') or '{}')
+
+    if method == 'POST':
+        name = _safe(body.get('name') or '', 200)
+        logo_url = _safe(body.get('logo_url') or '', 500)
+        if not name:
+            return _err(400, 'Название обязательно')
+        logo_s = "NULL" if not logo_url else f"'{logo_url}'"
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.partners (name, logo_url) VALUES ('{name}', {logo_s}) RETURNING id"
+        )
+        conn.commit()
+        return _ok({'id': cur.fetchone()['id'], 'success': True})
+
+    if method == 'PUT' and rid:
+        fields = []
+        for f, length in [('name', 200), ('logo_url', 500)]:
+            if f in body:
+                fields.append(f"{f} = {_str_or_null(body[f], length)}")
+        if 'is_active' in body:
+            fields.append(f"is_active = {_bool(body['is_active'])}")
+        if 'sort_order' in body:
+            fields.append(f"sort_order = {_int_or_null(body['sort_order'])}")
+        if not fields:
+            return _err(400, 'Нет полей')
+        fields.append("updated_at = NOW()")
+        cur.execute(f"UPDATE {SCHEMA}.partners SET {', '.join(fields)} WHERE id = {int(rid)}")
+        conn.commit()
+        return _ok({'success': True})
+
+    if method == 'DELETE' and rid:
+        cur.execute(f"DELETE FROM {SCHEMA}.partners WHERE id = {int(rid)}")
         conn.commit()
         return _ok({'success': True})
 
