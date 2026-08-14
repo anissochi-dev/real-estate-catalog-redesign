@@ -19,8 +19,18 @@ export default function HomePartnersSection() {
     fetchPublicPartners().then(setPartners);
   }, []);
 
+  useEffect(() => {
+    if (partners.length > 0) emblaApi?.reInit();
+  }, [partners, emblaApi]);
+
   const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
   const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi]);
+
+  // Карточки логотипов имеют переменную ширину (подстраивается под пропорции лого),
+  // а сами логотипы грузятся асинхронно. Embla считает точки прокрутки один раз при первой
+  // отрисовке — пока картинки не подгрузились, ширина карточек ещё не финальная, из-за чего
+  // на границе цикла (loop) карусель "скачет". Пересчитываем раскладку, когда лого подгрузились.
+  const handleLogoLoad = useCallback(() => emblaApi?.reInit(), [emblaApi]);
 
   if (partners.length === 0) return null;
 
@@ -66,7 +76,7 @@ export default function HomePartnersSection() {
                 className="group relative shrink-0 bg-white rounded-2xl shadow-sm h-32 md:h-36 flex items-center justify-center px-6 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all"
               >
                 {p.logo_url ? (
-                  <img src={p.logo_url} alt={p.name} className="h-full w-auto max-w-none object-contain py-5" loading="lazy" />
+                  <img src={p.logo_url} alt={p.name} className="h-full w-auto max-w-none object-contain py-5" loading="lazy" onLoad={handleLogoLoad} />
                 ) : (
                   <span className="text-sm font-semibold text-muted-foreground truncate">{p.name}</span>
                 )}
