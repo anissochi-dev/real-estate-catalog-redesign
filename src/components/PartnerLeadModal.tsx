@@ -59,7 +59,7 @@ export default function PartnerLeadModal({ partner, onClose }: Props) {
             )}
             <div className="min-w-0">
               <div className="font-display font-700 text-lg truncate">{partner.name}</div>
-              <div className="text-xs text-muted-foreground">Оставьте заявку, мы вас свяжем</div>
+              <div className="text-xs text-muted-foreground">Оставьте заявку, мы Вам перезвоним!</div>
             </div>
           </div>
           <button onClick={onClose} className="p-1 hover:bg-muted rounded shrink-0">
