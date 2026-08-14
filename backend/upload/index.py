@@ -451,10 +451,10 @@ def handler(event, context):
                 except Exception:
                     pass  # если Pillow не смог — грузим оригинал
 
-            # Логотипы партнёров/бренд-кита — обрезаем пустые поля вокруг знака, вписываем
-            # в квадрат с единым отступом (чтобы разные логотипы выглядели одного размера
-            # в карточках карусели) и сжимаем максимально (WebP, небольшая сторона — иконка,
-            # не фото, высокое разрешение не нужно).
+            # Логотипы партнёров/бренд-кита — обрезаем пустые поля вокруг знака, добавляем
+            # небольшой равномерный отступ (сохраняя исходные пропорции — НЕ вписываем
+            # в квадрат, иначе широкие/узкие логотипы визуально "тонут" в пустом поле)
+            # и сжимаем максимально (WebP, небольшое разрешение — иконка, не фото).
             if kind == 'logo' and ext in ('jpg', 'jpeg', 'png', 'webp'):
                 try:
                     from PIL import Image as PilLogo
@@ -476,17 +476,19 @@ def handler(event, context):
                         if bbox:
                             img = img.crop(bbox)
 
-                    # Вписываем в квадрат с отступом ~9% с каждой стороны
-                    side = max(img.width, img.height)
-                    pad = int(side * 0.09)
-                    canvas_side = side + pad * 2
-                    canvas = PilLogo.new('RGBA', (canvas_side, canvas_side), (0, 0, 0, 0))
-                    canvas.paste(img, ((canvas_side - img.width) // 2, (canvas_side - img.height) // 2), img)
+                    # Равномерный отступ ~9% от меньшей стороны — сохраняем пропорции лого
+                    pad = max(4, int(min(img.width, img.height) * 0.09))
+                    canvas = PilLogo.new('RGBA', (img.width + pad * 2, img.height + pad * 2), (0, 0, 0, 0))
+                    canvas.paste(img, (pad, pad), img)
 
-                    # Логотипу достаточно небольшого разрешения — ограничиваем сторону
+                    # Логотипу достаточно небольшого разрешения — ограничиваем большую сторону
                     LOGO_SIDE = 480
-                    if canvas_side > LOGO_SIDE:
-                        canvas = canvas.resize((LOGO_SIDE, LOGO_SIDE), PilLogo.LANCZOS)
+                    if max(canvas.width, canvas.height) > LOGO_SIDE:
+                        scale = LOGO_SIDE / max(canvas.width, canvas.height)
+                        canvas = canvas.resize(
+                            (max(1, int(canvas.width * scale)), max(1, int(canvas.height * scale))),
+                            PilLogo.LANCZOS,
+                        )
 
                     # Максимальное сжатие: WebP, метод=6 (самый плотный алгоритм)
                     buf_logo = io.BytesIO()
