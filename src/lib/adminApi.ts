@@ -333,6 +333,15 @@ export const adminApi = {
   deletePurpose: (id: number) =>
     req(`${ADMIN_URL}?resource=purposes&id=${id}`, { method: 'DELETE' }),
 
+  // partners (партнёры на главной странице)
+  listPartners: () => req(`${ADMIN_URL}?resource=partners`),
+  createPartner: (data: Record<string, unknown>) =>
+    req(`${ADMIN_URL}?resource=partners`, { method: 'POST', body: JSON.stringify(data) }),
+  updatePartner: (id: number, data: Record<string, unknown>) =>
+    req(`${ADMIN_URL}?resource=partners&id=${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deletePartner: (id: number) =>
+    req(`${ADMIN_URL}?resource=partners&id=${id}`, { method: 'DELETE' }),
+
   // land VRI (виды разрешённого использования)
   listLandVri: () => req(`${ADMIN_URL}?resource=land_vri`),
   createLandVri: (data: Record<string, unknown>) =>

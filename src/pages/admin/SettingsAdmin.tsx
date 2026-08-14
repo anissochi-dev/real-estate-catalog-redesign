@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { adminApi, aiApi, CRM_PAYMENTS_URL, getToken } from '@/lib/adminApi';
 import { useSettings } from '@/contexts/SettingsContext';
 import PurposesAdmin from './PurposesAdmin';
+import PartnersAdmin from './PartnersAdmin';
 import LandVriAdmin from './LandVriAdmin';
 import XmlFeedsAdmin from './XmlFeedsAdmin';
 import RolesAdmin from './RolesAdmin';
@@ -42,7 +43,7 @@ export default function SettingsAdmin() {
   const [cityAdding, setCityAdding] = useState(false);
   type TabId = 'general' | 'watermark' | 'brand-kit' | 'footer' | 'legal'
     | 'integrations' | 'ad-platforms' | 'autoposting' | 'feeds' | 'notifications'
-    | 'cities' | 'purposes' | 'land-vri' | 'pages' | 'roles' | 'migration' | 'photo-optimize' | 'site-health' | 'verification'
+    | 'cities' | 'purposes' | 'land-vri' | 'partners' | 'pages' | 'roles' | 'migration' | 'photo-optimize' | 'site-health' | 'verification'
     | 'vb-knowledge' | 'users' | 'phones' | 'seo' | 'districts' | 'category-texts';
 
   // Есть ли доступ к «обычным» настройкам (компания/сайт/интеграции/администрирование/база знаний)
@@ -273,6 +274,7 @@ export default function SettingsAdmin() {
         ['legal', 'Правовые', 'Scale'],
         ['purposes', 'Назначения', 'Tag'],
         ['land-vri', 'ВРИ земли', 'Sprout'],
+        ['partners', 'Партнёры', 'Handshake'],
       ],
     },
     {
@@ -391,6 +393,7 @@ export default function SettingsAdmin() {
       {tab === 'ad-platforms' && <AdPlatformsTab />}
       {tab === 'purposes' && <PurposesAdmin />}
       {tab === 'land-vri' && <LandVriAdmin />}
+      {tab === 'partners' && <PartnersAdmin />}
       {tab === 'feeds' && <XmlFeedsAdmin />}
       {tab === 'legal' && <LegalTab s={s} setS={setS} saved={saved} save={save} />}
       {tab === 'footer' && <FooterTab s={s} setS={setS} saved={saved} save={save} />}

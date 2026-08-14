@@ -4804,8 +4804,12 @@ def _partners(cur, conn, method, rid, event, user):
         if not name:
             return _err(400, 'Название обязательно')
         logo_s = "NULL" if not logo_url else f"'{logo_url}'"
+        try:
+            sort_order = int(body.get('sort_order'))
+        except (TypeError, ValueError):
+            sort_order = 0
         cur.execute(
-            f"INSERT INTO {SCHEMA}.partners (name, logo_url) VALUES ('{name}', {logo_s}) RETURNING id"
+            f"INSERT INTO {SCHEMA}.partners (name, logo_url, sort_order) VALUES ('{name}', {logo_s}, {sort_order}) RETURNING id"
         )
         conn.commit()
         return _ok({'id': cur.fetchone()['id'], 'success': True})
