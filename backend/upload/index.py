@@ -451,6 +451,52 @@ def handler(event, context):
                 except Exception:
                     pass  # если Pillow не смог — грузим оригинал
 
+            # Логотипы партнёров/бренд-кита — обрезаем пустые поля вокруг знака, вписываем
+            # в квадрат с единым отступом (чтобы разные логотипы выглядели одного размера
+            # в карточках карусели) и сжимаем максимально (WebP, небольшая сторона — иконка,
+            # не фото, высокое разрешение не нужно).
+            if kind == 'logo' and ext in ('jpg', 'jpeg', 'png', 'webp'):
+                try:
+                    from PIL import Image as PilLogo
+                    img = PilLogo.open(io.BytesIO(data)).convert('RGBA')
+
+                    # Обрезаем прозрачные поля (альфа-канал)
+                    alpha_bbox = img.split()[3].getbbox()
+                    if alpha_bbox:
+                        img = img.crop(alpha_bbox)
+
+                    # Если фон непрозрачный (JPEG или PNG без альфы) — обрезаем однородную
+                    # рамку по цвету углового пикселя (обычно белый фон вокруг знака)
+                    if img.getextrema()[3] == (255, 255):
+                        bg_color = img.getpixel((0, 0))
+                        diff = PilLogo.new('RGBA', img.size, bg_color)
+                        from PIL import ImageChops
+                        diff_img = ImageChops.difference(img.convert('RGBA'), diff)
+                        bbox = diff_img.convert('L').point(lambda p: 255 if p > 12 else 0).getbbox()
+                        if bbox:
+                            img = img.crop(bbox)
+
+                    # Вписываем в квадрат с отступом ~9% с каждой стороны
+                    side = max(img.width, img.height)
+                    pad = int(side * 0.09)
+                    canvas_side = side + pad * 2
+                    canvas = PilLogo.new('RGBA', (canvas_side, canvas_side), (0, 0, 0, 0))
+                    canvas.paste(img, ((canvas_side - img.width) // 2, (canvas_side - img.height) // 2), img)
+
+                    # Логотипу достаточно небольшого разрешения — ограничиваем сторону
+                    LOGO_SIDE = 480
+                    if canvas_side > LOGO_SIDE:
+                        canvas = canvas.resize((LOGO_SIDE, LOGO_SIDE), PilLogo.LANCZOS)
+
+                    # Максимальное сжатие: WebP, метод=6 (самый плотный алгоритм)
+                    buf_logo = io.BytesIO()
+                    canvas.save(buf_logo, format='WEBP', quality=70, method=6)
+                    data = buf_logo.getvalue()
+                    ext = 'webp'
+                    content_type = 'image/webp'
+                except Exception:
+                    pass  # если Pillow не смог — грузим оригинал как есть
+
             folder = {'photo': 'photos', 'logo': 'logos', 'watermark': 'watermarks'}.get(kind, 'files')
             token12 = secrets.token_urlsafe(12)
             aws_key = os.environ['AWS_ACCESS_KEY_ID']
