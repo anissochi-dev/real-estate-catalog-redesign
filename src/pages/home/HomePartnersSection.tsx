@@ -62,8 +62,8 @@ export default function HomePartnersSection() {
                 ) : (
                   <span className="text-sm font-semibold text-muted-foreground truncate">{p.name}</span>
                 )}
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                  <span className="text-brand-gold font-semibold text-sm text-center">Сдать объект?</span>
+                <div className="absolute inset-0 flex items-center justify-center p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  <span className="text-brand-gold font-bold text-lg md:text-xl leading-tight text-center">Сдать объект?</span>
                 </div>
               </button>
             ))}
