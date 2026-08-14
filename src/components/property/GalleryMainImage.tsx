@@ -88,7 +88,7 @@ export function GalleryMainImage({
           {/* Lightbox open button — bottom right, visible on hover */}
           <button
             onClick={e => { e.stopPropagation(); onOpenLightbox(); }}
-            className={`absolute bottom-3 right-3 z-10 bg-black/55 hover:bg-black/80 text-white rounded-lg px-2 py-1.5 text-xs hidden sm:flex items-center gap-1.5 transition-all duration-200 ${showArrows ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+            className={`absolute bottom-3 right-3 z-10 bg-black/55 hover:bg-black/80 text-white rounded-lg px-2 py-1.5 text-xs hidden sm:flex items-center gap-1.5 transition-opacity ${showArrows ? 'opacity-100 duration-0' : 'opacity-0 duration-200 pointer-events-none'}`}
             aria-label="Открыть во весь экран"
           >
             <Icon name="Expand" size={13} />
@@ -108,7 +108,7 @@ export function GalleryMainImage({
             aria-label="Предыдущее"
             onClick={e => { e.stopPropagation(); onPrev(); }}
             disabled={photoActiveIdx === 0}
-            className={`absolute left-3 top-1/2 -translate-y-1/2 z-10 bg-black/50 hover:bg-black/75 text-white rounded-full p-2 min-h-[40px] min-w-[40px] items-center justify-center transition-all duration-200 disabled:opacity-20 hidden sm:flex ${showArrows ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-2 pointer-events-none'}`}
+            className={`absolute left-3 top-1/2 -translate-y-1/2 z-10 bg-black/50 hover:bg-black/75 text-white rounded-full p-2 min-h-[40px] min-w-[40px] items-center justify-center transition-opacity disabled:opacity-20 hidden sm:flex ${showArrows ? 'opacity-100 duration-0' : 'opacity-0 duration-200 pointer-events-none'}`}
           >
             <Icon name="ChevronLeft" size={22} />
           </button>
@@ -116,7 +116,7 @@ export function GalleryMainImage({
             aria-label="Следующее"
             onClick={e => { e.stopPropagation(); onNext(); }}
             disabled={photoActiveIdx === photoThumbs.length - 1}
-            className={`absolute right-3 top-1/2 -translate-y-1/2 z-10 bg-black/50 hover:bg-black/75 text-white rounded-full p-2 min-h-[40px] min-w-[40px] items-center justify-center transition-all duration-200 disabled:opacity-20 hidden sm:flex ${showArrows ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-2 pointer-events-none'}`}
+            className={`absolute right-3 top-1/2 -translate-y-1/2 z-10 bg-black/50 hover:bg-black/75 text-white rounded-full p-2 min-h-[40px] min-w-[40px] items-center justify-center transition-opacity disabled:opacity-20 hidden sm:flex ${showArrows ? 'opacity-100 duration-0' : 'opacity-0 duration-200 pointer-events-none'}`}
           >
             <Icon name="ChevronRight" size={22} />
           </button>
