@@ -27,24 +27,25 @@ export default function HomePartnersSection() {
   return (
     <section className="py-10 md:py-14 bg-background border-t border-border">
       <div className="container mx-auto px-4 max-w-6xl">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="font-display font-700 text-xl md:text-2xl">Наши партнёры</h2>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={scrollPrev}
-              aria-label="Предыдущие"
-              className="w-9 h-9 rounded-full border border-border flex items-center justify-center hover:bg-muted transition"
-            >
-              <Icon name="ChevronLeft" size={18} />
-            </button>
-            <button
-              onClick={scrollNext}
-              aria-label="Следующие"
-              className="w-9 h-9 rounded-full border border-border flex items-center justify-center hover:bg-muted transition"
-            >
-              <Icon name="ChevronRight" size={18} />
-            </button>
-          </div>
+        <div className="text-center mb-6 md:mb-8">
+          <h2 className="font-display font-800 text-2xl md:text-3xl text-foreground">Наши партнёры</h2>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 mb-3">
+          <button
+            onClick={scrollPrev}
+            aria-label="Предыдущие"
+            className="w-9 h-9 rounded-full border border-border flex items-center justify-center hover:bg-muted transition"
+          >
+            <Icon name="ChevronLeft" size={18} />
+          </button>
+          <button
+            onClick={scrollNext}
+            aria-label="Следующие"
+            className="w-9 h-9 rounded-full border border-border flex items-center justify-center hover:bg-muted transition"
+          >
+            <Icon name="ChevronRight" size={18} />
+          </button>
         </div>
 
         <div className="overflow-hidden" ref={emblaRef}>
@@ -54,7 +55,7 @@ export default function HomePartnersSection() {
                 key={p.id}
                 onClick={() => setSelected(p)}
                 title={p.name}
-                className="shrink-0 basis-[45%] sm:basis-[30%] md:basis-[22%] lg:basis-[18%] bg-white rounded-2xl border border-border h-24 flex items-center justify-center p-4 hover:shadow-md hover:-translate-y-0.5 transition-all"
+                className="shrink-0 basis-[47%] sm:basis-[31%] md:basis-[23%] lg:basis-[calc(20%-13px)] bg-white rounded-2xl border border-border h-32 md:h-36 flex items-center justify-center p-5 hover:shadow-md hover:-translate-y-0.5 transition-all"
               >
                 {p.logo_url ? (
                   <img src={p.logo_url} alt={p.name} className="max-w-full max-h-full object-contain" loading="lazy" />
