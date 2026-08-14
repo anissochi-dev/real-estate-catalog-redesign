@@ -11,7 +11,7 @@ export default function HomePartnersSection() {
   const [selected, setSelected] = useState<PublicPartner | null>(null);
 
   const [emblaRef, emblaApi] = useEmblaCarousel(
-    { loop: true, align: 'start', dragFree: true },
+    { loop: true, align: 'start', slidesToScroll: 1, skipSnaps: false, dragFree: false, watchResize: true },
     [Autoplay({ delay: 2800, stopOnInteraction: false, stopOnMouseEnter: true })]
   );
 
@@ -67,23 +67,27 @@ export default function HomePartnersSection() {
         </div>
 
         <div className="overflow-hidden" ref={emblaRef}>
-          <div className="flex gap-4">
+          <div className="flex -ml-4">
             {slides.map((p, i) => (
-              <button
+              <div
                 key={`${p.id}-${i}`}
-                onClick={() => setSelected(p)}
-                title={p.name}
-                className="group relative shrink-0 bg-white rounded-2xl shadow-sm h-32 md:h-36 flex items-center justify-center px-6 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all"
+                className="pl-4 shrink-0 basis-1/2 sm:basis-1/3 md:basis-1/4 lg:basis-1/5"
               >
-                {p.logo_url ? (
-                  <img src={p.logo_url} alt={p.name} className="h-full w-auto max-w-none object-contain py-5" loading="lazy" onLoad={handleLogoLoad} />
-                ) : (
-                  <span className="text-sm font-semibold text-muted-foreground truncate">{p.name}</span>
-                )}
-                <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex items-center justify-center bg-white py-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                  <span className="text-brand-gold font-bold text-lg md:text-xl leading-tight text-center">Сдать объект?</span>
-                </div>
-              </button>
+                <button
+                  onClick={() => setSelected(p)}
+                  title={p.name}
+                  className="group relative w-full bg-white rounded-2xl shadow-sm h-32 md:h-36 flex items-center justify-center px-6 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all"
+                >
+                  {p.logo_url ? (
+                    <img src={p.logo_url} alt={p.name} className="max-h-full max-w-full object-contain py-5" loading="lazy" onLoad={handleLogoLoad} />
+                  ) : (
+                    <span className="text-sm font-semibold text-muted-foreground truncate">{p.name}</span>
+                  )}
+                  <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex items-center justify-center bg-white py-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    <span className="text-brand-gold font-bold text-lg md:text-xl leading-tight text-center">Сдать объект?</span>
+                  </div>
+                </button>
+              </div>
             ))}
           </div>
         </div>
