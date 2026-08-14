@@ -24,6 +24,11 @@ export default function HomePartnersSection() {
 
   if (partners.length === 0) return null;
 
+  // embla loop корректно анимирует переход последний→первый слайд только если слайдов
+  // достаточно много. При малом числе партнёров дублируем список для плавного зацикливания
+  // (реальные данные/клики не меняются — просто карусель "видит" больше карточек)
+  const slides = partners.length < 6 ? [...partners, ...partners, ...partners] : partners;
+
   return (
     <section className="py-10 md:py-14 bg-background border-t border-border">
       <div className="container mx-auto px-4 max-w-6xl">
@@ -50,9 +55,9 @@ export default function HomePartnersSection() {
 
         <div className="overflow-hidden" ref={emblaRef}>
           <div className="flex gap-4">
-            {partners.map(p => (
+            {slides.map((p, i) => (
               <button
-                key={p.id}
+                key={`${p.id}-${i}`}
                 onClick={() => setSelected(p)}
                 title={p.name}
                 className="group relative shrink-0 bg-white rounded-2xl shadow-sm h-32 md:h-36 flex items-center justify-center px-6 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all"
