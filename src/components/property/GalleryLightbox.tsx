@@ -117,12 +117,20 @@ export function GalleryLightbox({ imgs, activeImg, setActiveImg, onClose, title 
           loading="eager"
           fetchpriority="high"
           decoding="async"
+          onClick={e => {
+            e.stopPropagation();
+            if (zoom > 1 || imgs.length <= 1) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            go(x < rect.width / 2 ? -1 : 1);
+          }}
           style={{
             maxHeight: '90vh',
             maxWidth: '92vw',
             objectFit: 'contain',
             borderRadius: 12,
             userSelect: 'none',
+            cursor: zoom > 1 ? 'default' : imgs.length > 1 ? 'pointer' : 'default',
             transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`,
             transition: 'transform 0.1s ease',
             display: 'block',
