@@ -55,13 +55,16 @@ export default function HomePartnersSection() {
                 key={p.id}
                 onClick={() => setSelected(p)}
                 title={p.name}
-                className="shrink-0 basis-[47%] sm:basis-[31%] md:basis-[23%] lg:basis-[calc(20%-13px)] bg-white rounded-2xl shadow-sm h-32 md:h-36 flex items-center justify-center p-5 hover:shadow-md hover:-translate-y-0.5 transition-all"
+                className="group relative shrink-0 basis-[47%] sm:basis-[31%] md:basis-[23%] lg:basis-[calc(20%-13px)] bg-white rounded-2xl shadow-sm h-32 md:h-36 flex items-center justify-center p-5 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all"
               >
                 {p.logo_url ? (
                   <img src={p.logo_url} alt={p.name} className="max-w-full max-h-full object-contain" loading="lazy" />
                 ) : (
                   <span className="text-sm font-semibold text-muted-foreground truncate">{p.name}</span>
                 )}
+                <div className="absolute inset-0 flex items-center justify-center bg-foreground/70 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  <span className="text-white font-semibold text-sm px-2 text-center">Сдать объект</span>
+                </div>
               </button>
             ))}
           </div>
