@@ -1,46 +1,64 @@
-import { useEffect, useState, useCallback, lazy, Suspense } from 'react';
-import useEmblaCarousel from 'embla-carousel-react';
-import Autoplay from 'embla-carousel-autoplay';
+import { useEffect, useRef, useState, useCallback, lazy, Suspense } from 'react';
 import Icon from '@/components/ui/icon';
 import { fetchPublicPartners, PublicPartner } from '@/lib/api';
 
 const PartnerLeadModal = lazy(() => import('@/components/PartnerLeadModal'));
 
+const AUTOPLAY_DELAY = 2800;
+
 export default function HomePartnersSection() {
   const [partners, setPartners] = useState<PublicPartner[]>([]);
   const [selected, setSelected] = useState<PublicPartner | null>(null);
-
-  const [emblaRef, emblaApi] = useEmblaCarousel(
-    { loop: true, align: 'start', slidesToScroll: 1, skipSnaps: false, dragFree: false, watchResize: true },
-    [Autoplay({ delay: 2800, stopOnInteraction: false, stopOnMouseEnter: true })]
-  );
+  const trackRef = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     fetchPublicPartners().then(setPartners);
   }, []);
 
+  // Скроллим на ширину одной карточки нативным плавным скроллом браузера —
+  // никакой ручной анимации через JS, поэтому движение всегда стабильное и без рывков.
+  const scrollByCard = useCallback((dir: 1 | -1) => {
+    const el = trackRef.current;
+    if (!el) return;
+    const card = el.querySelector<HTMLElement>('[data-card]');
+    const step = card ? card.offsetWidth + 16 : el.clientWidth * 0.8;
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    let next = el.scrollLeft + dir * step;
+    if (next >= maxScroll - 4) next = 0;
+    if (next < 0) next = maxScroll;
+    el.scrollTo({ left: next, behavior: 'smooth' });
+  }, []);
+
+  const stopAutoplay = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  const startAutoplay = useCallback(() => {
+    stopAutoplay();
+    if (partners.length <= 1) return;
+    timerRef.current = setInterval(() => scrollByCard(1), AUTOPLAY_DELAY);
+  }, [partners.length, scrollByCard, stopAutoplay]);
+
   useEffect(() => {
-    if (partners.length > 0) emblaApi?.reInit();
-  }, [partners, emblaApi]);
+    startAutoplay();
+    return stopAutoplay;
+  }, [startAutoplay, stopAutoplay]);
 
-  const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
-  const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi]);
+  const scrollPrev = useCallback(() => {
+    scrollByCard(-1);
+    startAutoplay();
+  }, [scrollByCard, startAutoplay]);
 
-  // Карточки логотипов имеют переменную ширину (подстраивается под пропорции лого),
-  // а сами логотипы грузятся асинхронно. Embla считает точки прокрутки один раз при первой
-  // отрисовке — пока картинки не подгрузились, ширина карточек ещё не финальная, из-за чего
-  // на границе цикла (loop) карусель "скачет". Пересчитываем раскладку, когда лого подгрузились.
-  const handleLogoLoad = useCallback(() => emblaApi?.reInit(), [emblaApi]);
+  const scrollNext = useCallback(() => {
+    scrollByCard(1);
+    startAutoplay();
+  }, [scrollByCard, startAutoplay]);
 
   if (partners.length === 0) return null;
-
-  // embla loop корректно анимирует переход последний→первый слайд (в т.ч. при ручном
-  // перетаскивании) только если общая ширина слайдов минимум в 2-3 раза больше видимой
-  // области. При малом числе партнёров повторяем список нужное число раз, чтобы точно
-  // хватило ширины (на широких экранах видно до 5 карточек — берём запас x3)
-  const minSlides = 18;
-  const repeat = Math.max(1, Math.ceil(minSlides / partners.length));
-  const slides = repeat > 1 ? Array.from({ length: repeat }, () => partners).flat() : partners;
 
   return (
     <section className="py-10 md:py-14 bg-background border-t border-border">
@@ -66,30 +84,34 @@ export default function HomePartnersSection() {
           </button>
         </div>
 
-        <div className="overflow-hidden" ref={emblaRef}>
-          <div className="flex -ml-4">
-            {slides.map((p, i) => (
-              <div
-                key={`${p.id}-${i}`}
-                className="pl-4 shrink-0 basis-1/2 sm:basis-1/3 md:basis-1/4 lg:basis-1/5"
+        <div
+          ref={trackRef}
+          onMouseEnter={stopAutoplay}
+          onMouseLeave={startAutoplay}
+          className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth snap-x snap-mandatory"
+        >
+          {partners.map(p => (
+            <div
+              key={p.id}
+              data-card
+              className="snap-start shrink-0 w-[calc(50%-8px)] sm:w-[calc(33.333%-11px)] md:w-[calc(25%-12px)] lg:w-[calc(20%-13px)]"
+            >
+              <button
+                onClick={() => setSelected(p)}
+                title={p.name}
+                className="group relative w-full bg-white rounded-2xl shadow-sm h-32 md:h-36 flex items-center justify-center px-6 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all"
               >
-                <button
-                  onClick={() => setSelected(p)}
-                  title={p.name}
-                  className="group relative w-full bg-white rounded-2xl shadow-sm h-32 md:h-36 flex items-center justify-center px-6 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all"
-                >
-                  {p.logo_url ? (
-                    <img src={p.logo_url} alt={p.name} className="max-h-full max-w-full object-contain py-5" loading="lazy" onLoad={handleLogoLoad} />
-                  ) : (
-                    <span className="text-sm font-semibold text-muted-foreground truncate">{p.name}</span>
-                  )}
-                  <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex items-center justify-center bg-white py-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                    <span className="text-brand-gold font-bold text-lg md:text-xl leading-tight text-center">Сдать объект?</span>
-                  </div>
-                </button>
-              </div>
-            ))}
-          </div>
+                {p.logo_url ? (
+                  <img src={p.logo_url} alt={p.name} className="max-h-full max-w-full object-contain py-5" loading="lazy" />
+                ) : (
+                  <span className="text-sm font-semibold text-muted-foreground truncate">{p.name}</span>
+                )}
+                <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex items-center justify-center bg-white py-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  <span className="text-brand-gold font-bold text-lg md:text-xl leading-tight text-center">Сдать объект?</span>
+                </div>
+              </button>
+            </div>
+          ))}
         </div>
       </div>
 
