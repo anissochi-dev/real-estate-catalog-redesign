@@ -15,7 +15,7 @@ function optionLabel(d: District): string {
  * Используется вместе с <option value="all">Все районы</option> в родителе.
  */
 export default function DistrictOptions({ districts }: DistrictOptionsProps) {
-  const { groups, orphans } = groupByOkrug(districts, { sortBy: 'order' });
+  const { groups, orphans } = groupByOkrug(districts, { sortBy: 'alpha' });
 
   // Если иерархия не задана (нет округов) — плоский список
   if (groups.length === 0) {

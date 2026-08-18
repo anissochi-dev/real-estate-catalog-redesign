@@ -12,18 +12,20 @@ const byCount = (a: District, b: District) =>
 const bySort = (a: District, b: District) =>
   a.sort_order - b.sort_order || a.name.localeCompare(b.name, 'ru');
 
+const byAlpha = (a: District, b: District) => a.name.localeCompare(b.name, 'ru');
+
 /**
  * Группирует районы в иерархию: округа → их дочерние районы.
  * @param districts полный список из fetchDistricts()
  * @param opts.onlyWithListings оставлять только районы/округа, где есть объекты
- * @param opts.sortBy 'count' — по числу объектов, 'order' — по sort_order
+ * @param opts.sortBy 'count' — по числу объектов, 'order' — по sort_order, 'alpha' — районы внутри округа по алфавиту (округа сохраняют свой порядок)
  */
 export function groupByOkrug(
   districts: District[],
-  opts: { onlyWithListings?: boolean; sortBy?: 'count' | 'order' } = {},
+  opts: { onlyWithListings?: boolean; sortBy?: 'count' | 'order' | 'alpha' } = {},
 ): { groups: OkrugGroup[]; orphans: District[] } {
   const { onlyWithListings = false, sortBy = 'order' } = opts;
-  const sorter = sortBy === 'count' ? byCount : bySort;
+  const sorter = sortBy === 'count' ? byCount : sortBy === 'alpha' ? byAlpha : bySort;
   const hasListings = (d: District) => (d.listings_count ?? 0) > 0;
 
   const groups = districts

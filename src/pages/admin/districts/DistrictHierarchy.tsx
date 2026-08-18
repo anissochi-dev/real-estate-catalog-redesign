@@ -29,9 +29,9 @@ export default function DistrictHierarchy({ districts, onSaved, token }: Props) 
   });
 
   // Нераспределённые = активные, не округа, без parent_id
-  const unassigned = districts.filter(d =>
-    d.is_active && !d.is_okrug && d.parent_id == null
-  );
+  const unassigned = districts
+    .filter(d => d.is_active && !d.is_okrug && d.parent_id == null)
+    .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
   // Назначенные = активные, не округа, с parent_id
   const assigned = districts.filter(d => d.is_active && !d.is_okrug && d.parent_id != null);
 
@@ -204,7 +204,9 @@ export default function DistrictHierarchy({ districts, onSaved, token }: Props) 
         <div className="space-y-3">
           {okrugs.map((okrug, i) => {
             const c = OKRUG_COLOR_LIST[i % OKRUG_COLOR_LIST.length];
-            const children = assigned.filter(d => d.parent_id === okrug.id);
+            const children = assigned
+              .filter(d => d.parent_id === okrug.id)
+              .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
             const isDragOver = dragOver === okrug.id;
 
             return (
