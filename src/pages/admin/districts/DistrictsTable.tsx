@@ -88,14 +88,16 @@ export default function DistrictsTable({
   const activeCount = districts.filter(d => d.is_active).length;
   const inactiveCount = districts.length - activeCount;
 
-  const filtered = districts.filter(d => {
-    if (!d.is_active) return false;
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return d.name.toLowerCase().includes(q) ||
-      d.city.toLowerCase().includes(q) ||
-      (d.description || '').toLowerCase().includes(q);
-  });
+  const filtered = districts
+    .filter(d => {
+      if (!d.is_active) return false;
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return d.name.toLowerCase().includes(q) ||
+        d.city.toLowerCase().includes(q) ||
+        (d.description || '').toLowerCase().includes(q);
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
 
   return (
     <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
