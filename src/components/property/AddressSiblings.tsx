@@ -43,7 +43,7 @@ export default function AddressSiblings({ listingId }: Props) {
           <Link
             key={p.id}
             to={`/object/${listingSlug(p.title, p.id)}`}
-            className="flex items-center gap-3 py-2.5 hover:bg-muted/40 -mx-1 px-1 rounded-lg transition-colors group"
+            className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-1 py-2.5 hover:bg-muted/40 -mx-1 px-1 rounded-lg transition-colors group"
           >
             <div className="w-14 h-14 rounded-lg overflow-hidden bg-muted flex-shrink-0">
               {p.image ? (
@@ -59,7 +59,7 @@ export default function AddressSiblings({ listingId }: Props) {
               )}
             </div>
 
-            <div className="min-w-0 flex-shrink-0">
+            <div className="min-w-0 flex-shrink sm:flex-shrink-0">
               <div className="text-brand-blue text-sm font-medium group-hover:underline underline-offset-2 truncate">
                 {TYPE_LABELS[p.type] || p.type}
               </div>
@@ -68,12 +68,14 @@ export default function AddressSiblings({ listingId }: Props) {
               ) : null}
             </div>
 
-            <span className="ml-auto text-sm text-muted-foreground flex-shrink-0 whitespace-nowrap">
-              {p.area ? `${p.area.toLocaleString('ru')} м²` : ''}
-            </span>
-            <span className="text-sm font-semibold text-foreground flex-shrink-0 whitespace-nowrap min-w-[6.5rem] text-right">
-              {formatPrice(p.price, p.deal)}
-            </span>
+            <div className="w-full sm:w-auto sm:ml-auto flex items-center justify-between sm:justify-end gap-3 pl-[68px] sm:pl-0">
+              <span className="text-sm text-muted-foreground flex-shrink-0 whitespace-nowrap">
+                {p.area ? `${p.area.toLocaleString('ru')} м²` : ''}
+              </span>
+              <span className="text-sm font-semibold text-foreground flex-shrink-0 whitespace-nowrap sm:min-w-[6.5rem] text-right">
+                {formatPrice(p.price, p.deal)}
+              </span>
+            </div>
           </Link>
         ))}
       </div>
