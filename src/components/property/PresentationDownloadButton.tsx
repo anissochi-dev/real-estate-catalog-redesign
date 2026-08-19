@@ -19,14 +19,18 @@ export default function PresentationDownloadButton({ listingId, className = '' }
         alert('Не удалось подготовить презентацию. Попробуйте ещё раз.');
         return;
       }
+      // Скачиваем файл как blob — иначе браузер просто открывает файл с чужого домена (CDN)
+      // вместо скачивания, т.к. атрибут download игнорируется для cross-origin ссылок.
+      const fileRes = await fetch(result.url);
+      const blob = await fileRes.blob();
+      const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = result.url;
+      a.href = blobUrl;
       a.download = `presentation-${listingId}.jpg`;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
     } catch {
       alert('Не удалось подготовить презентацию. Попробуйте ещё раз.');
     } finally {
