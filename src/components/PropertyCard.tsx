@@ -3,8 +3,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Property } from '@/App';
 import Icon from '@/components/ui/icon';
 import { listingSlug } from '@/lib/slug';
-import YandexMap from '@/components/YandexMap';
-import { useSettings } from '@/contexts/SettingsContext';
 import { prefetchListingById } from '@/lib/api';
 import { prefetchPage } from '@/app/lazyPages';
 import { fmtListingId, computePaybackYears } from '@/lib/formatPrice';
@@ -205,10 +203,8 @@ export default function PropertyCard({
   const href = `/object/${listingSlug(property.title, property.id)}`;
   const navigate = useNavigate();
   const { hint, rootRef } = usePredictHint(property.id);
-  const { settings } = useSettings();
 
   const cover = getCoverImage(property);
-  const [mapOpen, setMapOpen] = useState(false);
 
   const ppm2 = property.pricePerM2
     ? property.pricePerM2
@@ -219,8 +215,6 @@ export default function PropertyCard({
     ? (ASSESS_STYLES[hint.price_assessment.color] ?? ASSESS_STYLES.gray) : null;
 
   const addressLine = [property.district, property.address].filter(Boolean).join(', ') || null;
-  const mapQuery = [property.district, property.address].filter(Boolean).join(', ');
-  const hasCoords = !!(property.lat && property.lng);
 
   const isAutoNew = useMemo(() => {
     const dateStr = property.createdAt;
@@ -330,14 +324,10 @@ export default function PropertyCard({
             {/* Адрес — полный */}
             {addressLine ? (
               <div className="flex items-start gap-1.5 flex-wrap">
-                <button
-                  type="button"
-                  onClick={e => { e.stopPropagation(); setMapOpen(true); }}
-                  className="flex items-start gap-1 text-[13px] text-muted-foreground hover:text-brand-blue transition-colors text-left group/addr"
-                >
-                  <Icon name="MapPin" size={12} className="flex-shrink-0 text-brand-blue/40 group-hover/addr:text-brand-blue mt-0.5 transition-colors" />
+                <div className="flex items-start gap-1 text-[13px] text-muted-foreground">
+                  <Icon name="MapPin" size={12} className="flex-shrink-0 text-brand-blue/40 mt-0.5" />
                   <span className="break-words">{addressLine}</span>
-                </button>
+                </div>
               </div>
             ) : property.district ? (
               <button
@@ -426,64 +416,6 @@ export default function PropertyCard({
 
         </div>
       </div>
-
-      {/* ── Попап карты ── */}
-      {mapOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-          onClick={() => setMapOpen(false)}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-              <div>
-                <div className="font-display font-700 text-sm text-foreground line-clamp-1">{property.title}</div>
-                <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                  <Icon name="MapPin" size={11} />
-                  {addressLine}
-                </div>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <a
-                  href={`https://yandex.ru/maps/?text=${encodeURIComponent(mapQuery)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-brand-blue hover:underline flex items-center gap-1"
-                >
-                  Открыть в Яндекс.Картах <Icon name="ExternalLink" size={11} />
-                </a>
-                <button type="button" onClick={() => setMapOpen(false)}
-                  className="w-7 h-7 rounded-full bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors">
-                  <Icon name="X" size={14} />
-                </button>
-              </div>
-            </div>
-            {hasCoords && settings.yandex_maps_api_key ? (
-              <YandexMap
-                points={[{ id: property.id, lat: property.lat, lng: property.lng, title: property.title, caption: addressLine || '' }]}
-                zoom={15}
-                height="300px"
-              />
-            ) : (
-              <div className="h-[200px] flex flex-col items-center justify-center gap-3 text-muted-foreground">
-                <Icon name="MapPin" size={32} className="text-brand-blue/40" />
-                <div className="text-sm text-center px-4">
-                  <a
-                    href={`https://yandex.ru/maps/?text=${encodeURIComponent(mapQuery)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-brand-blue hover:underline font-medium"
-                  >
-                    Открыть в Яндекс.Картах →
-                  </a>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </>
   );
 }
