@@ -880,6 +880,23 @@ def handler(event: dict, context) -> dict:
             total = int(rows[0]['_total_count']) if rows else 0
             items = [_serialize({k: v for k, v in dict(r).items() if k != '_total_count'}) for r in rows]
 
+            # Кол-во других активных объектов по тому же адресу — только для адресов
+            # этой страницы (не по всей таблице), запрос дешёвый.
+            addrs = {(it.get('address') or '').strip() for it in items if it.get('address')}
+            if addrs:
+                addr_list = ", ".join("'" + a.replace("'", "''") + "'" for a in addrs)
+                cur.execute(
+                    "SELECT TRIM(address) AS addr, COUNT(*) AS c "
+                    "FROM t_p71821556_real_estate_catalog_.listings "
+                    f"WHERE status = 'active' AND is_visible = TRUE AND TRIM(address) IN ({addr_list}) "
+                    "GROUP BY TRIM(address)"
+                )
+                counts = {r['addr']: int(r['c']) for r in cur.fetchall()}
+                for it in items:
+                    addr = (it.get('address') or '').strip()
+                    total_at_addr = counts.get(addr, 0)
+                    it['siblings_count'] = max(total_at_addr - 1, 0)
+
             result = {'listings': items, 'total': total}
             if cache_key:
                 _cache_set(cache_key, result)

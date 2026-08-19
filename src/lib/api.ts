@@ -48,6 +48,7 @@ interface ApiListing {
   owner_phone?: string | null;
   image_thumb?: string | null;
   broker_phone?: string | null;
+  siblings_count?: number | null;
 }
 
 function toNum(v: unknown): number {
@@ -102,6 +103,7 @@ export function mapApiListing(item: ApiListing): Property {
     ownerPhone: item.owner_phone || undefined,
     image_thumb: item.image_thumb || undefined,
     brokerPhone: item.broker_phone || undefined,
+    siblingsCount: item.siblings_count ?? undefined,
   };
 }
 

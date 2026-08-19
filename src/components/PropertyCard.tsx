@@ -329,14 +329,25 @@ export default function PropertyCard({
 
             {/* Адрес — полный */}
             {addressLine ? (
-              <button
-                type="button"
-                onClick={e => { e.stopPropagation(); setMapOpen(true); }}
-                className="flex items-start gap-1 text-[13px] text-muted-foreground hover:text-brand-blue transition-colors text-left w-full group/addr"
-              >
-                <Icon name="MapPin" size={12} className="flex-shrink-0 text-brand-blue/40 group-hover/addr:text-brand-blue mt-0.5 transition-colors" />
-                <span className="break-words">{addressLine}</span>
-              </button>
+              <div className="flex items-start gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={e => { e.stopPropagation(); setMapOpen(true); }}
+                  className="flex items-start gap-1 text-[13px] text-muted-foreground hover:text-brand-blue transition-colors text-left group/addr"
+                >
+                  <Icon name="MapPin" size={12} className="flex-shrink-0 text-brand-blue/40 group-hover/addr:text-brand-blue mt-0.5 transition-colors" />
+                  <span className="break-words">{addressLine}</span>
+                </button>
+                {!!property.siblingsCount && (
+                  <span
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-blue bg-brand-blue/8 border border-brand-blue/20 px-1.5 py-0.5 rounded-full flex-shrink-0"
+                    title={`По этому адресу ещё ${property.siblingsCount} предложений`}
+                  >
+                    <Icon name="Building2" size={10} />
+                    +{property.siblingsCount}
+                  </span>
+                )}
+              </div>
             ) : property.district ? (
               <button
                 type="button"

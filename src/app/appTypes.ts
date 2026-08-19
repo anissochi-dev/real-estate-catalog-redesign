@@ -40,6 +40,7 @@ export interface Property {
   ownerPhone?: string;
   image_thumb?: string;
   brokerPhone?: string;
+  siblingsCount?: number;
 }
 
 export type Page = 'home' | 'catalog' | 'map' | 'favorites' | 'compare' | 'network-tenants' | 'news' | 'leads';
