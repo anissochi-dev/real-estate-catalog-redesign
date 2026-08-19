@@ -728,6 +728,35 @@ def handler(event: dict, context) -> dict:
                     rows = cur.fetchall()
                 return _ok({'listings': [_serialize(dict(r)) for r in rows]}, cache='public, max-age=120, stale-while-revalidate=30')
 
+            if params.get('resource') == 'same_address' and params.get('id'):
+                try:
+                    sid = int(params.get('id'))
+                except (TypeError, ValueError):
+                    return _ok({'listings': []})
+                cur.execute(
+                    "SELECT address, city FROM t_p71821556_real_estate_catalog_.listings WHERE id = "
+                    + str(sid)
+                )
+                src = cur.fetchone()
+                addr = (src.get('address') or '').strip() if src else ''
+                city = (src.get('city') or '').strip() if src else ''
+                if not src or not addr:
+                    return _ok({'listings': []})
+                addr_esc = addr.replace("'", "''")
+                city_esc = city.replace("'", "''")
+                same_cols = (
+                    "id, title, category, deal, price, price_per_m2, price_unit, area, "
+                    "floor, total_floors, address, district, image"
+                )
+                cur.execute(
+                    f"SELECT {same_cols} FROM t_p71821556_real_estate_catalog_.listings WHERE "
+                    f"status = 'active' AND is_visible = TRUE AND id <> {sid} "
+                    f"AND TRIM(address) = '{addr_esc}' AND TRIM(COALESCE(city, '')) = '{city_esc}' "
+                    f"ORDER BY category, deal, price ASC"
+                )
+                rows = cur.fetchall()
+                return _ok({'listings': [_serialize(dict(r)) for r in rows]}, cache='public, max-age=120, stale-while-revalidate=30')
+
             listing_id = params.get('id')
             if listing_id:
                 cur.execute(

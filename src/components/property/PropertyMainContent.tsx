@@ -6,6 +6,7 @@ import PublicPhoneInput from '@/components/PublicPhoneInput';
 import PropertyMapInfrastructure from '@/components/PropertyMapInfrastructure';
 import SimilarListings from '@/components/SimilarListings';
 import RecentlyViewed from '@/components/RecentlyViewed';
+import AddressSiblings from '@/components/property/AddressSiblings';
 import CharCount from '@/components/ui/CharCount';
 import SmartCaptcha, { CaptchaResult } from '@/components/SmartCaptcha';
 
@@ -86,6 +87,9 @@ export default function PropertyMainContent({
           ) : null}
         </button>
       </div>
+
+      {/* Другие предложения по этому адресу */}
+      <AddressSiblings listingId={item.id} />
 
       {/* Инвестиционная NOI-модель (AI) — между адресом и параметрами */}
       <Suspense fallback={null}>

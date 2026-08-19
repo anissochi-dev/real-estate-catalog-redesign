@@ -153,6 +153,17 @@ export async function fetchSimilarListings(id: number): Promise<Property[]> {
   }
 }
 
+export async function fetchSameAddressListings(id: number): Promise<Property[]> {
+  try {
+    const res = await fetchWithTimeout(`${LISTINGS_URL}?resource=same_address&id=${id}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.listings || []).map(mapApiListing);
+  } catch {
+    return [];
+  }
+}
+
 export interface ListingDetail extends Property {
   images?: string[];
   city?: string;
