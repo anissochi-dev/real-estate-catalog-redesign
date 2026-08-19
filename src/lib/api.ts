@@ -306,6 +306,20 @@ export async function sendLead(payload: LeadInput): Promise<{ success: boolean; 
   return res.json();
 }
 
+const UPLOAD_URL = 'https://functions.poehali.dev/8983c0a8-a8c8-47ff-97ed-59cc1571aa15';
+
+/** Генерирует JPG-презентацию объекта (A4) и возвращает ссылку на файл в S3. */
+export async function generatePresentation(listingId: number): Promise<{ url: string } | { error: string }> {
+  const res = await fetch(UPLOAD_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: 'presentation', listing_id: listingId }),
+  });
+  const data = await res.json();
+  if (!res.ok) return { error: data?.error || 'Не удалось сгенерировать презентацию' };
+  return { url: data.url };
+}
+
 export interface PublicSettings {
   company_name?: string;
   company_phone?: string;

@@ -9,6 +9,7 @@ import RecentlyViewed from '@/components/RecentlyViewed';
 import AddressSiblings from '@/components/property/AddressSiblings';
 import CharCount from '@/components/ui/CharCount';
 import SmartCaptcha, { CaptchaResult } from '@/components/SmartCaptcha';
+import PresentationDownloadButton from '@/components/property/PresentationDownloadButton';
 
 const InvestmentModel = lazy(() => import('@/components/property/InvestmentModel'));
 import {
@@ -224,6 +225,9 @@ export default function PropertyMainContent({
             </button>
           </form>
         )}
+        <div className="mt-2">
+          <PresentationDownloadButton listingId={item.id} />
+        </div>
       </div>
 
 

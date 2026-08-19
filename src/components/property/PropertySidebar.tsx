@@ -10,6 +10,7 @@ import PublicPhoneInput from '@/components/PublicPhoneInput';
 import { fmtListingId } from '@/lib/formatPrice';
 import SmartCaptcha, { CaptchaResult } from '@/components/SmartCaptcha';
 import AIChatWidget from './AIChatWidget';
+import PresentationDownloadButton from './PresentationDownloadButton';
 import { trackListingCall } from '@/lib/analytics';
 
 interface Props {
@@ -194,6 +195,8 @@ export default function PropertySidebar({ item, agents, sent, sending, form, set
             </form>
           )}
         </div>
+
+        <PresentationDownloadButton listingId={item.id} />
 
       </div>
     </div>

@@ -2,7 +2,9 @@
 Business: Загрузка фото/логотипа/водяного знака/документа в S3 через base64. Опционально накладывает водяной знак на фото объектов.
 Также поддерживает публичную загрузку (kind=public) с защитой по magic bytes, rate limit и сканированием кода.
 kind=document — сохраняет файл (pdf/doc/docx/xls/xlsx/zip) как есть, без обработки как изображение.
-Args: event с httpMethod POST, body {file_base64, filename, kind (photo/logo/watermark/document/public), apply_watermark}, headers X-Auth-Token
+kind=presentation — публично (без авторизации) генерирует JPG-презентацию объекта (A4) с фото, ценой,
+параметрами, коммуникациями, описанием и QR-кодом на страницу объекта; загружает в S3 и возвращает ссылку.
+Args: event с httpMethod POST, body {file_base64, filename, kind (photo/logo/watermark/document/public/presentation), apply_watermark, listing_id}, headers X-Auth-Token
 Returns: HTTP-ответ с url загруженного файла на CDN
 """
 
@@ -281,6 +283,63 @@ def handler(event, context):
         s3_pub.put_object(Bucket='files', Key=fname, Body=file_data, ContentType=pub_mime, CacheControl='public, max-age=31536000')
         cdn = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{fname}"
         return _ok({'success': True, 'url': cdn, 'mime': pub_mime, 'size': len(file_data)})
+
+    if body_peek.get('kind') == 'presentation':
+        listing_id = body_peek.get('listing_id')
+        if not listing_id:
+            return _err(400, 'listing_id обязателен')
+        ip = ((event.get('requestContext') or {}).get('identity') or {}).get('sourceIp') or 'unknown'
+        s3_pres = boto3.client(
+            's3', endpoint_url='https://bucket.poehali.dev',
+            aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+            aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+        )
+        if not _check_rate_public(s3_pres, ip):
+            return _err(429, 'Превышен лимит запросов. Попробуйте позже.')
+
+        dsn_pres = os.environ['DATABASE_URL']
+        conn_pres = psycopg2.connect(dsn_pres)
+        try:
+            with conn_pres.cursor(cursor_factory=RealDictCursor) as cur_pres:
+                cur_pres.execute(
+                    f"SELECT id, title, address, district, price, deal, area, land_area, "
+                    f"category, condition, ceiling_height, parking, floor, total_floors, "
+                    f"utilities, description, images, image, slug "
+                    f"FROM {SCHEMA}.listings WHERE id = {int(listing_id)} AND status = 'active'"
+                )
+                listing_row = cur_pres.fetchone()
+                if not listing_row:
+                    return _err(404, 'Объект не найден')
+
+                cur_pres.execute(
+                    f"SELECT logo_url, company_phone, site_url FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
+                )
+                company_row = cur_pres.fetchone() or {}
+
+                listing = dict(listing_row)
+                imgs_raw = listing.get('images')
+                if isinstance(imgs_raw, str) and imgs_raw:
+                    sep = '|' if '|' in imgs_raw else ','
+                    listing['images'] = [s.strip() for s in imgs_raw.split(sep) if s.strip()]
+                elif not isinstance(imgs_raw, list):
+                    listing['images'] = [listing['image']] if listing.get('image') else []
+
+                try:
+                    from presentation import generate as generate_presentation
+                    jpg_bytes = generate_presentation(listing, dict(company_row))
+                except Exception as gen_err:
+                    return _err(500, f'Ошибка генерации: {gen_err}')
+
+                token_pres = secrets.token_urlsafe(10)
+                key_pres = f"presentations/{listing_id}_{token_pres}.jpg"
+                s3_pres.put_object(
+                    Bucket='files', Key=key_pres, Body=jpg_bytes,
+                    ContentType='image/jpeg', CacheControl='public, max-age=3600',
+                )
+                url_pres = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key_pres}"
+                return _ok({'success': True, 'url': url_pres, 'size': len(jpg_bytes)})
+        finally:
+            conn_pres.close()
 
     headers = event.get('headers') or {}
     token = headers.get('X-Auth-Token') or headers.get('x-auth-token') or ''
