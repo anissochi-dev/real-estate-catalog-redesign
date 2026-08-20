@@ -21,16 +21,27 @@ interface MapPoint {
 // UX для пожилых пользователей (65+): единый спокойный стиль пина вместо 12 разноцветных
 // категорий — глаз не устаёт различать цвета, все объекты воспринимаются как «то, что искал».
 // Контурный (не залитый) маркер: белая заливка + приглушённый синий контур (opacity ~0.85).
-const PIN_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="40" viewBox="0 0 32 40">'
+//
+// Этап 2 — увеличенная зона нажатия: сам рисунок пина остаётся 32×40, но SVG-канвас на
+// 8px шире с каждой стороны (прозрачные поля). iconImageSize указывается по канвасу целиком,
+// поэтому Яндекс.Карты регистрируют клик по всей увеличенной области, а не только по видимому
+// контуру — так пожилым пользователям проще попасть пальцем/курсором, а внешний вид не меняется.
+const PIN_PAD = 8;
+const PIN_VISUAL_W = 32;
+const PIN_VISUAL_H = 40;
+const PIN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="${PIN_VISUAL_W + PIN_PAD * 2}" height="${PIN_VISUAL_H + PIN_PAD * 2}" viewBox="0 0 ${PIN_VISUAL_W + PIN_PAD * 2} ${PIN_VISUAL_H + PIN_PAD * 2}">`
+  + `<g transform="translate(${PIN_PAD},${PIN_PAD})">`
   + '<path d="M16 0C7.163 0 0 7.163 0 16c0 11 16 24 16 24s16-13 16-24C32 7.163 24.837 0 16 0z" '
   + 'fill="#FFFFFF" stroke="#4A76BD" stroke-width="2.5" stroke-opacity="0.85"/>'
-  + '<circle cx="16" cy="16" r="5" fill="#4A76BD" fill-opacity="0.85"/></svg>';
+  + '<circle cx="16" cy="16" r="5" fill="#4A76BD" fill-opacity="0.85"/></g></svg>';
 const PIN_ICON_HREF = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(PIN_SVG)}`;
-const PIN_SIZE: [number, number] = [32, 40];
-const PIN_OFFSET: [number, number] = [-16, -40];
-// При наведении/выборе из списка — тот же спокойный стиль, но крупнее (не другой цвет/форма).
-const PIN_SIZE_HL: [number, number] = [40, 50];
-const PIN_OFFSET_HL: [number, number] = [-20, -50];
+const PIN_SIZE: [number, number] = [PIN_VISUAL_W + PIN_PAD * 2, PIN_VISUAL_H + PIN_PAD * 2];
+const PIN_OFFSET: [number, number] = [-(PIN_VISUAL_W / 2 + PIN_PAD), -(PIN_VISUAL_H + PIN_PAD)];
+// При наведении/выборе из списка — тот же спокойный стиль и та же (пропорционально увеличенная)
+// зона нажатия, просто крупнее (не другой цвет/форма).
+const PIN_SCALE_HL = 1.25;
+const PIN_SIZE_HL: [number, number] = [Math.round(PIN_SIZE[0] * PIN_SCALE_HL), Math.round(PIN_SIZE[1] * PIN_SCALE_HL)];
+const PIN_OFFSET_HL: [number, number] = [Math.round(PIN_OFFSET[0] * PIN_SCALE_HL), Math.round(PIN_OFFSET[1] * PIN_SCALE_HL)];
 
 // Кластер — мягкий пастельный круг с жирной чёрной цифрой (контраст для слабого зрения).
 const CLUSTER_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">'
