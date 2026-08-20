@@ -18,32 +18,24 @@ interface MapPoint {
   deal?: string;
 }
 
-// Соответствие типа объекта → preset иконки Yandex Maps (со значком категории).
-// Доступные значки: Office, Shopping, Food, Hotel, Factory, Money, Auto, Education,
-// Sport, Theater, MassTransit, Park, Health, Beauty, Government, Service, Home.
-// Цвета: blue, darkBlue, lightBlue, red, darkOrange, orange, yellow, green,
-// darkGreen, night, violet, pink, brown, grey, black.
-const TYPE_PRESET: Record<string, { glyph: string; color: string }> = {
-  office: { glyph: 'Office', color: 'blue' },
-  retail: { glyph: 'Shopping', color: 'orange' },
-  warehouse: { glyph: 'Factory', color: 'grey' },
-  restaurant: { glyph: 'Food', color: 'red' },
-  hotel: { glyph: 'Hotel', color: 'pink' },
-  business: { glyph: 'Money', color: 'violet' },
-  gab: { glyph: 'Money', color: 'green' },
-  production: { glyph: 'Factory', color: 'darkOrange' },
-  land: { glyph: 'Park', color: 'darkGreen' },
-  building: { glyph: 'Government', color: 'lightBlue' },
-  free_purpose: { glyph: 'Home', color: 'yellow' },
-  car_service: { glyph: 'Auto', color: 'brown' },
-};
+// UX для пожилых пользователей (65+): единый спокойный стиль пина вместо 12 разноцветных
+// категорий — глаз не устаёт различать цвета, все объекты воспринимаются как «то, что искал».
+// Контурный (не залитый) маркер: белая заливка + приглушённый синий контур (opacity ~0.85).
+const PIN_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="40" viewBox="0 0 32 40">'
+  + '<path d="M16 0C7.163 0 0 7.163 0 16c0 11 16 24 16 24s16-13 16-24C32 7.163 24.837 0 16 0z" '
+  + 'fill="#FFFFFF" stroke="#4A76BD" stroke-width="2.5" stroke-opacity="0.85"/>'
+  + '<circle cx="16" cy="16" r="5" fill="#4A76BD" fill-opacity="0.85"/></svg>';
+const PIN_ICON_HREF = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(PIN_SVG)}`;
+const PIN_SIZE: [number, number] = [32, 40];
+const PIN_OFFSET: [number, number] = [-16, -40];
+// При наведении/выборе из списка — тот же спокойный стиль, но крупнее (не другой цвет/форма).
+const PIN_SIZE_HL: [number, number] = [40, 50];
+const PIN_OFFSET_HL: [number, number] = [-20, -50];
 
-function presetFor(type?: string, isHot?: boolean): string {
-  const t = type ? TYPE_PRESET[type] : undefined;
-  const color = isHot ? 'red' : (t?.color || 'blue');
-  const glyph = t?.glyph || 'Home';
-  return `islands#${color}${glyph}Icon`;
-}
+// Кластер — мягкий пастельный круг с жирной чёрной цифрой (контраст для слабого зрения).
+const CLUSTER_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">'
+  + '<circle cx="20" cy="20" r="18" fill="#DCEAFB" stroke="#93C5FD" stroke-width="2"/></svg>';
+const CLUSTER_ICON_HREF = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(CLUSTER_SVG)}`;
 
 interface Props {
   points?: MapPoint[];
@@ -105,6 +97,8 @@ export default function YandexMap({
   const mapRef = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const placemarkMapRef = useRef<Map<number, any>>(new Map());
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const clustererRef = useRef<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
 
@@ -179,13 +173,39 @@ export default function YandexMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !window.ymaps || !mapReady) return;
-    map.geoObjects.removeAll();
 
     const valid = points
       .map(p => ({ ...p, lat: Number(p.lat), lng: Number(p.lng) }))
       .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng) && p.lat !== 0 && p.lng !== 0);
 
     placemarkMapRef.current.clear();
+
+    // Кластеризация (Этап 1 UX 65+): вместо "муравейника" из десятков пинов при отдалении —
+    // один пастельный круг с крупной цифрой. Единственный объект на карте — сам Clusterer,
+    // поэтому карту не чистим через geoObjects.removeAll() (это удалило бы и сам Clusterer) —
+    // просто очищаем его содержимое при каждом обновлении точек.
+    if (!clustererRef.current) {
+      clustererRef.current = new window.ymaps.Clusterer({
+        preset: 'islands#invertedVioletClusterIcons', // переопределяется layout ниже
+        groupByCoordinates: false,
+        clusterDisableClickZoom: false,
+        clusterHideIconOnBalloonOpen: false,
+        geoObjectHideIconOnBalloonOpen: false,
+        clusterIconLayout: window.ymaps.templateLayoutFactory.createClass(
+          `<div style="position:relative;width:40px;height:40px">
+             <img src="${CLUSTER_ICON_HREF}" width="40" height="40" style="position:absolute;top:0;left:0" />
+             <div style="position:absolute;top:0;left:0;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;color:#111;font-family:inherit">$[properties.geoObjects.length]</div>
+           </div>`
+        ),
+        clusterIconShape: { type: 'Circle', coordinates: [20, 20], radius: 20 },
+      });
+      map.geoObjects.add(clustererRef.current);
+    } else {
+      clustererRef.current.removeAll();
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const newPlacemarks: any[] = [];
 
     // Уникальный префикс для обработчиков кликов по balloon
     const cbKey = `_ymapsCb_${Date.now()}`;
@@ -226,6 +246,9 @@ export default function YandexMap({
           </div>
         </div>`;
 
+      // Единый спокойный контурный пин (Этап 1 UX 65+) вместо 12 разноцветных категорий.
+      // iconImageSize намеренно больше визуальной SVG-картинки — увеличивает зону нажатия
+      // для пользователей, которым сложно точно попасть пальцем/курсором.
       const placemark = new window.ymaps.Placemark(
         [p.lat, p.lng],
         {
@@ -233,7 +256,10 @@ export default function YandexMap({
           hintContent: p.title || '',
         },
         {
-          preset: presetFor(p.type, p.isHot),
+          iconLayout: 'default#image',
+          iconImageHref: PIN_ICON_HREF,
+          iconImageSize: PIN_SIZE,
+          iconImageOffset: PIN_OFFSET,
           balloonAutoPan: true,
           balloonCloseButton: true,
           hideIconOnBalloonOpen: false,
@@ -244,9 +270,11 @@ export default function YandexMap({
         if (onPointClick) onPointClick(p);
       });
 
-      map.geoObjects.add(placemark);
+      newPlacemarks.push(placemark);
       placemarkMapRef.current.set(p.id, placemark);
     });
+
+    clustererRef.current.add(newPlacemarks);
 
     if (valid.length === 1) {
       map.setCenter([valid[0].lat, valid[0].lng], Math.max(zoom, 14));
@@ -286,21 +314,16 @@ export default function YandexMap({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, mapReady]);
 
-  // Подсветка маркера при hover из списка
+  // Подсветка маркера при hover из списка — тот же спокойный стиль, просто крупнее
+  // (без смены цвета/формы — чтобы не создавать новый визуальный сигнал для пользователя).
   useEffect(() => {
     if (!mapReady || !window.ymaps) return;
     placemarkMapRef.current.forEach((pm, id) => {
       try {
         const isHL = id === highlightedId;
         pm.options.set('zIndex', isHL ? 1000 : 0);
-        pm.options.set('iconOffset', isHL ? [0, -10] : [0, 0]);
-        // Меняем preset: при hover — жёлтая звезда (выделяется на любом фоне)
-        const origPoint = points.find(p => p.id === id);
-        if (isHL) {
-          pm.options.set('preset', 'islands#yellowStarIcon');
-        } else {
-          pm.options.set('preset', presetFor(origPoint?.type, origPoint?.isHot));
-        }
+        pm.options.set('iconImageSize', isHL ? PIN_SIZE_HL : PIN_SIZE);
+        pm.options.set('iconImageOffset', isHL ? PIN_OFFSET_HL : PIN_OFFSET);
       } catch { /* ignore */ }
     });
   }, [highlightedId, mapReady, points]);
@@ -326,6 +349,7 @@ export default function YandexMap({
           // ignore destroy errors
         }
         ref.current = null;
+        clustererRef.current = null;
         setMapReady(false);
       }
     };
