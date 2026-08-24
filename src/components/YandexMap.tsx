@@ -37,19 +37,16 @@ const PIN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="${PIN_VISUAL_W +
 const PIN_ICON_HREF = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(PIN_SVG)}`;
 const PIN_SIZE: [number, number] = [PIN_VISUAL_W + PIN_PAD * 2, PIN_VISUAL_H + PIN_PAD * 2];
 const PIN_OFFSET: [number, number] = [-(PIN_VISUAL_W / 2 + PIN_PAD), -(PIN_VISUAL_H + PIN_PAD)];
-// При наведении на карточку в списке (или выборе на карте) — крупнее и с золотым контуром
-// (тот же стиль, что у обычных пинов — белая заливка + контур с точкой, только золотой
-// вместо приглушённого синего), чтобы пользователю было сразу видно, какому объекту
-// в списке соответствует пин на карте — это отдельный, легко читаемый сигнал.
+// При наведении на карточку в списке (или выборе на карте) — тот же размер и стиль,
+// что у обычных пинов (белая заливка + контур с точкой), меняется только цвет на золотой
+// вместо приглушённого синего — чтобы пользователю было сразу видно, какому объекту
+// в списке соответствует пин на карте.
 const PIN_SVG_HL = `<svg xmlns="http://www.w3.org/2000/svg" width="${PIN_VISUAL_W + PIN_PAD * 2}" height="${PIN_VISUAL_H + PIN_PAD * 2}" viewBox="0 0 ${PIN_VISUAL_W + PIN_PAD * 2} ${PIN_VISUAL_H + PIN_PAD * 2}">`
   + `<g transform="translate(${PIN_PAD},${PIN_PAD})">`
   + '<path d="M16 0C7.163 0 0 7.163 0 16c0 11 16 24 16 24s16-13 16-24C32 7.163 24.837 0 16 0z" '
   + 'fill="#FFFFFF" stroke="#D4AF37" stroke-width="2.5"/>'
   + '<circle cx="16" cy="16" r="5" fill="#D4AF37"/></g></svg>';
 const PIN_ICON_HREF_HL = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(PIN_SVG_HL)}`;
-const PIN_SCALE_HL = 1.25;
-const PIN_SIZE_HL: [number, number] = [Math.round(PIN_SIZE[0] * PIN_SCALE_HL), Math.round(PIN_SIZE[1] * PIN_SCALE_HL)];
-const PIN_OFFSET_HL: [number, number] = [Math.round(PIN_OFFSET[0] * PIN_SCALE_HL), Math.round(PIN_OFFSET[1] * PIN_SCALE_HL)];
 
 // Кластер — мягкий пастельный круг с жирной чёрной цифрой (контраст для слабого зрения).
 const CLUSTER_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">'
@@ -338,7 +335,7 @@ export default function YandexMap({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, mapReady]);
 
-  // Подсветка маркера при hover из списка — крупнее и другого цвета (оранжевый),
+  // Подсветка маркера при hover из списка — тот же размер, меняется только цвет (золотой),
   // чтобы было сразу понятно, где на карте находится наведённый объект из списка.
   //
   // Важно: при большом количестве объектов в одной точке/районе Яндекс.Карты группируют
@@ -368,8 +365,8 @@ export default function YandexMap({
         {
           iconLayout: 'default#image',
           iconImageHref: PIN_ICON_HREF_HL,
-          iconImageSize: PIN_SIZE_HL,
-          iconImageOffset: PIN_OFFSET_HL,
+          iconImageSize: PIN_SIZE,
+          iconImageOffset: PIN_OFFSET,
           zIndex: 1000,
           interactivityModel: 'default#transparent', // клики проходят "сквозь" — не мешает кластеру/пину под собой
         }
