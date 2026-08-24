@@ -136,7 +136,7 @@ export default function LeadsListPage() {
     setContactForm({
       name: '',
       phone: '',
-      message: `Хочу связаться по заявке #${lead.id}${lead.name ? ` (${lead.name})` : ''}`,
+      message: `Хочу связаться по заявке #${lead.id}`,
     });
     setContactSent(false);
     setCaptcha(null);

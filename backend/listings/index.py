@@ -359,8 +359,10 @@ def handler(event: dict, context) -> dict:
                 )
                 total = int(cur.fetchone()['c'] or 0)
 
+                # ФИО клиента (name) сознательно НЕ отдаём — персональные данные,
+                # публичный сайт не должен их раскрывать (поиск по имени в WHERE выше по-прежнему работает).
                 cur.execute(
-                    f"SELECT id, slug, name, message, budget, budget_to, company, request_category, "
+                    f"SELECT id, slug, message, budget, budget_to, company, request_category, "
                     f"lead_type, property_type, property_category, area_from, area_to, utilities, district_ids, "
                     f"is_network_tenant, created_at, updated_at "
                     f"FROM t_p71821556_real_estate_catalog_.leads WHERE {where_sql} "
@@ -397,8 +399,9 @@ def handler(event: dict, context) -> dict:
                         'body': json.dumps({'error': 'slug обязателен'}),
                     }
                 slug_safe = slug.replace("'", "''")
+                # ФИО клиента (name) сознательно не отдаём — персональные данные.
                 cur.execute(
-                    f"SELECT id, slug, name, message, budget, budget_to, company, request_category, "
+                    f"SELECT id, slug, message, budget, budget_to, company, request_category, "
                     f"lead_type, property_type, property_category, area_from, area_to, utilities, district_ids, "
                     f"is_network_tenant, created_at, updated_at "
                     f"FROM t_p71821556_real_estate_catalog_.leads "
@@ -427,7 +430,7 @@ def handler(event: dict, context) -> dict:
                 if d.get('property_category'):
                     pc_safe = str(d['property_category']).replace("'", "''")
                     cur.execute(
-                        f"SELECT id, slug, name, message, budget, budget_to, property_type, property_category, "
+                        f"SELECT id, slug, message, budget, budget_to, property_type, property_category, "
                         f"area_from, area_to, created_at "
                         f"FROM t_p71821556_real_estate_catalog_.leads "
                         f"WHERE property_category = '{pc_safe}' AND id != {int(d['id'])} "
@@ -446,8 +449,9 @@ def handler(event: dict, context) -> dict:
                 return _ok({'lead': d, 'similar': similar})
 
             if params.get('resource') == 'network_tenants':
+                # Публичная страница — персональные данные (ФИО, телефон, email) не отдаём.
                 cur.execute(
-                    "SELECT id, name, message, budget, company, phone, email, request_category, created_at "
+                    "SELECT id, message, budget, company, request_category, created_at "
                     "FROM t_p71821556_real_estate_catalog_.leads "
                     "WHERE is_network_tenant = TRUE "
                     "ORDER BY created_at DESC"

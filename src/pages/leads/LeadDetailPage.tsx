@@ -58,7 +58,7 @@ export default function LeadDetailPage() {
     setForm({
       name: '',
       phone: '',
-      message: `Хочу связаться по заявке #${lead.id}${lead.name ? ` (${lead.name})` : ''}`,
+      message: `Хочу связаться по заявке #${lead.id}`,
     });
     setSent(false);
     setCaptcha(null);

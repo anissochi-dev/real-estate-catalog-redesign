@@ -11,12 +11,9 @@ const LEADS_URL = 'https://functions.poehali.dev/45673fe4-a39d-4193-b529-174d4c8
 
 interface T {
   id: number;
-  name: string;
   company: string | null;
   message: string | null;
   budget: number | null;
-  phone: string;
-  email: string | null;
   request_category: string | null;
 }
 
@@ -43,7 +40,7 @@ export default function NetworkTenantsPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: form.name, phone: form.phone,
-        message: `Предложение сетевому арендатору "${offer.company || offer.name}" (заявка #${offer.id}). ${form.message}`,
+        message: `Предложение сетевому арендатору "${offer.company || `Заявка #${offer.id}`}" (заявка #${offer.id}). ${form.message}`,
         source: 'network-tenant-offer',
       }),
     });
@@ -91,7 +88,7 @@ export default function NetworkTenantsPage() {
             {items.map(t => (
               <div key={t.id} className="bg-white rounded-2xl p-5 shadow-sm border border-border flex flex-col">
                 <div className="flex items-center justify-between mb-3 gap-3">
-                  <div className="font-display font-700 text-lg truncate">{t.name}</div>
+                  <div className="font-display font-700 text-lg truncate">{t.company || `Заявка #${t.id}`}</div>
                   {t.budget && (
                     <span className="text-xs font-semibold bg-brand-blue/10 text-brand-blue px-2 py-1 rounded-lg whitespace-nowrap">
                       до {t.budget.toLocaleString('ru')} ₽

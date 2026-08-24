@@ -431,11 +431,10 @@ export async function aiSearchLeads(prompt: string): Promise<{ ids: number[]; re
   };
 }
 
-/** Тип публичной заявки. */
+/** Тип публичной заявки. ФИО клиента (name) сознательно не приходит с backend — персональные данные. */
 export interface PublicLead {
   id: number;
   slug?: string;
-  name: string;
   message: string;
   budget: number | null;
   budget_to: number | null;

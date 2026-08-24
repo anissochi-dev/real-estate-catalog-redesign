@@ -33,12 +33,6 @@ export function fmtDate(s: string | null): string {
   }
 }
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return name.slice(0, 2).toUpperCase();
-}
-
 export const CATEGORY_LABELS: Record<string, string> = {
   office: 'Офис',
   retail: 'Магазин / торговое',
@@ -70,7 +64,6 @@ const CATEGORY_ICONS: Record<string, string> = {
 };
 
 export default function LeadCard({ lead, districts, onContact, disableLink, hideContactButton }: { lead: PublicLead; districts: District[]; onContact: () => void; disableLink?: boolean; hideContactButton?: boolean }) {
-  const displayName = lead.name || `Клиент #${lead.id}`;
   const typeLabel = lead.property_type === 'sale' ? 'Продажа' : lead.property_type === 'rent' ? 'Аренда' : null;
   const typeSale = lead.property_type === 'sale';
   const cat = lead.property_category || lead.request_category;
