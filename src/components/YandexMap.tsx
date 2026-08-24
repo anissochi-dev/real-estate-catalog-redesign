@@ -37,14 +37,15 @@ const PIN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="${PIN_VISUAL_W +
 const PIN_ICON_HREF = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(PIN_SVG)}`;
 const PIN_SIZE: [number, number] = [PIN_VISUAL_W + PIN_PAD * 2, PIN_VISUAL_H + PIN_PAD * 2];
 const PIN_OFFSET: [number, number] = [-(PIN_VISUAL_W / 2 + PIN_PAD), -(PIN_VISUAL_H + PIN_PAD)];
-// При наведении на карточку в списке (или выборе на карте) — крупнее И другого цвета
-// (насыщенный оранжевый вместо приглушённого синего), чтобы пользователю было сразу видно,
-// какому объекту в списке соответствует пин на карте — это отдельный, легко читаемый сигнал.
+// При наведении на карточку в списке (или выборе на карте) — крупнее и с золотым контуром
+// (тот же стиль, что у обычных пинов — белая заливка + контур с точкой, только золотой
+// вместо приглушённого синего), чтобы пользователю было сразу видно, какому объекту
+// в списке соответствует пин на карте — это отдельный, легко читаемый сигнал.
 const PIN_SVG_HL = `<svg xmlns="http://www.w3.org/2000/svg" width="${PIN_VISUAL_W + PIN_PAD * 2}" height="${PIN_VISUAL_H + PIN_PAD * 2}" viewBox="0 0 ${PIN_VISUAL_W + PIN_PAD * 2} ${PIN_VISUAL_H + PIN_PAD * 2}">`
   + `<g transform="translate(${PIN_PAD},${PIN_PAD})">`
   + '<path d="M16 0C7.163 0 0 7.163 0 16c0 11 16 24 16 24s16-13 16-24C32 7.163 24.837 0 16 0z" '
-  + 'fill="#F97316" stroke="#C2410C" stroke-width="2.5"/>'
-  + '<circle cx="16" cy="16" r="5" fill="#FFFFFF"/></g></svg>';
+  + 'fill="#FFFFFF" stroke="#D4AF37" stroke-width="2.5"/>'
+  + '<circle cx="16" cy="16" r="5" fill="#D4AF37"/></g></svg>';
 const PIN_ICON_HREF_HL = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(PIN_SVG_HL)}`;
 const PIN_SCALE_HL = 1.25;
 const PIN_SIZE_HL: [number, number] = [Math.round(PIN_SIZE[0] * PIN_SCALE_HL), Math.round(PIN_SIZE[1] * PIN_SCALE_HL)];
