@@ -281,6 +281,7 @@ def handler(event: dict, context) -> dict:
                     "SELECT id, name, message, budget, company, created_at "
                     "FROM t_p71821556_real_estate_catalog_.leads "
                     "WHERE show_on_main = TRUE AND status IN ('new','in_progress') "
+                    "AND is_archived IS NOT TRUE "
                     "ORDER BY created_at DESC LIMIT 12"
                 )
                 rows = []
@@ -304,7 +305,7 @@ def handler(event: dict, context) -> dict:
                     limit = 24
                 offset = (page - 1) * limit
 
-                where = ["show_on_main = TRUE", "status IN ('new','in_progress')"]
+                where = ["show_on_main = TRUE", "status IN ('new','in_progress')", "is_archived IS NOT TRUE"]
                 # Поиск по message/name/company
                 q = (params.get('search') or '').strip()
                 if q:
@@ -406,7 +407,7 @@ def handler(event: dict, context) -> dict:
                     f"is_network_tenant, created_at, updated_at "
                     f"FROM t_p71821556_real_estate_catalog_.leads "
                     f"WHERE slug = '{slug_safe}' AND show_on_main = TRUE AND status IN ('new','in_progress') "
-                    f"AND is_public = TRUE"
+                    f"AND is_public = TRUE AND is_archived IS NOT TRUE"
                 )
                 row = cur.fetchone()
                 if not row:
@@ -435,6 +436,7 @@ def handler(event: dict, context) -> dict:
                         f"FROM t_p71821556_real_estate_catalog_.leads "
                         f"WHERE property_category = '{pc_safe}' AND id != {int(d['id'])} "
                         f"AND show_on_main = TRUE AND status IN ('new','in_progress') AND is_public = TRUE "
+                        f"AND is_archived IS NOT TRUE "
                         f"ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 4"
                     )
                     for r in cur.fetchall():
@@ -453,7 +455,7 @@ def handler(event: dict, context) -> dict:
                 cur.execute(
                     "SELECT id, message, budget, company, request_category, created_at "
                     "FROM t_p71821556_real_estate_catalog_.leads "
-                    "WHERE is_network_tenant = TRUE "
+                    "WHERE is_network_tenant = TRUE AND is_archived IS NOT TRUE "
                     "ORDER BY created_at DESC"
                 )
                 rows = []
@@ -665,7 +667,7 @@ def handler(event: dict, context) -> dict:
                 by_deal = {r['deal']: r['c'] for r in cur.fetchall()}
                 cur.execute(
                     "SELECT COUNT(*) AS c FROM t_p71821556_real_estate_catalog_.leads "
-                    "WHERE show_on_main = TRUE AND status IN ('new','in_progress')"
+                    "WHERE show_on_main = TRUE AND status IN ('new','in_progress') AND is_archived IS NOT TRUE"
                 )
                 leads_total = int(cur.fetchone()['c'] or 0)
                 return _ok({
