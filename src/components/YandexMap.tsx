@@ -153,6 +153,14 @@ export default function YandexMap({
             zoom,
             controls: ['zoomControl', 'fullscreenControl', 'geolocationControl'],
           });
+          // Даём браузеру завершить layout контейнера перед взаимодействием с картой —
+          // актуально для мобильного fullscreen-оверлея, который монтируется прямо в момент
+          // клика на кнопку «Карта»: на момент создания карты её контейнер ещё может иметь
+          // нулевые/неустоявшиеся размеры, из-за чего Яндекс.Карты падают с внутренней
+          // ошибкой при первом клике на метку (autoPan обращается к ещё не готовой проекции).
+          requestAnimationFrame(() => {
+            try { mapRef.current?.container.fitToViewport(); } catch { /* ignore */ }
+          });
           setMapReady(true);
           // Проверяем через 2 секунды — не вылетела ли ошибка от Яндекса
           setTimeout(() => {
@@ -287,7 +295,9 @@ export default function YandexMap({
       );
 
       placemark.events.add('click', () => {
-        if (onPointClick) onPointClick(p);
+        try {
+          if (onPointClick) onPointClick(p);
+        } catch { /* ignore — не роняем страницу из-за клика по метке */ }
       });
 
       newPlacemarks.push(placemark);
@@ -313,20 +323,30 @@ export default function YandexMap({
     }
   }, [points, center, zoom, onPointClick, mapReady]);
 
-  // Открытие balloon над маркером при выборе
+  // Открытие balloon над маркером при выборе.
+  // Важно: сама библиотека Яндекс.Карт иногда падает с внутренней ошибкой
+  // (например, "Cannot read properties of null (reading 'getGlobalPixelCenter')"),
+  // если карта ещё не до конца устоялась по размеру — особенно на мобильном,
+  // где карта монтируется прямо в момент клика на кнопку "Карта". Такая ошибка
+  // должна просто не открыть балун, а не ронять весь сайт — поэтому try/catch.
   useEffect(() => {
     if (!mapReady || !window.ymaps) return;
     const map = mapRef.current;
     if (!map) return;
 
     if (selectedId == null) {
-      map.balloon.close();
+      try { map.balloon.close(); } catch { /* ignore */ }
       return;
     }
 
     const pm = placemarkMapRef.current.get(selectedId);
     if (pm) {
-      pm.balloon.open();
+      try {
+        pm.balloon.open();
+      } catch {
+        // Балун не открылся из-за внутренней ошибки карты — не критично, просто пропускаем.
+        return;
+      }
       // Подписываемся на закрытие balloon пользователем
       const handler = () => { if (onBalloonClose) onBalloonClose(); };
       pm.balloon.events.add('close', handler);
