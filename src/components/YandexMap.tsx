@@ -115,8 +115,11 @@ export default function YandexMap({
   const mapRef = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const placemarkMapRef = useRef<Map<number, any>>(new Map());
+  const pointDataMapRef = useRef<Map<number, MapPoint>>(new Map());
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const clustererRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const highlightMarkerRef = useRef<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
 
@@ -197,6 +200,7 @@ export default function YandexMap({
       .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng) && p.lat !== 0 && p.lng !== 0);
 
     placemarkMapRef.current.clear();
+    pointDataMapRef.current.clear();
 
     // Кластеризация (Этап 1 UX 65+): вместо "муравейника" из десятков пинов при отдалении —
     // один пастельный круг с крупной цифрой. Единственный объект на карте — сам Clusterer,
@@ -290,6 +294,7 @@ export default function YandexMap({
 
       newPlacemarks.push(placemark);
       placemarkMapRef.current.set(p.id, placemark);
+      pointDataMapRef.current.set(p.id, p);
     });
 
     clustererRef.current.add(newPlacemarks);
@@ -334,17 +339,43 @@ export default function YandexMap({
 
   // Подсветка маркера при hover из списка — крупнее и другого цвета (оранжевый),
   // чтобы было сразу понятно, где на карте находится наведённый объект из списка.
+  //
+  // Важно: при большом количестве объектов в одной точке/районе Яндекс.Карты группируют
+  // пины в кластер (кружок с цифрой типа «17», «36») — сам Placemark внутри кластера
+  // не отрисовывается на карте, поэтому смена его iconImageHref/Size невидима глазу.
+  // Решение: рисуем ОТДЕЛЬНЫЙ маркер-указатель поверх карты (вне Clusterer, добавлен
+  // напрямую в map.geoObjects) — он не зависит от кластеризации и всегда виден.
   useEffect(() => {
     if (!mapReady || !window.ymaps) return;
-    placemarkMapRef.current.forEach((pm, id) => {
-      try {
-        const isHL = id === highlightedId;
-        pm.options.set('zIndex', isHL ? 1000 : 0);
-        pm.options.set('iconImageHref', isHL ? PIN_ICON_HREF_HL : PIN_ICON_HREF);
-        pm.options.set('iconImageSize', isHL ? PIN_SIZE_HL : PIN_SIZE);
-        pm.options.set('iconImageOffset', isHL ? PIN_OFFSET_HL : PIN_OFFSET);
-      } catch { /* ignore */ }
-    });
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Убираем предыдущий указатель
+    if (highlightMarkerRef.current) {
+      try { map.geoObjects.remove(highlightMarkerRef.current); } catch { /* ignore */ }
+      highlightMarkerRef.current = null;
+    }
+
+    if (highlightedId == null) return;
+    const p = pointDataMapRef.current.get(highlightedId);
+    if (!p) return;
+
+    try {
+      const marker = new window.ymaps.Placemark(
+        [p.lat, p.lng],
+        {},
+        {
+          iconLayout: 'default#image',
+          iconImageHref: PIN_ICON_HREF_HL,
+          iconImageSize: PIN_SIZE_HL,
+          iconImageOffset: PIN_OFFSET_HL,
+          zIndex: 1000,
+          interactivityModel: 'default#transparent', // клики проходят "сквозь" — не мешает кластеру/пину под собой
+        }
+      );
+      map.geoObjects.add(marker);
+      highlightMarkerRef.current = marker;
+    } catch { /* ignore */ }
   }, [highlightedId, mapReady, points]);
 
   // Ресайз карты при смене fullscreen (нативный Fullscreen API)
@@ -369,6 +400,7 @@ export default function YandexMap({
         }
         ref.current = null;
         clustererRef.current = null;
+        highlightMarkerRef.current = null;
         setMapReady(false);
       }
     };
