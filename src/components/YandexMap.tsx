@@ -216,7 +216,14 @@ export default function YandexMap({
       clustererRef.current = new window.ymaps.Clusterer({
         preset: 'islands#invertedVioletClusterIcons', // переопределяется layout ниже
         groupByCoordinates: false,
-        clusterDisableClickZoom: false,
+        // Встроенный авто-зум по клику на кластер прижимает объекты вплотную к краям
+        // экрана без каких-либо отступов — на мобильном они оказываются впритык к границе
+        // или под нашими плашками поверх карты ("Краснодар", "Скрыть"), и их толком не видно.
+        // Отключаем зум: при clusterDisableClickZoom=true клик по кластеру вместо приближения
+        // сразу открывает балун с каруселью объектов (clusterOpenBalloonOnClick=true по
+        // умолчанию) — тот же адаптивный балун, что и у одиночной метки, с удобными отступами
+        // от краёв экрана и понятным списком объектов вместо мелких точек на карте.
+        clusterDisableClickZoom: true,
         clusterHideIconOnBalloonOpen: false,
         geoObjectHideIconOnBalloonOpen: false,
         // Мобильный фикс: стандартный вид "две колонки" (список + карточка) занимает
