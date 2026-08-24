@@ -43,6 +43,7 @@ export interface Lead {
   // Кол-во активных объектов, подходящих заявке по критериям авто-подбора (тип, категория, цена ±10%, площадь ±10%, город)
   matching_listings_count?: number | null;
   extra_contacts?: LeadExtraContact[] | null;
+  is_archived?: boolean;
 }
 
 export const LEAD_TYPES: [string, string, string][] = [

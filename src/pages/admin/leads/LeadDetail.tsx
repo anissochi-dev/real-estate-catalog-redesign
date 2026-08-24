@@ -11,7 +11,7 @@ interface Props {
   setComment: (v: string) => void;
   onUpdate: (changes: Partial<Lead>) => void;
   onEdit: () => void;
-  onDelete: () => void;
+  onArchive: () => void;
   onSendComment: () => void;
   canManage?: boolean;
   onRefresh?: () => void;
@@ -19,7 +19,7 @@ interface Props {
 
 export default function LeadDetail({
   active, comments, comment, setComment,
-  onUpdate, onEdit, onDelete, onSendComment,
+  onUpdate, onEdit, onArchive, onSendComment,
   canManage = true, onRefresh,
 }: Props) {
   const [convertOpen, setConvertOpen] = useState(false);
@@ -121,8 +121,12 @@ export default function LeadDetail({
                 <button onClick={onEdit} className="text-brand-blue p-2 rounded-lg hover:bg-muted">
                   <Icon name="Pencil" size={16} />
                 </button>
-                <button onClick={onDelete} className="text-red-600 p-2 rounded-lg hover:bg-red-50">
-                  <Icon name="Trash2" size={16} />
+                <button
+                  onClick={onArchive}
+                  className="text-muted-foreground p-2 rounded-lg hover:bg-muted hover:text-foreground"
+                  title={active.is_archived ? 'Восстановить из архива' : 'В архив'}
+                >
+                  <Icon name={active.is_archived ? 'ArchiveRestore' : 'Archive'} size={16} />
                 </button>
               </>
             )}

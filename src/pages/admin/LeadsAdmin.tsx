@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { adminApi } from '@/lib/adminApi';
 import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
-import { Lead, Comment, Listing, STATUSES, empty, PROPERTY_CATEGORIES_LEAD } from './leads/leadsTypes';
+import { Lead, Comment, Listing, empty, PROPERTY_CATEGORIES_LEAD } from './leads/leadsTypes';
 import LeadsFilterBar from './leads/LeadsFilterBar';
 import LeadsTable from './leads/LeadsTable';
 import LeadDetail from './leads/LeadDetail';
@@ -115,22 +115,29 @@ export default function LeadsAdmin() {
     }
   };
 
-  const del = async (id: number) => {
-    if (!confirm('Удалить лид безвозвратно?')) return;
+  const archive = async (id: number) => {
+    const l = leads.find(x => x.id === id);
+    const isArchived = !!l?.is_archived;
+    if (!confirm(isArchived ? 'Восстановить заявку из архива?' : 'Архивировать заявку?')) return;
     try {
-      await adminApi.deleteLead(id);
-      if (active?.id === id) setActive(null);
-      load();
+      await adminApi.updateLead(id, { is_archived: !isArchived } as Record<string, unknown>);
+      setLeads(prev => prev.map(x => x.id === id ? { ...x, is_archived: !isArchived } : x));
+      if (active?.id === id) setActive(prev => prev ? { ...prev, is_archived: !isArchived } : prev);
+      toast.success(isArchived ? 'Заявка восстановлена' : 'Заявка перемещена в архив');
     } catch {
-      toast.error('Не удалось удалить заявку');
+      toast.error('Не удалось изменить архив заявки');
     }
   };
 
   const filtered = useMemo(() => {
     let list = leads;
-    // Фильтр по статусу/типу
-    if (filter === 'network') list = list.filter(l => l.is_network_tenant);
-    else if (filter !== 'all') list = list.filter(l => l.status === filter);
+    // Архив — отдельная вкладка, не пересекается с обычными фильтрами по статусу/типу
+    if (filter === 'archived') list = list.filter(l => l.is_archived);
+    else {
+      list = list.filter(l => !l.is_archived);
+      if (filter === 'network') list = list.filter(l => l.is_network_tenant);
+      else if (filter !== 'all') list = list.filter(l => l.status === filter);
+    }
     // Поиск
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -200,7 +207,7 @@ export default function LeadsAdmin() {
       <LeadsTable
         leads={filtered}
         onOpen={openLead}
-        onDelete={del}
+        onArchive={archive}
         onStatusChange={quickStatus}
         search={search}
         isBroker={isBroker}
@@ -244,7 +251,7 @@ export default function LeadsAdmin() {
                 setComment={setComment}
                 onUpdate={update}
                 onEdit={() => setEditing(active)}
-                onDelete={() => del(active.id)}
+                onArchive={() => archive(active.id)}
                 onSendComment={sendComment}
                 canManage={canManageLead(active)}
                 onRefresh={load}

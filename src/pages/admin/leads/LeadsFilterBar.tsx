@@ -11,6 +11,8 @@ interface Props {
 }
 
 export default function LeadsFilterBar({ leads, filter, setFilter, onAdd, search, setSearch }: Props) {
+  const activeLeads = leads.filter(l => !l.is_archived);
+  const archivedCount = leads.filter(l => l.is_archived).length;
   return (
     <div className="space-y-2">
       {/* Строка 1: фильтры + кнопка */}
@@ -18,10 +20,10 @@ export default function LeadsFilterBar({ leads, filter, setFilter, onAdd, search
         <div className="flex flex-wrap gap-1.5">
           <button onClick={() => setFilter('all')}
             className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${filter === 'all' ? 'bg-brand-blue text-white' : 'bg-white shadow-sm hover:bg-muted'}`}>
-            Все ({leads.length})
+            Все ({activeLeads.length})
           </button>
           {STATUSES.map(s => {
-            const cnt = leads.filter(l => l.status === s[0]).length;
+            const cnt = activeLeads.filter(l => l.status === s[0]).length;
             if (cnt === 0) return null;
             return (
               <button key={s[0]} onClick={() => setFilter(s[0])}
@@ -33,13 +35,22 @@ export default function LeadsFilterBar({ leads, filter, setFilter, onAdd, search
               </button>
             );
           })}
-          {leads.filter(l => l.is_network_tenant).length > 0 && (
+          {activeLeads.filter(l => l.is_network_tenant).length > 0 && (
             <button onClick={() => setFilter('network')}
               className={`text-xs px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 font-medium transition-colors ${
                 filter === 'network' ? 'bg-brand-blue text-white' : 'bg-white shadow-sm hover:bg-muted'
               }`}>
               <Icon name="Network" size={12} />
-              Сетевые ({leads.filter(l => l.is_network_tenant).length})
+              Сетевые ({activeLeads.filter(l => l.is_network_tenant).length})
+            </button>
+          )}
+          {archivedCount > 0 && (
+            <button onClick={() => setFilter('archived')}
+              className={`text-xs px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 font-medium transition-colors ${
+                filter === 'archived' ? 'bg-brand-blue text-white' : 'bg-white shadow-sm hover:bg-muted'
+              }`}>
+              <Icon name="Archive" size={12} />
+              Архив ({archivedCount})
             </button>
           )}
         </div>

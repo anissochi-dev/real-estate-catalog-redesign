@@ -3374,7 +3374,7 @@ def _leads(cur, conn, method, rid, action, event, user):
                 if is_broker_user and f == 'broker_id':
                     continue
                 fields.append(f"{f} = {_int_or_null(body[f])}")
-        for f in ('is_network_tenant', 'show_on_main'):
+        for f in ('is_network_tenant', 'show_on_main', 'is_archived'):
             if f in body:
                 fields.append(f"{f} = {_bool(body[f])}")
         if 'district_ids' in body:

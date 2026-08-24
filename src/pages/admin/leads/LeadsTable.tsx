@@ -7,7 +7,7 @@ import { District } from '../districts/DistrictsTypes';
 interface Props {
   leads: Lead[];
   onOpen: (l: Lead) => void;
-  onDelete?: (id: number) => void;
+  onArchive?: (id: number) => void;
   onStatusChange?: (id: number, status: string) => void;
   search?: string;
   currentUserId?: number;
@@ -64,7 +64,7 @@ const STATUS_STYLE: Record<string, { label: string; cls: string }> = {
 
 type SortKey = 'name' | 'date' | 'budget' | 'status';
 
-export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, search = '', currentUserId, isBroker = false, districts = [], onShowMatching }: Props) {
+export default function LeadsTable({ leads, onOpen, onArchive, onStatusChange, search = '', currentUserId, isBroker = false, districts = [], onShowMatching }: Props) {
   const [statusMenuId, setStatusMenuId] = useState<number | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -339,13 +339,13 @@ export default function LeadsTable({ leads, onOpen, onDelete, onStatusChange, se
                       >
                         <Icon name="Eye" size={14} />
                       </button>
-                      {onDelete && canManage && (
+                      {onArchive && canManage && (
                         <button
-                          onClick={() => onDelete(l.id)}
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors"
-                          title="Удалить"
+                          onClick={() => onArchive(l.id)}
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                          title={l.is_archived ? 'Восстановить из архива' : 'В архив'}
                         >
-                          <Icon name="Trash2" size={14} />
+                          <Icon name={l.is_archived ? 'ArchiveRestore' : 'Archive'} size={14} />
                         </button>
                       )}
                     </div>
