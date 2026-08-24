@@ -219,6 +219,15 @@ export default function YandexMap({
         clusterDisableClickZoom: false,
         clusterHideIconOnBalloonOpen: false,
         geoObjectHideIconOnBalloonOpen: false,
+        // Мобильный фикс: стандартный вид "две колонки" (список + карточка) занимает
+        // фиксированную широкую ширину и на узких экранах обрезается за край экрана —
+        // список объектов остаётся пустым/невидимым. Карусель показывает по одному
+        // объекту за раз (те же адаптивные карточки, что и у одиночных меток) с
+        // пролистыванием стрелками — помещается на любом экране.
+        clusterBalloonContentLayout: 'cluster#balloonCarousel',
+        clusterBalloonContentLayoutWidth: 280,
+        clusterBalloonPanelMaxMapArea: 0, // никогда не открывать как докнутую панель
+        clusterBalloonCycling: false,
         clusterIconLayout: window.ymaps.templateLayoutFactory.createClass(
           `<div style="position:relative;width:40px;height:40px">
              <img src="${CLUSTER_ICON_HREF}" width="40" height="40" style="position:absolute;top:0;left:0" />
