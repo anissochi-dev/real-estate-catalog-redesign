@@ -242,6 +242,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
             breadcrumbSchema={catalogBreadcrumbSchema}
             loadStep={LOAD_STEP}
             hoveredId={hoveredId}
+            mapSelectedId={mapSelected?.id ?? null}
             onToggleFavorite={onToggleFavorite}
             onToggleCompare={onToggleCompare}
             onLoadMore={() => setVisibleCount(v => v + LOAD_STEP)}

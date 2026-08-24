@@ -85,6 +85,8 @@ export default function CatalogMap({
           className={fullscreen ? '!rounded-none' : ''}
           onPointClick={onPointClick}
           highlightedId={highlightedId}
+          selectedId={mapSelected?.id ?? null}
+          onBalloonClose={onDeselectPoint}
         />
 
 

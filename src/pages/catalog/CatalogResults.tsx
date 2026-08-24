@@ -17,6 +17,7 @@ interface CatalogResultsProps {
   breadcrumbSchema: Record<string, unknown>;
   loadStep: number;
   hoveredId?: number | null;
+  mapSelectedId?: number | null;
   onToggleFavorite: (id: number) => void;
   onToggleCompare: (id: number) => void;
   onLoadMore: () => void;
@@ -26,7 +27,7 @@ interface CatalogResultsProps {
 export default function CatalogResults({
   h1, filtered, pageItems, favorites, compareList,
   visibleCount, hasMore, allLoaded,
-  breadcrumbs, breadcrumbSchema, loadStep, hoveredId,
+  breadcrumbs, breadcrumbSchema, loadStep, hoveredId, mapSelectedId,
   onToggleFavorite, onToggleCompare, onLoadMore, onHover,
 }: CatalogResultsProps) {
   return (
@@ -70,7 +71,7 @@ export default function CatalogResults({
                 onToggleCompare={onToggleCompare}
                 index={i}
                 variant="compact"
-                highlighted={hoveredId === property.id}
+                highlighted={hoveredId === property.id || mapSelectedId === property.id}
                 onHover={onHover}
                 style={{ animationDelay: `${i * 0.03}s` }}
               />

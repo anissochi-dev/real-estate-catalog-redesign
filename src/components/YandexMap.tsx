@@ -37,8 +37,15 @@ const PIN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="${PIN_VISUAL_W +
 const PIN_ICON_HREF = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(PIN_SVG)}`;
 const PIN_SIZE: [number, number] = [PIN_VISUAL_W + PIN_PAD * 2, PIN_VISUAL_H + PIN_PAD * 2];
 const PIN_OFFSET: [number, number] = [-(PIN_VISUAL_W / 2 + PIN_PAD), -(PIN_VISUAL_H + PIN_PAD)];
-// При наведении/выборе из списка — тот же спокойный стиль и та же (пропорционально увеличенная)
-// зона нажатия, просто крупнее (не другой цвет/форма).
+// При наведении на карточку в списке (или выборе на карте) — крупнее И другого цвета
+// (насыщенный оранжевый вместо приглушённого синего), чтобы пользователю было сразу видно,
+// какому объекту в списке соответствует пин на карте — это отдельный, легко читаемый сигнал.
+const PIN_SVG_HL = `<svg xmlns="http://www.w3.org/2000/svg" width="${PIN_VISUAL_W + PIN_PAD * 2}" height="${PIN_VISUAL_H + PIN_PAD * 2}" viewBox="0 0 ${PIN_VISUAL_W + PIN_PAD * 2} ${PIN_VISUAL_H + PIN_PAD * 2}">`
+  + `<g transform="translate(${PIN_PAD},${PIN_PAD})">`
+  + '<path d="M16 0C7.163 0 0 7.163 0 16c0 11 16 24 16 24s16-13 16-24C32 7.163 24.837 0 16 0z" '
+  + 'fill="#F97316" stroke="#C2410C" stroke-width="2.5"/>'
+  + '<circle cx="16" cy="16" r="5" fill="#FFFFFF"/></g></svg>';
+const PIN_ICON_HREF_HL = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(PIN_SVG_HL)}`;
 const PIN_SCALE_HL = 1.25;
 const PIN_SIZE_HL: [number, number] = [Math.round(PIN_SIZE[0] * PIN_SCALE_HL), Math.round(PIN_SIZE[1] * PIN_SCALE_HL)];
 const PIN_OFFSET_HL: [number, number] = [Math.round(PIN_OFFSET[0] * PIN_SCALE_HL), Math.round(PIN_OFFSET[1] * PIN_SCALE_HL)];
@@ -325,14 +332,15 @@ export default function YandexMap({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, mapReady]);
 
-  // Подсветка маркера при hover из списка — тот же спокойный стиль, просто крупнее
-  // (без смены цвета/формы — чтобы не создавать новый визуальный сигнал для пользователя).
+  // Подсветка маркера при hover из списка — крупнее и другого цвета (оранжевый),
+  // чтобы было сразу понятно, где на карте находится наведённый объект из списка.
   useEffect(() => {
     if (!mapReady || !window.ymaps) return;
     placemarkMapRef.current.forEach((pm, id) => {
       try {
         const isHL = id === highlightedId;
         pm.options.set('zIndex', isHL ? 1000 : 0);
+        pm.options.set('iconImageHref', isHL ? PIN_ICON_HREF_HL : PIN_ICON_HREF);
         pm.options.set('iconImageSize', isHL ? PIN_SIZE_HL : PIN_SIZE);
         pm.options.set('iconImageOffset', isHL ? PIN_OFFSET_HL : PIN_OFFSET);
       } catch { /* ignore */ }
