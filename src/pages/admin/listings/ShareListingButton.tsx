@@ -25,32 +25,43 @@ export default function ShareListingButton({ listing, compact }: Props) {
     e.stopPropagation();
     if (loading || !listing.id) return;
     setLoading(true);
+
+    const text = buildShareListingText(listing);
+
+    // На десктопе (без Web Share API с файлами) копируем текст в буфер СРАЗУ,
+    // первым действием — пока браузер ещё «помнит» пользовательский клик.
+    // Если сначала ждать сетевые запросы (генерацию/загрузку презентации),
+    // а копировать текст только потом — браузер успевает потерять связь
+    // с кликом и блокирует доступ к буферу обмена с ошибкой.
+    const hasFileShare = typeof navigator.share === 'function' && typeof navigator.canShare === 'function';
+    let copiedNow = false;
+    if (!hasFileShare) {
+      try {
+        await navigator.clipboard.writeText(text);
+        copiedNow = true;
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
+      } catch {
+        // буфер обмена недоступен — не критично, попробуем показать текст позже
+      }
+    }
+
     try {
       const result = await generatePresentation(listing.id);
       if ('error' in result) {
         alert('Не удалось подготовить презентацию. Попробуйте ещё раз.');
         return;
       }
-      const text = buildShareListingText(listing);
       const fileRes = await fetch(result.url);
       const blob = await fileRes.blob();
       const file = new File([blob], `presentation-${listing.id}.jpg`, { type: 'image/jpeg' });
 
-      const canShareFiles = typeof navigator.share === 'function'
-        && typeof navigator.canShare === 'function'
-        && navigator.canShare({ files: [file] });
+      const canShareFiles = hasFileShare && navigator.canShare({ files: [file] });
 
       if (canShareFiles) {
         await navigator.share({ files: [file], text });
         return;
       }
-
-      // Десктоп / браузеры без Web Share API с файлами: копируем текст, затем скачиваем фото
-      // (порядок важен — скачивание файла может увести фокус со страницы, а без фокуса
-      // navigator.clipboard.writeText падает с ошибкой)
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
 
       const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -60,6 +71,17 @@ export default function ShareListingButton({ listing, compact }: Props) {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
+
+      if (!copiedNow) {
+        // Буфер не скопировался раньше — пробуем ещё раз (файл уже скачан, фокус на странице есть)
+        try {
+          await navigator.clipboard.writeText(text);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2500);
+        } catch {
+          alert(`Не удалось скопировать текст. Скопируйте вручную:\n\n${text}`);
+        }
+      }
     } catch (e) {
       if ((e as Error)?.name !== 'AbortError') {
         alert('Не удалось поделиться объектом. Попробуйте ещё раз.');
