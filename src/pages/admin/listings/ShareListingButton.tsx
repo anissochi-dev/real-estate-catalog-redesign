@@ -45,7 +45,13 @@ export default function ShareListingButton({ listing, compact }: Props) {
         return;
       }
 
-      // Десктоп / браузеры без Web Share API с файлами: скачиваем фото + копируем текст
+      // Десктоп / браузеры без Web Share API с файлами: копируем текст, затем скачиваем фото
+      // (порядок важен — скачивание файла может увести фокус со страницы, а без фокуса
+      // navigator.clipboard.writeText падает с ошибкой)
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+
       const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = blobUrl;
@@ -54,10 +60,6 @@ export default function ShareListingButton({ listing, compact }: Props) {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
-
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
     } catch (e) {
       if ((e as Error)?.name !== 'AbortError') {
         alert('Не удалось поделиться объектом. Попробуйте ещё раз.');
