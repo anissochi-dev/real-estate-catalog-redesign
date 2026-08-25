@@ -4,6 +4,7 @@ import { fmtListingId } from '@/lib/formatPrice';
 import { listingSlug } from '@/lib/slug';
 import { useExitToPath } from '../AdminLayout';
 import ListingsTableExportBadges from './ListingsTableExportBadges';
+import ShareListingButton from './ShareListingButton';
 
 interface Props {
   it: Listing;
@@ -137,6 +138,7 @@ export default function ListingsTableDesktopRow({
             >
               <Icon name="BarChart2" size={14} />
             </button>
+            <ShareListingButton listing={it} compact />
             {canEdit && (
               <button
                 onClick={() => onEdit(it)}

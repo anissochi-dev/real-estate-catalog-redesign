@@ -2,7 +2,6 @@ import Icon from '@/components/ui/icon';
 import { Listing } from './types';
 import { EDITOR_TABS, EditorTab } from './ListingEditorHeader';
 import { useAuth } from '@/contexts/AuthContext';
-import ShareListingButton from './ShareListingButton';
 
 interface Props {
   editing: Partial<Listing>;
@@ -25,7 +24,7 @@ export default function ListingEditorFooter({ editing, tab, setTab, tabErrors, o
   return (
     <div className="p-4 border-t border-border flex items-center justify-between gap-3 flex-shrink-0">
       <div className="flex gap-2">
-        {editing.id && <ShareListingButton listing={editing} />}
+        {/* Кнопка «Поделиться» перенесена в список объектов — см. ListingsTableDesktopRow / ListingsTableMobileCard */}
       </div>
       <div className="flex gap-3 items-center flex-wrap justify-end">
         <div className="hidden sm:flex items-center gap-1">

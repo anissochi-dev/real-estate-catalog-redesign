@@ -6,6 +6,8 @@ import { Listing } from './types';
 
 interface Props {
   listing: Partial<Listing>;
+  /** Компактный вид — только иконка, для строки в списке объектов. */
+  compact?: boolean;
 }
 
 /**
@@ -15,11 +17,12 @@ interface Props {
  * На десктопе (Web Share API с файлами не поддерживается) — скачивает презентацию
  * и копирует текст в буфер обмена для ручной вставки в мессенджер.
  */
-export default function ShareListingButton({ listing }: Props) {
+export default function ShareListingButton({ listing, compact }: Props) {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const handleClick = async () => {
+  const handleClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (loading || !listing.id) return;
     setLoading(true);
     try {
@@ -63,6 +66,22 @@ export default function ShareListingButton({ listing }: Props) {
       setLoading(false);
     }
   };
+
+  const icon = loading ? 'Loader2' : copied ? 'Check' : 'Share2';
+
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={loading}
+        title={copied ? 'Текст скопирован' : 'Поделиться в мессенджер'}
+        className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-brand-blue/10 hover:text-brand-blue transition-colors disabled:opacity-50"
+      >
+        <Icon name={icon} size={13} className={loading ? 'animate-spin' : ''} />
+      </button>
+    );
+  }
 
   return (
     <button

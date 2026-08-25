@@ -4,6 +4,7 @@ import { fmtListingId } from '@/lib/formatPrice';
 import { listingSlug } from '@/lib/slug';
 import { useExitToPath } from '../AdminLayout';
 import ListingsTableExportBadges from './ListingsTableExportBadges';
+import ShareListingButton from './ShareListingButton';
 
 interface Props {
   it: Listing;
@@ -97,6 +98,7 @@ export default function ListingsTableMobileCard({
             <button onClick={() => onHistory(it)} title="История" className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-brand-blue transition-colors">
               <Icon name="BarChart2" size={13} />
             </button>
+            <ShareListingButton listing={it} compact />
             {canEdit && (
               <button onClick={() => onEdit(it)} title="Редактировать" className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-brand-blue/10 hover:text-brand-blue transition-colors">
                 <Icon name="Pencil" size={13} />
