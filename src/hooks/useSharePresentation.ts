@@ -2,6 +2,37 @@ import { useState } from 'react';
 import { generatePresentation } from '@/lib/api';
 
 /**
+ * Копирует текст в буфер обмена. Сначала пробует современный Clipboard API,
+ * а если он недоступен/запрещён браузером — сразу пробует запасной способ
+ * через скрытое текстовое поле и document.execCommand('copy'), который
+ * работает в подавляющем большинстве браузеров без специальных разрешений.
+ */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // пробуем запасной способ ниже
+  }
+
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Общая логика кнопки «Поделиться с презентацией»: генерирует свежий JPG объекта,
  * копирует текст в буфер обмена и открывает системное меню «Поделиться» (на мобильных)
  * либо скачивает файл (на десктопе, где Web Share API с файлами не поддерживается).
@@ -22,13 +53,10 @@ export function useSharePresentation() {
     const hasFileShare = typeof navigator.share === 'function' && typeof navigator.canShare === 'function';
     let copiedNow = false;
     if (!hasFileShare) {
-      try {
-        await navigator.clipboard.writeText(text);
-        copiedNow = true;
+      copiedNow = await copyText(text);
+      if (copiedNow) {
         setCopied(true);
         setTimeout(() => setCopied(false), 2500);
-      } catch {
-        // буфер обмена недоступен — не критично, попробуем показать текст позже
       }
     }
 
@@ -60,11 +88,11 @@ export function useSharePresentation() {
 
       if (!copiedNow) {
         // Буфер не скопировался раньше — пробуем ещё раз (файл уже скачан, фокус на странице есть)
-        try {
-          await navigator.clipboard.writeText(text);
+        const okNow = await copyText(text);
+        if (okNow) {
           setCopied(true);
           setTimeout(() => setCopied(false), 2500);
-        } catch {
+        } else {
           alert(`Не удалось скопировать текст. Скопируйте вручную:\n\n${text}`);
         }
       }

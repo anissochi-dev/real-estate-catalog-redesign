@@ -17,12 +17,12 @@ interface ShareListingInput {
   contact_name?: string | null;
 }
 
-const MAX_LENGTH = 1000;
+const MAX_LENGTH = 300;
 
 /**
  * Собирает текст-подпись для отправки объекта в мессенджеры вместе с JPG-презентацией.
  * Формат: название → адрес → телефон → площадь/цена → описание.
- * Итоговый текст ограничен 1000 символами — описание обрезается по необходимости.
+ * Итоговый текст ограничен 300 символами — описание обрезается по необходимости.
  */
 export function buildShareListingText(listing: ShareListingInput): string {
   const lines: string[] = [];
