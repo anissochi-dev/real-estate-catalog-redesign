@@ -9,14 +9,20 @@ interface ShareListingInput {
   area?: number | null;
   price?: number | null;
   deal?: string | null;
+  /** Телефон брокера (админка) — используется, если не передан contact_phone. */
   broker_phone?: string | null;
   broker_name?: string | null;
+  /** Явно переданный контактный телефон (например, телефон компании — для сайта). Имеет приоритет над broker_phone. */
+  contact_phone?: string | null;
+  contact_name?: string | null;
 }
+
+const MAX_LENGTH = 1000;
 
 /**
  * Собирает текст-подпись для отправки объекта в мессенджеры вместе с JPG-презентацией.
- * Формат: название → адрес → телефон брокера → площадь/цена → описание.
- * Данные всегда актуальные — берутся из уже открытой карточки объекта в админке.
+ * Формат: название → адрес → телефон → площадь/цена → описание.
+ * Итоговый текст ограничен 1000 символами — описание обрезается по необходимости.
  */
 export function buildShareListingText(listing: ShareListingInput): string {
   const lines: string[] = [];
@@ -26,8 +32,10 @@ export function buildShareListingText(listing: ShareListingInput): string {
   const cityLine = [listing.city, listing.address].filter(Boolean).join(', ');
   if (cityLine) lines.push(cityLine);
 
-  if (listing.broker_phone) {
-    const phoneLine = [formatPhone(listing.broker_phone), listing.broker_name].filter(Boolean).join(' ');
+  const phone = listing.contact_phone || listing.broker_phone;
+  const phoneName = listing.contact_phone ? listing.contact_name : listing.broker_name;
+  if (phone) {
+    const phoneLine = [formatPhone(phone), phoneName].filter(Boolean).join(' ');
     lines.push('', phoneLine);
   }
 
@@ -36,7 +44,18 @@ export function buildShareListingText(listing: ShareListingInput): string {
   if (listing.price) details.push(`Цена ${formatPrice(listing.price, listing.deal || 'sale')}`);
   if (details.length) lines.push('', details.join('\n'));
 
-  if (listing.description?.trim()) lines.push('', listing.description.trim());
+  const headPart = lines.join('\n');
+  const description = listing.description?.trim() || '';
 
-  return lines.join('\n');
+  if (!description) return headPart.slice(0, MAX_LENGTH);
+
+  // Считаем, сколько места остаётся под описание с учётом разделителя '\n\n'
+  const budget = MAX_LENGTH - headPart.length - 2;
+  if (budget <= 0) return headPart.slice(0, MAX_LENGTH);
+
+  const trimmedDescription = description.length > budget
+    ? description.slice(0, Math.max(budget - 1, 0)).trimEnd() + '…'
+    : description;
+
+  return [headPart, trimmedDescription].join('\n\n');
 }
