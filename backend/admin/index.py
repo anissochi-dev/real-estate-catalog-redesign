@@ -2746,7 +2746,7 @@ def _listings(cur, conn, method, rid, event, user):
         cnt = dict(cur.fetchone())
         main_city = _safe((_get_settings(cur).get('main_city') or 'Краснодар'), 100)
         list_cols = (
-            "l.id, l.title, l.category, l.deal, l.price, l.price_per_m2, l.area, "
+            "l.id, l.title, l.description, l.category, l.deal, l.price, l.price_per_m2, l.area, "
             "l.payback, l.profit, l.floor, l.total_floors, l.address, l.district, l.city, "
             "l.image, l.images, l.tags, l.is_hot, l.is_new, l.is_exclusive, l.is_urgent, "
             "l.status, l.owner_name, l.owner_phone, l.owner_phone2, l.price_unit, "
@@ -2765,7 +2765,7 @@ def _listings(cur, conn, method, rid, event, user):
         )
         cur.execute(
             f"SELECT {list_cols}, "
-            f"  u.name AS broker_name, "
+            f"  u.name AS broker_name, u.phone AS broker_phone, "
             f"  COALESCE(NULLIF(pc.name, ''), l.owner_name) AS owner_name_final, "
             f"  COALESCE(pc.phone, l.owner_phone) AS owner_phone_final, "
             f"  pc.photo_url AS owner_photo_url, "
