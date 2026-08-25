@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
+import { useBulkPresentations } from '@/hooks/useBulkPresentations';
 
 interface Broker { id: number; name: string; role: string }
 
@@ -22,6 +23,7 @@ const ROLE_RU: Record<string, string> = {
 export default function ListingsBulkBar({ selected, onDeselect, onBulk, onBulkDelete, bulkLoading, isAdmin }: Props) {
   const { user } = useAuth();
   const canAssignBroker = user?.role === 'admin' || user?.role === 'director';
+  const { downloadAll: downloadPresentations, loading: presLoading, progress: presProgress } = useBulkPresentations();
 
   const [brokers, setBrokers] = useState<Broker[]>([]);
   const [showBrokers, setShowBrokers] = useState(false);
@@ -141,6 +143,11 @@ export default function ListingsBulkBar({ selected, onDeselect, onBulk, onBulkDe
             <Icon name="Loader2" size={11} className="animate-spin" /> Применяю...
           </span>
         )}
+        {presProgress && (
+          <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Icon name="Loader2" size={11} className="animate-spin" /> Презентация {presProgress.current} из {presProgress.total}...
+          </span>
+        )}
       </div>
 
       {/* Строка 1: Действия */}
@@ -228,6 +235,10 @@ export default function ListingsBulkBar({ selected, onDeselect, onBulk, onBulkDe
               </div>
             )}
           </div>
+
+          <Btn icon="Image" label="Презентации" cls="bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"
+            disabled={presLoading}
+            onClick={() => downloadPresentations(Array.from(selected))} />
 
           {canAssignBroker && (
             <div className="relative" ref={brokerRef}>
