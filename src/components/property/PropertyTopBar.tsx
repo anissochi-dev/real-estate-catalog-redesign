@@ -2,46 +2,23 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '@/components/ui/icon';
 import Breadcrumbs, { Crumb } from '@/components/Breadcrumbs';
-import { useSettings } from '@/contexts/SettingsContext';
-import { buildShareListingText } from '@/lib/shareListingText';
-import { useSharePresentation } from '@/hooks/useSharePresentation';
-import { ListingDetail } from '@/lib/api';
 
 interface PropertyTopBarProps {
-  item: ListingDetail;
   itemTitle: string;
   shareUrl: string;
   breadcrumbs: Crumb[];
 }
 
-export default function PropertyTopBar({ item, itemTitle, shareUrl, breadcrumbs }: PropertyTopBarProps) {
+export default function PropertyTopBar({ itemTitle, shareUrl, breadcrumbs }: PropertyTopBarProps) {
   const navigate = useNavigate();
-  const { settings } = useSettings();
   const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const { share: sharePresentation, loading: presLoading, copied: presCopied } = useSharePresentation();
 
   const copyLink = () => {
     navigator.clipboard.writeText(shareUrl).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
-  };
-
-  const handleSharePresentation = () => {
-    const text = buildShareListingText({
-      title: item.title,
-      city: item.city,
-      address: item.address,
-      description: item.description,
-      area: item.area,
-      price: item.price,
-      deal: item.deal,
-      contact_phone: settings.company_phone,
-      contact_name: settings.company_name,
-    });
-    sharePresentation(item.id, text);
-    setShareOpen(false);
   };
 
   // Сети для шеринга — единые компактные иконки lucide, без фирменных цветов
@@ -101,11 +78,6 @@ export default function PropertyTopBar({ item, itemTitle, shareUrl, breadcrumbs 
                 className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-muted transition text-[12px] w-full text-left">
                 <Icon name={copied ? 'Check' : 'Link2'} size={13} className={copied ? 'text-emerald-600' : 'text-muted-foreground'} />
                 <span>{copied ? 'Скопировано' : 'Скопировать ссылку'}</span>
-              </button>
-              <button onClick={handleSharePresentation} disabled={presLoading}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-muted transition text-[12px] w-full text-left disabled:opacity-50">
-                <Icon name={presLoading ? 'Loader2' : presCopied ? 'Check' : 'Image'} size={13} className={presLoading ? 'animate-spin text-muted-foreground' : presCopied ? 'text-emerald-600' : 'text-muted-foreground'} />
-                <span>{presLoading ? 'Готовлю...' : presCopied ? 'Текст скопирован' : 'Отправить с фото'}</span>
               </button>
             </div>
           )}
