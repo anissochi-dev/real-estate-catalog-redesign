@@ -2646,7 +2646,7 @@ def _listings(cur, conn, method, rid, event, user):
     if method == 'GET':
         if rid:
             cur.execute(
-                f"SELECT l.*, u.name AS broker_name, u.id AS broker_user_id, "
+                f"SELECT l.*, u.name AS broker_name, u.id AS broker_user_id, u.phone AS broker_phone, "
                 f"  pc.name AS pc_owner_name, pc.phone AS pc_owner_phone, pc.photo_url AS pc_owner_photo, "
                 f"  pc.company AS pc_owner_company, pc.notes AS pc_owner_notes, "
                 f"  pc2.name AS pc2_owner_name, pc2.phone AS pc2_owner_phone "

@@ -90,6 +90,7 @@ export interface Listing {
   author_id?: number | null;
   broker_id?: number | null;
   broker_name?: string | null;
+  broker_phone?: string | null;
   is_visible?: boolean;
   rooms?: number | null;
   broker_commission?: string | null;
