@@ -17,7 +17,7 @@ _FONT_CACHE: dict = {}
 
 W, H = 1240, 1754
 PAD = 56
-BOTTOM_MARGIN = 50
+BOTTOM_MARGIN = 34
 
 BRAND_BLUE = (11, 61, 132)
 TEXT_DARK = (26, 32, 44)
@@ -257,11 +257,11 @@ def generate(listing: dict, company: dict) -> bytes:
             mask = Image.new('L', img.size, 0)
             ImageDraw.Draw(mask).rounded_rectangle([0, 0, img.size[0], img.size[1]], radius=10, fill=255)
             canvas.paste(img, (int(cx), int(cy)), mask)
-        y = gy + rows * (cell_h + gap) - gap + 40
+        y = gy + rows * (cell_h + gap) - gap + 28
 
     # ---------- Цена ----------
     draw.line([(PAD, y), (W - PAD, y)], fill=LINE, width=2)
-    y += 32
+    y += 28
     total_price, price_per_m2 = _normalize_price(listing)
     price_text = _format_price(total_price, listing.get('deal'))
     font_price = _font('Montserrat-Black.ttf', 58)
@@ -269,9 +269,9 @@ def generate(listing: dict, company: dict) -> bytes:
     bb = draw.textbbox((PAD, y), price_text, font=font_price)
     if price_per_m2:
         ppm2_text = f"{price_per_m2:,}".replace(',', ' ') + ' ₽/м²'
-        # Тот же шрифт (Montserrat-Black), что и у основной цены — на одном уровне.
-        # Если суммарно не помещается на строку — уменьшаем размер только у ppm2,
-        # пока не влезет (не трогая размер основной цены).
+        # Тот же шрифт (Montserrat-Black), что и у основной цены, выровнена по
+        # ПРАВОМУ краю страницы. Если не помещается рядом с основной ценой —
+        # уменьшаем размер только у ppm2, пока не влезет (основную цену не трогаем).
         ppm2_size = 58
         font_ppm2 = _font('Montserrat-Black.ttf', ppm2_size)
         available_w = (W - PAD) - (bb[2] + 26)
@@ -279,10 +279,11 @@ def generate(listing: dict, company: dict) -> bytes:
             ppm2_size -= 4
             font_ppm2 = _font('Montserrat-Black.ttf', ppm2_size)
         bb_ppm2 = draw.textbbox((0, 0), ppm2_text, font=font_ppm2)
-        # Выравниваем по нижней базовой линии с основной ценой
+        ppm2_w = bb_ppm2[2] - bb_ppm2[0]
+        # Выравниваем по нижней базовой линии с основной ценой и по правому краю страницы
         ppm2_y = bb[3] - (bb_ppm2[3] - bb_ppm2[1]) - bb_ppm2[1]
-        draw.text((bb[2] + 26, ppm2_y), ppm2_text, font=font_ppm2, fill=TEXT_GRAY)
-    y = bb[3] + 40
+        draw.text((W - PAD - ppm2_w, ppm2_y), ppm2_text, font=font_ppm2, fill=TEXT_GRAY)
+    y = bb[3] + 32
 
     # ---------- Параметры ----------
     params = []
@@ -309,7 +310,7 @@ def generate(listing: dict, company: dict) -> bytes:
         font_pl = _font('IBMPlexSans-Regular.ttf', 18)
         pcols, pgap = 3, 16
         pcell_w = (W - 2 * PAD - pgap * (pcols - 1)) / pcols
-        pcell_h = 90
+        pcell_h = 82
         for idx, (label, value) in enumerate(params):
             col, row = idx % pcols, idx // pcols
             px, py = PAD + col * (pcell_w + pgap), y + row * (pcell_h + pgap)
@@ -325,7 +326,7 @@ def generate(listing: dict, company: dict) -> bytes:
             v = value if draw.textbbox((0, 0), value, font=font_pv)[2] <= max_val_w else _ellipsize(value, font_pv, max_val_w, draw)
             draw.text((px + 20, py + 46), v, font=font_pv, fill=TEXT_DARK)
         prows = math.ceil(len(params) / pcols)
-        y = y + prows * (pcell_h + pgap) - pgap + 44
+        y = y + prows * (pcell_h + pgap) - pgap + 32
 
     # ---------- Коммуникации ----------
     utilities_raw = listing.get('utilities') or ''
@@ -342,9 +343,9 @@ def generate(listing: dict, company: dict) -> bytes:
 
     if utilities and y < content_bottom_limit - 80:
         draw.text((PAD, y), "Коммуникации", font=_font('Montserrat-ExtraBold.ttf', 26), fill=TEXT_DARK)
-        y += 48
+        y += 40
         ux, uy = PAD, y
-        row_h = 42
+        row_h = 38
         font_util = _font('IBMPlexSans-Regular.ttf', 21)
         for u in utilities:
             if uy + row_h > content_bottom_limit:
@@ -360,17 +361,18 @@ def generate(listing: dict, company: dict) -> bytes:
             if ux > W - PAD - 160:
                 ux = PAD
                 uy += row_h
-        y = uy + row_h + 30
+        y = uy + row_h + 20
 
-    # ---------- Описание (заполняет оставшееся место) ----------
+    # ---------- Описание (заполняет оставшееся место — уплотнено для большего объёма текста) ----------
     description = (listing.get('description') or '').strip()
     if description and y < content_bottom_limit - 60:
         draw.text((PAD, y), "Описание", font=_font('Montserrat-ExtraBold.ttf', 26), fill=TEXT_DARK)
-        y += 48
+        y += 40
 
-        font_desc = _font('IBMPlexSans-Regular.ttf', 21)
-        line_h = 32
-        max_lines = max(1, int((content_bottom_limit - y) // line_h))
+        font_desc = _font('IBMPlexSans-Regular.ttf', 19)
+        line_h = 27
+        para_gap = 9
+        available_h = content_bottom_limit - y
 
         all_lines = []
         paragraphs = [p.strip() for p in description.split('\n') if p.strip()]
@@ -380,8 +382,19 @@ def generate(listing: dict, company: dict) -> bytes:
         if all_lines and all_lines[-1] == '':
             all_lines.pop()
 
-        if len(all_lines) > max_lines:
-            all_lines = all_lines[:max_lines]
+        # Считаем реальную занимаемую высоту (пустая строка-разделитель абзаца
+        # занимает para_gap, а не полную line_h) и обрезаем ровно по месту,
+        # а не по числу строк — так текста помещается заметно больше.
+        used_h = 0
+        cut_at = len(all_lines)
+        for i, ln in enumerate(all_lines):
+            step = para_gap if ln == '' else line_h
+            if used_h + step > available_h:
+                cut_at = i
+                break
+            used_h += step
+        if cut_at < len(all_lines):
+            all_lines = all_lines[:cut_at]
             for i in range(len(all_lines) - 1, -1, -1):
                 if all_lines[i] != '':
                     all_lines[i] = _ellipsize(all_lines[i], font_desc, W - 2 * PAD, draw)
@@ -389,7 +402,7 @@ def generate(listing: dict, company: dict) -> bytes:
 
         for ln in all_lines:
             if ln == '':
-                y += line_h // 2
+                y += para_gap
                 continue
             draw.text((PAD, y), ln, font=font_desc, fill=(60, 68, 80))
             y += line_h
