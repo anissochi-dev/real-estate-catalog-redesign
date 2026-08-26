@@ -71,7 +71,7 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
   return (
     <>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <div>
+        <div data-field-error={errors.price ? 'true' : undefined}>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
             <span className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0"><Icon name="Banknote" size={11} className="text-emerald-600" /></span>
             {unit === 'm2' ? 'Цена за м², ₽ *' : unit === 'sotka' ? 'Цена за сотку, ₽ *' : 'Цена, ₽ *'}
@@ -85,7 +85,7 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
             onChange={handlePriceChange}
           />
         </div>
-        <div>
+        <div data-field-error={errors.area ? 'true' : undefined}>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
             <span className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0"><Icon name="Maximize2" size={11} className="text-brand-blue" /></span>Площадь, м² *
           </label>
@@ -166,14 +166,14 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <div>
+        <div data-field-error={errors.floor ? 'true' : undefined}>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
             <span className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0"><Icon name="Layers" size={11} className="text-brand-blue" /></span>Этаж{editing.category === 'office' ? ' *' : ''}
           </label>
           <input type="number" className={`w-full px-3 py-2 border rounded-lg ${err('floor')}`}
             value={editing.floor ?? ''} onChange={e => { setEditing({ ...editing, floor: e.target.value === '' ? null : +e.target.value }); setErrors?.(v => ({ ...v, floor: false })); }} />
         </div>
-        <div>
+        <div data-field-error={errors.total_floors ? 'true' : undefined}>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
             <span className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0"><Icon name="Building" size={11} className="text-slate-600" /></span>Этажность{['office', 'building', 'warehouse', 'production'].includes(editing.category || '') ? ' *' : ''}
           </label>

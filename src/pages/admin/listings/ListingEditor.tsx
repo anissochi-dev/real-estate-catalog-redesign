@@ -58,6 +58,7 @@ export default function ListingEditor({
    */
   const [coordsManual, setCoordsManual] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const { settings } = useSettings();
   const { user } = useAuth();
   const yandexApiKey = settings.yandex_maps_api_key || '';
@@ -198,10 +199,21 @@ export default function ListingEditor({
       if (t === 'location') return !editing.district?.trim();
       if (t === 'details') return !editing.price || !editing.area || (editing.category === 'office' && editing.floor == null) || (['office', 'building', 'warehouse', 'production'].includes(editing.category || '') && editing.total_floors == null) || !bc?.trim() || (editing.category === 'land' && (!editing.land_status || !editing.land_vri));
       if (t === 'content') return !editing.description?.trim() || editing.description.trim().length < 30;
-      if (t === 'extra') return !editing.building_class || !editing.building_year || !editing.property_rights;
+      if (t === 'extra') return !editing.building_class || !editing.building_year || !editing.property_rights || (editing.category === 'office' && !editing.office_layout);
       return false;
     });
-    if (firstErrTab) setTab(firstErrTab);
+    if (firstErrTab) {
+      const sameTab = tab === firstErrTab;
+      setTab(firstErrTab);
+      // Прокручиваем к первому невалидному полю. Если вкладка уже открыта — скроллим сразу,
+      // иначе ждём кадр после переключения, чтобы нужный контент успел отрендериться.
+      const scrollToError = () => {
+        const el = contentRef.current?.querySelector('[data-field-error="true"]');
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      };
+      if (sameTab) scrollToError();
+      else requestAnimationFrame(() => requestAnimationFrame(scrollToError));
+    }
   };
 
   return (
@@ -222,7 +234,7 @@ export default function ListingEditor({
         />
 
         {/* Контент вкладки */}
-        <div className="overflow-y-auto flex-1 p-5">
+        <div ref={contentRef} className="overflow-y-auto flex-1 p-5">
 
           {/* ── ОСНОВНОЕ ── */}
           {tab === 'main' && (

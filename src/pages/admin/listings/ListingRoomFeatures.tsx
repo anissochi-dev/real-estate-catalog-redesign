@@ -35,7 +35,7 @@ export default function ListingRoomFeatures({ editing, setEditing, landVri = [],
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {isLand && (
             <>
-              <div>
+              <div data-field-error={errors.land_status ? 'true' : undefined}>
                 <label className="text-xs text-muted-foreground">Категория земли *</label>
                 <select className={`w-full px-3 py-2 border rounded-lg ${err('land_status')}`}
                   value={editing.land_status || ''}
@@ -44,7 +44,7 @@ export default function ListingRoomFeatures({ editing, setEditing, landVri = [],
                   {LAND_STATUSES.map(s => <option key={s[0]} value={s[0]}>{s[1]}</option>)}
                 </select>
               </div>
-              <div className="sm:col-span-2">
+              <div className="sm:col-span-2" data-field-error={errors.land_vri ? 'true' : undefined}>
                 <label className="text-xs text-muted-foreground">Вид разрешённого использования (ВРИ) *</label>
                 <select className={`w-full px-3 py-2 border rounded-lg ${err('land_vri')}`}
                   value={editing.land_vri || ''}
