@@ -397,19 +397,29 @@ def generate(listing: dict, company: dict) -> bytes:
                 cut_at = i
                 break
             used_h += step
-        if cut_at < len(all_lines):
+        truncated = cut_at < len(all_lines)
+        if truncated:
             all_lines = all_lines[:cut_at]
             for i in range(len(all_lines) - 1, -1, -1):
                 if all_lines[i] != '':
                     all_lines[i] = _ellipsize(all_lines[i], font_desc, W - 2 * PAD, draw)
                     break
 
-        for ln in all_lines:
+        # Растягиваем межстрочные интервалы, чтобы последняя строка доходила ровно
+        # до нижнего края страницы (без остаточного зазора) — актуально когда текст
+        # обрезан по месту и стандартный шаг не попадает точно в границу.
+        steps = [para_gap if ln == '' else line_h for ln in all_lines]
+        leftover = available_h - sum(steps)
+        if truncated and steps and leftover > 0:
+            extra_per_step = leftover / len(steps)
+            steps = [s + extra_per_step for s in steps]
+
+        for ln, step in zip(all_lines, steps):
             if ln == '':
-                y += para_gap
+                y += step
                 continue
             draw.text((PAD, y), ln, font=font_desc, fill=(60, 68, 80))
-            y += line_h
+            y += step
 
     # Подвал убран полностью — QR-код и домен уже выведены в шапке/у заголовка выше.
 
