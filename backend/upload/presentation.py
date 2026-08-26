@@ -257,11 +257,11 @@ def generate(listing: dict, company: dict) -> bytes:
             mask = Image.new('L', img.size, 0)
             ImageDraw.Draw(mask).rounded_rectangle([0, 0, img.size[0], img.size[1]], radius=10, fill=255)
             canvas.paste(img, (int(cx), int(cy)), mask)
-        y = gy + rows * (cell_h + gap) - gap + 28
+        y = gy + rows * (cell_h + gap) - gap + 20
 
     # ---------- Цена ----------
     draw.line([(PAD, y), (W - PAD, y)], fill=LINE, width=2)
-    y += 28
+    y += 22
     total_price, price_per_m2 = _normalize_price(listing)
     price_text = _format_price(total_price, listing.get('deal'))
     font_price = _font('Montserrat-Black.ttf', 58)
@@ -283,7 +283,7 @@ def generate(listing: dict, company: dict) -> bytes:
         # Выравниваем по нижней базовой линии с основной ценой и по правому краю страницы
         ppm2_y = bb[3] - (bb_ppm2[3] - bb_ppm2[1]) - bb_ppm2[1]
         draw.text((W - PAD - ppm2_w, ppm2_y), ppm2_text, font=font_ppm2, fill=TEXT_GRAY)
-    y = bb[3] + 32
+    y = bb[3] + 24
 
     # ---------- Параметры ----------
     params = []
@@ -310,7 +310,7 @@ def generate(listing: dict, company: dict) -> bytes:
         font_pl = _font('IBMPlexSans-Regular.ttf', 18)
         pcols, pgap = 3, 16
         pcell_w = (W - 2 * PAD - pgap * (pcols - 1)) / pcols
-        pcell_h = 82
+        pcell_h = 76
         for idx, (label, value) in enumerate(params):
             col, row = idx % pcols, idx // pcols
             px, py = PAD + col * (pcell_w + pgap), y + row * (pcell_h + pgap)
@@ -326,7 +326,7 @@ def generate(listing: dict, company: dict) -> bytes:
             v = value if draw.textbbox((0, 0), value, font=font_pv)[2] <= max_val_w else _ellipsize(value, font_pv, max_val_w, draw)
             draw.text((px + 20, py + 46), v, font=font_pv, fill=TEXT_DARK)
         prows = math.ceil(len(params) / pcols)
-        y = y + prows * (pcell_h + pgap) - pgap + 32
+        y = y + prows * (pcell_h + pgap) - pgap + 24
 
     # ---------- Коммуникации ----------
     utilities_raw = listing.get('utilities') or ''
@@ -343,9 +343,9 @@ def generate(listing: dict, company: dict) -> bytes:
 
     if utilities and y < content_bottom_limit - 80:
         draw.text((PAD, y), "Коммуникации", font=_font('Montserrat-ExtraBold.ttf', 26), fill=TEXT_DARK)
-        y += 40
+        y += 36
         ux, uy = PAD, y
-        row_h = 38
+        row_h = 34
         font_util = _font('IBMPlexSans-Regular.ttf', 21)
         for u in utilities:
             if uy + row_h > content_bottom_limit:
@@ -361,15 +361,17 @@ def generate(listing: dict, company: dict) -> bytes:
             if ux > W - PAD - 160:
                 ux = PAD
                 uy += row_h
-        y = uy + row_h + 20
+        y = uy + row_h + 14
 
-    # ---------- Описание (ограничено 500 символами, крупный шрифт) ----------
+    # ---------- Описание (ограничено 1500 символами, крупный шрифт) ----------
+    # Реальная обрезка по месту на странице (ниже) сработает раньше этого лимита,
+    # если текста не хватает до низа — так не остаётся пустого места внизу.
     description = (listing.get('description') or '').strip()
-    if len(description) > 500:
-        description = description[:500].rstrip() + '…'
+    if len(description) > 1500:
+        description = description[:1500].rstrip() + '…'
     if description and y < content_bottom_limit - 60:
         draw.text((PAD, y), "Описание", font=_font('Montserrat-ExtraBold.ttf', 26), fill=TEXT_DARK)
-        y += 40
+        y += 34
 
         font_desc = _font('IBMPlexSans-Regular.ttf', 23)
         line_h = 33
