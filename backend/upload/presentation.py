@@ -363,15 +363,17 @@ def generate(listing: dict, company: dict) -> bytes:
                 uy += row_h
         y = uy + row_h + 20
 
-    # ---------- Описание (заполняет оставшееся место — уплотнено для большего объёма текста) ----------
+    # ---------- Описание (ограничено 500 символами, крупный шрифт) ----------
     description = (listing.get('description') or '').strip()
+    if len(description) > 500:
+        description = description[:500].rstrip() + '…'
     if description and y < content_bottom_limit - 60:
         draw.text((PAD, y), "Описание", font=_font('Montserrat-ExtraBold.ttf', 26), fill=TEXT_DARK)
         y += 40
 
-        font_desc = _font('IBMPlexSans-Regular.ttf', 19)
-        line_h = 27
-        para_gap = 9
+        font_desc = _font('IBMPlexSans-Regular.ttf', 23)
+        line_h = 33
+        para_gap = 11
         available_h = content_bottom_limit - y
 
         all_lines = []
