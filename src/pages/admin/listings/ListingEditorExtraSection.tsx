@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import CharCount from '@/components/ui/CharCount';
-import { Listing, BUILDING_CLASSES, PROPERTY_RIGHTS, FINISHING, OFFICE_LAYOUTS } from './types';
+import { Listing, BUILDING_CLASSES, PROPERTY_RIGHTS, FINISHING, OFFICE_LAYOUTS, BUILDING_TYPES, DEPOSIT_MONTHS } from './types';
 import SeoHeadingsBlock, { SeoHeadings } from '@/components/admin/SeoHeadingsBlock';
 
 const DEAL_LABEL: Record<string, string> = {
@@ -188,6 +188,85 @@ export default function ListingEditorExtraSection({
           </label>
         </div>
       </div>
+
+      {/* ─── Параметры для Авито ─── */}
+      {editing.export_avito && (
+        <div className="space-y-3 border-t border-border pt-4">
+          <div className="text-sm font-semibold flex items-center gap-2">
+            <Icon name="ShoppingBag" size={15} className="text-brand-blue" />
+            Дополнительные параметры для Авито
+            <span className="text-[10px] font-normal text-muted-foreground px-1.5 py-0.5 bg-muted rounded">обязательны при выгрузке на Авито</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div {...errWrap('building_type')}>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                <span className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0"><Icon name="Landmark" size={11} className="text-indigo-600" /></span>Тип здания *
+              </label>
+              <select className={`w-full px-3 py-2 border rounded-lg ${err('building_type')}`}
+                value={editing.building_type || ''}
+                onChange={e => { setEditing({ ...editing, building_type: e.target.value || null }); clearErr('building_type'); }}>
+                <option value="">— Не выбрано —</option>
+                {BUILDING_TYPES.map(t => <option key={t[0]} value={t[0]}>{t[1]}</option>)}
+              </select>
+            </div>
+            <div {...errWrap('has_vat')}>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                <span className="w-5 h-5 rounded-full bg-rose-100 flex items-center justify-center flex-shrink-0"><Icon name="Receipt" size={11} className="text-rose-600" /></span>НДС *
+              </label>
+              <select className={`w-full px-3 py-2 border rounded-lg ${err('has_vat')}`}
+                value={editing.has_vat === true ? 'yes' : editing.has_vat === false ? 'no' : ''}
+                onChange={e => { setEditing({ ...editing, has_vat: e.target.value === '' ? null : e.target.value === 'yes' }); clearErr('has_vat'); }}>
+                <option value="">— Не выбрано —</option>
+                <option value="yes">Да</option>
+                <option value="no">Нет</option>
+              </select>
+            </div>
+            {editing.deal === 'rent' && (
+              <div {...errWrap('deposit_months')}>
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                  <span className="w-5 h-5 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0"><Icon name="Wallet" size={11} className="text-amber-600" /></span>Залог *
+                </label>
+                <select className={`w-full px-3 py-2 border rounded-lg ${err('deposit_months')}`}
+                  value={editing.deposit_months || ''}
+                  onChange={e => { setEditing({ ...editing, deposit_months: e.target.value || null }); clearErr('deposit_months'); }}>
+                  <option value="">— Не выбрано —</option>
+                  {DEPOSIT_MONTHS.map(d => <option key={d[0]} value={d[0]}>{d[1]}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-4 pt-1">
+            {editing.deal === 'sale' && (
+              <>
+                <label className="flex items-center gap-2 cursor-pointer text-sm">
+                  <input type="checkbox" checked={!!editing.is_auction}
+                    onChange={e => setEditing({ ...editing, is_auction: e.target.checked })} />
+                  Аукцион
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-sm">
+                  <input type="checkbox" checked={!!editing.is_share_sale}
+                    onChange={e => setEditing({ ...editing, is_share_sale: e.target.checked })} />
+                  Продажа доли
+                </label>
+              </>
+            )}
+            {editing.deal === 'rent' && (
+              <>
+                <label className="flex items-center gap-2 cursor-pointer text-sm">
+                  <input type="checkbox" checked={!!editing.rent_holidays}
+                    onChange={e => setEditing({ ...editing, rent_holidays: e.target.checked })} />
+                  Арендные каникулы
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-sm">
+                  <input type="checkbox" checked={!!editing.avito_utilities_included}
+                    onChange={e => setEditing({ ...editing, avito_utilities_included: e.target.checked })} />
+                  Эксплуатационные расходы включены
+                </label>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ─── SEO ─── */}
       {canEditSeo ? (

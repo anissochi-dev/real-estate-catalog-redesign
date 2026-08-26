@@ -114,6 +114,15 @@ export interface Listing {
   prepay_months?: number | null;
   deposit_amount?: number | null;
   utilities_included?: boolean;
+  // ── Поля для выгрузки на Авито (обязательны только если включён export_avito) ──
+  additional_categories?: string | null;
+  has_vat?: boolean | null;
+  is_auction?: boolean;
+  is_share_sale?: boolean;
+  building_type?: string | null;
+  rent_holidays?: boolean;
+  avito_utilities_included?: boolean | null;
+  deposit_months?: string | null;
   cadastral_number?: string | null;
   egrn_objects?: EgrnStoredObject[] | null;
   rent_index_pct?: number | null;
@@ -242,6 +251,80 @@ export const DRIVEWAY_TYPES = [
   ['none', 'Нет подъездных путей'],
 ];
 
+// Матрица допустимых доп. категорий Авито в зависимости от основной category —
+// по каждой основной категории можно выбрать НЕ БОЛЕЕ 2 доп. категорий из списка.
+export const ADDITIONAL_CATEGORIES_MAP: Record<string, [string, string][]> = {
+  office: [
+    ['free_purpose', 'Свободное помещение'],
+    ['retail', 'Торговое помещение'],
+  ],
+  free_purpose: [
+    ['office', 'Офис'],
+    ['retail', 'Торговое помещение'],
+    ['warehouse', 'Склад'],
+    ['production', 'Производство'],
+    ['restaurant', 'Общепит'],
+    ['hotel', 'Гостиница'],
+    ['car_service', 'Автосервис'],
+  ],
+  retail: [
+    ['office', 'Офис'],
+    ['restaurant', 'Общепит'],
+  ],
+  warehouse: [
+    ['free_purpose', 'Свободного назначения'],
+    ['production', 'Производство'],
+    ['car_service', 'Автосервис'],
+  ],
+  production: [
+    ['free_purpose', 'Свободное назначение'],
+    ['warehouse', 'Склад'],
+    ['car_service', 'Автосервис'],
+  ],
+  restaurant: [
+    ['free_purpose', 'Свободного назначения'],
+    ['building', 'Здание'],
+  ],
+  hotel: [
+    ['free_purpose', 'Свободного назначения'],
+    ['building', 'Здание'],
+  ],
+  car_service: [
+    ['free_purpose', 'Свободного назначения'],
+    ['warehouse', 'Склад'],
+    ['production', 'Производство'],
+  ],
+  building: [
+    ['office', 'Офис'],
+    ['free_purpose', 'Свободного назначения'],
+    ['retail', 'Торговое помещение'],
+    ['warehouse', 'Склад'],
+    ['production', 'Производство'],
+    ['restaurant', 'Общепит'],
+    ['hotel', 'Гостиница'],
+    ['car_service', 'Автосервис'],
+  ],
+};
+export const ADDITIONAL_CATEGORIES_MAX = 2;
+
+export const BUILDING_TYPES = [
+  ['business_center', 'Бизнес-центр'],
+  ['shopping_center', 'Торговый центр'],
+  ['admin_building', 'Административное здание'],
+  ['residential', 'Жилой дом'],
+  ['other', 'Другой'],
+];
+
+export const DEPOSIT_MONTHS = [
+  ['none', 'Без залога'],
+  ['0.5', '0,5 месяца'],
+  ['1', '1 месяц'],
+  ['1.5', '1,5 месяца'],
+  ['2', '2 месяца'],
+  ['2.5', '2,5 месяца'],
+  ['3', '3 месяца'],
+];
+
 export const empty: Partial<Listing> = {
   title: '', category: '', deal: '', price: 0, area: 0,
   address: '', district: '', city: 'Краснодар', description: '', image: '', images: '', tags: '',
@@ -257,9 +340,11 @@ export const empty: Partial<Listing> = {
   is_exclusive: false, is_urgent: false,
   building_class: null, office_layout: null, subway_station: '', subway_distance: null,
   land_area: null, land_status: null, driveway_type: null, has_furniture: false, has_equipment: false, has_shop_windows: false,
-  property_rights: null, min_area: null, building_year: null, is_apartments: false,
+  property_rights: 'ownership', min_area: null, building_year: null, is_apartments: false,
   passenger_lifts: null, cargo_lifts: null,
   prepay_months: null, deposit_amount: null, utilities_included: false,
+  additional_categories: null, has_vat: null, is_auction: false, is_share_sale: false,
+  building_type: null, rent_holidays: false, avito_utilities_included: null, deposit_months: null,
 };
 
 export const fmtDate = (s: string | null) => {

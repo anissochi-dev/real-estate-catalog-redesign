@@ -608,9 +608,27 @@ AVITO_DECORATION_MAP = {
     'none': 'Без отделки',
 }
 
-# BuildingType — обязателен, допустимо 5 значений. Своего поля под тип здания
-# у нас нет — по умолчанию берём «Другой» (безопасное значение из справочника).
+# BuildingType — обязателен, допустимо 5 значений. Если пользователь не указал явно
+# (поле building_type на вкладке «Дополнительное») — берём «Другой» по умолчанию.
 AVITO_BUILDING_TYPE_DEFAULT = 'Другой'
+AVITO_BUILDING_TYPE_MAP = {
+    'business_center': 'Бизнес-центр',
+    'shopping_center': 'Торговый центр',
+    'admin_building': 'Административное здание',
+    'residential': 'Жилой дом',
+    'other': 'Другой',
+}
+
+# Deposit (залог, в месяцах) — используется только для аренды.
+AVITO_DEPOSIT_MAP = {
+    'none': 'Без залога',
+    '0.5': '0,5 месяца',
+    '1': '1 месяц',
+    '1.5': '1,5 месяца',
+    '2': '2 месяца',
+    '2.5': '2,5 месяца',
+    '3': '3 месяца',
+}
 
 _HEATING_RE = re.compile(r'Отопление:\s*([^,]+)')
 AVITO_HEATING_MAP = {
@@ -1229,6 +1247,17 @@ def _build_avito(listings, company):
         if l.get('title'):
             out.append(f'<Title>{_xml_escape(_clean_title(l["title"]))}</Title>')
 
+        # Доп. категории — до 2 значений, хранятся через | в additional_categories
+        if l.get('additional_categories'):
+            for ac in str(l['additional_categories']).split('|'):
+                ac = ac.strip()
+                ac_label = AVITO_OBJECT_TYPE_MAP.get(ac)
+                if ac_label:
+                    out.append(f'<AdditionalCategory>{_xml_escape(ac_label)}</AdditionalCategory>')
+
+        # Способ связи — по умолчанию только звонки для Авито
+        out.append('<ContactMethod>По телефону</ContactMethod>')
+
         # Цена
         price_val = _total_price(l)
         out.append(f'<Price>{price_val}</Price>')
@@ -1287,9 +1316,11 @@ def _build_avito(listings, company):
         if heating:
             out.append(f'<Heating>{heating}</Heating>')
 
-        # Тип здания — обязателен для большинства категорий (нет отдельного поля,
-        # используем безопасное значение по умолчанию из справочника)
-        out.append(f'<BuildingType>{AVITO_BUILDING_TYPE_DEFAULT}</BuildingType>')
+        # Тип здания — обязателен для большинства категорий. Если пользователь указал
+        # тип явно (вкладка «Дополнительное», обязательно при export_avito) — используем
+        # его, иначе безопасное значение по умолчанию из справочника.
+        building_type_val = AVITO_BUILDING_TYPE_MAP.get(l.get('building_type'), AVITO_BUILDING_TYPE_DEFAULT)
+        out.append(f'<BuildingType>{building_type_val}</BuildingType>')
 
         # Класс здания (только office/warehouse по схеме, но площадка игнорирует
         # тег для остальных категорий без ошибки — оставляем как есть при наличии данных)
@@ -1303,9 +1334,24 @@ def _build_avito(listings, company):
         if is_rent:
             # Аренда: тип аренды обязателен, залог — опционален
             out.append('<RentalType>Прямая</RentalType>')
+            deposit_label = AVITO_DEPOSIT_MAP.get(l.get('deposit_months'))
+            if deposit_label:
+                out.append(f'<Deposit>{deposit_label}</Deposit>')
+            if l.get('rent_holidays'):
+                out.append('<RentHolidays>Да</RentHolidays>')
+            if l.get('avito_utilities_included') is not None:
+                out.append(f'<UtilitiesIncluded>{"Да" if l["avito_utilities_included"] else "Нет"}</UtilitiesIncluded>')
         else:
             # Продажа: тип сделки обязателен
             out.append('<TransactionType>Продажа</TransactionType>')
+            if l.get('is_auction'):
+                out.append('<Auction>Да</Auction>')
+            if l.get('is_share_sale'):
+                out.append('<ShareInSale>Да</ShareInSale>')
+
+        # НДС — общее поле для продажи и аренды
+        if l.get('has_vat') is not None:
+            out.append(f'<VAT>{"Да" if l["has_vat"] else "Нет"}</VAT>')
 
         out.append('</Ad>')
 

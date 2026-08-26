@@ -92,7 +92,7 @@ export default function ListingEditor({
     location: !!(errors.address || errors.district),
     details:  !!(errors.price || errors.area || errors.floor || errors.total_floors || errors.broker_commission || errors.land_status || errors.land_vri),
     content:  !!errors.description,
-    extra:    !!(errors.finishing || errors.building_class || errors.building_year || errors.property_rights || errors.office_layout),
+    extra:    !!(errors.finishing || errors.building_class || errors.building_year || errors.property_rights || errors.office_layout || errors.building_type || errors.has_vat || errors.deposit_months),
   } : {};
 
   const validate = (): boolean => {
@@ -125,6 +125,12 @@ export default function ListingEditor({
     if (editing.category === 'land') {
       if (!editing.land_status) e.land_status = true;
       if (!editing.land_vri) e.land_vri = true;
+    }
+    // Доп. поля для Авито обязательны только если включена выгрузка на эту площадку
+    if (editing.export_avito) {
+      if (!editing.building_type) e.building_type = true;
+      if (editing.has_vat === null || editing.has_vat === undefined) e.has_vat = true;
+      if (editing.deal === 'rent' && !editing.deposit_months) e.deposit_months = true;
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -199,7 +205,8 @@ export default function ListingEditor({
       if (t === 'location') return !editing.district?.trim();
       if (t === 'details') return !editing.price || !editing.area || (editing.category === 'office' && editing.floor == null) || (['office', 'building', 'warehouse', 'production'].includes(editing.category || '') && editing.total_floors == null) || !bc?.trim() || (editing.category === 'land' && (!editing.land_status || !editing.land_vri));
       if (t === 'content') return !editing.description?.trim() || editing.description.trim().length < 30;
-      if (t === 'extra') return !editing.building_class || !editing.building_year || !editing.property_rights || (editing.category === 'office' && !editing.office_layout);
+      if (t === 'extra') return !editing.building_class || !editing.building_year || !editing.property_rights || (editing.category === 'office' && !editing.office_layout)
+        || (!!editing.export_avito && (!editing.building_type || editing.has_vat === null || editing.has_vat === undefined || (editing.deal === 'rent' && !editing.deposit_months)));
       return false;
     });
     if (firstErrTab) {

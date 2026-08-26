@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import PhonePickerInput from '@/components/admin/PhonePickerInput';
-import { Listing, OwnerExtraContact, CATS, DEALS, CONDITIONS, PURPOSE_LIST, Purpose, SALE_ONLY_CATEGORIES } from './types';
+import { Listing, OwnerExtraContact, CATS, DEALS, CONDITIONS, PURPOSE_LIST, Purpose, SALE_ONLY_CATEGORIES, ADDITIONAL_CATEGORIES_MAP } from './types';
 
 const MAX_OWNER_EXTRA_CONTACTS = 3;
 
@@ -137,7 +137,18 @@ export default function ListingEditorMainTab({ editing, setEditing, errors, setE
             onChange={e => {
               const nextCategory = e.target.value;
               const forceSale = SALE_ONLY_CATEGORIES.includes(nextCategory) && editing.deal === 'rent';
-              setEditing({ ...editing, category: nextCategory, ...(forceSale ? { deal: 'sale' } : {}) });
+              // Доп. категории (для Авито) зависят от основной — при смене основной
+              // категории оставляем только те выбранные значения, что валидны для новой.
+              const allowed = (ADDITIONAL_CATEGORIES_MAP[nextCategory] || []).map(([v]) => v);
+              const curAdditional = editing.additional_categories
+                ? editing.additional_categories.split('|').map(s => s.trim()).filter(Boolean)
+                : [];
+              const nextAdditional = curAdditional.filter(v => allowed.includes(v));
+              setEditing({
+                ...editing, category: nextCategory,
+                additional_categories: nextAdditional.join('|') || null,
+                ...(forceSale ? { deal: 'sale' } : {}),
+              });
               setErrors(v => ({ ...v, category: false }));
             }}>
             <option value="">— Выберите категорию —</option>
