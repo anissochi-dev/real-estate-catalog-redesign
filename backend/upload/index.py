@@ -302,7 +302,7 @@ def handler(event, context):
         try:
             with conn_pres.cursor(cursor_factory=RealDictCursor) as cur_pres:
                 cur_pres.execute(
-                    f"SELECT id, title, address, district, price, deal, area, land_area, "
+                    f"SELECT id, title, address, district, price, price_unit, deal, area, land_area, "
                     f"category, condition, ceiling_height, parking, floor, total_floors, "
                     f"utilities, description, images, image, slug "
                     f"FROM {SCHEMA}.listings WHERE id = {int(listing_id)} AND status = 'active'"

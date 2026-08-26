@@ -1,7 +1,8 @@
 """
 Генерация JPG-презентации объекта (формат A4, 1240x1754px, 150dpi) для соцсетей/статусов/клиентов.
-Рисует: шапку (лого+телефон), номер объекта, заголовок, сетку из фото, цену, параметры,
-коммуникации, описание и подвал с QR-кодом на страницу объекта.
+Рисует: шапку (лого слева, телефон по центру, домен+номер объекта справа), заголовок с QR-кодом
+на страницу объекта справа от названия, сетку из фото, цену, параметры, коммуникации и описание.
+Синего подвала больше нет — вся площадь страницы отдана под контент.
 """
 import base64
 import io
@@ -16,10 +17,9 @@ _FONT_CACHE: dict = {}
 
 W, H = 1240, 1754
 PAD = 56
-FOOTER_H = 190
+BOTTOM_MARGIN = 50
 
 BRAND_BLUE = (11, 61, 132)
-BRAND_BLUE_DARK = (8, 45, 97)
 TEXT_DARK = (26, 32, 44)
 TEXT_GRAY = (100, 110, 125)
 BG_LIGHT = (245, 247, 250)
@@ -94,6 +94,31 @@ def _format_price(price, deal):
     return f"{int(price):,}".replace(',', ' ') + ' ₽'
 
 
+def _normalize_price(listing):
+    """Возвращает (total_price, price_per_m2) в рублях с учётом price_unit.
+
+    В БД price хранится в единице, заданной price_unit: 'm2' — цена уже за метр,
+    иначе (в т.ч. 'total') — уже итоговая стоимость объекта. Логика идентична
+    _normalize_price() в backend/listings/index.py — защита от кривых данных:
+    если price_unit='m2', но цена > 200 000 ₽ (нереально для цены за метр),
+    считаем что в price уже итоговая стоимость.
+    """
+    try:
+        price = float(listing.get('price') or 0)
+    except (TypeError, ValueError):
+        price = 0
+    try:
+        area = float(listing.get('area') or 0)
+    except (TypeError, ValueError):
+        area = 0
+    unit = listing.get('price_unit')
+    if unit == 'm2' and area > 0 and 0 < price <= 200_000:
+        return int(round(price * area)), int(round(price))
+    if area > 0 and price > 0:
+        return int(price), int(round(price / area))
+    return int(price), None
+
+
 def generate(listing: dict, company: dict) -> bytes:
     """
     listing: dict с полями id, title, address, district, price, deal, area,
@@ -107,9 +132,12 @@ def generate(listing: dict, company: dict) -> bytes:
 
     canvas = Image.new('RGB', (W, H), WHITE)
     draw = ImageDraw.Draw(canvas)
-    content_bottom_limit = H - FOOTER_H
+    content_bottom_limit = H - BOTTOM_MARGIN
 
-    # ---------- Шапка ----------
+    site_url = (company.get('site_url') or '').rstrip('/')
+    site_label = site_url.replace('https://', '').replace('http://', '') if site_url else ''
+
+    # ---------- Шапка: лого слева, телефон по центру, домен+номер объекта справа ----------
     header_h = 110
     draw.rectangle([0, 0, W, header_h], fill=BRAND_BLUE)
     logo_url = company.get('logo_url')
@@ -128,27 +156,58 @@ def generate(listing: dict, company: dict) -> bytes:
 
     phone = company.get('company_phone') or ''
     if phone:
-        font_phone = _font('Montserrat-Bold.ttf', 30)
+        font_phone = _font('Montserrat-Black.ttf', 38)
         bb = draw.textbbox((0, 0), phone, font=font_phone)
-        draw.text((W - PAD - (bb[2] - bb[0]), (header_h - (bb[3] - bb[1])) // 2 - bb[1]), phone, font=font_phone, fill=WHITE)
+        pw, ph = bb[2] - bb[0], bb[3] - bb[1]
+        draw.text(((W - pw) // 2 - bb[0], (header_h - ph) // 2 - bb[1]), phone, font=font_phone, fill=WHITE)
+
+    # Справа: домен сайта сверху, номер объекта крупным шрифтом под ним
+    badge_text = f"№ {listing.get('id')}"
+    font_badge = _font('Montserrat-Black.ttf', 34)
+    bb_badge = draw.textbbox((0, 0), badge_text, font=font_badge)
+    bad_w, bad_h = bb_badge[2] - bb_badge[0], bb_badge[3] - bb_badge[1]
+
+    if site_label:
+        font_site = _font('IBMPlexSans-Medium.ttf', 20)
+        bb_site = draw.textbbox((0, 0), site_label, font=font_site)
+        site_w = bb_site[2] - bb_site[0]
+        block_h = bad_h + (bb_site[3] - bb_site[1]) + 6
+        top = (header_h - block_h) // 2
+        draw.text((W - PAD - site_w, top - bb_site[1]), site_label, font=font_site, fill=(200, 214, 235))
+        draw.text((W - PAD - bad_w, top + (bb_site[3] - bb_site[1]) + 6 - bb_badge[1]), badge_text, font=font_badge, fill=WHITE)
+    else:
+        draw.text((W - PAD - bad_w, (header_h - bad_h) // 2 - bb_badge[1]), badge_text, font=font_badge, fill=WHITE)
 
     y = header_h + 34
 
-    # ---------- Номер + заголовок ----------
-    badge_font = _font('IBMPlexSans-Medium.ttf', 22)
-    badge_text = f"№ {listing.get('id')}"
-    bb = draw.textbbox((0, 0), badge_text, font=badge_font)
-    bw, bh = bb[2] - bb[0], bb[3] - bb[1]
-    _rr(draw, [PAD, y, PAD + bw + 28, y + bh + 22], radius=10, fill=BG_LIGHT)
-    draw.text((PAD + 14, y + 11 - bb[1]), badge_text, font=badge_font, fill=BRAND_BLUE)
-    y += bh + 22 + 18
+    # ---------- Заголовок (слева) + QR-код на страницу объекта (справа) ----------
+    slug = listing.get('slug') or str(listing.get('id'))
+    listing_url = f"{site_url}/object/{slug}?from=presentation" if site_url else None
 
+    qr_size = 0
+    if listing_url:
+        qr_size = int(135 * 1.5)  # крупнее в 1.5 раза
+        qr = qrcode.QRCode(border=1, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=10)
+        qr.add_data(listing_url)
+        qr.make(fit=True)
+        qr_img = qr.make_image(fill_color='black', back_color='white').convert('RGB').resize((qr_size, qr_size), Image.LANCZOS)
+        qr_x = W - PAD - qr_size
+        qr_y = y
+        _rr(draw, [qr_x - 10, qr_y - 10, qr_x + qr_size + 10, qr_y + qr_size + 10], radius=10, fill=BG_LIGHT)
+        canvas.paste(qr_img, (qr_x, qr_y))
+        cap_font = _font('IBMPlexSans-Medium.ttf', 14)
+        cap = "Смотреть на сайте"
+        cb = draw.textbbox((0, 0), cap, font=cap_font)
+        draw.text((qr_x + qr_size // 2 - (cb[2] - cb[0]) // 2, qr_y + qr_size + 14), cap, font=cap_font, fill=TEXT_GRAY)
+
+    title_max_w = W - 2 * PAD - (qr_size + 30 if qr_size else 0)
+    title_top_y = y
     title = listing.get('title') or ''
     font_title = _font('Montserrat-Black.ttf', 42)
-    lines = _wrap(title, font_title, W - 2 * PAD, draw)
+    lines = _wrap(title, font_title, title_max_w, draw)
     if len(lines) > 2:
         lines = lines[:2]
-        lines[1] = _ellipsize(lines[1], font_title, W - 2 * PAD, draw)
+        lines[1] = _ellipsize(lines[1], font_title, title_max_w, draw)
     for ln in lines:
         draw.text((PAD, y), ln, font=font_title, fill=TEXT_DARK)
         y += 52
@@ -156,19 +215,24 @@ def generate(listing: dict, company: dict) -> bytes:
 
     addr = listing.get('address') or listing.get('district') or ''
     if addr:
-        font_addr = _font('IBMPlexSans-Regular.ttf', 24)
-        pin_r = 5
-        draw.ellipse([PAD, y + 8, PAD + pin_r * 2, y + 8 + pin_r * 2], fill=BRAND_BLUE)
-        draw.text((PAD + pin_r * 2 + 10, y), addr, font=font_addr, fill=TEXT_GRAY)
-        y += 46
+        font_addr = _font('IBMPlexSans-Regular.ttf', 32)
+        pin_r = 6
+        draw.ellipse([PAD, y + 10, PAD + pin_r * 2, y + 10 + pin_r * 2], fill=BRAND_BLUE)
+        draw.text((PAD + pin_r * 2 + 12, y), _ellipsize(addr, font_addr, title_max_w - pin_r * 2 - 12, draw) if draw.textbbox((0, 0), addr, font=font_addr)[2] > title_max_w - pin_r * 2 - 12 else addr, font=font_addr, fill=TEXT_GRAY)
+        y += 56
 
-    # ---------- Фото-сетка (до 10 шт, 5x2) ----------
+    # Если после заголовка+адреса контент короче блока QR — опускаем y до низа QR,
+    # чтобы фото-сетка не наезжала на QR-код.
+    if qr_size:
+        y = max(y, title_top_y + qr_size + 40)
+
+    # ---------- Фото-сетка (до 6 шт, 3x2, крупные ячейки) ----------
     images = listing.get('images') or []
-    images = images[:10]
+    images = images[:6]
     if images:
-        cols = 5
-        rows = 2 if len(images) > 5 else 1
-        gap = 10
+        cols = 3
+        rows = 2 if len(images) > 3 else 1
+        gap = 12
         cell_w = (W - 2 * PAD - gap * (cols - 1)) / cols
         cell_h = cell_w * 0.78
         gy = y
@@ -198,16 +262,26 @@ def generate(listing: dict, company: dict) -> bytes:
     # ---------- Цена ----------
     draw.line([(PAD, y), (W - PAD, y)], fill=LINE, width=2)
     y += 32
-    price_text = _format_price(listing.get('price'), listing.get('deal'))
+    total_price, price_per_m2 = _normalize_price(listing)
+    price_text = _format_price(total_price, listing.get('deal'))
     font_price = _font('Montserrat-Black.ttf', 58)
     draw.text((PAD, y), price_text, font=font_price, fill=BRAND_BLUE)
     bb = draw.textbbox((PAD, y), price_text, font=font_price)
-    area = listing.get('area')
-    price = listing.get('price')
-    if area and price:
-        ppm2 = f"{int(price / area):,}".replace(',', ' ') + ' ₽/м²'
-        font_ppm2 = _font('IBMPlexSans-Medium.ttf', 24)
-        draw.text((bb[2] + 22, bb[1] + (bb[3] - bb[1]) // 2 - 12), ppm2, font=font_ppm2, fill=TEXT_GRAY)
+    if price_per_m2:
+        ppm2_text = f"{price_per_m2:,}".replace(',', ' ') + ' ₽/м²'
+        # Тот же шрифт (Montserrat-Black), что и у основной цены — на одном уровне.
+        # Если суммарно не помещается на строку — уменьшаем размер только у ppm2,
+        # пока не влезет (не трогая размер основной цены).
+        ppm2_size = 58
+        font_ppm2 = _font('Montserrat-Black.ttf', ppm2_size)
+        available_w = (W - PAD) - (bb[2] + 26)
+        while draw.textbbox((0, 0), ppm2_text, font=font_ppm2)[2] > available_w and ppm2_size > 28:
+            ppm2_size -= 4
+            font_ppm2 = _font('Montserrat-Black.ttf', ppm2_size)
+        bb_ppm2 = draw.textbbox((0, 0), ppm2_text, font=font_ppm2)
+        # Выравниваем по нижней базовой линии с основной ценой
+        ppm2_y = bb[3] - (bb_ppm2[3] - bb_ppm2[1]) - bb_ppm2[1]
+        draw.text((bb[2] + 26, ppm2_y), ppm2_text, font=font_ppm2, fill=TEXT_GRAY)
     y = bb[3] + 40
 
     # ---------- Параметры ----------
@@ -320,46 +394,7 @@ def generate(listing: dict, company: dict) -> bytes:
             draw.text((PAD, y), ln, font=font_desc, fill=(60, 68, 80))
             y += line_h
 
-    # ---------- Подвал ----------
-    footer_y = H - FOOTER_H
-    draw.rectangle([0, footer_y, W, H], fill=BRAND_BLUE_DARK)
-
-    site_url = (company.get('site_url') or '').rstrip('/')
-    slug = listing.get('slug') or str(listing.get('id'))
-    listing_url = f"{site_url}/object/{slug}?from=presentation" if site_url else None
-
-    if listing_url:
-        qr_size = 135
-        qr = qrcode.QRCode(border=1, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=10)
-        qr.add_data(listing_url)
-        qr.make(fit=True)
-        qr_img = qr.make_image(fill_color='black', back_color='white').convert('RGB').resize((qr_size, qr_size), Image.LANCZOS)
-        qr_x = W - PAD - qr_size
-        qr_y = footer_y + 16
-        _rr(draw, [qr_x - 10, qr_y - 10, qr_x + qr_size + 10, qr_y + qr_size + 10], radius=10, fill=WHITE)
-        canvas.paste(qr_img, (qr_x, qr_y))
-        cap_font = _font('IBMPlexSans-Medium.ttf', 15)
-        cap = "Смотреть на сайте"
-        cb = draw.textbbox((0, 0), cap, font=cap_font)
-        draw.text((qr_x + qr_size // 2 - (cb[2] - cb[0]) // 2, qr_y + qr_size + 16), cap, font=cap_font, fill=WHITE)
-
-    if logo_url:
-        try:
-            req = urllib.request.Request(logo_url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=8) as resp:
-                logo_bytes = resp.read()
-            logo2 = Image.open(io.BytesIO(logo_bytes)).convert('RGBA')
-            logo2_h = 48
-            r2 = logo2_h / logo2.height
-            logo2 = logo2.resize((max(1, int(logo2.width * r2)), logo2_h), Image.LANCZOS)
-            logo2_y = footer_y + (FOOTER_H - logo2_h) // 2 - 20
-            canvas.paste(logo2, (PAD, logo2_y), logo2)
-            if site_url:
-                site_font = _font('IBMPlexSans-Regular.ttf', 20)
-                site_label = site_url.replace('https://', '').replace('http://', '')
-                draw.text((PAD, logo2_y + logo2_h + 16), site_label, font=site_font, fill=(200, 210, 225))
-        except Exception:
-            pass
+    # Подвал убран полностью — QR-код и домен уже выведены в шапке/у заголовка выше.
 
     out = io.BytesIO()
     canvas.convert('RGB').save(out, format='JPEG', quality=90, optimize=True)
