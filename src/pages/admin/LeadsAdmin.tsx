@@ -12,7 +12,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { District } from './districts/DistrictsTypes';
 import { fetchDistricts } from '@/lib/api';
 
-export default function LeadsAdmin() {
+interface Props {
+  openLeadId?: number | null;
+  onOpenLeadHandled?: () => void;
+}
+
+export default function LeadsAdmin({ openLeadId, onOpenLeadHandled }: Props = {}) {
   const { user } = useAuth();
   const isBroker = user?.role === 'broker';
   // Брокер может видеть все лиды, но управлять только своими (leads: read+create, без update/delete)
@@ -53,20 +58,19 @@ export default function LeadsAdmin() {
   }, []);
 
   // Открытие заявки по id из другого раздела (например из подбора совпадений в объектах)
+  // — id приходит пропсом от AdminPage, т.к. этот компонент был размонтирован в момент
+  // отправки события, если пользователь находился на другой вкладке.
   useEffect(() => {
-    const handler = async (e: Event) => {
-      const id = (e as CustomEvent<number>).detail;
-      if (!id) return;
-      const l = leads.find(x => x.id === id);
-      if (l) { openLead(l); return; }
-      try {
-        const d = await adminApi.getLead(id);
-        if (d.lead) { setActive(d.lead); setComments(d.comments || []); }
-      } catch { /* ignore */ }
-    };
-    window.addEventListener('admin:open-lead', handler);
-    return () => window.removeEventListener('admin:open-lead', handler);
-  }, [leads]);
+    if (!openLeadId) return;
+    const id = openLeadId;
+    onOpenLeadHandled?.();
+    const l = leads.find(x => x.id === id);
+    if (l) { openLead(l); return; }
+    adminApi.getLead(id)
+      .then(d => { if (d.lead) { setActive(d.lead); setComments(d.comments || []); } })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openLeadId, leads]);
 
   const openLead = async (l: Lead) => {
     setActive(l);

@@ -12,7 +12,12 @@ import Icon from '@/components/ui/icon';
 import { useListingsState } from './listings/useListingsState';
 import { adminApi } from '@/lib/adminApi';
 
-export default function ListingsAdmin() {
+interface Props {
+  openListingId?: number | null;
+  onOpenListingHandled?: () => void;
+}
+
+export default function ListingsAdmin({ openListingId, onOpenListingHandled }: Props = {}) {
   const s = useListingsState();
   const [internalCardId, setInternalCardId] = useState<number | null>(null);
   const [matchingListingId, setMatchingListingId] = useState<number | null>(null);
@@ -33,15 +38,15 @@ export default function ListingsAdmin() {
     }
   };
 
-  // Открытие карточки из других разделов (например из SEO-аудита)
+  // Открытие карточки из других разделов (например из подбора совпадений в заявках,
+  // из SEO-аудита) — id приходит пропсом от AdminPage, а не событием, т.к. этот
+  // компонент был размонтирован в момент отправки события.
   useEffect(() => {
-    const handler = (e: Event) => {
-      const id = (e as CustomEvent<number>).detail;
-      if (id) setInternalCardId(id);
-    };
-    window.addEventListener('admin:open-listing', handler);
-    return () => window.removeEventListener('admin:open-listing', handler);
-  }, []);
+    if (openListingId) {
+      setInternalCardId(openListingId);
+      onOpenListingHandled?.();
+    }
+  }, [openListingId, onOpenListingHandled]);
 
   if (s.loading && s.items.length === 0) return (
     <div className="flex items-center justify-center py-20 text-muted-foreground gap-2">
