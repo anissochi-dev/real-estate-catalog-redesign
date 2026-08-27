@@ -812,6 +812,61 @@ CONDITION_YANDEX = {
     'shellcore': 'требует ремонта',
 }
 
+# Тип здания (наше поле building_type, справочник BUILDING_TYPES) → тег Яндекса
+# <commercial-building-type>. Точные значения по документации Яндекс.Недвижимости:
+# business_center, detached_building, residential_building, shopping_center, warehouse.
+# У Яндекса нет прямых аналогов «Административное здание» и «Другой» — эти два
+# варианта в фид не передаём (поле необязательное).
+YANDEX_BUILDING_TYPE_MAP = {
+    'business_center': 'business_center',
+    'shopping_center': 'shopping_center',
+    'residential': 'residential_building',
+}
+
+# Ключи нашего текстового поля utilities → соответствующий булев тег Яндекса.
+# Некоторые пункты (вода/газ/электричество/отопление/канализация) у Яндекса —
+# это просто факт наличия (true), конкретный вид (скважина/магистральный и т.д.)
+# в схеме фида отдельно не передаётся.
+_YANDEX_UTILITY_TAG_MAP = {
+    'Вода': 'water-supply',
+    'Канализация': 'sewerage-supply',
+    'Отопление': 'heating-supply',
+    'Газ': 'gas-supply',
+    'Электричество': 'electricity-supply',
+    'Интернет': 'internet',
+    'Вентиляция': 'ventilation',
+    'Пожарная сигнализация': 'fire-alarm',
+}
+
+# Значения-исключения, при которых коммуникация считается ОТСУТСТВУЮЩЕЙ,
+# а не присутствующей (для пунктов, где один из вариантов — явное «нет»).
+_YANDEX_UTILITY_ABSENT_VALUES = {'Отсутствует', 'Нет'}
+
+
+def _parse_utilities_for_yandex(utilities: str) -> dict:
+    """Разбирает наше текстовое поле utilities вида
+    "Вода: Центральная, Электричество: 220В, ..." на отдельные булевы теги
+    Яндекса (water-supply, electricity-supply и т.д.) — тег добавляется
+    только если соответствующий пункт заполнен и не равен «Отсутствует»/«Нет».
+    """
+    result = {}
+    if not utilities:
+        return result
+    for part in utilities.split(','):
+        part = part.strip()
+        if ':' not in part:
+            continue
+        key, _, value = part.partition(':')
+        key = key.strip()
+        value = value.strip()
+        tag = _YANDEX_UTILITY_TAG_MAP.get(key)
+        if not tag or not value:
+            continue
+        if value in _YANDEX_UTILITY_ABSENT_VALUES:
+            continue
+        result[tag] = 'true'
+    return result
+
 # YML-фид недвижимости (param "Отделка") принимает только 3 значения:
 # Черновая / Чистовая / Под ключ — используется в _build_yandex_market.
 CONDITION_TO_FINISHING_MARKET = {
@@ -965,6 +1020,13 @@ def _build_yandex(listings, company, feed_slug=None, use_jpg_photos=None, city_r
         if site_url and l.get('slug'):
             out.append(f'<url>{_xml_escape(site_url)}/object/{l["slug"]}</url>')
 
+        # Номер лота — используем ID объекта (тот же номер, что виден клиенту на сайте)
+        out.append(f'<lot-number>{l["id"]}</lot-number>')
+
+        # Кадастровый номер объекта
+        if l.get('cadastral_number'):
+            out.append(f'<cadastral-number>{_xml_escape(str(l["cadastral_number"]))}</cadastral-number>')
+
         # Цена (unit не передаём — value всегда итоговая сумма, а не цена за м²)
         out.append('<price>')
         price_val = _total_price(l)
@@ -1031,11 +1093,31 @@ def _build_yandex(listings, company, feed_slug=None, use_jpg_photos=None, city_r
         for img in images:
             out.append(f'<image>{_xml_escape(img)}</image>')
 
-        # Видео — только ссылки на YouTube
-        if l.get('video_url') and 'youtu' in l['video_url'].lower():
+        # Видео — YouTube или RuTube
+        video_url = l.get('video_url') or ''
+        video_url_lower = video_url.lower()
+        if video_url and 'youtu' in video_url_lower:
             out.append('<video-review>')
-            out.append(f'<youtube-video-review-url>{_xml_escape(l["video_url"])}</youtube-video-review-url>')
+            out.append(f'<youtube-video-review-url>{_xml_escape(video_url)}</youtube-video-review-url>')
             out.append('</video-review>')
+        elif video_url and 'rutube' in video_url_lower:
+            out.append('<video-review>')
+            out.append(f'<rutube-video-review-url>{_xml_escape(video_url)}</rutube-video-review-url>')
+            out.append('</video-review>')
+
+        # Тип здания
+        building_type_yandex = YANDEX_BUILDING_TYPE_MAP.get(l.get('building_type'))
+        if building_type_yandex:
+            out.append(f'<commercial-building-type>{building_type_yandex}</commercial-building-type>')
+
+        # Коммуникации — разбираем текстовое поле utilities на отдельные булевы теги
+        utilities_flags = _parse_utilities_for_yandex(l.get('utilities') or '')
+        for tag, value in utilities_flags.items():
+            out.append(f'<{tag}>{value}</{tag}>')
+
+        # Мебель в помещении
+        if l.get('has_furniture'):
+            out.append('<room-furniture>true</room-furniture>')
 
         out.append('</offer>')
 
