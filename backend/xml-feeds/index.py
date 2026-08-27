@@ -350,7 +350,10 @@ def _regenerate_static_feeds(cur, conn, force=False):
 
         if s3 is None:
             s3 = _s3_client()
-        key = f"xml-feeds/{feed['slug']}.xml"
+        # VK Товары требует, чтобы ссылка на фид оканчивалась на .yml (иначе площадка
+        # отклоняет файл при импорте) — остальные форматы сохраняем как .xml, как раньше.
+        ext = 'yml' if feed['format'] == 'market_vk' else 'xml'
+        key = f"xml-feeds/{feed['slug']}.{ext}"
         s3.put_object(
             Bucket=S3_BUCKET,
             Key=key,
