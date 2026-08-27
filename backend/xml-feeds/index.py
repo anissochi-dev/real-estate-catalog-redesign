@@ -1323,9 +1323,12 @@ def _build_vk_market(listings, company, category_map):
     группы: Управление → Товары → Импортировать из файла). Формат — тот же YML
     (Yandex Market Language), что и у _build_yandex_market, но с жёсткими лимитами VK:
     не более 2 <param> на товар (у Яндекс.Маркета их может быть 10+), название/описание
-    без HTML-разметки. category_map — словарь {category объекта: categoryId в кабинете
-    VK}, обычно один и тот же id для всех категорий (в VK нет отдельных типов
-    коммерческой недвижимости — есть общая категория «Коммерческая недвижимость»)."""
+    без HTML-разметки, картинки ТОЛЬКО JPG/PNG/GIF — WEBP не поддерживается площадкой,
+    поэтому используются чистые JPG-копии фото (_split_images_for_feed с clean=True),
+    иначе VK пропускает все товары как «без изображений». category_map — словарь
+    {category объекта: categoryId в кабинете VK}, обычно один и тот же id для всех
+    категорий (в VK нет отдельных типов коммерческой недвижимости — есть общая
+    категория «Коммерческая недвижимость»)."""
     company_name = _xml_escape(company.get('company_name') or 'Магазин')
     site_url = (company.get('site_url') or '').rstrip('/')
     now = datetime.utcnow().strftime('%Y-%m-%d %H:%M')
@@ -1366,8 +1369,10 @@ def _build_vk_market(listings, company, category_map):
         out.append('<currencyId>RUB</currencyId>')
         out.append(f'<categoryId>{_xml_escape(str(vk_cat_id))}</categoryId>')
 
-        # Картинки — обязательны: товары без фото VK пропускает при импорте
-        images = _split_images(l)[:10]
+        # Картинки — обязательны (товары без фото VK пропускает при импорте) и должны
+        # быть JPG/PNG/GIF: use_jpg_photos=True принудительно переключает на чистые
+        # JPG-копии вместо исходных WEBP, которые VK не поддерживает.
+        images = _split_images_for_feed(l, None, use_jpg_photos=True)[:10]
         for img in images:
             out.append(f'<picture>{_xml_escape(img)}</picture>')
 
