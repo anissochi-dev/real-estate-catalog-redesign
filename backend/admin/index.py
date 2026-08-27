@@ -3023,7 +3023,7 @@ def _listings(cur, conn, method, rid, event, user):
                           # Дополнительные поля из вкладки «Дополнительное»
                           ('building_class', 10), ('property_rights', 30), ('office_layout', 20),
                           ('land_status', 30), ('land_vri', 150), ('driveway_type', 20), ('subway_station', 100),
-                          ('cadastral_number', 50), ('image_thumb', 500),
+                          ('cadastral_number', 50), ('image_thumb', 500), ('egrn_zip_url', 500),
                           # Поля для выгрузки на Авито
                           ('additional_categories', 150), ('building_type', 30), ('deposit_months', 10)]:
             if f in body:

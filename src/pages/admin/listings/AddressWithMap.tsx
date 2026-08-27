@@ -13,6 +13,7 @@ import {
 } from './cadastreTypes';
 import type { EgrnStoredObject } from './types';
 import CadastreCard from './CadastreCard';
+import EgrnZipUpload from './EgrnZipUpload';
 import EgrnBlock from './EgrnBlock';
 import AddressInputRow from './AddressInputRow';
 import YandexMap from './YandexMap';
@@ -376,6 +377,9 @@ export default function AddressWithMap({ editing, setEditing, cities, hasError, 
 
       {/* ── InfoCard кадастра ──────────────────────────────────────────────── */}
       <CadastreCard cadastreInfo={cadastreInfo} />
+
+      {/* ── Выписка ЕГРН (ZIP) для Авито ─────────────────────────────────── */}
+      <EgrnZipUpload editing={editing} setEditing={setEditing} />
 
       {/* ── Блок ЕГРН ────────────────────────────────────────────────────── */}
       {showEgrnBlock && (

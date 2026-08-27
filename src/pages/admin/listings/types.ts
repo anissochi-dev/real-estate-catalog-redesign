@@ -125,6 +125,7 @@ export interface Listing {
   deposit_months?: string | null;
   cadastral_number?: string | null;
   egrn_objects?: EgrnStoredObject[] | null;
+  egrn_zip_url?: string | null;
   rent_index_pct?: number | null;
   // Сводная статистика — приходит вместе со списком объектов
   stats_views?: number | null;

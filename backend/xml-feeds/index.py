@@ -1435,6 +1435,11 @@ def _build_avito(listings, company):
         if l.get('has_vat') is not None:
             out.append(f'<VAT>{"Да" if l["has_vat"] else "Нет"}</VAT>')
 
+        # Ссылка на ZIP-архив с выпиской из ЕГРН — ускоряет модерацию на Авито.
+        # Поле необязательное, передаём только если менеджер загрузил архив.
+        if l.get('egrn_zip_url'):
+            out.append(f'<EgrnExtractionLink><![CDATA[{l["egrn_zip_url"]}]]></EgrnExtractionLink>')
+
         out.append('</Ad>')
 
     out.append('</Ads>')
