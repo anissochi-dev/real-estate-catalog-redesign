@@ -251,9 +251,10 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_ca
         # каталоги без API. Один общий флаг «Р» на объекте включает выгрузку сразу во ВСЕ
         # такие площадки одновременно (в отличие от Я/А/Ц, у каждой из которых свой флаг).
         where.append("export_other = TRUE")
-    elif fmt == 'market':
-        # YML-фид товаров для Яндекс.Маркета — использует тот же флаг, что и группа «Разное»
-        # (отдельного флага на объекте не заводим, чтобы не плодить галочки в карточке).
+    elif fmt in ('market', 'market_vk'):
+        # YML-фиды товаров (Яндекс.Маркет, VK Товары) — используют тот же флаг, что и
+        # группа «Разное» (отдельного флага на объекте не заводим, чтобы не плодить
+        # галочки в карточке).
         where.append("export_other = TRUE")
 
     cur.execute(f"SELECT * FROM {SCHEMA}.listings WHERE {' AND '.join(where)} ORDER BY created_at DESC")
@@ -310,6 +311,8 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_ca
         return _build_yandex(listings, company, feed_slug, use_jpg_photos, city_region_map)
     if fmt == 'market':
         return _build_yandex_market(listings, company, market_category_map or {})
+    if fmt == 'market_vk':
+        return _build_vk_market(listings, company, market_category_map or {})
     return None
 
 
@@ -330,7 +333,7 @@ def _regenerate_static_feeds(cur, conn, force=False):
                 continue
 
         market_category_map = {}
-        if feed['format'] == 'market' and feed.get('market_category_map'):
+        if feed['format'] in ('market', 'market_vk') and feed.get('market_category_map'):
             try:
                 market_category_map = json.loads(feed['market_category_map'])
             except (ValueError, TypeError):
@@ -1292,6 +1295,92 @@ def _build_yandex_market(listings, company, category_map):
             out.append(f'<param name="Телефон объекта">{_xml_escape(company["company_phone"])}</param>')
         if site_url:
             out.append(f'<param name="Сайт объекта">{_xml_escape(site_url)}</param>')
+
+        out.append('</offer>')
+
+    out.append('</offers>')
+    out.append('</shop>')
+    out.append('</yml_catalog>')
+    return '\n'.join(out)
+
+
+_HTML_TAG_RE = re.compile(r'<[^>]+>')
+
+
+def _strip_html(s):
+    """Убирает HTML-теги из названия/описания — площадки вроде VK Товары отклоняют
+    карточки с посторонней разметкой в тексте (требование «нет кода/HTML-меток»)."""
+    if not s:
+        return ''
+    return _HTML_TAG_RE.sub(' ', str(s))
+
+
+def _build_vk_market(listings, company, category_map):
+    """Строит YML-фид «Товары» для сообщества ВКонтакте (импорт через личный кабинет
+    группы: Управление → Товары → Импортировать из файла). Формат — тот же YML
+    (Yandex Market Language), что и у _build_yandex_market, но с жёсткими лимитами VK:
+    не более 2 <param> на товар (у Яндекс.Маркета их может быть 10+), название/описание
+    без HTML-разметки. category_map — словарь {category объекта: categoryId в кабинете
+    VK}, обычно один и тот же id для всех категорий (в VK нет отдельных типов
+    коммерческой недвижимости — есть общая категория «Коммерческая недвижимость»)."""
+    company_name = _xml_escape(company.get('company_name') or 'Магазин')
+    site_url = (company.get('site_url') or '').rstrip('/')
+    now = datetime.utcnow().strftime('%Y-%m-%d %H:%M')
+
+    out = ['<?xml version="1.0" encoding="UTF-8"?>']
+    out.append(f'<yml_catalog date="{now}">')
+    out.append('<shop>')
+    out.append(f'<name>{company_name}</name>')
+    out.append(f'<company>{company_name}</company>')
+    if site_url:
+        out.append(f'<url>{_xml_escape(site_url)}</url>')
+    out.append('<currencies><currency id="RUB" rate="1"/></currencies>')
+
+    used_cat_ids = sorted(set(str(v) for v in category_map.values() if v))
+    if used_cat_ids:
+        out.append('<categories>')
+        for cat_id in used_cat_ids:
+            out.append(f'<category id="{_xml_escape(cat_id)}">Коммерческая недвижимость</category>')
+        out.append('</categories>')
+
+    out.append('<offers>')
+
+    for l in listings:
+        # VK хранит одну общую категорию недвижимости — ключ "*" в market_category_map
+        # покрывает все типы объектов сразу, но поддерживаем и точечное соответствие
+        # по category, если пользователь его настроит.
+        vk_cat_id = category_map.get(l.get('category')) or category_map.get('*')
+        if not vk_cat_id:
+            continue  # без категории объект отклонят при импорте
+
+        out.append(f'<offer id="{l["id"]}" available="true">')
+        if site_url and l.get('slug'):
+            out.append(f'<url>{_xml_escape(site_url)}/object/{l["slug"]}</url>')
+
+        price_val = _total_price(l)
+        if price_val > 0:
+            out.append(f'<price>{price_val}</price>')
+        out.append('<currencyId>RUB</currencyId>')
+        out.append(f'<categoryId>{_xml_escape(str(vk_cat_id))}</categoryId>')
+
+        # Картинки — обязательны: товары без фото VK пропускает при импорте
+        images = _split_images(l)[:10]
+        for img in images:
+            out.append(f'<picture>{_xml_escape(img)}</picture>')
+
+        title = _strip_html(_clean_title(l.get('title') or ''))
+        if title:
+            out.append(f'<name>{_xml_escape(title)}</name>')
+
+        if l.get('description'):
+            desc = _xml_escape(_strip_html(l['description']))[:3000]
+            out.append(f'<description>{desc}</description>')
+
+        # Не более 2 param — жёсткий лимит VK (у Яндекс.Маркета их может быть много больше)
+        deal_label = 'Аренда' if l.get('deal') == 'rent' else 'Продажа'
+        out.append(f'<param name="Тип сделки">{deal_label}</param>')
+        if l.get('area'):
+            out.append(f'<param name="Площадь">{l["area"]} м²</param>')
 
         out.append('</offer>')
 

@@ -5044,7 +5044,7 @@ def _category_texts(cur, conn, method, rid, event, user):
     return _err(400, 'Bad request')
 
 
-XML_FEED_FORMATS = ('yandex', 'avito', 'cian', 'other', 'market')
+XML_FEED_FORMATS = ('yandex', 'avito', 'cian', 'other', 'market', 'market_vk')
 
 
 def _make_feed_slug(cur, name: str, fmt: str) -> str:

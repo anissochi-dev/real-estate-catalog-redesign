@@ -5,6 +5,7 @@ import { F, XML_URL } from './xml-feeds/shared';
 import XmlFeedsListCard from './xml-feeds/XmlFeedsListCard';
 import XmlImportCard from './xml-feeds/XmlImportCard';
 import XmlMarketFeedCard from './xml-feeds/XmlMarketFeedCard';
+import XmlVkFeedCard from './xml-feeds/XmlVkFeedCard';
 import XmlFeedEditModal from './xml-feeds/XmlFeedEditModal';
 
 export default function XmlFeedsAdmin() {
@@ -72,6 +73,14 @@ export default function XmlFeedsAdmin() {
       <XmlImportCard />
 
       <XmlMarketFeedCard
+        items={items}
+        load={load}
+        regenerating={regenerating}
+        regenerateNow={regenerateNow}
+        copy={copy}
+      />
+
+      <XmlVkFeedCard
         items={items}
         load={load}
         regenerating={regenerating}
