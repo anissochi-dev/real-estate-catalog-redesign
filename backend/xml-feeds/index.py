@@ -1314,6 +1314,12 @@ def _build_avito(listings, company):
         is_rent = l.get('deal') == 'rent'
         out.append('<Ad>')
         out.append(f'<Id>{l["id"]}</Id>')
+        # AvitoId — заполняется вручную, только если это уже размещённое на Авито
+        # объявление (например, добавлено не через автозагрузку или сменился Id).
+        # Если поле пустое — тег не выводим, и Авито создаст новое объявление
+        # вместо обновления существующего.
+        if l.get('avito_ad_id'):
+            out.append(f'<AvitoId>{l["avito_ad_id"]}</AvitoId>')
         # Дата "поднятия" объявления для Авито: feed_bump_at (авто-обновление),
         # иначе дата создания объекта.
         date_begin = (l.get('feed_bump_at') or l.get('created_at') or '')[:10]

@@ -198,6 +198,18 @@ export default function ListingEditorExtraSection({
             <span className="text-[10px] font-normal text-muted-foreground px-1.5 py-0.5 bg-muted rounded">обязательны при выгрузке на Авито</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-2">
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                <span className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0"><Icon name="Hash" size={11} className="text-green-600" /></span>Номер объявления на Авито (AvitoId)
+              </label>
+              <input type="number" className="w-full px-3 py-2 border rounded-lg"
+                placeholder="оставьте пустым — объявление разместится как новое"
+                value={editing.avito_ad_id ?? ''}
+                onChange={e => setEditing({ ...editing, avito_ad_id: e.target.value === '' ? null : +e.target.value })} />
+              <div className="text-[11px] text-muted-foreground mt-1">
+                Если удалить номер — на Авито объявление разместится заново, а не продлится
+              </div>
+            </div>
             <div {...errWrap('building_type')}>
               <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
                 <span className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0"><Icon name="Landmark" size={11} className="text-indigo-600" /></span>Тип здания *

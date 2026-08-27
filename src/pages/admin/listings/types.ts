@@ -126,6 +126,7 @@ export interface Listing {
   rent_holidays?: boolean;
   avito_utilities_included?: boolean | null;
   deposit_months?: string | null;
+  avito_ad_id?: number | null;
   cadastral_number?: string | null;
   egrn_objects?: EgrnStoredObject[] | null;
   egrn_zip_url?: string | null;
