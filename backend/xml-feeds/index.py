@@ -813,14 +813,26 @@ CONDITION_YANDEX = {
 }
 
 # Тип здания (наше поле building_type, справочник BUILDING_TYPES) → тег Яндекса
-# <commercial-building-type>. Точные значения по документации Яндекс.Недвижимости:
-# business_center, detached_building, residential_building, shopping_center, warehouse.
+# <commercial-building-type>. Точные значения по официальной документации
+# Яндекс.Недвижимости (слова разделены ПРОБЕЛОМ, не подчёркиванием!):
+# business center, detached building, residential building, shopping center, warehouse.
 # У Яндекса нет прямых аналогов «Административное здание» и «Другой» — эти два
 # варианта в фид не передаём (поле необязательное).
 YANDEX_BUILDING_TYPE_MAP = {
-    'business_center': 'business_center',
-    'shopping_center': 'shopping_center',
-    'residential': 'residential_building',
+    'business_center': 'business center',
+    'shopping_center': 'shopping center',
+    'residential': 'residential building',
+}
+
+# Наше поле purpose (справочник PURPOSE_LIST, значения через |) → тег Яндекса <purpose>.
+# У Яндекса строго ограниченный список из 6 значений (bank, beauty shop, food store,
+# medical center, show room, touragency) — сопоставляем только те наши варианты, что
+# совпадают по смыслу однозначно; остальные (их большинство) прямого аналога не имеют
+# и в фид не передаются.
+YANDEX_PURPOSE_MAP = {
+    'Салон красоты': 'beauty shop',
+    'Продуктовый магазин': 'food store',
+    'Медицинский центр': 'medical center',
 }
 
 # Ключи нашего текстового поля utilities → соответствующий булев тег Яндекса.
@@ -1109,6 +1121,15 @@ def _build_yandex(listings, company, feed_slug=None, use_jpg_photos=None, city_r
         building_type_yandex = YANDEX_BUILDING_TYPE_MAP.get(l.get('building_type'))
         if building_type_yandex:
             out.append(f'<commercial-building-type>{building_type_yandex}</commercial-building-type>')
+
+        # Назначение объекта — тег может повторяться, но у нас с Яндексом совпадает
+        # только несколько вариантов, поэтому берём все подходящие из выбранных менеджером
+        if l.get('purpose'):
+            for p in str(l['purpose']).split('|'):
+                p = p.strip()
+                purpose_yandex = YANDEX_PURPOSE_MAP.get(p)
+                if purpose_yandex:
+                    out.append(f'<purpose>{purpose_yandex}</purpose>')
 
         # Коммуникации — разбираем текстовое поле utilities на отдельные булевы теги
         utilities_flags = _parse_utilities_for_yandex(l.get('utilities') or '')
