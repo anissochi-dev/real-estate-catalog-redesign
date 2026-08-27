@@ -203,6 +203,13 @@ def _num_or_null(v):
         return 'NULL'
 
 
+def _date_or_null(v):
+    """Для полей DATE (например contract_end_date) — ожидается 'YYYY-MM-DD'."""
+    if v is None or v == '':
+        return 'NULL'
+    return f"'{_safe(str(v)[:10], 10)}'"
+
+
 def _get_user(cur, token):
     if not token:
         return None
@@ -2856,7 +2863,7 @@ def _listings(cur, conn, method, rid, event, user):
 
         sql = (
             f"INSERT INTO {SCHEMA}.listings "
-            f"(title, description, ai_notes, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, export_other, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, broker_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, has_shop_windows, owner_phone_contact_id, owner_phone2_contact_id, owner_extra_contacts, cadastral_number, egrn_objects, image_thumb, rent_index_pct, prepay_months, deposit_amount, utilities_included, passenger_lifts, cargo_lifts, driveway_type, office_layout, additional_categories, has_vat, is_auction, is_share_sale, building_type, rent_holidays, avito_utilities_included, deposit_months, last_edited_at, last_edited_by) VALUES ("
+            f"(title, description, ai_notes, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, export_other, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, broker_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, has_shop_windows, owner_phone_contact_id, owner_phone2_contact_id, owner_extra_contacts, cadastral_number, egrn_objects, image_thumb, rent_index_pct, prepay_months, deposit_amount, utilities_included, passenger_lifts, cargo_lifts, driveway_type, office_layout, additional_categories, has_vat, is_auction, is_share_sale, is_assignment, rented_out, contract_end_date, building_type, rent_holidays, avito_utilities_included, deposit_months, last_edited_at, last_edited_by) VALUES ("
             f"{_str_or_null(body.get('title'), 255)}, {_str_or_null(body.get('description'), 5000)}, "
             f"{_str_or_null(body.get('ai_notes'), 2000)}, "
             f"{_str_or_null(body.get('category'), 50)}, {_str_or_null(body.get('deal'), 20)}, "
@@ -2905,6 +2912,8 @@ def _listings(cur, conn, method, rid, event, user):
             f"{_str_or_null(body.get('driveway_type'), 20)}, {_str_or_null(body.get('office_layout'), 20)}, "
             f"{_str_or_null(body.get('additional_categories'), 150)}, {_bool_or_null(body.get('has_vat'))}, "
             f"{_bool(body.get('is_auction'))}, {_bool(body.get('is_share_sale'))}, "
+            f"{_bool(body.get('is_assignment'))}, {_bool_or_null(body.get('rented_out'))}, "
+            f"{_date_or_null(body.get('contract_end_date'))}, "
             f"{_str_or_null(body.get('building_type'), 30)}, {_bool(body.get('rent_holidays'))}, "
             f"{_bool_or_null(body.get('avito_utilities_included'))}, {_str_or_null(body.get('deposit_months'), 10)}, "
             f"NOW(), {user['id']}) RETURNING id"
@@ -2969,6 +2978,7 @@ def _listings(cur, conn, method, rid, event, user):
             'use_watermark', 'export_yandex', 'export_avito', 'export_cian', 'export_other',
             'broker_commission', 'broker_id', 'lat', 'lng', 'image_thumb',
             'additional_categories', 'has_vat', 'is_auction', 'is_share_sale',
+            'is_assignment', 'rented_out', 'contract_end_date',
             'building_type', 'rent_holidays', 'avito_utilities_included', 'deposit_months',
         ]
         cols_sql = ', '.join(diff_cols)
@@ -3046,13 +3056,15 @@ def _listings(cur, conn, method, rid, event, user):
                 fields.append(f"{f} = " + ('NULL' if v is None or v == '' else str(float(v))))
         for f in ('is_hot', 'is_new', 'is_exclusive', 'is_urgent', 'is_visible',
                   'has_furniture', 'has_equipment', 'has_shop_windows', 'is_apartments', 'utilities_included',
-                  'is_auction', 'is_share_sale', 'rent_holidays'):
+                  'is_auction', 'is_share_sale', 'rent_holidays', 'is_assignment'):
             if f in body:
                 fields.append(f"{f} = {_bool(body.get(f))}")
         # Tri-state (да/нет/не указано) — NULL допустим, в отличие от обычных boolean выше
-        for f in ('has_vat', 'avito_utilities_included'):
+        for f in ('has_vat', 'avito_utilities_included', 'rented_out'):
             if f in body:
                 fields.append(f"{f} = {_bool_or_null(body.get(f))}")
+        if 'contract_end_date' in body:
+            fields.append(f"contract_end_date = {_date_or_null(body.get('contract_end_date'))}")
         if 'rooms' in body:
             fields.append(f"rooms = {_int_or_null(body.get('rooms'))}")
         if 'broker_commission' in body:

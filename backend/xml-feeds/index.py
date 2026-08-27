@@ -1445,8 +1445,12 @@ def _build_avito(listings, company):
             if l.get('avito_utilities_included') is not None:
                 out.append(f'<UtilitiesIncluded>{"Да" if l["avito_utilities_included"] else "Нет"}</UtilitiesIncluded>')
         else:
-            # Продажа: тип сделки обязателен
-            out.append('<TransactionType>Продажа</TransactionType>')
+            # Продажа: тип сделки обязателен. Переуступка права аренды — альтернативное
+            # значение TransactionType (сверено с шаблоном Авито от 27.08.2026).
+            if l.get('is_assignment'):
+                out.append('<TransactionType>Переуступка права аренды</TransactionType>')
+            else:
+                out.append('<TransactionType>Продажа</TransactionType>')
             if l.get('is_auction'):
                 out.append('<Auction>Да</Auction>')
             if l.get('is_share_sale'):

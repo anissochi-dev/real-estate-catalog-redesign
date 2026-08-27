@@ -119,6 +119,9 @@ export interface Listing {
   has_vat?: boolean | null;
   is_auction?: boolean;
   is_share_sale?: boolean;
+  is_assignment?: boolean;
+  rented_out?: boolean | null;
+  contract_end_date?: string | null;
   building_type?: string | null;
   rent_holidays?: boolean;
   avito_utilities_included?: boolean | null;

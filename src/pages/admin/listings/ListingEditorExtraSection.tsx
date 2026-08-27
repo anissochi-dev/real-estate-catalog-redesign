@@ -248,6 +248,11 @@ export default function ListingEditorExtraSection({
                     onChange={e => setEditing({ ...editing, is_share_sale: e.target.checked })} />
                   Продажа доли
                 </label>
+                <label className="flex items-center gap-2 cursor-pointer text-sm">
+                  <input type="checkbox" checked={!!editing.is_assignment}
+                    onChange={e => setEditing({ ...editing, is_assignment: e.target.checked })} />
+                  Это переуступка права аренды
+                </label>
               </>
             )}
             {editing.deal === 'rent' && (
@@ -265,6 +270,65 @@ export default function ListingEditorExtraSection({
               </>
             )}
           </div>
+
+          {/* ─── Переуступка права аренды ─── */}
+          {editing.deal === 'sale' && editing.is_assignment && (
+            <div className="space-y-3 border-t border-border pt-3">
+              <div className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                <Icon name="FileSignature" size={13} className="text-brand-blue" />
+                Условия переуступки
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                    <span className="w-5 h-5 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0"><Icon name="DoorOpen" size={11} className="text-teal-600" /></span>Помещение сдано
+                  </label>
+                  <select className="w-full px-3 py-2 border rounded-lg"
+                    value={editing.rented_out === true ? 'yes' : editing.rented_out === false ? 'no' : ''}
+                    onChange={e => setEditing({ ...editing, rented_out: e.target.value === '' ? null : e.target.value === 'yes' })}>
+                    <option value="">— Не выбрано —</option>
+                    <option value="yes">Да</option>
+                    <option value="no">Нет</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                    <span className="w-5 h-5 rounded-full bg-fuchsia-100 flex items-center justify-center flex-shrink-0"><Icon name="User" size={11} className="text-fuchsia-600" /></span>Арендатор
+                  </label>
+                  <input type="text" className="w-full px-3 py-2 border rounded-lg"
+                    placeholder='магазин «Продукты»'
+                    value={editing.tenant_name || ''}
+                    onChange={e => setEditing({ ...editing, tenant_name: e.target.value || null })} />
+                </div>
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                    <span className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0"><Icon name="Wallet" size={11} className="text-emerald-600" /></span>Месячный платёж, ₽
+                  </label>
+                  <input type="number" min={0} className="w-full px-3 py-2 border rounded-lg"
+                    placeholder="200 000"
+                    value={editing.monthly_rent ?? ''}
+                    onChange={e => setEditing({ ...editing, monthly_rent: e.target.value === '' ? null : +e.target.value })} />
+                </div>
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                    <span className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0"><Icon name="CalendarDays" size={11} className="text-brand-blue" /></span>Дата окончания договора
+                  </label>
+                  <input type="date" className="w-full px-3 py-2 border rounded-lg"
+                    value={editing.contract_end_date || ''}
+                    onChange={e => setEditing({ ...editing, contract_end_date: e.target.value || null })} />
+                </div>
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                    <span className="w-5 h-5 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0"><Icon name="TrendingUp" size={11} className="text-amber-600" /></span>Годовая индексация платежа, %
+                  </label>
+                  <input type="number" min={0} max={100} step={0.1} className="w-full px-3 py-2 border rounded-lg"
+                    placeholder="напр. 5"
+                    value={editing.rent_index_pct ?? ''}
+                    onChange={e => setEditing({ ...editing, rent_index_pct: e.target.value === '' ? null : +e.target.value })} />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
