@@ -18,11 +18,16 @@ interface Props {
 export default function XmlMarketFeedCard({ items, load, regenerating, regenerateNow, copy }: Props) {
   const marketFeeds = items.filter(f => f.format === 'market');
   const [creating, setCreating] = useState(false);
+  const [addingOpen, setAddingOpen] = useState(false);
+  const [newName, setNewName] = useState('');
 
   const createMarketFeed = async () => {
+    if (!newName.trim()) { alert('Введите название фида'); return; }
     setCreating(true);
     try {
-      await adminApi.createFeed({ name: 'Яндекс.Маркет (товары)', format: 'market', is_active: true });
+      await adminApi.createFeed({ name: newName.trim(), format: 'market', is_active: true });
+      setAddingOpen(false);
+      setNewName('');
       await load();
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Ошибка');
@@ -38,12 +43,33 @@ export default function XmlMarketFeedCard({ items, load, regenerating, regenerat
           <div className="font-display font-700 text-lg">Яндекс.Маркет (товары)</div>
           <div className="text-sm text-muted-foreground">YML-фиды: объекты выгружаются как товары в кабинет продавца Яндекс.Маркета. Можно завести несколько фидов под разные площадки.</div>
         </div>
-        <button onClick={createMarketFeed} disabled={creating}
-          className="btn-blue text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50 shrink-0">
-          <Icon name="Plus" size={14} />
-          {creating ? 'Создаём...' : 'Добавить YML-фид'}
-        </button>
+        {!addingOpen && (
+          <button onClick={() => { setAddingOpen(true); setNewName(marketFeeds.length === 0 ? 'Яндекс.Маркет (товары)' : ''); }}
+            className="btn-blue text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2 shrink-0">
+            <Icon name="Plus" size={14} /> Добавить YML-фид
+          </button>
+        )}
       </div>
+
+      {addingOpen && (
+        <div className="flex items-center gap-2 p-3 bg-muted/30 rounded-lg">
+          <input
+            className="min-w-0 flex-1 px-3 py-2 border rounded-lg text-sm bg-white"
+            placeholder="Название фида, например: Яндекс.Маркет, YML для Х"
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            autoFocus
+          />
+          <button onClick={createMarketFeed} disabled={creating}
+            className="btn-blue text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50 shrink-0">
+            {creating ? 'Создаём...' : 'Создать'}
+          </button>
+          <button onClick={() => { setAddingOpen(false); setNewName(''); }}
+            className="px-3 py-2 rounded-xl text-sm bg-muted shrink-0">
+            Отмена
+          </button>
+        </div>
+      )}
 
       {marketFeeds.length === 0 ? (
         <div className="text-sm text-muted-foreground text-center py-2">Пока нет ни одного YML-фида.</div>
