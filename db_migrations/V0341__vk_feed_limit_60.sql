@@ -1,0 +1,1 @@
+UPDATE t_p71821556_real_estate_catalog_.xml_feeds SET max_listings = 60, last_generated_at = NULL WHERE slug = 'vk';
