@@ -1318,6 +1318,29 @@ def _strip_html(s):
     return _HTML_TAG_RE.sub(' ', str(s))
 
 
+_VK_AREA_BUCKETS = [10, 20, 30, 50, 75, 100, 150, 200, 300, 500, 750, 1000, 1500, 2000, 3000, 5000]
+
+
+def _area_range_label(area):
+    """Переводит точную площадь объекта в диапазон («50-75 м²») вместо точного числа.
+    У VK лимит 50 уникальных значений на param — если отдавать площадь как есть
+    (у каждого объекта своё значение), лимит почти всегда превышается и площадка
+    ругается на «свойство с бОльшим числом значений». Фиксированная сетка диапазонов
+    держит количество уникальных значений заведомо ниже лимита."""
+    try:
+        val = float(area)
+    except (TypeError, ValueError):
+        return None
+    if val <= 0:
+        return None
+    prev = 0
+    for bucket in _VK_AREA_BUCKETS:
+        if val <= bucket:
+            return f'{prev}-{bucket} м²'
+        prev = bucket
+    return f'{_VK_AREA_BUCKETS[-1]}+ м²'
+
+
 def _build_vk_market(listings, company, category_map):
     """Строит YML-фид «Товары» для сообщества ВКонтакте (импорт через личный кабинет
     группы: Управление → Товары → Импортировать из файла). Формат — тот же YML
@@ -1371,8 +1394,10 @@ def _build_vk_market(listings, company, category_map):
 
         # Картинки — обязательны (товары без фото VK пропускает при импорте) и должны
         # быть JPG/PNG/GIF: use_jpg_photos=True принудительно переключает на чистые
-        # JPG-копии вместо исходных WEBP, которые VK не поддерживает.
-        images = _split_images_for_feed(l, None, use_jpg_photos=True)[:10]
+        # JPG-копии вместо исходных WEBP, которые VK не поддерживает. Лимит 5 штук —
+        # жёсткое ограничение VK: товары с бОльшим числом фото площадка отбрасывает
+        # целиком при импорте (проверено на реальной загрузке).
+        images = _split_images_for_feed(l, None, use_jpg_photos=True)[:5]
         for img in images:
             out.append(f'<picture>{_xml_escape(img)}</picture>')
 
@@ -1387,8 +1412,9 @@ def _build_vk_market(listings, company, category_map):
         # Не более 2 param — жёсткий лимит VK (у Яндекс.Маркета их может быть много больше)
         deal_label = 'Аренда' if l.get('deal') == 'rent' else 'Продажа'
         out.append(f'<param name="Тип сделки">{deal_label}</param>')
-        if l.get('area'):
-            out.append(f'<param name="Площадь">{l["area"]} м²</param>')
+        area_range = _area_range_label(l.get('area'))
+        if area_range:
+            out.append(f'<param name="Площадь">{area_range}</param>')
 
         out.append('</offer>')
 
