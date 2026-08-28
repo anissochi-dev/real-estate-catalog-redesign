@@ -1411,12 +1411,13 @@ def _build_vk_market(listings, company, category_map):
             desc = _xml_escape(_strip_html(l['description']))[:3000]
             out.append(f'<description>{desc}</description>')
 
-        # Не более 2 param — жёсткий лимит VK (у Яндекс.Маркета их может быть много больше)
-        deal_label = 'Аренда' if l.get('deal') == 'rent' else 'Продажа'
-        out.append(f'<param name="Тип сделки">{deal_label}</param>')
-        area_range = _area_range_label(l.get('area'))
-        if area_range:
-            out.append(f'<param name="Площадь">{area_range}</param>')
+        # TODO: временно отключено по просьбе заказчика (param «Тип сделки» и
+        # «Площадь») — проверяем, не в них ли причина ошибки при загрузке в VK.
+        # deal_label = 'Аренда' if l.get('deal') == 'rent' else 'Продажа'
+        # out.append(f'<param name="Тип сделки">{deal_label}</param>')
+        # area_range = _area_range_label(l.get('area'))
+        # if area_range:
+        #     out.append(f'<param name="Площадь">{area_range}</param>')
 
         out.append('</offer>')
 
