@@ -306,9 +306,11 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_ca
         # 23estate) можно включить индивидуальную особенность через FEED_OVERRIDES,
         # не затрагивая остальные площадки группы «Разное». use_jpg_photos — тот же
         # переключатель, но задаётся пользователем из настроек фида (приоритетнее).
+        # agent_category='private' — для «Разное» объявления выгружаются от лица
+        # собственника (а не агентства), в отличие от основного Яндекс-фида.
         cur.execute(f"SELECT name, region FROM {SCHEMA}.cities WHERE region IS NOT NULL")
         city_region_map = {r['name']: r['region'] for r in cur.fetchall()}
-        return _build_yandex(listings, company, feed_slug, use_jpg_photos, city_region_map)
+        return _build_yandex(listings, company, feed_slug, use_jpg_photos, city_region_map, agent_category='private')
     if fmt == 'market':
         return _build_yandex_market(listings, company, market_category_map or {})
     if fmt == 'market_vk':
@@ -953,7 +955,7 @@ def _total_price(l):
     return int(price)
 
 
-def _build_yandex(listings, company, feed_slug=None, use_jpg_photos=None, city_region_map=None):
+def _build_yandex(listings, company, feed_slug=None, use_jpg_photos=None, city_region_map=None, agent_category='agency'):
     company_name = _xml_escape(company.get('company_name', 'BIZNEST'))
     email = _xml_escape(company.get('company_email', ''))
     site_url = (company.get('site_url') or '').rstrip('/')
@@ -1031,7 +1033,7 @@ def _build_yandex(listings, company, feed_slug=None, use_jpg_photos=None, city_r
             out.append(f'<phone>{phone}</phone>')
         if email:
             out.append(f'<email>{email}</email>')
-        out.append('<category>agency</category>')
+        out.append(f'<category>{agent_category}</category>')
         out.append('</sales-agent>')
 
         # Ссылка на карточку объекта на сайте
