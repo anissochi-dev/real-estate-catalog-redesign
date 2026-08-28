@@ -102,6 +102,9 @@ function MarketFeedRow({ feed, load, regenerating, regenerateNow, copy }: {
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState(feed.name);
   const [savingName, setSavingName] = useState(false);
+  const [maxListings, setMaxListings] = useState<number | ''>(feed.max_listings ?? '');
+  const [customPhone, setCustomPhone] = useState(feed.custom_phone ?? '');
+  const [savingSettings, setSavingSettings] = useState(false);
 
   const saveName = async () => {
     if (!nameDraft.trim()) { alert('Название не может быть пустым'); return; }
@@ -114,6 +117,21 @@ function MarketFeedRow({ feed, load, regenerating, regenerateNow, copy }: {
       alert(e instanceof Error ? e.message : 'Ошибка');
     } finally {
       setSavingName(false);
+    }
+  };
+
+  const saveSettings = async () => {
+    setSavingSettings(true);
+    try {
+      await adminApi.updateFeed(feed.id, {
+        max_listings: maxListings === '' ? null : Number(maxListings),
+        custom_phone: customPhone.trim() || null,
+      });
+      await load();
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Ошибка');
+    } finally {
+      setSavingSettings(false);
     }
   };
 
@@ -221,6 +239,28 @@ function MarketFeedRow({ feed, load, regenerating, regenerateNow, copy }: {
           </button>
         </>
       )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div>
+          <label className="text-xs text-muted-foreground">Максимум объектов в фиде</label>
+          <input type="number" min={1} className="w-full px-2 py-1.5 border rounded-lg text-sm bg-white"
+            placeholder="Без ограничений"
+            value={maxListings}
+            onChange={e => setMaxListings(e.target.value ? Number(e.target.value) : '')} />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">Подменный телефон</label>
+          <input type="tel" className="w-full px-2 py-1.5 border rounded-lg text-sm bg-white"
+            placeholder="+7 900 000-00-00"
+            value={customPhone}
+            onChange={e => setCustomPhone(e.target.value)} />
+        </div>
+      </div>
+      <button onClick={saveSettings} disabled={savingSettings}
+        className="text-xs px-3 py-1.5 rounded-lg bg-muted hover:bg-muted/70 inline-flex items-center gap-1.5 disabled:opacity-50">
+        <Icon name="Save" size={13} />
+        {savingSettings ? 'Сохраняем...' : 'Сохранить настройки'}
+      </button>
 
       <div className="flex flex-col gap-2 overflow-hidden">
         {feed.cdn_url ? (
