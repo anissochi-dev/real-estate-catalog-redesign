@@ -67,6 +67,23 @@ function MarketFeedRow({ feed, load, regenerating, regenerateNow, copy }: {
   });
   const [saving, setSaving] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState(feed.name);
+  const [savingName, setSavingName] = useState(false);
+
+  const saveName = async () => {
+    if (!nameDraft.trim()) { alert('Название не может быть пустым'); return; }
+    setSavingName(true);
+    try {
+      await adminApi.updateFeed(feed.id, { name: nameDraft.trim() });
+      setRenaming(false);
+      await load();
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Ошибка');
+    } finally {
+      setSavingName(false);
+    }
+  };
 
   const saveCategoryMap = async () => {
     setSaving(true);
@@ -97,12 +114,34 @@ function MarketFeedRow({ feed, load, regenerating, regenerateNow, copy }: {
     <div className="p-3 bg-muted/30 rounded-lg space-y-2">
       <div className="flex justify-between items-start gap-2">
         <div className="min-w-0 flex-1">
-          <div className="font-semibold flex flex-wrap items-center gap-2">
-            <span className="break-all">{feed.name}</span>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${feed.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-muted'}`}>
-              {feed.is_active ? 'Активен' : 'Выкл'}
-            </span>
-          </div>
+          {renaming ? (
+            <div className="flex items-center gap-2">
+              <input
+                className="min-w-0 flex-1 px-2 py-1 border rounded-lg text-sm bg-white"
+                value={nameDraft}
+                onChange={e => setNameDraft(e.target.value)}
+                autoFocus
+              />
+              <button onClick={saveName} disabled={savingName}
+                className="text-xs px-2 py-1 rounded bg-brand-blue text-white shrink-0 disabled:opacity-50">
+                <Icon name="Check" size={13} />
+              </button>
+              <button onClick={() => { setRenaming(false); setNameDraft(feed.name); }}
+                className="text-xs px-2 py-1 rounded bg-muted shrink-0">
+                <Icon name="X" size={13} />
+              </button>
+            </div>
+          ) : (
+            <div className="font-semibold flex flex-wrap items-center gap-2">
+              <span className="break-all">{feed.name}</span>
+              <button onClick={() => setRenaming(true)} className="text-muted-foreground hover:text-brand-blue shrink-0">
+                <Icon name="Pencil" size={12} />
+              </button>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${feed.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-muted'}`}>
+                {feed.is_active ? 'Активен' : 'Выкл'}
+              </span>
+            </div>
+          )}
           <div className="text-xs text-muted-foreground">{timeAgo(feed.last_generated_at)}</div>
         </div>
         <div className="flex items-center gap-1 shrink-0">

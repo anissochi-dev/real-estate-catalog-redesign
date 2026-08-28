@@ -11,13 +11,14 @@ interface Props {
   copy: (text: string) => void;
 }
 
-// Карточка YML-фида «Товары» для сообщества ВКонтакте (format='market_vk').
-// В отличие от Яндекс.Маркета, у VK нет отдельных категорий под каждый тип
-// коммерческой недвижимости — только общая «Коммерческая недвижимость», поэтому
-// вместо 12 полей категорий здесь одно поле ID (ключ "*" в market_category_map,
-// он покрывает все объекты сразу).
+// Карточка YML-фидов «Товары» для сообщества ВКонтакте (format='market_vk').
+// Поддерживает НЕСКОЛЬКО фидов одновременно (например под разные сообщества) —
+// у каждого своё название и свой ID категории VK. В отличие от Яндекс.Маркета,
+// у VK нет отдельных категорий под каждый тип коммерческой недвижимости — только
+// общая «Коммерческая недвижимость», поэтому вместо 12 полей категорий здесь одно
+// поле ID (ключ "*" в market_category_map, он покрывает все объекты сразу).
 export default function XmlVkFeedCard({ items, load, regenerating, regenerateNow, copy }: Props) {
-  const feed = items.find(f => f.format === 'market_vk');
+  const vkFeeds = items.filter(f => f.format === 'market_vk');
   const [creating, setCreating] = useState(false);
 
   const createVkFeed = async () => {
@@ -37,21 +38,24 @@ export default function XmlVkFeedCard({ items, load, regenerating, regenerateNow
       <div className="flex justify-between items-center flex-wrap gap-2">
         <div>
           <div className="font-display font-700 text-lg">VK Товары</div>
-          <div className="text-sm text-muted-foreground">YML-фид для витрины «Товары» в сообществе ВКонтакте: Управление → Товары → Импортировать из файла.</div>
+          <div className="text-sm text-muted-foreground">YML-фиды для витрины «Товары» в сообществе ВКонтакте: Управление → Товары → Импортировать из файла. Можно завести несколько фидов под разные сообщества.</div>
         </div>
-        {!feed && (
-          <button onClick={createVkFeed} disabled={creating}
-            className="btn-blue text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50 shrink-0">
-            <Icon name="Plus" size={14} />
-            {creating ? 'Создаём...' : 'Добавить фид'}
-          </button>
-        )}
+        <button onClick={createVkFeed} disabled={creating}
+          className="btn-blue text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50 shrink-0">
+          <Icon name="Plus" size={14} />
+          {creating ? 'Создаём...' : 'Добавить фид'}
+        </button>
       </div>
 
-      {!feed ? (
-        <div className="text-sm text-muted-foreground text-center py-2">Фид ещё не создан.</div>
+      {vkFeeds.length === 0 ? (
+        <div className="text-sm text-muted-foreground text-center py-2">Пока нет ни одного VK-фида.</div>
       ) : (
-        <VkFeedRow feed={feed} load={load} regenerating={regenerating} regenerateNow={regenerateNow} copy={copy} />
+        <div className="space-y-3">
+          {vkFeeds.map(feed => (
+            <VkFeedRow key={feed.id} feed={feed} load={load} regenerating={regenerating}
+              regenerateNow={regenerateNow} copy={copy} />
+          ))}
+        </div>
       )}
     </div>
   );
@@ -65,6 +69,9 @@ function VkFeedRow({ feed, load, regenerating, regenerateNow, copy }: {
   })();
   const [catId, setCatId] = useState(initialCatId);
   const [saving, setSaving] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState(feed.name);
+  const [savingName, setSavingName] = useState(false);
 
   const saveCategoryId = async () => {
     setSaving(true);
@@ -75,6 +82,20 @@ function VkFeedRow({ feed, load, regenerating, regenerateNow, copy }: {
       alert(e instanceof Error ? e.message : 'Ошибка');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveName = async () => {
+    if (!nameDraft.trim()) { alert('Название не может быть пустым'); return; }
+    setSavingName(true);
+    try {
+      await adminApi.updateFeed(feed.id, { name: nameDraft.trim() });
+      setRenaming(false);
+      await load();
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Ошибка');
+    } finally {
+      setSavingName(false);
     }
   };
 
@@ -93,12 +114,34 @@ function VkFeedRow({ feed, load, regenerating, regenerateNow, copy }: {
     <div className="p-3 bg-muted/30 rounded-lg space-y-2">
       <div className="flex justify-between items-start gap-2">
         <div className="min-w-0 flex-1">
-          <div className="font-semibold flex flex-wrap items-center gap-2">
-            <span className="break-all">{feed.name}</span>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${feed.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-muted'}`}>
-              {feed.is_active ? 'Активен' : 'Выкл'}
-            </span>
-          </div>
+          {renaming ? (
+            <div className="flex items-center gap-2">
+              <input
+                className="min-w-0 flex-1 px-2 py-1 border rounded-lg text-sm bg-white"
+                value={nameDraft}
+                onChange={e => setNameDraft(e.target.value)}
+                autoFocus
+              />
+              <button onClick={saveName} disabled={savingName}
+                className="text-xs px-2 py-1 rounded bg-brand-blue text-white shrink-0 disabled:opacity-50">
+                <Icon name="Check" size={13} />
+              </button>
+              <button onClick={() => { setRenaming(false); setNameDraft(feed.name); }}
+                className="text-xs px-2 py-1 rounded bg-muted shrink-0">
+                <Icon name="X" size={13} />
+              </button>
+            </div>
+          ) : (
+            <div className="font-semibold flex flex-wrap items-center gap-2">
+              <span className="break-all">{feed.name}</span>
+              <button onClick={() => setRenaming(true)} className="text-muted-foreground hover:text-brand-blue shrink-0">
+                <Icon name="Pencil" size={12} />
+              </button>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${feed.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-muted'}`}>
+                {feed.is_active ? 'Активен' : 'Выкл'}
+              </span>
+            </div>
+          )}
           <div className="text-xs text-muted-foreground">{timeAgo(feed.last_generated_at)}</div>
         </div>
         <div className="flex items-center gap-1 shrink-0">

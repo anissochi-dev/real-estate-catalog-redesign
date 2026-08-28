@@ -15,10 +15,10 @@ interface Props {
 export default function XmlFeedsListCard({
   items, search, setSearch, regenerating, regenerateNow, setEditing, del, copy,
 }: Props) {
-  // Market-фид показывается в своей отдельной карточке ниже импорта — исключаем
-  // его из общего списка обычных фидов недвижимости.
+  // YML-фиды товаров (Яндекс.Маркет и VK Товары) показываются в своих отдельных
+  // карточках ниже импорта — исключаем их из общего списка обычных фидов недвижимости.
   const filteredItems = items
-    .filter(f => f.format !== 'market')
+    .filter(f => f.format !== 'market' && f.format !== 'market_vk')
     .filter(f => f.name.toLowerCase().includes(search.trim().toLowerCase()));
 
   return (
