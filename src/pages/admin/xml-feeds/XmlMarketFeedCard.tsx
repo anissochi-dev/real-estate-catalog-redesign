@@ -25,7 +25,13 @@ export default function XmlMarketFeedCard({ items, load, regenerating, regenerat
     if (!newName.trim()) { alert('Введите название фида'); return; }
     setCreating(true);
     try {
-      await adminApi.createFeed({ name: newName.trim(), format: 'market', is_active: true });
+      // При создании нового YML-фида копируем ID категорий из уже существующего
+      // фида (если он есть) — пользователю не нужно вбивать их заново вручную.
+      let market_category_map: Record<string, string> | undefined;
+      if (marketFeeds.length > 0) {
+        try { market_category_map = marketFeeds[0].market_category_map ? JSON.parse(marketFeeds[0].market_category_map) : undefined; } catch { /* ignore */ }
+      }
+      await adminApi.createFeed({ name: newName.trim(), format: 'market', is_active: true, ...(market_category_map ? { market_category_map } : {}) });
       setAddingOpen(false);
       setNewName('');
       await load();
