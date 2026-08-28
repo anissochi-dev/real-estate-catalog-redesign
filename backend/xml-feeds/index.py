@@ -1352,7 +1352,9 @@ def _build_vk_market(listings, company, category_map):
     {category объекта: categoryId в кабинете VK}, обычно один и тот же id для всех
     категорий (в VK нет отдельных типов коммерческой недвижимости — есть общая
     категория «Коммерческая недвижимость»)."""
-    company_name = _xml_escape(company.get('company_name') or 'Магазин')
+    # Название специально короткое ("БМН"), а не полное company_name из настроек
+    # (как у остальных фидов) — так просил заказчик именно для фида VK.
+    company_name = 'БМН'
     site_url = (company.get('site_url') or '').rstrip('/')
     now = datetime.utcnow().strftime('%Y-%m-%d %H:%M')
 
