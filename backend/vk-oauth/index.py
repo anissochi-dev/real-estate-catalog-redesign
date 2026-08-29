@@ -152,6 +152,12 @@ def handler(event, context):
                 if not access_token:
                     return _ok({'ok': False, 'error': f'VK не вернул токен: {resp}'})
 
+                # ВРЕМЕННАЯ ДИАГНОСТИКА: проверяем, работает ли вообще токен VK ID
+                # с методом загрузки фото для товаров — независимо от проверки прав.
+                photo_test, photo_test_err = _vk_call('photos.getMarketUploadServer', {
+                    'access_token': access_token, 'group_id': group_id, 'main_photo': 1,
+                })
+
                 # Проверяем, что пользователь действительно админ нужной группы.
                 if group_id:
                     groups_data, gerr = _vk_call('groups.get', {
@@ -166,6 +172,8 @@ def handler(event, context):
                             'debug_group_id_expected': str(group_id),
                             'debug_group_ids_received': group_ids,
                             'debug_groups_raw': groups_data,
+                            'debug_photo_upload_test': photo_test,
+                            'debug_photo_upload_test_err': photo_test_err,
                         })
 
                 expires_in = resp.get('expires_in')
