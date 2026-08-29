@@ -19,7 +19,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
-VK_API_BASE = 'https://api.vk.com/method'
+VK_API_BASE = 'https://api.vk.ru/method'
 VK_API_VERSION = '5.199'
 
 # Бюджеты на один запуск — чтобы уложиться в таймаут функции. Удаление дешёвое

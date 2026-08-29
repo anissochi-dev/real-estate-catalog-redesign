@@ -20,9 +20,9 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
-VK_OAUTH_AUTHORIZE = 'https://oauth.vk.com/authorize'
-VK_OAUTH_TOKEN = 'https://oauth.vk.com/access_token'
-VK_API_BASE = 'https://api.vk.com/method'
+VK_OAUTH_AUTHORIZE = 'https://oauth.vk.ru/authorize'
+VK_OAUTH_TOKEN = 'https://oauth.vk.ru/access_token'
+VK_API_BASE = 'https://api.vk.ru/method'
 VK_API_VERSION = '5.199'
 # Redirect URI — собственный URL этой функции (заполняется после первого деплоя,
 # см. func2url.json). VK строго сверяет redirect_uri при обмене кода на токен.
