@@ -1,0 +1,1 @@
+UPDATE xml_feeds SET vk_api_mode = TRUE WHERE id = 54 AND format = 'market_vk';
