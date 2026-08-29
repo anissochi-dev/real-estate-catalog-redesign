@@ -159,7 +159,14 @@ def handler(event, context):
                     })
                     group_ids = [str(g.get('id')) for g in ((groups_data or {}).get('items') or [])]
                     if gerr or str(group_id) not in group_ids:
-                        return _ok({'ok': False, 'error': 'Вы не администратор указанной группы (VK_GROUP_ID), либо не хватает прав'})
+                        return _ok({
+                            'ok': False,
+                            'error': 'Вы не администратор указанной группы (VK_GROUP_ID), либо не хватает прав',
+                            'debug_vk_error': gerr,
+                            'debug_group_id_expected': str(group_id),
+                            'debug_group_ids_received': group_ids,
+                            'debug_groups_raw': groups_data,
+                        })
 
                 expires_in = resp.get('expires_in')
                 expires_at = (datetime.utcnow() + timedelta(seconds=int(expires_in))) if expires_in else None
