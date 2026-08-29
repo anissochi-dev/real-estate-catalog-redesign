@@ -9,7 +9,10 @@ interface VkSyncStatus {
   last_sync_result: { added: number; edited: number; deleted: number; skipped_no_category: number; errors: number; pending: number } | null;
   counts: Record<string, number>;
   recent_errors: { listing_id: number; error_message: string }[];
+  admin_connected: boolean;
 }
+
+const VK_OAUTH_URL = 'https://functions.poehali.dev/00319010-cbca-43bf-ae81-3431d4d8de20';
 
 interface Props {
   items: F[];
@@ -284,6 +287,21 @@ function VkFeedRow({ feed, load, regenerating, regenerateNow, copy }: {
 
         {apiMode && (
           <div className="space-y-2 pt-1">
+            <div className={`flex items-center justify-between gap-2 flex-wrap px-3 py-2 rounded-lg ${syncStatus?.admin_connected ? 'bg-emerald-50' : 'bg-amber-50'}`}>
+              <div className="text-xs flex items-center gap-1.5">
+                <Icon name={syncStatus?.admin_connected ? 'CheckCircle2' : 'AlertTriangle'} size={14}
+                  className={syncStatus?.admin_connected ? 'text-emerald-600' : 'text-amber-600'} />
+                {syncStatus?.admin_connected
+                  ? 'Администратор группы подключён — загрузка фото работает'
+                  : 'Нужен вход администратора группы — без него фото товаров загружаться не будут'}
+              </div>
+              <a href={`${VK_OAUTH_URL}?action=start`} target="_blank" rel="noopener noreferrer"
+                className="text-xs px-3 py-1.5 rounded-lg font-semibold shrink-0 bg-white border border-border hover:bg-muted/50 inline-flex items-center gap-1.5">
+                <Icon name="LogIn" size={13} />
+                {syncStatus?.admin_connected ? 'Войти повторно' : 'Войти через VK'}
+              </a>
+            </div>
+
             <div className="flex items-center gap-2 flex-wrap">
               <button onClick={syncNow} disabled={syncing}
                 className="btn-blue text-white px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 disabled:opacity-50">
@@ -293,6 +311,9 @@ function VkFeedRow({ feed, load, regenerating, regenerateNow, copy }: {
               <span className="text-xs text-muted-foreground">
                 {syncStatus?.last_sync_at ? timeAgo(syncStatus.last_sync_at) : 'ещё не запускалась'}
               </span>
+              <button onClick={loadSyncStatus} className="text-xs text-brand-blue hover:underline">
+                Обновить статус
+              </button>
             </div>
 
             {syncStatus?.last_sync_result && (

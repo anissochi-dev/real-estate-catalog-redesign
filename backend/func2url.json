@@ -1,4 +1,5 @@
 {
+  "vk-oauth": "https://functions.poehali.dev/00319010-cbca-43bf-ae81-3431d4d8de20",
   "vk-market-sync": "https://functions.poehali.dev/afc5cc33-2cf0-4bec-910a-bd703e910245",
   "indexation-cron": "https://functions.poehali.dev/a9a02fcd-b7f8-48ef-b74c-d377edc3250f",
   "phone-flags": "https://functions.poehali.dev/254609bc-df6e-4209-be01-2223b26c1665",

@@ -134,10 +134,21 @@ def _multipart_post(url, field_name, filename, content, content_type):
         return json.loads(r.read().decode())
 
 
-def _upload_market_photo(group_id, token, image_url):
+def _get_admin_token(cur, group_id):
+    """Токен ПОЛЬЗОВАТЕЛЯ-администратора группы (получен через OAuth в vk-oauth) —
+    нужен ТОЛЬКО для загрузки фото: photos.getMarketUploadServer не работает
+    с токеном сообщества (ограничение VK API, error 27 group auth). Сами товары
+    (add/edit/delete) по-прежнему через VK_COMMUNITY_TOKEN."""
+    cur.execute(f"SELECT access_token FROM {SCHEMA}.vk_oauth_tokens WHERE group_id = %s", (int(group_id),))
+    row = cur.fetchone()
+    return row['access_token'] if row else None
+
+
+def _upload_market_photo(group_id, photo_token, image_url):
     """Скачивает фото объекта и загружает его в альбом товаров сообщества VK.
+    photo_token — токен АДМИНА (не сообщества, см. _get_admin_token).
     Возвращает (photo_id в формате "ownerId_photoId", ошибка)."""
-    server_resp, err = _vk_call('photos.getMarketUploadServer', {'group_id': group_id, 'main_photo': 1}, token)
+    server_resp, err = _vk_call('photos.getMarketUploadServer', {'group_id': group_id, 'main_photo': 1}, photo_token)
     if err:
         return None, err
     upload_url = (server_resp or {}).get('upload_url')
@@ -158,7 +169,7 @@ def _upload_market_photo(group_id, token, image_url):
         'photo': upload_result.get('photo'),
         'server': upload_result.get('server'),
         'hash': upload_result.get('hash'),
-    }, token)
+    }, photo_token)
     if err:
         return None, err
     photo = (save_resp or [{}])[0]
@@ -201,6 +212,11 @@ def _sync_feed(cur, conn, feed, token, group_id):
         category_map = json.loads(feed['market_category_map']) if feed.get('market_category_map') else {}
     except (TypeError, ValueError):
         category_map = {}
+
+    # Токен админа нужен только для загрузки фото (VK API ограничение — см. _get_admin_token).
+    # Если админ ещё не входил через OAuth — фото загружать не сможем, но остальная
+    # синхронизация (удаление снятых объектов) всё равно отработает.
+    admin_token = _get_admin_token(cur, group_id)
 
     listings = _get_sync_listings(cur, feed)
     target_ids = {l['id'] for l in listings}
@@ -252,10 +268,18 @@ def _sync_feed(cur, conn, feed, token, group_id):
             conn.commit()
             continue
 
+        if not admin_token:
+            _upsert_item(cur, feed_id, l['id'], prev.get('vk_item_id') if prev else None, h, 'error',
+                          'Не выполнен вход администратора группы через VK (нужен для загрузки фото) — нажмите «Войти через VK» в настройках фида')
+            summary['errors'] += 1
+            budget -= 1
+            conn.commit()
+            continue
+
         photo_ids = []
         photo_err = None
         for img_url in images:
-            pid, err = _upload_market_photo(group_id, token, img_url)
+            pid, err = _upload_market_photo(group_id, admin_token, img_url)
             if err:
                 photo_err = err
                 break
@@ -342,12 +366,15 @@ def handler(event, context):
                     (int(feed_id),)
                 )
                 errors = [dict(r) for r in cur.fetchall()]
+                group_id = os.environ.get('VK_GROUP_ID')
+                admin_connected = bool(_get_admin_token(cur, group_id)) if group_id else False
                 return _ok({
                     'vk_api_mode': feed['vk_api_mode'],
                     'last_sync_at': feed['vk_last_sync_at'],
                     'last_sync_result': json.loads(feed['vk_last_sync_result']) if feed['vk_last_sync_result'] else None,
                     'counts': counts,
                     'recent_errors': errors,
+                    'admin_connected': admin_connected,
                 })
 
             if method == 'POST':

@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Неизвестное действие",
+      "method": "GET",
+      "path": "/?action=unknown",
+      "expectedStatus": 400
+    }
+  ]
+}
