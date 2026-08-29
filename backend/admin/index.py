@@ -5137,6 +5137,8 @@ def _xml_feeds(cur, conn, method, rid, event, user):
                 return _err(400, 'Максимум объектов должен быть числом')
         if 'custom_phone' in body:
             fields.append(f"custom_phone = {_str_or_null(body['custom_phone'], 20)}")
+        if 'vk_api_mode' in body:
+            fields.append(f"vk_api_mode = {_bool(bool(body['vk_api_mode']))}")
         if not fields:
             return _err(400, 'Нет полей')
         cur.execute(f"UPDATE {SCHEMA}.xml_feeds SET {', '.join(fields)} WHERE id = {int(rid)}")

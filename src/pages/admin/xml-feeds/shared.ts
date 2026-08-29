@@ -14,6 +14,11 @@ export interface F {
   /** Подменный телефон для этого фида — если задан, в выгрузке показывается он
    * вместо основного телефона компании (например для отслеживания звонков с площадки). */
   custom_phone?: string | null;
+  /** Режим прямой синхронизации с VK Market API (add/edit/delete товаров) вместо
+   * обычного YML-файла для ручного импорта — независимая настройка, только для format='market_vk'. */
+  vk_api_mode?: boolean;
+  vk_last_sync_at?: string | null;
+  vk_last_sync_result?: string | null;
 }
 
 export const XML_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7';

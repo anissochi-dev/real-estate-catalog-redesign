@@ -1,7 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import { F, timeAgo } from './shared';
+
+interface VkSyncStatus {
+  vk_api_mode: boolean;
+  last_sync_at: string | null;
+  last_sync_result: { added: number; edited: number; deleted: number; skipped_no_category: number; errors: number; pending: number } | null;
+  counts: Record<string, number>;
+  recent_errors: { listing_id: number; error_message: string }[];
+}
 
 interface Props {
   items: F[];
@@ -75,6 +83,48 @@ function VkFeedRow({ feed, load, regenerating, regenerateNow, copy }: {
   const [maxListings, setMaxListings] = useState<number | ''>(feed.max_listings ?? '');
   const [customPhone, setCustomPhone] = useState(feed.custom_phone ?? '');
   const [savingSettings, setSavingSettings] = useState(false);
+  const [apiMode, setApiMode] = useState(!!feed.vk_api_mode);
+  const [togglingApiMode, setTogglingApiMode] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<VkSyncStatus | null>(null);
+  const [syncing, setSyncing] = useState(false);
+
+  const loadSyncStatus = async () => {
+    try {
+      const res = await adminApi.vkMarketSyncStatus(feed.id) as VkSyncStatus;
+      setSyncStatus(res);
+    } catch { /* тихо игнорируем — статус не критичен */ }
+  };
+
+  useEffect(() => {
+    if (apiMode) loadSyncStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiMode]);
+
+  const toggleApiMode = async () => {
+    setTogglingApiMode(true);
+    try {
+      const next = !apiMode;
+      await adminApi.updateFeed(feed.id, { vk_api_mode: next });
+      setApiMode(next);
+      await load();
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Ошибка');
+    } finally {
+      setTogglingApiMode(false);
+    }
+  };
+
+  const syncNow = async () => {
+    setSyncing(true);
+    try {
+      await adminApi.vkMarketSyncNow(feed.id);
+      await loadSyncStatus();
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Ошибка синхронизации');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const saveSettings = async () => {
     setSavingSettings(true);
@@ -214,6 +264,64 @@ function VkFeedRow({ feed, load, regenerating, regenerateNow, copy }: {
         <Icon name="Save" size={13} />
         {savingSettings ? 'Сохраняем...' : 'Сохранить настройки'}
       </button>
+
+      <div className="p-3 bg-white rounded-lg space-y-2 border border-border">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="min-w-0">
+            <div className="text-sm font-semibold flex items-center gap-2">
+              <Icon name="Zap" size={14} className={apiMode ? 'text-brand-blue' : 'text-muted-foreground'} />
+              Прямая синхронизация через VK API
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Товары добавляются/обновляются/удаляются в сообществе автоматически — без импорта файла вручную. Работает независимо от YML-фида выше.
+            </div>
+          </div>
+          <button onClick={toggleApiMode} disabled={togglingApiMode}
+            className={`text-xs px-3 py-1.5 rounded-lg font-semibold shrink-0 disabled:opacity-50 ${apiMode ? 'bg-emerald-100 text-emerald-700' : 'bg-muted hover:bg-muted/70'}`}>
+            {apiMode ? 'Включено' : 'Включить'}
+          </button>
+        </div>
+
+        {apiMode && (
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button onClick={syncNow} disabled={syncing}
+                className="btn-blue text-white px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 disabled:opacity-50">
+                <Icon name="RefreshCw" size={13} className={syncing ? 'animate-spin' : ''} />
+                {syncing ? 'Синхронизируем...' : 'Синхронизировать сейчас'}
+              </button>
+              <span className="text-xs text-muted-foreground">
+                {syncStatus?.last_sync_at ? timeAgo(syncStatus.last_sync_at) : 'ещё не запускалась'}
+              </span>
+            </div>
+
+            {syncStatus?.last_sync_result && (
+              <div className="flex flex-wrap gap-2 text-xs">
+                <span className="px-2 py-1 rounded bg-emerald-50 text-emerald-700">Добавлено: {syncStatus.last_sync_result.added}</span>
+                <span className="px-2 py-1 rounded bg-blue-50 text-blue-700">Обновлено: {syncStatus.last_sync_result.edited}</span>
+                <span className="px-2 py-1 rounded bg-muted">Удалено: {syncStatus.last_sync_result.deleted}</span>
+                {syncStatus.last_sync_result.skipped_no_category > 0 && (
+                  <span className="px-2 py-1 rounded bg-amber-50 text-amber-700">Без категории: {syncStatus.last_sync_result.skipped_no_category}</span>
+                )}
+                {syncStatus.last_sync_result.errors > 0 && (
+                  <span className="px-2 py-1 rounded bg-red-50 text-red-700">Ошибок: {syncStatus.last_sync_result.errors}</span>
+                )}
+                {syncStatus.last_sync_result.pending > 0 && (
+                  <span className="px-2 py-1 rounded bg-muted">Ждут след. запуска: {syncStatus.last_sync_result.pending}</span>
+                )}
+              </div>
+            )}
+
+            {!!syncStatus?.recent_errors?.length && (
+              <div className="text-xs bg-red-50 text-red-700 rounded-lg px-3 py-2 space-y-1">
+                {syncStatus.recent_errors.map(e => (
+                  <div key={e.listing_id} className="truncate">Объект #{e.listing_id}: {e.error_message}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-col gap-2 overflow-hidden">
         {feed.cdn_url ? (

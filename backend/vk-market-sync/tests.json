@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "GET status без feed_id — ошибка валидации",
+      "method": "GET",
+      "path": "/?action=status",
+      "expectedStatus": 400
+    },
+    {
+      "name": "GET cron — не падает без настроенных секретов",
+      "method": "GET",
+      "path": "/?action=cron",
+      "expectedStatus": 200
+    }
+  ]
+}
