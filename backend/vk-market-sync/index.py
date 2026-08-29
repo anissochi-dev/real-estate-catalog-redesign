@@ -15,11 +15,13 @@ import hashlib
 import urllib.request
 import urllib.parse
 import urllib.error
+from datetime import datetime, timedelta
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
 VK_API_BASE = 'https://api.vk.ru/method'
+VK_ID_TOKEN = 'https://id.vk.ru/oauth2/auth'
 VK_API_VERSION = '5.199'
 
 # Бюджеты на один запуск — чтобы уложиться в таймаут функции. Удаление дешёвое
@@ -134,14 +136,62 @@ def _multipart_post(url, field_name, filename, content, content_type):
         return json.loads(r.read().decode())
 
 
-def _get_admin_token(cur, group_id):
-    """Токен ПОЛЬЗОВАТЕЛЯ-администратора группы (получен через OAuth в vk-oauth) —
+def _refresh_admin_token(cur, conn, group_id, refresh_token):
+    """VK ID Access token живёт всего 1 час — обновляем через refresh_token
+    (id.vk.ru/oauth2/auth, grant_type=refresh_token), не заставляя админа
+    входить заново при каждом запуске синхронизации."""
+    app_id = os.environ.get('VK_APP_ID')
+    service_token = os.environ.get('VK_SERVICE_TOKEN')
+    if not app_id or not service_token:
+        return None
+    payload = {
+        'grant_type': 'refresh_token',
+        'refresh_token': refresh_token,
+        'client_id': app_id,
+        'device_id': '',
+        'state': hashlib.md5(str(group_id).encode()).hexdigest(),
+        'service_token': service_token,
+    }
+    data = urllib.parse.urlencode(payload).encode()
+    req = urllib.request.Request(VK_ID_TOKEN, data=data, method='POST')
+    req.add_header('Content-Type', 'application/x-www-form-urlencoded')
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            resp = json.loads(r.read().decode())
+    except Exception:
+        return None
+    new_access = resp.get('access_token')
+    if not new_access:
+        return None
+    new_refresh = resp.get('refresh_token') or refresh_token
+    expires_in = resp.get('expires_in')
+    expires_at = (datetime.utcnow() + timedelta(seconds=int(expires_in))) if expires_in else None
+    cur.execute(
+        f"UPDATE {SCHEMA}.vk_oauth_tokens SET access_token = %s, refresh_token = %s, expires_at = %s, updated_at = NOW() WHERE group_id = %s",
+        (new_access, new_refresh, expires_at, int(group_id))
+    )
+    conn.commit()
+    return new_access
+
+
+def _get_admin_token(cur, conn, group_id):
+    """Токен ПОЛЬЗОВАТЕЛЯ-администратора группы (получен через VK ID вход в vk-oauth) —
     нужен ТОЛЬКО для загрузки фото: photos.getMarketUploadServer не работает
     с токеном сообщества (ограничение VK API, error 27 group auth). Сами товары
-    (add/edit/delete) по-прежнему через VK_COMMUNITY_TOKEN."""
-    cur.execute(f"SELECT access_token FROM {SCHEMA}.vk_oauth_tokens WHERE group_id = %s", (int(group_id),))
+    (add/edit/delete) по-прежнему через VK_COMMUNITY_TOKEN. Access token живёт 1 час —
+    если истёк или истекает в ближайшую минуту, обновляем через refresh_token."""
+    cur.execute(f"SELECT access_token, refresh_token, expires_at FROM {SCHEMA}.vk_oauth_tokens WHERE group_id = %s", (int(group_id),))
     row = cur.fetchone()
-    return row['access_token'] if row else None
+    if not row:
+        return None
+    expires_at = row.get('expires_at')
+    if expires_at and expires_at > datetime.utcnow() + timedelta(minutes=1):
+        return row['access_token']
+    if row.get('refresh_token'):
+        refreshed = _refresh_admin_token(cur, conn, group_id, row['refresh_token'])
+        if refreshed:
+            return refreshed
+    return row['access_token']
 
 
 def _upload_market_photo(group_id, photo_token, image_url):
@@ -216,7 +266,7 @@ def _sync_feed(cur, conn, feed, token, group_id):
     # Токен админа нужен только для загрузки фото (VK API ограничение — см. _get_admin_token).
     # Если админ ещё не входил через OAuth — фото загружать не сможем, но остальная
     # синхронизация (удаление снятых объектов) всё равно отработает.
-    admin_token = _get_admin_token(cur, group_id)
+    admin_token = _get_admin_token(cur, conn, group_id)
 
     listings = _get_sync_listings(cur, feed)
     target_ids = {l['id'] for l in listings}
@@ -367,7 +417,7 @@ def handler(event, context):
                 )
                 errors = [dict(r) for r in cur.fetchall()]
                 group_id = os.environ.get('VK_GROUP_ID')
-                admin_connected = bool(_get_admin_token(cur, group_id)) if group_id else False
+                admin_connected = bool(_get_admin_token(cur, conn, group_id)) if group_id else False
                 return _ok({
                     'vk_api_mode': feed['vk_api_mode'],
                     'last_sync_at': feed['vk_last_sync_at'],
