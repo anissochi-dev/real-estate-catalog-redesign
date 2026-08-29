@@ -1,0 +1,2 @@
+ALTER TABLE vk_oauth_tokens ADD COLUMN IF NOT EXISTS refresh_token TEXT NULL;
+ALTER TABLE vk_oauth_tokens ADD COLUMN IF NOT EXISTS device_id VARCHAR(255) NULL;
