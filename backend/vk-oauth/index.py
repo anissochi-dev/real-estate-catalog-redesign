@@ -4,8 +4,10 @@ Business: OAuth-вход администратора сообщества VK (A
 использует ТОЛЬКО для загрузки фото в товары (photos.getMarketUploadServer не
 работает с токеном сообщества — ограничение VK API). Сами товары (add/edit/delete)
 управляются отдельным токеном сообщества (VK_COMMUNITY_TOKEN), эта функция его не трогает.
-Args: event с httpMethod GET, queryStringParameters {action: start|callback, code, state}
-Returns: redirect (302) на VK для входа, либо на админку с результатом после обмена кода
+Args: event с httpMethod GET, queryStringParameters {action: start|status, code, error} —
+редирект от VK всегда приходит на «голый» адрес функции без ?action (VK не разрешает
+query-параметры в Redirect URI), поэтому шаг callback определяется по наличию code/error.
+Returns: redirect (302) на VK для входа, либо JSON с результатом после обмена кода
 """
 
 import json
@@ -73,23 +75,13 @@ def handler(event, context):
     group_id = os.environ.get('VK_GROUP_ID')
 
     action = params.get('action', 'start')
+    # VK не позволяет сохранить в настройках приложения Redirect URI с query-параметрами —
+    # поэтому и при отправке на авторизацию, и при обмене кода используем «голый» SELF_URL
+    # (без ?action=...). Различаем шаги не по action, а по факту: VK вернул нас на этот же
+    # адрес с параметром code (или error) — значит это шаг 2 (callback).
+    is_vk_callback = bool(params.get('code') or params.get('error') or params.get('error_description'))
 
-    if action == 'start':
-        # Шаг 1: отправляем администратора на страницу авторизации VK.
-        # scope: groups (проверка админских прав) + photos (загрузка фото в товары).
-        if not app_id:
-            return _err(400, 'VK_APP_ID не настроен')
-        q = urllib.parse.urlencode({
-            'client_id': app_id,
-            'display': 'page',
-            'redirect_uri': SELF_URL + '?action=callback',
-            'scope': 'groups,photos',
-            'response_type': 'code',
-            'v': VK_API_VERSION,
-        })
-        return _redirect(f'{VK_OAUTH_AUTHORIZE}?{q}')
-
-    if action == 'callback':
+    if is_vk_callback:
         # Шаг 2: VK вернул код — меняем на токен пользователя и сохраняем в БД.
         code = params.get('code')
         vk_error = params.get('error_description') or params.get('error')
@@ -103,7 +95,7 @@ def handler(event, context):
         q = urllib.parse.urlencode({
             'client_id': app_id,
             'client_secret': app_secret,
-            'redirect_uri': SELF_URL + '?action=callback',
+            'redirect_uri': SELF_URL,
             'code': code,
         })
         try:
@@ -161,4 +153,18 @@ def handler(event, context):
             conn.close()
         return _ok({'connected': bool(row), 'info': dict(row) if row else None})
 
-    return _err(400, 'Неизвестное действие')
+    # Шаг 1 (action=start, значение по умолчанию): отправляем администратора на
+    # страницу авторизации VK. scope: groups (проверка админских прав) + photos
+    # (загрузка фото в товары). redirect_uri — БЕЗ query-параметров (VK требует
+    # точное совпадение с тем, что сохранено в настройках приложения).
+    if not app_id:
+        return _err(400, 'VK_APP_ID не настроен')
+    q = urllib.parse.urlencode({
+        'client_id': app_id,
+        'display': 'page',
+        'redirect_uri': SELF_URL,
+        'scope': 'groups,photos',
+        'response_type': 'code',
+        'v': VK_API_VERSION,
+    })
+    return _redirect(f'{VK_OAUTH_AUTHORIZE}?{q}')

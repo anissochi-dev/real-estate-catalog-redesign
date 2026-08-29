@@ -7,10 +7,10 @@
       "expectedStatus": 200
     },
     {
-      "name": "Неизвестное действие",
+      "name": "action=status без VK_GROUP_ID работает",
       "method": "GET",
-      "path": "/?action=unknown",
-      "expectedStatus": 400
+      "path": "/?action=status",
+      "expectedStatus": 200
     }
   ]
 }
