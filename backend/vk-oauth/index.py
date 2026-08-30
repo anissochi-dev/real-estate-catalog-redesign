@@ -194,6 +194,27 @@ def handler(event, context):
 
         return _ok({'ok': True, 'message': 'Вход выполнен, токен сохранён. Можно закрыть эту вкладку и вернуться в админку.'})
 
+    if params.get('action') == 'test_tokens':
+        # ВРЕМЕННАЯ ДИАГНОСТИКА: пробуем вызвать photos.getMarketUploadServer
+        # напрямую сервисным ключом и токеном сообщества, без пользовательского входа.
+        community_token = os.environ.get('VK_COMMUNITY_TOKEN')
+        results = {}
+        if service_token:
+            r, e = _vk_call('photos.getMarketUploadServer', {
+                'access_token': service_token, 'group_id': group_id, 'main_photo': 1,
+            })
+            results['service_token'] = {'result': r, 'error': e}
+        else:
+            results['service_token'] = {'result': None, 'error': 'VK_SERVICE_TOKEN не задан'}
+        if community_token:
+            r, e = _vk_call('photos.getMarketUploadServer', {
+                'access_token': community_token, 'group_id': group_id, 'main_photo': 1,
+            })
+            results['community_token'] = {'result': r, 'error': e}
+        else:
+            results['community_token'] = {'result': None, 'error': 'VK_COMMUNITY_TOKEN не задан'}
+        return _ok(results)
+
     if params.get('action') == 'status':
         conn = psycopg2.connect(dsn)
         try:
