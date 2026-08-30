@@ -391,6 +391,17 @@ def handler(event, context):
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
 
+            if method == 'GET' and params.get('action') == 'test_market_token':
+                # ВРЕМЕННАЯ ДИАГНОСТИКА: проверяем, работает ли VK_COMMUNITY_TOKEN
+                # с методами Market API в принципе (доступ "Товары" может быть не
+                # выдан приложению) — безобидный вызов market.get на чтение.
+                token = os.environ.get('VK_COMMUNITY_TOKEN')
+                group_id = os.environ.get('VK_GROUP_ID')
+                if not token or not group_id:
+                    return _ok({'ok': False, 'error': 'VK_COMMUNITY_TOKEN / VK_GROUP_ID не заданы'})
+                r, e = _vk_call('market.get', {'owner_id': f'-{group_id}', 'count': 1}, token)
+                return _ok({'market_get_result': r, 'market_get_error': e})
+
             if method == 'GET' and params.get('action') == 'cron':
                 token = os.environ.get('VK_COMMUNITY_TOKEN')
                 group_id = os.environ.get('VK_GROUP_ID')
