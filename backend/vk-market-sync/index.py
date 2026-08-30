@@ -400,7 +400,20 @@ def handler(event, context):
                 if not token or not group_id:
                     return _ok({'ok': False, 'error': 'VK_COMMUNITY_TOKEN / VK_GROUP_ID не заданы'})
                 r, e = _vk_call('market.get', {'owner_id': f'-{group_id}', 'count': 1}, token)
-                return _ok({'market_get_result': r, 'market_get_error': e})
+
+                # Заодно проверяем новый Implicit Flow токен (из vk_oauth_tokens)
+                # именно на методе загрузки фото — это финальная проверка всей затеи.
+                photo_result = None
+                photo_err = None
+                admin_token = _get_admin_token(cur, conn, group_id) if group_id else None
+                if admin_token:
+                    photo_result, photo_err = _vk_call('photos.getMarketUploadServer', {'group_id': group_id, 'main_photo': 1}, admin_token)
+
+                return _ok({
+                    'market_get_result': r, 'market_get_error': e,
+                    'admin_token_present': bool(admin_token),
+                    'photo_upload_result': photo_result, 'photo_upload_error': photo_err,
+                })
 
             if method == 'GET' and params.get('action') == 'cron':
                 token = os.environ.get('VK_COMMUNITY_TOKEN')

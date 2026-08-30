@@ -8,6 +8,8 @@ VK 27/28/1051 «method is unavailable»; токен сообщества, выд
 Implicit Flow с group_ids, — единственный подтверждённый рабочий вариант).
 Сами товары (add/edit/delete) управляются отдельным токеном сообщества
 (VK_COMMUNITY_TOKEN), эта функция его не трогает.
+VK возвращает токен под ключом access_token_{group_id} (не просто access_token) —
+это обрабатывается при разборе присланной ссылки.
 Args: event с httpMethod GET (action=start|status) или POST (сохранение токена из URL)
 Returns: redirect (302) на VK для входа, JSON статус, либо результат сохранения токена
 """
@@ -73,16 +75,27 @@ def handler(event, context):
         if raw.startswith('http'):
             frag = raw.split('#', 1)[1] if '#' in raw else ''
             qs = urllib.parse.parse_qs(frag)
+            # При запросе с group_ids VK возвращает токен сообщества под ключом
+            # access_token_{group_id} (а не просто access_token) — ищем оба варианта.
             access_token = (qs.get('access_token') or [None])[0]
+            if not access_token and group_id:
+                access_token = (qs.get(f'access_token_{group_id}') or [None])[0]
+            if not access_token:
+                # запасной вариант — берём любой ключ, начинающийся с access_token
+                for k, v in qs.items():
+                    if k.startswith('access_token') and v:
+                        access_token = v[0]
+                        break
             expires_in = (qs.get('expires_in') or [None])[0]
             vk_user_id = (qs.get('user_id') or [None])[0]
         else:
             access_token = raw
 
         if not access_token:
-            return _err(400, 'Не удалось найти access_token в присланной ссылке — вставьте адрес целиком, начиная с https://oauth.vk.com/blank.html#access_token=...')
+            return _err(400, 'Не удалось найти access_token в присланной ссылке — вставьте адрес целиком, начиная с https://oauth.vk.ru/blank.html#...')
 
-        expires_at = (datetime.utcnow() + timedelta(seconds=int(expires_in))) if expires_in else None
+        # expires_in=0 у токена сообщества означает «бессрочный» — не ошибка.
+        expires_at = (datetime.utcnow() + timedelta(seconds=int(expires_in))) if expires_in and int(expires_in) > 0 else None
 
         conn = psycopg2.connect(dsn)
         try:
