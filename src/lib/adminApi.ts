@@ -58,6 +58,7 @@ export const CRM_PAYMENTS_URL = 'https://functions.poehali.dev/74ca5694-a05f-405
 export const NEWS_URL = 'https://functions.poehali.dev/984cad3a-0783-4408-a614-52ed36f8c77f';
 export const PRICE_PREDICT_URL = 'https://functions.poehali.dev/9986e5a6-c4d4-407a-919f-a303aa3eddf2';
 const VK_MARKET_SYNC_URL = 'https://functions.poehali.dev/afc5cc33-2cf0-4bec-910a-bd703e910245';
+const VK_OAUTH_URL = 'https://functions.poehali.dev/00319010-cbca-43bf-ae81-3431d4d8de20';
 
 export type Role = 'admin' | 'editor' | 'manager' | 'client' | 'broker' | 'director' | 'office_manager';
 
@@ -366,6 +367,8 @@ export const adminApi = {
     req(`${VK_MARKET_SYNC_URL}`, { method: 'POST', body: JSON.stringify({ feed_id: feedId }) }),
   vkMarketSyncStatus: (feedId: number) =>
     req(`${VK_MARKET_SYNC_URL}?action=status&feed_id=${feedId}`),
+  vkOauthSaveToken: (tokenOrUrl: string) =>
+    req(VK_OAUTH_URL, { method: 'POST', body: JSON.stringify({ token_or_url: tokenOrUrl }) }),
 
   // leads CRUD
   createLead: (data: Record<string, unknown>) =>

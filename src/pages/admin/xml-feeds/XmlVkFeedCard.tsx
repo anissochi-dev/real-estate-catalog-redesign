@@ -90,6 +90,9 @@ function VkFeedRow({ feed, load, regenerating, regenerateNow, copy }: {
   const [togglingApiMode, setTogglingApiMode] = useState(false);
   const [syncStatus, setSyncStatus] = useState<VkSyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [tokenInput, setTokenInput] = useState('');
+  const [savingToken, setSavingToken] = useState(false);
+  const [tokenResult, setTokenResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   const loadSyncStatus = async () => {
     try {
@@ -114,6 +117,26 @@ function VkFeedRow({ feed, load, regenerating, regenerateNow, copy }: {
       alert(e instanceof Error ? e.message : 'Ошибка');
     } finally {
       setTogglingApiMode(false);
+    }
+  };
+
+  const saveVkToken = async () => {
+    if (!tokenInput.trim()) { setTokenResult({ ok: false, message: 'Вставьте ссылку целиком или сам токен' }); return; }
+    setSavingToken(true);
+    setTokenResult(null);
+    try {
+      const res = await adminApi.vkOauthSaveToken(tokenInput.trim()) as { ok: boolean; message?: string; error?: string };
+      if (res.ok) {
+        setTokenResult({ ok: true, message: res.message || 'Токен сохранён' });
+        setTokenInput('');
+        await loadSyncStatus();
+      } else {
+        setTokenResult({ ok: false, message: res.error || 'Не удалось сохранить токен' });
+      }
+    } catch (e: unknown) {
+      setTokenResult({ ok: false, message: e instanceof Error ? e.message : 'Ошибка' });
+    } finally {
+      setSavingToken(false);
     }
   };
 
@@ -287,19 +310,44 @@ function VkFeedRow({ feed, load, regenerating, regenerateNow, copy }: {
 
         {apiMode && (
           <div className="space-y-2 pt-1">
-            <div className={`flex items-center justify-between gap-2 flex-wrap px-3 py-2 rounded-lg ${syncStatus?.admin_connected ? 'bg-emerald-50' : 'bg-amber-50'}`}>
-              <div className="text-xs flex items-center gap-1.5">
-                <Icon name={syncStatus?.admin_connected ? 'CheckCircle2' : 'AlertTriangle'} size={14}
-                  className={syncStatus?.admin_connected ? 'text-emerald-600' : 'text-amber-600'} />
-                {syncStatus?.admin_connected
-                  ? 'Администратор группы подключён — загрузка фото работает'
-                  : 'Нужен вход администратора группы — без него фото товаров загружаться не будут'}
+            <div className={`px-3 py-2 rounded-lg space-y-2 ${syncStatus?.admin_connected ? 'bg-emerald-50' : 'bg-amber-50'}`}>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="text-xs flex items-center gap-1.5">
+                  <Icon name={syncStatus?.admin_connected ? 'CheckCircle2' : 'AlertTriangle'} size={14}
+                    className={syncStatus?.admin_connected ? 'text-emerald-600' : 'text-amber-600'} />
+                  {syncStatus?.admin_connected
+                    ? 'Администратор группы подключён — загрузка фото работает'
+                    : 'Нужен вход администратора группы — без него фото товаров загружаться не будут'}
+                </div>
+                <a href={`${VK_OAUTH_URL}?action=start`} target="_blank" rel="noopener noreferrer"
+                  className="text-xs px-3 py-1.5 rounded-lg font-semibold shrink-0 bg-white border border-border hover:bg-muted/50 inline-flex items-center gap-1.5">
+                  <Icon name="LogIn" size={13} />
+                  1. Открыть страницу входа VK
+                </a>
               </div>
-              <a href={`${VK_OAUTH_URL}?action=start`} target="_blank" rel="noopener noreferrer"
-                className="text-xs px-3 py-1.5 rounded-lg font-semibold shrink-0 bg-white border border-border hover:bg-muted/50 inline-flex items-center gap-1.5">
-                <Icon name="LogIn" size={13} />
-                {syncStatus?.admin_connected ? 'Войти повторно' : 'Войти через VK'}
-              </a>
+              <div className="text-xs text-muted-foreground">
+                Войдите как администратор группы → нажмите «Разрешить» → браузер откроет пустую страницу с длинной ссылкой в адресной строке. Скопируйте её целиком и вставьте сюда:
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="https://oauth.vk.com/blank.html#access_token=..."
+                  className="flex-1 min-w-0 px-2 py-1.5 border rounded-lg text-xs font-mono bg-white"
+                  value={tokenInput}
+                  onChange={e => { setTokenInput(e.target.value); setTokenResult(null); }}
+                />
+                <button onClick={saveVkToken} disabled={savingToken}
+                  className="text-xs px-3 py-1.5 rounded-lg font-semibold shrink-0 bg-brand-blue text-white disabled:opacity-50 inline-flex items-center gap-1.5">
+                  <Icon name="Check" size={13} />
+                  {savingToken ? 'Сохраняем...' : '2. Сохранить'}
+                </button>
+              </div>
+              {tokenResult && (
+                <div className={`text-xs flex items-center gap-1.5 ${tokenResult.ok ? 'text-emerald-700' : 'text-red-700'}`}>
+                  <Icon name={tokenResult.ok ? 'CheckCircle2' : 'XCircle'} size={13} />
+                  {tokenResult.message}
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
