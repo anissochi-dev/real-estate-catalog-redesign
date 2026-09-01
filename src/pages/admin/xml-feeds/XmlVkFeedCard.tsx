@@ -12,8 +12,6 @@ interface VkSyncStatus {
   admin_connected: boolean;
 }
 
-const VK_OAUTH_URL = 'https://functions.poehali.dev/00319010-cbca-43bf-ae81-3431d4d8de20';
-
 interface Props {
   items: F[];
   load: () => void;
@@ -90,9 +88,6 @@ function VkFeedRow({ feed, load, regenerating, regenerateNow, copy }: {
   const [togglingApiMode, setTogglingApiMode] = useState(false);
   const [syncStatus, setSyncStatus] = useState<VkSyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [tokenInput, setTokenInput] = useState('');
-  const [savingToken, setSavingToken] = useState(false);
-  const [tokenResult, setTokenResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   const loadSyncStatus = async () => {
     try {
@@ -106,6 +101,18 @@ function VkFeedRow({ feed, load, regenerating, regenerateNow, copy }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiMode]);
 
+  // После возврата с VK ID (redirect_uri вернул нас сюда с ?vk_connected=1)
+  // сразу обновляем статус подключения, не дожидаясь ручного клика.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('vk_connected') === '1') {
+      loadSyncStatus();
+      const url = new URL(window.location.href);
+      url.searchParams.delete('vk_connected');
+      window.history.replaceState({}, '', url.toString());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const toggleApiMode = async () => {
     setTogglingApiMode(true);
     try {
@@ -117,26 +124,6 @@ function VkFeedRow({ feed, load, regenerating, regenerateNow, copy }: {
       alert(e instanceof Error ? e.message : 'Ошибка');
     } finally {
       setTogglingApiMode(false);
-    }
-  };
-
-  const saveVkToken = async () => {
-    if (!tokenInput.trim()) { setTokenResult({ ok: false, message: 'Вставьте ссылку целиком или сам токен' }); return; }
-    setSavingToken(true);
-    setTokenResult(null);
-    try {
-      const res = await adminApi.vkOauthSaveToken(tokenInput.trim()) as { ok: boolean; message?: string; error?: string };
-      if (res.ok) {
-        setTokenResult({ ok: true, message: res.message || 'Токен сохранён' });
-        setTokenInput('');
-        await loadSyncStatus();
-      } else {
-        setTokenResult({ ok: false, message: res.error || 'Не удалось сохранить токен' });
-      }
-    } catch (e: unknown) {
-      setTokenResult({ ok: false, message: e instanceof Error ? e.message : 'Ошибка' });
-    } finally {
-      setSavingToken(false);
     }
   };
 
@@ -316,38 +303,15 @@ function VkFeedRow({ feed, load, regenerating, regenerateNow, copy }: {
                   <Icon name={syncStatus?.admin_connected ? 'CheckCircle2' : 'AlertTriangle'} size={14}
                     className={syncStatus?.admin_connected ? 'text-emerald-600' : 'text-amber-600'} />
                   {syncStatus?.admin_connected
-                    ? 'Администратор группы подключён — загрузка фото работает'
-                    : 'Нужен вход администратора группы — без него фото товаров загружаться не будут'}
+                    ? 'Администратор группы подключён — товары и фото загружаются'
+                    : 'Нужен вход администратора группы — без него товары не будут синхронизироваться'}
                 </div>
-                <a href={`${VK_OAUTH_URL}?action=start`} target="_blank" rel="noopener noreferrer"
-                  className="text-xs px-3 py-1.5 rounded-lg font-semibold shrink-0 bg-white border border-border hover:bg-muted/50 inline-flex items-center gap-1.5">
+                <a href={adminApi.vkOauthStartUrl()}
+                  className="text-xs px-3 py-1.5 rounded-lg font-semibold shrink-0 bg-brand-blue text-white hover:opacity-90 inline-flex items-center gap-1.5">
                   <Icon name="LogIn" size={13} />
-                  1. Открыть страницу входа VK
+                  {syncStatus?.admin_connected ? 'Войти заново' : 'Войти через VK'}
                 </a>
               </div>
-              <div className="text-xs text-muted-foreground">
-                Войдите как администратор группы → нажмите «Разрешить» → браузер откроет пустую страницу с длинной ссылкой в адресной строке. Скопируйте её целиком и вставьте сюда:
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="https://oauth.vk.com/blank.html#access_token=..."
-                  className="flex-1 min-w-0 px-2 py-1.5 border rounded-lg text-xs font-mono bg-white"
-                  value={tokenInput}
-                  onChange={e => { setTokenInput(e.target.value); setTokenResult(null); }}
-                />
-                <button onClick={saveVkToken} disabled={savingToken}
-                  className="text-xs px-3 py-1.5 rounded-lg font-semibold shrink-0 bg-brand-blue text-white disabled:opacity-50 inline-flex items-center gap-1.5">
-                  <Icon name="Check" size={13} />
-                  {savingToken ? 'Сохраняем...' : '2. Сохранить'}
-                </button>
-              </div>
-              {tokenResult && (
-                <div className={`text-xs flex items-center gap-1.5 ${tokenResult.ok ? 'text-emerald-700' : 'text-red-700'}`}>
-                  <Icon name={tokenResult.ok ? 'CheckCircle2' : 'XCircle'} size={13} />
-                  {tokenResult.message}
-                </div>
-              )}
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">

@@ -1,9 +1,13 @@
 """
 Business: Точечная синхронизация товаров сообщества ВКонтакте через Market API
-(market.add/edit/delete) — независимо от YML-фида «VK Товары» (который остаётся
-файлом для ручного импорта). Работает по токену сообщества (VK_COMMUNITY_TOKEN) —
-без OAuth. Обновляет/добавляет/удаляет только изменившиеся объекты (сравнение по
-хэшу), поэтому повторные запуски быстрые и не создают лишних правок в VK.
+(market.add/edit/delete, photos.getMarketUploadServer/saveMarketPhoto) —
+независимо от YML-фида «VK Товары» (который остаётся файлом для ручного
+импорта). Работает по личному токену администратора группы, полученному через
+VK ID Authorization Code + PKCE (см. backend/vk-oauth) — VK Market API требует
+именно пользовательский токен, токен сообщества для market.* не подходит
+(error 27 Group auth). Обновляет/добавляет/удаляет только изменившиеся объекты
+(сравнение по хэшу), поэтому повторные запуски быстрые и не создают лишних
+правок в VK.
 Args: event с httpMethod GET/POST, queryStringParameters {action, feed_id}, body {feed_id}
 Returns: JSON со статистикой синхронизации или статусом фида
 """
@@ -136,22 +140,24 @@ def _multipart_post(url, field_name, filename, content, content_type):
         return json.loads(r.read().decode())
 
 
-def _refresh_admin_token(cur, conn, group_id, refresh_token):
-    """VK ID Access token живёт всего 1 час — обновляем через refresh_token
+def _refresh_admin_token(cur, conn, group_id, refresh_token, device_id):
+    """VK ID Access token живёт недолго — обновляем через refresh_token
     (id.vk.ru/oauth2/auth, grant_type=refresh_token), не заставляя админа
-    входить заново при каждом запуске синхронизации."""
+    входить заново при каждом запуске синхронизации. device_id обязателен и
+    должен быть тем же, что был выдан при исходном входе (сохранён в БД)."""
     app_id = os.environ.get('VK_APP_ID')
-    service_token = os.environ.get('VK_SERVICE_TOKEN')
-    if not app_id or not service_token:
+    client_secret = os.environ.get('VK_CLIENT_SECRET')
+    if not app_id:
         return None
     payload = {
         'grant_type': 'refresh_token',
         'refresh_token': refresh_token,
         'client_id': app_id,
-        'device_id': '',
+        'device_id': device_id or '',
         'state': hashlib.md5(str(group_id).encode()).hexdigest(),
-        'service_token': service_token,
     }
+    if client_secret:
+        payload['client_secret'] = client_secret
     data = urllib.parse.urlencode(payload).encode()
     req = urllib.request.Request(VK_ID_TOKEN, data=data, method='POST')
     req.add_header('Content-Type', 'application/x-www-form-urlencoded')
@@ -175,12 +181,13 @@ def _refresh_admin_token(cur, conn, group_id, refresh_token):
 
 
 def _get_admin_token(cur, conn, group_id):
-    """Токен ПОЛЬЗОВАТЕЛЯ-администратора группы (получен через VK ID вход в vk-oauth) —
-    нужен ТОЛЬКО для загрузки фото: photos.getMarketUploadServer не работает
-    с токеном сообщества (ограничение VK API, error 27 group auth). Сами товары
-    (add/edit/delete) по-прежнему через VK_COMMUNITY_TOKEN. Access token живёт 1 час —
-    если истёк или истекает в ближайшую минуту, обновляем через refresh_token."""
-    cur.execute(f"SELECT access_token, refresh_token, expires_at FROM {SCHEMA}.vk_oauth_tokens WHERE group_id = %s", (int(group_id),))
+    """Личный токен ПОЛЬЗОВАТЕЛЯ-администратора группы (получен через VK ID
+    Authorization Code + PKCE, вход в backend/vk-oauth) — используется для ВСЕХ
+    операций Market API: и market.add/edit/delete, и photos.getMarketUploadServer/
+    saveMarketPhoto (VK Market API не принимает токен сообщества — error 27
+    Group auth). Access token живёт недолго — если истёк или истекает в
+    ближайшую минуту, обновляем через refresh_token."""
+    cur.execute(f"SELECT access_token, refresh_token, expires_at, device_id FROM {SCHEMA}.vk_oauth_tokens WHERE group_id = %s", (int(group_id),))
     row = cur.fetchone()
     if not row:
         return None
@@ -188,17 +195,17 @@ def _get_admin_token(cur, conn, group_id):
     if expires_at and expires_at > datetime.utcnow() + timedelta(minutes=1):
         return row['access_token']
     if row.get('refresh_token'):
-        refreshed = _refresh_admin_token(cur, conn, group_id, row['refresh_token'])
+        refreshed = _refresh_admin_token(cur, conn, group_id, row['refresh_token'], row.get('device_id'))
         if refreshed:
             return refreshed
     return row['access_token']
 
 
-def _upload_market_photo(group_id, photo_token, image_url):
+def _upload_market_photo(group_id, admin_token, image_url):
     """Скачивает фото объекта и загружает его в альбом товаров сообщества VK.
-    photo_token — токен АДМИНА (не сообщества, см. _get_admin_token).
+    admin_token — личный токен администратора (см. _get_admin_token).
     Возвращает (photo_id в формате "ownerId_photoId", ошибка)."""
-    server_resp, err = _vk_call('photos.getMarketUploadServer', {'group_id': group_id, 'main_photo': 1}, photo_token)
+    server_resp, err = _vk_call('photos.getMarketUploadServer', {'group_id': group_id, 'main_photo': 1}, admin_token)
     if err:
         return None, err
     upload_url = (server_resp or {}).get('upload_url')
@@ -219,7 +226,7 @@ def _upload_market_photo(group_id, photo_token, image_url):
         'photo': upload_result.get('photo'),
         'server': upload_result.get('server'),
         'hash': upload_result.get('hash'),
-    }, photo_token)
+    }, admin_token)
     if err:
         return None, err
     photo = (save_resp or [{}])[0]
@@ -256,17 +263,27 @@ def _upsert_item(cur, feed_id, listing_id, vk_item_id, content_hash, status, err
     )
 
 
-def _sync_feed(cur, conn, feed, token, group_id):
+def _sync_feed(cur, conn, feed, group_id):
     feed_id = feed['id']
     try:
         category_map = json.loads(feed['market_category_map']) if feed.get('market_category_map') else {}
     except (TypeError, ValueError):
         category_map = {}
 
-    # Токен админа нужен только для загрузки фото (VK API ограничение — см. _get_admin_token).
-    # Если админ ещё не входил через OAuth — фото загружать не сможем, но остальная
-    # синхронизация (удаление снятых объектов) всё равно отработает.
+    # Токен администратора (личный, через VK ID Authorization Code + PKCE) нужен
+    # для ВСЕХ операций — и market.add/edit/delete, и загрузки фото. Токен
+    # сообщества (старый VK_COMMUNITY_TOKEN) больше не используется: VK Market API
+    # требует именно пользовательский токен (error 27 "Group auth" при попытке
+    # вызвать market.* токеном сообщества).
     admin_token = _get_admin_token(cur, conn, group_id)
+    if not admin_token:
+        cur.execute(
+            f"UPDATE {SCHEMA}.xml_feeds SET vk_last_sync_at = NOW(), vk_last_sync_result = %s WHERE id = %s",
+            (json.dumps({'added': 0, 'edited': 0, 'deleted': 0, 'skipped_no_category': 0, 'errors': 1, 'pending': 0,
+                         'error': 'Не выполнен вход администратора группы через VK — нажмите «Войти через VK» в настройках фида'}, ensure_ascii=False), feed_id)
+        )
+        conn.commit()
+        return {'added': 0, 'edited': 0, 'deleted': 0, 'skipped_no_category': 0, 'errors': 1, 'pending': 0}
 
     listings = _get_sync_listings(cur, feed)
     target_ids = {l['id'] for l in listings}
@@ -281,7 +298,7 @@ def _sync_feed(cur, conn, feed, token, group_id):
     for lid in to_delete_ids[:DELETE_BUDGET]:
         row = existing[lid]
         if row.get('vk_item_id'):
-            _, err = _vk_call('market.delete', {'owner_id': f'-{group_id}', 'item_id': row['vk_item_id']}, token)
+            _, err = _vk_call('market.delete', {'owner_id': f'-{group_id}', 'item_id': row['vk_item_id']}, admin_token)
             if err:
                 summary['errors'] += 1
                 continue
@@ -318,14 +335,6 @@ def _sync_feed(cur, conn, feed, token, group_id):
             conn.commit()
             continue
 
-        if not admin_token:
-            _upsert_item(cur, feed_id, l['id'], prev.get('vk_item_id') if prev else None, h, 'error',
-                          'Не выполнен вход администратора группы через VK (нужен для загрузки фото) — нажмите «Войти через VK» в настройках фида')
-            summary['errors'] += 1
-            budget -= 1
-            conn.commit()
-            continue
-
         photo_ids = []
         photo_err = None
         for img_url in images:
@@ -354,10 +363,10 @@ def _sync_feed(cur, conn, feed, token, group_id):
 
         if prev and prev.get('vk_item_id'):
             vk_params['item_id'] = prev['vk_item_id']
-            resp, err = _vk_call('market.edit', vk_params, token)
+            resp, err = _vk_call('market.edit', vk_params, admin_token)
             action_kind = 'edited'
         else:
-            resp, err = _vk_call('market.add', vk_params, token)
+            resp, err = _vk_call('market.add', vk_params, admin_token)
             action_kind = 'added'
 
         if err:
@@ -392,37 +401,33 @@ def handler(event, context):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
 
             if method == 'GET' and params.get('action') == 'test_market_token':
-                # ВРЕМЕННАЯ ДИАГНОСТИКА: проверяем, работает ли VK_COMMUNITY_TOKEN
-                # с методами Market API в принципе (доступ "Товары" может быть не
-                # выдан приложению) — безобидный вызов market.get на чтение.
-                token = os.environ.get('VK_COMMUNITY_TOKEN')
+                # ДИАГНОСТИКА: проверяем личный токен администратора (получен через
+                # VK ID Authorization Code + PKCE, см. backend/vk-oauth) на обоих
+                # типах методов — market.get (чтение товаров) и getMarketUploadServer
+                # (загрузка фото). Оба должны работать одним и тем же токеном.
                 group_id = os.environ.get('VK_GROUP_ID')
-                if not token or not group_id:
-                    return _ok({'ok': False, 'error': 'VK_COMMUNITY_TOKEN / VK_GROUP_ID не заданы'})
-                r, e = _vk_call('market.get', {'owner_id': f'-{group_id}', 'count': 1}, token)
+                if not group_id:
+                    return _ok({'ok': False, 'error': 'VK_GROUP_ID не задан'})
+                admin_token = _get_admin_token(cur, conn, group_id)
+                if not admin_token:
+                    return _ok({'ok': False, 'error': 'Администратор группы не подключён — войдите через VK в настройках фида', 'admin_token_present': False})
 
-                # Заодно проверяем новый Implicit Flow токен (из vk_oauth_tokens)
-                # именно на методе загрузки фото — это финальная проверка всей затеи.
-                photo_result = None
-                photo_err = None
-                admin_token = _get_admin_token(cur, conn, group_id) if group_id else None
-                if admin_token:
-                    photo_result, photo_err = _vk_call('photos.getMarketUploadServer', {'group_id': group_id, 'main_photo': 1}, admin_token)
+                r, e = _vk_call('market.get', {'owner_id': f'-{group_id}', 'count': 1}, admin_token)
+                photo_result, photo_err = _vk_call('photos.getMarketUploadServer', {'group_id': group_id, 'main_photo': 1}, admin_token)
 
                 return _ok({
                     'market_get_result': r, 'market_get_error': e,
-                    'admin_token_present': bool(admin_token),
+                    'admin_token_present': True,
                     'photo_upload_result': photo_result, 'photo_upload_error': photo_err,
                 })
 
             if method == 'GET' and params.get('action') == 'cron':
-                token = os.environ.get('VK_COMMUNITY_TOKEN')
                 group_id = os.environ.get('VK_GROUP_ID')
-                if not token or not group_id:
-                    return _ok({'ok': False, 'error': 'VK_COMMUNITY_TOKEN / VK_GROUP_ID не заданы'})
+                if not group_id:
+                    return _ok({'ok': False, 'error': 'VK_GROUP_ID не задан'})
                 cur.execute(f"SELECT * FROM {SCHEMA}.xml_feeds WHERE format = 'market_vk' AND vk_api_mode = TRUE AND is_active = TRUE")
                 feeds = [dict(r) for r in cur.fetchall()]
-                results = [{'feed_id': f['id'], 'name': f['name'], **_sync_feed(cur, conn, f, token, group_id)} for f in feeds]
+                results = [{'feed_id': f['id'], 'name': f['name'], **_sync_feed(cur, conn, f, group_id)} for f in feeds]
                 return _ok({'ok': True, 'results': results})
 
             if method == 'GET' and params.get('action') == 'status':
@@ -469,12 +474,11 @@ def handler(event, context):
                     return _err(404, 'VK-фид не найден')
                 feed = dict(feed)
 
-                token = os.environ.get('VK_COMMUNITY_TOKEN')
                 group_id = os.environ.get('VK_GROUP_ID')
-                if not token or not group_id:
-                    return _err(400, 'Не настроены секреты VK_COMMUNITY_TOKEN / VK_GROUP_ID')
+                if not group_id:
+                    return _err(400, 'Не настроен секрет VK_GROUP_ID')
 
-                result = _sync_feed(cur, conn, feed, token, group_id)
+                result = _sync_feed(cur, conn, feed, group_id)
                 return _ok({'ok': True, **result})
 
             return _err(400, 'Bad request')

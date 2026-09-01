@@ -367,8 +367,11 @@ export const adminApi = {
     req(`${VK_MARKET_SYNC_URL}`, { method: 'POST', body: JSON.stringify({ feed_id: feedId }) }),
   vkMarketSyncStatus: (feedId: number) =>
     req(`${VK_MARKET_SYNC_URL}?action=status&feed_id=${feedId}`),
-  vkOauthSaveToken: (tokenOrUrl: string) =>
-    req(VK_OAUTH_URL, { method: 'POST', body: JSON.stringify({ token_or_url: tokenOrUrl }) }),
+  // Вход администратора группы через VK ID (Authorization Code + PKCE) — просто
+  // редирект, обмен кода на токен и сохранение делает backend сам, без ручного
+  // копирования ссылок.
+  vkOauthStartUrl: () =>
+    `${VK_OAUTH_URL}?return_url=${encodeURIComponent(window.location.href)}`,
 
   // leads CRUD
   createLead: (data: Record<string, unknown>) =>

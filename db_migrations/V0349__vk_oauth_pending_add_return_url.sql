@@ -1,0 +1,1 @@
+ALTER TABLE t_p71821556_real_estate_catalog_.vk_oauth_pending ADD COLUMN IF NOT EXISTS return_url TEXT;
