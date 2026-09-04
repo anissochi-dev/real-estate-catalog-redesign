@@ -9,9 +9,13 @@ photos.getMarketUploadServer (см. историю ошибок VK 27/3). Нов
 используется). Scope offline обязателен: без него VK привязывает токен к
 IP-адресу браузера, в котором проходил вход, и вызовы с backend (меняющийся
 исходящий IP облачных функций) отклоняются ошибкой VK 5 "access_token was
-given to another ip address". code_verifier на время редиректа хранится в
-vk_oauth_pending по ключу state (PKCE требует, чтобы он совпал при обмене
-кода на токен).
+given to another ip address". Для обмена code на токен конфиденциальному
+приложению обязателен параметр service_token (Сервисный ключ доступа из
+настроек приложения VK ID) — это НЕ то же самое, что client_secret
+(Защищённый ключ); передача client_secret вместо service_token приводит
+к ошибке invalid_grant "service_token is missing or invalid". code_verifier
+на время редиректа хранится в vk_oauth_pending по ключу state (PKCE
+требует, чтобы он совпал при обмене кода на токен).
 Args: event с httpMethod GET (action=start — редирект на VK; action=callback —
       обмен code на токен; action=status — статус подключения)
 Returns: redirect (302) на VK для входа, редирект обратно в админку после
@@ -90,7 +94,7 @@ def handler(event, context):
 
     app_id = os.environ.get('VK_APP_ID')
     group_id = os.environ.get('VK_GROUP_ID')
-    client_secret = os.environ.get('VK_CLIENT_SECRET')
+    service_token = os.environ.get('VK_SERVICE_TOKEN')
     dsn = os.environ['DATABASE_URL']
     action = params.get('action')
 
@@ -123,8 +127,8 @@ def handler(event, context):
                     'device_id': device_id,
                     'state': state,
                 }
-                if client_secret:
-                    payload['client_secret'] = client_secret
+                if service_token:
+                    payload['service_token'] = service_token
                 data = urllib.parse.urlencode(payload).encode()
                 req = urllib.request.Request(VK_ID_TOKEN, data=data, method='POST')
                 req.add_header('Content-Type', 'application/x-www-form-urlencoded')
