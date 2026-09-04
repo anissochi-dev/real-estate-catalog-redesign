@@ -207,6 +207,25 @@ export default function ListingsTableMobileCard({
             {fmtDate(it.created_at)}
           </span>
         </div>
+
+        {/* Доп. лицо (представитель) */}
+        {(() => {
+          const extra = (it.owner_extra_contacts || []).find(c => c.name || c.phone);
+          if (!extra) return null;
+          return (
+            <div className="flex items-center gap-1 mt-1" title="Доп. лицо">
+              <Icon name="UserPlus" size={11} className="text-muted-foreground/50 flex-shrink-0" />
+              <div className="flex flex-col min-w-0">
+                {extra.name && <span className="text-[11px] font-medium text-foreground">{extra.name}</span>}
+                {extra.phone && showPhone && (
+                  <a href={`tel:${extra.phone}`} className="text-[10px] text-brand-blue hover:underline whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                    {extra.phone}
+                  </a>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </>
   );

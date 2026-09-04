@@ -321,6 +321,27 @@ export default function ListingsTableDesktopRow({
             </div>
           </div>
 
+          {/* Доп. лицо (представитель) */}
+          {(() => {
+            const extra = (it.owner_extra_contacts || []).find(c => c.name || c.phone);
+            if (!extra) return null;
+            return (
+              <div className="flex items-center gap-1.5 min-w-0" title="Доп. лицо">
+                <Icon name="UserPlus" size={12} className="text-muted-foreground/50 flex-shrink-0" />
+                <div className="text-xs text-muted-foreground truncate">
+                  {extra.name && <span className="font-medium text-foreground">{extra.name}</span>}
+                  {extra.phone && (
+                    <span className="ml-1.5">
+                      {showPhone
+                        ? <a href={`tel:${extra.phone}`} className="text-brand-blue hover:underline" onClick={e => e.stopPropagation()}>{extra.phone}</a>
+                        : <span className="text-muted-foreground">+7 •••</span>}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Даты */}
           <div className="flex items-center gap-3 text-[11px] text-muted-foreground/70 flex-shrink-0">
             <span title="Дата создания">

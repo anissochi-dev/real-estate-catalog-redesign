@@ -2775,7 +2775,7 @@ def _listings(cur, conn, method, rid, event, user):
             "l.slug, l.public_code, l.lat, l.lng, "
             "l.created_at, l.updated_at, l.last_edited_at, l.last_edited_by, "
             "l.use_watermark, l.video_url, l.video_type, "
-            "l.cadastral_number, l.egrn_objects, l.rent_index_pct"
+            "l.cadastral_number, l.egrn_objects, l.rent_index_pct, l.owner_extra_contacts"
         )
         cur.execute(
             f"SELECT {list_cols}, "
@@ -2834,6 +2834,10 @@ def _listings(cur, conn, method, rid, event, user):
                 if d.get('broker_id') != uid and d.get('author_id') != uid:
                     d['owner_phone'] = None
                     d['owner_phone2'] = None
+                    if d.get('owner_extra_contacts'):
+                        d['owner_extra_contacts'] = [
+                            {**c, 'phone': None, 'phone2': None} for c in d['owner_extra_contacts']
+                        ]
             rows.append(_ser(d))
         return _ok({
             'listings': rows, 'total': total, 'limit': limit, 'offset': offset,
