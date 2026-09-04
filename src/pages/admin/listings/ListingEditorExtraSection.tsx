@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import CharCount from '@/components/ui/CharCount';
-import { Listing, BUILDING_CLASSES, PROPERTY_RIGHTS, FINISHING, OFFICE_LAYOUTS, BUILDING_TYPES, DEPOSIT_MONTHS } from './types';
+import { Listing, BUILDING_CLASSES, PROPERTY_RIGHTS, OFFICE_LAYOUTS, BUILDING_TYPES, DEPOSIT_MONTHS } from './types';
 import SeoHeadingsBlock, { SeoHeadings } from '@/components/admin/SeoHeadingsBlock';
 
 const DEAL_LABEL: Record<string, string> = {
@@ -73,18 +73,6 @@ export default function ListingEditorExtraSection({
           <span className="text-[10px] font-normal text-muted-foreground px-1.5 py-0.5 bg-muted rounded">Яндекс / Авито / ЦИАН</span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div>
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-              <span className="w-5 h-5 rounded-full bg-pink-100 flex items-center justify-center flex-shrink-0"><Icon name="Paintbrush" size={11} className="text-pink-600" /></span>Отделка (для досок)
-              <span className="text-muted-foreground/60 font-normal">— из «Состояния»</span>
-            </label>
-            <select className="w-full px-3 py-2 border rounded-lg"
-              value={editing.finishing || ''}
-              onChange={e => setEditing({ ...editing, finishing: e.target.value || null })}>
-              <option value="">— Авто из состояния —</option>
-              {FINISHING.map(f => <option key={f[0]} value={f[0]}>{f[1]}</option>)}
-            </select>
-          </div>
           <div {...errWrap('building_class')}>
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
               <span className="w-5 h-5 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0"><Icon name="Award" size={11} className="text-amber-600" /></span>Класс здания *
