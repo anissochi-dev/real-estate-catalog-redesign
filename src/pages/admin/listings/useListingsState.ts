@@ -459,6 +459,12 @@ export function useListingsState() {
     if (e.yearly_rent) parts.push(`Доход в год: ${e.yearly_rent} ₽`);
     if (e.profit) parts.push(`Чистая прибыль: ${e.profit} ₽`);
     if (e.payback) parts.push(`Окупаемость: ${e.payback} мес.`);
+    if (e.deposit_amount) parts.push(`Залог: ${e.deposit_amount} ₽`);
+    // Действующий арендатор — вместе с monthly_rent/yearly_rent триггерит блок
+    // «Финансовые перспективы и доходность» в промпте generate-описания
+    if (e.tenant_name) parts.push(`Действующий арендатор: ${e.tenant_name}`);
+    if (e.rented_out) parts.push(`Помещение уже сдано в аренду`);
+    if (e.contract_end_date) parts.push(`Договор аренды действует до: ${e.contract_end_date}`);
     if (includePrice && e.price) parts.push(`Цена: ${e.price} ₽`);
     if (e.ai_notes) parts.push(`Особые пожелания к описанию (обязательно учесть): ${e.ai_notes}`);
     return parts.join('; ');
