@@ -2544,6 +2544,16 @@ def _avito_fetch_report(cur, conn, token):
             """, (int(ad_id), item.get('avito_id'), item.get('url'),
                   item.get('avito_status'), section.get('title'), msg_text or None))
             checked += 1
+            # Обратная синхронизация: пишем реальный номер объявления с Авито
+            # в карточку объекта (listings.avito_ad_id), чтобы при следующей
+            # выгрузке фида тег <AvitoId> обновлял то же объявление, а не создавал
+            # дубликат. avito_id из отчёта — источник истины, перезаписываем всегда.
+            real_avito_id = item.get('avito_id')
+            if real_avito_id and str(real_avito_id).isdigit():
+                cur.execute(f"""
+                    UPDATE {SCHEMA}.listings SET avito_ad_id = %s
+                    WHERE id = %s AND avito_ad_id IS DISTINCT FROM %s
+                """, (int(real_avito_id), int(ad_id), int(real_avito_id)))
     conn.commit()
 
     return {
