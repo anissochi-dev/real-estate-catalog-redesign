@@ -3,11 +3,15 @@ Business: Вход администратора сообщества VK чере
 Authorization Code + PKCE (id.vk.ru). Заменяет устаревший Implicit Flow
 (oauth.vk.com), который выдавал токен СООБЩЕСТВА, непригодный для
 photos.getMarketUploadServer (см. историю ошибок VK 27/3). Новый флоу выдаёт
-личный токен ПОЛЬЗОВАТЕЛЯ-администратора со scope market,photos,groups — этим
-токеном backend vk-market-sync теперь вызывает и market.add/edit/delete,
+личный токен ПОЛЬЗОВАТЕЛЯ-администратора со scope market,photos,groups,offline —
+этим токеном backend vk-market-sync теперь вызывает и market.add/edit/delete,
 и photos.getMarketUploadServer/saveMarketPhoto (VK_COMMUNITY_TOKEN больше не
-используется). code_verifier на время редиректа хранится в vk_oauth_pending
-по ключу state (PKCE требует, чтобы он совпал при обмене кода на токен).
+используется). Scope offline обязателен: без него VK привязывает токен к
+IP-адресу браузера, в котором проходил вход, и вызовы с backend (меняющийся
+исходящий IP облачных функций) отклоняются ошибкой VK 5 "access_token was
+given to another ip address". code_verifier на время редиректа хранится в
+vk_oauth_pending по ключу state (PKCE требует, чтобы он совпал при обмене
+кода на токен).
 Args: event с httpMethod GET (action=start — редирект на VK; action=callback —
       обмен code на токен; action=status — статус подключения)
 Returns: redirect (302) на VK для входа, редирект обратно в админку после
@@ -31,7 +35,11 @@ SCHEMA = 't_p71821556_real_estate_catalog_'
 VK_ID_AUTHORIZE = 'https://id.vk.ru/authorize'
 VK_ID_TOKEN = 'https://id.vk.ru/oauth2/auth'
 VK_API_VERSION = '5.199'
-SCOPE = 'market photos groups'
+# offline обязателен: без него VK привязывает токен к IP-адресу браузера, в
+# котором проходил вход, и любой запрос с другого IP (а наш backend обращается
+# к VK API с меняющегося IP облачных функций) отклоняется ошибкой
+# "User authorization failed: access_token was given to another ip address".
+SCOPE = 'market photos groups offline'
 # После обмена code -> token редиректим админа обратно в админку. Разрешаем
 # только адреса на poehali.dev/поддомены, чтобы не превращать эндпоинт
 # в открытый редиректор.

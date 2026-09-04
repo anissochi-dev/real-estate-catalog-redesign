@@ -400,6 +400,18 @@ def handler(event, context):
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
 
+            if method == 'GET' and params.get('action') == 'my_ip':
+                # ДИАГНОСТИКА: исходящий IP-адрес, с которого backend стучится в VK API —
+                # нужен, чтобы прописать его в VK ID (Ключи доступа → Конфиденциальное →
+                # IP-адрес сервера). Если облачная платформа не даёт статический IP,
+                # придётся переключать уровень конфиденциальности приложения на "Публичное".
+                try:
+                    with urllib.request.urlopen('https://api.ipify.org?format=json', timeout=10) as r:
+                        ip_info = json.loads(r.read().decode())
+                except Exception as e:
+                    ip_info = {'error': str(e)}
+                return _ok({'outbound_ip': ip_info.get('ip'), 'raw': ip_info})
+
             if method == 'GET' and params.get('action') == 'test_market_token':
                 # ДИАГНОСТИКА: проверяем личный токен администратора (получен через
                 # VK ID Authorization Code + PKCE, см. backend/vk-oauth) на обоих
