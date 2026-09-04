@@ -332,12 +332,10 @@ export function useListingsState() {
         // Теги
         data.tags = (tagsRes.text || '').replace(/\n/g, ',').replace(/\s+,/g, ',');
 
-        // SEO title + description
+        // SEO title
         const txt = seoRes.text || '';
         const titleMatch = txt.match(/TITLE:\s*(.+)/i);
-        const descMatch = txt.match(/DESCRIPTION:\s*([\s\S]+)/i);
         data.seo_title = (titleMatch ? titleMatch[1] : '').trim().replace(/^["«]|["»]$/g, '').slice(0, 70);
-        data.seo_description = (descMatch ? descMatch[1] : '').trim().replace(/^["«]|["»]$/g, '').slice(0, 160);
 
         // H1-H5 по шаблону
         const h = _buildHeadings(merged);
@@ -551,10 +549,8 @@ export function useListingsState() {
       const r = await aiApi.ask('seo_listing', ctx);
       const txt = r.text || '';
       const titleMatch = txt.match(/TITLE:\s*(.+)/i);
-      const descMatch = txt.match(/DESCRIPTION:\s*([\s\S]+)/i);
       const seo_title = (titleMatch ? titleMatch[1] : '').trim().replace(/^["«]|["»]$/g, '');
-      const seo_description = (descMatch ? descMatch[1] : '').trim().replace(/^["«]|["»]$/g, '').slice(0, 200);
-      setEditing({ ...editing, seo_title, seo_description });
+      setEditing({ ...editing, seo_title });
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Ошибка');
     } finally {
@@ -577,10 +573,8 @@ export function useListingsState() {
       const seoRes = await aiApi.ask('seo_listing', seoCtx);
       const txt = seoRes.text || '';
       const titleMatch = txt.match(/TITLE:\s*(.+)/i);
-      const descMatch = txt.match(/DESCRIPTION:\s*([\s\S]+)/i);
       const seo_title = (titleMatch ? titleMatch[1] : '').trim().replace(/^["«]|["»]$/g, '');
-      const seo_description = (descMatch ? descMatch[1] : '').trim().replace(/^["«]|["»]$/g, '').slice(0, 200);
-      setEditing({ ...editing, description, tags, seo_title, seo_description });
+      setEditing({ ...editing, description, tags, seo_title });
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Ошибка ИИ');
     } finally {

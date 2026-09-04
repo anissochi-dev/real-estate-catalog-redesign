@@ -363,7 +363,7 @@ export default function ListingEditorExtraSection({
                 <button type="button" onClick={onGenerateSeo} disabled={aiSeoLoading}
                   className="text-xs text-brand-orange hover:underline inline-flex items-center gap-1">
                   <Icon name="Sparkles" size={12} />
-                  {aiSeoLoading ? 'Генерация...' : 'SEO Title/Desc'}
+                  {aiSeoLoading ? 'Генерация...' : 'SEO Title'}
                 </button>
               </div>
             </div>
