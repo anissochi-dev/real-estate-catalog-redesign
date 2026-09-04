@@ -295,15 +295,15 @@ export default function ListingsTableDesktopRow({
                 {(it.matching_leads_count ?? 0) > 0 ? it.matching_leads_count : ''}
               </button>
             )}
-          </div>
 
-          {/* Брокер */}
-          {it.broker_name && (
-            <div className="flex items-center gap-1.5 min-w-0">
-              <Icon name="UserCheck" size={12} className="text-brand-blue/60 flex-shrink-0" />
-              <span className="text-xs font-medium text-foreground truncate">{it.broker_name}</span>
-            </div>
-          )}
+            {/* Брокер */}
+            {it.broker_name && (
+              <div className="flex items-center gap-1.5 min-w-0 ml-1">
+                <Icon name="UserCheck" size={12} className="text-muted-foreground/50 flex-shrink-0" />
+                <span className="text-xs font-medium text-muted-foreground truncate">{it.broker_name}</span>
+              </div>
+            )}
+          </div>
 
           {/* Собственник */}
           <div className="flex items-center gap-1.5 min-w-0">
