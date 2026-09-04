@@ -166,6 +166,16 @@ def handler(event, context):
         sep = '&' if '?' in target else '?'
         return _redirect(f'{target}{sep}vk_connected=1')
 
+    if action == 'my_ip':
+        # ДИАГНОСТИКА: исходящий IP именно этой функции (vk-oauth) — он может
+        # отличаться от IP функции vk-market-sync, т.к. это разные контейнеры.
+        try:
+            with urllib.request.urlopen('https://api.ipify.org?format=json', timeout=10) as r:
+                ip_info = json.loads(r.read().decode())
+        except Exception as e:
+            ip_info = {'error': str(e)}
+        return _ok({'outbound_ip': ip_info.get('ip'), 'raw': ip_info})
+
     if action == 'status':
         conn = psycopg2.connect(dsn)
         try:
