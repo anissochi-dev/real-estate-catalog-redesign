@@ -340,10 +340,10 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
               </div>
               <div className="divide-y divide-border">
                 {rows.map(r => (
-                  <div key={r.year} className="grid grid-cols-3 px-3 py-1.5 text-xs hover:bg-muted/30 transition-colors">
-                    <span className="text-muted-foreground">Год {r.year}</span>
-                    <span className="font-medium">{r.monthly.toLocaleString('ru')} ₽/мес</span>
-                    <span className="text-muted-foreground text-right">{r.yearly.toLocaleString('ru')} ₽/год</span>
+                  <div key={r.year} className="grid grid-cols-3 px-3 py-1.5 text-xs hover:bg-muted/30 transition-colors gap-1">
+                    <span className="text-muted-foreground truncate">Год {r.year}</span>
+                    <span className="font-medium truncate">{r.monthly.toLocaleString('ru')} ₽/мес</span>
+                    <span className="text-muted-foreground text-right truncate">{r.yearly.toLocaleString('ru')} ₽/год</span>
                   </div>
                 ))}
               </div>

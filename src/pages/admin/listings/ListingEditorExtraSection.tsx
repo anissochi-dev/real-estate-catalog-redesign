@@ -374,7 +374,7 @@ export default function ListingEditorExtraSection({
                 <div className="text-xs font-semibold text-blue-800 flex items-center gap-1.5">
                   <Icon name="Wand2" size={12} /> Выберите что перегенерировать
                 </div>
-                <div className="grid grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
                   {IMPROVE_FIELDS.map(f => (
                     <label key={f.key} className="flex items-center gap-2 text-xs cursor-pointer">
                       <input type="checkbox"
