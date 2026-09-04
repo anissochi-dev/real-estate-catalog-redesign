@@ -306,7 +306,7 @@ function VkFeedRow({ feed, load, regenerating, regenerateNow, copy }: {
                     ? 'Администратор группы подключён — товары и фото загружаются'
                     : 'Нужен вход администратора группы — без него товары не будут синхронизироваться'}
                 </div>
-                <a href={adminApi.vkOauthStartUrl()}
+                <a href={adminApi.vkOauthStartUrl()} target="_blank" rel="noopener noreferrer"
                   className="text-xs px-3 py-1.5 rounded-lg font-semibold shrink-0 bg-brand-blue text-white hover:opacity-90 inline-flex items-center gap-1.5">
                   <Icon name="LogIn" size={13} />
                   {syncStatus?.admin_connected ? 'Войти заново' : 'Войти через VK'}
