@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import CharCount from '@/components/ui/CharCount';
-import { Listing, BUILDING_CLASSES, PROPERTY_RIGHTS, OFFICE_LAYOUTS, BUILDING_TYPES, DEPOSIT_MONTHS } from './types';
+import { Listing, BUILDING_CLASSES, PROPERTY_RIGHTS, OFFICE_LAYOUTS, BUILDING_TYPES, DEPOSIT_MONTHS, ADDITIONAL_CATEGORIES_MAP, ADDITIONAL_CATEGORIES_MAX } from './types';
 import SeoHeadingsBlock, { SeoHeadings } from '@/components/admin/SeoHeadingsBlock';
 
 const DEAL_LABEL: Record<string, string> = {
@@ -235,6 +235,38 @@ export default function ListingEditorExtraSection({
               </div>
             )}
           </div>
+          {!!ADDITIONAL_CATEGORIES_MAP[editing.category || '']?.length && (
+            <div>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1.5">
+                <span className="w-5 h-5 rounded-full bg-fuchsia-100 flex items-center justify-center flex-shrink-0"><Icon name="Tags" size={11} className="text-fuchsia-600" /></span>
+                Доп. категория (для Авито, не более {ADDITIONAL_CATEGORIES_MAX})
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {ADDITIONAL_CATEGORIES_MAP[editing.category || ''].map(([value, label]) => {
+                  const cur = editing.additional_categories
+                    ? editing.additional_categories.split('|').map(s => s.trim()).filter(Boolean)
+                    : [];
+                  const checked = cur.includes(value);
+                  const toggle = () => {
+                    let next: string[];
+                    if (checked) {
+                      next = cur.filter(v => v !== value);
+                    } else {
+                      if (cur.length >= ADDITIONAL_CATEGORIES_MAX) return;
+                      next = [...cur, value];
+                    }
+                    setEditing({ ...editing, additional_categories: next.join('|') || null });
+                  };
+                  return (
+                    <label key={value} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs cursor-pointer transition ${checked ? 'bg-fuchsia-50 border-fuchsia-300 text-fuchsia-700' : 'border-border hover:bg-muted/50'}`}>
+                      <input type="checkbox" className="hidden" checked={checked} onChange={toggle} />
+                      {label}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div className="flex flex-wrap gap-4 pt-1">
             {editing.deal === 'sale' && (
               <>
