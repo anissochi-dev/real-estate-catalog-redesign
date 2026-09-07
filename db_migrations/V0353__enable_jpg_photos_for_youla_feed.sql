@@ -1,0 +1,1 @@
+UPDATE t_p71821556_real_estate_catalog_.xml_feeds SET use_jpg_photos = TRUE WHERE format = 'youla';
