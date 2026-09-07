@@ -1035,9 +1035,13 @@ def _build_yandex(listings, company, feed_slug=None, use_jpg_photos=None, city_r
             out.append('</metro>')
         out.append('</location>')
 
-        # Агент
+        # Агент. organization — юрлицо агентства; обязателен для Юлы (схема
+        # «Недвижимость (Яндекс)» мапит его в provider.name), для Яндекса —
+        # необязательное доп. поле по той же официальной схеме.
         out.append('<sales-agent>')
         out.append(f'<name>{company_name}</name>')
+        if agent_category != 'private':
+            out.append(f'<organization>{company_name}</organization>')
         if phone:
             out.append(f'<phone>{phone}</phone>')
         if email:
