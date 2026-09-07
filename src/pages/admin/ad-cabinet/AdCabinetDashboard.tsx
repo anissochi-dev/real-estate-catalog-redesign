@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
+import PlatformIcon from '@/components/admin/PlatformIcon';
 import { AVITO_API_URL, AvitoData, CIAN_API_URL, CianData, OTHER_PLATFORMS_API_URL, OtherPlatformRow, PlatformCard, SERVICE_TYPE_LABELS, YANDEX_CALLS_API_URL, YandexCallsData } from './types';
 
 interface Props {
@@ -56,8 +57,8 @@ function PlatformCardView({ card, onClick }: { card: PlatformCard; onClick: () =
       }`}
     >
       <div className="flex items-center gap-2.5">
-        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${meta.color}`}>
-          <Icon name={meta.icon} size={18} />
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden ${meta.color}`}>
+          <PlatformIcon platform={card.key} icon={meta.icon} size={18} />
         </div>
         <div className="font-semibold text-sm">{meta.label}</div>
       </div>

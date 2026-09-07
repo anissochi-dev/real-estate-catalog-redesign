@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
+import PlatformIcon from '@/components/admin/PlatformIcon';
 import { CIAN_API_URL, CianData, CianOfferRow, OFFER_STATUS_LABELS, SERVICE_TYPE_LABELS } from './types';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -193,7 +194,7 @@ export default function CianCabinetTab() {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h2 className="font-bold text-lg flex items-center gap-2">
-              <Icon name="Building2" size={20} className="text-sky-600" />
+              <PlatformIcon platform="cian" icon="Building2" size={20} className="text-sky-600" />
               Кабинет ЦИАН
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">

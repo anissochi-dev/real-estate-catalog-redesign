@@ -1,0 +1,2 @@
+ALTER TABLE t_p71821556_real_estate_catalog_.ad_platform_keys ADD COLUMN IF NOT EXISTS logo_url VARCHAR(500) NULL;
+COMMENT ON COLUMN t_p71821556_real_estate_catalog_.ad_platform_keys.logo_url IS 'Логотип площадки, загружается вручную в Настройки → XML фиды. Если не загружен — используется дефолтная иконка Lucide.';

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { adminApi, getToken } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
+import PlatformIcon from '@/components/admin/PlatformIcon';
 
 const STATS_URL = 'https://functions.poehali.dev/1d84bd40-ef8c-4bd3-82c3-af294b1ec0b1';
 
@@ -309,7 +310,7 @@ export default function ListingHistory({ listingId, listingTitle, onClose }: Pro
                   <div key={src.value} className={`border rounded-xl p-4 ${hasData ? 'border-border' : 'border-dashed border-border opacity-60'}`}>
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <Icon name={src.icon} size={15} className={src.color} />
+                        <PlatformIcon platform={src.value} icon={src.icon} size={15} className={src.color} />
                         <span className="font-semibold text-sm">{src.label}</span>
                       </div>
                       {!hasData && <span className="text-[11px] text-muted-foreground">нет данных</span>}

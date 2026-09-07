@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
+import PlatformIcon from '@/components/admin/PlatformIcon';
 import { YANDEX_CALLS_API_URL, YandexCallsData } from './types';
 
 function formatDuration(seconds: number): string {
@@ -68,7 +69,7 @@ export default function YandexCallsTab() {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h2 className="font-bold text-lg flex items-center gap-2">
-              <Icon name="Home" size={20} className="text-red-600" />
+              <PlatformIcon platform="yandex_realty" icon="Home" size={20} className="text-red-600" />
               Звонки Яндекс.Недвижимость
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">

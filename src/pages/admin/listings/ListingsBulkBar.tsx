@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
+import PlatformIcon from '@/components/admin/PlatformIcon';
 import { useBulkPresentations } from '@/hooks/useBulkPresentations';
 
 interface Broker { id: number; name: string; role: string }
@@ -222,7 +223,7 @@ export default function ListingsBulkBar({ selected, onDeselect, onBulk, onBulkDe
                 ].map(({ platform, label, icon }) => (
                   <div key={platform} className="flex items-center justify-between px-3 py-1.5 border-b border-border/30 last:border-0">
                     <div className="flex items-center gap-1.5 text-[11px]">
-                      <Icon name={icon} size={12} className="text-muted-foreground" />
+                      <PlatformIcon platform={platform} icon={icon} size={12} className="text-muted-foreground" />
                       {label}
                     </div>
                     <div className="flex gap-1">

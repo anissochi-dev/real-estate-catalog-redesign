@@ -5,6 +5,7 @@ import { useAdminPolling, ROLE_DEFAULTS } from './useAdminPolling';
 import AdminSidebar from './AdminSidebar';
 import AdminHeader from './AdminHeader';
 import AdminIdleWarning from './AdminIdleWarning';
+import { PlatformLogosProvider } from '@/contexts/PlatformLogosContext';
 
 export type AdminSection = 'dashboard' | 'listings' | 'leads' | 'network-tenants' | 'pages' | 'settings' | 'ai-logs'
   | 'crm-owners' | 'crm-kanban' | 'crm-gamification' | 'crm-checks' | 'crm-payments'
@@ -105,6 +106,7 @@ export default function AdminLayout({ section, setSection, onExit, onExitToPath,
   return (
     <ExitToPathCtx.Provider value={onExitToPath}>
     <AdminPermsCtx.Provider value={{ rolePerms, role: user.role }}>
+    <PlatformLogosProvider>
     <div className="min-h-screen bg-muted/30 flex">
       <AdminSidebar
         sortedItems={sortedItems}
@@ -147,6 +149,7 @@ export default function AdminLayout({ section, setSection, onExit, onExitToPath,
         />
       )}
     </div>
+    </PlatformLogosProvider>
     </AdminPermsCtx.Provider>
     </ExitToPathCtx.Provider>
   );

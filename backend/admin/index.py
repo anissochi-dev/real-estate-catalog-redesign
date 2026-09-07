@@ -246,7 +246,7 @@ STAFF_ROLES = ('admin', 'director', 'manager', 'editor', 'broker', 'office_manag
 # Ресурсы доступные всем сотрудникам на чтение
 STAFF_READ_RESOURCES = (
     'stats', 'listing_comments', 'listing_history', 'listing_stats',
-    'listing_documents', 'ai_inpaint', 'matching',
+    'listing_documents', 'ai_inpaint', 'matching', 'platform_logos',
 )
 
 # Встроенные права по умолчанию (fallback если role_permissions не настроены в БД)
@@ -268,6 +268,7 @@ FALLBACK_PERMS = {
         'crm-payments':     ['read', 'create', 'update'],
         'export_requests':  ['read', 'update'],
         'partners':         ['read', 'create', 'update', 'delete'],
+        'ad_platform_keys': ['read', 'update'],
     },
     'manager': {
         'stats':            ['read'],
@@ -435,6 +436,8 @@ def handler(event, context):
                 return _listing_comments(cur, conn, method, rid, event, user)
             if resource == 'ad_platform_keys':
                 return _ad_platform_keys(cur, conn, method, rid, event, user)
+            if resource == 'platform_logos':
+                return _platform_logos(cur)
             if resource == 'notifications':
                 return _notifications(cur, conn, method, action, event, user)
             if resource == 'webmaster_check':
@@ -6078,13 +6081,24 @@ def _ai_inpaint(cur, event, user):
         'мы интегрируем его, как только он выйдет, либо подключим стороннее inpaint-решение по запросу.')
 
 
+def _platform_logos(cur):
+    """Публичный для всех сотрудников список логотипов площадок (без ключей/секретов) —
+    используется для отображения лого вместо иконки-заглушки везде, где показывается
+    площадка (бейджи в списке объектов, кабинеты, прайс размещения и т.д.)."""
+    cur.execute(f"SELECT platform, logo_url FROM {SCHEMA}.ad_platform_keys WHERE logo_url IS NOT NULL")
+    return _ok({'logos': {r['platform']: r['logo_url'] for r in cur.fetchall()}})
+
+
 def _ad_platform_keys(cur, conn, method, rid, event, user):
+    # Полные данные (включая api_key/api_secret) — только admin/director.
+    # Логотипы площадок для остальных сотрудников отдаются отдельным облегчённым
+    # ресурсом platform_logos (см. _platform_logos), без секретных ключей.
     if user['role'] not in ('admin', 'director'):
         return _err(403, 'Нет прав')
 
     if method == 'GET':
         cur.execute(
-            f"SELECT id, platform, api_key, api_secret, extra, is_active, updated_at "
+            f"SELECT id, platform, api_key, api_secret, extra, is_active, logo_url, updated_at "
             f"FROM {SCHEMA}.ad_platform_keys ORDER BY platform ASC"
         )
         rows = []
@@ -6104,6 +6118,8 @@ def _ad_platform_keys(cur, conn, method, rid, event, user):
             fields.append(f"api_secret = {_str_or_null(body.get('api_secret'), 2000)}")
         if 'is_active' in body:
             fields.append(f"is_active = {_bool(body.get('is_active'))}")
+        if 'logo_url' in body:
+            fields.append(f"logo_url = {_str_or_null(body.get('logo_url'), 500)}")
         if 'extra' in body:
             import json as _json
             extra_json = _json.dumps(body.get('extra') or {}).replace("'", "''")

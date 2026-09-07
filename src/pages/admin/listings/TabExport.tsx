@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { adminApi } from '@/lib/adminApi';
 import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
+import PlatformIcon from '@/components/admin/PlatformIcon';
 import { Listing } from './types';
 import { Spinner } from './TabOverview';
 
@@ -82,7 +83,7 @@ export function TabExport({ listing }: { listing: Listing }) {
             <span className="text-sm text-muted-foreground">Нигде</span>
           ) : alreadyExported.map(p => (
             <span key={p.id} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-medium">
-              <Icon name={p.icon} size={12} /> {p.label}
+              <PlatformIcon platform={p.id} icon={p.icon} size={12} /> {p.label}
             </span>
           ))}
         </div>
@@ -114,7 +115,7 @@ export function TabExport({ listing }: { listing: Listing }) {
                       }`}
                     >
                       <Icon name={isSelected ? 'CheckSquare' : 'Square'} size={15} className="shrink-0" />
-                      <Icon name={p.icon} size={14} className="shrink-0" />
+                      <PlatformIcon platform={p.id} icon={p.icon} size={14} className="shrink-0" />
                       {p.label}
                       {already && <span className="ml-auto text-[10px]">уже есть</span>}
                     </button>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
+import PlatformIcon from '@/components/admin/PlatformIcon';
 import { AVITO_API_URL, AvitoData, AVITO_STATUS_STYLES } from './types';
 
 const DEAL_LABELS: Record<string, string> = { sale: 'Продажа', rent: 'Аренда' };
@@ -64,7 +65,7 @@ export default function AvitoCabinetTab() {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h2 className="font-bold text-lg flex items-center gap-2">
-              <Icon name="ShoppingBag" size={20} className="text-emerald-600" />
+              <PlatformIcon platform="avito" icon="ShoppingBag" size={20} className="text-emerald-600" />
               Кабинет Авито
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
+import PlatformIcon from '@/components/admin/PlatformIcon';
 
 const PLATFORMS = [
   { id: 'cian', label: 'Циан', icon: 'Building2' },
@@ -90,7 +91,7 @@ export default function ExportPricingTab() {
         {PLATFORMS.map(p => (
           <div key={p.id}>
             <label className="flex items-center gap-2 text-sm font-semibold mb-2">
-              <Icon name={p.icon} size={14} className="text-brand-blue" />
+              <PlatformIcon platform={p.id} icon={p.icon} size={14} className="text-brand-blue" />
               {p.label}
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

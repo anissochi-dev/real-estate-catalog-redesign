@@ -438,10 +438,15 @@ export const adminApi = {
   deleteListingComment: (commentId: number) =>
     req(`${ADMIN_URL}?resource=listing_comments&id=${commentId}`, { method: 'DELETE', body: '{}' }),
 
-  // ad platform keys (integration hub)
+  // ad platform keys (integration hub) — только admin/director (содержит секреты)
   getAdPlatformKeys: () => req(`${ADMIN_URL}?resource=ad_platform_keys`),
   updateAdPlatformKey: (id: number, data: Record<string, unknown>) =>
     req(`${ADMIN_URL}?resource=ad_platform_keys&id=${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  // логотипы площадок (без ключей) — доступно всем сотрудникам, для отображения лого
+  // вместо иконки-заглушки везде, где показывается площадка
+  getPlatformLogos: (): Promise<{ logos: Record<string, string> }> =>
+    req(`${ADMIN_URL}?resource=platform_logos`),
 
   // role permissions
   getRolePermissions: () => req(`${ADMIN_URL}?resource=role_permissions`),

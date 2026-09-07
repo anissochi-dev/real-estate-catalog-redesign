@@ -7,6 +7,7 @@ import XmlImportCard from './xml-feeds/XmlImportCard';
 import XmlMarketFeedCard from './xml-feeds/XmlMarketFeedCard';
 import XmlVkFeedCard from './xml-feeds/XmlVkFeedCard';
 import XmlFeedEditModal from './xml-feeds/XmlFeedEditModal';
+import XmlPlatformLogosCard from './xml-feeds/XmlPlatformLogosCard';
 
 export default function XmlFeedsAdmin() {
   const [items, setItems] = useState<F[]>([]);
@@ -59,6 +60,8 @@ export default function XmlFeedsAdmin() {
 
   return (
     <div className="space-y-4">
+      <XmlPlatformLogosCard />
+
       <XmlFeedsListCard
         items={items}
         search={search}

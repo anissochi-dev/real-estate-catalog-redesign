@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
+import PlatformIcon from '@/components/admin/PlatformIcon';
 
 interface PlatformKey {
   id: number;
@@ -142,8 +143,8 @@ export default function AdPlatformsTab() {
           return (
             <div key={p.id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${p.is_active ? 'border-border' : 'border-border opacity-70'}`}>
               <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center border ${meta.color}`}>
-                  <Icon name={meta.icon} size={18} />
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center border overflow-hidden ${meta.color}`}>
+                  <PlatformIcon platform={p.platform} icon={meta.icon} size={18} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
