@@ -246,10 +246,14 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_ca
         where.append("export_avito = TRUE")
     elif fmt == 'cian':
         where.append("export_cian = TRUE")
+    elif fmt == 'youla':
+        # Юла — отдельная платная площадка со своим независимым флагом на объекте
+        # (как у Я/А/Ц), формат XML использует ту же yandex-схему.
+        where.append("export_youla = TRUE")
     elif fmt == 'other':
         # Площадки группы «Разное» (realtymag, rucountry и т.п.) — универсальные бесплатные
         # каталоги без API. Один общий флаг «Р» на объекте включает выгрузку сразу во ВСЕ
-        # такие площадки одновременно (в отличие от Я/А/Ц, у каждой из которых свой флаг).
+        # такие площадки одновременно (в отличие от Я/А/Ц/Ю, у каждой из которых свой флаг).
         where.append("export_other = TRUE")
     elif fmt in ('market', 'market_vk'):
         # YML-фиды товаров (Яндекс.Маркет, VK Товары) — используют тот же флаг, что и
@@ -299,6 +303,11 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_ca
         return _build_avito(listings, company)
     if fmt == 'cian':
         return _build_cian(listings, company)
+    if fmt == 'youla':
+        # Юла — формат совпадает с Яндекс.Недвижимостью (та же XML-схема принимается).
+        cur.execute(f"SELECT name, region FROM {SCHEMA}.cities WHERE region IS NOT NULL")
+        city_region_map = {r['name']: r['region'] for r in cur.fetchall()}
+        return _build_yandex(listings, company, feed_slug, use_jpg_photos, city_region_map)
     if fmt == 'other':
         # Площадки «Разное» без собственного формата — используем универсальную
         # yandex-схему (её принимает большинство каталогов недвижимости).

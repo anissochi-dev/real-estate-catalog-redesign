@@ -8,6 +8,7 @@ const PLATFORMS = [
   { id: 'domclick', label: 'ДомКлик', icon: 'MousePointer' },
   { id: 'yandex', label: 'Яндекс.Недвижимость', icon: 'Home' },
   { id: 'avito', label: 'Авито', icon: 'ShoppingBag' },
+  { id: 'youla', label: 'Юла', icon: 'ShoppingCart' },
 ];
 
 const DEAL_TYPES = [

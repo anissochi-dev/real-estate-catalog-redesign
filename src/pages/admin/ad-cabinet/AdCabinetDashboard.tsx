@@ -11,7 +11,7 @@ const PLATFORM_META: Record<string, { label: string; icon: string; color: string
   avito: { label: 'Авито', icon: 'ShoppingBag', color: 'bg-emerald-100 text-emerald-600' },
   yandex_realty: { label: 'Яндекс.Недвижимость', icon: 'Home', color: 'bg-red-100 text-red-600' },
   domclick: { label: 'ДомКлик', icon: 'MousePointer', color: 'bg-blue-100 text-blue-600' },
-  youla: { label: 'Юла', icon: 'Circle', color: 'bg-violet-100 text-violet-600' },
+  youla: { label: 'Юла', icon: 'ShoppingCart', color: 'bg-violet-100 text-violet-600' },
 };
 
 const PLATFORM_ORDER = ['cian', 'avito', 'yandex_realty', 'domclick', 'youla'];

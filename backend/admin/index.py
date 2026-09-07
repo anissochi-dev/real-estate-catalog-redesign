@@ -2765,7 +2765,7 @@ def _listings(cur, conn, method, rid, event, user):
             "l.image, l.images, l.tags, l.is_hot, l.is_new, l.is_exclusive, l.is_urgent, "
             "l.status, l.owner_name, l.owner_phone, l.owner_phone2, l.price_unit, "
             "l.purpose, l.condition, l.parking, l.entrance, "
-            "l.export_yandex, l.export_avito, l.export_cian, l.export_other, "
+            "l.export_yandex, l.export_avito, l.export_cian, l.export_other, l.export_youla, "
             "l.tenant_name, l.monthly_rent, l.yearly_rent, "
             "l.finishing, l.ceiling_height, l.electricity_kw, l.utilities, l.road_line, "
             "l.author_id, l.broker_id, l.is_visible, l.rooms, l.broker_commission, "
@@ -2867,7 +2867,7 @@ def _listings(cur, conn, method, rid, event, user):
 
         sql = (
             f"INSERT INTO {SCHEMA}.listings "
-            f"(title, description, ai_notes, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, export_other, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, broker_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, has_shop_windows, owner_phone_contact_id, owner_phone2_contact_id, owner_extra_contacts, cadastral_number, egrn_objects, image_thumb, rent_index_pct, prepay_months, deposit_amount, utilities_included, passenger_lifts, cargo_lifts, driveway_type, office_layout, additional_categories, has_vat, is_auction, is_share_sale, is_assignment, rented_out, contract_end_date, building_type, rent_holidays, avito_utilities_included, deposit_months, avito_ad_id, last_edited_at, last_edited_by) VALUES ("
+            f"(title, description, ai_notes, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, export_other, export_youla, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, broker_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, has_shop_windows, owner_phone_contact_id, owner_phone2_contact_id, owner_extra_contacts, cadastral_number, egrn_objects, image_thumb, rent_index_pct, prepay_months, deposit_amount, utilities_included, passenger_lifts, cargo_lifts, driveway_type, office_layout, additional_categories, has_vat, is_auction, is_share_sale, is_assignment, rented_out, contract_end_date, building_type, rent_holidays, avito_utilities_included, deposit_months, avito_ad_id, last_edited_at, last_edited_by) VALUES ("
             f"{_str_or_null(body.get('title'), 255)}, {_str_or_null(body.get('description'), 5000)}, "
             f"{_str_or_null(body.get('ai_notes'), 2000)}, "
             f"{_str_or_null(body.get('category'), 50)}, {_str_or_null(body.get('deal'), 20)}, "
@@ -2890,7 +2890,7 @@ def _listings(cur, conn, method, rid, event, user):
             f"{_str_or_null(body.get('video_url'), 500)}, {_str_or_null(body.get('video_type'), 20)}, "
             f"{_bool(body.get('use_watermark', True))}, {_bool(body.get('export_yandex'))}, "
             f"{_bool(body.get('export_avito'))}, {_bool(body.get('export_cian'))}, "
-            f"{_bool(body.get('export_other', True))}, "
+            f"{_bool(body.get('export_other', True))}, {_bool(body.get('export_youla'))}, "
             f"{_str_or_null(body.get('tenant_name'), 200)}, "
             f"{_num_or_null(body.get('monthly_rent'))}, {_num_or_null(body.get('yearly_rent'))}, "
             f"{_str_or_null(body.get('finishing'), 100)}, "
@@ -2980,7 +2980,7 @@ def _listings(cur, conn, method, rid, event, user):
             'prepay_months', 'deposit_amount', 'utilities_included',
             'passenger_lifts', 'cargo_lifts', 'driveway_type', 'has_shop_windows', 'office_layout',
             'is_hot', 'is_new', 'is_exclusive', 'is_urgent', 'is_visible',
-            'use_watermark', 'export_yandex', 'export_avito', 'export_cian', 'export_other',
+            'use_watermark', 'export_yandex', 'export_avito', 'export_cian', 'export_other', 'export_youla',
             'broker_commission', 'broker_id', 'lat', 'lng', 'image_thumb',
             'additional_categories', 'has_vat', 'is_auction', 'is_share_sale',
             'is_assignment', 'rented_out', 'contract_end_date',
@@ -3054,7 +3054,7 @@ def _listings(cur, conn, method, rid, event, user):
         for f in ('monthly_rent', 'yearly_rent', 'ceiling_height', 'electricity_kw', 'land_area', 'min_area', 'rent_index_pct', 'deposit_amount'):
             if f in body:
                 fields.append(f"{f} = {_num_or_null(body.get(f))}")
-        for f in ('use_watermark', 'export_yandex', 'export_avito', 'export_cian', 'export_other'):
+        for f in ('use_watermark', 'export_yandex', 'export_avito', 'export_cian', 'export_other', 'export_youla'):
             if f in body:
                 fields.append(f"{f} = {_bool(body.get(f))}")
         for f in ('lat', 'lng'):
@@ -3157,7 +3157,7 @@ def _listings(cur, conn, method, rid, event, user):
             ).start()
         # Пересобираем XML-фиды сразу, если изменилось что-то, влияющее на площадки:
         # галочки экспорта, цена/единица цены, площадь, статус или видимость объекта
-        if any(k in body for k in ('export_yandex', 'export_avito', 'export_cian', 'export_other',
+        if any(k in body for k in ('export_yandex', 'export_avito', 'export_cian', 'export_other', 'export_youla',
                                     'status', 'is_visible', 'price', 'price_unit', 'area')):
             _trigger_feeds_regen()
         return _ok({'success': True})
@@ -4048,12 +4048,14 @@ _EXPORT_PLATFORM_COLUMN = {
     'domclick': 'export_domclick',
     'yandex': 'export_yandex',
     'avito': 'export_avito',
+    'youla': 'export_youla',
 }
 _EXPORT_PLATFORM_LABEL = {
     'cian': 'Циан',
     'domclick': 'ДомКлик',
     'yandex': 'Яндекс.Недвижимость',
     'avito': 'Авито',
+    'youla': 'Юла',
 }
 
 
@@ -5449,7 +5451,7 @@ def _listings_bulk(cur, conn, event, user):
         platform = str(val.get('platform') or '').lower()
         enabled = bool(val.get('enabled', True))
         enabled_sql = 'TRUE' if enabled else 'FALSE'
-        allowed = {'yandex': 'export_yandex', 'avito': 'export_avito', 'cian': 'export_cian', 'other': 'export_other'}
+        allowed = {'yandex': 'export_yandex', 'avito': 'export_avito', 'cian': 'export_cian', 'other': 'export_other', 'youla': 'export_youla'}
         if platform == 'all':
             fields_sql = ', '.join(f"{col} = {enabled_sql}" for col in allowed.values())
         elif platform in allowed:

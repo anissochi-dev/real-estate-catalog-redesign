@@ -50,7 +50,7 @@ const PLATFORM_META: Record<string, { label: string; icon: string; color: string
   },
   youla: {
     label: 'Юла',
-    icon: 'Circle',
+    icon: 'ShoppingCart',
     color: 'text-violet-600 bg-violet-50 border-violet-200',
     fields: [
       { key: 'api_key', label: 'Client ID' },

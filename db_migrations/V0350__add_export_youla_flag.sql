@@ -1,0 +1,2 @@
+ALTER TABLE t_p71821556_real_estate_catalog_.listings ADD COLUMN IF NOT EXISTS export_youla BOOLEAN NOT NULL DEFAULT FALSE;
+COMMENT ON COLUMN t_p71821556_real_estate_catalog_.listings.export_youla IS 'Выгружать объект в XML фид Юла (формат совпадает с Яндекс.Недвижимость, отдельный независимый флаг)';

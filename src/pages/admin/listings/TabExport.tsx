@@ -11,6 +11,7 @@ const PLATFORMS: { id: string; label: string; icon: string }[] = [
   { id: 'domclick', label: 'ДомКлик', icon: 'Home' },
   { id: 'yandex', label: 'Яндекс.Недвижимость', icon: 'MapPin' },
   { id: 'avito', label: 'Авито', icon: 'ShoppingBag' },
+  { id: 'youla', label: 'Юла', icon: 'ShoppingCart' },
 ];
 
 interface ExportRequestRow {

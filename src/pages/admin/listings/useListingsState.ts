@@ -249,6 +249,7 @@ export function useListingsState() {
         export_avito: false,
         export_cian: false,
         export_other: true,
+        export_youla: false,
         slug: null,
         created_at: undefined as unknown as string,
         updated_at: undefined as unknown as string,

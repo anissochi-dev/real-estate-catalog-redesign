@@ -1,7 +1,7 @@
 import { Listing } from './types';
 
 export default function ListingsTableExportBadges({ it }: { it: Listing }) {
-  if (!it.export_yandex && !it.export_avito && !it.export_cian && !it.export_other) return null;
+  if (!it.export_yandex && !it.export_avito && !it.export_cian && !it.export_youla && !it.export_other) return null;
   return (
     <div className="flex items-center gap-1">
       {it.export_yandex && (
@@ -15,6 +15,10 @@ export default function ListingsTableExportBadges({ it }: { it: Listing }) {
       {it.export_cian && (
         <span title="ЦИАН"
           className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200">Ц</span>
+      )}
+      {it.export_youla && (
+        <span title="Юла"
+          className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">Ю</span>
       )}
       {it.export_other && (
         <span title="Разное (доп. площадки)"

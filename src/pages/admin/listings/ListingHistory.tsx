@@ -62,7 +62,7 @@ const FIELD_LABELS: Record<string, string> = {
   is_hot: 'Горячее', is_new: 'Новинка', is_exclusive: 'Эксклюзив',
   is_urgent: 'Срочно', is_visible: 'Видимость на сайте',
   use_watermark: 'Водяной знак', export_yandex: 'Яндекс',
-  export_avito: 'Авито', export_cian: 'ЦИАН', tenant_name: 'Арендатор',
+  export_avito: 'Авито', export_cian: 'ЦИАН', export_youla: 'Юла', tenant_name: 'Арендатор',
   monthly_rent: 'Аренда в мес.', yearly_rent: 'Аренда в год', finishing: 'Отделка',
   ceiling_height: 'Высота потолков', electricity_kw: 'Электричество',
   utilities: 'Коммунальные', road_line: 'Линия', payback: 'Окупаемость', profit: 'Прибыль',
@@ -88,6 +88,7 @@ const FIELD_FMT: Record<string, (v: unknown) => string> = {
   export_yandex: v => v ? 'Вкл' : 'Выкл',
   export_avito: v => v ? 'Вкл' : 'Выкл',
   export_cian: v => v ? 'Вкл' : 'Выкл',
+  export_youla: v => v ? 'Вкл' : 'Выкл',
   status: v => ({ active: 'Активен', archived: 'В архиве', draft: 'Черновик', moderation: 'На модерации' } as Record<string, string>)[String(v)] || String(v ?? '—'),
   deal: v => ({ sale: 'Продажа', rent: 'Аренда', business: 'Бизнес' } as Record<string, string>)[String(v)] || String(v ?? '—'),
 };

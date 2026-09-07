@@ -8,6 +8,7 @@ const PLATFORM_LABEL: Record<string, string> = {
   domclick: 'ДомКлик',
   yandex: 'Яндекс.Недвижимость',
   avito: 'Авито',
+  youla: 'Юла',
 };
 
 // Формат совпадает с ExportPricingTab: "cian: описание||domclick: описание||..."
