@@ -54,8 +54,10 @@ const PLATFORM_META: Record<string, { label: string; icon: string; color: string
     icon: 'ShoppingCart',
     color: 'text-violet-600 bg-violet-50 border-violet-200',
     fields: [
-      { key: 'api_key', label: 'Client ID' },
-      { key: 'api_secret', label: 'Client Secret', secret: true },
+      { key: 'api_key', label: 'Токен (Bearer)', hint: 'Выдаётся партнёрской поддержкой Юлы вместе с ID профиля', secret: true },
+      { key: 'extra.owner_id', label: 'ID профиля (owner_id)', hint: 'ID вашего профиля/пользователя в Юле' },
+      { key: 'extra.category_id', label: 'ID категории', hint: 'Категория «Коммерческая недвижимость» — уточните у поддержки Юлы (GET /feeds/categories)' },
+      { key: 'extra.subcategory_id', label: 'ID подкатегории', hint: 'Подкатегория под тип объекта — уточните у поддержки Юлы' },
     ],
   },
 };

@@ -2,6 +2,7 @@ export const CIAN_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be
 export const YANDEX_CALLS_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=yandex_stats';
 export const AVITO_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=avito_stats';
 export const OTHER_PLATFORMS_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=other_platforms';
+export const YOULA_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=youla_stats';
 
 export interface OtherPlatformListing {
   id: number;
@@ -206,4 +207,47 @@ export interface AvitoData {
   last_report?: AvitoReportLog | null;
   items?: AvitoItemRow[];
   synced_now?: boolean;
+}
+
+export interface YoulaLastSync {
+  synced_at?: string;
+  owner_id?: string | null;
+  owner_name?: string | null;
+  error?: string | null;
+}
+
+export interface YoulaItemRow {
+  listing_id: number;
+  youla_id: string | null;
+  url: string | null;
+  is_published: boolean | null;
+  is_archived: boolean | null;
+  is_blocked: boolean | null;
+  block_type_text: string | null;
+  views: number | null;
+  shows: number | null;
+  contacts: number | null;
+  unique_contacts: number | null;
+  error: string | null;
+  checked_at: string | null;
+  title: string | null;
+  city: string | null;
+  category: string | null;
+  deal: string | null;
+}
+
+export interface YoulaSyncResult {
+  sync?: { owner_id?: string; owner_name?: string; error?: string };
+  publish?: { created: number; updated: number; archived: number; failed: number; total: number; error?: string };
+  stats?: { updated: number; requested: number; skipped?: boolean; reason?: string };
+}
+
+export interface YoulaData {
+  ok: boolean;
+  connected: boolean;
+  last_sync: YoulaLastSync | null;
+  items?: YoulaItemRow[];
+  synced_now?: boolean;
+  sync_result?: YoulaSyncResult;
+  error?: string;
 }

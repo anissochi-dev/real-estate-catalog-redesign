@@ -2723,6 +2723,280 @@ def _avito_handle(cur, conn, params):
     return _json(_avito_read_from_db(cur))
 
 
+# ── Юла: Partner API (https://partner-api.youla.ru) ──────────────────────────
+# В отличие от Авито/ЦИАН, у Юлы нет отдельного XML-фида как основного канала —
+# публикация объектов идёт напрямую через REST (создание/обновление/архивация
+# объявлений), что даёт мгновенный статус по каждому объекту вместо общего
+# результата по фиду раз в N минут. Авторизация — простой Bearer-токен
+# (api_key в ad_platform_keys), без client_secret. ID профиля (owner_id) и
+# ID категории/подкатегории коммерческой недвижимости хранятся в extra —
+# их выдают в личном кабинете партнёра/поддержке Юлы под конкретный аккаунт.
+
+YOULA_BASE = 'https://partner-api.youla.ru'
+YOULA_SYNC_INTERVAL_HOURS = 1
+
+
+def _youla_request(method, path, token, payload=None, params=None):
+    """Универсальный запрос к Youla Partner API (GET/POST/PUT/DELETE), Bearer-токен."""
+    url = f'{YOULA_BASE}{path}'
+    if params:
+        url += ('&' if '?' in url else '?') + urllib.parse.urlencode(params)
+    data = json.dumps(payload).encode() if payload is not None else None
+    req = urllib.request.Request(url, data=data, method=method, headers={
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json',
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=25) as r:
+            body = r.read().decode()
+            return (json.loads(body) if body else {}), None
+    except urllib.error.HTTPError as e:
+        try:
+            err_body = json.loads(e.read().decode())
+        except Exception:
+            err_body = {}
+        return None, f'HTTP {e.code}: {err_body}'
+    except Exception as e:
+        return None, str(e)
+
+
+def _youla_sync(cur, conn, token, owner_id):
+    """Проверяет токен+owner_id Юлы: запрашивает данные профиля пользователя."""
+    if not owner_id:
+        cur.execute(f"INSERT INTO {SCHEMA}.youla_sync_log (synced_at, error) VALUES (NOW(), %s)",
+                    ('Не указан ID профиля (owner_id) в настройках площадки',))
+        conn.commit()
+        return {'error': 'Не указан ID профиля (owner_id) в настройках площадки'}
+
+    user, err = _youla_request('GET', f'/users/{owner_id}', token)
+    if err or not user:
+        cur.execute(f"INSERT INTO {SCHEMA}.youla_sync_log (synced_at, error) VALUES (NOW(), %s)",
+                    (err[:500] if err else 'Пустой ответ',))
+        conn.commit()
+        return {'error': err or 'Не удалось получить данные профиля'}
+
+    data = user.get('data') or user
+    owner_name = data.get('name') or f"{data.get('first_name', '')} {data.get('last_name', '')}".strip()
+    cur.execute(f"""
+        INSERT INTO {SCHEMA}.youla_sync_log (synced_at, owner_id, owner_name, raw_response)
+        VALUES (NOW(), %s, %s, %s)
+    """, (owner_id, owner_name, json.dumps(data)))
+    conn.commit()
+    return {'owner_id': owner_id, 'owner_name': owner_name}
+
+
+YOULA_PRICE_MAX_M2 = 200_000  # см. _total_price — та же защита от кривых данных price_unit
+
+
+def _youla_build_product(l, owner_id, category_id, subcategory_id):
+    """Формирует тело CreateProduct/UpdateProduct для объекта listing."""
+    price_val = _total_price(l)
+    imgs = _split_images(l)[:10]
+    addr_parts = [p for p in [l.get('city') or 'Краснодар', l.get('district'), l.get('address')] if p]
+    body = {
+        'name': _clean_title(l.get('title') or '')[:100] or 'Коммерческая недвижимость',
+        'description': (l.get('description') or '')[:5000],
+        'price': int(price_val) * 100,  # Юла хранит цену в копейках
+        'category': int(category_id),
+        'subcategory': int(subcategory_id),
+        'owner_id': owner_id,
+        'images': imgs if imgs else [],
+        'location': {
+            'description': ', '.join(addr_parts),
+            **({'latitude': float(l['lat']), 'longitude': float(l['lng'])} if l.get('lat') and l.get('lng') else {}),
+        },
+    }
+    return body
+
+
+def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory_id):
+    """Публикует/обновляет на Юле все объекты с export_youla=TRUE, архивирует те,
+    у кого флаг сняли (но объявление на Юле уже было). Пишет статус каждого
+    объекта в youla_item_status и youla_ad_id обратно в listings."""
+    if not category_id or not subcategory_id:
+        return {'error': 'Не указаны ID категории/подкатегории Юлы в настройках площадки'}
+
+    cur.execute(f"""
+        SELECT id, title, description, price, price_unit, area, city, district, address, lat, lng, images, image, youla_ad_id
+        FROM {SCHEMA}.listings
+        WHERE export_youla = TRUE AND status = 'active' AND (is_visible IS NULL OR is_visible = TRUE)
+    """)
+    listings = [dict(r) for r in cur.fetchall()]
+
+    created, updated, failed = 0, 0, 0
+    for l in listings:
+        body = _youla_build_product(l, owner_id, category_id, subcategory_id)
+        if l.get('youla_ad_id'):
+            data, err = _youla_request('PUT', f"/products/{l['youla_ad_id']}", token, body)
+        else:
+            data, err = _youla_request('POST', '/products', token, body)
+
+        if err or not data:
+            failed += 1
+            cur.execute(f"""
+                INSERT INTO {SCHEMA}.youla_item_status (listing_id, error, checked_at)
+                VALUES (%s, %s, NOW())
+                ON CONFLICT (listing_id) DO UPDATE SET error = EXCLUDED.error, checked_at = NOW()
+            """, (l['id'], (err or 'Пустой ответ')[:500]))
+            continue
+
+        product = data.get('data') or data
+        youla_id = product.get('id')
+        if youla_id and not l.get('youla_ad_id'):
+            cur.execute(f"UPDATE {SCHEMA}.listings SET youla_ad_id = %s WHERE id = %s", (youla_id, l['id']))
+            # Новое объявление — публикуем явно (по умолчанию продукт создаётся в черновике)
+            _youla_request('POST', '/products/publish', token, {'product_ids': [youla_id]}, params={'user_id': owner_id})
+            created += 1
+        else:
+            updated += 1
+
+        cur.execute(f"""
+            INSERT INTO {SCHEMA}.youla_item_status
+                (listing_id, youla_id, url, is_published, is_archived, is_blocked, block_type_text, error, checked_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, NULL, NOW())
+            ON CONFLICT (listing_id) DO UPDATE SET
+                youla_id = EXCLUDED.youla_id, url = EXCLUDED.url, is_published = EXCLUDED.is_published,
+                is_archived = EXCLUDED.is_archived, is_blocked = EXCLUDED.is_blocked,
+                block_type_text = EXCLUDED.block_type_text, error = NULL, checked_at = NOW()
+        """, (l['id'], youla_id, product.get('url'), product.get('is_published'),
+              product.get('is_archived'), product.get('is_blocked'), product.get('block_type_text')))
+
+    # Объекты, у которых флаг export_youla сняли, но объявление на Юле осталось — архивируем.
+    cur.execute(f"""
+        SELECT s.listing_id, s.youla_id FROM {SCHEMA}.youla_item_status s
+        JOIN {SCHEMA}.listings l ON l.id = s.listing_id
+        WHERE s.youla_id IS NOT NULL AND s.is_archived IS NOT TRUE
+          AND (l.export_youla = FALSE OR l.status != 'active')
+    """)
+    to_archive = [dict(r) for r in cur.fetchall()]
+    archived = 0
+    for row in to_archive:
+        _, err = _youla_request('POST', '/products/archive', token,
+                                 {'product_ids': [row['youla_id']]}, params={'user_id': owner_id})
+        if not err:
+            cur.execute(f"UPDATE {SCHEMA}.youla_item_status SET is_archived = TRUE, checked_at = NOW() WHERE listing_id = %s",
+                        (row['listing_id'],))
+            archived += 1
+    conn.commit()
+
+    return {'created': created, 'updated': updated, 'archived': archived, 'failed': failed, 'total': len(listings)}
+
+
+def _youla_fetch_stats(cur, conn, token):
+    """Запрашивает статистику показов/просмотров/контактов за 30 дней по каждому
+    объявлению, у которого уже есть youla_id."""
+    cur.execute(f"SELECT listing_id, youla_id FROM {SCHEMA}.youla_item_status WHERE youla_id IS NOT NULL")
+    rows = [dict(r) for r in cur.fetchall()]
+    if not rows:
+        return {'skipped': True, 'reason': 'Нет объявлений с youla_id'}
+
+    date_to = datetime.now(timezone.utc)
+    date_from = date_to - timedelta(days=30)
+    updated = 0
+    for row in rows:
+        data, err = _youla_request('GET', f"/products/{row['youla_id']}/statistic", token, params={
+            'from': date_from.strftime('%Y-%m-%dT%H:%M:%SZ'),
+            'to': date_to.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        })
+        if err or not data:
+            continue
+        stat = data.get('data') or data
+        cur.execute(f"""
+            UPDATE {SCHEMA}.youla_item_status
+            SET shows = %s, views = %s, contacts = %s, unique_contacts = %s, checked_at = NOW()
+            WHERE listing_id = %s
+        """, (stat.get('shows'), stat.get('views'), stat.get('contacts'), stat.get('unique_contacts'), row['listing_id']))
+        updated += 1
+    conn.commit()
+    return {'updated': updated, 'requested': len(rows)}
+
+
+def _youla_read_from_db(cur):
+    """Читает последнюю проверку подключения + статусы/статистику объявлений из БД."""
+    cur.execute(f"SELECT * FROM {SCHEMA}.youla_sync_log ORDER BY synced_at DESC LIMIT 1")
+    last = cur.fetchone()
+    if not last:
+        return {'ok': True, 'connected': False, 'last_sync': None, 'items': []}
+    last = dict(last)
+    last['synced_at'] = last['synced_at'].isoformat() if last.get('synced_at') else None
+    last.pop('raw_response', None)
+
+    cur.execute(f"""
+        SELECT s.listing_id, s.youla_id, s.url, s.is_published, s.is_archived, s.is_blocked,
+               s.block_type_text, s.views, s.shows, s.contacts, s.unique_contacts, s.error, s.checked_at,
+               l.title, l.city, l.category, l.deal
+        FROM {SCHEMA}.youla_item_status s
+        JOIN {SCHEMA}.listings l ON l.id = s.listing_id
+        ORDER BY s.checked_at DESC
+    """)
+    items = []
+    for r in cur.fetchall():
+        d = dict(r)
+        d['checked_at'] = d['checked_at'].isoformat() if d.get('checked_at') else None
+        items.append(d)
+
+    return {
+        'ok': True,
+        'connected': bool(last.get('owner_id')) and not last.get('error'),
+        'last_sync': last,
+        'items': items,
+    }
+
+
+def _youla_full_sync(cur, conn, token, owner_id, category_id, subcategory_id):
+    """Полная синхронизация: проверка токена → публикация/архивация объектов → статистика."""
+    sync_result = _youla_sync(cur, conn, token, owner_id)
+    if sync_result.get('error'):
+        return {'sync': sync_result}
+    publish_result = _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory_id)
+    stats_result = _youla_fetch_stats(cur, conn, token)
+    return {'sync': sync_result, 'publish': publish_result, 'stats': stats_result}
+
+
+def _youla_handle(cur, conn, params):
+    """Обрабатывает action=youla_stats|youla_sync|youla_cron: проверка подключения,
+    публикация/архивация объектов по флагу export_youla, статистика показов/контактов."""
+    action = params.get('action', '')
+    force_sync = params.get('sync') == '1'
+
+    cur.execute(f"SELECT api_key, extra, is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = 'youla' LIMIT 1")
+    row = cur.fetchone()
+    token = (row.get('api_key') or '').strip() if row else ''
+    extra = (row.get('extra') or {}) if row else {}
+    is_active = bool(row.get('is_active')) if row else False
+    owner_id = str(extra.get('owner_id') or '').strip()
+    category_id = str(extra.get('category_id') or '').strip()
+    subcategory_id = str(extra.get('subcategory_id') or '').strip()
+
+    if not token or not owner_id:
+        return _json({'error': 'Юла не настроена: заполните Токен и ID профиля в Настройках → Интеграции → Площадки'}, 400)
+
+    if action == 'youla_cron' or force_sync:
+        if action == 'youla_cron':
+            if not is_active:
+                return _json({'ok': True, 'skipped': True, 'reason': 'Интеграция выключена'})
+            cur.execute(f"SELECT synced_at FROM {SCHEMA}.youla_sync_log ORDER BY synced_at DESC LIMIT 1")
+            last = cur.fetchone()
+            if last and last['synced_at']:
+                elapsed = (datetime.now(last['synced_at'].tzinfo) - last['synced_at']).total_seconds() / 3600
+                if elapsed < YOULA_SYNC_INTERVAL_HOURS:
+                    return _json({'ok': True, 'skipped': True, 'reason': f'Последняя синхронизация {round(elapsed, 1)}ч назад'})
+
+        full_result = _youla_full_sync(cur, conn, token, owner_id, category_id, subcategory_id)
+        data = _youla_read_from_db(cur)
+        return _json({**data, 'synced_now': True, 'sync_result': full_result})
+
+    cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.youla_sync_log")
+    never_synced = cur.fetchone()['c'] == 0
+
+    if never_synced:
+        full_result = _youla_full_sync(cur, conn, token, owner_id, category_id, subcategory_id)
+        data = _youla_read_from_db(cur)
+        return _json({**data, 'synced_now': True, 'sync_result': full_result})
+
+    return _json(_youla_read_from_db(cur))
+
+
 def handler(event, context):
     method = event.get('httpMethod', 'GET')
     params = event.get('queryStringParameters') or {}
@@ -2766,12 +3040,18 @@ def handler(event, context):
                 avito_result = None
                 if row and row.get('is_active'):
                     avito_result = _avito_handle(cur, conn, {'action': 'avito_cron'})
+                cur.execute(f"SELECT is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = 'youla' LIMIT 1")
+                row = cur.fetchone()
+                youla_result = None
+                if row and row.get('is_active'):
+                    youla_result = _youla_handle(cur, conn, {'action': 'youla_cron'})
                 return _json({
                     'ok': True, 'results': results,
                     'feed_bump': bump_result,
                     'cian': json.loads(cian_result['body']) if cian_result else None,
                     'yandex': json.loads(yandex_result['body']) if yandex_result else None,
                     'avito': json.loads(avito_result['body']) if avito_result else None,
+                    'youla': json.loads(youla_result['body']) if youla_result else None,
                 })
 
             if method == 'GET' and params.get('action') == 'generate_static':
@@ -2812,6 +3092,10 @@ def handler(event, context):
             if method == 'GET' and params.get('action') in ('avito_stats', 'avito_sync', 'avito_cron'):
                 # Проверка подключения и баланс кошелька кабинета Авито (Core API).
                 return _avito_handle(cur, conn, params)
+
+            if method == 'GET' and params.get('action') in ('youla_stats', 'youla_sync', 'youla_cron'):
+                # Проверка подключения, публикация/архивация объектов и статистика Юлы (Partner API).
+                return _youla_handle(cur, conn, params)
 
             if method == 'GET' and params.get('action') == 'other_platforms':
                 # Вкладка «Разное»: список площадок формата 'other' (realtymag, rucountry и т.п.)

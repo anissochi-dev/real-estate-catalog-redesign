@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import PlatformIcon from '@/components/admin/PlatformIcon';
-import { AVITO_API_URL, AvitoData, CIAN_API_URL, CianData, OTHER_PLATFORMS_API_URL, OtherPlatformRow, PlatformCard, SERVICE_TYPE_LABELS, YANDEX_CALLS_API_URL, YandexCallsData } from './types';
+import { AVITO_API_URL, AvitoData, CIAN_API_URL, CianData, OTHER_PLATFORMS_API_URL, OtherPlatformRow, PlatformCard, SERVICE_TYPE_LABELS, YANDEX_CALLS_API_URL, YandexCallsData, YOULA_API_URL, YoulaData } from './types';
 
 interface Props {
   onOpenPlatform: (key: string) => void;
@@ -123,6 +123,7 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
   const [cian, setCian] = useState<CianData | null>(null);
   const [yandex, setYandex] = useState<YandexCallsData | null>(null);
   const [avito, setAvito] = useState<AvitoData | null>(null);
+  const [youla, setYoula] = useState<YoulaData | null>(null);
   const [otherPlatforms, setOtherPlatforms] = useState<OtherPlatformRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -133,18 +134,22 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
     const cianUrl = sync ? `${CIAN_API_URL}&sync=1` : CIAN_API_URL;
     const yandexUrl = sync ? `${YANDEX_CALLS_API_URL}&sync=1` : YANDEX_CALLS_API_URL;
     const avitoUrl = sync ? `${AVITO_API_URL}&sync=1` : AVITO_API_URL;
+    const youlaUrl = sync ? `${YOULA_API_URL}&sync=1` : YOULA_API_URL;
     Promise.all([
       fetch(cianUrl).then(r => r.json()).catch(() => ({ error: 'network' })),
       fetch(yandexUrl).then(r => r.json()).catch(() => ({ error: 'network' })),
       fetch(avitoUrl).then(r => r.json()).catch(() => ({ error: 'network' })),
       fetch(OTHER_PLATFORMS_API_URL).then(r => r.json()).catch(() => ({ platforms: [] })),
-    ]).then(([cianData, yandexData, avitoData, otherData]) => {
+      fetch(youlaUrl).then(r => r.json()).catch(() => ({ error: 'network' })),
+    ]).then(([cianData, yandexData, avitoData, otherData, youlaData]) => {
       if (cianData.error) { setError(cianData.error); setCian(null); }
       else { setCian(cianData); setError(null); }
       if (!yandexData.error) setYandex(yandexData);
       else setYandex(null);
       if (!avitoData.error) setAvito(avitoData);
       else setAvito(null);
+      if (!youlaData.error) setYoula(youlaData);
+      else setYoula(null);
       setOtherPlatforms(otherData.platforms || []);
     }).finally(() => { setLoading(false); setSyncing(false); });
   };
@@ -186,6 +191,18 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
         offersCount: 0,
         balance: connected ? Number(avito.last_sync?.balance_real || 0) : null,
         status: connected ? 'active' : 'not_connected',
+        services: [],
+      };
+    }
+    if (key === 'youla' && youla) {
+      const connected = youla.connected && !youla.last_sync?.error;
+      const publishedCount = youla.items?.filter(i => i.is_published).length || 0;
+      return {
+        key, label: 'Юла', icon: '', color: '',
+        connected,
+        offersCount: youla.items?.length || 0,
+        balance: null,
+        status: connected ? (publishedCount > 0 ? 'active' : 'paused') : 'not_connected',
         services: [],
       };
     }
