@@ -3,7 +3,7 @@ import { adminApi, aiApi } from '@/lib/adminApi';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
-import { Listing, City, Purpose, LandVri, empty, detectVideoType, splitImages, CATS } from './types';
+import { Listing, City, Purpose, LandVri, empty, detectVideoType, splitImages, CATS, ROAD_LINES } from './types';
 
 function toThumbUrl(src: string): string {
   if (!src || !src.includes('cdn.poehali.dev')) return src;
@@ -452,7 +452,7 @@ export function useListingsState() {
     if (e.electricity_kw) parts.push(`Электричество: ${e.electricity_kw} кВт`);
     if (e.utilities) parts.push(`Коммуникации: ${e.utilities}`);
     if (e.parking) parts.push(`Парковка: ${parkingLabel[e.parking] || e.parking}`);
-    if (e.road_line) parts.push(`Линия дороги: ${e.road_line}`);
+    if (e.road_line) parts.push(`Линия расположения: ${ROAD_LINES.find(r => r[0] === e.road_line)?.[1] || e.road_line}`);
     if (e.purpose) parts.push(`Назначение (направления использования): ${e.purpose}`);
     // Доходность — важно для аренды/готового бизнеса
     if (e.monthly_rent) parts.push(`Доход в месяц: ${e.monthly_rent} ₽`);
