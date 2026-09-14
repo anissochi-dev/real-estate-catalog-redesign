@@ -38,6 +38,9 @@ export interface PlatformCard {
   status: 'active' | 'paused' | 'not_connected';
   services: { label: string; count: number }[];
   callsCount?: number;
+  /** Заполнено, если ключ настроен, но само подключение к площадке не удалось
+   * (например 403 от Youla) — отличаем от «ключ вообще не заполнен». */
+  errorReason?: string | null;
 }
 
 export interface CianCallRow {

@@ -82,7 +82,9 @@ function PlatformCardView({ card, onClick }: { card: PlatformCard; onClick: () =
           )}
         </>
       ) : (
-        <div className="text-xs text-muted-foreground">Ключ API не настроен</div>
+        <div className="text-xs text-muted-foreground truncate" title={card.errorReason || undefined}>
+          {card.errorReason ? `Ошибка подключения: ${card.errorReason}` : 'Ключ API не настроен'}
+        </div>
       )}
       <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit ${statusMeta.cls}`}>
         <Icon name={card.status === 'active' ? 'CheckCircle2' : card.status === 'paused' ? 'PauseCircle' : 'Circle'} size={10} />
@@ -192,6 +194,7 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
         balance: connected ? Number(avito.last_sync?.balance_real || 0) : null,
         status: connected ? 'active' : 'not_connected',
         services: [],
+        errorReason: !connected ? (avito.last_sync?.error || null) : null,
       };
     }
     if (key === 'youla' && youla) {
@@ -204,6 +207,7 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
         balance: null,
         status: connected ? (publishedCount > 0 ? 'active' : 'paused') : 'not_connected',
         services: [],
+        errorReason: !connected ? youla.last_sync?.error : null,
       };
     }
     return {

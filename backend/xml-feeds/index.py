@@ -2957,6 +2957,73 @@ def _youla_full_sync(cur, conn, token, owner_id, category_id, subcategory_id):
     return {'sync': sync_result, 'publish': publish_result, 'stats': stats_result}
 
 
+def _youla_webhook(cur, conn, event):
+    """Приёмник вебхуков Юлы (CloudEvents-формат): тип события — в заголовке Ce-Type,
+    тело — JSON конкретного события. Публичный эндпоинт без авторизации (Юла не
+    поддерживает подпись запроса) — обрабатывает только известные типы, отвечает
+    200 OK на любой валидный JSON, чтобы Юла не ретраила бесконечно.
+    Типы событий: product.block, product.archive, message.incom, user.block, user.unblock."""
+    headers = {k.lower(): v for k, v in (event.get('headers') or {}).items()}
+    event_type = headers.get('ce-type', '')
+    try:
+        body = json.loads(event.get('body') or '{}')
+    except (TypeError, ValueError):
+        return _json({'ok': False, 'error': 'invalid json'}, 200)
+
+    if event_type == 'product.block':
+        product_id = body.get('product_id')
+        block_types = body.get('block_types') or []
+        block_text = '; '.join(bt.get('block_description', '') for bt in block_types if bt.get('block_description'))
+        cur.execute(f"""
+            UPDATE {SCHEMA}.youla_item_status
+            SET is_blocked = TRUE, block_type_text = %s, checked_at = NOW()
+            WHERE youla_id = %s
+        """, (block_text[:2000] or None, product_id))
+        conn.commit()
+        return _json({'ok': True})
+
+    if event_type == 'product.archive':
+        product_id = body.get('product_id')
+        cur.execute(f"""
+            UPDATE {SCHEMA}.youla_item_status
+            SET is_archived = TRUE, checked_at = NOW()
+            WHERE youla_id = %s
+        """, (product_id,))
+        conn.commit()
+        return _json({'ok': True})
+
+    if event_type == 'message.incom':
+        product_id = body.get('product_id')
+        listing_id = None
+        if product_id:
+            cur.execute(f"SELECT listing_id FROM {SCHEMA}.youla_item_status WHERE youla_id = %s", (product_id,))
+            row = cur.fetchone()
+            listing_id = row['listing_id'] if row else None
+        images = body.get('images')
+        cur.execute(f"""
+            INSERT INTO {SCHEMA}.youla_messages
+                (chat_id, product_id, listing_id, sender_id, recipient_id, direction, message, images, created_at)
+            VALUES (%s, %s, %s, %s, %s, 'in', %s, %s, NOW())
+        """, (body.get('chat_id'), product_id, listing_id, body.get('sender_id'), body.get('recipient_id'),
+              body.get('message'), json.dumps(images) if images else None))
+        conn.commit()
+        return _json({'ok': True})
+
+    if event_type in ('user.block', 'user.unblock'):
+        is_blocked = bool(body.get('is_blocked'))
+        block_type = body.get('block_type') or ''
+        error_text = f"Профиль заблокирован на Юле: {block_type}" if is_blocked else None
+        cur.execute(f"""
+            INSERT INTO {SCHEMA}.youla_sync_log (synced_at, owner_id, error)
+            VALUES (NOW(), %s, %s)
+        """, (body.get('user_id'), error_text))
+        conn.commit()
+        return _json({'ok': True})
+
+    # Неизвестный/пустой тип события — отвечаем 200, чтобы Юла не повторяла отправку.
+    return _json({'ok': True, 'skipped': True, 'event_type': event_type})
+
+
 def _youla_handle(cur, conn, params):
     """Обрабатывает action=youla_stats|youla_sync|youla_cron: проверка подключения,
     публикация/архивация объектов по флагу export_youla, статистика показов/контактов."""
@@ -3127,6 +3194,12 @@ def handler(event, context):
                 # Фиды отдаются только готовыми статическими файлами с CDN (см. cdn_url в xml_feeds).
                 # Генерация "на лету" по ?feed=slug удалена — используйте ссылку из админки.
                 return _json({'error': 'Используйте статическую ссылку на файл (cdn_url) из раздела XML фиды в админке'}, 410)
+
+            if method == 'POST' and params.get('action') == 'youla_webhook':
+                # Публичный вебхук Юлы — без авторизации (площадка не поддерживает
+                # подпись запроса). URL для регистрации в поддержке Юлы:
+                # https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=youla_webhook
+                return _youla_webhook(cur, conn, event)
 
             if method == 'POST':
                 headers = event.get('headers') or {}
