@@ -185,7 +185,14 @@
       })();
     </script>
 
-    <!-- Prerender: redirect search bots and social crawlers to server-side HTML -->
+    <!-- Prerender для поисковых ботов и соцсетей — БЕЗ навигации на другой домен.
+         Хостинг (custom domain) не поддерживает серверный rewrite на HTML-ответы
+         (_redirects игнорируется для html Content-Type — только для xml/txt),
+         поэтому раньше использовался window.location.replace() на functions.poehali.dev,
+         что требовало второго HTTP-перехода на чужой домен — ненадёжно для JS-рендерера
+         Яндекса (может не досчитать редирект за один проход).
+         Теперь: синхронный fetch prerender-HTML и подмена <head>+#root ПРЯМО в текущем
+         документе на bmn.su — один URL, один ответ, без перехода. */ -->
     <script>
       (function() {
         var PRERENDER = 'https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff';
@@ -217,7 +224,20 @@
           return;
         }
 
-        window.location.replace(PRERENDER + '?path=' + encodeURIComponent(path));
+        // document.write работает ТОЛЬКО пока документ ещё парсится (скрипт синхронный,
+        // не defer/async) — гарантирует, что бот получит финальный HTML за один проход,
+        // без гонки с последующими скриптами и без видимого мигания у пользователей
+        // (для людей isSearchBot/isSocialBot === false, их этот блок не выполняет).
+        try {
+          var xhr = new XMLHttpRequest();
+          xhr.open('GET', PRERENDER + '?path=' + encodeURIComponent(path), false); // синхронный запрос — допустимо, т.к. это боты, не реальные пользователи
+          xhr.send(null);
+          if (xhr.status >= 200 && xhr.status < 300 && xhr.responseText) {
+            document.open();
+            document.write(xhr.responseText);
+            document.close();
+          }
+        } catch (e) { /* при сетевой ошибке — просто рендерим обычный SPA как раньше */ }
       })();
     </script>
 
