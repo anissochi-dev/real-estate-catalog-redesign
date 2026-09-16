@@ -2432,7 +2432,7 @@ def _auto_district(cur, address: str, city: str = 'Краснодар') -> str:
         method='POST',
     )
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read().decode())
         alts = (data.get('result') or {}).get('alternatives') or []
         text = ((alts[0].get('message') or {}).get('text') or '').strip() if alts else ''
@@ -2544,6 +2544,47 @@ def _notify_phone_subscribers(listing_id: int, body: dict, cur):
         print(f'[phone_sub] notify triggered for listing {listing_id}')
     except Exception as e:
         print(f'[phone_sub] notify error for listing {listing_id}: {e}')
+
+
+def _trigger_post_save_tasks(listing_id: int, body: dict, slug: str, do_faq: bool, do_reindex: bool, do_indexnow: bool, do_prerender: bool, do_notify_subscribers: bool = False):
+    """Единый фоновый поток для ВСЕХ уведомлений/побочных задач после создания или
+    редактирования объекта (FAQ, подписчики, переиндексация ИИ-поиска, IndexNow,
+    прогрев prerender-кэша). Раньше эти вызовы выполнялись синхронно один за другим
+    ПОСЛЕ conn.commit() и вместе могли занимать до ~20 сек (несколько HTTP-запросов
+    с таймаутами 3-4 сек каждый) — из-за этого при неудачном стечении обстоятельств
+    (например, подтормозил один из внешних сервисов) шлюз мог оборвать соединение
+    с 504, хотя объект уже успешно сохранён в БД. Теперь ответ пользователю уходит
+    сразу после commit(), а эти задачи выполняются в фоне на отдельном соединении
+    с БД (тот же паттерн, что и в _trigger_feeds_regen)."""
+    import threading as _threading
+
+    def _run():
+        conn2 = None
+        try:
+            conn2 = psycopg2.connect(os.environ['DATABASE_URL'])
+            with conn2.cursor(cursor_factory=RealDictCursor) as cur2:
+                real_slug = slug
+                if (do_indexnow or do_prerender) and not real_slug:
+                    cur2.execute(f"SELECT slug FROM {SCHEMA}.listings WHERE id = {int(listing_id)} LIMIT 1")
+                    row = cur2.fetchone()
+                    real_slug = (row.get('slug') or '') if row else ''
+                if do_faq:
+                    _trigger_faq_async(listing_id, cur2)
+                if do_notify_subscribers:
+                    _notify_phone_subscribers(listing_id, body, cur2)
+                if do_reindex:
+                    _trigger_reindex_async(listing_id)
+                if do_indexnow and real_slug:
+                    _notify_indexnow(real_slug)
+                if do_prerender and real_slug:
+                    _trigger_prerender_for_listing(listing_id, real_slug)
+        except Exception as e:
+            print(f'[post_save] ошибка фоновых задач для listing {listing_id}: {e}')
+        finally:
+            if conn2:
+                conn2.close()
+
+    _threading.Thread(target=_run, daemon=True).start()
 
 
 _DEAL_RU = {'rent': 'Аренда', 'sale': 'Продажа', 'sale_rent': 'Аренда/Продажа'}
@@ -2950,11 +2991,13 @@ def _listings(cur, conn, method, rid, event, user):
         _auto_seo(cur, new_id)
         _attach_photos_to_listing(cur, new_id, body.get('images', ''), body.get('image', ''))
         conn.commit()
-        _trigger_faq_async(new_id, cur)
-        _notify_phone_subscribers(new_id, body, cur)
-        _trigger_reindex_async(new_id)
-        if (body.get('status') or 'active') == 'active':
-            _notify_indexnow(new_slug)
+        is_active_status = (body.get('status') or 'active') == 'active'
+        # Все уведомления/побочные задачи — в фоне, не блокируя ответ пользователю
+        _trigger_post_save_tasks(
+            new_id, body, new_slug,
+            do_faq=True, do_reindex=True, do_indexnow=is_active_status, do_prerender=False,
+            do_notify_subscribers=True,
+        )
         # Новый объект сразу может попасть в XML-фиды (если статус active и стоят галочки экспорта)
         _trigger_feeds_regen()
         return _ok({'id': new_id, 'success': True, 'slug': new_slug, 'owner_phone_contact_id': owner_pc_id})
@@ -3135,29 +3178,17 @@ def _listings(cur, conn, method, rid, event, user):
         if 'images' in body or 'image' in body:
             _attach_photos_to_listing(cur, int(rid), body.get('images', ''), body.get('image', ''))
         conn.commit()
-        # Перегенерируем FAQ если изменилось описание, название, категория или сделка
-        if any(k in body for k in ('title', 'description', 'category', 'deal', 'price', 'area')):
-            _trigger_faq_async(int(rid), cur)
-        # Обновляем эмбеддинг в ИИ-поиске если изменились характеристики объекта
-        if any(k in body for k in ('title', 'description', 'category', 'deal', 'price', 'area',
-                                    'address', 'district', 'condition', 'ceiling_height',
-                                    'electricity_kw', 'purpose', 'is_visible', 'status')):
-            _trigger_reindex_async(int(rid))
-        # IndexNow + prerender при публикации (статус → active)
-        if body.get('status') == 'active':
-            cur2 = conn.cursor(cursor_factory=RealDictCursor)
-            cur2.execute(f"SELECT slug FROM {SCHEMA}.listings WHERE id = {int(rid)} LIMIT 1")
-            row = cur2.fetchone()
-            cur2.close()
-            listing_slug = dict(row).get('slug') or '' if row else ''
-            if listing_slug:
-                _notify_indexnow(listing_slug)
-            import threading as _threading
-            _threading.Thread(
-                target=_trigger_prerender_for_listing,
-                args=(int(rid), listing_slug),
-                daemon=True
-            ).start()
+        # Все уведомления/побочные задачи — в фоне, не блокируя ответ пользователю
+        do_faq = any(k in body for k in ('title', 'description', 'category', 'deal', 'price', 'area'))
+        do_reindex = any(k in body for k in ('title', 'description', 'category', 'deal', 'price', 'area',
+                                              'address', 'district', 'condition', 'ceiling_height',
+                                              'electricity_kw', 'purpose', 'is_visible', 'status'))
+        is_publishing = body.get('status') == 'active'
+        if do_faq or do_reindex or is_publishing:
+            _trigger_post_save_tasks(
+                int(rid), body, '',
+                do_faq=do_faq, do_reindex=do_reindex, do_indexnow=is_publishing, do_prerender=is_publishing,
+            )
         # Пересобираем XML-фиды сразу, если изменилось что-то, влияющее на площадки:
         # галочки экспорта, цена/единица цены, площадь, статус или видимость объекта
         if any(k in body for k in ('export_yandex', 'export_avito', 'export_cian', 'export_other', 'export_youla',
@@ -3950,10 +3981,11 @@ def _attach_photos_to_listing(cur, listing_id: int, images_str: str, image_str: 
 def _trigger_prerender_for_listing(listing_id: int, slug: str = ''):
     """Прогревает prerender-кэш для страницы объекта сразу после публикации."""
     import urllib.request as _ureq
+    import urllib.parse as _uparse
     PRERENDER_URL = 'https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff'
     path = f'/object/{slug}' if slug else f'/object/id-{listing_id}'
     try:
-        url = f'{PRERENDER_URL}/?path={urllib.parse.quote(path)}'
+        url = f'{PRERENDER_URL}/?path={_uparse.quote(path)}'
         req = _ureq.Request(url, headers={'User-Agent': 'prerender-trigger/1.0'})
         _ureq.urlopen(req, timeout=20)
         print(f'[admin] prerender warmed: {path}')
