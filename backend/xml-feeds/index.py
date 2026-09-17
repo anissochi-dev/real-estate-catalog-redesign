@@ -1130,19 +1130,17 @@ def _build_yandex(listings, company, feed_slug=None, use_jpg_photos=None, city_r
         for img in images:
             out.append(f'<image>{_xml_escape(img)}</image>')
 
-        # Видео — схема video-review Яндекса допускает только два дочерних тега:
-        # youtube-video-review-url и online-show (универсальная ссылка на видео/показ).
-        # rutube-video-review-url в схему не входит и валит проверку — RuTube и любые
-        # прочие ссылки (не YouTube) выгружаем через online-show.
+        # Видео — по документации Яндекса тег video-review поддерживает ссылки как на
+        # YouTube, так и на RuTube, но актуальная XSD-схема их валидатора пока не
+        # содержит rutube-video-review-url (проверка его отклоняет). online-show — это
+        # НЕ поле для ссылки, а флаг «доступен онлайн-показ» (1/0), поэтому ссылку
+        # туда класть нельзя. Пока RuTube не появится в схеме — просто не выгружаем
+        # такое видео (единичные случаи, не критично для карточки объекта).
         video_url = l.get('video_url') or ''
         video_url_lower = video_url.lower()
         if video_url and 'youtu' in video_url_lower:
             out.append('<video-review>')
             out.append(f'<youtube-video-review-url>{_xml_escape(video_url)}</youtube-video-review-url>')
-            out.append('</video-review>')
-        elif video_url:
-            out.append('<video-review>')
-            out.append(f'<online-show>{_xml_escape(video_url)}</online-show>')
             out.append('</video-review>')
 
         # Тип здания
