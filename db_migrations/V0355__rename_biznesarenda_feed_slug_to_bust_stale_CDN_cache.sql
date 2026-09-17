@@ -1,0 +1,1 @@
+UPDATE t_p71821556_real_estate_catalog_.xml_feeds SET slug = 'biznesarenda2', cdn_url = NULL, last_generated_at = NULL WHERE id = 30 AND slug = 'biznesarenda';
