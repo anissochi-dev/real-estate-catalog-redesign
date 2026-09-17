@@ -842,6 +842,29 @@ CONDITION_YANDEX = {
     'shellcore': 'требует ремонта',
 }
 
+# Наше поле condition → тег Яндекса <renovation> (более развёрнутый список,
+# чем <quality> выше — оба тега передаются одновременно, схема это разрешает).
+# Значения строго по документации Яндекса: дизайнерский/евро/с отделкой/
+# требует ремонта/хороший/частичный ремонт/черновая отделка.
+CONDITION_TO_RENOVATION_YANDEX = {
+    'new': 'дизайнерский',
+    'euro': 'евро',
+    'good': 'с отделкой',
+    'cosmetic': 'частичный ремонт',
+    'rough': 'черновая отделка',
+    'shellcore': 'черновая отделка',
+}
+
+# Наше поле entrance (street/yard — «с улицы»/«со двора») → тег Яндекса
+# <entrance-type> (common/separate — «общий»/«отдельный»). Прямого смыслового
+# соответствия нет (это разные признаки), берём ближайшее приближение:
+# отдельный вход со двора чаще означает обособленный вход → separate,
+# вход с улицы чаще общий для здания → common.
+ENTRANCE_TO_YANDEX = {
+    'street': 'common',
+    'yard': 'separate',
+}
+
 # Тип здания (наше поле building_type, справочник BUILDING_TYPES) → тег Яндекса
 # <commercial-building-type>. Точные значения по официальной документации
 # Яндекс.Недвижимости (слова разделены ПРОБЕЛОМ, не подчёркиванием!):
@@ -852,6 +875,7 @@ YANDEX_BUILDING_TYPE_MAP = {
     'business_center': 'business center',
     'shopping_center': 'shopping center',
     'residential': 'residential building',
+    'warehouse': 'warehouse',
 }
 
 # Наше поле purpose (справочник PURPOSE_LIST, значения через |) → тег Яндекса <purpose>.
@@ -878,6 +902,7 @@ _YANDEX_UTILITY_TAG_MAP = {
     'Интернет': 'internet',
     'Вентиляция': 'ventilation',
     'Пожарная сигнализация': 'fire-alarm',
+    'Кондиционирование': 'air-conditioner',
 }
 
 # Значения-исключения, при которых коммуникация считается ОТСУТСТВУЮЩЕЙ,
@@ -1020,9 +1045,13 @@ def _build_yandex(listings, company, feed_slug=None, use_jpg_photos=None, city_r
         out.append(f'<type>{deal}</type>')
         out.append('<category>commercial</category>')
         out.append(f'<commercial-type>{commercial_type}</commercial-type>')
-        # deal-status обязателен только для аренды; для продажи не передаётся
+        # deal-status обязателен только для аренды; для продажи не передаётся.
+        # Читаем реальные данные из property_rights (Права на объект):
+        # sublease → subrent (субаренда), иначе — прямая аренда (значение
+        # по умолчанию для ownership/lease и не заполненного поля).
         if l.get('deal') == 'rent':
-            out.append('<deal-status>direct rent</deal-status>')
+            deal_status = 'subrent' if l.get('property_rights') == 'sublease' else 'direct rent'
+            out.append(f'<deal-status>{deal_status}</deal-status>')
         out.append(f'<creation-date>{creation_date}</creation-date>')
 
         # Адрес, геолокация и метро — всё внутри <location>

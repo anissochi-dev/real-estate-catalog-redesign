@@ -317,6 +317,7 @@ export const ADDITIONAL_CATEGORIES_MAX = 2;
 export const BUILDING_TYPES = [
   ['business_center', 'Бизнес-центр'],
   ['shopping_center', 'Торговый центр'],
+  ['warehouse', 'Складской комплекс'],
   ['admin_building', 'Административное здание'],
   ['residential', 'Жилой дом'],
   ['other', 'Другой'],
