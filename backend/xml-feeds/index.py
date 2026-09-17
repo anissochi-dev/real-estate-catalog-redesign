@@ -250,6 +250,10 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_ca
         # Юла — отдельная платная площадка со своим независимым флагом на объекте
         # (как у Я/А/Ц), формат XML использует ту же yandex-схему.
         where.append("export_youla = TRUE")
+    elif fmt == 'domclick':
+        # ДомКлик — свой независимый флаг на объекте (ручной выбор, как у Авито),
+        # формат XML использует ту же yandex-схему, выгружается от лица агентства.
+        where.append("export_domclick = TRUE")
     elif fmt == 'other':
         # Площадки группы «Разное» (realtymag, rucountry и т.п.) — универсальные бесплатные
         # каталоги без API. Один общий флаг «Р» на объекте включает выгрузку сразу во ВСЕ
@@ -305,6 +309,12 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_ca
         return _build_cian(listings, company)
     if fmt == 'youla':
         # Юла — формат совпадает с Яндекс.Недвижимостью (та же XML-схема принимается).
+        cur.execute(f"SELECT name, region FROM {SCHEMA}.cities WHERE region IS NOT NULL")
+        city_region_map = {r['name']: r['region'] for r in cur.fetchall()}
+        return _build_yandex(listings, company, feed_slug, use_jpg_photos, city_region_map)
+    if fmt == 'domclick':
+        # ДомКлик принимает тот же формат Яндекс.Недвижимости. Выгружаем от лица
+        # агентства (agent_category по умолчанию 'agency') — как основной Яндекс-фид.
         cur.execute(f"SELECT name, region FROM {SCHEMA}.cities WHERE region IS NOT NULL")
         city_region_map = {r['name']: r['region'] for r in cur.fetchall()}
         return _build_yandex(listings, company, feed_slug, use_jpg_photos, city_region_map)

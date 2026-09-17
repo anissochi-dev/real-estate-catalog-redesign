@@ -28,6 +28,7 @@ export const PLATFORMS = [
   ['avito', 'Авито'],
   ['cian', 'ЦИАН'],
   ['youla', 'Юла'],
+  ['domclick', 'ДомКлик'],
   ['other', 'Разное (доп. площадки)'],
 ];
 

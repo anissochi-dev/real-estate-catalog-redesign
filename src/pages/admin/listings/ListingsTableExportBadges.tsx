@@ -19,7 +19,7 @@ function Badge({ platform, letter, title, cls }: { platform: string; letter: str
 }
 
 export default function ListingsTableExportBadges({ it }: { it: Listing }) {
-  if (!it.export_yandex && !it.export_avito && !it.export_cian && !it.export_youla && !it.export_other) return null;
+  if (!it.export_yandex && !it.export_avito && !it.export_cian && !it.export_youla && !it.export_domclick && !it.export_other) return null;
   return (
     <div className="flex items-center gap-1">
       {it.export_yandex && (
@@ -33,6 +33,9 @@ export default function ListingsTableExportBadges({ it }: { it: Listing }) {
       )}
       {it.export_youla && (
         <Badge platform="youla" letter="Ю" title="Юла" cls="bg-purple-50 text-purple-700 border-purple-200" />
+      )}
+      {it.export_domclick && (
+        <Badge platform="domclick" letter="Д" title="ДомКлик" cls="bg-emerald-50 text-emerald-700 border-emerald-200" />
       )}
       {it.export_other && (
         <span title="Разное (доп. площадки)"
