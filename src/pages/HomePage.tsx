@@ -208,6 +208,9 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
         onToggleCompare={onToggleCompare}
       />
 
+      {/* Партнёры */}
+      <HomePartnersSection />
+
       {showLeads && (
         <Suspense fallback={<div className="py-8 bg-muted/20 border-t border-border" style={{minHeight: 200}} />}>
           <ClientLeadsSection limit={settings.home_leads_limit ?? 6} />
@@ -221,9 +224,6 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
           homeNewsLimit={homeNewsLimit}
         />
       )}
-
-      {/* Партнёры */}
-      <HomePartnersSection />
 
       {/* Частые вопросы — FAQ Schema + видимый блок (полезно для AI и поиска) */}
       <SchemaOrg id="faq" schema={makeFaqSchema(faqItems)} />
