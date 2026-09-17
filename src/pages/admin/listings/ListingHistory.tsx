@@ -58,7 +58,7 @@ const FIELD_LABELS: Record<string, string> = {
   status: 'Статус', owner_name: 'Имя собственника', owner_phone: 'Телефон собственника',
   owner_phone2: 'Доп. телефон', purpose: 'Назначение', condition: 'Состояние',
   floor: 'Этаж', total_floors: 'Этажей всего', rooms: 'Комнат',
-  parking: 'Парковка', entrance: 'Вход',
+  parking: 'Парковка', entrance: 'Вход', access_type: 'Доступ', legal_address_provided: 'Юр. адрес предоставляется',
   video_url: 'Видео', video_type: 'Тип видео',
   is_hot: 'Горячее', is_new: 'Новинка', is_exclusive: 'Эксклюзив',
   is_urgent: 'Срочно', is_visible: 'Видимость на сайте',

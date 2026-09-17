@@ -50,6 +50,8 @@ export interface Listing {
   condition: string | null;
   parking: string | null;
   entrance: string | null;
+  access_type?: string | null;
+  legal_address_provided?: boolean | null;
   floor: number | null;
   total_floors: number | null;
   video_url: string | null;
@@ -181,6 +183,7 @@ export const CONDITION_TO_FINISHING: Record<string, string> = {
 };
 export const PARKING = [['none', 'Нет'], ['street', 'На улице'], ['building', 'В здании']];
 export const ENTRANCE = [['street', 'С улицы'], ['yard', 'Со двора']];
+export const ACCESS_TYPES = [['free', 'Свободный'], ['controlled', 'Пропускная система']];
 
 export const PURPOSE_LIST = [
   'Столовая', 'Кафе', 'Ресторан', 'Кофейня', 'Бургерная', 'Бар', 'Паб', 'Пиццерия',

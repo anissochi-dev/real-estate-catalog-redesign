@@ -1023,6 +1023,10 @@ def _build_yandex(listings, company, feed_slug=None, use_jpg_photos=None, city_r
     for l in listings:
         deal_map = {'sale': 'продажа', 'rent': 'аренда', 'business': 'продажа'}
         commercial_type = YANDEX_COMMERCIAL_TYPE_MAP.get(l.get('category'), 'office')
+        # «Юридический адрес» — спецзначение commercial-type, допустимо только
+        # для аренды (по документации Яндекса), заменяет обычный тип объекта.
+        if l.get('deal') == 'rent' and l.get('legal_address_provided'):
+            commercial_type = 'legal address'
         deal = deal_map.get(l.get('deal'), 'продажа')
 
         # creation-date в строгом ISO 8601: YYYY-MM-DDTHH:mm:ss+00:00 (без микросекунд).
@@ -1109,7 +1113,24 @@ def _build_yandex(listings, company, feed_slug=None, use_jpg_photos=None, city_r
         out.append('<currency>RUB</currency>')
         if l.get('deal') == 'rent':
             out.append('<period>month</period>')
+        # Форма налогообложения арендодателя — из чекбокса «НДС» (has_vat).
+        # True → плательщик НДС, False → работает по УСН. Тег только для аренды
+        # (по документации Яндекса), если чекбокс не заполнен — не передаём.
+        if l.get('deal') == 'rent' and l.get('has_vat') is not None:
+            out.append(f'<taxation-form>{"НДС" if l["has_vat"] else "УСН"}</taxation-form>')
         out.append('</price>')
+
+        # Комиссия для клиента — по умолчанию у нас все объекты выгружаются
+        # без комиссии (агентское вознаграждение не входит в стоимость для
+        # арендатора/покупателя на площадке).
+        out.append('<commission>0</commission>')
+
+        # Залог — заполняем реальными данными, если менеджер указал сумму
+        # или количество месяцев залога; иначе передаём «нет». НЕ путать с
+        # торгом — в схеме Яндекса для коммерции тега «торг» не существует.
+        if l.get('deal') == 'rent':
+            has_deposit = bool(l.get('deposit_amount')) or (l.get('deposit_months') and l['deposit_months'] != 'none')
+            out.append(f'<rent-pledge>{"да" if has_deposit else "нет"}</rent-pledge>')
 
         # Площадь
         if l.get('area'):
@@ -1200,6 +1221,29 @@ def _build_yandex(listings, company, feed_slug=None, use_jpg_photos=None, city_r
         utilities_flags = _parse_utilities_for_yandex(l.get('utilities') or '')
         for tag, value in utilities_flags.items():
             out.append(f'<{tag}>{value}</{tag}>')
+
+        # Коммунальные платежи включены в стоимость аренды — общий чекбокс
+        # «Коммуналка включена» (не путать с avito_utilities_included, который
+        # заполняется отдельно только в блоке настроек для Авито).
+        if l.get('deal') == 'rent' and l.get('utilities_included') is not None:
+            out.append(f'<utilities-included>{"true" if l["utilities_included"] else "false"}</utilities-included>')
+
+        # Вход в помещение — приближённый маппинг (см. комментарий у ENTRANCE_TO_YANDEX)
+        entrance_yandex = ENTRANCE_TO_YANDEX.get(l.get('entrance'))
+        if entrance_yandex:
+            out.append(f'<entrance-type>{entrance_yandex}</entrance-type>')
+
+        # Ремонт — более развёрнутый тег, чем <quality> выше, оба передаются одновременно
+        renovation_yandex = CONDITION_TO_RENOVATION_YANDEX.get(l.get('condition'))
+        if renovation_yandex:
+            out.append(f'<renovation>{renovation_yandex}</renovation>')
+
+        # Пропускная система — поле access_type появляется в БД только после
+        # миграции (Этап 2 доработки фида); на старых записях просто отсутствует.
+        if l.get('access_type') == 'controlled':
+            out.append('<access-control-system>true</access-control-system>')
+        elif l.get('access_type') == 'free':
+            out.append('<access-control-system>false</access-control-system>')
 
         # Мебель в помещении
         if l.get('has_furniture'):

@@ -2808,7 +2808,7 @@ def _listings(cur, conn, method, rid, event, user):
             "l.payback, l.profit, l.floor, l.total_floors, l.address, l.district, l.city, "
             "l.image, l.images, l.tags, l.is_hot, l.is_new, l.is_exclusive, l.is_urgent, "
             "l.status, l.owner_name, l.owner_phone, l.owner_phone2, l.price_unit, "
-            "l.purpose, l.condition, l.parking, l.entrance, "
+            "l.purpose, l.condition, l.parking, l.entrance, l.access_type, l.legal_address_provided, "
             "l.export_yandex, l.export_avito, l.export_cian, l.export_other, l.export_youla, l.export_domclick, "
             "l.tenant_name, l.monthly_rent, l.yearly_rent, "
             "l.finishing, l.ceiling_height, l.electricity_kw, l.utilities, l.road_line, "
@@ -2911,7 +2911,7 @@ def _listings(cur, conn, method, rid, event, user):
 
         sql = (
             f"INSERT INTO {SCHEMA}.listings "
-            f"(title, description, ai_notes, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, export_other, export_youla, export_domclick, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, broker_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, has_shop_windows, owner_phone_contact_id, owner_phone2_contact_id, owner_extra_contacts, cadastral_number, egrn_objects, image_thumb, rent_index_pct, prepay_months, deposit_amount, utilities_included, passenger_lifts, cargo_lifts, driveway_type, office_layout, additional_categories, has_vat, is_auction, is_share_sale, is_assignment, rented_out, contract_end_date, building_type, rent_holidays, avito_utilities_included, deposit_months, avito_ad_id, last_edited_at, last_edited_by) VALUES ("
+            f"(title, description, ai_notes, category, deal, price, price_per_m2, area, payback, profit, floor, total_floors, address, district, city, lat, lng, image, images, tags, is_hot, is_new, is_exclusive, is_urgent, status, owner_name, owner_phone, owner_phone2, price_unit, purpose, condition, parking, entrance, access_type, legal_address_provided, video_url, video_type, use_watermark, export_yandex, export_avito, export_cian, export_other, export_youla, export_domclick, tenant_name, monthly_rent, yearly_rent, finishing, ceiling_height, electricity_kw, utilities, road_line, author_id, broker_id, is_visible, rooms, broker_commission, building_class, building_year, property_rights, min_area, land_area, land_status, land_vri, is_apartments, has_furniture, has_equipment, has_shop_windows, owner_phone_contact_id, owner_phone2_contact_id, owner_extra_contacts, cadastral_number, egrn_objects, image_thumb, rent_index_pct, prepay_months, deposit_amount, utilities_included, passenger_lifts, cargo_lifts, driveway_type, office_layout, additional_categories, has_vat, is_auction, is_share_sale, is_assignment, rented_out, contract_end_date, building_type, rent_holidays, avito_utilities_included, deposit_months, avito_ad_id, last_edited_at, last_edited_by) VALUES ("
             f"{_str_or_null(body.get('title'), 255)}, {_str_or_null(body.get('description'), 5000)}, "
             f"{_str_or_null(body.get('ai_notes'), 2000)}, "
             f"{_str_or_null(body.get('category'), 50)}, {_str_or_null(body.get('deal'), 20)}, "
@@ -2931,6 +2931,7 @@ def _listings(cur, conn, method, rid, event, user):
             f"{_str_or_null(body.get('price_unit') or 'total', 10)}, "
             f"{_str_or_null(body.get('purpose'), 500)}, {_str_or_null(body.get('condition'), 50)}, "
             f"{_str_or_null(body.get('parking'), 20)}, {_str_or_null(body.get('entrance'), 20)}, "
+            f"{_str_or_null(body.get('access_type'), 20)}, {_bool(body.get('legal_address_provided'))}, "
             f"{_str_or_null(body.get('video_url'), 500)}, {_str_or_null(body.get('video_type'), 20)}, "
             f"{_bool(body.get('use_watermark', True))}, {_bool(body.get('export_yandex'))}, "
             f"{_bool(body.get('export_avito'))}, {_bool(body.get('export_cian'))}, "
@@ -3021,7 +3022,7 @@ def _listings(cur, conn, method, rid, event, user):
             'area', 'payback', 'profit', 'floor', 'total_floors', 'rooms',
             'address', 'district', 'city', 'image', 'images', 'tags', 'status',
             'owner_name', 'owner_phone', 'owner_phone2', 'price_unit', 'purpose',
-            'condition', 'parking', 'entrance', 'video_url', 'video_type',
+            'condition', 'parking', 'entrance', 'access_type', 'legal_address_provided', 'video_url', 'video_type',
             'tenant_name', 'monthly_rent', 'yearly_rent', 'finishing',
             'ceiling_height', 'electricity_kw', 'utilities', 'road_line',
             'prepay_months', 'deposit_amount', 'utilities_included',
@@ -3080,7 +3081,7 @@ def _listings(cur, conn, method, rid, event, user):
                           ('address', 255), ('district', 100), ('city', 100), ('image', 500),
                           ('images', 5000), ('tags', 1000), ('status', 20),
                           ('owner_name', 150), ('owner_phone', 30), ('owner_phone2', 30), ('price_unit', 10),
-                          ('purpose', 500), ('condition', 50), ('parking', 20), ('entrance', 20),
+                          ('purpose', 500), ('condition', 50), ('parking', 20), ('entrance', 20), ('access_type', 20),
                           ('video_url', 500), ('video_type', 20), ('tenant_name', 200),
                           ('finishing', 100), ('utilities', 500), ('road_line', 50),
                           # Дополнительные поля из вкладки «Дополнительное»
@@ -3110,7 +3111,7 @@ def _listings(cur, conn, method, rid, event, user):
                 fields.append(f"{f} = " + ('NULL' if v is None or v == '' else str(float(v))))
         for f in ('is_hot', 'is_new', 'is_exclusive', 'is_urgent', 'is_visible',
                   'has_furniture', 'has_equipment', 'has_shop_windows', 'is_apartments', 'utilities_included',
-                  'is_auction', 'is_share_sale', 'rent_holidays', 'is_assignment'):
+                  'is_auction', 'is_share_sale', 'rent_holidays', 'is_assignment', 'legal_address_provided'):
             if f in body:
                 fields.append(f"{f} = {_bool(body.get(f))}")
         # Tri-state (да/нет/не указано) — NULL допустим, в отличие от обычных boolean выше

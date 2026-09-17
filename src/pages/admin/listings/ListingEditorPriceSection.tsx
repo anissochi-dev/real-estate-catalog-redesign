@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import Icon from '@/components/ui/icon';
-import { Listing, PARKING, ENTRANCE, perM2 } from './types';
+import { Listing, PARKING, ENTRANCE, ACCESS_TYPES, perM2 } from './types';
 
 function formatPriceDisplay(val: number | string | undefined): string {
   if (!val && val !== 0) return '';
@@ -207,6 +207,16 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
             {ENTRANCE.map(p => <option key={p[0]} value={p[0]}>{p[1]}</option>)}
           </select>
         </div>
+        <div>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+            <span className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0"><Icon name="KeyRound" size={11} className="text-indigo-600" /></span>Доступ
+          </label>
+          <select className="w-full px-3 py-2 border rounded-lg" value={editing.access_type || ''}
+            onChange={e => setEditing({ ...editing, access_type: e.target.value || null })}>
+            <option value="">— Не указано —</option>
+            {ACCESS_TYPES.map(p => <option key={p[0]} value={p[0]}>{p[1]}</option>)}
+          </select>
+        </div>
         <div data-field-error={errors.broker_commission ? 'true' : undefined}>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
             <span className="w-5 h-5 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0"><Icon name="Percent" size={11} className="text-amber-600" /></span>Комиссия брокера *
@@ -253,6 +263,17 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
                   <Icon name="Zap" size={11} className="text-sky-600" />
                 </div>
                 <span className="text-sm">Коммуналка включена</span>
+              </label>
+            </div>
+            <div className="flex items-end pb-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox"
+                  checked={!!editing.legal_address_provided}
+                  onChange={e => setEditing({ ...editing, legal_address_provided: e.target.checked })} />
+                <div className="w-5 h-5 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0">
+                  <Icon name="FileText" size={11} className="text-violet-600" />
+                </div>
+                <span className="text-sm">Юр. адрес предоставляется</span>
               </label>
             </div>
           </div>
