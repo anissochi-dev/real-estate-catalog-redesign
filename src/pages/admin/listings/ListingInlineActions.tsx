@@ -191,12 +191,13 @@ export default function ListingInlineActions({ listingId: _listingId, onBulk, on
               >
                 <div className="px-3 py-2 border-b border-border bg-muted/30 text-[11px] font-semibold">Площадка XML-выгрузки</div>
                 {[
-                  { platform: 'yandex', label: 'Яндекс.Недвижимость', icon: 'Building2' },
-                  { platform: 'avito',  label: 'Авито',               icon: 'ShoppingBag' },
-                  { platform: 'cian',   label: 'ЦИАН',                icon: 'MapPin' },
-                  { platform: 'youla',  label: 'Юла',                 icon: 'ShoppingCart' },
-                  { platform: 'other',  label: 'Разное',              icon: 'LayoutGrid' },
-                  { platform: 'all',    label: 'Все площадки',        icon: 'Globe' },
+                  { platform: 'yandex',   label: 'Яндекс.Недвижимость', icon: 'Building2' },
+                  { platform: 'avito',    label: 'Авито',               icon: 'ShoppingBag' },
+                  { platform: 'cian',     label: 'ЦИАН',                icon: 'MapPin' },
+                  { platform: 'youla',    label: 'Юла',                 icon: 'ShoppingCart' },
+                  { platform: 'domclick', label: 'ДомКлик',             icon: 'MousePointer' },
+                  { platform: 'other',    label: 'Разное',              icon: 'LayoutGrid' },
+                  { platform: 'all',      label: 'Все площадки',        icon: 'Globe' },
                 ].map(({ platform, label, icon }) => (
                   <div key={platform} className="flex items-center justify-between px-3 py-1.5 border-b border-border/30 last:border-0">
                     <div className="flex items-center gap-1.5 text-[11px]">

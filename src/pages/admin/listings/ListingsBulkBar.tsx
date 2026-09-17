@@ -214,12 +214,13 @@ export default function ListingsBulkBar({ selected, onDeselect, onBulk, onBulkDe
               <div className="absolute top-full mt-1 left-0 z-50 w-64 bg-white border border-border rounded-xl shadow-2xl overflow-hidden">
                 <div className="px-3 py-2 border-b border-border bg-muted/30 text-[11px] font-semibold">Площадка XML-выгрузки</div>
                 {[
-                  { platform: 'yandex', label: 'Яндекс.Недвижимость', icon: 'Building2' },
-                  { platform: 'avito',  label: 'Авито',               icon: 'ShoppingBag' },
-                  { platform: 'cian',   label: 'ЦИАН',                icon: 'MapPin' },
-                  { platform: 'youla',  label: 'Юла',                 icon: 'ShoppingCart' },
-                  { platform: 'other',  label: 'Разное',              icon: 'LayoutGrid' },
-                  { platform: 'all',    label: 'Все площадки',        icon: 'Globe' },
+                  { platform: 'yandex',   label: 'Яндекс.Недвижимость', icon: 'Building2' },
+                  { platform: 'avito',    label: 'Авито',               icon: 'ShoppingBag' },
+                  { platform: 'cian',     label: 'ЦИАН',                icon: 'MapPin' },
+                  { platform: 'youla',    label: 'Юла',                 icon: 'ShoppingCart' },
+                  { platform: 'domclick', label: 'ДомКлик',             icon: 'MousePointer' },
+                  { platform: 'other',    label: 'Разное',              icon: 'LayoutGrid' },
+                  { platform: 'all',      label: 'Все площадки',        icon: 'Globe' },
                 ].map(({ platform, label, icon }) => (
                   <div key={platform} className="flex items-center justify-between px-3 py-1.5 border-b border-border/30 last:border-0">
                     <div className="flex items-center gap-1.5 text-[11px]">
