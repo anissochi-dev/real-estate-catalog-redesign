@@ -315,11 +315,14 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_ca
         # 23estate) можно включить индивидуальную особенность через FEED_OVERRIDES,
         # не затрагивая остальные площадки группы «Разное». use_jpg_photos — тот же
         # переключатель, но задаётся пользователем из настроек фида (приоритетнее).
-        # agent_category='private' — для «Разное» объявления выгружаются от лица
+        # agent_category='owner' — для «Разное» объявления выгружаются от лица
         # собственника (а не агентства), в отличие от основного Яндекс-фида.
+        # Значение должно быть строго из допустимого перечня схемы Яндекса
+        # (владелец/owner/агентство/agency/застройщик/developer) — 'private' не входит
+        # в перечень и валится как cvc-enumeration-valid при проверке фида.
         cur.execute(f"SELECT name, region FROM {SCHEMA}.cities WHERE region IS NOT NULL")
         city_region_map = {r['name']: r['region'] for r in cur.fetchall()}
-        return _build_yandex(listings, company, feed_slug, use_jpg_photos, city_region_map, agent_category='private')
+        return _build_yandex(listings, company, feed_slug, use_jpg_photos, city_region_map, agent_category='owner')
     if fmt == 'market':
         return _build_yandex_market(listings, company, market_category_map or {})
     if fmt == 'market_vk':
@@ -1040,7 +1043,7 @@ def _build_yandex(listings, company, feed_slug=None, use_jpg_photos=None, city_r
         # необязательное доп. поле по той же официальной схеме.
         out.append('<sales-agent>')
         out.append(f'<name>{company_name}</name>')
-        if agent_category != 'private':
+        if agent_category != 'owner':
             out.append(f'<organization>{company_name}</organization>')
         if phone:
             out.append(f'<phone>{phone}</phone>')
@@ -1084,10 +1087,11 @@ def _build_yandex(listings, company, feed_slug=None, use_jpg_photos=None, city_r
             if l.get('land_vri'):
                 out.append(f'<permitted-land-use>{_xml_escape(str(l["land_vri"]))}</permitted-land-use>')
 
-        # Этажность
+        # Этажность (floors-total по схеме Яндекса должен быть >= 1 — некорректные
+        # отрицательные/нулевые значения в БД просто не выгружаем, а не шлём как есть)
         if l.get('floor') is not None:
             out.append(f'<floor>{l["floor"]}</floor>')
-        if l.get('total_floors') is not None:
+        if l.get('total_floors') is not None and l['total_floors'] >= 1:
             out.append(f'<floors-total>{l["total_floors"]}</floors-total>')
 
         # Состояние / отделка
@@ -1126,16 +1130,19 @@ def _build_yandex(listings, company, feed_slug=None, use_jpg_photos=None, city_r
         for img in images:
             out.append(f'<image>{_xml_escape(img)}</image>')
 
-        # Видео — YouTube или RuTube
+        # Видео — схема video-review Яндекса допускает только два дочерних тега:
+        # youtube-video-review-url и online-show (универсальная ссылка на видео/показ).
+        # rutube-video-review-url в схему не входит и валит проверку — RuTube и любые
+        # прочие ссылки (не YouTube) выгружаем через online-show.
         video_url = l.get('video_url') or ''
         video_url_lower = video_url.lower()
         if video_url and 'youtu' in video_url_lower:
             out.append('<video-review>')
             out.append(f'<youtube-video-review-url>{_xml_escape(video_url)}</youtube-video-review-url>')
             out.append('</video-review>')
-        elif video_url and 'rutube' in video_url_lower:
+        elif video_url:
             out.append('<video-review>')
-            out.append(f'<rutube-video-review-url>{_xml_escape(video_url)}</rutube-video-review-url>')
+            out.append(f'<online-show>{_xml_escape(video_url)}</online-show>')
             out.append('</video-review>')
 
         # Тип здания
