@@ -46,7 +46,8 @@ const PLATFORM_META: Record<string, { label: string; icon: string; color: string
     icon: 'MousePointer',
     color: 'text-emerald-600 bg-emerald-50 border-emerald-200',
     fields: [
-      { key: 'api_key', label: 'API Key', hint: 'Ключ из личного кабинета Домклик' },
+      { key: 'api_key', label: 'Токен статистики', hint: 'Кабинет объявлений → Статистика → Статистика по API → «Получить токен»', secret: true },
+      { key: 'extra.company_id', label: 'ID компании', hint: 'Идентификатор компании из URL кабинета ДомКлик' },
     ],
   },
   youla: {

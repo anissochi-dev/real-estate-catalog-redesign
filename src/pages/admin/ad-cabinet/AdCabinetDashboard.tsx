@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import PlatformIcon from '@/components/admin/PlatformIcon';
-import { AVITO_API_URL, AvitoData, CIAN_API_URL, CianData, OTHER_PLATFORMS_API_URL, OtherPlatformRow, PlatformCard, SERVICE_TYPE_LABELS, YANDEX_CALLS_API_URL, YandexCallsData, YOULA_API_URL, YoulaData } from './types';
+import { AVITO_API_URL, AvitoData, CIAN_API_URL, CianData, DOMCLICK_API_URL, DomclickData, OTHER_PLATFORMS_API_URL, OtherPlatformRow, PlatformCard, SERVICE_TYPE_LABELS, YANDEX_CALLS_API_URL, YandexCallsData, YOULA_API_URL, YoulaData } from './types';
 
 interface Props {
   onOpenPlatform: (key: string) => void;
@@ -126,6 +126,7 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
   const [yandex, setYandex] = useState<YandexCallsData | null>(null);
   const [avito, setAvito] = useState<AvitoData | null>(null);
   const [youla, setYoula] = useState<YoulaData | null>(null);
+  const [domclick, setDomclick] = useState<DomclickData | null>(null);
   const [otherPlatforms, setOtherPlatforms] = useState<OtherPlatformRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -137,13 +138,15 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
     const yandexUrl = sync ? `${YANDEX_CALLS_API_URL}&sync=1` : YANDEX_CALLS_API_URL;
     const avitoUrl = sync ? `${AVITO_API_URL}&sync=1` : AVITO_API_URL;
     const youlaUrl = sync ? `${YOULA_API_URL}&sync=1` : YOULA_API_URL;
+    const domclickUrl = sync ? `${DOMCLICK_API_URL}&sync=1` : DOMCLICK_API_URL;
     Promise.all([
       fetch(cianUrl).then(r => r.json()).catch(() => ({ error: 'network' })),
       fetch(yandexUrl).then(r => r.json()).catch(() => ({ error: 'network' })),
       fetch(avitoUrl).then(r => r.json()).catch(() => ({ error: 'network' })),
       fetch(OTHER_PLATFORMS_API_URL).then(r => r.json()).catch(() => ({ platforms: [] })),
       fetch(youlaUrl).then(r => r.json()).catch(() => ({ error: 'network' })),
-    ]).then(([cianData, yandexData, avitoData, otherData, youlaData]) => {
+      fetch(domclickUrl).then(r => r.json()).catch(() => ({ error: 'network' })),
+    ]).then(([cianData, yandexData, avitoData, otherData, youlaData, domclickData]) => {
       if (cianData.error) { setError(cianData.error); setCian(null); }
       else { setCian(cianData); setError(null); }
       if (!yandexData.error) setYandex(yandexData);
@@ -152,6 +155,8 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
       else setAvito(null);
       if (!youlaData.error) setYoula(youlaData);
       else setYoula(null);
+      if (!domclickData.error) setDomclick(domclickData);
+      else setDomclick(null);
       setOtherPlatforms(otherData.platforms || []);
     }).finally(() => { setLoading(false); setSyncing(false); });
   };
@@ -208,6 +213,19 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
         status: connected ? (publishedCount > 0 ? 'active' : 'paused') : 'not_connected',
         services: [],
         errorReason: !connected ? youla.last_sync?.error : null,
+      };
+    }
+    if (key === 'domclick' && domclick) {
+      const connected = domclick.connected && !domclick.last_sync?.error;
+      const publishedCount = domclick.items?.filter(i => i.status === 'Опубликовано').length || 0;
+      return {
+        key, label: 'ДомКлик', icon: '', color: '',
+        connected,
+        offersCount: domclick.items?.length || 0,
+        balance: null,
+        status: connected ? (publishedCount > 0 ? 'active' : 'paused') : 'not_connected',
+        services: [],
+        errorReason: !connected ? domclick.last_sync?.error : null,
       };
     }
     return {

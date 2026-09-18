@@ -3,6 +3,7 @@ export const YANDEX_CALLS_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede
 export const AVITO_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=avito_stats';
 export const OTHER_PLATFORMS_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=other_platforms';
 export const YOULA_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=youla_stats';
+export const DOMCLICK_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=domclick_stats';
 
 export interface OtherPlatformListing {
   id: number;
@@ -252,5 +253,70 @@ export interface YoulaData {
   items?: YoulaItemRow[];
   synced_now?: boolean;
   sync_result?: YoulaSyncResult;
+  error?: string;
+}
+
+// ДомКлик отдаёт статус уже готовым русским текстом («Опубликовано», «Черновик» и т.п.),
+// а не числовым кодом, как заявлено в официальной OpenAPI-схеме — сверено с реальным ответом API.
+export const DOMCLICK_STATUS_STYLES: Record<string, string> = {
+  'Опубликовано': 'bg-emerald-100 text-emerald-700',
+  'Черновик': 'bg-gray-100 text-gray-500',
+  'Ошибка': 'bg-red-100 text-red-700',
+  'Заблокировано модератором': 'bg-red-100 text-red-700',
+  'Снято с публикации': 'bg-gray-100 text-gray-500',
+  'На одобрении': 'bg-amber-100 text-amber-700',
+  'Продано': 'bg-blue-100 text-blue-700',
+  'Не размещено из-за лимитов за нарушения': 'bg-red-100 text-red-700',
+  'Ожидает оплаты': 'bg-amber-100 text-amber-700',
+  'Отклонено модератором': 'bg-red-100 text-red-700',
+};
+
+export interface DomclickLastSync {
+  synced_at?: string;
+  offers_count?: number | null;
+  error?: string | null;
+}
+
+export interface DomclickItemRow {
+  offer_id: number;
+  feed_offer_id: string | null;
+  listing_id: number | null;
+  status: string | null;
+  source: string | null;
+  domclick_link: string | null;
+  offer_type: string | null;
+  deal_type: string | null;
+  is_duplicate: boolean | null;
+  moderation_reason: string | null;
+  moderation_comment: string | null;
+  published_dt: string | null;
+  publish_end_dt: string | null;
+  views: number | null;
+  phone_shows: number | null;
+  search_shows: number | null;
+  chats_total: number | null;
+  chats_answered: number | null;
+  chats_unanswered: number | null;
+  favorites: number | null;
+  errors: string | null;
+  checked_at: string | null;
+  title: string | null;
+  city: string | null;
+  category: string | null;
+  deal: string | null;
+}
+
+export interface DomclickSyncResult {
+  offers_count?: number;
+  error?: string;
+}
+
+export interface DomclickData {
+  ok: boolean;
+  connected: boolean;
+  last_sync: DomclickLastSync | null;
+  items?: DomclickItemRow[];
+  synced_now?: boolean;
+  sync_result?: DomclickSyncResult;
   error?: string;
 }

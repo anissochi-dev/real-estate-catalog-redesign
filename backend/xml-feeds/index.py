@@ -33,6 +33,9 @@ YANDEX_REALTY_API_BASE = 'https://api.realty.yandex.net/2.0'
 YANDEX_REALTY_PARTNER_TOKEN = 'public-partner-ak0hmqjjk1thu3eutxy8hd1i56mhprpfbb6575qw'
 YANDEX_REALTY_SYNC_INTERVAL_HOURS = 1
 
+DOMCLICK_STATS_BASE = 'https://public-api.domclick.ru/stats'
+DOMCLICK_SYNC_INTERVAL_HOURS = 1
+
 CONTROL_CHARS_RE = re.compile(r'[\x00-\x08\x0B\x0C\x0E-\x1F]')
 XML_DECL_RE = re.compile(r'^<\?xml[^?]*\?>', re.IGNORECASE)
 CDATA_RE = re.compile(r'<!\[CDATA\[.*?\]\]>', re.DOTALL)
@@ -3351,6 +3354,200 @@ def _youla_handle(cur, conn, params):
     return _json(_youla_read_from_db(cur))
 
 
+# ── DomClick Stats API ──────────────────────────────────────────────────────
+# Официальная документация: https://public-api.domclick.ru/stats/swagger
+# У площадки всего 2 эндпоинта, оба GET, оба read-only (нет публикации объектов
+# через это API — только XML-фид, который у нас уже реализован отдельно):
+#   GET /v1/companies/{company_id}/offers — список объявлений + статистика за всё время
+#   GET /v1/companies/{company_id}/statistic-by-days/{offer_id} — статистика по дням (макс. 90 дней)
+# Сопоставление с объектами сайта — по полю feed_offer_id (это internal-id offer'а
+# в нашем XML-фиде ДомКлик, т.е. l["id"] из _build_yandex — см. company_id/token
+# в ad_platform_keys.extra.company_id и api_key).
+#
+# ВАЖНО: реальный формат ответа отличается от документации в OpenAPI-схеме —
+# площадка оборачивает данные в {"result": ..., "errors": [...], "success": bool},
+# а не отдаёт голый массив/объект напрямую. Поля status/deal_type/source в
+# реальном ответе — уже готовые русские текстовые лейблы («Опубликовано»,
+# «Аренда», «Фид»), а НЕ числовые коды/enum, как заявлено в схеме — сверено
+# напрямую с продовым ответом API, поэтому храним/показываем их как есть,
+# без маппинга по словарю.
+
+
+def _domclick_request(path, token, params=None):
+    """GET-запрос к DomClick Stats API. Токен передаётся query-параметром `token`
+    (не заголовком — так требует документация площадки). Разворачивает обёртку
+    {"result": ..., "success": bool, "errors": [...]}, которую реально отдаёт API.
+    Площадка блокирует запросы со стандартным User-Agent Python (отдаёт HTML-страницу
+    защиты вместо JSON) — подставляем браузерный User-Agent, как для остальных площадок."""
+    url = f'{DOMCLICK_STATS_BASE}{path}'
+    all_params = {'token': token, **(params or {})}
+    url += '?' + urllib.parse.urlencode(all_params, doseq=True)
+    req = urllib.request.Request(url, method='GET', headers={
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=25) as r:
+            body = r.read().decode()
+            data = json.loads(body) if body else {}
+    except urllib.error.HTTPError as e:
+        try:
+            err_body = json.loads(e.read().decode())
+        except Exception:
+            err_body = {}
+        return None, f'HTTP {e.code}: {err_body}'
+    except Exception as e:
+        return None, str(e)
+
+    if isinstance(data, dict) and 'result' in data:
+        if data.get('success') is False:
+            errs = data.get('errors') or []
+            msg = '; '.join(str(e.get('message', e)) for e in errs) if errs else 'Неизвестная ошибка API'
+            return None, msg
+        return data.get('result'), None
+    return data, None
+
+
+def _domclick_sync_offers(cur, conn, token, company_id):
+    """Постранично забирает все объявления компании (эндпоинт /offers) вместе
+    со статистикой (views, phone_shows, search_shows, chats, favorites) и
+    сохраняет в domclick_item_status. Сопоставляет с объектом сайта по
+    feed_offer_id (internal-id из нашего XML-фида ДомКлик == listing.id)."""
+    last_offer_id = 0
+    total = 0
+    while True:
+        data, err = _domclick_request(
+            f'/v1/companies/{company_id}/offers', token,
+            params={'last_offer_id': last_offer_id, 'limit': 1000},
+        )
+        if err:
+            cur.execute(f"INSERT INTO {SCHEMA}.domclick_sync_log (synced_at, error) VALUES (NOW(), %s)", (err[:500],))
+            conn.commit()
+            return {'error': err}
+        offers = data if isinstance(data, list) else []
+        if not offers:
+            break
+
+        for o in offers:
+            statistics = o.get('statistics') or {}
+            moderation = o.get('moderation') or {}
+            feed_offer_id = o.get('feed_offer_id')
+            listing_id = None
+            if feed_offer_id:
+                try:
+                    listing_id = int(feed_offer_id)
+                except (TypeError, ValueError):
+                    listing_id = None
+            cur.execute(f"""
+                INSERT INTO {SCHEMA}.domclick_item_status
+                    (offer_id, feed_offer_id, listing_id, status, source, domclick_link, offer_type, deal_type,
+                     is_duplicate, moderation_reason, moderation_comment, published_dt, publish_end_dt,
+                     views, phone_shows, search_shows, chats_total, chats_answered, chats_unanswered,
+                     favorites, errors, checked_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                ON CONFLICT (offer_id) DO UPDATE SET
+                    feed_offer_id = EXCLUDED.feed_offer_id, listing_id = EXCLUDED.listing_id,
+                    status = EXCLUDED.status, source = EXCLUDED.source, domclick_link = EXCLUDED.domclick_link,
+                    offer_type = EXCLUDED.offer_type, deal_type = EXCLUDED.deal_type,
+                    is_duplicate = EXCLUDED.is_duplicate, moderation_reason = EXCLUDED.moderation_reason,
+                    moderation_comment = EXCLUDED.moderation_comment, published_dt = EXCLUDED.published_dt,
+                    publish_end_dt = EXCLUDED.publish_end_dt, views = EXCLUDED.views,
+                    phone_shows = EXCLUDED.phone_shows, search_shows = EXCLUDED.search_shows,
+                    chats_total = EXCLUDED.chats_total, chats_answered = EXCLUDED.chats_answered,
+                    chats_unanswered = EXCLUDED.chats_unanswered, favorites = EXCLUDED.favorites,
+                    errors = EXCLUDED.errors, checked_at = NOW()
+            """, (
+                o.get('offer_id'), feed_offer_id, listing_id, o.get('status'), o.get('source'),
+                o.get('domclick_link'), o.get('offer_type'), o.get('deal_type'), o.get('is_duplicate'),
+                moderation.get('reason'), moderation.get('comment'), o.get('published_dt'), o.get('publish_end_dt'),
+                statistics.get('views'), statistics.get('phone_shows'), statistics.get('search_shows'),
+                statistics.get('chats_total'), statistics.get('chats_answered'), statistics.get('chats_unanswered'),
+                statistics.get('favorites'),
+                '; '.join(o.get('errors') or []) or None,
+            ))
+            total += 1
+            last_offer_id = o.get('offer_id') or last_offer_id
+
+        if len(offers) < 1000:
+            break
+
+    cur.execute(f"INSERT INTO {SCHEMA}.domclick_sync_log (synced_at, offers_count) VALUES (NOW(), %s)", (total,))
+    conn.commit()
+    return {'offers_count': total}
+
+
+def _domclick_read_from_db(cur):
+    """Читает последнюю синхронизацию + статусы/статистику объявлений из БД."""
+    cur.execute(f"SELECT * FROM {SCHEMA}.domclick_sync_log ORDER BY synced_at DESC LIMIT 1")
+    last = cur.fetchone()
+    if not last:
+        return {'ok': True, 'connected': False, 'last_sync': None, 'items': []}
+    last = dict(last)
+    last['synced_at'] = last['synced_at'].isoformat() if last.get('synced_at') else None
+
+    cur.execute(f"""
+        SELECT s.offer_id, s.feed_offer_id, s.listing_id, s.status, s.source, s.domclick_link,
+               s.offer_type, s.deal_type, s.is_duplicate, s.moderation_reason, s.moderation_comment,
+               s.published_dt, s.publish_end_dt, s.views, s.phone_shows, s.search_shows,
+               s.chats_total, s.chats_answered, s.chats_unanswered, s.favorites, s.errors, s.checked_at,
+               l.title, l.city, l.category, l.deal
+        FROM {SCHEMA}.domclick_item_status s
+        LEFT JOIN {SCHEMA}.listings l ON l.id = s.listing_id
+        ORDER BY s.checked_at DESC
+    """)
+    items = []
+    for r in cur.fetchall():
+        d = dict(r)
+        for k in ('published_dt', 'publish_end_dt', 'checked_at'):
+            if d.get(k):
+                d[k] = d[k].isoformat()
+        items.append(d)
+
+    return {'ok': True, 'connected': not last.get('error'), 'last_sync': last, 'items': items}
+
+
+def _domclick_handle(cur, conn, params):
+    """Обрабатывает action=domclick_stats|domclick_sync|domclick_cron: синхронизация
+    и чтение статистики объявлений компании из DomClick Stats API."""
+    action = params.get('action', '')
+    force_sync = params.get('sync') == '1'
+
+    cur.execute(f"SELECT api_key, extra, is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = 'domclick' LIMIT 1")
+    row = cur.fetchone()
+    token = (row.get('api_key') or '').strip() if row else ''
+    extra = (row.get('extra') or {}) if row else {}
+    is_active = bool(row.get('is_active')) if row else False
+    company_id = str(extra.get('company_id') or '').strip()
+
+    if not token or not company_id:
+        return _json({'error': 'ДомКлик не настроен: заполните Токен и ID компании в Настройках → Интеграции → Площадки'}, 400)
+
+    if action == 'domclick_cron' or force_sync:
+        if action == 'domclick_cron':
+            if not is_active:
+                return _json({'ok': True, 'skipped': True, 'reason': 'Интеграция выключена'})
+            cur.execute(f"SELECT synced_at FROM {SCHEMA}.domclick_sync_log ORDER BY synced_at DESC LIMIT 1")
+            last = cur.fetchone()
+            if last and last['synced_at']:
+                elapsed = (datetime.now(last['synced_at'].tzinfo) - last['synced_at']).total_seconds() / 3600
+                if elapsed < DOMCLICK_SYNC_INTERVAL_HOURS:
+                    return _json({'ok': True, 'skipped': True, 'reason': f'Последняя синхронизация {round(elapsed, 1)}ч назад'})
+
+        sync_result = _domclick_sync_offers(cur, conn, token, company_id)
+        data = _domclick_read_from_db(cur)
+        return _json({**data, 'synced_now': True, 'sync_result': sync_result})
+
+    cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.domclick_sync_log")
+    never_synced = cur.fetchone()['c'] == 0
+
+    if never_synced:
+        sync_result = _domclick_sync_offers(cur, conn, token, company_id)
+        data = _domclick_read_from_db(cur)
+        return _json({**data, 'synced_now': True, 'sync_result': sync_result})
+
+    return _json(_domclick_read_from_db(cur))
+
+
 def handler(event, context):
     method = event.get('httpMethod', 'GET')
     params = event.get('queryStringParameters') or {}
@@ -3399,6 +3596,11 @@ def handler(event, context):
                 youla_result = None
                 if row and row.get('is_active'):
                     youla_result = _youla_handle(cur, conn, {'action': 'youla_cron'})
+                cur.execute(f"SELECT is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = 'domclick' LIMIT 1")
+                row = cur.fetchone()
+                domclick_result = None
+                if row and row.get('is_active'):
+                    domclick_result = _domclick_handle(cur, conn, {'action': 'domclick_cron'})
                 return _json({
                     'ok': True, 'results': results,
                     'feed_bump': bump_result,
@@ -3406,6 +3608,7 @@ def handler(event, context):
                     'yandex': json.loads(yandex_result['body']) if yandex_result else None,
                     'avito': json.loads(avito_result['body']) if avito_result else None,
                     'youla': json.loads(youla_result['body']) if youla_result else None,
+                    'domclick': json.loads(domclick_result['body']) if domclick_result else None,
                 })
 
             if method == 'GET' and params.get('action') == 'generate_static':
@@ -3450,6 +3653,11 @@ def handler(event, context):
             if method == 'GET' and params.get('action') in ('youla_stats', 'youla_sync', 'youla_cron'):
                 # Проверка подключения, публикация/архивация объектов и статистика Юлы (Partner API).
                 return _youla_handle(cur, conn, params)
+
+            if method == 'GET' and params.get('action') in ('domclick_stats', 'domclick_sync', 'domclick_cron'):
+                # Статистика объявлений кабинета ДомКлик (Stats API): просмотры, показы
+                # телефона, показы в поиске, чаты, избранное — по каждому объявлению.
+                return _domclick_handle(cur, conn, params)
 
             if method == 'GET' and params.get('action') == 'other_platforms':
                 # Вкладка «Разное»: список площадок формата 'other' (realtymag, rucountry и т.п.)

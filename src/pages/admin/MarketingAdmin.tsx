@@ -10,6 +10,7 @@ import CianCabinetTab from '@/pages/admin/ad-cabinet/CianCabinetTab';
 import YandexCallsTab from '@/pages/admin/ad-cabinet/YandexCallsTab';
 import AvitoCabinetTab from '@/pages/admin/ad-cabinet/AvitoCabinetTab';
 import YoulaCabinetTab from '@/pages/admin/ad-cabinet/YoulaCabinetTab';
+import DomclickCabinetTab from '@/pages/admin/ad-cabinet/DomclickCabinetTab';
 import OtherPlatformsTab from '@/pages/admin/ad-cabinet/OtherPlatformsTab';
 import ExportPricingTab from '@/pages/admin/marketing/ExportPricingTab';
 
@@ -46,7 +47,7 @@ export default function MarketingAdmin() {
       </div>
 
       {tab === 'ad-cabinet' && (
-        adPlatform === 'cian' || adPlatform === 'yandex_realty' || adPlatform === 'avito' || adPlatform === 'youla' || adPlatform === 'other' ? (
+        adPlatform === 'cian' || adPlatform === 'yandex_realty' || adPlatform === 'avito' || adPlatform === 'youla' || adPlatform === 'domclick' || adPlatform === 'other' ? (
           <div className="space-y-3">
             <button
               onClick={() => setAdPlatform(null)}
@@ -58,6 +59,7 @@ export default function MarketingAdmin() {
               : adPlatform === 'yandex_realty' ? <YandexCallsTab />
               : adPlatform === 'avito' ? <AvitoCabinetTab />
               : adPlatform === 'youla' ? <YoulaCabinetTab />
+              : adPlatform === 'domclick' ? <DomclickCabinetTab />
               : <OtherPlatformsTab />}
           </div>
         ) : (
