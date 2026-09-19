@@ -13,6 +13,7 @@ import re
 import urllib.request
 import urllib.parse
 import urllib.error
+import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
@@ -29,8 +30,6 @@ STATIC_REGEN_MINUTES = 20
 CIAN_BASE = 'https://public-api.cian.ru'
 CIAN_SYNC_INTERVAL_HOURS = 1
 
-YANDEX_REALTY_API_BASE = 'https://api.realty.yandex.net/2.0'
-YANDEX_REALTY_PARTNER_TOKEN = 'public-partner-ak0hmqjjk1thu3eutxy8hd1i56mhprpfbb6575qw'
 YANDEX_REALTY_SYNC_INTERVAL_HOURS = 1
 
 DOMCLICK_STATS_BASE = 'https://public-api.domclick.ru/stats'
@@ -2491,23 +2490,29 @@ def _cian_handle(cur, conn, params):
     return _json(_cian_read_from_db(cur))
 
 
-# ── Яндекс.Недвижимость: синхронизация звонков через Public Partner API ─────
-# https://yandex.ru/support/realty-partner/ru/api-calls — только список звонков.
+# ── Яндекс.Недвижимость: статистика через официальный CRM API ───────────────
+# https://api.realty.yandex.net/2.0/crm — статистика по фиду и объявлениям,
+# доступна по обычному OAuth-токену БЕЗ привязки к рекламному кабинету
+# (в отличие от прежнего publicPartner/calls, который требовал недоступный
+# грант OnCustomer на клиентский аккаунт Директа — оттуда были 120 подряд
+# неудачных синхронизаций с 403 FORBIDDEN).
+# Авторизация — два фиксированных заголовка на каждый запрос:
+#   Authorization: OAuth <токен из ad_platform_keys.api_key>
+#   X-Authorization: Vertis crm-dff153a8ef1a90d3bff5ee378dee416606cf8915 (константа API, одна для всех)
 
-def _yandex_calls_get(oauth_token, client_id, agency_id, date_from, date_to):
-    qs = urllib.parse.urlencode({
-        'clientId': client_id,
-        'agencyId': agency_id,
-        'fromDate': date_from,
-        'toDate': date_to,
-        'pageNum': '0',
-        'pageSize': '500',
-    })
-    url = f'{YANDEX_REALTY_API_BASE}/publicPartner/calls?{qs}'
+YANDEX_CRM_API_BASE = 'https://api.realty.yandex.net/2.0/crm'
+YANDEX_CRM_X_AUTH = 'Vertis crm-dff153a8ef1a90d3bff5ee378dee416606cf8915'
+
+
+def _yandex_crm_get(path, oauth_token, params=None):
+    """GET-запрос к CRM API Яндекс.Недвижимости."""
+    url = f'{YANDEX_CRM_API_BASE}{path}'
+    if params:
+        url += '?' + urllib.parse.urlencode(params, doseq=True)
     req = urllib.request.Request(url, headers={
         'accept': 'application/json',
-        'X-Authorization': f'Vertis {YANDEX_REALTY_PARTNER_TOKEN}',
         'Authorization': f'OAuth {oauth_token}',
+        'X-Authorization': YANDEX_CRM_X_AUTH,
     })
     try:
         with urllib.request.urlopen(req, timeout=20) as r:
@@ -2522,100 +2527,220 @@ def _yandex_calls_get(oauth_token, client_id, agency_id, date_from, date_to):
         return None, str(e)
 
 
-def _yandex_calls_sync(cur, conn, oauth_token, client_id, agency_id):
-    """Синхронизирует звонки Яндекс.Недвижимости за последние 30 дней → БД."""
-    date_to = datetime.now().strftime('%Y-%m-%d')
-    date_from = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+def _yandex_crm_find_feed_id(oauth_token, our_feed_url):
+    """Находит id нашего фида на стороне Яндекса (GET /crm/feeds) по совпадению
+    URL — этот id внутренний для Яндекса и не совпадает с нашим xml_feeds.id,
+    поэтому ищем каждый раз заново, а не храним статично (на случай если
+    Яндекс пересоздаст фид при смене URL)."""
+    data, err = _yandex_crm_get('/feeds', oauth_token)
+    if err:
+        return None, err
+    feeds = (data or {}).get('feeds') or []
+    for f in feeds:
+        if f.get('url') == our_feed_url and f.get('status') != 'DELETED':
+            return f.get('id'), None
+    return None, 'Наш фид (yandex.xml) не найден в списке фидов Яндекса — проверьте, что он подключён в личном кабинете Яндекс.Недвижимости'
 
-    data, err = _yandex_calls_get(oauth_token, client_id, agency_id, date_from, date_to)
+
+def _yandex_crm_fetch_offer_stats(args):
+    """Один запрос статистики по объявлению (GET /offer/{offerId}/stats).
+    Яндекс троттлит эти запросы примерно до 1/сек — параллелизация не помогает,
+    поэтому вызывается последовательно с бюджетом времени в _yandex_crm_sync."""
+    offer_id, oauth_token, date_from, date_to = args
+    stats_data, stats_err = _yandex_crm_get(f'/offer/{offer_id}/stats', oauth_token, {
+        'startTime': date_from.strftime('%Y-%m-%dT%H:%M:%S+00:00'),
+        'endTime': date_to.strftime('%Y-%m-%dT%H:%M:%S+00:00'),
+    })
+    if stats_err:
+        return offer_id, None
+    daily = ((stats_data or {}).get('stats') or {}).get('daily') or []
+    return offer_id, daily
+
+
+def _yandex_crm_sync(cur, conn, oauth_token, our_feed_url):
+    """Синхронизирует статус фида, статус каждого объявления и дневную
+    статистику (показы/звонки) за последние 30 дней через CRM API → БД.
+    Статусы объявлений сохраняются и коммитятся СРАЗУ (быстрый, надёжный шаг) —
+    даже если следующий шаг (статистика по дням) не уложится в таймаут, состояние
+    индексации фида и список объявлений в БД уже не потеряются."""
+    feed_id, err = _yandex_crm_find_feed_id(oauth_token, our_feed_url)
     if err:
         cur.execute(f"""
             INSERT INTO {SCHEMA}.yandex_sync_log (synced_at, calls_count, error)
             VALUES (NOW(), 0, %s)
         """, (err[:500],))
         conn.commit()
-        return {'calls_count': 0, 'error': err}
+        return {'error': err}
 
-    calls = (data or {}).get('calls') or []
-    calls_count = 0
-    for c in calls:
-        obj_name = c.get('objectName') or ''
-        ext_id_match = re.search(r'\b(\d{4,})\b', obj_name)
-        ext_id = int(ext_id_match.group(1)) if ext_id_match else None
+    # Состояние индексации фида: всего/принято/отклонено объявлений
+    state_data, state_err = _yandex_crm_get(f'/feed/{feed_id}/state', oauth_token)
+    state = (state_data or {}).get('state') or {}
+
+    # Список объявлений фида (постранично, до 100 за раз) → сопоставление по internalId
+    offers = []
+    offset = 0
+    while True:
+        page, page_err = _yandex_crm_get('/offers', oauth_token, {'feedId': feed_id, 'offset': offset, 'limit': 100})
+        if page_err:
+            break
+        snippets = ((page or {}).get('listing') or {}).get('snippets') or []
+        offers.extend(s['offer'] for s in snippets if s.get('offer'))
+        total = (((page or {}).get('listing') or {}).get('slicing') or {}).get('total', 0)
+        offset += 100
+        if offset >= total or not snippets:
+            break
+
+    # Шаг 1: статусы объявлений — быстро, сохраняем и коммитим сразу.
+    offer_to_listing = {}
+    for o in offers:
+        internal_id = o.get('internalId')
+        listing_id = None
+        if internal_id:
+            try:
+                listing_id = int(internal_id)
+            except (TypeError, ValueError):
+                listing_id = None
+        offer_id = o.get('id')
+        error_type = None
+        errors = ((o.get('state') or {}).get('errors')) or []
+        if errors:
+            error_type = errors[0].get('type')
+
+        if not listing_id or not offer_id:
+            continue
+        offer_to_listing[offer_id] = listing_id
+
         cur.execute(f"""
-            INSERT INTO {SCHEMA}.yandex_calls
-                (external_id, object_name, incoming_phone, internal_phone, wait_duration, call_duration,
-                 revenue, object_type, campaign_tariff, client_tariff, call_timestamp, synced_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW())
-            ON CONFLICT (call_timestamp, incoming_phone, internal_phone) DO UPDATE SET
-                object_name=EXCLUDED.object_name, wait_duration=EXCLUDED.wait_duration,
-                call_duration=EXCLUDED.call_duration, revenue=EXCLUDED.revenue,
-                object_type=EXCLUDED.object_type, synced_at=NOW()
-        """, (
-            ext_id, obj_name, c.get('incomingPhone'), c.get('internalPhone'),
-            c.get('waitDuration'), c.get('callDuration'), c.get('revenue'),
-            c.get('objectType'), c.get('campaignTariff'), c.get('clientTariff'), c.get('timestamp'),
-        ))
-        calls_count += 1
+            INSERT INTO {SCHEMA}.yandex_offer_status (listing_id, yandex_offer_id, yandex_url, create_time, error_type, checked_at)
+            VALUES (%s,%s,%s,%s,%s, NOW())
+            ON CONFLICT (listing_id) DO UPDATE SET
+                yandex_offer_id=EXCLUDED.yandex_offer_id, yandex_url=EXCLUDED.yandex_url,
+                create_time=EXCLUDED.create_time, error_type=EXCLUDED.error_type, checked_at=NOW()
+        """, (listing_id, offer_id, o.get('url'), o.get('createTime'), error_type))
     conn.commit()
+    print(f'[yandex_crm] step 1 done, offer_to_listing count={len(offer_to_listing)}')
+
+    # Шаг 2: статистика по дням. Яндекс троттлит запросы к /offer/{id}/stats
+    # примерно до 1 в секунду СО СТОРОНЫ САМОГО API — независимо от того, сколько
+    # параллельных потоков открываем мы (проверено: max_workers=10 не ускоряет).
+    # А у платформы жёсткий gateway-таймаут 30с (меньше, чем наш function.json
+    # timeout=60) — значит за один вызов крона нельзя гарантированно успеть более
+    # ~25 объявлений. Решение: обрабатываем с ограничением по времени (бюджет),
+    # коммитим В БД ПОСЛЕ КАЖДОГО объявления (не одним большим commit в конце) —
+    # если бюджет исчерпан, недообработанные объявления просто подтянутся на
+    # следующем тике крона (раз в 20 минут), прогресс уже сохранённых не теряется.
+    SYNC_TIME_BUDGET_SEC = 22
+    start_ts = time.monotonic()
+    date_to = datetime.now()
+    date_from = date_to - timedelta(days=30)
+    stats_synced = 0
+    offers_processed = 0
+    offers_skipped_budget = 0
+    for offer_id, listing_id in offer_to_listing.items():
+        if time.monotonic() - start_ts > SYNC_TIME_BUDGET_SEC:
+            offers_skipped_budget += 1
+            continue
+        _, daily = _yandex_crm_fetch_offer_stats((offer_id, oauth_token, date_from, date_to))
+        offers_processed += 1
+        if not daily:
+            continue
+        for d in daily:
+            try:
+                stat_date = datetime.strptime(d['day'], '%d-%m-%Y').date()
+            except (KeyError, ValueError):
+                continue
+            cur.execute(f"""
+                INSERT INTO {SCHEMA}.yandex_offer_stats (listing_id, yandex_offer_id, stat_date, shows, card_shows, phone_shows, calls, synced_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s, NOW())
+                ON CONFLICT (yandex_offer_id, stat_date) DO UPDATE SET
+                    shows=EXCLUDED.shows, card_shows=EXCLUDED.card_shows,
+                    phone_shows=EXCLUDED.phone_shows, calls=EXCLUDED.calls, synced_at=NOW()
+            """, (listing_id, offer_id, stat_date, d.get('shows', 0), d.get('cardShows', 0), d.get('phoneShows', 0), d.get('calls', 0)))
+            stats_synced += 1
+        conn.commit()
+    print(f'[yandex_crm] step 2 done: processed={offers_processed} skipped_budget={offers_skipped_budget} stats_synced={stats_synced}')
 
     cur.execute(f"""
-        INSERT INTO {SCHEMA}.yandex_sync_log (synced_at, calls_count)
-        VALUES (NOW(), %s)
-    """, (calls_count,))
+        INSERT INTO {SCHEMA}.yandex_sync_log (synced_at, calls_count, yandex_feed_id, offers_total, offers_accepted, offers_declined)
+        VALUES (NOW(), %s, %s, %s, %s, %s)
+    """, (stats_synced, feed_id, state.get('total'), state.get('accepted'), state.get('declined')))
     conn.commit()
 
-    return {'calls_count': calls_count}
+    return {
+        'feed_id': feed_id,
+        'offers_total': state.get('total'),
+        'offers_accepted': state.get('accepted'),
+        'offers_declined': state.get('declined'),
+        'offers_synced': len(offers),
+        'stats_days_synced': stats_synced,
+    }
 
 
-def _yandex_calls_read_from_db(cur):
-    """Читает статистику звонков Яндекс.Недвижимости из БД для фронтенда."""
+def _yandex_crm_read_from_db(cur):
+    """Читает статистику Яндекс.Недвижимости из БД для фронтенда: сводку за
+    30 дней по каждому объекту + статус индексации фида."""
     cur.execute(f"""
-        SELECT c.external_id, c.object_name, c.incoming_phone, c.internal_phone,
-               c.wait_duration, c.call_duration, c.revenue, c.object_type,
-               c.campaign_tariff, c.client_tariff, c.call_timestamp,
-               l.title, l.slug, l.category, l.deal, l.price, l.image
-        FROM {SCHEMA}.yandex_calls c
-        LEFT JOIN {SCHEMA}.listings l ON l.id = c.external_id
-        ORDER BY c.call_timestamp DESC
-        LIMIT 500
+        SELECT s.listing_id, s.yandex_offer_id, s.yandex_url, s.create_time, s.error_type, s.checked_at,
+               l.title, l.slug, l.category, l.deal, l.price, l.image,
+               COALESCE(SUM(st.shows), 0) AS shows, COALESCE(SUM(st.card_shows), 0) AS card_shows,
+               COALESCE(SUM(st.phone_shows), 0) AS phone_shows, COALESCE(SUM(st.calls), 0) AS calls
+        FROM {SCHEMA}.yandex_offer_status s
+        LEFT JOIN {SCHEMA}.listings l ON l.id = s.listing_id
+        LEFT JOIN {SCHEMA}.yandex_offer_stats st ON st.listing_id = s.listing_id AND st.stat_date >= CURRENT_DATE - INTERVAL '30 days'
+        GROUP BY s.listing_id, s.yandex_offer_id, s.yandex_url, s.create_time, s.error_type, s.checked_at,
+                 l.title, l.slug, l.category, l.deal, l.price, l.image
+        ORDER BY shows DESC
     """)
-    calls = [dict(r) for r in cur.fetchall()]
+    offers = []
+    for r in cur.fetchall():
+        d = dict(r)
+        for k in ('create_time', 'checked_at'):
+            if d.get(k):
+                d[k] = d[k].isoformat()
+        offers.append(d)
 
     cur.execute(f"SELECT * FROM {SCHEMA}.yandex_sync_log ORDER BY synced_at DESC LIMIT 1")
-    last_sync = dict(cur.fetchone() or {})
+    last_row = cur.fetchone()
+    last_sync = dict(last_row) if last_row else {}
+    if last_sync.get('synced_at'):
+        last_sync['synced_at'] = last_sync['synced_at'].isoformat()
 
-    total_calls = len(calls)
-    total_duration = sum(c.get('call_duration') or 0 for c in calls)
-    unique_objects = len({c['external_id'] for c in calls if c.get('external_id')})
+    total_shows = sum(o.get('shows') or 0 for o in offers)
+    total_calls = sum(o.get('calls') or 0 for o in offers)
+    with_errors = len([o for o in offers if o.get('error_type')])
 
     return {
         'ok': True,
         'last_sync': last_sync,
         'summary': {
+            'total_shows': total_shows,
             'total_calls': total_calls,
-            'total_duration': total_duration,
-            'unique_objects': unique_objects,
+            'unique_objects': len(offers),
+            'with_errors': with_errors,
         },
-        'calls': calls,
+        'offers': offers,
     }
 
 
 def _yandex_calls_handle(cur, conn, params):
-    """Обрабатывает action=yandex_stats|yandex_cron: читает/синхронизирует звонки Яндекс.Недвижимости."""
+    """Обрабатывает action=yandex_stats|yandex_cron: читает/синхронизирует статистику
+    Яндекс.Недвижимости через официальный CRM API (фид + объявления + показы/звонки)."""
     action = params.get('action', '')
     force_sync = params.get('sync') == '1'
 
-    cur.execute(f"SELECT api_key, extra, is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = 'yandex_realty' LIMIT 1")
+    cur.execute(f"SELECT api_key, is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = 'yandex_realty' LIMIT 1")
     row = cur.fetchone()
     oauth_token = (row.get('api_key') or '').strip() if row else ''
-    extra = row.get('extra') or {} if row else {}
-    client_id = (extra.get('client_id') or '').strip()
-    agency_id = (extra.get('agency_id') or '').strip()
     is_active = bool(row.get('is_active')) if row else False
 
-    if not oauth_token or not client_id:
-        return _json({'error': 'Яндекс.Недвижимость не настроена: заполните OAuth Token и Client ID в Настройках → Интеграции → Площадки'}, 400)
+    if not oauth_token:
+        return _json({'error': 'Яндекс.Недвижимость не настроена: заполните OAuth Token в Настройках → Интеграции → Площадки'}, 400)
+
+    cur.execute(f"SELECT cdn_url FROM {SCHEMA}.xml_feeds WHERE slug = 'yandex' LIMIT 1")
+    feed_row = cur.fetchone()
+    our_feed_url = (feed_row.get('cdn_url') or '') if feed_row else ''
+    if not our_feed_url:
+        return _json({'error': 'Фид yandex.xml не найден в разделе XML фиды'}, 400)
 
     if action == 'yandex_cron' or force_sync:
         if action == 'yandex_cron':
@@ -2628,19 +2753,19 @@ def _yandex_calls_handle(cur, conn, params):
                 if elapsed < YANDEX_REALTY_SYNC_INTERVAL_HOURS:
                     return _json({'ok': True, 'skipped': True, 'reason': f'Последняя синхронизация {round(elapsed, 1)}ч назад'})
 
-        result = _yandex_calls_sync(cur, conn, oauth_token, client_id, agency_id)
-        data = _yandex_calls_read_from_db(cur)
+        result = _yandex_crm_sync(cur, conn, oauth_token, our_feed_url)
+        data = _yandex_crm_read_from_db(cur)
         return _json({**data, 'synced_now': True, 'sync_result': result})
 
     cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.yandex_sync_log")
     never_synced = cur.fetchone()['c'] == 0
 
     if never_synced:
-        result = _yandex_calls_sync(cur, conn, oauth_token, client_id, agency_id)
-        data = _yandex_calls_read_from_db(cur)
+        result = _yandex_crm_sync(cur, conn, oauth_token, our_feed_url)
+        data = _yandex_crm_read_from_db(cur)
         return _json({**data, 'synced_now': True, 'sync_result': result})
 
-    return _json(_yandex_calls_read_from_db(cur))
+    return _json(_yandex_crm_read_from_db(cur))
 
 
 # ── Авито: проверка подключения + баланс кошелька через api.avito.ru ────────

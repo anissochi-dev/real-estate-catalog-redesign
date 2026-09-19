@@ -3,12 +3,7 @@ import Icon from '@/components/ui/icon';
 import PlatformIcon from '@/components/admin/PlatformIcon';
 import { YANDEX_CALLS_API_URL, YandexCallsData } from './types';
 
-function formatDuration(seconds: number): string {
-  if (!seconds) return '0с';
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return m > 0 ? `${m}м ${s}с` : `${s}с`;
-}
+const DEAL_LABELS: Record<string, string> = { sale: 'Продажа', rent: 'Аренда' };
 
 export default function YandexCallsTab() {
   const [data, setData] = useState<YandexCallsData | null>(null);
@@ -43,7 +38,7 @@ export default function YandexCallsTab() {
   }
 
   if (error) {
-    const isSetup = error.includes('не настроена');
+    const isSetup = error.includes('не настроена') || error.includes('не найден');
     return (
       <div className="bg-white rounded-xl border border-border p-6 flex flex-col items-center gap-3 text-center">
         <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
@@ -61,7 +56,8 @@ export default function YandexCallsTab() {
   }
 
   if (!data) return null;
-  const { summary, calls, last_sync } = data;
+  const { summary, offers, last_sync } = data;
+  const syncError = last_sync?.error;
 
   return (
     <div className="space-y-4">
@@ -70,7 +66,7 @@ export default function YandexCallsTab() {
           <div>
             <h2 className="font-bold text-lg flex items-center gap-2">
               <PlatformIcon platform="yandex_realty" icon="Home" size={20} className="text-red-600" />
-              Звонки Яндекс.Недвижимость
+              Яндекс.Недвижимость
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">
               {last_sync?.synced_at ? `Обновлено ${new Date(last_sync.synced_at).toLocaleString('ru')}` : 'Ещё не синхронизировано'}
@@ -87,69 +83,108 @@ export default function YandexCallsTab() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <div className="bg-white rounded-xl border border-border p-3">
-          <div className="text-xl font-bold">{fmt(summary.total_calls)}</div>
-          <div className="text-xs text-muted-foreground">Звонков за 30 дней</div>
+      {syncError ? (
+        <div className="bg-white rounded-xl border border-border p-6 flex flex-col items-center gap-3 text-center">
+          <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+            <Icon name="AlertCircle" size={24} className="text-red-500" />
+          </div>
+          <div className="font-semibold text-foreground">Не удалось подключиться</div>
+          <div className="text-sm text-muted-foreground max-w-sm">{syncError}</div>
         </div>
-        <div className="bg-white rounded-xl border border-border p-3">
-          <div className="text-xl font-bold">{formatDuration(summary.total_duration)}</div>
-          <div className="text-xs text-muted-foreground">Общая длительность</div>
-        </div>
-        <div className="bg-white rounded-xl border border-border p-3">
-          <div className="text-xl font-bold">{fmt(summary.unique_objects)}</div>
-          <div className="text-xs text-muted-foreground">Объектов со звонками</div>
-        </div>
-      </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="bg-white rounded-xl border border-border p-3">
+              <div className="text-xl font-bold">{fmt(last_sync?.offers_accepted ?? 0)}</div>
+              <div className="text-xs text-muted-foreground">Принято из {fmt(last_sync?.offers_total ?? 0)}</div>
+            </div>
+            <div className="bg-white rounded-xl border border-border p-3">
+              <div className="text-xl font-bold">{fmt(summary.total_shows)}</div>
+              <div className="text-xs text-muted-foreground">Показов за 30 дней</div>
+            </div>
+            <div className="bg-white rounded-xl border border-border p-3">
+              <div className="text-xl font-bold">{fmt(summary.total_calls)}</div>
+              <div className="text-xs text-muted-foreground">Звонков за 30 дней</div>
+            </div>
+            <div className="bg-white rounded-xl border border-border p-3">
+              <div className="text-xl font-bold">{fmt(summary.unique_objects)}</div>
+              <div className="text-xs text-muted-foreground">Объектов в фиде</div>
+            </div>
+            <div className="bg-white rounded-xl border border-border p-3">
+              <div className={`text-xl font-bold ${summary.with_errors > 0 ? 'text-red-600' : ''}`}>{fmt(summary.with_errors)}</div>
+              <div className="text-xs text-muted-foreground">С ошибками индексации</div>
+            </div>
+          </div>
 
-      {calls.some(c => !c.external_id) && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800 flex items-start gap-2">
-          <Icon name="Info" size={14} className="shrink-0 mt-0.5" />
-          Часть звонков не удалось привязать к объекту сайта — Яндекс не всегда передаёт точный ID в названии объявления.
-        </div>
+          {!!last_sync?.offers_declined && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800 flex items-start gap-2">
+              <Icon name="Info" size={14} className="shrink-0 mt-0.5" />
+              {last_sync.offers_declined} объявлени{last_sync.offers_declined === 1 ? 'е' : 'й'} отклонено Яндексом при последней индексации фида — см. колонку «Ошибка» в таблице ниже.
+            </div>
+          )}
+
+          <div className="bg-white rounded-2xl border border-border overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/40 text-xs text-muted-foreground">
+                    <th className="text-left px-3 py-2.5 font-semibold">Объект</th>
+                    <th className="text-left px-3 py-2.5 font-semibold">Ошибка</th>
+                    <th className="text-right px-3 py-2.5 font-semibold">Показы</th>
+                    <th className="text-right px-3 py-2.5 font-semibold">Показы карточки</th>
+                    <th className="text-right px-3 py-2.5 font-semibold">Показы телефона</th>
+                    <th className="text-right px-3 py-2.5 font-semibold">Звонки</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {offers.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground text-xs">
+                        Нет объявлений в фиде
+                      </td>
+                    </tr>
+                  )}
+                  {offers.map((o) => (
+                    <tr key={o.yandex_offer_id || o.listing_id} className="border-t border-border hover:bg-muted/20">
+                      <td className="px-3 py-2.5">
+                        {o.title ? (
+                          <div>
+                            <div className="font-medium max-w-[220px] truncate" title={o.title}>{o.title}</div>
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <span>{DEAL_LABELS[o.deal || ''] || o.deal || ''}</span>
+                              {o.yandex_url && (
+                                <>
+                                  {o.deal && <span className="text-muted-foreground/40">·</span>}
+                                  <a href={o.yandex_url} target="_blank" rel="noreferrer" className="text-brand-blue underline">
+                                    Открыть на Яндексе
+                                  </a>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-muted-foreground italic">Объект #{o.listing_id ?? '—'}</div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {o.error_type ? (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">{o.error_type}</span>
+                        ) : (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">OK</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-medium">{fmt(o.shows)}</td>
+                      <td className="px-3 py-2.5 text-right">{fmt(o.card_shows)}</td>
+                      <td className="px-3 py-2.5 text-right">{fmt(o.phone_shows)}</td>
+                      <td className="px-3 py-2.5 text-right">{fmt(o.calls)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
       )}
-
-      <div className="bg-white rounded-2xl border border-border overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-muted/40 text-xs text-muted-foreground">
-                <th className="text-left px-3 py-2.5 font-semibold">Объект</th>
-                <th className="text-left px-3 py-2.5 font-semibold">Звонящий</th>
-                <th className="text-left px-3 py-2.5 font-semibold">Дата</th>
-                <th className="text-right px-3 py-2.5 font-semibold">Длительность</th>
-                <th className="text-right px-3 py-2.5 font-semibold">Ожидание</th>
-              </tr>
-            </thead>
-            <tbody>
-              {calls.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-3 py-8 text-center text-muted-foreground text-xs">
-                    Звонков пока нет
-                  </td>
-                </tr>
-              )}
-              {calls.map((c, i) => (
-                <tr key={i} className="border-t border-border hover:bg-muted/20">
-                  <td className="px-3 py-2.5">
-                    {c.title ? (
-                      <div className="font-medium">{c.title}</div>
-                    ) : (
-                      <div className="text-muted-foreground italic">{c.object_name || 'Не привязан к сайту'}</div>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5 font-mono text-xs">{c.incoming_phone || '—'}</td>
-                  <td className="px-3 py-2.5 text-xs text-muted-foreground">
-                    {c.call_timestamp ? new Date(c.call_timestamp).toLocaleString('ru') : '—'}
-                  </td>
-                  <td className="px-3 py-2.5 text-right">{formatDuration(c.call_duration)}</td>
-                  <td className="px-3 py-2.5 text-right text-xs text-muted-foreground">{formatDuration(c.wait_duration)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
   );
 }

@@ -180,14 +180,16 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
       };
     }
     if (key === 'yandex_realty' && yandex) {
+      const connected = !yandex.last_sync?.error;
       return {
         key, label: 'Яндекс.Недвижимость', icon: '', color: '',
-        connected: true,
+        connected,
         offersCount: yandex.summary.unique_objects,
         balance: null,
-        status: yandex.summary.total_calls > 0 ? 'active' : 'paused',
+        status: connected ? (yandex.summary.total_shows > 0 ? 'active' : 'paused') : 'not_connected',
         services: [],
         callsCount: yandex.summary.total_calls,
+        errorReason: !connected ? yandex.last_sync?.error : null,
       };
     }
     if (key === 'avito' && avito) {

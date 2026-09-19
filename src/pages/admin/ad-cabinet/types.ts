@@ -126,35 +126,42 @@ export const OFFER_STATUS_LABELS: Record<string, { label: string; cls: string }>
   removedByModerator: { label: 'Удалён модерацией', cls: 'bg-red-100 text-red-700' },
 };
 
-export interface YandexCallRow {
-  external_id: number | null;
-  object_name: string | null;
-  incoming_phone: string | null;
-  internal_phone: string | null;
-  wait_duration: number;
-  call_duration: number;
-  revenue: number | null;
-  object_type: string | null;
-  campaign_tariff: string | null;
-  client_tariff: string | null;
-  call_timestamp: string | null;
+export interface YandexOfferRow {
+  listing_id: number | null;
+  yandex_offer_id: string | null;
+  yandex_url: string | null;
+  create_time: string | null;
+  error_type: string | null;
+  checked_at: string | null;
   title: string | null;
   slug: string | null;
   category: string | null;
   deal: string | null;
   price: number | null;
   image: string | null;
+  shows: number;
+  card_shows: number;
+  phone_shows: number;
+  calls: number;
 }
 
 export interface YandexCallsData {
   ok: boolean;
-  last_sync: { synced_at?: string; calls_count?: number; error?: string };
-  summary: {
-    total_calls: number;
-    total_duration: number;
-    unique_objects: number;
+  last_sync: {
+    synced_at?: string;
+    error?: string;
+    yandex_feed_id?: string | null;
+    offers_total?: number | null;
+    offers_accepted?: number | null;
+    offers_declined?: number | null;
   };
-  calls: YandexCallRow[];
+  summary: {
+    total_shows: number;
+    total_calls: number;
+    unique_objects: number;
+    with_errors: number;
+  };
+  offers: YandexOfferRow[];
   synced_now?: boolean;
 }
 
