@@ -42,6 +42,18 @@ export interface PlatformCard {
   /** Заполнено, если ключ настроен, но само подключение к площадке не удалось
    * (например 403 от Youla) — отличаем от «ключ вообще не заполнен». */
   errorReason?: string | null;
+  /** Расширенная сводка ЦИАН — вся статистика, которую передаёт площадка,
+   * показывается прямо в карточке на дашборде (не только на отдельной вкладке). */
+  cianExtra?: {
+    publishedCount: number;
+    totalViews: number;
+    totalCalls: number;
+    totalFavorites: number;
+    archivedCount: number;
+    bonusesAmount: number;
+    auctionPointsAmount: number;
+    syncedAt: string | null;
+  };
 }
 
 export interface CianCallRow {

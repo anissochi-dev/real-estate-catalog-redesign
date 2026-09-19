@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import PlatformIcon from '@/components/admin/PlatformIcon';
 import { AVITO_API_URL, AvitoData, CIAN_API_URL, CianData, DOMCLICK_API_URL, DomclickData, OTHER_PLATFORMS_API_URL, OtherPlatformRow, PlatformCard, SERVICE_TYPE_LABELS, YANDEX_CALLS_API_URL, YandexCallsData, YOULA_API_URL, YoulaData } from './types';
@@ -15,31 +15,7 @@ const PLATFORM_META: Record<string, { label: string; icon: string; color: string
   youla: { label: 'Юла', icon: 'ShoppingCart', color: 'bg-violet-100 text-violet-600' },
 };
 
-const PLATFORM_ORDER = ['cian', 'avito', 'yandex_realty', 'domclick', 'youla'];
-
-function KpiCard({ icon, label, value, sub, color = 'blue' }: {
-  icon: string; label: string; value: string | number; sub?: string; color?: string;
-}) {
-  const colorMap: Record<string, string> = {
-    blue: 'bg-brand-blue/10 text-brand-blue',
-    green: 'bg-emerald-100 text-emerald-600',
-    amber: 'bg-amber-100 text-amber-600',
-    purple: 'bg-purple-100 text-purple-600',
-    rose: 'bg-rose-100 text-rose-600',
-  };
-  return (
-    <div className="bg-white rounded-2xl border border-border p-4 flex items-start gap-3">
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${colorMap[color]}`}>
-        <Icon name={icon} size={19} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-2xl font-bold leading-tight">{value}</div>
-        <div className="text-xs text-muted-foreground mt-0.5 leading-tight">{label}</div>
-        {sub && <div className="text-xs text-brand-blue mt-1 font-medium">{sub}</div>}
-      </div>
-    </div>
-  );
-}
+const PLATFORM_ORDER = ['avito', 'yandex_realty', 'cian', 'domclick', 'youla'];
 
 function PlatformCardView({ card, onClick }: { card: PlatformCard; onClick: () => void }) {
   const meta = PLATFORM_META[card.key];
@@ -71,6 +47,28 @@ function PlatformCardView({ card, onClick }: { card: PlatformCard; onClick: () =
               ? `Подключено${card.balance !== null ? ` · ${card.balance.toLocaleString('ru')} ₽` : ''}`
               : `${card.offersCount} объявл.${card.balance !== null ? ` · ${card.balance.toLocaleString('ru')} ₽` : ''}`}
           </div>
+
+          {card.key === 'cian' && card.cianExtra && (
+            <div className="grid grid-cols-2 gap-1.5 mt-0.5">
+              <div className="bg-muted/50 rounded-lg px-2 py-1.5">
+                <div className="text-sm font-bold leading-none">{card.cianExtra.totalViews.toLocaleString('ru')}</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">Просмотры</div>
+              </div>
+              <div className="bg-muted/50 rounded-lg px-2 py-1.5">
+                <div className="text-sm font-bold leading-none">{card.cianExtra.totalCalls.toLocaleString('ru')}</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">Звонки</div>
+              </div>
+              <div className="bg-muted/50 rounded-lg px-2 py-1.5">
+                <div className="text-sm font-bold leading-none">{card.cianExtra.totalFavorites.toLocaleString('ru')}</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">В избранном</div>
+              </div>
+              <div className="bg-muted/50 rounded-lg px-2 py-1.5">
+                <div className="text-sm font-bold leading-none">{card.cianExtra.archivedCount.toLocaleString('ru')}</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">В архиве</div>
+              </div>
+            </div>
+          )}
+
           {card.services.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-0.5">
               {card.services.map(s => (
@@ -78,6 +76,20 @@ function PlatformCardView({ card, onClick }: { card: PlatformCard; onClick: () =
                   {s.label}: {s.count}
                 </span>
               ))}
+            </div>
+          )}
+
+          {card.key === 'cian' && card.cianExtra && (card.cianExtra.bonusesAmount > 0 || card.cianExtra.auctionPointsAmount > 0) && (
+            <div className="text-[10px] text-muted-foreground">
+              {card.cianExtra.bonusesAmount > 0 && <>Бонусы: {card.cianExtra.bonusesAmount.toLocaleString('ru')} ₽</>}
+              {card.cianExtra.bonusesAmount > 0 && card.cianExtra.auctionPointsAmount > 0 && <> · </>}
+              {card.cianExtra.auctionPointsAmount > 0 && <>Баллы аукциона: {card.cianExtra.auctionPointsAmount.toLocaleString('ru')}</>}
+            </div>
+          )}
+
+          {card.key === 'cian' && card.cianExtra?.syncedAt && (
+            <div className="text-[10px] text-muted-foreground/70">
+              Обновлено {new Date(card.cianExtra.syncedAt).toLocaleString('ru')}
             </div>
           )}
         </>
@@ -163,8 +175,6 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
 
   useEffect(() => { load(); }, []);
 
-  const fmt = (n: number) => (n || 0).toLocaleString('ru');
-
   const platforms: PlatformCard[] = PLATFORM_ORDER.map(key => {
     if (key === 'cian' && cian && !error) {
       const servicesEntries = Object.entries(cian.summary.services_by_type || {})
@@ -177,6 +187,16 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
         balance: cian.balance?.total_balance ? Number(cian.balance.total_balance) : 0,
         status: cian.summary.published_count > 0 ? 'active' : 'paused',
         services: servicesEntries,
+        cianExtra: {
+          publishedCount: cian.summary.published_count || 0,
+          totalViews: cian.summary.total_views || 0,
+          totalCalls: cian.summary.total_calls || 0,
+          totalFavorites: cian.summary.total_favorites || 0,
+          archivedCount: cian.summary.archived_count || 0,
+          bonusesAmount: cian.balance?.bonuses_amount ? Number(cian.balance.bonuses_amount) : 0,
+          auctionPointsAmount: cian.balance?.auction_points_amount ? Number(cian.balance.auction_points_amount) : 0,
+          syncedAt: cian.last_sync?.synced_at || null,
+        },
       };
     }
     if (key === 'yandex_realty' && yandex) {
@@ -236,10 +256,6 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
     };
   });
 
-  const totalOffers = platforms.reduce((a, p) => a + p.offersCount, 0);
-  const activeCount = platforms.filter(p => p.status === 'active').length;
-  const totalBalance = platforms.reduce((a, p) => a + (p.balance || 0), 0);
-
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-2xl border border-border p-4">
@@ -277,14 +293,6 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
 
       {!loading && (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <KpiCard icon="Building2" label="Всего объявлений" value={fmt(totalOffers)} color="blue" />
-            <KpiCard icon="CheckCircle2" label="Активных площадок" value={activeCount} sub={`из ${platforms.length}`} color="green" />
-            <KpiCard icon="Eye" label="Просмотров (ЦИАН)" value={fmt(cian?.summary.total_views || 0)} color="purple" />
-            <KpiCard icon="Phone" label="Звонков (Яндекс)" value={fmt(yandex?.summary.total_calls || 0)} color="rose" />
-            <KpiCard icon="Wallet" label="Баланс площадок" value={`${fmt(totalBalance)} ₽`} color="amber" />
-          </div>
-
           {error && (
             <div className="bg-white rounded-xl border border-border p-4 flex items-start gap-2 text-sm">
               <Icon name="AlertCircle" size={16} className="text-red-500 shrink-0 mt-0.5" />
@@ -299,15 +307,11 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
             <div className="text-sm font-semibold mb-2 flex items-center gap-1.5">
               <Icon name="Zap" size={15} className="text-brand-blue" /> Быстрые действия по площадкам
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {platforms.map(p => (
-                <Fragment key={p.key}>
-                  <PlatformCardView card={p} onClick={() => onOpenPlatform(p.key)} />
-                  {p.key === 'cian' && (
-                    <OtherPlatformCardView platforms={otherPlatforms} onClick={() => onOpenPlatform('other')} />
-                  )}
-                </Fragment>
+                <PlatformCardView key={p.key} card={p} onClick={() => onOpenPlatform(p.key)} />
               ))}
+              <OtherPlatformCardView platforms={otherPlatforms} onClick={() => onOpenPlatform('other')} />
             </div>
           </div>
         </>
