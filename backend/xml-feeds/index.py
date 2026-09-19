@@ -268,12 +268,23 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_ca
         # галочки в карточке).
         where.append("export_other = TRUE")
 
+    # ORDER BY created_at DESC — единая точка сортировки для ВСЕХ форматов и площадок:
+    # самые свежие (недавно добавленные на сайт) объекты всегда идут первыми в фиде.
     cur.execute(f"SELECT * FROM {SCHEMA}.listings WHERE {' AND '.join(where)} ORDER BY created_at DESC")
     listings = [dict(r) for r in cur.fetchall()]
+
+    # dnr.red принимает только объекты в аренду (единственная категория площадки —
+    # id=339) — фильтруем ДО среза max_listings, иначе лимит отрезал бы самые свежие
+    # объекты по ВСЕМ сделкам (включая продажу), а не по аренде, и в фид могло попасть
+    # меньше объектов, чем реально доступно и разрешено площадкой.
+    if fmt == 'other' and feed_slug == 'dnr-red':
+        listings = [l for l in listings if l.get('deal') == 'rent']
+
     if max_listings:
-        # Ограничение площадки на количество объектов в фиде (например Doska.ru — 100):
-        # берём самые свежие (список уже отсортирован по created_at DESC) — по мере
-        # появления новых объектов старые автоматически перестают попадать в выгрузку.
+        # Ограничение площадки на количество объектов в фиде (например Doska.ru — 100,
+        # dnr.red — 50): берём самые свежие (список уже отсортирован по created_at DESC,
+        # для dnr.red — уже отфильтрован по аренде) — по мере появления новых объектов
+        # старые автоматически перестают попадать в выгрузку.
         listings = listings[:max_listings]
 
     cur.execute(f"SELECT slug, name FROM {SCHEMA}.land_vri")
