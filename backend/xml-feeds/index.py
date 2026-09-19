@@ -3173,28 +3173,28 @@ def _youla_request(method, path, token, payload=None, params=None):
 
 
 def _youla_sync(cur, conn, token, owner_id):
-    """Проверяет токен+owner_id Юлы: запрашивает данные профиля пользователя."""
+    """Проверяет заполненность токена+owner_id Юлы (без реального запроса к API).
+
+    Раньше здесь дёргался GET /users/{owner_id} для проверки подключения и
+    получения имени владельца профиля — но по ответу техподдержки Юлы права
+    токена НЕ включают чтение данных пользователя (доступны только продукты и
+    статистика), поэтому этот запрос стабильно возвращал 403 Forbidden и
+    останавливал всю синхронизацию до публикации объявлений и сбора статистики
+    (см. историю youla_sync_log — 0 успешных синхронизаций с 7 сентября).
+    Теперь просто фиксируем факт «данные заполнены» и сразу переходим к
+    публикации — она использует другие, разрешённые эндпоинты (/products)."""
     if not owner_id:
         cur.execute(f"INSERT INTO {SCHEMA}.youla_sync_log (synced_at, error) VALUES (NOW(), %s)",
                     ('Не указан ID профиля (owner_id) в настройках площадки',))
         conn.commit()
         return {'error': 'Не указан ID профиля (owner_id) в настройках площадки'}
 
-    user, err = _youla_request('GET', f'/users/{owner_id}', token)
-    if err or not user:
-        cur.execute(f"INSERT INTO {SCHEMA}.youla_sync_log (synced_at, error) VALUES (NOW(), %s)",
-                    (err[:500] if err else 'Пустой ответ',))
-        conn.commit()
-        return {'error': err or 'Не удалось получить данные профиля'}
-
-    data = user.get('data') or user
-    owner_name = data.get('name') or f"{data.get('first_name', '')} {data.get('last_name', '')}".strip()
     cur.execute(f"""
-        INSERT INTO {SCHEMA}.youla_sync_log (synced_at, owner_id, owner_name, raw_response)
-        VALUES (NOW(), %s, %s, %s)
-    """, (owner_id, owner_name, json.dumps(data)))
+        INSERT INTO {SCHEMA}.youla_sync_log (synced_at, owner_id, owner_name)
+        VALUES (NOW(), %s, NULL)
+    """, (owner_id,))
     conn.commit()
-    return {'owner_id': owner_id, 'owner_name': owner_name}
+    return {'owner_id': owner_id, 'owner_name': None}
 
 
 YOULA_PRICE_MAX_M2 = 200_000  # см. _total_price — та же защита от кривых данных price_unit
@@ -3356,7 +3356,8 @@ def _youla_read_from_db(cur):
 
 
 def _youla_full_sync(cur, conn, token, owner_id, category_id, subcategory_id):
-    """Полная синхронизация: проверка токена → публикация/архивация объектов → статистика."""
+    """Полная синхронизация: проверка заполненности настроек → публикация/архивация
+    объектов через /products → статистика через /products/{id}/statistic."""
     sync_result = _youla_sync(cur, conn, token, owner_id)
     if sync_result.get('error'):
         return {'sync': sync_result}
