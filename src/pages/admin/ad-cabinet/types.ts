@@ -54,6 +54,36 @@ export interface PlatformCard {
     auctionPointsAmount: number;
     syncedAt: string | null;
   };
+  /** Расширенная сводка Авито — баланс, бонусы, статистика по объявлениям, отчёт автозагрузки. */
+  avitoExtra?: {
+    accountName: string | null;
+    balanceBonus: number;
+    totalViews: number;
+    totalContacts: number;
+    totalFavorites: number;
+    reportStatusLabel: string | null;
+    reportTotalAds: number | null;
+    reportFinishedAt: string | null;
+  };
+  /** Расширенная сводка Яндекс.Недвижимости — показы, звонки, статус индексации фида. */
+  yandexExtra?: {
+    offersTotal: number;
+    offersAccepted: number;
+    offersDeclined: number;
+    totalShows: number;
+    withErrors: number;
+  };
+  /** Расширенная сводка ДомКлик — вся статистика, которую передаёт площадка. */
+  domclickExtra?: {
+    publishedCount: number;
+    totalViews: number;
+    totalSearchShows: number;
+    totalPhoneShows: number;
+    totalChats: number;
+    totalChatsAnswered: number;
+    totalFavorites: number;
+    syncedAt: string | null;
+  };
 }
 
 export interface CianCallRow {

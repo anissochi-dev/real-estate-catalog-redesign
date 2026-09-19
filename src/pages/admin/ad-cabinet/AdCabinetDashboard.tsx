@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import PlatformIcon from '@/components/admin/PlatformIcon';
 import { AVITO_API_URL, AvitoData, CIAN_API_URL, CianData, DOMCLICK_API_URL, DomclickData, OTHER_PLATFORMS_API_URL, OtherPlatformRow, PlatformCard, SERVICE_TYPE_LABELS, YANDEX_CALLS_API_URL, YandexCallsData, YOULA_API_URL, YoulaData } from './types';
@@ -16,6 +16,15 @@ const PLATFORM_META: Record<string, { label: string; icon: string; color: string
 };
 
 const PLATFORM_ORDER = ['avito', 'yandex_realty', 'cian', 'domclick', 'youla'];
+
+function MiniStat({ value, label }: { value: ReactNode; label: string }) {
+  return (
+    <div className="bg-muted/50 rounded-lg px-2 py-1.5">
+      <div className="text-sm font-bold leading-none">{value}</div>
+      <div className="text-[10px] text-muted-foreground mt-0.5">{label}</div>
+    </div>
+  );
+}
 
 function PlatformCardView({ card, onClick }: { card: PlatformCard; onClick: () => void }) {
   const meta = PLATFORM_META[card.key];
@@ -43,29 +52,48 @@ function PlatformCardView({ card, onClick }: { card: PlatformCard; onClick: () =
           <div className="text-xs text-muted-foreground">
             {card.key === 'yandex_realty'
               ? `${card.callsCount || 0} звонков за 30 дней`
-              : card.key === 'avito'
-              ? `Подключено${card.balance !== null ? ` · ${card.balance.toLocaleString('ru')} ₽` : ''}`
               : `${card.offersCount} объявл.${card.balance !== null ? ` · ${card.balance.toLocaleString('ru')} ₽` : ''}`}
           </div>
 
           {card.key === 'cian' && card.cianExtra && (
             <div className="grid grid-cols-2 gap-1.5 mt-0.5">
-              <div className="bg-muted/50 rounded-lg px-2 py-1.5">
-                <div className="text-sm font-bold leading-none">{card.cianExtra.totalViews.toLocaleString('ru')}</div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">Просмотры</div>
-              </div>
-              <div className="bg-muted/50 rounded-lg px-2 py-1.5">
-                <div className="text-sm font-bold leading-none">{card.cianExtra.totalCalls.toLocaleString('ru')}</div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">Звонки</div>
-              </div>
-              <div className="bg-muted/50 rounded-lg px-2 py-1.5">
-                <div className="text-sm font-bold leading-none">{card.cianExtra.totalFavorites.toLocaleString('ru')}</div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">В избранном</div>
-              </div>
-              <div className="bg-muted/50 rounded-lg px-2 py-1.5">
-                <div className="text-sm font-bold leading-none">{card.cianExtra.archivedCount.toLocaleString('ru')}</div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">В архиве</div>
-              </div>
+              <MiniStat value={card.cianExtra.totalViews.toLocaleString('ru')} label="Просмотры" />
+              <MiniStat value={card.cianExtra.totalCalls.toLocaleString('ru')} label="Звонки" />
+              <MiniStat value={card.cianExtra.totalFavorites.toLocaleString('ru')} label="В избранном" />
+              <MiniStat value={card.cianExtra.archivedCount.toLocaleString('ru')} label="В архиве" />
+            </div>
+          )}
+
+          {card.key === 'avito' && card.avitoExtra && (
+            <div className="grid grid-cols-2 gap-1.5 mt-0.5">
+              <MiniStat value={card.avitoExtra.totalViews.toLocaleString('ru')} label="Просмотры" />
+              <MiniStat value={card.avitoExtra.totalContacts.toLocaleString('ru')} label="Обращения" />
+              <MiniStat value={card.avitoExtra.totalFavorites.toLocaleString('ru')} label="В избранном" />
+              <MiniStat value={`${card.avitoExtra.balanceBonus.toLocaleString('ru')} ₽`} label="Бонусный счёт" />
+            </div>
+          )}
+
+          {card.key === 'yandex_realty' && card.yandexExtra && (
+            <div className="grid grid-cols-2 gap-1.5 mt-0.5">
+              <MiniStat value={card.yandexExtra.totalShows.toLocaleString('ru')} label="Показов за 30 дн." />
+              <MiniStat value={card.yandexExtra.offersAccepted.toLocaleString('ru')} label={`Принято из ${card.yandexExtra.offersTotal}`} />
+              {card.yandexExtra.offersDeclined > 0 && (
+                <MiniStat value={<span className="text-red-600">{card.yandexExtra.offersDeclined}</span>} label="Отклонено фидом" />
+              )}
+              {card.yandexExtra.withErrors > 0 && (
+                <MiniStat value={<span className="text-red-600">{card.yandexExtra.withErrors}</span>} label="С ошибками" />
+              )}
+            </div>
+          )}
+
+          {card.key === 'domclick' && card.domclickExtra && (
+            <div className="grid grid-cols-2 gap-1.5 mt-0.5">
+              <MiniStat value={card.domclickExtra.totalViews.toLocaleString('ru')} label="Просмотры" />
+              <MiniStat value={card.domclickExtra.totalSearchShows.toLocaleString('ru')} label="Показы в поиске" />
+              <MiniStat value={card.domclickExtra.totalPhoneShows.toLocaleString('ru')} label="Показы телефона" />
+              <MiniStat value={`${card.domclickExtra.totalChatsAnswered}/${card.domclickExtra.totalChats}`} label="Чаты (отвечено)" />
+              <MiniStat value={card.domclickExtra.totalFavorites.toLocaleString('ru')} label="В избранном" />
+              <MiniStat value={card.domclickExtra.publishedCount.toLocaleString('ru')} label="Опубликовано" />
             </div>
           )}
 
@@ -90,6 +118,24 @@ function PlatformCardView({ card, onClick }: { card: PlatformCard; onClick: () =
           {card.key === 'cian' && card.cianExtra?.syncedAt && (
             <div className="text-[10px] text-muted-foreground/70">
               Обновлено {new Date(card.cianExtra.syncedAt).toLocaleString('ru')}
+            </div>
+          )}
+
+          {card.key === 'avito' && card.avitoExtra?.reportStatusLabel && (
+            <div className="text-[10px] text-muted-foreground">
+              Автозагрузка: {card.avitoExtra.reportStatusLabel}
+              {card.avitoExtra.reportTotalAds !== null && <> · {card.avitoExtra.reportTotalAds} объявл.</>}
+            </div>
+          )}
+          {card.key === 'avito' && card.avitoExtra?.reportFinishedAt && (
+            <div className="text-[10px] text-muted-foreground/70">
+              Обновлено {new Date(card.avitoExtra.reportFinishedAt).toLocaleString('ru')}
+            </div>
+          )}
+
+          {card.key === 'domclick' && card.domclickExtra?.syncedAt && (
+            <div className="text-[10px] text-muted-foreground/70">
+              Обновлено {new Date(card.domclickExtra.syncedAt).toLocaleString('ru')}
             </div>
           )}
         </>
@@ -210,18 +256,38 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
         services: [],
         callsCount: yandex.summary.total_calls,
         errorReason: !connected ? yandex.last_sync?.error : null,
+        yandexExtra: connected ? {
+          offersTotal: yandex.last_sync?.offers_total || 0,
+          offersAccepted: yandex.last_sync?.offers_accepted || 0,
+          offersDeclined: yandex.last_sync?.offers_declined || 0,
+          totalShows: yandex.summary.total_shows || 0,
+          withErrors: yandex.summary.with_errors || 0,
+        } : undefined,
       };
     }
     if (key === 'avito' && avito) {
       const connected = avito.connected && !avito.last_sync?.error;
+      const totalViews = avito.items?.reduce((a, i) => a + (i.uniq_views || 0), 0) || 0;
+      const totalContacts = avito.items?.reduce((a, i) => a + (i.uniq_contacts || 0), 0) || 0;
+      const totalFavorites = avito.items?.reduce((a, i) => a + (i.uniq_favorites || 0), 0) || 0;
       return {
         key, label: 'Авито', icon: '', color: '',
         connected,
-        offersCount: 0,
+        offersCount: avito.items?.length || 0,
         balance: connected ? Number(avito.last_sync?.balance_real || 0) : null,
         status: connected ? 'active' : 'not_connected',
         services: [],
         errorReason: !connected ? (avito.last_sync?.error || null) : null,
+        avitoExtra: connected ? {
+          accountName: avito.last_sync?.account_name || null,
+          balanceBonus: Number(avito.last_sync?.balance_bonus || 0),
+          totalViews,
+          totalContacts,
+          totalFavorites,
+          reportStatusLabel: avito.last_report?.status_label || null,
+          reportTotalAds: avito.last_report?.total_ads ?? null,
+          reportFinishedAt: avito.last_report?.finished_at || null,
+        } : undefined,
       };
     }
     if (key === 'youla' && youla) {
@@ -239,15 +305,26 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
     }
     if (key === 'domclick' && domclick) {
       const connected = domclick.connected && !domclick.last_sync?.error;
-      const publishedCount = domclick.items?.filter(i => i.status === 'Опубликовано').length || 0;
+      const items = domclick.items || [];
+      const publishedCount = items.filter(i => i.status === 'Опубликовано').length;
       return {
         key, label: 'ДомКлик', icon: '', color: '',
         connected,
-        offersCount: domclick.items?.length || 0,
+        offersCount: items.length,
         balance: null,
         status: connected ? (publishedCount > 0 ? 'active' : 'paused') : 'not_connected',
         services: [],
         errorReason: !connected ? domclick.last_sync?.error : null,
+        domclickExtra: connected ? {
+          publishedCount,
+          totalViews: items.reduce((a, i) => a + (i.views || 0), 0),
+          totalSearchShows: items.reduce((a, i) => a + (i.search_shows || 0), 0),
+          totalPhoneShows: items.reduce((a, i) => a + (i.phone_shows || 0), 0),
+          totalChats: items.reduce((a, i) => a + (i.chats_total || 0), 0),
+          totalChatsAnswered: items.reduce((a, i) => a + (i.chats_answered || 0), 0),
+          totalFavorites: items.reduce((a, i) => a + (i.favorites || 0), 0),
+          syncedAt: domclick.last_sync?.synced_at || null,
+        } : undefined,
       };
     }
     return {
