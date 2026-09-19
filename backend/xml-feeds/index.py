@@ -401,7 +401,13 @@ def _regenerate_static_feeds(cur, conn, force=False):
             Key=key,
             Body=xml_content.encode('utf-8'),
             ContentType='application/xml; charset=utf-8',
-            CacheControl='public, max-age=300',
+            # no-cache (НЕ no-store) — CDN обязан на каждый запрос идти в S3 и сверять
+            # актуальность файла. Раньше был max-age=300, но обнаружено, что некоторые
+            # фиды отдавались из CDN-кэша по несколько дней (площадка получала устаревший
+            # список объектов, например ДомКлик недополучал новые объявления) — площадки
+            # обходят фид намного реже 5 минут, поэтому короткий max-age не спасал от
+            # залипания на edge-узле CDN.
+            CacheControl='no-cache, must-revalidate',
         )
         cdn_url = _cdn_url(key)
         cur.execute(
