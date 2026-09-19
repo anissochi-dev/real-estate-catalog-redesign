@@ -1112,8 +1112,14 @@ def _build_dnr_red(listings, company):
     собственный формат площадки, НЕ имеет отношения к схеме Яндекс.Недвижимости).
     Площадка принимает только ОДНУ категорию недвижимости — id=339 «Аренда
     помещений свободного назначения», поэтому выгружаем только объекты в
-    аренду (deal=rent), независимо от типа помещения (офис/склад/ритейл и т.д.)."""
-    site_url = (company.get('site_url') or '').rstrip('/')
+    аренду (deal=rent), независимо от типа помещения (офис/склад/ритейл и т.д.).
+
+    Справочные блоки categories/currencies/cities/params (id категорий, городов,
+    валюты, параметров) в реальную выгрузку НЕ включаются — по прямому указанию
+    площадки они нужны только для примера в личном кабинете, чтобы видеть id
+    перед интеграцией. При загрузке фида сразу после <listings> должен идти
+    <items> — сами id используются inline внутри каждого <item> (category,
+    geo/city, price/currency)."""
     company_name = _xml_escape(company.get('company_name', 'BIZNEST'))
 
     raw_phone = company.get('company_phone', '') or ''
@@ -1124,44 +1130,14 @@ def _build_dnr_red(listings, company):
 
     out = ['<?xml version="1.0" encoding="UTF-8"?>']
     out.append('<listings type="items-import-export">')
-    out.append(f'<title>{_xml_escape(company_name)}</title>')
-    if site_url:
-        out.append(f'<url>{_xml_escape(site_url)}/</url>')
-    out.append('<locale>ru</locale>')
-
-    out.append('<categories>')
-    out.append('<category id="339" pid="11">Аренда помещений свободного назначения</category>')
-    out.append('</categories>')
-
-    out.append('<currencies>')
-    out.append('<currency id="2">Рубли</currency>')
-    out.append('</currencies>')
-
-    # Города — только Краснодарский край (весь справочник, на перспективу),
-    # без районов/метро — по нашим объектам эти данные сейчас не заполняются.
-    out.append('<cities>')
-    for city_name, city_id in sorted(DNR_RED_CITY_IDS.items(), key=lambda kv: kv[1]):
-        out.append(f'<city id="{city_id}" lvl="3">')
-        out.append(f'<title>{_xml_escape(city_name)}</title>')
-        out.append('<parents>')
-        out.append('<parent id="1000" lvl="1">Россия</parent>')
-        out.append(f'<parent id="{DNR_RED_KRASNODAR_REGION_PID}" lvl="2">{_xml_escape(DNR_RED_KRASNODAR_REGION)}</parent>')
-        out.append('</parents>')
-        out.append('</city>')
-    out.append('</cities>')
-
-    out.append('<params>')
-    out.append('<param id="108" title="Площадь" keyword="" field="1" type="10" parent="0"/>')
-    out.append('<param id="3008" title="Этаж" keyword="" field="2" type="10" parent="0"/>')
-    out.append('<param id="3009" title="Этажность" keyword="" field="3" type="10" parent="0"/>')
-    out.append('</params>')
 
     out.append('<items>')
     for l in listings:
         if l.get('deal') != 'rent':
             continue  # площадка принимает только аренду (единственная категория — 339)
 
-        out.append(f'<item id="{l["id"]}" external="0" publicated="true">')
+        # external="1" — по требованию площадки для загружаемых через фид объявлений.
+        out.append(f'<item id="{l["id"]}" external="1" publicated="true">')
         title = _clean_title(l.get('title') or '')
         out.append(f'<title>{_xml_escape(title)}</title>')
         if l.get('description'):
