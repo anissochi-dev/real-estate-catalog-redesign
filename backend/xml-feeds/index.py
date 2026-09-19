@@ -404,13 +404,20 @@ def _regenerate_static_feeds(cur, conn, force=False):
 
 
 def _bump_feed_dates(cur, conn):
-    """Раз в сутки, в окне settings.feed_bump_cron_hour/minute (UTC), проставляет
+    """Раз в сутки, начиная с settings.feed_bump_cron_hour/minute (UTC), проставляет
     feed_bump_at = NOW() всем активным и видимым объектам, у которых включена
-    выгрузка хотя бы на одну площадку (Яндекс/Авито/ЦИАН/Разное). Это поднимает
-    дату объявления в фидах площадок, НЕ трогая updated_at — сортировка «новые/
-    обновлённые» на сайте и история редактирования в админке не затрагиваются.
+    выгрузка хотя бы на одну площадку (Яндекс/Авито/ЦИАН/Юла/ДомКлик/Разное — все
+    44+ площадки группы «Разное» используют общий флаг export_other). Это поднимает
+    дату объявления (creation-date/DateBegin) в фидах площадок на сегодняшнюю, НЕ
+    трогая updated_at — сортировка «новые/обновлённые» на сайте и история
+    редактирования в админке не затрагиваются.
 
-    По умолчанию: 06:23 UTC = 09:23 МСК.
+    По умолчанию: 20:30 UTC = 23:30 МСК.
+
+    Срабатывает при ПЕРВОМ вызове после наступления целевого времени в текущие
+    сутки (сравнение last_at с точной меткой «сегодня, target_hour:target_minute»),
+    а не в узком окне в минутах — так обновление не пропускается, даже если
+    платформенный крон (раз в 20 минут) не попадает ровно в нужную минуту.
     """
     cur.execute(
         f"SELECT feed_bump_cron_enabled, feed_bump_cron_hour, feed_bump_cron_minute, "
@@ -421,11 +428,13 @@ def _bump_feed_dates(cur, conn):
         return {'skipped': True, 'reason': 'disabled'}
 
     now_utc = datetime.now(timezone.utc)
-    target_hour = int(s.get('feed_bump_cron_hour') if s.get('feed_bump_cron_hour') is not None else 6)
-    target_minute = int(s.get('feed_bump_cron_minute') if s.get('feed_bump_cron_minute') is not None else 23)
+    target_hour = int(s.get('feed_bump_cron_hour') if s.get('feed_bump_cron_hour') is not None else 20)
+    target_minute = int(s.get('feed_bump_cron_minute') if s.get('feed_bump_cron_minute') is not None else 30)
+    target_dt_today = now_utc.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
     last_at = s.get('feed_bump_cron_last_at')
-    already_ran = last_at and hasattr(last_at, 'date') and last_at.date() >= now_utc.date()
-    time_ok = now_utc.hour == target_hour and abs(now_utc.minute - target_minute) <= 5
+
+    time_ok = now_utc >= target_dt_today
+    already_ran = bool(last_at) and last_at >= target_dt_today
 
     if not time_ok or already_ran:
         return {'skipped': True, 'time_ok': time_ok, 'already_ran': already_ran}
@@ -433,7 +442,8 @@ def _bump_feed_dates(cur, conn):
     cur.execute(
         f"UPDATE {SCHEMA}.listings SET feed_bump_at = NOW() "
         f"WHERE status = 'active' AND (is_visible IS NULL OR is_visible = TRUE) "
-        f"AND (export_yandex = TRUE OR export_avito = TRUE OR export_cian = TRUE OR export_other = TRUE)"
+        f"AND (export_yandex = TRUE OR export_avito = TRUE OR export_cian = TRUE "
+        f"OR export_youla = TRUE OR export_domclick = TRUE OR export_other = TRUE)"
     )
     updated = cur.rowcount
     cur.execute(f"UPDATE {SCHEMA}.settings SET feed_bump_cron_last_at = NOW() WHERE id = (SELECT id FROM {SCHEMA}.settings ORDER BY id LIMIT 1)")
@@ -3558,11 +3568,26 @@ def handler(event, context):
             'headers': {
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token, X-Authorization, Authorization, X-User-Id, X-Session-Id',
+                'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token, X-Authorization, Authorization, X-User-Id, X-Session-Id, X-Cron-Token',
                 'Access-Control-Max-Age': '86400',
             },
             'body': '',
         }
+
+    # Платформенный крон (function.json → "cron": "*/20 * * * *") вызывает функцию
+    # ЧИСТЫМ GET без query-параметров — раньше обновление дат/файлов фидов зависело
+    # ТОЛЬКО от захода посетителей на сайт (see useCrons.ts, троттлинг 20 мин), из-за
+    # чего при низком трафике окно авто-обновления даты (раз в сутки) могло вообще не
+    # сработать несколько дней подряд. X-Cron-Token — доверенный заголовок платформы
+    # (тот же секрет уже используется в price-predict/auto-seo) — если он совпал,
+    # считаем вызов равносильным ?action=cron.
+    _raw_headers = event.get('headers') or {}
+    _headers_lc = {k.lower(): v for k, v in _raw_headers.items()}
+    _cron_token = _headers_lc.get('x-cron-token') or ''
+    _expected_cron_token = os.environ.get('CRON_SECRET', '')
+    is_platform_cron = bool(_expected_cron_token) and _cron_token == _expected_cron_token
+    if is_platform_cron and 'action' not in params:
+        params = {**params, 'action': 'cron'}
 
     dsn = os.environ['DATABASE_URL']
     conn = psycopg2.connect(dsn)
