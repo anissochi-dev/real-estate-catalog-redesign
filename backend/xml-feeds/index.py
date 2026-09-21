@@ -3537,14 +3537,31 @@ def _domclick_request(path, token, params=None):
     return data, None
 
 
+DOMCLICK_SYNC_TIME_BUDGET_SEC = 45  # см. комментарий в цикле ниже
+
+
 def _domclick_sync_offers(cur, conn, token, company_id):
     """Постранично забирает все объявления компании (эндпоинт /offers) вместе
     со статистикой (views, phone_shows, search_shows, chats, favorites) и
     сохраняет в domclick_item_status. Сопоставляет с объектом сайта по
-    feed_offer_id (internal-id из нашего XML-фида ДомКлик == listing.id)."""
+    feed_offer_id (internal-id из нашего XML-фида ДомКлик == listing.id).
+
+    Тайм-бюджет + commit после каждой полученной страницы (а не один общий
+    commit в конце) — тот же паттерн, что уже используется для Яндекс.CRM
+    (см. _yandex_crm_sync): при большом каталоге и/или медленном ответе API
+    ДомКлика ждать полного обхода всех страниц рискованно — функция может
+    упереться в лимит времени и оборвать выполнение, потеряв уже полученные,
+    но ещё не сохранённые данные. Если бюджет исчерпан — то, что успели
+    обработать, уже закоммичено, а необработанный остаток дообработается на
+    следующем тике крона (last_offer_id продолжает обход с той же точки)."""
+    start_ts = time.monotonic()
     last_offer_id = 0
     total = 0
+    budget_exceeded = False
     while True:
+        if time.monotonic() - start_ts > DOMCLICK_SYNC_TIME_BUDGET_SEC:
+            budget_exceeded = True
+            break
         data, err = _domclick_request(
             f'/v1/companies/{company_id}/offers', token,
             params={'last_offer_id': last_offer_id, 'limit': 1000},
@@ -3597,12 +3614,17 @@ def _domclick_sync_offers(cur, conn, token, company_id):
             total += 1
             last_offer_id = o.get('offer_id') or last_offer_id
 
+        conn.commit()  # сохраняем страницу сразу — не ждём обхода всех страниц
+
         if len(offers) < 1000:
             break
 
+    # budget_exceeded НЕ пишем в колонку error — это не сбой подключения, а штатное
+    # разбиение большого каталога на несколько тиков крона (см. _domclick_read_from_db,
+    # где error используется для connected=False/красного баннера ошибки в UI).
     cur.execute(f"INSERT INTO {SCHEMA}.domclick_sync_log (synced_at, offers_count) VALUES (NOW(), %s)", (total,))
     conn.commit()
-    return {'offers_count': total}
+    return {'offers_count': total, 'budget_exceeded': budget_exceeded}
 
 
 def _domclick_read_from_db(cur):
@@ -3779,21 +3801,32 @@ def handler(event, context):
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             if method == 'GET' and params.get('action') == 'cron':
-                # Публичный пинг-крон: вызывается автоматически платформой раз в час (см. function.json)
-                # + дублируется пингом из браузера (useCrons.ts) как подстраховка.
-                # Пересобирает статические файлы в S3 (раз в 10 мин) и параллельно синхронизирует
-                # кабинеты ЦИАН, Яндекс.Недвижимость и Авито (раз в час, если подключены и включены).
+                # Публичный пинг-крон: вызывается автоматически платформой раз в 20 минут
+                # (см. function.json) + дублируется пингом из браузера (useCrons.ts) как
+                # подстраховка. Пересобирает статические файлы в S3 (раз в 10 мин).
                 # Перед сборкой — проверяем окно авто-обновления даты объявлений (раз в сутки).
                 bump_result = _bump_feed_dates(cur, conn)
                 results = _regenerate_static_feeds(cur, conn, force=bump_result.get('updated', 0) > 0)
 
-                # Каждая площадка синхронизируется независимо — падение одной (сетевая
-                # ошибка, невалидный токен, необработанное исключение внутри _handle)
-                # НЕ должно останавливать синхронизацию остальных. Раньше вызовы шли
-                # подряд без try/except, и сбой, например, Яндекса обрывал весь крон-тик,
-                # из-за чего Авито/Юла/ДомКлик молча переставали обновляться на несколько
-                # дней — именно так и произошло 19-21 сентября.
-                platform_errors = {}
+                # Кабинеты площадок (ЦИАН/Яндекс/Авито/Юла/ДомКлик) СИНХРОНИЗИРУЮТСЯ
+                # ROUND-ROBIN — только ОДНА площадка за один тик крона, а не все 5 подряд.
+                # Раньше все 5 обходились в одном HTTP-вызове (лимит function.json
+                # timeout=60с) — при росте каталога (публикация N объявлений на Юле,
+                # постраничный обход ДомКлика и т.д.) суммарное время пяти синхронизаций
+                # стало превышать 60с, и крон обрывался по таймауту на середине, не
+                # успевая даже сохранить прогресс уже готовых площадок. Round-robin
+                # выбирает площадку детерминированно по времени (без доп. таблиц в БД) —
+                # так каждый тик остаётся лёгким, а полный круг по всем 5 площадкам
+                # занимает ~100 минут (5 × 20 мин) вместо желаемого 1 часа — компромисс,
+                # осознанно принятый ради устранения таймаутов.
+                PLATFORM_ROTATION = [
+                    ('cian', 'cian_cron', _cian_handle),
+                    ('yandex_realty', 'yandex_cron', _yandex_calls_handle),
+                    ('avito', 'avito_cron', _avito_handle),
+                    ('youla', 'youla_cron', _youla_handle),
+                    ('domclick', 'domclick_cron', _domclick_handle),
+                ]
+                CRON_TICK_SECONDS = 1200  # 20 минут — совпадает с function.json cron
 
                 def _run_platform_cron(platform_key, action_name, handler_fn):
                     cur.execute(f"SELECT is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = '{platform_key}' LIMIT 1")
@@ -3803,7 +3836,7 @@ def handler(event, context):
                     try:
                         return handler_fn(cur, conn, {'action': action_name})
                     except Exception as e:
-                        # Откатываем текущую транзакцию, иначе следующая площадка
+                        # Откатываем текущую транзакцию, иначе следующий вызов
                         # унаследует "испорченное" состояние соединения (aborted transaction)
                         # и тоже упадёт, даже если сама по себе работает исправно.
                         try:
@@ -3811,25 +3844,23 @@ def handler(event, context):
                         except Exception:
                             pass
                         err_text = f'{type(e).__name__}: {str(e)[:300]}'
-                        platform_errors[platform_key] = err_text
                         print(f'[xml-feeds cron] {platform_key} failed: {err_text}')
-                        return None
+                        return {'error': err_text}
 
-                cian_result = _run_platform_cron('cian', 'cian_cron', _cian_handle)
-                yandex_result = _run_platform_cron('yandex_realty', 'yandex_cron', _yandex_calls_handle)
-                avito_result = _run_platform_cron('avito', 'avito_cron', _avito_handle)
-                youla_result = _run_platform_cron('youla', 'youla_cron', _youla_handle)
-                domclick_result = _run_platform_cron('domclick', 'domclick_cron', _domclick_handle)
+                tick_index = int(datetime.now(timezone.utc).timestamp() // CRON_TICK_SECONDS) % len(PLATFORM_ROTATION)
+                turn_key, turn_action, turn_handler = PLATFORM_ROTATION[tick_index]
+                turn_result = _run_platform_cron(turn_key, turn_action, turn_handler)
+
+                platform_results = {k: None for k, _, _ in PLATFORM_ROTATION}
+                if turn_result is not None:
+                    body = json.loads(turn_result['body']) if isinstance(turn_result, dict) and 'body' in turn_result else turn_result
+                    platform_results[turn_key] = body
 
                 return _json({
                     'ok': True, 'results': results,
                     'feed_bump': bump_result,
-                    'cian': json.loads(cian_result['body']) if cian_result else None,
-                    'yandex': json.loads(yandex_result['body']) if yandex_result else None,
-                    'avito': json.loads(avito_result['body']) if avito_result else None,
-                    'youla': json.loads(youla_result['body']) if youla_result else None,
-                    'domclick': json.loads(domclick_result['body']) if domclick_result else None,
-                    'platform_errors': platform_errors or None,
+                    'synced_platform': turn_key,
+                    **platform_results,
                 })
 
             if method == 'GET' and params.get('action') == 'generate_static':
