@@ -401,13 +401,16 @@ def _regenerate_static_feeds(cur, conn, force=False):
             Key=key,
             Body=xml_content.encode('utf-8'),
             ContentType='application/xml; charset=utf-8',
-            # no-cache (НЕ no-store) — CDN обязан на каждый запрос идти в S3 и сверять
-            # актуальность файла. Раньше был max-age=300, но обнаружено, что некоторые
-            # фиды отдавались из CDN-кэша по несколько дней (площадка получала устаревший
-            # список объектов, например ДомКлик недополучал новые объявления) — площадки
-            # обходят фид намного реже 5 минут, поэтому короткий max-age не спасал от
-            # залипания на edge-узле CDN.
-            CacheControl='no-cache, must-revalidate',
+            # no-store — жёсткий запрет кэширования где-либо (в отличие от no-cache,
+            # который лишь предписывает ревалидацию, но не запрещает кэш явно).
+            # Раньше был max-age=300, потом no-cache — оба варианта не спасали:
+            # некоторые фиды отдавались из CDN-кэша по несколько дней (edge-узел
+            # не всегда уважал ревалидацию), например biznesarenda2.xml отдавал
+            # версию недельной давности при обычном запросе (подтверждено: с
+            # анти-кэш query-параметром CDN честно отдавал MISS+свежий файл, без
+            # параметра — HIT+устаревший). no-store — самая жёсткая директива,
+            # должна закрыть и этот случай.
+            CacheControl='no-store',
         )
         cdn_url = _cdn_url(key)
         cur.execute(
@@ -428,7 +431,7 @@ def _bump_feed_dates(cur, conn):
     трогая updated_at — сортировка «новые/обновлённые» на сайте и история
     редактирования в админке не затрагиваются.
 
-    По умолчанию: 20:30 UTC = 23:30 МСК.
+    По умолчанию: 06:00 UTC = 09:00 МСК.
 
     Срабатывает при ПЕРВОМ вызове после наступления целевого времени в текущие
     сутки (сравнение last_at с точной меткой «сегодня, target_hour:target_minute»),
@@ -444,8 +447,8 @@ def _bump_feed_dates(cur, conn):
         return {'skipped': True, 'reason': 'disabled'}
 
     now_utc = datetime.now(timezone.utc)
-    target_hour = int(s.get('feed_bump_cron_hour') if s.get('feed_bump_cron_hour') is not None else 20)
-    target_minute = int(s.get('feed_bump_cron_minute') if s.get('feed_bump_cron_minute') is not None else 30)
+    target_hour = int(s.get('feed_bump_cron_hour') if s.get('feed_bump_cron_hour') is not None else 6)
+    target_minute = int(s.get('feed_bump_cron_minute') if s.get('feed_bump_cron_minute') is not None else 0)
     target_dt_today = now_utc.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
     last_at = s.get('feed_bump_cron_last_at')
 
