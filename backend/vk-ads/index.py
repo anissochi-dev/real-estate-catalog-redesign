@@ -22,7 +22,7 @@ SYNC_INTERVAL_HOURS = 6
 CORS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Authorization, X-Cron-Token',
 }
 
 
@@ -260,6 +260,21 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
 
     params = event.get('queryStringParameters') or {}
+
+    # Платформенный крон (function.json → "cron": "0 */6 * * *") вызывает функцию
+    # ЧИСТЫМ GET без query-параметров — раньше у VK Ads вообще не было своего
+    # function.json, поэтому синхронизация ни разу не запускалась автоматически
+    # (vk_ads_sync_log оставался пустым). X-Cron-Token — доверенный заголовок
+    # платформы (тот же секрет уже используется в xml-feeds/price-predict) —
+    # если он совпал, считаем вызов равносильным ?action=cron.
+    _raw_headers = event.get('headers') or {}
+    _headers_lc = {k.lower(): v for k, v in _raw_headers.items()}
+    _cron_token = _headers_lc.get('x-cron-token') or ''
+    _expected_cron_token = os.environ.get('CRON_SECRET', '')
+    is_platform_cron = bool(_expected_cron_token) and _cron_token == _expected_cron_token
+    if is_platform_cron and 'action' not in params:
+        params = {**params, 'action': 'cron'}
+
     action = params.get('action', '')
     force_sync = params.get('sync') == '1'
 

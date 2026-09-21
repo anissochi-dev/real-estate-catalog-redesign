@@ -3677,6 +3677,72 @@ def _domclick_handle(cur, conn, params):
     return _json(_domclick_read_from_db(cur))
 
 
+# Порог «протухания» для алерта — если площадка активна, но реальной синхронизации
+# не было дольше этого времени, считаем её проблемной. Каждая площадка синхронизируется
+# раз в час (см. *_SYNC_INTERVAL_HOURS выше) — 24 часа даёт большой запас на случайный
+# пропуск нескольких крон-тиков, но всё равно ловит реальные многодневные обрывы вроде
+# того, что случился 19-21 сентября.
+SYNC_HEALTH_THRESHOLD_HOURS = 24
+
+
+def _sync_health_check(cur):
+    """Проверяет для каждой ВКЛЮЧЕННОЙ площадки (ad_platform_keys.is_active=TRUE),
+    когда была последняя синхронизация, и возвращает список тех, кто не обновлялся
+    дольше SYNC_HEALTH_THRESHOLD_HOURS. Площадки группы «Разное» проверяются по
+    last_generated_at из xml_feeds (свежая generation среди активных фидов), а не
+    по platform_keys — у них нет отдельного ключа API, это статические фиды."""
+    now = datetime.now(timezone.utc)
+    threshold = timedelta(hours=SYNC_HEALTH_THRESHOLD_HOURS)
+    stale = []
+
+    platform_checks = [
+        ('cian', 'ЦИАН', 'cian_sync_log'),
+        ('yandex_realty', 'Яндекс.Недвижимость', 'yandex_sync_log'),
+        ('avito', 'Авито', 'avito_sync_log'),
+        ('youla', 'Юла', 'youla_sync_log'),
+        ('domclick', 'ДомКлик', 'domclick_sync_log'),
+    ]
+
+    for platform_key, label, log_table in platform_checks:
+        cur.execute(f"SELECT is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = '{platform_key}' LIMIT 1")
+        row = cur.fetchone()
+        if not row or not row.get('is_active'):
+            continue  # площадка не подключена — не считаем это сбоем синхронизации
+
+        cur.execute(f"SELECT MAX(synced_at) AS last_sync FROM {SCHEMA}.{log_table}")
+        last_row = cur.fetchone()
+        last_sync = last_row.get('last_sync') if last_row else None
+
+        if not last_sync:
+            stale.append({'key': platform_key, 'label': label, 'last_sync': None, 'hours_ago': None})
+            continue
+
+        elapsed = now - last_sync
+        if elapsed > threshold:
+            stale.append({
+                'key': platform_key, 'label': label,
+                'last_sync': last_sync.isoformat(),
+                'hours_ago': round(elapsed.total_seconds() / 3600, 1),
+            })
+
+    # «Разное» — группа статических фидов, проверяем по самой свежей генерации
+    # среди активных фидов формата 'other' (один общий флаг на все площадки группы).
+    cur.execute(f"SELECT MAX(last_generated_at) AS last_gen FROM {SCHEMA}.xml_feeds WHERE format = 'other' AND is_active = TRUE")
+    other_row = cur.fetchone()
+    last_gen = other_row.get('last_gen') if other_row else None
+    if last_gen:
+        last_gen_aware = last_gen if last_gen.tzinfo else last_gen.replace(tzinfo=timezone.utc)
+        elapsed = now - last_gen_aware
+        if elapsed > threshold:
+            stale.append({
+                'key': 'other', 'label': 'Разное',
+                'last_sync': last_gen_aware.isoformat(),
+                'hours_ago': round(elapsed.total_seconds() / 3600, 1),
+            })
+
+    return {'ok': True, 'stale': stale, 'checked_at': now.isoformat()}
+
+
 def handler(event, context):
     method = event.get('httpMethod', 'GET')
     params = event.get('queryStringParameters') or {}
@@ -3720,31 +3786,41 @@ def handler(event, context):
                 # Перед сборкой — проверяем окно авто-обновления даты объявлений (раз в сутки).
                 bump_result = _bump_feed_dates(cur, conn)
                 results = _regenerate_static_feeds(cur, conn, force=bump_result.get('updated', 0) > 0)
-                cur.execute(f"SELECT is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = 'cian' LIMIT 1")
-                row = cur.fetchone()
-                cian_result = None
-                if row and row.get('is_active'):
-                    cian_result = _cian_handle(cur, conn, {'action': 'cian_cron'})
-                cur.execute(f"SELECT is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = 'yandex_realty' LIMIT 1")
-                row = cur.fetchone()
-                yandex_result = None
-                if row and row.get('is_active'):
-                    yandex_result = _yandex_calls_handle(cur, conn, {'action': 'yandex_cron'})
-                cur.execute(f"SELECT is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = 'avito' LIMIT 1")
-                row = cur.fetchone()
-                avito_result = None
-                if row and row.get('is_active'):
-                    avito_result = _avito_handle(cur, conn, {'action': 'avito_cron'})
-                cur.execute(f"SELECT is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = 'youla' LIMIT 1")
-                row = cur.fetchone()
-                youla_result = None
-                if row and row.get('is_active'):
-                    youla_result = _youla_handle(cur, conn, {'action': 'youla_cron'})
-                cur.execute(f"SELECT is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = 'domclick' LIMIT 1")
-                row = cur.fetchone()
-                domclick_result = None
-                if row and row.get('is_active'):
-                    domclick_result = _domclick_handle(cur, conn, {'action': 'domclick_cron'})
+
+                # Каждая площадка синхронизируется независимо — падение одной (сетевая
+                # ошибка, невалидный токен, необработанное исключение внутри _handle)
+                # НЕ должно останавливать синхронизацию остальных. Раньше вызовы шли
+                # подряд без try/except, и сбой, например, Яндекса обрывал весь крон-тик,
+                # из-за чего Авито/Юла/ДомКлик молча переставали обновляться на несколько
+                # дней — именно так и произошло 19-21 сентября.
+                platform_errors = {}
+
+                def _run_platform_cron(platform_key, action_name, handler_fn):
+                    cur.execute(f"SELECT is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = '{platform_key}' LIMIT 1")
+                    row = cur.fetchone()
+                    if not row or not row.get('is_active'):
+                        return None
+                    try:
+                        return handler_fn(cur, conn, {'action': action_name})
+                    except Exception as e:
+                        # Откатываем текущую транзакцию, иначе следующая площадка
+                        # унаследует "испорченное" состояние соединения (aborted transaction)
+                        # и тоже упадёт, даже если сама по себе работает исправно.
+                        try:
+                            conn.rollback()
+                        except Exception:
+                            pass
+                        err_text = f'{type(e).__name__}: {str(e)[:300]}'
+                        platform_errors[platform_key] = err_text
+                        print(f'[xml-feeds cron] {platform_key} failed: {err_text}')
+                        return None
+
+                cian_result = _run_platform_cron('cian', 'cian_cron', _cian_handle)
+                yandex_result = _run_platform_cron('yandex_realty', 'yandex_cron', _yandex_calls_handle)
+                avito_result = _run_platform_cron('avito', 'avito_cron', _avito_handle)
+                youla_result = _run_platform_cron('youla', 'youla_cron', _youla_handle)
+                domclick_result = _run_platform_cron('domclick', 'domclick_cron', _domclick_handle)
+
                 return _json({
                     'ok': True, 'results': results,
                     'feed_bump': bump_result,
@@ -3753,6 +3829,7 @@ def handler(event, context):
                     'avito': json.loads(avito_result['body']) if avito_result else None,
                     'youla': json.loads(youla_result['body']) if youla_result else None,
                     'domclick': json.loads(domclick_result['body']) if domclick_result else None,
+                    'platform_errors': platform_errors or None,
                 })
 
             if method == 'GET' and params.get('action') == 'generate_static':
@@ -3802,6 +3879,13 @@ def handler(event, context):
                 # Статистика объявлений кабинета ДомКлик (Stats API): просмотры, показы
                 # телефона, показы в поиске, чаты, избранное — по каждому объявлению.
                 return _domclick_handle(cur, conn, params)
+
+            if method == 'GET' and params.get('action') == 'sync_health':
+                # Публичный (без авторизации, только для чтения) эндпоинт для
+                # фронтенда — проверка «здоровья» автообновления площадок при входе
+                # администратора: возвращает список площадок, которые не обновлялись
+                # дольше SYNC_HEALTH_THRESHOLD_HOURS часов, для всплывающего уведомления.
+                return _json(_sync_health_check(cur))
 
             if method == 'GET' and params.get('action') == 'other_platforms':
                 # Вкладка «Разное»: список площадок формата 'other' (realtymag, rucountry и т.п.)
@@ -3979,5 +4063,15 @@ def handler(event, context):
                 })
 
             return _json({'error': 'Method not allowed'}, 405)
+    except Exception as e:
+        # Подстраховка верхнего уровня: без этого необработанное исключение в любом
+        # ветвлении handler'а (не только в cron) обрывало бы запрос кодом 500 без
+        # понятного тела ответа и без записи в логи функции.
+        print(f'[xml-feeds] unhandled error: {type(e).__name__}: {e}')
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return _json({'error': f'Internal error: {type(e).__name__}: {str(e)[:300]}'}, 500)
     finally:
         conn.close()

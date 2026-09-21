@@ -4,6 +4,20 @@ export const AVITO_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-b
 export const OTHER_PLATFORMS_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=other_platforms';
 export const YOULA_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=youla_stats';
 export const DOMCLICK_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=domclick_stats';
+export const SYNC_HEALTH_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=sync_health';
+
+export interface StalePlatform {
+  key: string;
+  label: string;
+  last_sync: string | null;
+  hours_ago: number | null;
+}
+
+export interface SyncHealthData {
+  ok: boolean;
+  stale: StalePlatform[];
+  checked_at: string;
+}
 
 export interface OtherPlatformListing {
   id: number;
@@ -72,6 +86,7 @@ export interface PlatformCard {
     offersDeclined: number;
     totalShows: number;
     withErrors: number;
+    syncedAt: string | null;
   };
   /** Расширенная сводка ДомКлик — вся статистика, которую передаёт площадка. */
   domclickExtra?: {

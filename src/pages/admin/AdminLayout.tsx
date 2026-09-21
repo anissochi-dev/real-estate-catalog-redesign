@@ -6,6 +6,8 @@ import AdminSidebar from './AdminSidebar';
 import AdminHeader from './AdminHeader';
 import AdminIdleWarning from './AdminIdleWarning';
 import { PlatformLogosProvider } from '@/contexts/PlatformLogosContext';
+import { useSyncHealth } from './ad-cabinet/useSyncHealth';
+import SyncHealthModal from './ad-cabinet/SyncHealthModal';
 
 export type AdminSection = 'dashboard' | 'listings' | 'leads' | 'network-tenants' | 'pages' | 'settings' | 'ai-logs'
   | 'crm-owners' | 'crm-kanban' | 'crm-gamification' | 'crm-checks' | 'crm-payments'
@@ -47,6 +49,8 @@ const NAV: { id: AdminSection; label: string; icon: string; roles: string[]; gro
   { id: 'crm-payments',     label: 'Платежи',           icon: 'CreditCard',      roles: ['admin', 'director', 'office_manager', 'manager'] },
 ];
 
+const SYNC_HEALTH_SESSION_KEY = 'biznest_sync_health_shown';
+
 export default function AdminLayout({ section, setSection, onExit, onExitToPath, children }: Props) {
   const { user } = useAuth();
   const [aiOpen,      setAiOpen]      = useState(false);
@@ -63,6 +67,20 @@ export default function AdminLayout({ section, setSection, onExit, onExitToPath,
     navOrder,
     stayLoggedIn,
   } = useAdminPolling(section);
+
+  // Проверка «здоровья» автообновления рекламных площадок — только для ролей,
+  // которым доступен раздел «Маркетолог», и только один раз за сессию браузера
+  // (иначе модалка всплывала бы при каждом переключении раздела в админке).
+  const canSeeAdCabinet = !!user && ['admin', 'editor', 'manager', 'director'].includes(user.role);
+  const { stale: staleSyncPlatforms } = useSyncHealth(canSeeAdCabinet);
+  const [syncHealthModalOpen, setSyncHealthModalOpen] = useState(() => {
+    try { return !sessionStorage.getItem(SYNC_HEALTH_SESSION_KEY); } catch { return true; }
+  });
+  const showSyncHealthModal = syncHealthModalOpen && canSeeAdCabinet && staleSyncPlatforms.length > 0;
+  const closeSyncHealthModal = () => {
+    setSyncHealthModalOpen(false);
+    try { sessionStorage.setItem(SYNC_HEALTH_SESSION_KEY, '1'); } catch { /* ignore */ }
+  };
 
   if (!user) return null;
 
@@ -146,6 +164,14 @@ export default function AdminLayout({ section, setSection, onExit, onExitToPath,
         <AdminIdleWarning
           secondsLeft={secondsLeft}
           onStay={stayLoggedIn}
+        />
+      )}
+
+      {showSyncHealthModal && (
+        <SyncHealthModal
+          stale={staleSyncPlatforms}
+          onClose={closeSyncHealthModal}
+          onOpenAdCabinet={() => setSection('marketing')}
         />
       )}
     </div>

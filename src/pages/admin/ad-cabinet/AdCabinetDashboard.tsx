@@ -2,6 +2,8 @@ import { ReactNode, useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import PlatformIcon from '@/components/admin/PlatformIcon';
 import { AVITO_API_URL, AvitoData, CIAN_API_URL, CianData, DOMCLICK_API_URL, DomclickData, OTHER_PLATFORMS_API_URL, OtherPlatformRow, PlatformCard, SERVICE_TYPE_LABELS, YANDEX_CALLS_API_URL, YandexCallsData, YOULA_API_URL, YoulaData } from './types';
+import { useSyncHealth } from './useSyncHealth';
+import SyncHealthBanner from './SyncHealthBanner';
 
 interface Props {
   onOpenPlatform: (key: string) => void;
@@ -138,6 +140,12 @@ function PlatformCardView({ card, onClick }: { card: PlatformCard; onClick: () =
               Обновлено {new Date(card.domclickExtra.syncedAt).toLocaleString('ru')}
             </div>
           )}
+
+          {card.key === 'yandex_realty' && card.yandexExtra?.syncedAt && (
+            <div className="text-[10px] text-muted-foreground/70">
+              Обновлено {new Date(card.yandexExtra.syncedAt).toLocaleString('ru')}
+            </div>
+          )}
         </>
       ) : (
         <div className="text-xs text-muted-foreground truncate" title={card.errorReason || undefined}>
@@ -155,6 +163,15 @@ function PlatformCardView({ card, onClick }: { card: PlatformCard; onClick: () =
 function OtherPlatformCardView({ platforms, onClick }: { platforms: OtherPlatformRow[]; onClick: () => void }) {
   const totalListings = platforms[0]?.listings_count ?? 0;
   const activeCount = platforms.filter(p => p.is_active).length;
+  // Показываем дату самой недавней пересборки среди всех площадок группы —
+  // так карточка на дашборде отражает, что автообновление реально работает,
+  // а не "висит без даты" (это единственная карточка из шести, где раньше
+  // дата вообще не выводилась, хотя last_generated_at в БД обновляется).
+  const lastGeneratedAt = platforms.reduce<string | null>((latest, p) => {
+    if (!p.last_generated_at) return latest;
+    if (!latest || p.last_generated_at > latest) return p.last_generated_at;
+    return latest;
+  }, null);
   return (
     <div
       onClick={onClick}
@@ -175,6 +192,11 @@ function OtherPlatformCardView({ platforms, onClick }: { platforms: OtherPlatfor
         <Icon name={activeCount > 0 ? 'CheckCircle2' : 'Circle'} size={10} />
         {activeCount > 0 ? `Активно: ${activeCount}` : 'Нет площадок'}
       </span>
+      {lastGeneratedAt && (
+        <div className="text-[10px] text-muted-foreground/70">
+          Обновлено {new Date(lastGeneratedAt).toLocaleString('ru')}
+        </div>
+      )}
     </div>
   );
 }
@@ -189,6 +211,7 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const { stale: staleSyncPlatforms } = useSyncHealth(true);
 
   const load = (sync = false) => {
     if (sync) setSyncing(true); else setLoading(true);
@@ -262,6 +285,7 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
           offersDeclined: yandex.last_sync?.offers_declined || 0,
           totalShows: yandex.summary.total_shows || 0,
           withErrors: yandex.summary.with_errors || 0,
+          syncedAt: yandex.last_sync?.synced_at || null,
         } : undefined,
       };
     }
@@ -356,6 +380,8 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
           </button>
         </div>
       </div>
+
+      <SyncHealthBanner stale={staleSyncPlatforms} />
 
       {loading && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
