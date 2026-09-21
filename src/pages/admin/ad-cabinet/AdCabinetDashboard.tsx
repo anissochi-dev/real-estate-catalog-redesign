@@ -99,6 +99,16 @@ function PlatformCardView({ card, onClick }: { card: PlatformCard; onClick: () =
             </div>
           )}
 
+          {card.key === 'youla' && card.youlaExtra && (
+            <div className="grid grid-cols-2 gap-1.5 mt-0.5">
+              <MiniStat value={card.youlaExtra.totalShows.toLocaleString('ru')} label="Показы" />
+              <MiniStat value={card.youlaExtra.totalViews.toLocaleString('ru')} label="Просмотры" />
+              <MiniStat value={card.youlaExtra.totalContacts.toLocaleString('ru')} label="Контакты" />
+              <MiniStat value={card.youlaExtra.totalUniqueContacts.toLocaleString('ru')} label="Уник. контакты" />
+              <MiniStat value={card.youlaExtra.publishedCount.toLocaleString('ru')} label="Опубликовано" />
+            </div>
+          )}
+
           {card.services.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-0.5">
               {card.services.map(s => (
@@ -138,6 +148,12 @@ function PlatformCardView({ card, onClick }: { card: PlatformCard; onClick: () =
           {card.key === 'domclick' && card.domclickExtra?.syncedAt && (
             <div className="text-[10px] text-muted-foreground/70">
               Обновлено {new Date(card.domclickExtra.syncedAt).toLocaleString('ru')}
+            </div>
+          )}
+
+          {card.key === 'youla' && card.youlaExtra?.syncedAt && (
+            <div className="text-[10px] text-muted-foreground/70">
+              Обновлено {new Date(card.youlaExtra.syncedAt).toLocaleString('ru')}
             </div>
           )}
 
@@ -316,15 +332,24 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
     }
     if (key === 'youla' && youla) {
       const connected = youla.connected && !youla.last_sync?.error;
-      const publishedCount = youla.items?.filter(i => i.is_published).length || 0;
+      const items = youla.items || [];
+      const publishedCount = items.filter(i => i.is_published).length;
       return {
         key, label: 'Юла', icon: '', color: '',
         connected,
-        offersCount: youla.items?.length || 0,
+        offersCount: items.length,
         balance: null,
         status: connected ? (publishedCount > 0 ? 'active' : 'paused') : 'not_connected',
         services: [],
         errorReason: !connected ? youla.last_sync?.error : null,
+        youlaExtra: connected ? {
+          publishedCount,
+          totalShows: items.reduce((a, i) => a + (i.shows || 0), 0),
+          totalViews: items.reduce((a, i) => a + (i.views || 0), 0),
+          totalContacts: items.reduce((a, i) => a + (i.contacts || 0), 0),
+          totalUniqueContacts: items.reduce((a, i) => a + (i.unique_contacts || 0), 0),
+          syncedAt: youla.last_sync?.synced_at || null,
+        } : undefined,
       };
     }
     if (key === 'domclick' && domclick) {

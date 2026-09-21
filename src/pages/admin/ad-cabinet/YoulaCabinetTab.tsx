@@ -58,6 +58,11 @@ export default function YoulaCabinetTab() {
   if (!data) return null;
   const { last_sync, sync_result } = data;
   const syncError = last_sync?.error;
+  const items = data.items || [];
+  const totalShows = items.reduce((a, i) => a + (i.shows || 0), 0);
+  const totalViews = items.reduce((a, i) => a + (i.views || 0), 0);
+  const totalContacts = items.reduce((a, i) => a + (i.contacts || 0), 0);
+  const totalUniqueContacts = items.reduce((a, i) => a + (i.unique_contacts || 0), 0);
 
   return (
     <div className="space-y-4">
@@ -96,7 +101,7 @@ export default function YoulaCabinetTab() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="bg-white rounded-xl border border-border p-3">
               <div className="text-xl font-bold flex items-center gap-1.5">
                 <Icon name="CheckCircle2" size={16} className="text-emerald-600" />
@@ -105,12 +110,28 @@ export default function YoulaCabinetTab() {
               <div className="text-xs text-muted-foreground mt-0.5">{last_sync?.owner_name || last_sync?.owner_id || '—'}</div>
             </div>
             <div className="bg-white rounded-xl border border-border p-3">
-              <div className="text-xl font-bold">{fmt(data.items?.length || 0)}</div>
+              <div className="text-xl font-bold">{fmt(items.length)}</div>
               <div className="text-xs text-muted-foreground">Объявлений на Юле</div>
             </div>
             <div className="bg-white rounded-xl border border-border p-3">
-              <div className="text-xl font-bold">{fmt(data.items?.filter(i => i.is_published).length || 0)}</div>
+              <div className="text-xl font-bold">{fmt(items.filter(i => i.is_published).length)}</div>
               <div className="text-xs text-muted-foreground">Опубликовано</div>
+            </div>
+            <div className="bg-white rounded-xl border border-border p-3">
+              <div className="text-xl font-bold">{fmt(totalShows)}</div>
+              <div className="text-xs text-muted-foreground">Показы</div>
+            </div>
+            <div className="bg-white rounded-xl border border-border p-3">
+              <div className="text-xl font-bold">{fmt(totalViews)}</div>
+              <div className="text-xs text-muted-foreground">Просмотры</div>
+            </div>
+            <div className="bg-white rounded-xl border border-border p-3">
+              <div className="text-xl font-bold">{fmt(totalContacts)}</div>
+              <div className="text-xs text-muted-foreground">Контакты</div>
+            </div>
+            <div className="bg-white rounded-xl border border-border p-3">
+              <div className="text-xl font-bold">{fmt(totalUniqueContacts)}</div>
+              <div className="text-xs text-muted-foreground">Уникальные контакты</div>
             </div>
           </div>
 
@@ -135,7 +156,7 @@ export default function YoulaCabinetTab() {
             </div>
           )}
 
-          {!!data.items?.length && (
+          {!!items.length && (
             <div className="bg-white rounded-2xl border border-border p-4 overflow-x-auto">
               <h3 className="font-semibold text-sm flex items-center gap-2 mb-3">
                 <Icon name="ListChecks" size={16} className="text-brand-blue" />
@@ -150,11 +171,12 @@ export default function YoulaCabinetTab() {
                     <th className="pb-2 pr-3 font-medium text-right">Показы</th>
                     <th className="pb-2 pr-3 font-medium text-right">Просмотры</th>
                     <th className="pb-2 pr-3 font-medium text-right">Контакты</th>
+                    <th className="pb-2 pr-3 font-medium text-right">Уник. контакты</th>
                     <th className="pb-2 font-medium"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.items.map((item) => (
+                  {items.map((item) => (
                     <tr key={item.listing_id} className="border-b border-border/50 last:border-0">
                       <td className="py-2 pr-3 max-w-[220px] truncate" title={item.title || ''}>{item.title || '—'}</td>
                       <td className="py-2 pr-3">{DEAL_LABELS[item.deal || ''] || item.deal || '—'}</td>
@@ -176,6 +198,7 @@ export default function YoulaCabinetTab() {
                       <td className="py-2 pr-3 text-right">{item.shows ?? '—'}</td>
                       <td className="py-2 pr-3 text-right">{item.views ?? '—'}</td>
                       <td className="py-2 pr-3 text-right">{item.contacts ?? '—'}</td>
+                      <td className="py-2 pr-3 text-right">{item.unique_contacts ?? '—'}</td>
                       <td className="py-2">
                         {item.url && (
                           <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-brand-blue hover:underline">

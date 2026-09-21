@@ -99,6 +99,15 @@ export interface PlatformCard {
     totalFavorites: number;
     syncedAt: string | null;
   };
+  /** Расширенная сводка Юлы — показы, просмотры, контакты по объявлениям. */
+  youlaExtra?: {
+    publishedCount: number;
+    totalShows: number;
+    totalViews: number;
+    totalContacts: number;
+    totalUniqueContacts: number;
+    syncedAt: string | null;
+  };
 }
 
 export interface CianCallRow {
