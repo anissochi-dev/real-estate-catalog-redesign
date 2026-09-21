@@ -2222,8 +2222,24 @@ def _cian_chunks(lst, n):
         yield lst[i:i + n]
 
 
+CIAN_SYNC_TIME_BUDGET_SEC = 22  # см. комментарий в _cian_sync. У платформы жёсткий
+# gateway-таймаут ~30с (меньше, чем function.json timeout=60 — подтверждено на практике
+# на этой же функции при синхронизации Юлы) — бюджет должен укладываться в этот лимит
+# с запасом на накладные расходы, как уже сделано для Яндекс.CRM (22с).
+
+
 def _cian_sync(cur, conn, token):
-    """Синхронизирует объявления, статистику, услуги, звонки и баланс ЦИАН → БД."""
+    """Синхронизирует объявления, статистику, услуги, звонки и баланс ЦИАН → БД.
+
+    Тайм-бюджет + commit ПОСЛЕ КАЖДОГО ЭТАПА (offers → detail → views-stats →
+    services → calls → balance) — тот же паттерн, что уже используется для
+    Яндекс.CRM/ДомКлика/Юлы: раньше был один общий commit() в самом конце всех
+    шести последовательных сетевых этапов, а при росте каталога (сейчас батчи
+    по 50 id, но с ростом числа объявлений растёт и число батчей на каждом
+    этапе) суммарное время рискует превысить лимит функции (60с) — тогда
+    результаты ВСЕГО прогона (включая уже полученные offers/detail/stats)
+    терялись бы, а не только необработанный остаток."""
+    start_ts = time.monotonic()
     offers_count = stats_count = services_count = calls_count = 0
 
     all_offers = []
@@ -2265,8 +2281,11 @@ def _cian_sync(cur, conn, token):
             UPDATE {SCHEMA}.cian_offers SET archived_at = NOW()
             WHERE id NOT IN ({keep_ids_sql}) AND archived_at IS NULL
         """)
+    conn.commit()  # этап 1 (offers) сохранён
 
     for batch in _cian_chunks(offer_ids, 50):
+        if time.monotonic() - start_ts > CIAN_SYNC_TIME_BUDGET_SEC:
+            break
         qs = '&'.join(f'offerIds={oid}' for oid in batch)
         data, err = _cian_get(f'/v1/get-my-offers-detail?{qs}', token)
         if err or not data:
@@ -2280,8 +2299,11 @@ def _cian_sync(cur, conn, token):
             cur.execute(f"""
                 UPDATE {SCHEMA}.cian_offers SET external_id = %s, url = %s WHERE id = %s
             """, (ext_id_int, item.get('url'), item.get('id')))
+        conn.commit()  # этап 2 (detail) — сохраняем по мере обработки батчей
 
     for batch in _cian_chunks(offer_ids, 50):
+        if time.monotonic() - start_ts > CIAN_SYNC_TIME_BUDGET_SEC:
+            break
         qs = '&'.join(f'offersIds={oid}' for oid in batch)
         data, err = _cian_get(f'/v1/get-views-statistics?{qs}', token)
         if err or not data:
@@ -2302,8 +2324,11 @@ def _cian_sync(cur, conn, token):
                 s.get('responses', 0), s.get('showsBase', 0),
             ))
             stats_count += 1
+        conn.commit()  # этап 3 (views-stats) — сохраняем по мере обработки батчей
 
     for batch in _cian_chunks(offer_ids, 50):
+        if time.monotonic() - start_ts > CIAN_SYNC_TIME_BUDGET_SEC:
+            break
         qs = '&'.join(f'offerIds={oid}' for oid in batch)
         data, err = _cian_get(f'/v1/get-offer-active-services?{qs}', token)
         if err or not data:
@@ -2320,59 +2345,66 @@ def _cian_sync(cur, conn, token):
                             auto_prolong=EXCLUDED.auto_prolong, synced_at=NOW()
                     """, (oid, stype, svc.get('price'), svc.get('paidTill'), svc.get('autoProlongEnabled', False)))
                     services_count += 1
+        conn.commit()  # этап 4 (services) — сохраняем по мере обработки батчей
 
-    date_to = datetime.now().strftime('%Y-%m-%d')
-    date_from = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
-    page = 1
-    while True:
-        data, err = _cian_get(
-            f'/v2/get-calls-report?dateFrom={date_from}&dateTo={date_to}&page={page}&pageSize=100', token,
-        )
-        if err or not data:
-            break
-        result = data.get('result') or {}
-        calls = result.get('calls') or []
-        for c in calls:
-            offer = c.get('offer') or {}
-            ext_id = offer.get('externalId')
-            try:
-                ext_id_int = int(ext_id) if ext_id else None
-            except (ValueError, TypeError):
-                ext_id_int = None
+    budget_exceeded = time.monotonic() - start_ts > CIAN_SYNC_TIME_BUDGET_SEC
+    if not budget_exceeded:
+        date_to = datetime.now().strftime('%Y-%m-%d')
+        date_from = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+        page = 1
+        while True:
+            if time.monotonic() - start_ts > CIAN_SYNC_TIME_BUDGET_SEC:
+                budget_exceeded = True
+                break
+            data, err = _cian_get(
+                f'/v2/get-calls-report?dateFrom={date_from}&dateTo={date_to}&page={page}&pageSize=100', token,
+            )
+            if err or not data:
+                break
+            result = data.get('result') or {}
+            calls = result.get('calls') or []
+            for c in calls:
+                offer = c.get('offer') or {}
+                ext_id = offer.get('externalId')
+                try:
+                    ext_id_int = int(ext_id) if ext_id else None
+                except (ValueError, TypeError):
+                    ext_id_int = None
+                cur.execute(f"""
+                    INSERT INTO {SCHEMA}.cian_calls
+                        (call_id, offer_id, external_id, source_phone, destination_phone, calltracking_phone,
+                         duration, status, call_datetime, employee_id, synced_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW())
+                    ON CONFLICT (call_id) DO UPDATE SET
+                        offer_id=EXCLUDED.offer_id, external_id=EXCLUDED.external_id,
+                        source_phone=EXCLUDED.source_phone, destination_phone=EXCLUDED.destination_phone,
+                        calltracking_phone=EXCLUDED.calltracking_phone, duration=EXCLUDED.duration,
+                        status=EXCLUDED.status, call_datetime=EXCLUDED.call_datetime,
+                        employee_id=EXCLUDED.employee_id, synced_at=NOW()
+                """, (
+                    c.get('callId'), offer.get('id'), ext_id_int, c.get('sourcePhone'), c.get('destinationPhone'),
+                    c.get('calltrackingPhone'), c.get('duration'), c.get('status'), c.get('datetime'), c.get('employeeId'),
+                ))
+                calls_count += 1
+            conn.commit()  # этап 5 (calls) — сохраняем по мере обработки страниц
+            total = result.get('totalCount', 0)
+            if page * 100 >= total or not calls:
+                break
+            page += 1
+            if page > 20:
+                break
+
+    if not budget_exceeded:
+        bdata, berr = _cian_get('/v1/get-my-balance', token)
+        if not berr and bdata:
+            bres = bdata.get('result') or {}
+            bonuses = sum(float(b.get('amount', 0) or 0) for b in (bres.get('bonuses') or []))
+            auction_pts = sum(float(b.get('amount', 0) or 0) for b in (bres.get('auctionPoints') or []))
             cur.execute(f"""
-                INSERT INTO {SCHEMA}.cian_calls
-                    (call_id, offer_id, external_id, source_phone, destination_phone, calltracking_phone,
-                     duration, status, call_datetime, employee_id, synced_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW())
-                ON CONFLICT (call_id) DO UPDATE SET
-                    offer_id=EXCLUDED.offer_id, external_id=EXCLUDED.external_id,
-                    source_phone=EXCLUDED.source_phone, destination_phone=EXCLUDED.destination_phone,
-                    calltracking_phone=EXCLUDED.calltracking_phone, duration=EXCLUDED.duration,
-                    status=EXCLUDED.status, call_datetime=EXCLUDED.call_datetime,
-                    employee_id=EXCLUDED.employee_id, synced_at=NOW()
-            """, (
-                c.get('callId'), offer.get('id'), ext_id_int, c.get('sourcePhone'), c.get('destinationPhone'),
-                c.get('calltrackingPhone'), c.get('duration'), c.get('status'), c.get('datetime'), c.get('employeeId'),
-            ))
-            calls_count += 1
-        total = result.get('totalCount', 0)
-        if page * 100 >= total or not calls:
-            break
-        page += 1
-        if page > 20:
-            break
-
-    bdata, berr = _cian_get('/v1/get-my-balance', token)
-    if not berr and bdata:
-        bres = bdata.get('result') or {}
-        bonuses = sum(float(b.get('amount', 0) or 0) for b in (bres.get('bonuses') or []))
-        auction_pts = sum(float(b.get('amount', 0) or 0) for b in (bres.get('auctionPoints') or []))
-        cur.execute(f"""
-            INSERT INTO {SCHEMA}.cian_balance (total_balance, bonuses_amount, auction_points_amount, synced_at)
-            VALUES (%s,%s,%s, NOW())
-        """, (bres.get('totalBalance', 0), bonuses, auction_pts))
-
-    conn.commit()
+                INSERT INTO {SCHEMA}.cian_balance (total_balance, bonuses_amount, auction_points_amount, synced_at)
+                VALUES (%s,%s,%s, NOW())
+            """, (bres.get('totalBalance', 0), bonuses, auction_pts))
+            conn.commit()  # этап 6 (balance)
 
     cur.execute(f"""
         INSERT INTO {SCHEMA}.cian_sync_log (synced_at, offers_count, stats_count, services_count, calls_count)
@@ -2380,7 +2412,10 @@ def _cian_sync(cur, conn, token):
     """, (offers_count, stats_count, services_count, calls_count))
     conn.commit()
 
-    return {'offers_count': offers_count, 'stats_count': stats_count, 'services_count': services_count, 'calls_count': calls_count}
+    return {
+        'offers_count': offers_count, 'stats_count': stats_count, 'services_count': services_count,
+        'calls_count': calls_count, 'budget_exceeded': budget_exceeded,
+    }
 
 
 def _cian_read_from_db(cur):
@@ -3227,10 +3262,26 @@ def _youla_build_product(l, owner_id, category_id, subcategory_id):
     return body
 
 
+YOULA_PUBLISH_TIME_BUDGET_SEC = 17  # см. комментарий в цикле ниже. У платформы жёсткий
+# gateway-таймаут 30с (меньше, чем function.json timeout=60 — подтверждено на практике:
+# запрос оборвался ровно на 30014мс) — суммарно publish+stats (см. YOULA_STATS_TIME_BUDGET_SEC
+# ниже) должны укладываться в этот лимит с запасом на накладные расходы (открытие
+# соединения с БД, чтение/парсинг ответов и т.п.), как уже сделано для Яндекс.CRM (22с).
+
+
 def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory_id):
     """Публикует/обновляет на Юле все объекты с export_youla=TRUE, архивирует те,
     у кого флаг сняли (но объявление на Юле уже было). Пишет статус каждого
-    объекта в youla_item_status и youla_ad_id обратно в listings."""
+    объекта в youla_item_status и youla_ad_id обратно в listings.
+
+    Тайм-бюджет + commit ПОСЛЕ КАЖДОГО объекта (тот же паттерн, что уже используется
+    для Яндекс.CRM и ДомКлика) — на каждый объект уходит 2+ последовательных HTTP-
+    запроса к Юле (создание/обновление + отдельная публикация), поэтому при большом
+    каталоге один общий commit в конце рискует не дождаться: функция оборвётся по
+    таймауту, и результаты ВСЕГО прогона потеряются, а не только необработанный
+    остаток. Раньше это приводило к тому, что часть объявлений годами оставалась
+    неопубликованной — каждый следующий крон начинал заново с первого объекта в
+    списке и снова упирался в тот же лимит, до "везучих" не успевая дойти."""
     if not category_id or not subcategory_id:
         return {'error': 'Не указаны ID категории/подкатегории Юлы в настройках площадки'}
 
@@ -3238,11 +3289,17 @@ def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory
         SELECT id, title, description, price, price_unit, area, city, district, address, lat, lng, images, image, youla_ad_id
         FROM {SCHEMA}.listings
         WHERE export_youla = TRUE AND status = 'active' AND (is_visible IS NULL OR is_visible = TRUE)
+        ORDER BY (youla_ad_id IS NULL) DESC, id ASC
     """)
     listings = [dict(r) for r in cur.fetchall()]
 
-    created, updated, failed = 0, 0, 0
+    start_ts = time.monotonic()
+    created, updated, failed, skipped_budget = 0, 0, 0, 0
     for l in listings:
+        if time.monotonic() - start_ts > YOULA_PUBLISH_TIME_BUDGET_SEC:
+            skipped_budget += 1
+            continue
+
         body = _youla_build_product(l, owner_id, category_id, subcategory_id)
         if l.get('youla_ad_id'):
             data, err = _youla_request('PUT', f"/products/{l['youla_ad_id']}", token, body)
@@ -3256,6 +3313,7 @@ def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory
                 VALUES (%s, %s, NOW())
                 ON CONFLICT (listing_id) DO UPDATE SET error = EXCLUDED.error, checked_at = NOW()
             """, (l['id'], (err or 'Пустой ответ')[:500]))
+            conn.commit()
             continue
 
         product = data.get('data') or data
@@ -3278,40 +3336,59 @@ def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory
                 block_type_text = EXCLUDED.block_type_text, error = NULL, checked_at = NOW()
         """, (l['id'], youla_id, product.get('url'), product.get('is_published'),
               product.get('is_archived'), product.get('is_blocked'), product.get('block_type_text')))
+        conn.commit()
 
     # Объекты, у которых флаг export_youla сняли, но объявление на Юле осталось — архивируем.
-    cur.execute(f"""
-        SELECT s.listing_id, s.youla_id FROM {SCHEMA}.youla_item_status s
-        JOIN {SCHEMA}.listings l ON l.id = s.listing_id
-        WHERE s.youla_id IS NOT NULL AND s.is_archived IS NOT TRUE
-          AND (l.export_youla = FALSE OR l.status != 'active')
-    """)
-    to_archive = [dict(r) for r in cur.fetchall()]
-    archived = 0
-    for row in to_archive:
-        _, err = _youla_request('POST', '/products/archive', token,
-                                 {'product_ids': [row['youla_id']]}, params={'user_id': owner_id})
-        if not err:
-            cur.execute(f"UPDATE {SCHEMA}.youla_item_status SET is_archived = TRUE, checked_at = NOW() WHERE listing_id = %s",
-                        (row['listing_id'],))
-            archived += 1
-    conn.commit()
+    # Тоже под тем же бюджетом времени — не должно съедать остаток окна, отведённого публикации.
+    archived, archive_skipped_budget = 0, 0
+    if time.monotonic() - start_ts <= YOULA_PUBLISH_TIME_BUDGET_SEC:
+        cur.execute(f"""
+            SELECT s.listing_id, s.youla_id FROM {SCHEMA}.youla_item_status s
+            JOIN {SCHEMA}.listings l ON l.id = s.listing_id
+            WHERE s.youla_id IS NOT NULL AND s.is_archived IS NOT TRUE
+              AND (l.export_youla = FALSE OR l.status != 'active')
+        """)
+        to_archive = [dict(r) for r in cur.fetchall()]
+        for row in to_archive:
+            if time.monotonic() - start_ts > YOULA_PUBLISH_TIME_BUDGET_SEC:
+                archive_skipped_budget += 1
+                continue
+            _, err = _youla_request('POST', '/products/archive', token,
+                                     {'product_ids': [row['youla_id']]}, params={'user_id': owner_id})
+            if not err:
+                cur.execute(f"UPDATE {SCHEMA}.youla_item_status SET is_archived = TRUE, checked_at = NOW() WHERE listing_id = %s",
+                            (row['listing_id'],))
+                archived += 1
+                conn.commit()
 
-    return {'created': created, 'updated': updated, 'archived': archived, 'failed': failed, 'total': len(listings)}
+    return {
+        'created': created, 'updated': updated, 'archived': archived, 'failed': failed,
+        'total': len(listings), 'skipped_budget': skipped_budget + archive_skipped_budget,
+    }
+
+
+YOULA_STATS_TIME_BUDGET_SEC = 5  # запускается ПОСЛЕ publish (см. _youla_full_sync) —
+# бюджет короткий, чтобы суммарно (публикация + статистика) укладываться в реальный
+# gateway-таймаут ~30с (см. комментарий у YOULA_PUBLISH_TIME_BUDGET_SEC)
 
 
 def _youla_fetch_stats(cur, conn, token):
     """Запрашивает статистику показов/просмотров/контактов за 30 дней по каждому
-    объявлению, у которого уже есть youla_id."""
+    объявлению, у которого уже есть youla_id. Тайм-бюджет + commit после каждого
+    объявления — та же защита от потери прогресса, что и в _youla_publish_listings."""
     cur.execute(f"SELECT listing_id, youla_id FROM {SCHEMA}.youla_item_status WHERE youla_id IS NOT NULL")
     rows = [dict(r) for r in cur.fetchall()]
     if not rows:
         return {'skipped': True, 'reason': 'Нет объявлений с youla_id'}
 
+    start_ts = time.monotonic()
     date_to = datetime.now(timezone.utc)
     date_from = date_to - timedelta(days=30)
-    updated = 0
+    updated, skipped_budget = 0, 0
     for row in rows:
+        if time.monotonic() - start_ts > YOULA_STATS_TIME_BUDGET_SEC:
+            skipped_budget += 1
+            continue
         data, err = _youla_request('GET', f"/products/{row['youla_id']}/statistic", token, params={
             'from': date_from.strftime('%Y-%m-%dT%H:%M:%SZ'),
             'to': date_to.strftime('%Y-%m-%dT%H:%M:%SZ'),
@@ -3325,8 +3402,8 @@ def _youla_fetch_stats(cur, conn, token):
             WHERE listing_id = %s
         """, (stat.get('shows'), stat.get('views'), stat.get('contacts'), stat.get('unique_contacts'), row['listing_id']))
         updated += 1
-    conn.commit()
-    return {'updated': updated, 'requested': len(rows)}
+        conn.commit()
+    return {'updated': updated, 'requested': len(rows), 'skipped_budget': skipped_budget}
 
 
 def _youla_read_from_db(cur):
@@ -3537,7 +3614,10 @@ def _domclick_request(path, token, params=None):
     return data, None
 
 
-DOMCLICK_SYNC_TIME_BUDGET_SEC = 45  # см. комментарий в цикле ниже
+DOMCLICK_SYNC_TIME_BUDGET_SEC = 22  # см. комментарий в цикле ниже. У платформы жёсткий
+# gateway-таймаут ~30с (меньше, чем function.json timeout=60 — подтверждено на практике
+# на этой же функции при синхронизации Юлы) — бюджет должен укладываться в этот лимит
+# с запасом на накладные расходы, как уже сделано для Яндекс.CRM (22с).
 
 
 def _domclick_sync_offers(cur, conn, token, company_id):
