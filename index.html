@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
+    <!-- Редирект www.bmn.su → bmn.su. Хостинг (custom domain) не поддерживает
+         серверный rewrite на HTML-ответы, поэтому редирект делаем самым первым
+         скриптом в <head> — до любой другой загрузки, сохраняя путь/query/hash. -->
+    <script>
+      if (window.location.hostname === 'www.bmn.su') {
+        window.location.replace('https://bmn.su' + window.location.pathname + window.location.search + window.location.hash);
+      }
+    </script>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover"/>
     <meta name="theme-color" content="#1a3a6b"/>
