@@ -3193,7 +3193,16 @@ YOULA_SYNC_INTERVAL_HOURS = 1
 
 
 def _youla_request(method, path, token, payload=None, params=None):
-    """Универсальный запрос к Youla Partner API (GET/POST/PUT/DELETE), Bearer-токен."""
+    """Универсальный запрос к Youla Partner API (GET/POST/PUT/DELETE), Bearer-токен.
+
+    timeout=8 (не 25!) — у платформы жёсткий gateway-таймаут ~30с на ВЕСЬ вызов
+    функции (подтверждено на практике: запрос оборвался ровно на 30014мс), а на
+    один объект может уйти 2+ последовательных запроса (создание/обновление +
+    публикация). Старый timeout=25 позволял ОДНОМУ зависшему запросу съесть
+    почти весь бюджет времени — логический тайм-бюджет (YOULA_PUBLISH_TIME_BUDGET_SEC)
+    проверяется только МЕЖДУ итерациями цикла и не мог прервать уже начавшийся
+    запрос, из-за чего вся синхронизация иногда обрывалась по 504 без сохранения
+    прогресса — крон реально не успевал сработать по расписанию сутками."""
     url = f'{YOULA_BASE}{path}'
     if params:
         url += ('&' if '?' in url else '?') + urllib.parse.urlencode(params)
@@ -3203,7 +3212,7 @@ def _youla_request(method, path, token, payload=None, params=None):
         'Content-Type': 'application/json',
     })
     try:
-        with urllib.request.urlopen(req, timeout=25) as r:
+        with urllib.request.urlopen(req, timeout=8) as r:
             body = r.read().decode()
             return (json.loads(body) if body else {}), None
     except urllib.error.HTTPError as e:
