@@ -14,6 +14,8 @@ import urllib.request
 import urllib.parse
 import urllib.error
 import time
+import traceback
+import uuid
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
@@ -3885,75 +3887,131 @@ def handler(event, context):
     _cron_token = _headers_lc.get('x-cron-token') or ''
     _expected_cron_token = os.environ.get('CRON_SECRET', '')
     is_platform_cron = bool(_expected_cron_token) and _cron_token == _expected_cron_token
+    _action_from_query = 'action' in params
     if is_platform_cron and 'action' not in params:
         params = {**params, 'action': 'cron'}
+
+    # Диагностика cron (временно): request_id — из context, иначе из заголовка, иначе uuid4.
+    _rid = getattr(context, 'request_id', None)
+    _rid_source = 'context'
+    if not _rid:
+        _rid = _headers_lc.get('x-request-id')
+        _rid_source = 'header'
+    if not _rid:
+        _rid = str(uuid.uuid4())
+        _rid_source = 'uuid4'
+
+    def _cron_log(event_name, **fields):
+        print(json.dumps({
+            'event': event_name,
+            'request_id': _rid,
+            'rid_source': _rid_source,
+            'ts': datetime.now(timezone.utc).isoformat(),
+            **fields,
+        }, ensure_ascii=False, separators=(',', ':'), default=str))
 
     dsn = os.environ['DATABASE_URL']
     conn = psycopg2.connect(dsn)
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             if method == 'GET' and params.get('action') == 'cron':
-                # Публичный пинг-крон: вызывается автоматически платформой раз в 20 минут
-                # (см. function.json) + дублируется пингом из браузера (useCrons.ts) как
-                # подстраховка. Пересобирает статические файлы в S3 (раз в 10 мин).
-                # Перед сборкой — проверяем окно авто-обновления даты объявлений (раз в сутки).
-                bump_result = _bump_feed_dates(cur, conn)
-                results = _regenerate_static_feeds(cur, conn, force=bump_result.get('updated', 0) > 0)
+                _cron_t0 = time.monotonic()
+                _rot_keys = ['cian', 'yandex_realty', 'avito', 'youla', 'domclick']
+                _start_tick = int(datetime.now(timezone.utc).timestamp() // 1200) % len(_rot_keys)
+                _cron_log(
+                    'cron_start',
+                    tick_index=_start_tick, platform_selected=_rot_keys[_start_tick],
+                    is_platform_cron=is_platform_cron, has_token=bool(_cron_token),
+                    token_match=bool(_expected_cron_token) and _cron_token == _expected_cron_token,
+                    secret_present=bool(_expected_cron_token), action_from_query=_action_from_query,
+                    user_agent=(_headers_lc.get('user-agent') or '')[:200],
+                )
+                try:
+                    # Публичный пинг-крон: вызывается автоматически платформой раз в 20 минут
+                    # (см. function.json) + дублируется пингом из браузера (useCrons.ts) как
+                    # подстраховка. Пересобирает статические файлы в S3 (раз в 10 мин).
+                    # Перед сборкой — проверяем окно авто-обновления даты объявлений (раз в сутки).
+                    bump_result = _bump_feed_dates(cur, conn)
+                    results = _regenerate_static_feeds(cur, conn, force=bump_result.get('updated', 0) > 0)
+                    _feeds_ms = int((time.monotonic() - _cron_t0) * 1000)
 
-                # Кабинеты площадок (ЦИАН/Яндекс/Авито/Юла/ДомКлик) СИНХРОНИЗИРУЮТСЯ
-                # ROUND-ROBIN — только ОДНА площадка за один тик крона, а не все 5 подряд.
-                # Раньше все 5 обходились в одном HTTP-вызове (лимит function.json
-                # timeout=60с) — при росте каталога (публикация N объявлений на Юле,
-                # постраничный обход ДомКлика и т.д.) суммарное время пяти синхронизаций
-                # стало превышать 60с, и крон обрывался по таймауту на середине, не
-                # успевая даже сохранить прогресс уже готовых площадок. Round-robin
-                # выбирает площадку детерминированно по времени (без доп. таблиц в БД) —
-                # так каждый тик остаётся лёгким, а полный круг по всем 5 площадкам
-                # занимает ~100 минут (5 × 20 мин) вместо желаемого 1 часа — компромисс,
-                # осознанно принятый ради устранения таймаутов.
-                PLATFORM_ROTATION = [
-                    ('cian', 'cian_cron', _cian_handle),
-                    ('yandex_realty', 'yandex_cron', _yandex_calls_handle),
-                    ('avito', 'avito_cron', _avito_handle),
-                    ('youla', 'youla_cron', _youla_handle),
-                    ('domclick', 'domclick_cron', _domclick_handle),
-                ]
-                CRON_TICK_SECONDS = 1200  # 20 минут — совпадает с function.json cron
+                    # Кабинеты площадок (ЦИАН/Яндекс/Авито/Юла/ДомКлик) СИНХРОНИЗИРУЮТСЯ
+                    # ROUND-ROBIN — только ОДНА площадка за один тик крона, а не все 5 подряд.
+                    # Раньше все 5 обходились в одном HTTP-вызове (лимит function.json
+                    # timeout=60с) — при росте каталога (публикация N объявлений на Юле,
+                    # постраничный обход ДомКлика и т.д.) суммарное время пяти синхронизаций
+                    # стало превышать 60с, и крон обрывался по таймауту на середине, не
+                    # успевая даже сохранить прогресс уже готовых площадок. Round-robin
+                    # выбирает площадку детерминированно по времени (без доп. таблиц в БД) —
+                    # так каждый тик остаётся лёгким, а полный круг по всем 5 площадкам
+                    # занимает ~100 минут (5 × 20 мин) вместо желаемого 1 часа — компромисс,
+                    # осознанно принятый ради устранения таймаутов.
+                    PLATFORM_ROTATION = [
+                        ('cian', 'cian_cron', _cian_handle),
+                        ('yandex_realty', 'yandex_cron', _yandex_calls_handle),
+                        ('avito', 'avito_cron', _avito_handle),
+                        ('youla', 'youla_cron', _youla_handle),
+                        ('domclick', 'domclick_cron', _domclick_handle),
+                    ]
+                    CRON_TICK_SECONDS = 1200  # 20 минут — совпадает с function.json cron
 
-                def _run_platform_cron(platform_key, action_name, handler_fn):
-                    cur.execute(f"SELECT is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = '{platform_key}' LIMIT 1")
-                    row = cur.fetchone()
-                    if not row or not row.get('is_active'):
-                        return None
-                    try:
-                        return handler_fn(cur, conn, {'action': action_name})
-                    except Exception as e:
-                        # Откатываем текущую транзакцию, иначе следующий вызов
-                        # унаследует "испорченное" состояние соединения (aborted transaction)
-                        # и тоже упадёт, даже если сама по себе работает исправно.
+                    def _run_platform_cron(platform_key, action_name, handler_fn):
+                        cur.execute(f"SELECT is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = '{platform_key}' LIMIT 1")
+                        row = cur.fetchone()
+                        if not row or not row.get('is_active'):
+                            return None
                         try:
-                            conn.rollback()
-                        except Exception:
-                            pass
-                        err_text = f'{type(e).__name__}: {str(e)[:300]}'
-                        print(f'[xml-feeds cron] {platform_key} failed: {err_text}')
-                        return {'error': err_text}
+                            return handler_fn(cur, conn, {'action': action_name})
+                        except Exception as e:
+                            # Откатываем текущую транзакцию, иначе следующий вызов
+                            # унаследует "испорченное" состояние соединения (aborted transaction)
+                            # и тоже упадёт, даже если сама по себе работает исправно.
+                            try:
+                                conn.rollback()
+                            except Exception:
+                                pass
+                            err_text = f'{type(e).__name__}: {str(e)[:300]}'
+                            print(f'[xml-feeds cron] {platform_key} failed: {err_text}')
+                            return {'error': err_text}
 
-                tick_index = int(datetime.now(timezone.utc).timestamp() // CRON_TICK_SECONDS) % len(PLATFORM_ROTATION)
-                turn_key, turn_action, turn_handler = PLATFORM_ROTATION[tick_index]
-                turn_result = _run_platform_cron(turn_key, turn_action, turn_handler)
+                    tick_index = int(datetime.now(timezone.utc).timestamp() // CRON_TICK_SECONDS) % len(PLATFORM_ROTATION)
+                    turn_key, turn_action, turn_handler = PLATFORM_ROTATION[tick_index]
+                    _plat_t0 = time.monotonic()
+                    turn_result = _run_platform_cron(turn_key, turn_action, turn_handler)
+                    _platform_ms = int((time.monotonic() - _plat_t0) * 1000)
 
-                platform_results = {k: None for k, _, _ in PLATFORM_ROTATION}
-                if turn_result is not None:
-                    body = json.loads(turn_result['body']) if isinstance(turn_result, dict) and 'body' in turn_result else turn_result
-                    platform_results[turn_key] = body
+                    platform_results = {k: None for k, _, _ in PLATFORM_ROTATION}
+                    if turn_result is not None:
+                        body = json.loads(turn_result['body']) if isinstance(turn_result, dict) and 'body' in turn_result else turn_result
+                        platform_results[turn_key] = body
 
-                return _json({
-                    'ok': True, 'results': results,
-                    'feed_bump': bump_result,
-                    'synced_platform': turn_key,
-                    **platform_results,
-                })
+                    _plat_err = None
+                    if isinstance(platform_results.get(turn_key), dict):
+                        _plat_err = platform_results[turn_key].get('error')
+                    _cron_log(
+                        'cron_finish',
+                        status=200, tick_index=tick_index, platform_processed=turn_key,
+                        platform_skipped=(platform_results.get(turn_key) or {}).get('skipped') if isinstance(platform_results.get(turn_key), dict) else None,
+                        platform_error=_plat_err,
+                        feeds_regenerated=sum(1 for r in results if r.get('regenerated')),
+                        feed_bump_updated=bump_result.get('updated'),
+                        feeds_ms=_feeds_ms, platform_ms=_platform_ms,
+                        duration_ms=int((time.monotonic() - _cron_t0) * 1000),
+                    )
+                    return _json({
+                        'ok': True, 'results': results,
+                        'feed_bump': bump_result,
+                        'synced_platform': turn_key,
+                        **platform_results,
+                    })
+                except Exception:
+                    _cron_log(
+                        'cron_error',
+                        tick_index=_start_tick, platform_selected=_rot_keys[_start_tick],
+                        duration_ms=int((time.monotonic() - _cron_t0) * 1000),
+                        traceback=traceback.format_exc(),
+                    )
+                    raise
 
             if method == 'GET' and params.get('action') == 'generate_static':
                 # Ручной принудительный пересчёт (из админки).
