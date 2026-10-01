@@ -12,7 +12,7 @@ import PropertyMediaGallery from '@/components/property/PropertyMediaGallery';
 import PropertyMainContent from '@/components/property/PropertyMainContent';
 import PropertySidebar from '@/components/property/PropertySidebar';
 import PriceDropModal from '@/components/property/PriceDropModal';
-import PropertyTopBar from '@/components/property/PropertyTopBar';
+import PageTopBar from '@/components/common/PageTopBar';
 import PropertyFaqSection from '@/components/property/PropertyFaqSection';
 import { TYPE_LABELS, DEAL_LABELS } from '@/components/property/propertyLabels';
 import { categoryLabel, catalogCategoryUrl } from '@/lib/categories';
@@ -267,7 +267,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
       {faqSchema && <SchemaOrg schema={faqSchema} id="faq" />}
 
       <div className="container mx-auto px-4 py-4">
-        <PropertyTopBar itemTitle={item.title} shareUrl={shareUrl} breadcrumbs={breadcrumbs} />
+        <PageTopBar itemTitle={item.title} shareUrl={shareUrl} breadcrumbs={breadcrumbs} />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 space-y-3">

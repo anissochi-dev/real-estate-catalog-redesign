@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
-import Breadcrumbs from '@/components/Breadcrumbs';
+import PageTopBar from '@/components/common/PageTopBar';
 import { CaptchaResult } from '@/components/SmartCaptcha';
 import { fetchPublicLeadBySlug, sendLead, PublicLead, fetchDistricts, District } from '@/lib/api';
 import SeoHead from '@/components/SeoHead';
@@ -165,9 +165,12 @@ export default function LeadDetailPage() {
       <SchemaOrg schema={serviceSchema} id="lead-service" />
 
       <div className="container mx-auto px-4 py-6 max-w-3xl">
-        <div className="mb-3">
-          <Breadcrumbs items={breadcrumbs} />
-        </div>
+        <PageTopBar
+          itemTitle={h1}
+          shareUrl={typeof window !== 'undefined' ? window.location.href : ''}
+          breadcrumbs={breadcrumbs}
+          fallbackTo="/leads"
+        />
 
         <h1 className="font-display font-900 text-2xl md:text-3xl text-foreground mb-4">{h1}</h1>
 

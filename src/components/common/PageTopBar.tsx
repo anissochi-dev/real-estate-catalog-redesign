@@ -3,13 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import Icon from '@/components/ui/icon';
 import Breadcrumbs, { Crumb } from '@/components/Breadcrumbs';
 
-interface PropertyTopBarProps {
+interface PageTopBarProps {
   itemTitle: string;
   shareUrl: string;
   breadcrumbs: Crumb[];
+  fallbackTo?: string;
 }
 
-export default function PropertyTopBar({ itemTitle, shareUrl, breadcrumbs }: PropertyTopBarProps) {
+export default function PageTopBar({ itemTitle, shareUrl, breadcrumbs, fallbackTo = "/catalog" }: PageTopBarProps) {
   const navigate = useNavigate();
   const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -21,7 +22,7 @@ export default function PropertyTopBar({ itemTitle, shareUrl, breadcrumbs }: Pro
       return;
     }
     const parent = breadcrumbs.length >= 2 ? breadcrumbs[breadcrumbs.length - 2]?.to : undefined;
-    navigate(parent || '/catalog', { replace: true });
+    navigate(parent || fallbackTo, { replace: true });
   };
 
   const openShare = async () => {

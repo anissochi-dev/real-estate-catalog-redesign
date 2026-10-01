@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { NEWS_URL } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import Breadcrumbs from '@/components/Breadcrumbs';
+import PageTopBar from '@/components/common/PageTopBar';
 import { useSettings } from '@/contexts/SettingsContext';
 import SchemaOrg, { makeNewsArticleSchema, makeItemListSchema } from '@/components/SchemaOrg';
 import { getSiteUrl } from '@/lib/siteUrl';
@@ -247,11 +248,16 @@ export function NewsArticlePage() {
       <SchemaOrg schema={articleSchema} id={`article-${article.id}`} />
       <SchemaOrg schema={articleBcSchema} id={`article-bc-${article.id}`} />
       <div className="mb-3">
-        <Breadcrumbs items={articleBreadcrumbs} />
+        <PageTopBar
+          itemTitle={article.title}
+          shareUrl={typeof window !== 'undefined' ? window.location.href : ''}
+          breadcrumbs={articleBreadcrumbs}
+          fallbackTo="/news"
+        />
       </div>
       <button
         onClick={() => navigate('/news')}
-        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-brand-blue transition mb-6"
+        className="hidden md:flex items-center gap-2 text-sm text-muted-foreground hover:text-brand-blue transition mb-6"
       >
         <Icon name="ArrowLeft" size={16} />
         Все новости
