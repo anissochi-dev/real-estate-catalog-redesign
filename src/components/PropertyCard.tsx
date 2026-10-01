@@ -238,7 +238,10 @@ export default function PropertyCard({
         ref={rootRef}
         onMouseEnter={handlePrefetch}
         onTouchStart={handlePrefetch}
-        onClick={() => navigate(href)}
+        onClick={e => {
+          if ((e.target as HTMLElement).closest('a, button')) return;
+          navigate(href);
+        }}
         className={`property-card group bg-white rounded-2xl overflow-hidden border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up flex flex-col cursor-pointer ${isHome ? 'sm:grid sm:grid-cols-[300px_1fr]' : ''} ${isCompact ? 'rounded-xl' : ''} ${highlighted ? 'border-brand-blue ring-2 ring-brand-blue/30 shadow-md -translate-y-0.5' : 'border-border'}`}
         onMouseEnter={() => onHover?.(property.id)}
         onMouseLeave={() => onHover?.(null)}
