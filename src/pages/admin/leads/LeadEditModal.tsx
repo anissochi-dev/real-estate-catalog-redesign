@@ -303,10 +303,10 @@ export default function LeadEditModal({
               {errors.budget_to && <span className="ml-1 text-red-500 font-normal">— обязательно</span>}
             </label>
             <div className="grid grid-cols-2 gap-3">
-              <input type="number" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="от (необязательно)"
+              <input type="number" className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-full px-3 py-2 border rounded-lg text-sm" placeholder="от (необязательно)"
                 value={editing.budget ?? ''}
                 onChange={e => setEditing({ ...editing, budget: e.target.value === '' ? null : +e.target.value })} />
-              <input type="number" className={`w-full px-3 py-2 border rounded-lg text-sm ${errors.budget_to ? 'border-red-400 bg-red-50' : ''}`} placeholder="до"
+              <input type="number" className={`[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-full px-3 py-2 border rounded-lg text-sm ${errors.budget_to ? 'border-red-400 bg-red-50' : ''}`} placeholder="до"
                 value={editing.budget_to ?? ''}
                 onChange={e => setEditing({ ...editing, budget_to: e.target.value === '' ? null : +e.target.value })} />
             </div>
@@ -319,10 +319,10 @@ export default function LeadEditModal({
               {errors.area_to && <span className="ml-1 text-red-500 font-normal">— обязательно</span>}
             </label>
             <div className="grid grid-cols-2 gap-3">
-              <input type="number" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="от (необязательно)"
+              <input type="number" className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-full px-3 py-2 border rounded-lg text-sm" placeholder="от (необязательно)"
                 value={editing.area_from ?? ''}
                 onChange={e => setEditing({ ...editing, area_from: e.target.value === '' ? null : +e.target.value })} />
-              <input type="number" className={`w-full px-3 py-2 border rounded-lg text-sm ${errors.area_to ? 'border-red-400 bg-red-50' : ''}`} placeholder="до"
+              <input type="number" className={`[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-full px-3 py-2 border rounded-lg text-sm ${errors.area_to ? 'border-red-400 bg-red-50' : ''}`} placeholder="до"
                 value={editing.area_to ?? ''}
                 onChange={e => setEditing({ ...editing, area_to: e.target.value === '' ? null : +e.target.value })} />
             </div>
