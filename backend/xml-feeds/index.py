@@ -1227,11 +1227,15 @@ def _build_yandex(listings, company, feed_slug=None, use_jpg_photos=None, city_r
 
     for l in listings:
         deal_map = {'sale': 'продажа', 'rent': 'аренда', 'business': 'продажа'}
-        commercial_type = YANDEX_COMMERCIAL_TYPE_MAP.get(l.get('category'), 'office')
-        # «Юридический адрес» — спецзначение commercial-type, допустимо только
-        # для аренды (по документации Яндекса), заменяет обычный тип объекта.
+        # Основной тип берём из категории объекта; если категория неизвестна —
+        # безопасное значение 'free purpose' (оно есть в перечне Яндекса).
+        commercial_types = [YANDEX_COMMERCIAL_TYPE_MAP.get(l.get('category'), 'free purpose')]
+        # «Юридический адрес» — дополнительное значение commercial-type только для
+        # аренды (по документации Яндекса элемент может повторяться). Реальный тип
+        # объекта НЕ заменяем: подмена основного типа на 'legal address' приводила
+        # к отклонению объявления валидатором («Ошибка в типе объявления»).
         if l.get('deal') == 'rent' and l.get('legal_address_provided'):
-            commercial_type = 'legal address'
+            commercial_types.append('legal address')
         deal = deal_map.get(l.get('deal'), 'продажа')
 
         # creation-date в строгом ISO 8601: YYYY-MM-DDTHH:mm:ss+00:00 (без микросекунд).
@@ -1253,7 +1257,8 @@ def _build_yandex(listings, company, feed_slug=None, use_jpg_photos=None, city_r
         out.append(f'<offer internal-id="{l["id"]}">')
         out.append(f'<type>{deal}</type>')
         out.append('<category>commercial</category>')
-        out.append(f'<commercial-type>{commercial_type}</commercial-type>')
+        for ct in commercial_types:
+            out.append(f'<commercial-type>{ct}</commercial-type>')
         # deal-status обязателен только для аренды; для продажи не передаётся.
         # Читаем реальные данные из property_rights (Права на объект):
         # sublease → subrent (субаренда), иначе — прямая аренда (значение
