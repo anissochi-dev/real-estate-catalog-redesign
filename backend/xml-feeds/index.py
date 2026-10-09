@@ -21,7 +21,7 @@ from datetime import datetime, timedelta, timezone
 
 import boto3
 import psycopg2
-from psycopg2.extras import RealDictCursor
+from psycopg2.extras import RealDictCursor, execute_values
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
 S3_BUCKET = 'files'
@@ -360,18 +360,28 @@ def _build_feed_xml(cur, feed_slug, fmt, filter_category, filter_deal, market_ca
     return None
 
 
-def _regenerate_static_feeds(cur, conn, force=False):
+def _regenerate_static_feeds(cur, conn, force=False, deadline=None, stale_before=None):
     """Пересобирает XML для всех активных фидов и заливает готовые файлы в S3.
-    Пропускает фид, если он обновлялся меньше STATIC_REGEN_MINUTES назад (если force=False)."""
-    cur.execute(f"SELECT * FROM {SCHEMA}.xml_feeds WHERE is_active = TRUE ORDER BY id ASC")
+    Пропускает фид, если он обновлялся меньше STATIC_REGEN_MINUTES назад (если force=False).
+    Фиды обходятся от самого давно обновлённого к самому свежему — так при частичной
+    сборке (ограничение по времени) ни один фид не застревает в хвосте очереди.
+    deadline — time.monotonic(), после которого новые фиды не начинаем (остальные
+    доберёт следующий вызов). stale_before — фид старше этой метки пересобирается
+    даже если 20 минут ещё не прошло (нужно после ежедневного «поднятия» дат)."""
+    cur.execute(f"SELECT * FROM {SCHEMA}.xml_feeds WHERE is_active = TRUE ORDER BY last_generated_at ASC NULLS FIRST, id ASC")
     feeds = [dict(r) for r in cur.fetchall()]
     s3 = None
     results = []
 
     for feed in feeds:
+        if deadline is not None and time.monotonic() >= deadline:
+            results.append({'slug': feed['slug'], 'skipped': True, 'reason': 'deferred (time budget)'})
+            continue
         last_gen = feed.get('last_generated_at')
-        if not force and last_gen:
-            elapsed_min = (datetime.now(timezone.utc) - last_gen.replace(tzinfo=timezone.utc)).total_seconds() / 60
+        last_gen_aware = last_gen.replace(tzinfo=timezone.utc) if last_gen and last_gen.tzinfo is None else last_gen
+        must_rebuild = force or (stale_before is not None and last_gen_aware is not None and last_gen_aware < stale_before)
+        if not must_rebuild and last_gen_aware:
+            elapsed_min = (datetime.now(timezone.utc) - last_gen_aware).total_seconds() / 60
             if elapsed_min < STATIC_REGEN_MINUTES:
                 results.append({'slug': feed['slug'], 'skipped': True, 'reason': f'{round(elapsed_min, 1)}m ago'})
                 continue
@@ -2643,6 +2653,7 @@ def _yandex_crm_sync(cur, conn, oauth_token, our_feed_url):
 
     # Шаг 1: статусы объявлений — быстро, сохраняем и коммитим сразу.
     offer_to_listing = {}
+    status_rows = {}
     for o in offers:
         internal_id = o.get('internalId')
         listing_id = None
@@ -2660,14 +2671,19 @@ def _yandex_crm_sync(cur, conn, oauth_token, our_feed_url):
         if not listing_id or not offer_id:
             continue
         offer_to_listing[offer_id] = listing_id
+        status_rows[listing_id] = (listing_id, offer_id, o.get('url'), o.get('createTime'), error_type)
 
-        cur.execute(f"""
+    # Одним пакетным запросом, а не по запросу на объявление: у БД платформы есть
+    # лимит частоты запросов («rate limit exceeded»), и сотни одиночных INSERT подряд
+    # его пробивали — синхронизация Яндекса падала на середине.
+    if status_rows:
+        execute_values(cur, f"""
             INSERT INTO {SCHEMA}.yandex_offer_status (listing_id, yandex_offer_id, yandex_url, create_time, error_type, checked_at)
-            VALUES (%s,%s,%s,%s,%s, NOW())
+            VALUES %s
             ON CONFLICT (listing_id) DO UPDATE SET
                 yandex_offer_id=EXCLUDED.yandex_offer_id, yandex_url=EXCLUDED.yandex_url,
                 create_time=EXCLUDED.create_time, error_type=EXCLUDED.error_type, checked_at=NOW()
-        """, (listing_id, offer_id, o.get('url'), o.get('createTime'), error_type))
+        """, list(status_rows.values()), template='(%s,%s,%s,%s,%s, NOW())')
     conn.commit()
     print(f'[yandex_crm] step 1 done, offer_to_listing count={len(offer_to_listing)}')
 
@@ -2695,19 +2711,24 @@ def _yandex_crm_sync(cur, conn, oauth_token, our_feed_url):
         offers_processed += 1
         if not daily:
             continue
+        day_rows = {}
         for d in daily:
             try:
                 stat_date = datetime.strptime(d['day'], '%d-%m-%Y').date()
             except (KeyError, ValueError):
                 continue
-            cur.execute(f"""
-                INSERT INTO {SCHEMA}.yandex_offer_stats (listing_id, yandex_offer_id, stat_date, shows, card_shows, phone_shows, calls, synced_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s, NOW())
-                ON CONFLICT (yandex_offer_id, stat_date) DO UPDATE SET
-                    shows=EXCLUDED.shows, card_shows=EXCLUDED.card_shows,
-                    phone_shows=EXCLUDED.phone_shows, calls=EXCLUDED.calls, synced_at=NOW()
-            """, (listing_id, offer_id, stat_date, d.get('shows', 0), d.get('cardShows', 0), d.get('phoneShows', 0), d.get('calls', 0)))
-            stats_synced += 1
+            day_rows[stat_date] = (listing_id, offer_id, stat_date, d.get('shows', 0), d.get('cardShows', 0), d.get('phoneShows', 0), d.get('calls', 0))
+        if not day_rows:
+            continue
+        # Все дни объявления — одним запросом (раньше 30 запросов на объявление).
+        execute_values(cur, f"""
+            INSERT INTO {SCHEMA}.yandex_offer_stats (listing_id, yandex_offer_id, stat_date, shows, card_shows, phone_shows, calls, synced_at)
+            VALUES %s
+            ON CONFLICT (yandex_offer_id, stat_date) DO UPDATE SET
+                shows=EXCLUDED.shows, card_shows=EXCLUDED.card_shows,
+                phone_shows=EXCLUDED.phone_shows, calls=EXCLUDED.calls, synced_at=NOW()
+        """, list(day_rows.values()), template='(%s,%s,%s,%s,%s,%s,%s, NOW())')
+        stats_synced += len(day_rows)
         conn.commit()
     print(f'[yandex_crm] step 2 done: processed={offers_processed} skipped_budget={offers_skipped_budget} stats_synced={stats_synced}')
 
@@ -3673,6 +3694,7 @@ def _domclick_sync_offers(cur, conn, token, company_id):
         if not offers:
             break
 
+        page_rows = {}
         for o in offers:
             statistics = o.get('statistics') or {}
             moderation = o.get('moderation') or {}
@@ -3683,13 +3705,28 @@ def _domclick_sync_offers(cur, conn, token, company_id):
                     listing_id = int(feed_offer_id)
                 except (TypeError, ValueError):
                     listing_id = None
-            cur.execute(f"""
+            if o.get('offer_id') is not None:
+                page_rows[o.get('offer_id')] = (
+                    o.get('offer_id'), feed_offer_id, listing_id, o.get('status'), o.get('source'),
+                    o.get('domclick_link'), o.get('offer_type'), o.get('deal_type'), o.get('is_duplicate'),
+                    moderation.get('reason'), moderation.get('comment'), o.get('published_dt'), o.get('publish_end_dt'),
+                    statistics.get('views'), statistics.get('phone_shows'), statistics.get('search_shows'),
+                    statistics.get('chats_total'), statistics.get('chats_answered'), statistics.get('chats_unanswered'),
+                    statistics.get('favorites'),
+                    '; '.join(o.get('errors') or []) or None,
+                )
+            total += 1
+            last_offer_id = o.get('offer_id') or last_offer_id
+
+        # Вся страница — одним пакетным запросом (лимит частоты запросов к БД платформы).
+        if page_rows:
+            execute_values(cur, f"""
                 INSERT INTO {SCHEMA}.domclick_item_status
                     (offer_id, feed_offer_id, listing_id, status, source, domclick_link, offer_type, deal_type,
                      is_duplicate, moderation_reason, moderation_comment, published_dt, publish_end_dt,
                      views, phone_shows, search_shows, chats_total, chats_answered, chats_unanswered,
                      favorites, errors, checked_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                VALUES %s
                 ON CONFLICT (offer_id) DO UPDATE SET
                     feed_offer_id = EXCLUDED.feed_offer_id, listing_id = EXCLUDED.listing_id,
                     status = EXCLUDED.status, source = EXCLUDED.source, domclick_link = EXCLUDED.domclick_link,
@@ -3701,17 +3738,8 @@ def _domclick_sync_offers(cur, conn, token, company_id):
                     chats_total = EXCLUDED.chats_total, chats_answered = EXCLUDED.chats_answered,
                     chats_unanswered = EXCLUDED.chats_unanswered, favorites = EXCLUDED.favorites,
                     errors = EXCLUDED.errors, checked_at = NOW()
-            """, (
-                o.get('offer_id'), feed_offer_id, listing_id, o.get('status'), o.get('source'),
-                o.get('domclick_link'), o.get('offer_type'), o.get('deal_type'), o.get('is_duplicate'),
-                moderation.get('reason'), moderation.get('comment'), o.get('published_dt'), o.get('publish_end_dt'),
-                statistics.get('views'), statistics.get('phone_shows'), statistics.get('search_shows'),
-                statistics.get('chats_total'), statistics.get('chats_answered'), statistics.get('chats_unanswered'),
-                statistics.get('favorites'),
-                '; '.join(o.get('errors') or []) or None,
-            ))
-            total += 1
-            last_offer_id = o.get('offer_id') or last_offer_id
+            """, list(page_rows.values()),
+                template='(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW())')
 
         conn.commit()  # сохраняем страницу сразу — не ждём обхода всех страниц
 
@@ -3861,7 +3889,161 @@ def _sync_health_check(cur):
                 'hours_ago': round(elapsed.total_seconds() / 3600, 1),
             })
 
-    return {'ok': True, 'stale': stale, 'checked_at': now.isoformat()}
+    # Ошибки последних синхронизаций (из platform_sync_state — пишется кроном xml-feeds):
+    # площадка может быть «свежей» по журналу, но падать на каждой новой попытке.
+    failing = []
+    labels = {k: lbl for k, lbl, _ in platform_checks}
+    try:
+        cur.execute(
+            f"SELECT platform, consecutive_errors, last_error, last_attempt_at, last_success_at, paused_until "
+            f"FROM {SCHEMA}.platform_sync_state WHERE consecutive_errors > 0"
+        )
+        log_tables = {k: t for k, _, t in platform_checks}
+        for r in cur.fetchall():
+            # Если после неудачной попытки крона площадка успешно синхронизировалась
+            # другим путём (кнопка «Синхронизировать» в рекламном кабинете) — это уже
+            # не проблема, не показываем ложную тревогу в колокольчике.
+            tbl = log_tables.get(r['platform'])
+            if tbl and r.get('last_attempt_at'):
+                cur.execute(
+                    f"SELECT 1 FROM {SCHEMA}.{tbl} WHERE synced_at > %s AND (error IS NULL OR error = '') LIMIT 1",
+                    (r['last_attempt_at'],)
+                )
+                if cur.fetchone():
+                    continue
+            failing.append({
+                'key': r['platform'], 'label': labels.get(r['platform'], r['platform']),
+                'errors': r['consecutive_errors'], 'last_error': (r.get('last_error') or '')[:300],
+                'last_attempt': r['last_attempt_at'].isoformat() if r.get('last_attempt_at') else None,
+                'paused_until': r['paused_until'].isoformat() if r.get('paused_until') else None,
+            })
+    except Exception:
+        pass
+
+    return {'ok': True, 'stale': stale, 'failing': failing, 'checked_at': now.isoformat()}
+
+
+CRON_LOCK_TTL_SEC = 130
+# Фиды собираются до этой секунды от старта вызова — остальные доберёт следующий вызов.
+# Таймаут функции 120 с; 90 с оставляют запас на синхронизацию площадки и ответ.
+CRON_FEEDS_DEADLINE_SEC = 90
+PLATFORM_RETRY_MINUTES = 20
+PLATFORM_MAX_ERRORS = 3
+PLATFORM_PAUSE_HOURS = 2
+
+# (ключ площадки, action для принудительной синхронизации, журнал синхронизации).
+# Вызываем *_stats с sync=1, а не *_cron: у *_cron внутри своя проверка «последняя
+# запись в журнале < 1 часа» — она учитывает и записи с ОШИБКОЙ, из-за чего повтор
+# после сбоя блокировался бы на час. Свежесть и активность проверяем сами выше.
+PLATFORM_ROTATION = [
+    ('cian', 'cian_stats', 'cian_sync_log'),
+    ('yandex_realty', 'yandex_stats', 'yandex_sync_log'),
+    ('avito', 'avito_stats', 'avito_sync_log'),
+    ('youla', 'youla_stats', 'youla_sync_log'),
+    ('domclick', 'domclick_stats', 'domclick_sync_log'),
+]
+
+
+def _platform_handler(key):
+    return {
+        'cian': _cian_handle,
+        'yandex_realty': _yandex_calls_handle,
+        'avito': _avito_handle,
+        'youla': _youla_handle,
+        'domclick': _domclick_handle,
+    }[key]
+
+
+def _extract_sync_error(body):
+    """Достаёт текст ошибки из ответа синхронизации площадки (у каждой площадки
+    своя вложенность: error / sync_result.error / sync_result.sync.error / ...)."""
+    if not isinstance(body, dict):
+        return None
+    if body.get('error'):
+        return str(body['error'])
+    sr = body.get('sync_result')
+    if isinstance(sr, dict):
+        if sr.get('error'):
+            return str(sr['error'])
+        for part in ('sync', 'report', 'publish'):
+            sub = sr.get(part)
+            if isinstance(sub, dict) and sub.get('error'):
+                return f'{part}: {sub["error"]}'
+    return None
+
+
+def _run_next_platform_sync(cur, conn):
+    """Выбирает ОДНУ площадку для синхронизации в этом вызове и синхронизирует её.
+
+    Вместо жёсткого круга по времени (раньше: площадка = номер 20-минутного окна) —
+    выбор по состоянию: берётся площадка, которая дольше всех не синхронизировалась
+    успешно. Площадки, которые уже пробовали в последние PLATFORM_RETRY_MINUTES,
+    а также поставленные на паузу после PLATFORM_MAX_ERRORS ошибок подряд, пропускаются.
+    Если все площадки свежие (успех < 1 часа назад) — шаг пропускается целиком,
+    и всё время вызова уходит на фиды. Состояние — в platform_sync_state."""
+    now = datetime.now(timezone.utc)
+    cur.execute(f"SELECT platform, is_active FROM {SCHEMA}.ad_platform_keys")
+    active = {r['platform'] for r in cur.fetchall() if r.get('is_active')}
+    cur.execute(f"SELECT * FROM {SCHEMA}.platform_sync_state")
+    state = {r['platform']: dict(r) for r in cur.fetchall()}
+
+    candidates = []
+    for key, action, log_table in PLATFORM_ROTATION:
+        if key not in active:
+            continue
+        st = state.get(key) or {}
+        if st.get('paused_until') and st['paused_until'] > now:
+            continue
+        if st.get('last_attempt_at') and (now - st['last_attempt_at']) < timedelta(minutes=PLATFORM_RETRY_MINUTES):
+            continue
+        cur.execute(f"SELECT MAX(synced_at) AS m FROM {SCHEMA}.{log_table} WHERE error IS NULL OR error = ''")
+        last_ok = (cur.fetchone() or {}).get('m')
+        if last_ok and (now - last_ok) < timedelta(hours=1):
+            continue
+        candidates.append((last_ok or datetime(1970, 1, 1, tzinfo=timezone.utc), key, action))
+
+    if not candidates:
+        return None, None
+
+    candidates.sort(key=lambda c: c[0])
+    _, key, action = candidates[0]
+
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.platform_sync_state (platform, last_attempt_at, updated_at) "
+        f"VALUES ('{key}', NOW(), NOW()) "
+        f"ON CONFLICT (platform) DO UPDATE SET last_attempt_at = NOW(), updated_at = NOW()"
+    )
+    conn.commit()
+
+    try:
+        resp = _platform_handler(key)(cur, conn, {'action': action, 'sync': '1'})
+        body = json.loads(resp['body']) if isinstance(resp, dict) and 'body' in resp else resp
+        err = _extract_sync_error(body)
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        err = f'{type(e).__name__}: {str(e)[:300]}'
+        body = {'error': err}
+        print(f'[xml-feeds cron] {key} failed: {err}')
+
+    if err:
+        cur.execute(
+            f"UPDATE {SCHEMA}.platform_sync_state SET "
+            f"consecutive_errors = consecutive_errors + 1, last_error = %s, "
+            f"paused_until = CASE WHEN consecutive_errors + 1 >= {PLATFORM_MAX_ERRORS} "
+            f"THEN NOW() + INTERVAL '{PLATFORM_PAUSE_HOURS} hours' ELSE NULL END, "
+            f"updated_at = NOW() WHERE platform = '{key}'",
+            (err[:1000],)
+        )
+    else:
+        cur.execute(
+            f"UPDATE {SCHEMA}.platform_sync_state SET consecutive_errors = 0, last_error = NULL, "
+            f"paused_until = NULL, last_success_at = NOW(), updated_at = NOW() WHERE platform = '{key}'"
+        )
+    conn.commit()
+    return key, body
 
 
 def handler(event, context):
@@ -3921,84 +4103,61 @@ def handler(event, context):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             if method == 'GET' and params.get('action') == 'cron':
                 _cron_t0 = time.monotonic()
-                _rot_keys = ['cian', 'yandex_realty', 'avito', 'youla', 'domclick']
-                _start_tick = int(datetime.now(timezone.utc).timestamp() // 1200) % len(_rot_keys)
+                # Блокировка от параллельных запусков (браузеры посетителей + платформенный
+                # крон + внешний пинг могут прийти одновременно). Блокировка — строка в
+                # cron_locks с временем жизни: если функцию оборвало по таймауту и снять
+                # её не успели, она сама истечёт через CRON_LOCK_TTL_SEC.
+                cur.execute(
+                    f"UPDATE {SCHEMA}.cron_locks SET locked_until = NOW() + INTERVAL '{CRON_LOCK_TTL_SEC} seconds', "
+                    f"locked_by = '{_safe(str(_rid), 100)}', updated_at = NOW() "
+                    f"WHERE name = 'xml-feeds-cron' AND (locked_until IS NULL OR locked_until < NOW()) RETURNING name"
+                )
+                _got_lock = cur.fetchone() is not None
+                conn.commit()
+                if not _got_lock:
+                    _cron_log('cron_busy', is_platform_cron=is_platform_cron)
+                    return _json({'ok': True, 'skipped': True, 'reason': 'already_running'})
                 _cron_log(
                     'cron_start',
-                    tick_index=_start_tick, platform_selected=_rot_keys[_start_tick],
                     is_platform_cron=is_platform_cron, has_token=bool(_cron_token),
                     token_match=bool(_expected_cron_token) and _cron_token == _expected_cron_token,
                     secret_present=bool(_expected_cron_token), action_from_query=_action_from_query,
                     user_agent=(_headers_lc.get('user-agent') or '')[:200],
                 )
                 try:
-                    # Публичный пинг-крон: вызывается автоматически платформой раз в 20 минут
-                    # (см. function.json) + дублируется пингом из браузера (useCrons.ts) как
-                    # подстраховка. Пересобирает статические файлы в S3 (раз в 10 мин).
-                    # Перед сборкой — проверяем окно авто-обновления даты объявлений (раз в сутки).
+                    # Порядок важен: 1) «поднятие» дат (быстро) → 2) ОДНА площадка через API
+                    # (до ~30 с) → 3) фиды, пока остаётся время. Раньше фиды шли первыми и
+                    # съедали всё время вызова — до площадок дело не доходило (Юла переставала
+                    # публиковать, статистика замирала на сутки).
                     bump_result = _bump_feed_dates(cur, conn)
-                    results = _regenerate_static_feeds(cur, conn, force=bump_result.get('updated', 0) > 0)
-                    _feeds_ms = int((time.monotonic() - _cron_t0) * 1000)
 
-                    # Кабинеты площадок (ЦИАН/Яндекс/Авито/Юла/ДомКлик) СИНХРОНИЗИРУЮТСЯ
-                    # ROUND-ROBIN — только ОДНА площадка за один тик крона, а не все 5 подряд.
-                    # Раньше все 5 обходились в одном HTTP-вызове (лимит function.json
-                    # timeout=60с) — при росте каталога (публикация N объявлений на Юле,
-                    # постраничный обход ДомКлика и т.д.) суммарное время пяти синхронизаций
-                    # стало превышать 60с, и крон обрывался по таймауту на середине, не
-                    # успевая даже сохранить прогресс уже готовых площадок. Round-robin
-                    # выбирает площадку детерминированно по времени (без доп. таблиц в БД) —
-                    # так каждый тик остаётся лёгким, а полный круг по всем 5 площадкам
-                    # занимает ~100 минут (5 × 20 мин) вместо желаемого 1 часа — компромисс,
-                    # осознанно принятый ради устранения таймаутов.
-                    PLATFORM_ROTATION = [
-                        ('cian', 'cian_cron', _cian_handle),
-                        ('yandex_realty', 'yandex_cron', _yandex_calls_handle),
-                        ('avito', 'avito_cron', _avito_handle),
-                        ('youla', 'youla_cron', _youla_handle),
-                        ('domclick', 'domclick_cron', _domclick_handle),
-                    ]
-                    CRON_TICK_SECONDS = 1200  # 20 минут — совпадает с function.json cron
-
-                    def _run_platform_cron(platform_key, action_name, handler_fn):
-                        cur.execute(f"SELECT is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = '{platform_key}' LIMIT 1")
-                        row = cur.fetchone()
-                        if not row or not row.get('is_active'):
-                            return None
-                        try:
-                            return handler_fn(cur, conn, {'action': action_name})
-                        except Exception as e:
-                            # Откатываем текущую транзакцию, иначе следующий вызов
-                            # унаследует "испорченное" состояние соединения (aborted transaction)
-                            # и тоже упадёт, даже если сама по себе работает исправно.
-                            try:
-                                conn.rollback()
-                            except Exception:
-                                pass
-                            err_text = f'{type(e).__name__}: {str(e)[:300]}'
-                            print(f'[xml-feeds cron] {platform_key} failed: {err_text}')
-                            return {'error': err_text}
-
-                    tick_index = int(datetime.now(timezone.utc).timestamp() // CRON_TICK_SECONDS) % len(PLATFORM_ROTATION)
-                    turn_key, turn_action, turn_handler = PLATFORM_ROTATION[tick_index]
                     _plat_t0 = time.monotonic()
-                    turn_result = _run_platform_cron(turn_key, turn_action, turn_handler)
+                    turn_key, turn_result = _run_next_platform_sync(cur, conn)
                     _platform_ms = int((time.monotonic() - _plat_t0) * 1000)
 
                     platform_results = {k: None for k, _, _ in PLATFORM_ROTATION}
-                    if turn_result is not None:
-                        body = json.loads(turn_result['body']) if isinstance(turn_result, dict) and 'body' in turn_result else turn_result
-                        platform_results[turn_key] = body
+                    if turn_key and turn_result is not None:
+                        platform_results[turn_key] = turn_result
 
-                    _plat_err = None
-                    if isinstance(platform_results.get(turn_key), dict):
-                        _plat_err = platform_results[turn_key].get('error')
+                    _feeds_t0 = time.monotonic()
+                    stale_before = None
+                    if bump_result.get('updated', 0) > 0 or bump_result.get('already_ran'):
+                        cur.execute(f"SELECT feed_bump_cron_last_at FROM {SCHEMA}.settings ORDER BY id LIMIT 1")
+                        stale_before = (cur.fetchone() or {}).get('feed_bump_cron_last_at')
+                    results = _regenerate_static_feeds(
+                        cur, conn,
+                        deadline=_cron_t0 + CRON_FEEDS_DEADLINE_SEC,
+                        stale_before=stale_before,
+                    )
+                    _feeds_ms = int((time.monotonic() - _feeds_t0) * 1000)
+
+                    _plat_err = turn_result.get('error') if isinstance(turn_result, dict) else None
                     _cron_log(
                         'cron_finish',
-                        status=200, tick_index=tick_index, platform_processed=turn_key,
-                        platform_skipped=(platform_results.get(turn_key) or {}).get('skipped') if isinstance(platform_results.get(turn_key), dict) else None,
+                        status=200, platform_processed=turn_key,
                         platform_error=_plat_err,
                         feeds_regenerated=sum(1 for r in results if r.get('regenerated')),
+                        feeds_deferred=sum(1 for r in results if r.get('reason') == 'deferred (time budget)'),
                         feed_bump_updated=bump_result.get('updated'),
                         feeds_ms=_feeds_ms, platform_ms=_platform_ms,
                         duration_ms=int((time.monotonic() - _cron_t0) * 1000),
@@ -4012,11 +4171,20 @@ def handler(event, context):
                 except Exception:
                     _cron_log(
                         'cron_error',
-                        tick_index=_start_tick, platform_selected=_rot_keys[_start_tick],
                         duration_ms=int((time.monotonic() - _cron_t0) * 1000),
                         traceback=traceback.format_exc(),
                     )
                     raise
+                finally:
+                    try:
+                        conn.rollback()
+                        cur.execute(
+                            f"UPDATE {SCHEMA}.cron_locks SET locked_until = NULL, updated_at = NOW() "
+                            f"WHERE name = 'xml-feeds-cron' AND locked_by = '{_safe(str(_rid), 100)}'"
+                        )
+                        conn.commit()
+                    except Exception:
+                        pass
 
             if method == 'GET' and params.get('action') == 'generate_static':
                 # Ручной принудительный пересчёт (из админки).

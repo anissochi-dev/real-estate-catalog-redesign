@@ -72,7 +72,7 @@ export default function AdminLayout({ section, setSection, onExit, onExitToPath,
   // которым доступен раздел «Маркетолог», и только один раз за сессию браузера
   // (иначе модалка всплывала бы при каждом переключении раздела в админке).
   const canSeeAdCabinet = !!user && ['admin', 'editor', 'manager', 'director'].includes(user.role);
-  const { stale: staleSyncPlatforms } = useSyncHealth(canSeeAdCabinet);
+  const { stale: staleSyncPlatforms, failing: failingSyncPlatforms } = useSyncHealth(canSeeAdCabinet);
   const [syncHealthModalOpen, setSyncHealthModalOpen] = useState(() => {
     try { return !sessionStorage.getItem(SYNC_HEALTH_SESSION_KEY); } catch { return true; }
   });
@@ -149,6 +149,9 @@ export default function AdminLayout({ section, setSection, onExit, onExitToPath,
           onOpenAi={() => setAiOpen(true)}
           newExportRequestsCount={newExportRequestsCount}
           setNewExportRequestsCount={setNewExportRequestsCount}
+          staleSyncPlatforms={staleSyncPlatforms}
+          failingSyncPlatforms={failingSyncPlatforms}
+          onOpenAdCabinet={() => setSection('marketing')}
         />
         <div className="p-4 lg:p-8">{children}</div>
       </main>

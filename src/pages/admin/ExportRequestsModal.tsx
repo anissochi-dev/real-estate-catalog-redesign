@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
@@ -44,9 +44,20 @@ interface Props {
   onClose: () => void;
   onHandled: () => void;
   onOpenListing?: (id: number) => void;
+  showExports?: boolean;
+  platformAlerts?: ReactNode;
+  platformAlertsCount?: number;
+  initialTab?: 'exports' | 'platforms';
 }
 
-export default function ExportRequestsModal({ onClose, onHandled, onOpenListing }: Props) {
+export default function ExportRequestsModal({
+  onClose, onHandled, onOpenListing,
+  showExports = true, platformAlerts, platformAlertsCount = 0, initialTab,
+}: Props) {
+  const hasPlatforms = platformAlerts !== undefined;
+  const [tab, setTab] = useState<'exports' | 'platforms'>(
+    initialTab || (!showExports ? 'platforms' : 'exports')
+  );
   const [items, setItems] = useState<ExportRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<number | null>(null);
@@ -63,6 +74,7 @@ export default function ExportRequestsModal({ onClose, onHandled, onOpenListing 
   };
 
   useEffect(() => {
+    if (!showExports) { setLoading(false); return; }
     load();
     adminApi.getSettings()
       .then(d => setPricingNotes(parsePricingNotes(d.settings?.export_pricing_notes || '')))
@@ -110,16 +122,40 @@ export default function ExportRequestsModal({ onClose, onHandled, onOpenListing 
       <div className="bg-white rounded-2xl max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
-            <Icon name="UploadCloud" size={18} className="text-brand-blue" />
-            <span className="font-display font-700 text-base">Запросы на платную выгрузку</span>
+            <Icon name={hasPlatforms ? 'Bell' : 'UploadCloud'} size={18} className="text-brand-blue" />
+            <span className="font-display font-700 text-base">{hasPlatforms ? 'Уведомления' : 'Запросы на платную выгрузку'}</span>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted">
             <Icon name="X" size={18} />
           </button>
         </div>
 
+        {hasPlatforms && (
+          <div className="px-4 pt-3 flex gap-2 shrink-0">
+            {showExports && (
+              <button
+                onClick={() => setTab('exports')}
+                className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${tab === 'exports' ? 'bg-brand-blue text-white' : 'bg-muted text-foreground hover:bg-muted/70'}`}
+              >
+                Платная выгрузка{!loading && items.length > 0 && <span className="ml-1.5 opacity-80">{items.length}</span>}
+              </button>
+            )}
+            <button
+              onClick={() => setTab('platforms')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition inline-flex items-center gap-1.5 ${tab === 'platforms' ? 'bg-brand-blue text-white' : 'bg-muted text-foreground hover:bg-muted/70'}`}
+            >
+              Площадки
+              {platformAlertsCount > 0 && (
+                <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold inline-flex items-center justify-center">
+                  {platformAlertsCount}
+                </span>
+              )}
+            </button>
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {loading ? (
+          {hasPlatforms && tab === 'platforms' ? platformAlerts : loading ? (
             <div className="flex items-center justify-center py-12 text-muted-foreground">
               <Icon name="Loader2" size={22} className="animate-spin" />
             </div>

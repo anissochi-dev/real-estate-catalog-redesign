@@ -13,9 +13,19 @@ export interface StalePlatform {
   hours_ago: number | null;
 }
 
+export interface FailingPlatform {
+  key: string;
+  label: string;
+  errors: number;
+  last_error: string;
+  last_attempt: string | null;
+  paused_until: string | null;
+}
+
 export interface SyncHealthData {
   ok: boolean;
   stale: StalePlatform[];
+  failing?: FailingPlatform[];
   checked_at: string;
 }
 

@@ -3,6 +3,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
 import type { AdminSection } from './AdminLayout';
 import ExportRequestsModal from './ExportRequestsModal';
+import PlatformAlertsPanel from './PlatformAlertsPanel';
+import type { FailingPlatform, StalePlatform } from './ad-cabinet/types';
 
 interface NavItem {
   id: AdminSection;
@@ -17,6 +19,9 @@ interface Props {
   onOpenAi: () => void;
   newExportRequestsCount?: number;
   setNewExportRequestsCount?: (v: number) => void;
+  staleSyncPlatforms?: StalePlatform[];
+  failingSyncPlatforms?: FailingPlatform[];
+  onOpenAdCabinet?: () => void;
 }
 
 const roleLabel: Record<string, string> = {
@@ -33,6 +38,7 @@ export default function AdminHeader({
   section, items,
   setSidebarOpen, onExit, onOpenAi,
   newExportRequestsCount = 0, setNewExportRequestsCount,
+  staleSyncPlatforms = [], failingSyncPlatforms = [], onOpenAdCabinet,
 }: Props) {
   const { user, logout } = useAuth();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -41,6 +47,12 @@ export default function AdminHeader({
   if (!user) return null;
 
   const canReviewExports = ['admin', 'director', 'office_manager'].includes(user.role);
+  const canSeePlatformAlerts = ['admin', 'director'].includes(user.role);
+  const platformAlertsCount = canSeePlatformAlerts
+    ? new Set([...failingSyncPlatforms.map(f => f.key), ...staleSyncPlatforms.map(s => s.key)]).size
+    : 0;
+  const bellCount = (canReviewExports ? newExportRequestsCount : 0) + platformAlertsCount;
+  const showBell = canReviewExports || canSeePlatformAlerts;
 
   return (
     <header className="bg-white border-b border-border px-4 lg:px-8 py-4 flex items-center justify-between sticky top-0 z-30">
@@ -58,16 +70,16 @@ export default function AdminHeader({
       </div>
 
       <div className="flex items-center gap-2">
-        {canReviewExports && (
+        {showBell && (
           <button
             onClick={() => setExportModalOpen(true)}
             className="relative p-2 rounded-xl hover:bg-muted transition"
-            title="Запросы на платную выгрузку"
+            title={canSeePlatformAlerts ? 'Уведомления' : 'Запросы на платную выгрузку'}
           >
             <Icon name="Bell" size={20} />
-            {newExportRequestsCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
-                {newExportRequestsCount > 99 ? '99+' : newExportRequestsCount}
+            {bellCount > 0 && (
+              <span className={`absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full text-white text-[10px] font-bold flex items-center justify-center ${platformAlertsCount > 0 && failingSyncPlatforms.length > 0 ? 'bg-red-600 animate-pulse' : 'bg-red-500'}`}>
+                {bellCount > 99 ? '99+' : bellCount}
               </span>
             )}
           </button>
@@ -123,6 +135,16 @@ export default function AdminHeader({
 
       {exportModalOpen && (
         <ExportRequestsModal
+          showExports={canReviewExports}
+          platformAlerts={canSeePlatformAlerts ? (
+            <PlatformAlertsPanel
+              stale={staleSyncPlatforms}
+              failing={failingSyncPlatforms}
+              onOpenAdCabinet={() => { setExportModalOpen(false); onOpenAdCabinet?.(); }}
+            />
+          ) : undefined}
+          platformAlertsCount={platformAlertsCount}
+          initialTab={canSeePlatformAlerts && platformAlertsCount > 0 && newExportRequestsCount === 0 ? 'platforms' : undefined}
           onClose={() => setExportModalOpen(false)}
           onHandled={() => setNewExportRequestsCount?.(Math.max(0, newExportRequestsCount - 1))}
           onOpenListing={id => {

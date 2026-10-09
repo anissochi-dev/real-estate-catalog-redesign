@@ -13,6 +13,14 @@ export function useCrons() {
       fetch(url, { ...opts, signal: ac.signal, keepalive: false }).catch(() => {});
     };
 
+    // Для долгих задач (фиды + синхронизация площадки, генерация новостей) не обрываем
+    // запрос через 8 секунд: обрыв браузером останавливает и саму функцию на сервере
+    // (ошибка 499), из-за чего работа не доходила до конца. Ответ нам не нужен —
+    // просто не отменяем запрос; от параллельных запусков функцию защищает блокировка.
+    const fireLongCron = (url: string, opts?: RequestInit) => {
+      fetch(url, { ...opts, keepalive: false }).catch(() => {});
+    };
+
     const runCrons = () => {
       const SEO_CRON_URL = 'https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d';
       const NEWS_CRON_URL = 'https://functions.poehali.dev/984cad3a-0783-4408-a614-52ed36f8c77f';
@@ -26,7 +34,7 @@ export function useCrons() {
         const newsLast = parseInt(localStorage.getItem('news_cron_last_ping') || '0', 10);
         if (Date.now() - newsLast > 10 * 60 * 1000) {
           localStorage.setItem('news_cron_last_ping', String(Date.now()));
-          fireCron(`${NEWS_CRON_URL}?action=ping_cron`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+          fireLongCron(`${NEWS_CRON_URL}?action=ping_cron`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
         }
         const retrainLast = parseInt(localStorage.getItem('retrain_cron_last_ping') || '0', 10);
         if (Date.now() - retrainLast > THROTTLE_MS) {
@@ -50,7 +58,7 @@ export function useCrons() {
         const xmlFeedsLast = parseInt(localStorage.getItem('xml_feeds_cron_last_ping') || '0', 10);
         if (Date.now() - xmlFeedsLast > 20 * 60 * 1000) {
           localStorage.setItem('xml_feeds_cron_last_ping', String(Date.now()));
-          fireCron('https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=cron');
+          fireLongCron('https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=cron');
         }
       } catch { /* ignore */ }
     };
