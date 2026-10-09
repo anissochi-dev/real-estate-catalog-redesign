@@ -3352,18 +3352,22 @@ YOULA_PUBLISH_TIME_BUDGET_SEC = 17  # см. комментарий в цикле
 
 
 def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory_id):
-    """Публикует/обновляет на Юле все объекты с export_youla=TRUE, архивирует те,
-    у кого флаг сняли (но объявление на Юле уже было). Пишет статус каждого
-    объекта в youla_item_status и youla_ad_id обратно в listings.
+    """Публикует/обновляет на Юле все объекты с export_youla=TRUE и архивирует те,
+    у кого флаг сняли. Пишет статус каждого объекта в youla_item_status.
 
-    Тайм-бюджет + commit ПОСЛЕ КАЖДОГО объекта (тот же паттерн, что уже используется
-    для Яндекс.CRM и ДомКлика) — на каждый объект уходит 2+ последовательных HTTP-
-    запроса к Юле (создание/обновление + отдельная публикация), поэтому при большом
-    каталоге один общий commit в конце рискует не дождаться: функция оборвётся по
-    таймауту, и результаты ВСЕГО прогона потеряются, а не только необработанный
-    остаток. Раньше это приводило к тому, что часть объявлений годами оставалась
-    неопубликованной — каждый следующий крон начинал заново с первого объекта в
-    списке и снова упирался в тот же лимит, до "везучих" не успевая дойти."""
+    Защита от дублей (одно объявление на один id объекта):
+      • номер объявления ищется в listings, youla_item_status и youla_create_claims;
+      • перед созданием ставится отметка «создаётся» (youla_create_claims) — второй
+        запуск такой объект пропускает; номер сохраняется сразу после ответа Юлы;
+      • при обрыве без ответа отметка остаётся, объект уходит в колокольчик «проверить».
+
+    Удалённые на Юле объявления (is_deleted): Partner API не умеет их восстанавливать
+    (publish → failed, unarchive/activate → 405). Они помечаются is_removed и
+    пересоздаются НОВЫМ объявлением только по явному запросу админа
+    (recreate_requested), и никогда — заблокированные модерацией.
+
+    Скорость: обновления (PUT) идут параллельно по 6 потоков — раньше по одному, и
+    за 17 секунд успевало 6 из 37 объектов. Запись в БД — из основного потока."""
     if not category_id or not subcategory_id:
         return {'error': 'Не указаны ID категории/подкатегории Юлы в настройках площадки'}
 
@@ -3371,13 +3375,10 @@ def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory
         SELECT id, title, description, price, price_unit, area, city, district, address, lat, lng, images, image, youla_ad_id
         FROM {SCHEMA}.listings
         WHERE export_youla = TRUE AND status = 'active' AND (is_visible IS NULL OR is_visible = TRUE)
-        ORDER BY (youla_ad_id IS NULL) DESC, id ASC
+        ORDER BY id ASC
     """)
     listings = [dict(r) for r in cur.fetchall()]
 
-    # Защита от дублей: у одного id объекта — не больше одного объявления на Юле.
-    # 1) Номер объявления ищем не только в listings.youla_ad_id, но и в журнале статусов
-    #    и в отметках создания — если он где-то есть, объект только обновляется.
     cur.execute(f"""
         SELECT listing_id, youla_id FROM {SCHEMA}.youla_item_status WHERE youla_id IS NOT NULL
         UNION ALL
@@ -3386,6 +3387,8 @@ def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory
     known_ids = {}
     for r in cur.fetchall():
         known_ids.setdefault(r['listing_id'], r['youla_id'])
+    cur.execute(f"SELECT listing_id, is_removed, is_blocked, recreate_requested, checked_at FROM {SCHEMA}.youla_item_status")
+    status_by_id = {r['listing_id']: dict(r) for r in cur.fetchall()}
     for l in listings:
         if not l.get('youla_ad_id') and known_ids.get(l['id']):
             l['youla_ad_id'] = known_ids[l['id']]
@@ -3393,100 +3396,154 @@ def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory
                         (l['youla_ad_id'], l['id']))
     conn.commit()
 
-    start_ts = time.monotonic()
-    created, updated, failed, skipped_budget, skipped_claimed = 0, 0, 0, 0, 0
+    # Удалённые и не заблокированные — пересоздаём: сбрасываем старый номер, дальше они
+    # идут общим путём создания (с отметкой «создаётся»).
+    # Автоматически НЕ пересоздаём: удаления на Юле бывают ручной чисткой дублей в
+    # кабинете (24.09 — 24 объявления за 2 минуты, 09.10 — ещё 4) — авто-пересоздание
+    # вернуло бы дубли. Пересоздаются только объекты, явно отмеченные админом
+    # (youla_item_status.recreate_requested = TRUE).
+    recreate_ids = []
     for l in listings:
+        st = status_by_id.get(l['id']) or {}
+        if l.get('youla_ad_id') and st.get('is_removed') and st.get('recreate_requested') and not st.get('is_blocked'):
+            recreate_ids.append(l['id'])
+            l['youla_ad_id'] = None
+    if recreate_ids:
+        cur.execute(f"UPDATE {SCHEMA}.listings SET youla_ad_id = NULL WHERE id = ANY(%s)", (recreate_ids,))
+        cur.execute(f"UPDATE {SCHEMA}.youla_item_status SET youla_id = NULL, is_removed = FALSE, recreate_requested = FALSE WHERE listing_id = ANY(%s)", (recreate_ids,))
+        conn.commit()
+
+    start_ts = time.monotonic()
+    created, updated, failed, skipped_budget, skipped_claimed, skipped_blocked = 0, 0, 0, 0, 0, 0
+
+    # ── 1. Обновления существующих объявлений — параллельно, давно не обновлявшиеся первыми.
+    to_update = [l for l in listings if l.get('youla_ad_id')]
+    _epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    to_update.sort(key=lambda l: (status_by_id.get(l['id']) or {}).get('checked_at') or _epoch)
+    to_update = [l for l in to_update if not (status_by_id.get(l['id']) or {}).get('is_blocked')] + \
+                [l for l in to_update if (status_by_id.get(l['id']) or {}).get('is_blocked')]
+
+    def _put(l):
+        body = _youla_build_product(l, owner_id, category_id, subcategory_id)
+        return l, _youla_request('PUT', f"/products/{l['youla_ad_id']}", token, body)
+
+    from concurrent.futures import ThreadPoolExecutor
+    results = []
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futures = []
+        for l in to_update:
+            if time.monotonic() - start_ts > YOULA_PUBLISH_TIME_BUDGET_SEC:
+                skipped_budget += 1
+                continue
+            futures.append(ex.submit(_put, l))
+        for f in futures:
+            results.append(f.result())
+
+    status_rows, error_rows = [], []
+    for l, (data, err) in results:
+        if err or not data:
+            failed += 1
+            error_rows.append((l['id'], (err or 'Пустой ответ')[:500]))
+            continue
+        product = data.get('data') or data
+        status_rows.append(_youla_status_row(l['id'], product))
+        updated += 1
+    _youla_save_status(cur, conn, status_rows, error_rows)
+
+    # ── 2. Создание новых (и пересоздание удалённых) — последовательно, с отметкой.
+    to_create = [l for l in listings if not l.get('youla_ad_id')]
+    for l in to_create:
         if time.monotonic() - start_ts > YOULA_PUBLISH_TIME_BUDGET_SEC:
             skipped_budget += 1
             continue
+        cur.execute(f"""
+            INSERT INTO {SCHEMA}.youla_create_claims (listing_id, claimed_at, claimed_by)
+            VALUES (%s, NOW(), 'publish') ON CONFLICT (listing_id) DO NOTHING RETURNING listing_id
+        """, (l['id'],))
+        got_claim = cur.fetchone() is not None
+        conn.commit()
+        if not got_claim:
+            skipped_claimed += 1
+            continue
 
         body = _youla_build_product(l, owner_id, category_id, subcategory_id)
-        if l.get('youla_ad_id'):
-            data, err = _youla_request('PUT', f"/products/{l['youla_ad_id']}", token, body)
-        else:
-            # 2) Отметка «создаётся» ДО запроса к Юле. Если она уже есть — объект создаёт
-            #    (или создавал и оборвался) другой запуск: повторно НЕ отправляем.
-            cur.execute(f"""
-                INSERT INTO {SCHEMA}.youla_create_claims (listing_id, claimed_at, claimed_by)
-                VALUES (%s, NOW(), 'publish') ON CONFLICT (listing_id) DO NOTHING RETURNING listing_id
-            """, (l['id'],))
-            got_claim = cur.fetchone() is not None
-            conn.commit()
-            if not got_claim:
-                skipped_claimed += 1
-                continue
-            data, err = _youla_request('POST', '/products', token, body)
+        data, err = _youla_request('POST', '/products', token, body)
+        if err or not data:
             if err and str(err).startswith('HTTP 4'):
-                # Юла явно отказала (4xx) — объявление точно не создано, отметку снимаем.
+                # Юла явно отказала — объявление точно не создано, отметку снимаем.
                 cur.execute(f"DELETE FROM {SCHEMA}.youla_create_claims WHERE listing_id = %s AND youla_id IS NULL", (l['id'],))
                 conn.commit()
-            # Сетевая ошибка/таймаут — неизвестно, создано ли объявление. Отметку
-            # оставляем: объект попадёт в колокольчик «проверить», без автоповтора.
-
-        if err or not data:
             failed += 1
-            cur.execute(f"""
-                INSERT INTO {SCHEMA}.youla_item_status (listing_id, error, checked_at)
-                VALUES (%s, %s, NOW())
-                ON CONFLICT (listing_id) DO UPDATE SET error = EXCLUDED.error, checked_at = NOW()
-            """, (l['id'], (err or 'Пустой ответ')[:500]))
-            conn.commit()
+            _youla_save_status(cur, conn, [], [(l['id'], (err or 'Пустой ответ')[:500])])
             continue
 
         product = data.get('data') or data
         youla_id = product.get('id')
-        if youla_id and not l.get('youla_ad_id'):
-            # 3) Номер сохраняем СРАЗУ, отдельным commit — до публикации и прочих шагов.
-            cur.execute(f"UPDATE {SCHEMA}.listings SET youla_ad_id = %s WHERE id = %s", (youla_id, l['id']))
-            cur.execute(f"UPDATE {SCHEMA}.youla_create_claims SET youla_id = %s, resolved_at = NOW() WHERE listing_id = %s",
-                        (youla_id, l['id']))
-            conn.commit()
-            # Новое объявление — публикуем явно (по умолчанию продукт создаётся в черновике)
-            _youla_request('POST', '/products/publish', token, {'product_ids': [youla_id]}, params={'user_id': owner_id})
-            created += 1
-        else:
-            updated += 1
-
-        cur.execute(f"""
-            INSERT INTO {SCHEMA}.youla_item_status
-                (listing_id, youla_id, url, is_published, is_archived, is_blocked, block_type_text, error, checked_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, NULL, NOW())
-            ON CONFLICT (listing_id) DO UPDATE SET
-                youla_id = EXCLUDED.youla_id, url = EXCLUDED.url, is_published = EXCLUDED.is_published,
-                is_archived = EXCLUDED.is_archived, is_blocked = EXCLUDED.is_blocked,
-                block_type_text = EXCLUDED.block_type_text, error = NULL, checked_at = NOW()
-        """, (l['id'], youla_id, product.get('url'), product.get('is_published'),
-              product.get('is_archived'), product.get('is_blocked'), product.get('block_type_text')))
+        if not youla_id:
+            failed += 1
+            continue
+        # Номер сохраняем СРАЗУ — до публикации и прочих шагов.
+        cur.execute(f"UPDATE {SCHEMA}.listings SET youla_ad_id = %s WHERE id = %s", (youla_id, l['id']))
+        cur.execute(f"UPDATE {SCHEMA}.youla_create_claims SET youla_id = %s, resolved_at = NOW() WHERE listing_id = %s",
+                    (youla_id, l['id']))
         conn.commit()
+        _youla_request('POST', '/products/publish', token, {'product_ids': [youla_id]}, params={'user_id': owner_id})
+        _youla_save_status(cur, conn, [_youla_status_row(l['id'], product)], [])
+        created += 1
 
-    # Объекты, у которых флаг export_youla сняли, но объявление на Юле осталось — архивируем.
-    # Тоже под тем же бюджетом времени — не должно съедать остаток окна, отведённого публикации.
-    archived, archive_skipped_budget = 0, 0
+    # ── 3. Архивация объектов, у которых сняли флаг export_youla.
+    archived = 0
     if time.monotonic() - start_ts <= YOULA_PUBLISH_TIME_BUDGET_SEC:
         cur.execute(f"""
             SELECT s.listing_id, s.youla_id FROM {SCHEMA}.youla_item_status s
             JOIN {SCHEMA}.listings l ON l.id = s.listing_id
-            WHERE s.youla_id IS NOT NULL AND s.is_archived IS NOT TRUE
+            WHERE s.youla_id IS NOT NULL AND s.is_archived IS NOT TRUE AND s.is_removed IS NOT TRUE
               AND (l.export_youla = FALSE OR l.status != 'active')
         """)
         to_archive = [dict(r) for r in cur.fetchall()]
-        for row in to_archive:
-            if time.monotonic() - start_ts > YOULA_PUBLISH_TIME_BUDGET_SEC:
-                archive_skipped_budget += 1
-                continue
-            _, err = _youla_request('POST', '/products/archive', token,
-                                     {'product_ids': [row['youla_id']]}, params={'user_id': owner_id})
+        if to_archive:
+            ids = [r['youla_id'] for r in to_archive]
+            _, err = _youla_request('POST', '/products/archive', token, {'product_ids': ids}, params={'user_id': owner_id})
             if not err:
-                cur.execute(f"UPDATE {SCHEMA}.youla_item_status SET is_archived = TRUE, checked_at = NOW() WHERE listing_id = %s",
-                            (row['listing_id'],))
-                archived += 1
+                cur.execute(f"UPDATE {SCHEMA}.youla_item_status SET is_archived = TRUE, checked_at = NOW() WHERE youla_id = ANY(%s)", (ids,))
                 conn.commit()
+                archived = len(ids)
 
     return {
         'created': created, 'updated': updated, 'archived': archived, 'failed': failed,
-        'total': len(listings), 'skipped_budget': skipped_budget + archive_skipped_budget,
-        'skipped_claimed': skipped_claimed,
+        'total': len(listings), 'skipped_budget': skipped_budget,
+        'skipped_claimed': skipped_claimed, 'recreated': len(recreate_ids),
+        'duration_sec': round(time.monotonic() - start_ts, 1),
     }
+
+
+def _youla_status_row(listing_id, product):
+    return (listing_id, product.get('id'), product.get('url'), product.get('is_published'),
+            product.get('is_archived'), product.get('is_blocked'), product.get('block_type_text'),
+            bool(product.get('is_deleted')), product.get('date_deleted') or None)
+
+
+def _youla_save_status(cur, conn, status_rows, error_rows):
+    """Пакетная запись статусов объявлений Юлы (один запрос на все объекты)."""
+    if status_rows:
+        execute_values(cur, f"""
+            INSERT INTO {SCHEMA}.youla_item_status
+                (listing_id, youla_id, url, is_published, is_archived, is_blocked, block_type_text,
+                 is_removed, removed_at, error, checked_at)
+            VALUES %s
+            ON CONFLICT (listing_id) DO UPDATE SET
+                youla_id = EXCLUDED.youla_id, url = EXCLUDED.url, is_published = EXCLUDED.is_published,
+                is_archived = EXCLUDED.is_archived, is_blocked = EXCLUDED.is_blocked,
+                block_type_text = EXCLUDED.block_type_text, is_removed = EXCLUDED.is_removed,
+                removed_at = EXCLUDED.removed_at, error = NULL, checked_at = NOW()
+        """, status_rows, template="(%s,%s,%s,%s,%s,%s,%s,%s,NULLIF(%s,'')::timestamptz, NULL, NOW())")
+    if error_rows:
+        execute_values(cur, f"""
+            INSERT INTO {SCHEMA}.youla_item_status (listing_id, error, checked_at)
+            VALUES %s
+            ON CONFLICT (listing_id) DO UPDATE SET error = EXCLUDED.error, checked_at = NOW()
+        """, error_rows, template='(%s,%s, NOW())')
+    conn.commit()
 
 
 YOULA_STATS_TIME_BUDGET_SEC = 5  # запускается ПОСЛЕ publish (см. _youla_full_sync) —
@@ -3498,7 +3555,7 @@ def _youla_fetch_stats(cur, conn, token):
     """Запрашивает статистику показов/просмотров/контактов за 30 дней по каждому
     объявлению, у которого уже есть youla_id. Тайм-бюджет + commit после каждого
     объявления — та же защита от потери прогресса, что и в _youla_publish_listings."""
-    cur.execute(f"SELECT listing_id, youla_id FROM {SCHEMA}.youla_item_status WHERE youla_id IS NOT NULL")
+    cur.execute(f"SELECT listing_id, youla_id FROM {SCHEMA}.youla_item_status WHERE youla_id IS NOT NULL AND is_removed IS NOT TRUE")
     rows = [dict(r) for r in cur.fetchall()]
     if not rows:
         return {'skipped': True, 'reason': 'Нет объявлений с youla_id'}
@@ -3506,21 +3563,28 @@ def _youla_fetch_stats(cur, conn, token):
     start_ts = time.monotonic()
     date_to = datetime.now(timezone.utc)
     date_from = date_to - timedelta(days=30)
+    prm = {'from': date_from.strftime('%Y-%m-%dT%H:%M:%SZ'), 'to': date_to.strftime('%Y-%m-%dT%H:%M:%SZ')}
+
+    def _one(row):
+        return row, _youla_request('GET', f"/products/{row['youla_id']}/statistic", token, params=prm)
+
+    from concurrent.futures import ThreadPoolExecutor
     skipped_budget = 0
     stat_rows = []
-    for row in rows:
-        if time.monotonic() - start_ts > YOULA_STATS_TIME_BUDGET_SEC:
-            skipped_budget += 1
-            continue
-        data, err = _youla_request('GET', f"/products/{row['youla_id']}/statistic", token, params={
-            'from': date_from.strftime('%Y-%m-%dT%H:%M:%SZ'),
-            'to': date_to.strftime('%Y-%m-%dT%H:%M:%SZ'),
-        })
-        if err or not data:
-            continue
-        stat = data.get('data') or data
-        stat_rows.append((row['listing_id'], stat.get('shows'), stat.get('views'),
-                          stat.get('contacts'), stat.get('unique_contacts')))
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futures = []
+        for row in rows:
+            if time.monotonic() - start_ts > YOULA_STATS_TIME_BUDGET_SEC:
+                skipped_budget += 1
+                continue
+            futures.append(ex.submit(_one, row))
+        for f in futures:
+            row, (data, err) = f.result()
+            if err or not data:
+                continue
+            stat = data.get('data') or data
+            stat_rows.append((row['listing_id'], stat.get('shows'), stat.get('views'),
+                              stat.get('contacts'), stat.get('unique_contacts')))
     # Запросы к API Юлы идут по одному (так устроено API), но в БД пишем один раз
     # пакетом — раньше был UPDATE + commit на каждое объявление.
     if stat_rows:
@@ -3549,6 +3613,7 @@ def _youla_read_from_db(cur):
     cur.execute(f"""
         SELECT s.listing_id, s.youla_id, s.url, s.is_published, s.is_archived, s.is_blocked,
                s.block_type_text, s.views, s.shows, s.contacts, s.unique_contacts, s.error, s.checked_at,
+               s.is_removed, s.removed_at, s.recreate_requested,
                l.title, l.city, l.category, l.deal
         FROM {SCHEMA}.youla_item_status s
         JOIN {SCHEMA}.listings l ON l.id = s.listing_id
@@ -3558,6 +3623,7 @@ def _youla_read_from_db(cur):
     for r in cur.fetchall():
         d = dict(r)
         d['checked_at'] = d['checked_at'].isoformat() if d.get('checked_at') else None
+        d['removed_at'] = d['removed_at'].isoformat() if d.get('removed_at') else None
         items.append(d)
 
     return {
@@ -4385,6 +4451,27 @@ def handler(event, context):
                 # Статистика объявлений кабинета ДомКлик (Stats API): просмотры, показы
                 # телефона, показы в поиске, чаты, избранное — по каждому объявлению.
                 return _domclick_handle(cur, conn, params)
+
+            if method == 'POST' and params.get('action') == 'youla_recreate':
+                # Админ/директор подтверждает: объявление удалено на Юле, и его НЕ было
+                # удалено как дубль — пересоздать при следующей синхронизации.
+                _h = event.get('headers') or {}
+                _tok = _h.get('X-Auth-Token') or _h.get('x-auth-token') or params.get('token') or ''
+                _u = _get_user(cur, _tok)
+                if not _u or _u['role'] not in ('admin', 'director'):
+                    return _json({'error': 'Нет прав'}, 403)
+                _body = json.loads(event.get('body') or '{}')
+                _ids = [int(x) for x in (_body.get('listing_ids') or []) if str(x).isdigit()]
+                if not _ids:
+                    return _json({'error': 'Не выбраны объекты'}, 400)
+                cur.execute(
+                    f"UPDATE {SCHEMA}.youla_item_status SET recreate_requested = TRUE "
+                    f"WHERE listing_id = ANY(%s) AND is_removed = TRUE AND is_blocked IS NOT TRUE",
+                    (_ids,)
+                )
+                _n = cur.rowcount
+                conn.commit()
+                return _json({'ok': True, 'marked': _n})
 
             if method == 'POST' and params.get('action') == 'youla_claim_reset':
                 # «Отправить снова» из колокольчика: админ/директор подтвердил, что

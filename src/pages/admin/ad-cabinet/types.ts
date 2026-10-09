@@ -325,6 +325,9 @@ export interface YoulaItemRow {
   unique_contacts: number | null;
   error: string | null;
   checked_at: string | null;
+  is_removed?: boolean | null;
+  removed_at?: string | null;
+  recreate_requested?: boolean;
   title: string | null;
   city: string | null;
   category: string | null;

@@ -105,7 +105,7 @@ function PlatformCardView({ card, onClick }: { card: PlatformCard; onClick: () =
               <MiniStat value={card.youlaExtra.totalViews.toLocaleString('ru')} label="Просмотры" />
               <MiniStat value={card.youlaExtra.totalContacts.toLocaleString('ru')} label="Контакты" />
               <MiniStat value={card.youlaExtra.totalUniqueContacts.toLocaleString('ru')} label="Уник. контакты" />
-              <MiniStat value={card.youlaExtra.publishedCount.toLocaleString('ru')} label="Опубликовано" />
+              <MiniStat value={card.youlaExtra.publishedCount.toLocaleString('ru')} label="Видны на Юле" />
             </div>
           )}
 
@@ -333,7 +333,7 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
     if (key === 'youla' && youla) {
       const connected = youla.connected && !youla.last_sync?.error;
       const items = youla.items || [];
-      const publishedCount = items.filter(i => i.is_published).length;
+      const publishedCount = items.filter(i => i.is_published && !i.is_removed && !i.is_blocked && !i.is_archived).length;
       return {
         key, label: 'Юла', icon: '', color: '',
         connected,
