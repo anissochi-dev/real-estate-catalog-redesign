@@ -2278,15 +2278,18 @@ def _cian_sync(cur, conn, token):
         if page > 20:
             break
 
-    for o in all_offers:
-        cur.execute(f"""
+    # Пакетная запись (один запрос вместо запроса на объявление) — лимит частоты запросов к БД.
+    offer_rows = {o.get('id'): (o.get('id'), o.get('status'), o.get('source'), o.get('creationDate'))
+                  for o in all_offers if o.get('id')}
+    if offer_rows:
+        execute_values(cur, f"""
             INSERT INTO {SCHEMA}.cian_offers (id, status, source, creation_date, synced_at, archived_at)
-            VALUES (%s,%s,%s,%s, NOW(), NULL)
+            VALUES %s
             ON CONFLICT (id) DO UPDATE SET
                 status=EXCLUDED.status, source=EXCLUDED.source,
                 creation_date=EXCLUDED.creation_date, synced_at=NOW(),
                 archived_at=NULL
-        """, (o.get('id'), o.get('status'), o.get('source'), o.get('creationDate')))
+        """, list(offer_rows.values()), template='(%s,%s,%s,%s, NOW(), NULL)')
     offers_count = len(all_offers)
     offer_ids = [o['id'] for o in all_offers if o.get('id')]
 
@@ -2310,15 +2313,21 @@ def _cian_sync(cur, conn, token):
         data, err = _cian_get(f'/v1/get-my-offers-detail?{qs}', token)
         if err or not data:
             continue
+        detail_rows = []
         for item in (data.get('result') or {}).get('offers') or []:
             ext_id = item.get('externalId')
             try:
                 ext_id_int = int(ext_id) if ext_id else None
             except (ValueError, TypeError):
                 ext_id_int = None
-            cur.execute(f"""
-                UPDATE {SCHEMA}.cian_offers SET external_id = %s, url = %s WHERE id = %s
-            """, (ext_id_int, item.get('url'), item.get('id')))
+            if item.get('id') is not None:
+                detail_rows.append((item.get('id'), ext_id_int, item.get('url')))
+        if detail_rows:
+            execute_values(cur, f"""
+                UPDATE {SCHEMA}.cian_offers AS t SET external_id = v.external_id::bigint, url = v.url
+                FROM (VALUES %s) AS v(id, external_id, url)
+                WHERE t.id = v.id::bigint
+            """, detail_rows)
         conn.commit()  # этап 2 (detail) — сохраняем по мере обработки батчей
 
     for batch in _cian_chunks(offer_ids, 50):
@@ -2328,22 +2337,27 @@ def _cian_sync(cur, conn, token):
         data, err = _cian_get(f'/v1/get-views-statistics?{qs}', token)
         if err or not data:
             continue
+        stat_rows = {}
         for s in (data.get('result') or {}).get('statistics') or []:
-            cur.execute(f"""
+            if s.get('offerId') is None:
+                continue
+            stat_rows[s.get('offerId')] = (
+                s.get('offerId'), s.get('addToFavorites', 0), s.get('calls', 0), s.get('chats', 0),
+                s.get('phoneShows', 0), s.get('phoneViews', 0), s.get('phoneViewsAndChats', 0),
+                s.get('responses', 0), s.get('showsBase', 0),
+            )
+        if stat_rows:
+            execute_values(cur, f"""
                 INSERT INTO {SCHEMA}.cian_offer_stats
                     (offer_id, add_to_favorites, calls, chats, phone_shows, phone_views, phone_views_and_chats, responses, shows_base, synced_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW())
+                VALUES %s
                 ON CONFLICT (offer_id) DO UPDATE SET
                     add_to_favorites=EXCLUDED.add_to_favorites, calls=EXCLUDED.calls, chats=EXCLUDED.chats,
                     phone_shows=EXCLUDED.phone_shows, phone_views=EXCLUDED.phone_views,
                     phone_views_and_chats=EXCLUDED.phone_views_and_chats, responses=EXCLUDED.responses,
                     shows_base=EXCLUDED.shows_base, synced_at=NOW()
-            """, (
-                s.get('offerId'), s.get('addToFavorites', 0), s.get('calls', 0), s.get('chats', 0),
-                s.get('phoneShows', 0), s.get('phoneViews', 0), s.get('phoneViewsAndChats', 0),
-                s.get('responses', 0), s.get('showsBase', 0),
-            ))
-            stats_count += 1
+            """, list(stat_rows.values()), template='(%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW())')
+            stats_count += len(stat_rows)
         conn.commit()  # этап 3 (views-stats) — сохраняем по мере обработки батчей
 
     for batch in _cian_chunks(offer_ids, 50):
@@ -2353,18 +2367,21 @@ def _cian_sync(cur, conn, token):
         data, err = _cian_get(f'/v1/get-offer-active-services?{qs}', token)
         if err or not data:
             continue
+        svc_rows = {}
         for item in (data.get('result') or {}).get('items') or []:
             oid = item.get('offerId')
             for svc in item.get('services') or []:
                 for stype in svc.get('serviceTypes') or []:
-                    cur.execute(f"""
-                        INSERT INTO {SCHEMA}.cian_offer_services (offer_id, service_type, price, paid_till, auto_prolong, synced_at)
-                        VALUES (%s,%s,%s,%s,%s, NOW())
-                        ON CONFLICT (offer_id, service_type) DO UPDATE SET
-                            price=EXCLUDED.price, paid_till=EXCLUDED.paid_till,
-                            auto_prolong=EXCLUDED.auto_prolong, synced_at=NOW()
-                    """, (oid, stype, svc.get('price'), svc.get('paidTill'), svc.get('autoProlongEnabled', False)))
-                    services_count += 1
+                    svc_rows[(oid, stype)] = (oid, stype, svc.get('price'), svc.get('paidTill'), svc.get('autoProlongEnabled', False))
+        if svc_rows:
+            execute_values(cur, f"""
+                INSERT INTO {SCHEMA}.cian_offer_services (offer_id, service_type, price, paid_till, auto_prolong, synced_at)
+                VALUES %s
+                ON CONFLICT (offer_id, service_type) DO UPDATE SET
+                    price=EXCLUDED.price, paid_till=EXCLUDED.paid_till,
+                    auto_prolong=EXCLUDED.auto_prolong, synced_at=NOW()
+            """, list(svc_rows.values()), template='(%s,%s,%s,%s,%s, NOW())')
+            services_count += len(svc_rows)
         conn.commit()  # этап 4 (services) — сохраняем по мере обработки батчей
 
     budget_exceeded = time.monotonic() - start_ts > CIAN_SYNC_TIME_BUDGET_SEC
@@ -2383,6 +2400,7 @@ def _cian_sync(cur, conn, token):
                 break
             result = data.get('result') or {}
             calls = result.get('calls') or []
+            call_rows = {}
             for c in calls:
                 offer = c.get('offer') or {}
                 ext_id = offer.get('externalId')
@@ -2390,22 +2408,26 @@ def _cian_sync(cur, conn, token):
                     ext_id_int = int(ext_id) if ext_id else None
                 except (ValueError, TypeError):
                     ext_id_int = None
-                cur.execute(f"""
+                if c.get('callId') is None:
+                    continue
+                call_rows[c.get('callId')] = (
+                    c.get('callId'), offer.get('id'), ext_id_int, c.get('sourcePhone'), c.get('destinationPhone'),
+                    c.get('calltrackingPhone'), c.get('duration'), c.get('status'), c.get('datetime'), c.get('employeeId'),
+                )
+            if call_rows:
+                execute_values(cur, f"""
                     INSERT INTO {SCHEMA}.cian_calls
                         (call_id, offer_id, external_id, source_phone, destination_phone, calltracking_phone,
                          duration, status, call_datetime, employee_id, synced_at)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW())
+                    VALUES %s
                     ON CONFLICT (call_id) DO UPDATE SET
                         offer_id=EXCLUDED.offer_id, external_id=EXCLUDED.external_id,
                         source_phone=EXCLUDED.source_phone, destination_phone=EXCLUDED.destination_phone,
                         calltracking_phone=EXCLUDED.calltracking_phone, duration=EXCLUDED.duration,
                         status=EXCLUDED.status, call_datetime=EXCLUDED.call_datetime,
                         employee_id=EXCLUDED.employee_id, synced_at=NOW()
-                """, (
-                    c.get('callId'), offer.get('id'), ext_id_int, c.get('sourcePhone'), c.get('destinationPhone'),
-                    c.get('calltrackingPhone'), c.get('duration'), c.get('status'), c.get('datetime'), c.get('employeeId'),
-                ))
-                calls_count += 1
+                """, list(call_rows.values()), template='(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW())')
+                calls_count += len(call_rows)
             conn.commit()  # этап 5 (calls) — сохраняем по мере обработки страниц
             total = result.get('totalCount', 0)
             if page * 100 >= total or not calls:
@@ -3019,6 +3041,8 @@ def _avito_fetch_report(cur, conn, token):
         data, ierr = _avito_get(f'/autoload/v2/reports/items?query={urllib.parse.quote(query)}', token)
         if ierr or not data:
             continue
+        status_rows = {}
+        id_rows = {}
         for item in (data.get('items') or []):
             ad_id = item.get('ad_id')
             if not ad_id or not str(ad_id).isdigit():
@@ -3026,27 +3050,33 @@ def _avito_fetch_report(cur, conn, token):
             msgs = item.get('messages') or []
             msg_text = '; '.join(m.get('description', '') for m in msgs if m.get('description'))
             section = item.get('section') or {}
-            cur.execute(f"""
-                INSERT INTO {SCHEMA}.avito_item_status
-                    (listing_id, avito_id, url, status, status_detail, status_message, checked_at)
-                VALUES (%s, %s, %s, %s, %s, %s, NOW())
-                ON CONFLICT (listing_id) DO UPDATE SET
-                    avito_id = EXCLUDED.avito_id, url = EXCLUDED.url,
-                    status = EXCLUDED.status, status_detail = EXCLUDED.status_detail,
-                    status_message = EXCLUDED.status_message, checked_at = NOW()
-            """, (int(ad_id), item.get('avito_id'), item.get('url'),
-                  item.get('avito_status'), section.get('title'), msg_text or None))
-            checked += 1
+            status_rows[int(ad_id)] = (int(ad_id), item.get('avito_id'), item.get('url'),
+                                       item.get('avito_status'), section.get('title'), msg_text or None)
             # Обратная синхронизация: пишем реальный номер объявления с Авито
             # в карточку объекта (listings.avito_ad_id), чтобы при следующей
             # выгрузке фида тег <AvitoId> обновлял то же объявление, а не создавал
             # дубликат. avito_id из отчёта — источник истины, перезаписываем всегда.
             real_avito_id = item.get('avito_id')
             if real_avito_id and str(real_avito_id).isdigit():
-                cur.execute(f"""
-                    UPDATE {SCHEMA}.listings SET avito_ad_id = %s
-                    WHERE id = %s AND avito_ad_id IS DISTINCT FROM %s
-                """, (int(real_avito_id), int(ad_id), int(real_avito_id)))
+                id_rows[int(ad_id)] = (int(ad_id), int(real_avito_id))
+        # Пакетом на всю страницу (до 100 объектов) — два запроса вместо 200.
+        if status_rows:
+            execute_values(cur, f"""
+                INSERT INTO {SCHEMA}.avito_item_status
+                    (listing_id, avito_id, url, status, status_detail, status_message, checked_at)
+                VALUES %s
+                ON CONFLICT (listing_id) DO UPDATE SET
+                    avito_id = EXCLUDED.avito_id, url = EXCLUDED.url,
+                    status = EXCLUDED.status, status_detail = EXCLUDED.status_detail,
+                    status_message = EXCLUDED.status_message, checked_at = NOW()
+            """, list(status_rows.values()), template='(%s,%s,%s,%s,%s,%s, NOW())')
+            checked += len(status_rows)
+        if id_rows:
+            execute_values(cur, f"""
+                UPDATE {SCHEMA}.listings AS l SET avito_ad_id = v.avito_id::bigint
+                FROM (VALUES %s) AS v(id, avito_id)
+                WHERE l.id = v.id::int AND l.avito_ad_id IS DISTINCT FROM v.avito_id::bigint
+            """, list(id_rows.values()))
     conn.commit()
 
     return {
@@ -3080,7 +3110,7 @@ def _avito_fetch_stats(cur, conn, token, account_id):
         return {'error': err or 'Пустой ответ'}
 
     result_items = ((data.get('result') or {}).get('items')) or []
-    updated = 0
+    stat_rows = {}
     for item in result_items:
         avito_id = item.get('itemId') or item.get('item_id')
         listing_id = id_to_listing.get(int(avito_id)) if avito_id else None
@@ -3090,12 +3120,15 @@ def _avito_fetch_stats(cur, conn, token, account_id):
         views = sum(int(s.get('uniqViews') or s.get('uniq_views') or 0) for s in stats_list)
         contacts = sum(int(s.get('uniqContacts') or s.get('uniq_contacts') or 0) for s in stats_list)
         favorites = sum(int(s.get('uniqFavorites') or s.get('uniq_favorites') or 0) for s in stats_list)
-        cur.execute(f"""
-            UPDATE {SCHEMA}.avito_item_status
-            SET uniq_views = %s, uniq_contacts = %s, uniq_favorites = %s
-            WHERE listing_id = %s
-        """, (views, contacts, favorites, listing_id))
-        updated += 1
+        stat_rows[listing_id] = (listing_id, views, contacts, favorites)
+    if stat_rows:
+        execute_values(cur, f"""
+            UPDATE {SCHEMA}.avito_item_status AS t
+            SET uniq_views = v.views::int, uniq_contacts = v.contacts::int, uniq_favorites = v.favorites::int
+            FROM (VALUES %s) AS v(listing_id, views, contacts, favorites)
+            WHERE t.listing_id = v.listing_id::int
+        """, list(stat_rows.values()))
+    updated = len(stat_rows)
     conn.commit()
     return {'updated': updated, 'requested': len(item_ids)}
 
@@ -3424,7 +3457,8 @@ def _youla_fetch_stats(cur, conn, token):
     start_ts = time.monotonic()
     date_to = datetime.now(timezone.utc)
     date_from = date_to - timedelta(days=30)
-    updated, skipped_budget = 0, 0
+    skipped_budget = 0
+    stat_rows = []
     for row in rows:
         if time.monotonic() - start_ts > YOULA_STATS_TIME_BUDGET_SEC:
             skipped_budget += 1
@@ -3436,13 +3470,20 @@ def _youla_fetch_stats(cur, conn, token):
         if err or not data:
             continue
         stat = data.get('data') or data
-        cur.execute(f"""
-            UPDATE {SCHEMA}.youla_item_status
-            SET shows = %s, views = %s, contacts = %s, unique_contacts = %s, checked_at = NOW()
-            WHERE listing_id = %s
-        """, (stat.get('shows'), stat.get('views'), stat.get('contacts'), stat.get('unique_contacts'), row['listing_id']))
-        updated += 1
+        stat_rows.append((row['listing_id'], stat.get('shows'), stat.get('views'),
+                          stat.get('contacts'), stat.get('unique_contacts')))
+    # Запросы к API Юлы идут по одному (так устроено API), но в БД пишем один раз
+    # пакетом — раньше был UPDATE + commit на каждое объявление.
+    if stat_rows:
+        execute_values(cur, f"""
+            UPDATE {SCHEMA}.youla_item_status AS t
+            SET shows = v.shows::int, views = v.views::int, contacts = v.contacts::int,
+                unique_contacts = v.unique_contacts::int, checked_at = NOW()
+            FROM (VALUES %s) AS v(listing_id, shows, views, contacts, unique_contacts)
+            WHERE t.listing_id = v.listing_id::int
+        """, stat_rows)
         conn.commit()
+    updated = len(stat_rows)
     return {'updated': updated, 'requested': len(rows), 'skipped_budget': skipped_budget}
 
 
@@ -4008,12 +4049,13 @@ def _run_next_platform_sync(cur, conn):
     candidates.sort(key=lambda c: c[0])
     _, key, action = candidates[0]
 
-    cur.execute(
+    if not _state_write(cur, conn,
         f"INSERT INTO {SCHEMA}.platform_sync_state (platform, last_attempt_at, updated_at) "
         f"VALUES ('{key}', NOW(), NOW()) "
         f"ON CONFLICT (platform) DO UPDATE SET last_attempt_at = NOW(), updated_at = NOW()"
-    )
-    conn.commit()
+    ):
+        # БД перегружена уже до начала — не трогаем площадку, попробуем в следующий запуск.
+        return None, None
 
     try:
         resp = _platform_handler(key)(cur, conn, {'action': action, 'sync': '1'})
@@ -4029,7 +4071,7 @@ def _run_next_platform_sync(cur, conn):
         print(f'[xml-feeds cron] {key} failed: {err}')
 
     if err:
-        cur.execute(
+        _state_write(cur, conn,
             f"UPDATE {SCHEMA}.platform_sync_state SET "
             f"consecutive_errors = consecutive_errors + 1, last_error = %s, "
             f"paused_until = CASE WHEN consecutive_errors + 1 >= {PLATFORM_MAX_ERRORS} "
@@ -4038,12 +4080,36 @@ def _run_next_platform_sync(cur, conn):
             (err[:1000],)
         )
     else:
-        cur.execute(
+        _state_write(cur, conn,
             f"UPDATE {SCHEMA}.platform_sync_state SET consecutive_errors = 0, last_error = NULL, "
             f"paused_until = NULL, last_success_at = NOW(), updated_at = NOW() WHERE platform = '{key}'"
         )
-    conn.commit()
     return key, body
+
+
+def _state_write(cur, conn, sql, args=None, attempts=4):
+    """Запись состояния синхронизации площадки с повтором при перегрузке БД.
+
+    Раньше, если ошибку площадки («rate limit exceeded») не удавалось ЗАПИСАТЬ из-за
+    той же перегрузки, исключение роняло весь запуск: счётчик ошибок не рос
+    (уведомление показывало «1 подряд» при 2+ сбоях, пауза после 3 ошибок не
+    включалась), а фиды в этом запуске не собирались. Теперь — 4 попытки с паузой
+    1/2/3 с; если так и не получилось, запуск продолжается без падения."""
+    for i in range(attempts):
+        try:
+            cur.execute(sql, args) if args is not None else cur.execute(sql)
+            conn.commit()
+            return True
+        except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            if i == attempts - 1:
+                print(f'[xml-feeds cron] state write failed: {type(e).__name__}: {str(e)[:200]}')
+                return False
+            time.sleep(i + 1)
+    return False
 
 
 def handler(event, context):
@@ -4132,7 +4198,17 @@ def handler(event, context):
                     bump_result = _bump_feed_dates(cur, conn)
 
                     _plat_t0 = time.monotonic()
-                    turn_key, turn_result = _run_next_platform_sync(cur, conn)
+                    try:
+                        turn_key, turn_result = _run_next_platform_sync(cur, conn)
+                    except Exception as _pe:
+                        # Сбой на этапе площадки (например, перегрузка БД при выборе) не должен
+                        # отменять сборку фидов в этом же запуске.
+                        try:
+                            conn.rollback()
+                        except Exception:
+                            pass
+                        print(f'[xml-feeds cron] platform step failed: {type(_pe).__name__}: {str(_pe)[:200]}')
+                        turn_key, turn_result = None, {'error': f'{type(_pe).__name__}: {str(_pe)[:200]}'}
                     _platform_ms = int((time.monotonic() - _plat_t0) * 1000)
 
                     platform_results = {k: None for k, _, _ in PLATFORM_ROTATION}

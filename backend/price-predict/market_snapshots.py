@@ -34,6 +34,7 @@
 import datetime
 import json
 import statistics
+import time
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
 
@@ -322,8 +323,15 @@ _PPM2_RANGES = {
 
 
 def _batch_finalize(cur, conn, pool, today):
-    """Батч 5: сохраняем снапшоты из накопленного пула с санитарной фильтрацией."""
-    saved = 0
+    """Батч 5: сохраняем снапшоты из накопленного пула с санитарной фильтрацией.
+
+    Все снапшоты пишутся ОДНИМ запросом INSERT ... VALUES (...), (...), а не по
+    одному на район. Раньше было ~110 отдельных INSERT подряд — у БД платформы есть
+    лимит частоты запросов («rate limit exceeded»), finalize падал на середине,
+    цикл оставался незавершённым и повторял finalize при КАЖДОМ запуске крона,
+    создавая постоянную нагрузку на общую БД (от неё падали и другие функции —
+    синхронизация площадок в xml-feeds)."""
+    rows = []
     for key, analogs in pool.items():
         parts = key.split('|', 2)
         if len(parts) != 3:
@@ -340,10 +348,63 @@ def _batch_finalize(cur, conn, pool, today):
 
         snap = _calc_snapshot(analogs)
         if snap and snap['price_per_m2_median'] > 0:
-            _save_snapshot(cur, today, category, deal, district, snap)
-            saved += 1
+            rows.append(_snapshot_values_sql(today, category, deal, district, snap))
+
+    if rows:
+        sql = f"""
+            INSERT INTO {SCHEMA}.price_market_snapshots
+                (snapshot_date, category, deal, district,
+                 price_median, price_min, price_max, price_per_m2_median,
+                 analogs_count, sources)
+            VALUES {', '.join(rows)}
+            ON CONFLICT (snapshot_date, category, deal, district)
+            DO UPDATE SET
+                price_median        = EXCLUDED.price_median,
+                price_min           = EXCLUDED.price_min,
+                price_max           = EXCLUDED.price_max,
+                price_per_m2_median = EXCLUDED.price_per_m2_median,
+                analogs_count       = EXCLUDED.analogs_count,
+                sources             = EXCLUDED.sources,
+                created_at          = NOW()
+        """
+        _exec_with_retry(cur, conn, sql)
+    saved = len(rows)
     print(f'[price_refresh] finalize: saved={saved}')
     return saved
+
+
+def _snapshot_values_sql(today, category, deal, district, snap):
+    src_json = json.dumps(snap['sources'], ensure_ascii=False).replace("'", "''")
+    dist_safe = district.replace("'", "''")
+    cat_safe = str(category).replace("'", "''")
+    deal_safe = str(deal).replace("'", "''")
+    pm, pmin, pmax = snap['price_median'], snap['price_min'], snap['price_max']
+    return (
+        f"('{today}', '{cat_safe}', '{deal_safe}', '{dist_safe}', "
+        f"{pm if pm is not None else 'NULL'}, "
+        f"{pmin if pmin is not None else 'NULL'}, "
+        f"{pmax if pmax is not None else 'NULL'}, "
+        f"{snap['price_per_m2_median']}, {snap['analogs_count']}, '{src_json}')"
+    )
+
+
+def _exec_with_retry(cur, conn, sql, attempts=3):
+    """Выполняет запрос и коммитит; при перегрузке БД («rate limit exceeded»)
+    откатывает транзакцию и повторяет с паузой 1.5 / 3 с."""
+    for i in range(attempts):
+        try:
+            cur.execute(sql)
+            conn.commit()
+            return
+        except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            if 'rate limit' not in str(e).lower() or i == attempts - 1:
+                raise
+            print(f'[price_refresh] rate limit, retry {i + 1}')
+            time.sleep(1.5 * (i + 1))
 
 
 # ── Главный entry point ───────────────────────────────────────────────────────
@@ -624,7 +685,7 @@ def aggregate_market_listings(cur, conn, today=None):
     deleted = cur.rowcount
     print(f'[aggregate_ml] deleted {deleted} stale snapshots for {today}')
 
-    saved = 0
+    rows = []
     for key, analogs in groups.items():
         if len(analogs) < 3:  # меньше 3 объявлений — ненадёжно
             continue
@@ -639,9 +700,28 @@ def aggregate_market_listings(cur, conn, today=None):
 
         # Помечаем источник как market_listings
         snap['sources'] = ['market_listings (импорт)']
-        _save_snapshot(cur, today, category, deal, district, snap)
-        saved += 1
+        rows.append(_snapshot_values_sql(today, category, deal, district, snap))
 
+    # Удаление старых и запись новых — одной транзакцией, запись одним пакетным запросом
+    # (раньше — по INSERT на каждую группу, что упиралось в лимит частоты запросов к БД).
+    if rows:
+        cur.execute(f"""
+            INSERT INTO {SCHEMA}.price_market_snapshots
+                (snapshot_date, category, deal, district,
+                 price_median, price_min, price_max, price_per_m2_median,
+                 analogs_count, sources)
+            VALUES {', '.join(rows)}
+            ON CONFLICT (snapshot_date, category, deal, district)
+            DO UPDATE SET
+                price_median        = EXCLUDED.price_median,
+                price_min           = EXCLUDED.price_min,
+                price_max           = EXCLUDED.price_max,
+                price_per_m2_median = EXCLUDED.price_per_m2_median,
+                analogs_count       = EXCLUDED.analogs_count,
+                sources             = EXCLUDED.sources,
+                created_at          = NOW()
+        """)
+    saved = len(rows)
     conn.commit()
     print(f'[aggregate_ml] saved={saved} snapshots')
     return {'saved': saved, 'groups_total': len(groups), 'deleted_stale': deleted, 'date': today}
