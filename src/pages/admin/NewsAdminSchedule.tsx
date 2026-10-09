@@ -62,6 +62,26 @@ export function NewsAdminSchedule({ schedule, schedSaved, headers, onScheduleCha
         Статья публикуется автоматически, как только пройдёт 24 часа с момента предыдущей публикации — точное время запуска не привязано к конкретному часу, это исключает пропуски дней.
       </div>
 
+      {/* Свежесть новостей-источников */}
+      <div>
+        <label className="text-xs text-muted-foreground font-medium block mb-1.5">Свежесть новостей-источников</label>
+        <div className="flex items-center gap-2">
+          <span className="text-sm">не старше</span>
+          <input
+            type="number"
+            min={1}
+            max={90}
+            value={schedule.max_news_age_days ?? 14}
+            onChange={e => onScheduleChange(s => ({ ...s, max_news_age_days: Math.max(1, Math.min(90, Number(e.target.value) || 14)) }))}
+            className="w-20 px-3 py-1.5 border rounded-lg text-sm"
+          />
+          <span className="text-sm">дней с даты публикации</span>
+        </div>
+        <div className="text-xs text-muted-foreground mt-1">
+          ИИ пишет статьи только по новостям не старше этого срока. Новости без даты публикации не используются. Если свежих новостей по теме нет — статья не пишется.
+        </div>
+      </div>
+
       {/* Темы */}
       <div>
         <div className="flex items-center justify-between mb-2">

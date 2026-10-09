@@ -13,7 +13,14 @@ export interface NewsItem {
   published_at?: string;
   created_at: string;
   category: string;
-  cb_key_rate?: number | null;
+  sources?: NewsSource[] | null;
+}
+
+export interface NewsSource {
+  title: string;
+  url: string;
+  published_at: string | null;
+  source?: string;
 }
 
 export interface Schedule {
@@ -31,6 +38,7 @@ export interface Schedule {
   price_digest_day?: number;
   price_digest_threshold?: number;
   price_digest_last_at?: string;
+  max_news_age_days?: number;
 }
 
 export const WEEK_DAYS = [

@@ -69,6 +69,7 @@ export default function NewsAdmin() {
           loading={loading}
           headers={headers}
           onNewsChange={setNews}
+          maxNewsAgeDays={schedule.max_news_age_days ?? 14}
         />
       )}
 

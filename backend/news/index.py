@@ -1,7 +1,7 @@
 """
-Новости коммерческой недвижимости: CRUD + автокопирайтер на YandexGPT + расписание. v3
-Копирайтер анализирует рынок (ключевые ставки ЦБ, данные застройщиков Краснодара,
-ипотека, аренда) и генерирует профессиональные статьи для публикации на сайте.
+Новости коммерческой недвижимости: CRUD + автокопирайтер на YandexGPT + расписание. v4
+Копирайтер пишет статьи по свежим новостям (не старше срока из настроек, по умолчанию 14 дней)
+о рынке коммерческой недвижимости и бизнесе Краснодара и генерирует профессиональные статьи для публикации на сайте.
 
 Публичные эндпоинты (без токена):
   GET /?action=list          — список опубликованных (limit, page)
@@ -25,6 +25,7 @@ import base64
 import json
 import os
 import re
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
@@ -164,7 +165,11 @@ def _is_valid_article(article: dict) -> bool:
 SYSTEM_PROMPT_TEMPLATE = """Ты — редактор и глубокий аналитик издания о коммерческой недвижимости и бизнесе Краснодара и Краснодарского края.
 
 СЕГОДНЯШНЯЯ ДАТА: {today}.
-{key_rate_block}
+
+СВЕЖЕСТЬ: тебе даны новости не старше {max_age} дней, у каждой в квадратных скобках указана дата
+публикации. Пиши только о событиях из этих новостей. Не называй событие «сегодняшним», «вчерашним»
+или «на этой неделе», если дата новости этого не подтверждает — при необходимости указывай дату.
+Не добавляй события из своих знаний, которых нет в новостях.
 
 ГЛАВНОЕ ПРАВИЛО — НИКАКИХ ВЫДУМОК:
 - Пиши ТОЛЬКО на основе предоставленных новостей из источников
@@ -184,14 +189,13 @@ SYSTEM_PROMPT_TEMPLATE = """Ты — редактор и глубокий ана
    раскрытия темы. Целевой объём — 800-1200 слов. НЕ растягивай текст искусственно повторами
    или водой сверх этого объёма — раскрой тему настолько подробно, насколько позволяют
    реальные факты из источников, и заверши статью, даже если это меньше 800 слов.
-4. Если упоминается ключевая ставка — {key_rate_rule}
-5. Завершай кратким выводом о том, что это значит для рынка Краснодара — без придуманных прогнозов
-6. Без markdown-разметки, только текст с переносами строк
+4. Завершай кратким выводом о том, что это значит для рынка Краснодара — без придуманных прогнозов
+5. Без markdown-разметки, только текст с переносами строк
 
 ОБЯЗАТЕЛЬНО:
 - Все факты и цифры — только из предоставленных новостей
 - Переформулируй своими словами, НЕ копируй дословно
-- Указывай временные рамки только если они есть в источниках
+- Указывай временные рамки только если они есть в источниках или в дате новости
 - Раскрывай ОДНУ заявленную тему глубоко и подробно, не распыляйся на несколько несвязанных новостей
 
 Формат ответа (строго JSON):
@@ -200,40 +204,6 @@ SYSTEM_PROMPT_TEMPLATE = """Ты — редактор и глубокий ана
   "summary": "Краткое описание",
   "content": "Полный текст статьи"
 }}"""
-
-
-def _extract_key_rate(text: str) -> float | None:
-    """
-    Ищет упоминание ключевой ставки ЦБ РФ прямо в тексте (статьи/новости/сниппеты).
-    Не делает никаких внешних запросов — только разбор переданного текста.
-    Ищет число с процентом рядом со словом «ставка» (ключевая ставка / ставка ЦБ / ставка Банка России).
-    Возвращает float (например 18.0) или None, если в тексте ставка не упомянута.
-    """
-    if not text:
-        return None
-    for m in re.finditer(r'ставк[а-я]*', text, re.IGNORECASE):
-        window = text[max(0, m.start() - 15):m.end() + 60]
-        rate_m = re.search(r'(\d{1,2})[.,]?(\d{0,2})\s*%', window)
-        if rate_m:
-            whole, frac = rate_m.group(1), rate_m.group(2) or '0'
-            try:
-                rate = float(f'{whole}.{frac}')
-                if 1.0 <= rate <= 50.0:
-                    return rate
-            except Exception:
-                continue
-    return None
-
-
-def _extract_key_rate_from_snippets(snippets: list | None) -> float | None:
-    """Ищет ключевую ставку ЦБ РФ в заголовках/сниппетах найденных новостей (первое совпадение)."""
-    if not snippets:
-        return None
-    for s in snippets:
-        rate = _extract_key_rate(f"{s.get('title', '')} {s.get('snippet', '')}")
-        if rate is not None:
-            return rate
-    return None
 
 
 def _ok(body, status=200, cache: str = 'no-store'):
@@ -282,13 +252,102 @@ def _load_gpt_keys(cur):
     return load_keys()
 
 
-def _fetch_news_snippets(query: str, limit: int = 8) -> tuple[list[dict], str]:
-    """
-    Ищет свежие новости. Пробует несколько источников.
-    Возвращает (список {'title', 'snippet', 'url'}, источник).
-    """
-    import urllib.parse
+DEFAULT_MAX_NEWS_AGE_DAYS = 14
 
+
+def _max_news_age_days(cur=None) -> int:
+    """Срок свежести новостей-источников (дней) из настроек автоновостей, по умолчанию 14."""
+    if cur is None:
+        return DEFAULT_MAX_NEWS_AGE_DAYS
+    try:
+        cur.execute(f"SELECT max_news_age_days FROM {SCHEMA}.news_schedule ORDER BY id LIMIT 1")
+        row = cur.fetchone()
+        v = int((row or {}).get('max_news_age_days') or DEFAULT_MAX_NEWS_AGE_DAYS)
+        return max(1, min(90, v))
+    except Exception:
+        return DEFAULT_MAX_NEWS_AGE_DAYS
+
+
+def _parse_pub_date(raw: str):
+    """Дата публикации из RSS pubDate (RFC 822) или ISO / yyyymmddThhmmss (Яндекс XML)."""
+    raw = (raw or '').strip()
+    if not raw:
+        return None
+    try:
+        from email.utils import parsedate_to_datetime
+        d = parsedate_to_datetime(raw)
+        return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+    except Exception:
+        pass
+    try:
+        d = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+        return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+    except Exception:
+        pass
+    try:
+        return datetime.strptime(raw[:15], '%Y%m%dT%H%M%S').replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+def _is_fresh(item: dict, max_age_days: int) -> bool:
+    """Новость свежая, если дата публикации известна и не старше max_age_days.
+    Новости без даты отбрасываются — проверить их свежесть невозможно."""
+    pub = item.get('published_at')
+    if not pub:
+        return False
+    try:
+        d = datetime.fromisoformat(pub)
+    except Exception:
+        return False
+    now = datetime.now(timezone.utc)
+    return now - timedelta(days=max_age_days) <= d <= now + timedelta(days=1)
+
+
+def _filter_fresh(items: list, max_age_days: int) -> list:
+    return [i for i in (items or []) if _is_fresh(i, max_age_days)]
+
+
+def _rss_items(rss_url: str, limit: int, max_age_days: int, strip_source: bool) -> list:
+    req = urllib.request.Request(rss_url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        rss_data = resp.read().decode('utf-8', errors='replace')
+    root = ET.fromstring(rss_data)
+    results = []
+    for item in root.iter('item'):
+        title = item.findtext('title') or ''
+        import html as _html
+        snippet = _html.unescape(re.sub(r'<[^>]+>', ' ', item.findtext('description') or '')).replace('\xa0', ' ')
+        snippet = re.sub(r'\s+', ' ', snippet).strip()
+        link = item.findtext('link') or ''
+        src_name = (item.findtext('source') or '').strip()
+        if strip_source:
+            title = re.sub(r'\s+-\s+[^-]+$', '', title).strip()
+        pub = _parse_pub_date(item.findtext('pubDate') or '')
+        if not title:
+            continue
+        row = {'title': title[:150], 'snippet': snippet[:300], 'url': link[:300],
+               'published_at': pub.isoformat() if pub else None, 'source': src_name[:80]}
+        if _is_fresh(row, max_age_days):
+            results.append(row)
+        if len(results) >= limit:
+            break
+    return results
+
+
+def _google_news_url(query: str, max_age_days: int) -> str:
+    # when:Nd — фильтр свежести на стороне Google News (проверено: без него до 80%
+    # выдачи старше 14 дней, вплоть до новостей 3-летней давности).
+    q_enc = urllib.parse.quote(f'{query} when:{int(max_age_days)}d')
+    return f'https://news.google.com/rss/search?q={q_enc}&hl=ru&gl=RU&ceid=RU:ru'
+
+
+def _fetch_news_snippets(query: str, limit: int = 8, max_age_days: int = DEFAULT_MAX_NEWS_AGE_DAYS) -> tuple[list[dict], str]:
+    """
+    Ищет свежие новости (не старше max_age_days по дате публикации в источнике).
+    Возвращает (список {'title','snippet','url','published_at','source'}, источник).
+    Новости без даты публикации отбрасываются.
+    """
     # ── Метод 1: Яндекс XML Search API ───────────────────────────────────
     search_user = os.environ.get('YANDEX_SEARCH_USER', '')
     search_key = os.environ.get('YANDEX_SEARCH_API_KEY', '')
@@ -300,16 +359,15 @@ def _fetch_news_snippets(query: str, limit: int = 8) -> tuple[list[dict], str]:
                 'query': query,
                 'lr': '35',
                 'l10n': 'ru',
-                'sortby': 'rlv',
+                'sortby': 'tm.order=descending',
                 'filter': 'none',
                 'maxpassages': '3',
-                'groupby': f'attr=d.mode=flat.groups-on-page={limit}.docs-in-group=1',
+                'groupby': f'attr=d.mode=flat.groups-on-page={limit * 2}.docs-in-group=1',
             })
             url = f'https://yandex.ru/search/xml?{params}'
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=12) as resp:
+            with urllib.request.urlopen(req, timeout=8) as resp:
                 xml_data = resp.read().decode('utf-8', errors='replace')
-            # Проверяем на ошибку от Яндекса
             if '<error' in xml_data.lower():
                 err_m = re.search(r'<message>(.*?)</message>', xml_data)
                 raise Exception(f'Яндекс XML: {err_m.group(1) if err_m else xml_data[:200]}')
@@ -318,147 +376,89 @@ def _fetch_news_snippets(query: str, limit: int = 8) -> tuple[list[dict], str]:
             for doc in root.iter('doc'):
                 title_el = doc.find('title')
                 snippet_el = doc.find('passages/passage') or doc.find('headline') or doc.find('snippet')
-                url_el = doc.find('url')
-                title = re.sub(r'<[^>]+>', '', (title_el.text or '') if title_el is not None else '').strip()
-                snippet = re.sub(r'<[^>]+>', '', (snippet_el.text or '') if snippet_el is not None else '').strip()
-                url_s = (url_el.text or '') if url_el is not None else ''
-                if title:
-                    results.append({'title': title[:150], 'snippet': snippet[:400], 'url': url_s[:200]})
+                title = re.sub(r'<[^>]+>', '', ''.join(title_el.itertext()) if title_el is not None else '').strip()
+                snippet = re.sub(r'<[^>]+>', '', ''.join(snippet_el.itertext()) if snippet_el is not None else '').strip()
+                url_s = doc.findtext('url') or ''
+                pub = _parse_pub_date(doc.findtext('modtime') or '')
+                row = {'title': title[:150], 'snippet': snippet[:400], 'url': url_s[:300],
+                       'published_at': pub.isoformat() if pub else None, 'source': (doc.findtext('domain') or '')[:80]}
+                if title and _is_fresh(row, max_age_days):
+                    results.append(row)
                 if len(results) >= limit:
                     break
             if results:
                 return results, 'yandex_xml'
         except Exception as e:
-            # Сохраняем ошибку для диагностики — попадёт в логи если вызывается из _gpt
             os.environ['_SEARCH_LAST_ERROR'] = str(e)[:300]
 
-    # ── Метод 2: Google News RSS (без ключа) ─────────────────────────────
+    # ── Метод 2: Google News RSS (без ключа), фильтр свежести when:Nd ────
     try:
-        q_enc = urllib.parse.quote(query)
-        rss_url = f'https://news.google.com/rss/search?q={q_enc}&hl=ru&gl=RU&ceid=RU:ru'
-        req2 = urllib.request.Request(rss_url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req2, timeout=10) as resp2:
-            rss_data = resp2.read().decode('utf-8', errors='replace')
-        root2 = ET.fromstring(rss_data)
-        results2 = []
-        for item in root2.iter('item'):
-            t_el = item.find('title')
-            d_el = item.find('description')
-            l_el = item.find('link')
-            title = (t_el.text or '') if t_el is not None else ''
-            snippet = re.sub(r'<[^>]+>', '', (d_el.text or '') if d_el is not None else '').strip()
-            link = (l_el.text or '') if l_el is not None else ''
-            # Убираем имя издания из заголовка (формат «Заголовок - Издание»)
-            title = re.sub(r'\s+-\s+[\w\s]+$', '', title).strip()
-            if title:
-                results2.append({'title': title[:150], 'snippet': snippet[:300], 'url': link[:200]})
-            if len(results2) >= limit:
-                break
+        results2 = _rss_items(_google_news_url(query, max_age_days), limit, max_age_days, strip_source=True)
         if results2:
             return results2, 'google_news_rss'
     except Exception:
         pass
 
-    # ── Метод 3: Яндекс Новости RSS ──────────────────────────────────────
-    try:
-        q_enc = urllib.parse.quote(query)
-        yn_url = f'https://news.yandex.ru/search.rss?text={q_enc}&geo=35'
-        req3 = urllib.request.Request(yn_url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req3, timeout=10) as resp3:
-            rss3 = resp3.read().decode('utf-8', errors='replace')
-        root3 = ET.fromstring(rss3)
-        results3 = []
-        for item in root3.iter('item'):
-            t_el = item.find('title')
-            d_el = item.find('description')
-            l_el = item.find('link')
-            title = (t_el.text or '') if t_el is not None else ''
-            snippet = re.sub(r'<[^>]+>', '', (d_el.text or '') if d_el is not None else '').strip()[:300]
-            link = (l_el.text or '') if l_el is not None else ''
-            if title:
-                results3.append({'title': title[:150], 'snippet': snippet, 'url': link[:200]})
-            if len(results3) >= limit:
-                break
-        if results3:
-            return results3, 'yandex_news_rss'
-    except Exception:
-        pass
+    # Яндекс Новости RSS (news.yandex.ru/search.rss) убран: сервис больше не отвечает —
+    # запрос висел ~40 с (проверено 09.10.2026) и обрывал функцию по таймауту 30 с.
 
     return [], 'none'
 
 
-def _fetch_local_news_snippets(query: str, limit: int = 3) -> list[dict]:
+def _fetch_local_news_snippets(query: str, limit: int = 3, max_age_days: int = DEFAULT_MAX_NEWS_AGE_DAYS) -> list[dict]:
     """
     Ищет новости только на локальных СМИ Краснодарского края (Юга.ру, MK Кубань)
     через Google News RSS с оператором site: — точечно, без замены основного поиска.
-    Используется как доп. источник для более региональной фактуры в статьях.
+    Только свежие (не старше max_age_days).
     """
     try:
-        q_enc = urllib.parse.quote(f'{query} (site:yuga.ru OR site:kuban.mk.ru)')
-        rss_url = f'https://news.google.com/rss/search?q={q_enc}&hl=ru&gl=RU&ceid=RU:ru'
-        req = urllib.request.Request(rss_url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            rss_data = resp.read().decode('utf-8', errors='replace')
-        root = ET.fromstring(rss_data)
-        results = []
-        for item in root.iter('item'):
-            t_el = item.find('title')
-            d_el = item.find('description')
-            l_el = item.find('link')
-            title = (t_el.text or '') if t_el is not None else ''
-            snippet = re.sub(r'<[^>]+>', '', (d_el.text or '') if d_el is not None else '').strip()
-            link = (l_el.text or '') if l_el is not None else ''
-            title = re.sub(r'\s+-\s+[\w\s]+$', '', title).strip()
-            if title:
-                results.append({'title': title[:150], 'snippet': snippet[:300], 'url': link[:200]})
-            if len(results) >= limit:
-                break
-        return results
+        return _rss_items(_google_news_url(f'{query} (site:yuga.ru OR site:kuban.mk.ru)', max_age_days),
+                          limit, max_age_days, strip_source=True)
     except Exception:
         return []
 
 
+def _fmt_pub(pub: str | None) -> str:
+    if not pub:
+        return ''
+    try:
+        return datetime.fromisoformat(pub).strftime('%d.%m.%Y')
+    except Exception:
+        return ''
+
+
 def _build_news_context(snippets: list[dict]) -> str:
-    """Форматирует найденные новости в читаемый блок для промпта GPT."""
+    """Форматирует найденные новости в читаемый блок для промпта GPT — с датой публикации."""
     if not snippets:
         return ''
-    lines = ['СВЕЖИЕ НОВОСТИ ИЗ ИНТЕРНЕТА (использй как фактуру, НЕ копируй дословно):']
+    lines = ['СВЕЖИЕ НОВОСТИ ИЗ ИНТЕРНЕТА (используй как фактуру, НЕ копируй дословно):']
     for i, s in enumerate(snippets, 1):
-        lines.append(f'{i}. {s["title"]}')
-        if s['snippet']:
+        d = _fmt_pub(s.get('published_at'))
+        lines.append(f'{i}. [{d}] {s["title"]}' if d else f'{i}. {s["title"]}')
+        if s.get('snippet'):
             lines.append(f'   {s["snippet"]}')
     return '\n'.join(lines)
 
 
-def _build_article_prompts(topic: str, key_rate: float | None, news_snippets: list) -> tuple[str, str] | tuple[None, None]:
+def _build_article_prompts(topic: str, news_snippets: list, max_age_days: int = DEFAULT_MAX_NEWS_AGE_DAYS) -> tuple[str, str] | tuple[None, None]:
     """Собирает (system_prompt, user_text) для генерации статьи. Возвращает (None, None), если новостей нет."""
     now = datetime.now(timezone.utc)
     MONTHS_RU = ['января','февраля','марта','апреля','мая','июня',
                  'июля','августа','сентября','октября','ноября','декабря']
     today_str = f'{now.day} {MONTHS_RU[now.month-1]} {now.year}'
     month_year = f'{MONTHS_RU[now.month-1]} {now.year}'
-    if key_rate is not None:
-        key_rate_block = f'АКТУАЛЬНАЯ КЛЮЧЕВАЯ СТАВКА ЦБ РФ: {key_rate:.2f}% годовых. Используй ИМЕННО ЭТО значение — не придумывай другое.'
-        key_rate_rule = f'используй только точное значение {key_rate:.2f}% — не придумывай другую цифру'
-    else:
-        key_rate_block = 'Ключевая ставка ЦБ РФ в предоставленных новостях не упомянута — опиши влияние ставки без конкретной цифры (например: "в условиях высокой ключевой ставки", "при текущей ставке ЦБ").'
-        key_rate_rule = 'не указывай конкретный процент — напиши "при текущей ключевой ставке ЦБ" или "в условиях высоких ставок по кредитам"'
-    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
-        today=today_str,
-        month_year=month_year,
-        key_rate_block=key_rate_block,
-        key_rate_rule=key_rate_rule,
-    )
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(today=today_str, month_year=month_year, max_age=max_age_days)
     news_snippets = news_snippets or []
     if not news_snippets:
         return None, None
     news_block = _build_news_context(news_snippets)
     user_text = (
         f'Тема: {topic}\n'
-        f'Дата публикации: {today_str}\n\n'
+        f'Дата публикации статьи: {today_str}\n\n'
         f'{news_block}\n\n'
-        f'Напиши статью, пересказав эти новости своими словами. '
-        f'Используй только факты из источников выше. Не придумывай цифры и данные которых нет в новостях.'
+        f'Напиши статью, пересказав эти новости своими словами. В квадратных скобках — дата публикации '
+        f'каждой новости в источнике. Используй только факты из источников выше. Не придумывай цифры и '
+        f'данные, которых нет в новостях.'
     )
     return system_prompt, user_text
 
@@ -499,24 +499,6 @@ def _parse_gpt_article(text: str, topic: str) -> dict | None:
             'summary': lines[1][:300] if len(lines) > 1 else '',
             'content': _strip_md('\n'.join(lines[2:]) if len(lines) > 2 else text),
         }
-
-
-def _gpt(api_key, folder_id, topic, key_rate: float | None = None, news_snippets: list | None = None):
-    """Синхронная генерация статьи (используется только там, где укладывается в короткий лимит —
-    например, для служебных коротких текстов). Для основной статьи используется асинхронный job."""
-    if not api_key or not folder_id:
-        return None, 'YandexGPT не настроен'
-    system_prompt, user_text = _build_article_prompts(topic, key_rate, news_snippets or [])
-    if system_prompt is None:
-        return None, 'Нет свежих новостей по теме — генерация отменена (запрещено писать без источников)'
-    try:
-        text = chat_simple(system_prompt, user_text, api_key, folder_id,
-                           temperature=0.3, max_tokens=3500, timeout=25)
-        if not text:
-            return None, 'Пустой ответ от модели'
-        return _parse_gpt_article(text, topic), None
-    except Exception as e:
-        return None, str(e)[:300]
 
 
 def _generate_image(title: str, logo_url: str = '') -> str:
@@ -840,13 +822,10 @@ def _send_max_digest(bot_token: str, roles_str: str, cur, text: str):
         return 0
 
 
-def _build_price_news_prompt(
-    changes: list, date_str: str, key_rate: float | None,
-    district_changes: list | None = None, prev_key_rate: float | None = None,
-) -> str:
+def _build_price_news_prompt(changes: list, date_str: str, district_changes: list | None = None) -> str:
     """
     Строит prompt для GPT для генерации обзорной еженедельной статьи.
-    Включает ТОЛЬКО блоки, где реально есть изменения (по городу, по районам, по ставке ЦБ) —
+    Включает ТОЛЬКО блоки, где реально есть изменения (по городу, по районам) —
     пустые блоки не упоминаются вообще, чтобы не плодить шаблонные фразы вида
     "значимых изменений не выявлено" из недели в неделю.
     """
@@ -873,21 +852,13 @@ def _build_price_news_prompt(
         ]
         blocks.append('Изменение цен по районам (за неделю):\n' + '\n'.join(dist_lines))
 
-    if key_rate is not None and prev_key_rate is not None and abs(key_rate - prev_key_rate) >= 0.01:
-        direction = 'повышена' if key_rate > prev_key_rate else 'снижена'
-        blocks.append(
-            f'Ключевая ставка ЦБ РФ {direction}: было {prev_key_rate:.2f}%, стало {key_rate:.2f}%.'
-        )
-    elif key_rate is not None:
-        blocks.append(f'Ключевая ставка ЦБ РФ без изменений: {key_rate:.2f}%.')
-
     data_block = '\n\n'.join(blocks)
 
     return (
         f'Напиши профессиональную аналитическую статью «Обзор рынка коммерческой недвижимости Краснодара — {month_year}» '
         f'по итогам недели ({date_str}).\n\n'
         f'{data_block}\n\n'
-        f'ВАЖНО: пиши ТОЛЬКО о данных, приведённых выше. Если по какому-то направлению (город/районы/ставка) '
+        f'ВАЖНО: пиши ТОЛЬКО о данных, приведённых выше. Если по какому-то направлению (город/районы) '
         f'данных нет в блоке — вообще не упоминай его и не пиши, что там "нет изменений" — просто пропусти. '
         f'Требования: 3-5 абзацев, 300-600 слов, профессиональный деловой стиль, '
         f'краткий анализ возможных причин изменений на основе только приведённых цифр, без придуманных прогнозов. '
@@ -895,7 +866,7 @@ def _build_price_news_prompt(
     )
 
 
-def _save_article(cur, conn, article, is_auto, user_id=None, auto_publish=False, logo_url='', key_rate: float | None = None, topic: str = ''):
+def _save_article(cur, conn, article, is_auto, user_id=None, auto_publish=False, logo_url='', topic: str = '', sources: list | None = None):
     title = _safe(article.get('title', ''), 299)
     summary = _safe(article.get('summary', ''), 999)
     content = _safe(article.get('content', ''), 49999)
@@ -903,12 +874,18 @@ def _save_article(cur, conn, article, is_auto, user_id=None, auto_publish=False,
     img_val = f"'{_safe(image_url, 499)}'" if image_url else 'NULL'
     pub_val = 'TRUE' if auto_publish else 'FALSE'
     pub_at_val = f"'{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')}'" if auto_publish else 'NULL'
-    rate_val = str(key_rate) if key_rate is not None else 'NULL'
     topic_val = f"'{_safe(topic, 299)}'" if topic else 'NULL'
+    # Источники статьи с датами публикации — видны в админке (откуда и какой давности факты).
+    src_list = [
+        {'title': (x.get('title') or '')[:150], 'url': (x.get('url') or '')[:300],
+         'published_at': x.get('published_at'), 'source': (x.get('source') or '')[:80]}
+        for x in (sources or [])
+    ]
+    src_val = "'" + json.dumps(src_list, ensure_ascii=False).replace("'", "''") + "'::jsonb" if src_list else 'NULL'
     cur.execute(
-        f"INSERT INTO {SCHEMA}.news (title, summary, content, image_url, is_auto, is_published, published_at, created_by, cb_key_rate, topic) "
+        f"INSERT INTO {SCHEMA}.news (title, summary, content, image_url, is_auto, is_published, published_at, created_by, topic, sources) "
         f"VALUES ('{title}', '{summary}', '{content}', {img_val}, {is_auto}, {pub_val}, {pub_at_val}, "
-        f"{'NULL' if not user_id else user_id}, {rate_val}, {topic_val}) RETURNING id"
+        f"{'NULL' if not user_id else user_id}, {topic_val}, {src_val}) RETURNING id"
     )
     news_id = cur.fetchone()['id']
     slug = _slug(article.get('title', ''), news_id)
@@ -1018,15 +995,15 @@ def _check_article_unique(cur, api_key: str, folder_id: str, article: dict) -> b
         return True
 
 
-def _job_create(cur, conn, *, status='pending', topic='', snippets=None, key_rate=None,
+def _job_create(cur, conn, *, status='pending', topic='', snippets=None,
                  auto_publish=False, is_auto=False, created_by=None):
     """Создаёт запись асинхронного джоба генерации статьи, возвращает его id."""
     snippets_json = json.dumps(snippets or [], ensure_ascii=False).replace("'", "''")
     topic_safe = _safe(topic, 299)
     cur.execute(
-        f"INSERT INTO {SCHEMA}.news_gen_jobs (status, topic, snippets, key_rate, auto_publish, is_auto, created_by) "
+        f"INSERT INTO {SCHEMA}.news_gen_jobs (status, topic, snippets, auto_publish, is_auto, created_by) "
         f"VALUES ('{status}', '{topic_safe}', '{snippets_json}'::jsonb, "
-        f"{key_rate if key_rate is not None else 'NULL'}, {auto_publish}, {is_auto}, "
+        f"{auto_publish}, {is_auto}, "
         f"{int(created_by) if created_by else 'NULL'}) RETURNING id"
     )
     jid = cur.fetchone()['id']
@@ -1081,38 +1058,38 @@ def _advance_job(cur, conn, job: dict, api_key: str, folder_id: str) -> dict:
     jid = job['id']
     status = job['status']
     snippets = job.get('snippets') or []
+    max_age = _max_news_age_days(cur)
 
     # ── Ручная тема (задана пользователем) ────────────────────────────────
     if status == 'topic_given':
         topic = job.get('topic') or ''
-        topic_news, _src = _fetch_news_snippets(f'{topic} Краснодар', limit=8)
+        topic_news, _src = _fetch_news_snippets(f'{topic} Краснодар', limit=8, max_age_days=max_age)
         if not topic_news:
-            topic_news, _src = _fetch_news_snippets('коммерческая недвижимость Краснодар', limit=8)
+            topic_news, _src = _fetch_news_snippets('коммерческая недвижимость Краснодар', limit=8, max_age_days=max_age)
         _job_set(cur, conn, jid, status='topic_given_local', snippets_raw=topic_news)
         return _job_get(cur, jid)
 
     if status == 'topic_given_local':
         topic = job.get('topic') or ''
-        local_news = _fetch_local_news_snippets(topic, limit=3)
+        local_news = _fetch_local_news_snippets(topic, limit=3, max_age_days=max_age)
         seen = {s['url'] for s in snippets}
         combined = snippets + [s for s in local_news if s['url'] not in seen]
         if not combined:
-            _job_set(cur, conn, jid, status='error', error='Нет свежих новостей по этой теме')
+            _job_set(cur, conn, jid, status='error', error=f'Нет новостей по этой теме за последние {max_age} дн.')
             return _job_get(cur, jid)
-        key_rate = _extract_key_rate_from_snippets(combined)
-        _job_set(cur, conn, jid, status='pending', snippets_raw=combined[:8], key_rate=key_rate)
+        _job_set(cur, conn, jid, status='pending', snippets_raw=combined[:8])
         return _job_get(cur, jid)
 
     # ── Автопоиск: широкий поиск свежих бизнес-новостей "с нуля" ──────────
     if status == 'search_wide':
         wide, _src = _fetch_news_snippets(
-            'бизнес коммерческая недвижимость Краснодар Краснодарский край', limit=15
+            'бизнес коммерческая недвижимость Краснодар Краснодарский край', limit=15, max_age_days=max_age
         )
         _job_set(cur, conn, jid, status='search_wide_local', snippets_raw=wide)
         return _job_get(cur, jid)
 
     if status == 'search_wide_local':
-        local = _fetch_local_news_snippets('бизнес коммерческая недвижимость', limit=5)
+        local = _fetch_local_news_snippets('бизнес коммерческая недвижимость', limit=5, max_age_days=max_age)
         seen = {s['url'] for s in snippets}
         combined = snippets + [s for s in local if s['url'] not in seen]
         if not combined:
@@ -1127,7 +1104,11 @@ def _advance_job(cur, conn, job: dict, api_key: str, folder_id: str) -> dict:
             recent_titles = [r['title'] for r in cur.fetchall() if r.get('title')]
         except Exception:
             recent_titles = []
-        news_list = '\n'.join(f'{i + 1}. {s["title"]} — {s["snippet"][:150]}' for i, s in enumerate(snippets))
+        snippets = _filter_fresh(snippets, max_age)
+        news_list = '\n'.join(
+            f'{i + 1}. [{_fmt_pub(s.get("published_at"))}] {s["title"]} — {(s.get("snippet") or "")[:150]}'
+            for i, s in enumerate(snippets)
+        )
         recent_block = '\n'.join(f'- {t}' for t in recent_titles) or '(пока пусто)'
         system = (
             'Ты — редактор новостей о бизнесе и коммерческой недвижимости Краснодарского края. '
@@ -1161,9 +1142,7 @@ def _advance_job(cur, conn, job: dict, api_key: str, folder_id: str) -> dict:
             # на него (вероятно, о том же событии из разных источников). Раньше передавался
             # весь список из 15-20 разнородных новостей, и статья "расползалась" по темам.
             focused = [matched_snippet] + _find_similar_snippets(matched_snippet, snippets, exclude_idx=idx, limit=3)
-            key_rate = _extract_key_rate_from_snippets(focused)
-            _job_set(cur, conn, jid, status='pending', topic=found_topic,
-                     snippets_raw=focused, key_rate=key_rate)
+            _job_set(cur, conn, jid, status='pending', topic=found_topic, snippets_raw=focused)
         else:
             _job_set(cur, conn, jid, status='catalog_search', snippets_raw=[])
         return _job_get(cur, jid)
@@ -1176,36 +1155,40 @@ def _advance_job(cur, conn, job: dict, api_key: str, folder_id: str) -> dict:
         pool = [t.strip() for t in custom_topics_raw.splitlines() if t.strip()] if custom_topics_raw else AUTO_TOPICS
         picked = _pick_fresh_topics(cur, pool, 1, cooldown_days=30)
         topic = picked[0] if picked else pool[0]
-        topic_news, _src = _fetch_news_snippets(f'{topic} Краснодар', limit=5)
+        topic_news, _src = _fetch_news_snippets(f'{topic} Краснодар', limit=5, max_age_days=max_age)
         _job_set(cur, conn, jid, status='catalog_local', topic=topic, snippets_raw=topic_news)
         return _job_get(cur, jid)
 
     if status == 'catalog_local':
         topic = job.get('topic') or ''
-        local_news = _fetch_local_news_snippets(topic, limit=3)
+        local_news = _fetch_local_news_snippets(topic, limit=3, max_age_days=max_age)
         seen = {s['url'] for s in snippets}
         combined = snippets + [s for s in local_news if s['url'] not in seen]
         _job_set(cur, conn, jid, status='catalog_daily', snippets_raw=combined)
         return _job_get(cur, jid)
 
     if status == 'catalog_daily':
-        daily_news, _ = _fetch_news_snippets('коммерческая недвижимость Краснодар новости сегодня', limit=10)
+        daily_news, _ = _fetch_news_snippets('коммерческая недвижимость Краснодар новости сегодня', limit=10, max_age_days=max_age)
         seen = {s['url'] for s in snippets}
         combined = snippets + [s for s in daily_news if s['url'] not in seen]
         if not combined:
-            _job_set(cur, conn, jid, status='error', error='Не найдено свежих новостей ни по одной теме')
+            _job_set(cur, conn, jid, status='error', error=f'Нет новостей за последние {max_age} дн. ни по одной теме')
             return _job_get(cur, jid)
-        key_rate = _extract_key_rate_from_snippets(combined)
-        _job_set(cur, conn, jid, status='pending', snippets_raw=combined[:8], key_rate=key_rate)
+        _job_set(cur, conn, jid, status='pending', snippets_raw=combined[:8])
         return _job_get(cur, jid)
 
     if status == 'pending':
-        snippets = job.get('snippets') or []
+        # Повторная проверка свежести прямо перед написанием: задание могло пролежать
+        # в очереди, а старые задания — содержать новости без даты/старше срока.
+        snippets = _filter_fresh(job.get('snippets') or [], max_age)
         topic = job.get('topic') or ''
-        key_rate = float(job['key_rate']) if job.get('key_rate') is not None else None
-        system_prompt, user_text = _build_article_prompts(topic, key_rate, snippets)
+        if not snippets:
+            _job_set(cur, conn, jid, status='error', error=f'Нет новостей за последние {max_age} дн. — статья не написана')
+            return _job_get(cur, jid)
+        _job_set(cur, conn, jid, snippets_raw=snippets)
+        system_prompt, user_text = _build_article_prompts(topic, snippets, max_age)
         if system_prompt is None:
-            _job_set(cur, conn, jid, status='error', error='Нет свежих новостей по теме — генерация отменена')
+            _job_set(cur, conn, jid, status='error', error=f'Нет новостей за последние {max_age} дн. — статья не написана')
             return _job_get(cur, jid)
         try:
             op_id = chat_async_start(system_prompt, user_text, api_key, folder_id,
@@ -1243,11 +1226,10 @@ def _advance_job(cur, conn, job: dict, api_key: str, folder_id: str) -> dict:
         if not unique:
             _job_set(cur, conn, jid, status='error', error='Статья дублирует уже опубликованный материал')
             return _job_get(cur, jid)
-        key_rate = float(job['key_rate']) if job.get('key_rate') is not None else None
         news_id, slug = _save_article(
             cur, conn, article, job.get('is_auto', False),
             job.get('created_by'), auto_publish=job.get('auto_publish', False),
-            key_rate=key_rate, topic=job.get('topic') or '',
+            topic=job.get('topic') or '', sources=job.get('snippets') or [],
         )
         _job_set(cur, conn, jid, status='done', news_id=news_id, slug=slug)
         return _job_get(cur, jid)
@@ -1270,8 +1252,8 @@ def _row_to_dict(r):
         'is_auto': r['is_auto'],
         'published_at': r['published_at'],
         'created_at': r['created_at'],
-        'cb_key_rate': float(r['cb_key_rate']) if r.get('cb_key_rate') is not None else None,
         'topic': r.get('topic'),
+        'sources': r.get('sources') or [],
     }
 
 
@@ -1502,16 +1484,7 @@ def handler(event: dict, context) -> dict:
                             sent_max = 0
                             news_id = None
 
-                            # Ставку ЦБ ищем только в свежих новостях — без обязательного cbr.ru
-                            rate_snippets, _ = _fetch_news_snippets('ключевая ставка ЦБ РФ', limit=5)
-                            key_rate_d = _extract_key_rate_from_snippets(rate_snippets)
-                            prev_key_rate = sch_d.get('price_digest_last_key_rate')
-                            prev_key_rate = float(prev_key_rate) if prev_key_rate is not None else None
-                            rate_changed = (
-                                key_rate_d is not None and prev_key_rate is not None
-                                and abs(key_rate_d - prev_key_rate) >= 0.01
-                            )
-                            has_any_data = bool(changes) or bool(district_changes) or rate_changed
+                            has_any_data = bool(changes) or bool(district_changes)
 
                             # MAX-дайджест менеджерам
                             if pm_enabled and (changes or district_changes):
@@ -1532,16 +1505,14 @@ def handler(event: dict, context) -> dict:
                                     print(f'[price_digest] MAX error: {e}')
 
                             # Авто-новость на сайт — публикуем ТОЛЬКО если есть хоть какие-то
-                            # реальные изменения (город/районы/ставка ЦБ), иначе неделя пропускается
+                            # реальные изменения (город/районы), иначе неделя пропускается
                             # без публикации, вместо шаблонной статьи "изменений не выявлено"
                             if pn_enabled and has_any_data:
                                 try:
                                     api_key, folder_id = _load_gpt_keys(cur)
                                     if api_key and folder_id:
                                         prompt_text = _build_price_news_prompt(
-                                            changes, date_str, key_rate_d,
-                                            district_changes=district_changes,
-                                            prev_key_rate=prev_key_rate,
+                                            changes, date_str, district_changes=district_changes,
                                         )
                                         gpt_result = _call_gpt_raw(api_key, folder_id, prompt_text)
                                         if gpt_result:
@@ -1549,25 +1520,21 @@ def handler(event: dict, context) -> dict:
                                             if article and _is_valid_article(article):
                                                 news_id, _ = _save_article(
                                                     cur, conn, article, True,
-                                                    auto_publish=True, key_rate=key_rate_d,
+                                                    auto_publish=True,
                                                     topic='weekly_price_digest',
                                                 )
                                 except Exception as e:
                                     print(f'[price_digest] news error: {e}')
 
-                            # Обновляем last_at и последнюю ставку ЦБ (для сравнения на след. неделе)
                             ts_pd = now_utc.strftime('%Y-%m-%d %H:%M:%S+00')
-                            rate_sql = str(key_rate_d) if key_rate_d is not None else 'NULL'
                             cur.execute(
-                                f"UPDATE {SCHEMA}.news_schedule SET price_digest_last_at = '{ts_pd}', "
-                                f"price_digest_last_key_rate = {rate_sql} "
+                                f"UPDATE {SCHEMA}.news_schedule SET price_digest_last_at = '{ts_pd}' "
                                 f"WHERE id = {sch_d['id']}"
                             )
                             conn.commit()
                             price_digest_result = {
                                 'changes_found': len(changes),
                                 'district_changes_found': len(district_changes),
-                                'rate_changed': rate_changed,
                                 'sent_max': sent_max,
                                 'news_id': news_id,
                                 'date': date_str,
@@ -1649,14 +1616,12 @@ def handler(event: dict, context) -> dict:
                 cur.execute(
                     f"SELECT id, title, slug, summary, content, image_url, "
                     f"source_url, source_name, is_published, is_auto, "
-                    f"published_at, created_at, category, cb_key_rate FROM {SCHEMA}.news "
+                    f"published_at, created_at, category, sources FROM {SCHEMA}.news "
                     f"ORDER BY created_at DESC LIMIT 100"
                 )
                 rows = []
                 for r in cur.fetchall():
                     d = dict(r)
-                    if d.get('cb_key_rate') is not None:
-                        d['cb_key_rate'] = float(d['cb_key_rate'])
                     # Обрезаем content для списка — полный текст не нужен
                     if d.get('content'):
                         d['content_preview'] = d['content'][:600]
@@ -1675,21 +1640,19 @@ def handler(event: dict, context) -> dict:
                 image_url = _safe(body.get('image_url', ''), 499)
                 source_url = _safe(body.get('source_url', ''), 499)
                 source_name = _safe(body.get('source_name', ''), 199)
-                key_rate = _extract_key_rate(f"{title} {summary} {content}")
-                rate_val = str(key_rate) if key_rate is not None else 'NULL'
                 cur.execute(
-                    f"INSERT INTO {SCHEMA}.news (title, summary, content, image_url, source_url, source_name, is_auto, created_by, cb_key_rate) "
+                    f"INSERT INTO {SCHEMA}.news (title, summary, content, image_url, source_url, source_name, is_auto, created_by) "
                     f"VALUES ('{title}', '{summary}', '{content}', "
                     f"{'NULL' if not image_url else chr(39)+image_url+chr(39)}, "
                     f"{'NULL' if not source_url else chr(39)+source_url+chr(39)}, "
                     f"{'NULL' if not source_name else chr(39)+source_name+chr(39)}, "
-                    f"FALSE, {user['id']}, {rate_val}) RETURNING id"
+                    f"FALSE, {user['id']}) RETURNING id"
                 )
                 nid = cur.fetchone()['id']
                 slug = _slug(body.get('title', ''), nid)
                 cur.execute(f"UPDATE {SCHEMA}.news SET slug = '{_safe(slug,319)}' WHERE id = {nid}")
                 conn.commit()
-                return _ok({'id': nid, 'slug': slug, 'cb_key_rate': key_rate}, 201)
+                return _ok({'id': nid, 'slug': slug}, 201)
 
             # ── ОБНОВИТЬ ─────────────────────────────────────────────────
             if action == 'update':
@@ -1775,7 +1738,7 @@ def handler(event: dict, context) -> dict:
                 resp = {'status': job['status'], 'topic': job.get('topic')}
                 if job['status'] == 'done':
                     resp.update({'id': job.get('news_id'), 'slug': job.get('slug'),
-                                 'title': (job.get('article') or {}).get('title'), 'cb_key_rate': job.get('key_rate')})
+                                 'title': (job.get('article') or {}).get('title')})
                 elif job['status'] == 'error':
                     resp['error'] = job.get('error')
                 return _ok(resp)
@@ -1838,6 +1801,7 @@ def handler(event: dict, context) -> dict:
                 price_digest_max_enabled = bool(body.get('price_digest_max_enabled', False))
                 price_digest_day = max(0, min(6, int(body.get('price_digest_day', 0))))
                 price_digest_threshold = max(0.5, min(20.0, float(body.get('price_digest_threshold', 3.0))))
+                max_news_age = max(1, min(90, int(body.get('max_news_age_days') or DEFAULT_MAX_NEWS_AGE_DAYS)))
                 ts = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')
                 if row:
                     cur.execute(
@@ -1849,6 +1813,7 @@ def handler(event: dict, context) -> dict:
                         f"price_digest_max_enabled = {price_digest_max_enabled}, "
                         f"price_digest_day = {price_digest_day}, "
                         f"price_digest_threshold = {price_digest_threshold}, "
+                        f"max_news_age_days = {max_news_age}, "
                         f"updated_at = '{ts}' "
                         f"WHERE id = {row['id']}"
                     )
@@ -1857,10 +1822,10 @@ def handler(event: dict, context) -> dict:
                         f"INSERT INTO {SCHEMA}.news_schedule "
                         f"(is_enabled, run_hour, run_minute, articles_per_run, topics, "
                         f"price_digest_enabled, price_news_enabled, price_digest_max_enabled, "
-                        f"price_digest_day, price_digest_threshold) "
+                        f"price_digest_day, price_digest_threshold, max_news_age_days) "
                         f"VALUES ({is_enabled}, {run_hour}, {run_minute}, {per_run}, '{topics_raw}', "
                         f"{price_digest_enabled}, {price_news_enabled}, {price_digest_max_enabled}, "
-                        f"{price_digest_day}, {price_digest_threshold})"
+                        f"{price_digest_day}, {price_digest_threshold}, {max_news_age})"
                     )
                 conn.commit()
                 return _ok({'ok': True})

@@ -1,0 +1,2 @@
+INSERT INTO t_p71821556_real_estate_catalog_.news_gen_jobs (status, topic, snippets, auto_publish, is_auto, created_by)
+VALUES ('topic_given', 'Аренда офисов в Краснодаре', '[]'::jsonb, FALSE, FALSE, NULL);

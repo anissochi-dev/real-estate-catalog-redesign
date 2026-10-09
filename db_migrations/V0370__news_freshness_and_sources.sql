@@ -1,0 +1,2 @@
+ALTER TABLE t_p71821556_real_estate_catalog_.news_schedule ADD COLUMN IF NOT EXISTS max_news_age_days INTEGER NOT NULL DEFAULT 14;
+ALTER TABLE t_p71821556_real_estate_catalog_.news ADD COLUMN IF NOT EXISTS sources JSONB;

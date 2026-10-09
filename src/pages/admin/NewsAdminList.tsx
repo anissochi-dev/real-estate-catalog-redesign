@@ -10,9 +10,10 @@ interface Props {
   loading: boolean;
   headers: Record<string, string>;
   onNewsChange: (updater: (prev: NewsItem[]) => NewsItem[]) => void;
+  maxNewsAgeDays?: number;
 }
 
-export function NewsAdminList({ news, loading, headers, onNewsChange }: Props) {
+export function NewsAdminList({ news, loading, headers, onNewsChange, maxNewsAgeDays = 14 }: Props) {
   const { settings } = useSettings();
   const siteOrigin = (settings.site_url || '').replace(/\/$/, '') || window.location.origin;
   const [report, setReport] = useState<NewsItem | null>(null);
@@ -38,6 +39,7 @@ export function NewsAdminList({ news, loading, headers, onNewsChange }: Props) {
           source_url: d.article.source_url,
           source_name: d.article.source_name,
           summary: d.article.summary,
+          sources: d.article.sources,
         } : prev);
       }
     } catch { /* тихо */ } finally { setLoadingFull(false); }
@@ -269,10 +271,25 @@ export function NewsAdminList({ news, loading, headers, onNewsChange }: Props) {
                     </div>
                   </div>
 
-                  {report.cb_key_rate != null && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-                      <div className="text-[10px] text-amber-700 uppercase tracking-wide mb-1 font-semibold">Ключевая ставка ЦБ на момент публикации</div>
-                      <div className="text-xl font-bold text-amber-700">{report.cb_key_rate}%</div>
+                  {report.sources && report.sources.length > 0 && (
+                    <div className="bg-muted/40 rounded-xl p-3 space-y-2">
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold flex items-center gap-1">
+                        <Icon name="Newspaper" size={11} /> Новости-источники ({report.sources.length})
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">Дата публикации в источнике. Красным — старше {maxNewsAgeDays} дн. на момент написания статьи.</div>
+                      {report.sources.map((src, i) => {
+                        const age = src.published_at ? Math.floor((new Date(report.created_at).getTime() - new Date(src.published_at).getTime()) / 86400000) : null;
+                        return (
+                          <div key={i} className="text-xs flex items-start gap-2">
+                            <span className={`shrink-0 px-1.5 py-0.5 rounded font-medium ${age === null ? 'bg-gray-100 text-gray-500' : age > maxNewsAgeDays ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                              {src.published_at ? new Date(src.published_at).toLocaleDateString('ru') : 'без даты'}
+                            </span>
+                            <a href={src.url} target="_blank" rel="noopener noreferrer" className="text-foreground hover:text-brand-blue hover:underline line-clamp-2">
+                              {src.title}{src.source ? <span className="text-muted-foreground"> · {src.source}</span> : null}
+                            </a>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
 
@@ -290,7 +307,7 @@ export function NewsAdminList({ news, loading, headers, onNewsChange }: Props) {
                         </a>
                       )}
                     </div>
-                  ) : report.is_auto ? (
+                  ) : report.is_auto && !(report.sources && report.sources.length) ? (
                     <div className="bg-muted/40 rounded-xl p-3">
                       <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1 font-semibold flex items-center gap-1">
                         <Icon name="Globe" size={11} /> Источники
