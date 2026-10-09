@@ -4257,11 +4257,14 @@ def handler(event, context):
                     f"ORDER BY created_at DESC"
                 )
                 shared_listings = [dict(r) for r in cur.fetchall()]
+                # Список объектов общий для всех площадок «Разного» (один флаг export_other),
+                # поэтому отдаём его ОДИН раз на верхнем уровне, а не копией в каждой площадке:
+                # 44 площадки × 155 объектов давали ответ 3.85 МБ > лимита платформы 3.67 МБ —
+                # функция падала с JobResponseTooLong, а карточка «Разное» показывала 0.
                 for f in feeds:
                     f['listings_count'] = len(shared_listings)
-                    f['listings'] = shared_listings
                     f['stats'] = None  # ручного ввода нет; появится, когда площадка подключит API
-                return _json({'platforms': feeds})
+                return _json({'platforms': feeds, 'listings': shared_listings})
 
             if method == 'GET':
                 # Фиды отдаются только готовыми статическими файлами с CDN (см. cdn_url в xml_feeds).

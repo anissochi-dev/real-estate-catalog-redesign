@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import PlatformIcon from '@/components/admin/PlatformIcon';
-import { AVITO_API_URL, AvitoData, CIAN_API_URL, CianData, DOMCLICK_API_URL, DomclickData, OTHER_PLATFORMS_API_URL, OtherPlatformRow, PlatformCard, SERVICE_TYPE_LABELS, YANDEX_CALLS_API_URL, YandexCallsData, YOULA_API_URL, YoulaData } from './types';
+import { AVITO_API_URL, AvitoData, CIAN_API_URL, CianData, DOMCLICK_API_URL, DomclickData, normalizeOtherPlatforms, OTHER_PLATFORMS_API_URL, OtherPlatformRow, PlatformCard, SERVICE_TYPE_LABELS, YANDEX_CALLS_API_URL, YandexCallsData, YOULA_API_URL, YoulaData } from './types';
 import { useSyncHealth } from './useSyncHealth';
 import SyncHealthBanner from './SyncHealthBanner';
 
@@ -254,7 +254,7 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
       else setYoula(null);
       if (!domclickData.error) setDomclick(domclickData);
       else setDomclick(null);
-      setOtherPlatforms(otherData.platforms || []);
+      setOtherPlatforms(normalizeOtherPlatforms(otherData));
     }).finally(() => { setLoading(false); setSyncing(false); });
   };
 
