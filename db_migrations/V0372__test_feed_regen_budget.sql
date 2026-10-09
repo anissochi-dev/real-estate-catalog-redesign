@@ -1,0 +1,1 @@
+UPDATE t_p71821556_real_estate_catalog_.xml_feeds SET last_generated_at = last_generated_at - INTERVAL '30 minutes' WHERE is_active = TRUE;

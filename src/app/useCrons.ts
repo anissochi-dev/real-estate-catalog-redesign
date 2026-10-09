@@ -5,8 +5,23 @@ import { useEffect } from 'react';
  * Запускаются один раз после загрузки страницы через requestIdleCallback/setTimeout.
  * Каждый пинг троттлится через localStorage — не чаще раза в час (или 10 мин для news).
  */
+const BOT_UA = /bot|crawl|spider|slurp|lighthouse|headless|pagespeed|preview|reflection|gtmetrix|pingdom|phantom|puppeteer|playwright|selenium/i;
+
+function isAutomatedBrowser(): boolean {
+  try {
+    if ((navigator as Navigator & { webdriver?: boolean }).webdriver) return true;
+    return BOT_UA.test(navigator.userAgent || '');
+  } catch {
+    return false;
+  }
+}
+
 export function useCrons() {
   useEffect(() => {
+    // Боты и автопроверки (поисковики, ИИ-краулеры, Lighthouse) исполняют JS сайта, но
+    // закрывают страницу через ~30 с — долгие фоновые задачи обрывались с ошибкой 499.
+    if (isAutomatedBrowser()) return;
+
     const fireCron = (url: string, opts?: RequestInit) => {
       const ac = new AbortController();
       setTimeout(() => ac.abort(), 8000);

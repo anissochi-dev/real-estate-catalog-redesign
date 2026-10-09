@@ -4108,8 +4108,10 @@ def _sync_health_check(cur):
 
 CRON_LOCK_TTL_SEC = 130
 # Фиды собираются до этой секунды от старта вызова — остальные доберёт следующий вызов.
-# Таймаут функции 120 с; 90 с оставляют запас на синхронизацию площадки и ответ.
-CRON_FEEDS_DEADLINE_SEC = 90
+# 25 с: вызов из браузера посетителя может оборваться через ~30 с (уход со страницы,
+# боты) — ошибка 499. Плановый вызов (расписание) может работать дольше.
+CRON_FEEDS_DEADLINE_SEC = 25
+CRON_FEEDS_DEADLINE_PLATFORM_SEC = 90
 PLATFORM_RETRY_MINUTES = 20
 PLATFORM_MAX_ERRORS = 3
 PLATFORM_PAUSE_HOURS = 2
@@ -4283,8 +4285,22 @@ def handler(event, context):
     _expected_cron_token = os.environ.get('CRON_SECRET', '')
     is_platform_cron = bool(_expected_cron_token) and _cron_token == _expected_cron_token
     _action_from_query = 'action' in params
+    # Признаки вызова по расписанию платформы: X-Cron-Token, либо событие-триггер
+    # (без httpMethod / с details.trigger_id), либо пустой запрос без заголовков браузера.
+    _is_trigger_event = ('httpMethod' not in event) or bool((event.get('details') or {}).get('trigger_id')) \
+        or event.get('event_metadata', {}).get('event_type', '').endswith('Timer')
+    if _is_trigger_event:
+        is_platform_cron = True
     if is_platform_cron and 'action' not in params:
         params = {**params, 'action': 'cron'}
+        method = 'GET'
+    if not _action_from_query and method != 'OPTIONS':
+        print(json.dumps({
+            'event': 'invoke_trace', 'trigger_event': _is_trigger_event,
+            'token_match': bool(_expected_cron_token) and _cron_token == _expected_cron_token,
+            'keys': sorted(event.keys())[:20], 'header_names': sorted(_headers_lc.keys())[:25],
+            'ua': (_headers_lc.get('user-agent') or '')[:120],
+        }, ensure_ascii=False))
 
     # Диагностика cron (временно): request_id — из context, иначе из заголовка, иначе uuid4.
     _rid = getattr(context, 'request_id', None)
@@ -4327,6 +4343,7 @@ def handler(event, context):
                     return _json({'ok': True, 'skipped': True, 'reason': 'already_running'})
                 _cron_log(
                     'cron_start',
+                    source='schedule' if is_platform_cron else 'visitor',
                     is_platform_cron=is_platform_cron, has_token=bool(_cron_token),
                     token_match=bool(_expected_cron_token) and _cron_token == _expected_cron_token,
                     secret_present=bool(_expected_cron_token), action_from_query=_action_from_query,
@@ -4340,6 +4357,7 @@ def handler(event, context):
                     bump_result = _bump_feed_dates(cur, conn)
 
                     _plat_t0 = time.monotonic()
+                    _feeds_deadline_sec = CRON_FEEDS_DEADLINE_PLATFORM_SEC if is_platform_cron else CRON_FEEDS_DEADLINE_SEC
                     try:
                         turn_key, turn_result = _run_next_platform_sync(cur, conn)
                     except Exception as _pe:
@@ -4364,7 +4382,7 @@ def handler(event, context):
                         stale_before = (cur.fetchone() or {}).get('feed_bump_cron_last_at')
                     results = _regenerate_static_feeds(
                         cur, conn,
-                        deadline=_cron_t0 + CRON_FEEDS_DEADLINE_SEC,
+                        deadline=_cron_t0 + _feeds_deadline_sec,
                         stale_before=stale_before,
                     )
                     _feeds_ms = int((time.monotonic() - _feeds_t0) * 1000)
@@ -4372,6 +4390,7 @@ def handler(event, context):
                     _plat_err = turn_result.get('error') if isinstance(turn_result, dict) else None
                     _cron_log(
                         'cron_finish',
+                        source='schedule' if is_platform_cron else 'visitor',
                         status=200, platform_processed=turn_key,
                         platform_error=_plat_err,
                         feeds_regenerated=sum(1 for r in results if r.get('regenerated')),
