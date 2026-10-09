@@ -3314,6 +3314,15 @@ def _youla_sync(cur, conn, token, owner_id):
 YOULA_PRICE_MAX_M2 = 200_000  # см. _total_price — та же защита от кривых данных price_unit
 
 
+def _youla_description(l):
+    """Описание + строка «Код объекта: N» — однозначная привязка объявления на Юле
+    к объекту каталога (API Юлы не даёт ни поля под внешний id, ни поиска своих
+    объявлений — проверено: GET /products → 405, /users/{id}/products → 403)."""
+    code_line = f"Код объекта: {l['id']}"
+    desc = (l.get('description') or '').strip()
+    return (desc[:5000 - len(code_line) - 2] + '\n\n' + code_line) if desc else code_line
+
+
 def _youla_build_product(l, owner_id, category_id, subcategory_id):
     """Формирует тело CreateProduct/UpdateProduct для объекта listing."""
     price_val = _total_price(l)
@@ -3321,7 +3330,7 @@ def _youla_build_product(l, owner_id, category_id, subcategory_id):
     addr_parts = [p for p in [l.get('city') or 'Краснодар', l.get('district'), l.get('address')] if p]
     body = {
         'name': _clean_title(l.get('title') or '')[:100] or 'Коммерческая недвижимость',
-        'description': (l.get('description') or '')[:5000],
+        'description': _youla_description(l),
         'price': int(price_val) * 100,  # Юла хранит цену в копейках
         'category': int(category_id),
         'subcategory': int(subcategory_id),
@@ -3366,8 +3375,26 @@ def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory
     """)
     listings = [dict(r) for r in cur.fetchall()]
 
+    # Защита от дублей: у одного id объекта — не больше одного объявления на Юле.
+    # 1) Номер объявления ищем не только в listings.youla_ad_id, но и в журнале статусов
+    #    и в отметках создания — если он где-то есть, объект только обновляется.
+    cur.execute(f"""
+        SELECT listing_id, youla_id FROM {SCHEMA}.youla_item_status WHERE youla_id IS NOT NULL
+        UNION ALL
+        SELECT listing_id, youla_id FROM {SCHEMA}.youla_create_claims WHERE youla_id IS NOT NULL
+    """)
+    known_ids = {}
+    for r in cur.fetchall():
+        known_ids.setdefault(r['listing_id'], r['youla_id'])
+    for l in listings:
+        if not l.get('youla_ad_id') and known_ids.get(l['id']):
+            l['youla_ad_id'] = known_ids[l['id']]
+            cur.execute(f"UPDATE {SCHEMA}.listings SET youla_ad_id = %s WHERE id = %s AND youla_ad_id IS NULL",
+                        (l['youla_ad_id'], l['id']))
+    conn.commit()
+
     start_ts = time.monotonic()
-    created, updated, failed, skipped_budget = 0, 0, 0, 0
+    created, updated, failed, skipped_budget, skipped_claimed = 0, 0, 0, 0, 0
     for l in listings:
         if time.monotonic() - start_ts > YOULA_PUBLISH_TIME_BUDGET_SEC:
             skipped_budget += 1
@@ -3377,7 +3404,24 @@ def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory
         if l.get('youla_ad_id'):
             data, err = _youla_request('PUT', f"/products/{l['youla_ad_id']}", token, body)
         else:
+            # 2) Отметка «создаётся» ДО запроса к Юле. Если она уже есть — объект создаёт
+            #    (или создавал и оборвался) другой запуск: повторно НЕ отправляем.
+            cur.execute(f"""
+                INSERT INTO {SCHEMA}.youla_create_claims (listing_id, claimed_at, claimed_by)
+                VALUES (%s, NOW(), 'publish') ON CONFLICT (listing_id) DO NOTHING RETURNING listing_id
+            """, (l['id'],))
+            got_claim = cur.fetchone() is not None
+            conn.commit()
+            if not got_claim:
+                skipped_claimed += 1
+                continue
             data, err = _youla_request('POST', '/products', token, body)
+            if err and str(err).startswith('HTTP 4'):
+                # Юла явно отказала (4xx) — объявление точно не создано, отметку снимаем.
+                cur.execute(f"DELETE FROM {SCHEMA}.youla_create_claims WHERE listing_id = %s AND youla_id IS NULL", (l['id'],))
+                conn.commit()
+            # Сетевая ошибка/таймаут — неизвестно, создано ли объявление. Отметку
+            # оставляем: объект попадёт в колокольчик «проверить», без автоповтора.
 
         if err or not data:
             failed += 1
@@ -3392,7 +3436,11 @@ def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory
         product = data.get('data') or data
         youla_id = product.get('id')
         if youla_id and not l.get('youla_ad_id'):
+            # 3) Номер сохраняем СРАЗУ, отдельным commit — до публикации и прочих шагов.
             cur.execute(f"UPDATE {SCHEMA}.listings SET youla_ad_id = %s WHERE id = %s", (youla_id, l['id']))
+            cur.execute(f"UPDATE {SCHEMA}.youla_create_claims SET youla_id = %s, resolved_at = NOW() WHERE listing_id = %s",
+                        (youla_id, l['id']))
+            conn.commit()
             # Новое объявление — публикуем явно (по умолчанию продукт создаётся в черновике)
             _youla_request('POST', '/products/publish', token, {'product_ids': [youla_id]}, params={'user_id': owner_id})
             created += 1
@@ -3437,6 +3485,7 @@ def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory
     return {
         'created': created, 'updated': updated, 'archived': archived, 'failed': failed,
         'total': len(listings), 'skipped_budget': skipped_budget + archive_skipped_budget,
+        'skipped_claimed': skipped_claimed,
     }
 
 
@@ -3961,6 +4010,33 @@ def _sync_health_check(cur):
     except Exception:
         pass
 
+    # Юла: создание объявления оборвалось между отправкой и ответом (отметка есть,
+    # номера нет > 10 мин). Автоповтора нет — иначе возможен дубль; нужна ручная проверка.
+    try:
+        cur.execute(f"""
+            SELECT c.listing_id, c.claimed_at, l.title FROM {SCHEMA}.youla_create_claims c
+            LEFT JOIN {SCHEMA}.listings l ON l.id = c.listing_id
+            WHERE c.youla_id IS NULL AND c.claimed_at < NOW() - INTERVAL '10 minutes'
+            ORDER BY c.claimed_at
+        """)
+        for r in cur.fetchall():
+            failing.append({
+                'key': f"youla_claim_{r['listing_id']}",
+                'label': f"Юла: проверить объект №{r['listing_id']}",
+                'errors': 0,
+                'last_error': (
+                    f"Отправка объявления оборвалась без ответа Юлы. Проверьте в кабинете Юлы, есть ли "
+                    f"объявление с текстом «Код объекта: {r['listing_id']}»"
+                    + (f" ({(r.get('title') or '')[:80]})" if r.get('title') else '')
+                    + ". Если объявления нет — нажмите «Отправить снова»."
+                ),
+                'last_attempt': r['claimed_at'].isoformat() if r.get('claimed_at') else None,
+                'paused_until': None,
+                'listing_id': r['listing_id'],
+            })
+    except Exception:
+        pass
+
     return {'ok': True, 'stale': stale, 'failing': failing, 'checked_at': now.isoformat()}
 
 
@@ -4309,6 +4385,22 @@ def handler(event, context):
                 # Статистика объявлений кабинета ДомКлик (Stats API): просмотры, показы
                 # телефона, показы в поиске, чаты, избранное — по каждому объявлению.
                 return _domclick_handle(cur, conn, params)
+
+            if method == 'POST' and params.get('action') == 'youla_claim_reset':
+                # «Отправить снова» из колокольчика: админ/директор подтвердил, что
+                # объявления с «Код объекта: N» на Юле нет — снимаем отметку, и объект
+                # будет создан при следующей синхронизации.
+                _h = event.get('headers') or {}
+                _tok = _h.get('X-Auth-Token') or _h.get('x-auth-token') or params.get('token') or ''
+                _u = _get_user(cur, _tok)
+                if not _u or _u['role'] not in ('admin', 'director'):
+                    return _json({'error': 'Нет прав'}, 403)
+                _body = json.loads(event.get('body') or '{}')
+                _lid = int(_body.get('listing_id') or 0)
+                cur.execute(f"DELETE FROM {SCHEMA}.youla_create_claims WHERE listing_id = %s AND youla_id IS NULL", (_lid,))
+                _n = cur.rowcount
+                conn.commit()
+                return _json({'ok': True, 'reset': _n})
 
             if method == 'GET' and params.get('action') == 'sync_health':
                 # Публичный (без авторизации, только для чтения) эндпоинт для

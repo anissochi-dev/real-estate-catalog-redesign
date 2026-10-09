@@ -1,0 +1,1 @@
+UPDATE t_p71821556_real_estate_catalog_.xml_feeds SET is_active = FALSE WHERE id = 58 AND slug = 'yula' AND format = 'youla';

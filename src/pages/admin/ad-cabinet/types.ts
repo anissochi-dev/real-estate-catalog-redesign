@@ -27,6 +27,7 @@ export interface FailingPlatform {
   last_error: string;
   last_attempt: string | null;
   paused_until: string | null;
+  listing_id?: number;
 }
 
 export interface SyncHealthData {
