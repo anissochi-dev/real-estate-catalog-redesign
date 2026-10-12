@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import PlatformIcon from '@/components/admin/PlatformIcon';
 import { CIAN_API_URL, CianData, CianOfferRow, OFFER_STATUS_LABELS, SERVICE_TYPE_LABELS } from './types';
+import { platformFetch } from './platformFetch';
+import BusyNotice from './BusyNotice';
 
 const CATEGORY_LABELS: Record<string, string> = {
   office: 'Офис', retail: 'Торговое', warehouse: 'Склад', restaurant: 'Ресторан',
@@ -139,13 +141,13 @@ export default function CianCabinetTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [view, setView] = useState<'active' | 'archive'>('active');
 
   const load = (sync = false) => {
     if (sync) setSyncing(true); else setLoading(true);
     const url = sync ? `${CIAN_API_URL}&sync=1` : CIAN_API_URL;
-    fetch(url)
-      .then(r => r.json())
+    platformFetch<CianData & { error?: string }>(url, undefined, setBusy)
       .then(d => {
         if (d.error) setError(d.error);
         else { setData(d); setError(null); }
@@ -159,6 +161,7 @@ export default function CianCabinetTab() {
   const fmt = (n: number) => (n || 0).toLocaleString('ru');
 
   if (loading) {
+    if (busy) return <BusyNotice />;
     return (
       <div className="space-y-3">
         <div className="bg-white rounded-xl border border-border p-4 h-16 animate-pulse" />

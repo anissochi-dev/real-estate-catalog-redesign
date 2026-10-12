@@ -4,7 +4,7 @@ import Icon from '@/components/ui/icon';
 import { getToken } from '@/lib/adminApi';
 import type { FailingPlatform, StalePlatform } from './ad-cabinet/types';
 
-const YOULA_CLAIM_RESET_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=youla_claim_reset';
+const YOULA_CLAIM_RESET_URL = 'https://functions.poehali.dev/fd00362c-a377-4d94-816c-c5a4abf087cd?action=youla_claim_reset';
 
 interface Props {
   stale: StalePlatform[];

@@ -7,13 +7,14 @@ interface Props {
   setSearch: (v: string) => void;
   regenerating: boolean;
   regenerateNow: () => void;
+  regenProgress?: string;
   setEditing: (f: Partial<F> | null) => void;
   del: (id: number) => void;
   copy: (text: string) => void;
 }
 
 export default function XmlFeedsListCard({
-  items, search, setSearch, regenerating, regenerateNow, setEditing, del, copy,
+  items, search, setSearch, regenerating, regenerateNow, regenProgress, setEditing, del, copy,
 }: Props) {
   // YML-фиды товаров (Яндекс.Маркет и VK Товары) показываются в своих отдельных
   // карточках ниже импорта — исключаем их из общего списка обычных фидов недвижимости.
@@ -26,6 +27,7 @@ export default function XmlFeedsListCard({
       <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
         <div className="font-display font-700 text-lg">XML фиды (экспорт)</div>
         <div className="flex items-center gap-2">
+          {regenProgress && <span className="text-xs text-muted-foreground">{regenProgress}</span>}
           <button onClick={regenerateNow} disabled={regenerating}
             className="px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-2 border border-border hover:bg-muted/50 transition disabled:opacity-50">
             <Icon name="RefreshCw" size={14} className={regenerating ? 'animate-spin' : ''} />

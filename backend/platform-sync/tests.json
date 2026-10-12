@@ -1,0 +1,8 @@
+{
+  "tests": [
+    {"name": "Проверка здоровья площадок", "method": "GET", "path": "/?action=sync_health", "expectedStatus": 200, "expectedBody": {"ok": true}, "bodyMatcher": "partial"},
+    {"name": "Кабинет Яндекс.Недвижимости", "method": "GET", "path": "/?action=yandex_stats", "expectedStatus": 200},
+    {"name": "Площадки «Разное»", "method": "GET", "path": "/?action=other_platforms", "expectedStatus": 200},
+    {"name": "Неизвестное действие", "method": "GET", "path": "/?action=nope", "expectedStatus": 400}
+  ]
+}

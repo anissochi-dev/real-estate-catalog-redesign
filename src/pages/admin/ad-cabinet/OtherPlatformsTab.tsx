@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import { normalizeOtherPlatforms, OTHER_PLATFORMS_API_URL, OtherPlatformRow } from './types';
+import { platformFetch } from './platformFetch';
 
 const DEAL_LABEL: Record<string, string> = { sale: 'Продажа', rent: 'Аренда' };
 
@@ -10,8 +11,7 @@ export default function OtherPlatformsTab() {
   const [openSlug, setOpenSlug] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(OTHER_PLATFORMS_API_URL)
-      .then(r => r.json())
+    platformFetch<Parameters<typeof normalizeOtherPlatforms>[0]>(OTHER_PLATFORMS_API_URL)
       .then(d => setPlatforms(normalizeOtherPlatforms(d)))
       .catch(() => setPlatforms([]))
       .finally(() => setLoading(false));

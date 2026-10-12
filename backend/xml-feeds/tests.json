@@ -1,16 +1,8 @@
 {
   "tests": [
-    {
-      "name": "Legacy ?feed= отключён (только статика на CDN)",
-      "method": "GET",
-      "path": "/?feed=yandex",
-      "expectedStatus": 410
-    },
-    {
-      "name": "Крон-пинг генерации статических фидов",
-      "method": "GET",
-      "path": "/?action=cron",
-      "expectedStatus": 200
-    }
+    {"name": "Legacy ?feed= отключён (только статика на CDN)", "method": "GET", "path": "/?feed=yandex", "expectedStatus": 410},
+    {"name": "Порция сборки фидов", "method": "GET", "path": "/?action=cron", "expectedStatus": 200, "expectedBody": {"ok": true}, "bodyMatcher": "partial"},
+    {"name": "Команды площадок перенесены", "method": "GET", "path": "/?action=yandex_stats", "expectedStatus": 410},
+    {"name": "Пересборка без прав", "method": "GET", "path": "/?action=generate_static", "expectedStatus": 403}
   ]
 }

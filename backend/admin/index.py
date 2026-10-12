@@ -2456,11 +2456,11 @@ _XML_FEEDS_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da
 
 
 def _trigger_feeds_regen():
-    """Немедленно пересобирает статические XML-фиды (ЦИАН, Авито, Яндекс и т.д.)
-    в фоне (fire-and-forget), чтобы изменения объекта (галочки экспорта, цена,
-    статус) попадали на площадки сразу, а не ждали плановый крон (раз в 10 мин).
-    Открывает СВОЁ соединение с БД — не переиспользует курсор основного запроса,
-    т.к. соединение psycopg2 нельзя безопасно использовать из другого потока."""
+    """Изменения объекта (галочки экспорта, цена, статус) должны попасть на площадки сразу:
+    ставим все фиды первыми в очередь сборки (feed_build_state.force_before = NOW()) и в фоне
+    запускаем одну порцию. Остальные порции (по 10 фидов) доберут следующие автозапуски.
+    Раньше здесь вызывалась полная пересборка всех 51 фида за один запрос — она упиралась
+    в лимит частоты запросов БД и в обрыв вызова на ~30-й секунде."""
     import threading as _threading
     import urllib.request as _ureq
 
@@ -2468,24 +2468,15 @@ def _trigger_feeds_regen():
         conn2 = None
         try:
             conn2 = psycopg2.connect(os.environ['DATABASE_URL'])
-            with conn2.cursor(cursor_factory=RealDictCursor) as cur2:
-                # Берём токен активного admin/editor — эндпоинту generate_static нужна авторизация
+            with conn2.cursor() as cur2:
                 cur2.execute(
-                    f"SELECT s.token FROM {SCHEMA}.sessions s "
-                    f"JOIN {SCHEMA}.users u ON u.id = s.user_id "
-                    f"WHERE u.role IN ('admin', 'editor') AND u.is_active = TRUE AND s.expires_at > NOW() "
-                    f"ORDER BY s.created_at DESC LIMIT 1"
+                    f"UPDATE {SCHEMA}.feed_build_state SET force_before = NOW(), updated_at = NOW() WHERE name = 'main'"
                 )
-                session = cur2.fetchone()
-                if not session:
-                    return
-                token = session.get('token') or ''
-            url = f'{_XML_FEEDS_URL}?action=generate_static'
-            req = _ureq.Request(url, headers={'X-Auth-Token': token})
-            _ureq.urlopen(req, timeout=25)
-            print('[feeds] статические XML-фиды пересобраны')
+            conn2.commit()
+            _ureq.urlopen(_ureq.Request(f'{_XML_FEEDS_URL}?action=cron'), timeout=25)
+            print('[feeds] фиды поставлены в очередь пересборки')
         except Exception as e:
-            print(f'[feeds] ошибка пересборки фидов: {e}')
+            print(f'[feeds] ошибка постановки фидов в очередь: {e}')
         finally:
             if conn2:
                 conn2.close()

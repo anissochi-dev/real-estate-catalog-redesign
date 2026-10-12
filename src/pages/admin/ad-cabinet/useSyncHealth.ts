@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { FailingPlatform, StalePlatform, SYNC_HEALTH_API_URL } from './types';
+import { platformFetch } from './platformFetch';
 
 const REFRESH_MS = 5 * 60 * 1000;
 
@@ -16,8 +17,7 @@ export function useSyncHealth(enabled: boolean) {
   useEffect(() => {
     if (!enabled) { setLoading(false); return; }
     const load = () => {
-      fetch(SYNC_HEALTH_API_URL)
-        .then(r => r.json())
+      platformFetch<{ ok?: boolean; stale?: StalePlatform[]; failing?: FailingPlatform[] }>(SYNC_HEALTH_API_URL)
         .then(d => {
           if (d.ok) {
             setStale(d.stale || []);

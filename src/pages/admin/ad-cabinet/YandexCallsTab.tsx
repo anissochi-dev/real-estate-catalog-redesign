@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import PlatformIcon from '@/components/admin/PlatformIcon';
 import { YANDEX_CALLS_API_URL, YandexCallsData } from './types';
+import { platformFetch } from './platformFetch';
+import BusyNotice from './BusyNotice';
 
 const DEAL_LABELS: Record<string, string> = { sale: 'Продажа', rent: 'Аренда' };
 
@@ -10,12 +12,12 @@ export default function YandexCallsTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const load = (sync = false) => {
     if (sync) setSyncing(true); else setLoading(true);
     const url = sync ? `${YANDEX_CALLS_API_URL}&sync=1` : YANDEX_CALLS_API_URL;
-    fetch(url)
-      .then(r => r.json())
+    platformFetch<YandexCallsData & { error?: string }>(url, undefined, setBusy)
       .then(d => {
         if (d.error) setError(d.error);
         else { setData(d); setError(null); }
@@ -29,6 +31,7 @@ export default function YandexCallsTab() {
   const fmt = (n: number) => (n || 0).toLocaleString('ru');
 
   if (loading) {
+    if (busy) return <BusyNotice />;
     return (
       <div className="space-y-3">
         <div className="bg-white rounded-xl border border-border p-4 h-16 animate-pulse" />

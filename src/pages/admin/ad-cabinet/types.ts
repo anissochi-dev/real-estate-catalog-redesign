@@ -1,7 +1,7 @@
-export const CIAN_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=cian_stats';
-export const YANDEX_CALLS_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=yandex_stats';
-export const AVITO_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=avito_stats';
-export const OTHER_PLATFORMS_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=other_platforms';
+export const CIAN_API_URL = 'https://functions.poehali.dev/fd00362c-a377-4d94-816c-c5a4abf087cd?action=cian_stats';
+export const YANDEX_CALLS_API_URL = 'https://functions.poehali.dev/fd00362c-a377-4d94-816c-c5a4abf087cd?action=yandex_stats';
+export const AVITO_API_URL = 'https://functions.poehali.dev/fd00362c-a377-4d94-816c-c5a4abf087cd?action=avito_stats';
+export const OTHER_PLATFORMS_API_URL = 'https://functions.poehali.dev/fd00362c-a377-4d94-816c-c5a4abf087cd?action=other_platforms';
 
 /** Бэкенд отдаёт список объектов «Разного» один раз (общий для всех площадок),
  * а не копией в каждой площадке — здесь раскладываем его обратно по площадкам. */
@@ -9,9 +9,9 @@ export function normalizeOtherPlatforms(d: { platforms?: OtherPlatformRow[]; lis
   const shared = d.listings || [];
   return (d.platforms || []).map(p => ({ ...p, listings: p.listings || shared }));
 }
-export const YOULA_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=youla_stats';
-export const DOMCLICK_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=domclick_stats';
-export const SYNC_HEALTH_API_URL = 'https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=sync_health';
+export const YOULA_API_URL = 'https://functions.poehali.dev/fd00362c-a377-4d94-816c-c5a4abf087cd?action=youla_stats';
+export const DOMCLICK_API_URL = 'https://functions.poehali.dev/fd00362c-a377-4d94-816c-c5a4abf087cd?action=domclick_stats';
+export const SYNC_HEALTH_API_URL = 'https://functions.poehali.dev/fd00362c-a377-4d94-816c-c5a4abf087cd?action=sync_health';
 
 export interface StalePlatform {
   key: string;

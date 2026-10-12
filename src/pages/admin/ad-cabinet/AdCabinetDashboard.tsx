@@ -2,6 +2,7 @@ import { ReactNode, useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import PlatformIcon from '@/components/admin/PlatformIcon';
 import { AVITO_API_URL, AvitoData, CIAN_API_URL, CianData, DOMCLICK_API_URL, DomclickData, normalizeOtherPlatforms, OTHER_PLATFORMS_API_URL, OtherPlatformRow, PlatformCard, SERVICE_TYPE_LABELS, YANDEX_CALLS_API_URL, YandexCallsData, YOULA_API_URL, YoulaData } from './types';
+import { BUSY_TEXT, platformFetch } from './platformFetch';
 import { useSyncHealth } from './useSyncHealth';
 import SyncHealthBanner from './SyncHealthBanner';
 
@@ -227,6 +228,7 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [busy, setBusy] = useState(false);
   const { stale: staleSyncPlatforms } = useSyncHealth(true);
 
   const load = (sync = false) => {
@@ -236,26 +238,25 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
     const avitoUrl = sync ? `${AVITO_API_URL}&sync=1` : AVITO_API_URL;
     const youlaUrl = sync ? `${YOULA_API_URL}&sync=1` : YOULA_API_URL;
     const domclickUrl = sync ? `${DOMCLICK_API_URL}&sync=1` : DOMCLICK_API_URL;
-    Promise.all([
-      fetch(cianUrl).then(r => r.json()).catch(() => ({ error: 'network' })),
-      fetch(yandexUrl).then(r => r.json()).catch(() => ({ error: 'network' })),
-      fetch(avitoUrl).then(r => r.json()).catch(() => ({ error: 'network' })),
-      fetch(OTHER_PLATFORMS_API_URL).then(r => r.json()).catch(() => ({ platforms: [] })),
-      fetch(youlaUrl).then(r => r.json()).catch(() => ({ error: 'network' })),
-      fetch(domclickUrl).then(r => r.json()).catch(() => ({ error: 'network' })),
-    ]).then(([cianData, yandexData, avitoData, otherData, youlaData, domclickData]) => {
+    // Площадки — строго по очереди (очередь внутри platformFetch): одновременные запросы
+    // ко всем 6 площадкам давали всплеск нагрузки на БД («rate limit exceeded»).
+    type Err = { error?: string };
+    const net = { error: 'network' };
+    (async () => {
+      const cianData = await platformFetch<CianData & Err>(cianUrl, undefined, setBusy).catch(() => net as CianData & Err);
       if (cianData.error) { setError(cianData.error); setCian(null); }
       else { setCian(cianData); setError(null); }
-      if (!yandexData.error) setYandex(yandexData);
-      else setYandex(null);
-      if (!avitoData.error) setAvito(avitoData);
-      else setAvito(null);
-      if (!youlaData.error) setYoula(youlaData);
-      else setYoula(null);
-      if (!domclickData.error) setDomclick(domclickData);
-      else setDomclick(null);
+      const yandexData = await platformFetch<YandexCallsData & Err>(yandexUrl, undefined, setBusy).catch(() => net as YandexCallsData & Err);
+      setYandex(yandexData.error ? null : yandexData);
+      const avitoData = await platformFetch<AvitoData & Err>(avitoUrl, undefined, setBusy).catch(() => net as AvitoData & Err);
+      setAvito(avitoData.error ? null : avitoData);
+      const otherData = await platformFetch<Parameters<typeof normalizeOtherPlatforms>[0]>(OTHER_PLATFORMS_API_URL, undefined, setBusy).catch(() => ({ platforms: [] }));
       setOtherPlatforms(normalizeOtherPlatforms(otherData));
-    }).finally(() => { setLoading(false); setSyncing(false); });
+      const youlaData = await platformFetch<YoulaData & Err>(youlaUrl, undefined, setBusy).catch(() => net as YoulaData & Err);
+      setYoula(youlaData.error ? null : youlaData);
+      const domclickData = await platformFetch<DomclickData & Err>(domclickUrl, undefined, setBusy).catch(() => net as DomclickData & Err);
+      setDomclick(domclickData.error ? null : domclickData);
+    })().finally(() => { setLoading(false); setSyncing(false); setBusy(false); });
   };
 
   useEffect(() => { load(); }, []);
@@ -407,6 +408,13 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
       </div>
 
       <SyncHealthBanner stale={staleSyncPlatforms} />
+
+      {busy && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-2.5 text-sm flex items-center gap-2">
+          <Icon name="Loader2" size={16} className="animate-spin" />
+          {BUSY_TEXT}
+        </div>
+      )}
 
       {loading && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

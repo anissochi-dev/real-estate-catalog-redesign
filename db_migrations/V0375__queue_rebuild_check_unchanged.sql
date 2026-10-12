@@ -1,0 +1,1 @@
+UPDATE t_p71821556_real_estate_catalog_.feed_build_state SET force_before = NOW(), updated_at = NOW() WHERE name = 'main';

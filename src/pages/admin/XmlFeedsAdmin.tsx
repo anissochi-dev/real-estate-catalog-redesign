@@ -45,16 +45,39 @@ export default function XmlFeedsAdmin() {
     alert('Скопировано');
   };
 
+  const [regenProgress, setRegenProgress] = useState('');
+
+  // Пересборка порциями: каждый вызов собирает до 10 фидов (≤ 25 с), повторяем, пока не done.
+  // first=1 в первом вызове ставит все фиды в очередь. При перегрузке сервера — пауза и повтор.
   const regenerateNow = async () => {
     setRegenerating(true);
+    setRegenProgress('Запуск…');
+    const token = localStorage.getItem('biznest_token') || '';
     try {
-      const token = localStorage.getItem('biznest_token') || '';
-      await fetch(`${XML_URL}?action=generate_static`, {
-        headers: { 'X-Auth-Token': token },
-      });
+      let first = true;
+      let busyRetries = 0;
+      for (let step = 0; step < 20; step++) {
+        const r = await fetch(`${XML_URL}?action=generate_static${first ? '&first=1' : ''}`, {
+          headers: { 'X-Auth-Token': token },
+        });
+        const d = await r.json().catch(() => ({}));
+        if (r.status === 503 || d.busy || d.skipped) {
+          if (++busyRetries > 6) { setRegenProgress('Сервер занят — фиды доберутся автоматически'); break; }
+          setRegenProgress('Сервер занят, повторяю…');
+          await new Promise(res => setTimeout(res, 3000));
+          continue;
+        }
+        if (d.error) { setRegenProgress(d.error); break; }
+        first = false;
+        busyRetries = 0;
+        const total = d.total || 0;
+        setRegenProgress(`Собрано ${Math.max(total - (d.remaining || 0), 0)} из ${total}`);
+        if (d.done) break;
+      }
       await load();
     } finally {
       setRegenerating(false);
+      setTimeout(() => setRegenProgress(''), 4000);
     }
   };
 
@@ -68,6 +91,7 @@ export default function XmlFeedsAdmin() {
         setSearch={setSearch}
         regenerating={regenerating}
         regenerateNow={regenerateNow}
+        regenProgress={regenProgress}
         setEditing={setEditing}
         del={del}
         copy={copy}
