@@ -336,7 +336,7 @@ export interface YoulaItemRow {
 
 export interface YoulaSyncResult {
   sync?: { owner_id?: string; owner_name?: string; error?: string };
-  publish?: { created: number; updated: number; archived: number; failed: number; total: number; error?: string };
+  publish?: { created: number; updated: number; archived: number; failed: number; total: number; error?: string; sent?: number; skipped_removed?: number; skipped_unchanged?: number; duration_sec?: number };
   stats?: { updated: number; requested: number; skipped?: boolean; reason?: string };
 }
 

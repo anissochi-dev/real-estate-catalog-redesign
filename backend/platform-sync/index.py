@@ -7,6 +7,7 @@ Args: event с httpMethod GET/POST, queryStringParameters {action, sync}
 Returns: JSON
 """
 
+import hashlib
 import json
 import os
 import time
@@ -1216,7 +1217,7 @@ def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory
     known_ids = {}
     for r in cur.fetchall():
         known_ids.setdefault(r['listing_id'], r['youla_id'])
-    cur.execute(f"SELECT listing_id, is_removed, is_blocked, recreate_requested, checked_at FROM {SCHEMA}.youla_item_status")
+    cur.execute(f"SELECT listing_id, is_removed, is_blocked, recreate_requested, checked_at, sent_hash, sent_at FROM {SCHEMA}.youla_item_status")
     status_by_id = {r['listing_id']: dict(r) for r in cur.fetchall()}
     restore_rows = []
     for l in listings:
@@ -1250,22 +1251,41 @@ def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory
         conn.commit()
 
     start_ts = time.monotonic()
-    created, updated, failed, skipped_budget, skipped_claimed, skipped_blocked = 0, 0, 0, 0, 0, 0
+    created, updated, failed, skipped_budget, skipped_claimed = 0, 0, 0, 0, 0
 
-    # ── 1. Обновления существующих объявлений — параллельно, давно не обновлявшиеся первыми.
-    to_update = [l for l in listings if l.get('youla_ad_id')]
+    # ── 1. Обновления существующих объявлений — только то, что реально нужно отправить.
+    # Удалённые на Юле (is_removed) не отправляем: Partner API их не восстанавливает, а
+    # 33 таких объявления съедали ~15 с каждой синхронизации. Живые отправляем, только
+    # если данные изменились с прошлой отправки (отпечаток тела запроса), плюс раз в
+    # YOULA_RECHECK_HOURS — контрольная отправка, чтобы подтянуть статус модерации.
+    now_utc = datetime.now(timezone.utc)
     _epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
-    to_update.sort(key=lambda l: (status_by_id.get(l['id']) or {}).get('checked_at') or _epoch)
+    to_update, skipped_removed, skipped_unchanged = [], 0, 0
+    for l in listings:
+        if not l.get('youla_ad_id'):
+            continue
+        st = status_by_id.get(l['id']) or {}
+        if st.get('is_removed'):
+            skipped_removed += 1
+            continue
+        body = _youla_build_product(l, owner_id, category_id, subcategory_id)
+        l['_body'] = body
+        l['_hash'] = _youla_body_hash(body)
+        recheck_due = not st.get('sent_at') or (now_utc - st['sent_at']) >= timedelta(hours=YOULA_RECHECK_HOURS)
+        if st.get('sent_hash') == l['_hash'] and not recheck_due:
+            skipped_unchanged += 1
+            continue
+        to_update.append(l)
+    to_update.sort(key=lambda l: (status_by_id.get(l['id']) or {}).get('sent_at') or _epoch)
     to_update = [l for l in to_update if not (status_by_id.get(l['id']) or {}).get('is_blocked')] + \
                 [l for l in to_update if (status_by_id.get(l['id']) or {}).get('is_blocked')]
 
     def _put(l):
-        body = _youla_build_product(l, owner_id, category_id, subcategory_id)
-        return l, _youla_request('PUT', f"/products/{l['youla_ad_id']}", token, body)
+        return l, _youla_request('PUT', f"/products/{l['youla_ad_id']}", token, l['_body'])
 
     from concurrent.futures import ThreadPoolExecutor
     results = []
-    with ThreadPoolExecutor(max_workers=6) as ex:
+    with ThreadPoolExecutor(max_workers=YOULA_PARALLEL) as ex:
         futures = []
         for l in to_update:
             if _over_budget(start_ts, YOULA_PUBLISH_TIME_BUDGET_SEC):
@@ -1275,7 +1295,7 @@ def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory
         for f in futures:
             results.append(f.result())
 
-    status_rows, error_rows = [], []
+    status_rows, error_rows, sent_rows = [], [], []
     for l, (data, err) in results:
         if err or not data:
             failed += 1
@@ -1283,8 +1303,10 @@ def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory
             continue
         product = data.get('data') or data
         status_rows.append(_youla_status_row(l['id'], product))
+        sent_rows.append((l['id'], l['_hash']))
         updated += 1
     _youla_save_status(cur, conn, status_rows, error_rows)
+    _youla_save_sent(cur, conn, sent_rows)
 
     # ── 2. Создание новых (и пересоздание удалённых) — последовательно, с отметкой.
     to_create = [l for l in listings if not l.get('youla_ad_id')]
@@ -1325,11 +1347,12 @@ def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory
         conn.commit()
         _youla_request('POST', '/products/publish', token, {'product_ids': [youla_id]}, params={'user_id': owner_id})
         _youla_save_status(cur, conn, [_youla_status_row(l['id'], product)], [])
+        _youla_save_sent(cur, conn, [(l['id'], _youla_body_hash(body))])
         created += 1
 
     # ── 3. Архивация объектов, у которых сняли флаг export_youla.
     archived = 0
-    if time.monotonic() - start_ts <= YOULA_PUBLISH_TIME_BUDGET_SEC:
+    if not _over_budget(start_ts, YOULA_PUBLISH_TIME_BUDGET_SEC):
         cur.execute(f"""
             SELECT s.listing_id, s.youla_id FROM {SCHEMA}.youla_item_status s
             JOIN {SCHEMA}.listings l ON l.id = s.listing_id
@@ -1349,8 +1372,29 @@ def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory
         'created': created, 'updated': updated, 'archived': archived, 'failed': failed,
         'total': len(listings), 'skipped_budget': skipped_budget,
         'skipped_claimed': skipped_claimed, 'recreated': len(recreate_ids),
+        'sent': len(to_update), 'skipped_removed': skipped_removed, 'skipped_unchanged': skipped_unchanged,
         'duration_sec': round(time.monotonic() - start_ts, 1),
     }
+
+
+YOULA_RECHECK_HOURS = 24
+YOULA_PARALLEL = 8
+
+
+def _youla_body_hash(body):
+    """Отпечаток отправляемых данных объявления: совпал с прошлым — отправлять незачем."""
+    return hashlib.sha256(json.dumps(body, ensure_ascii=False, sort_keys=True).encode('utf-8')).hexdigest()
+
+
+def _youla_save_sent(cur, conn, rows):
+    """Отпечаток и время последней успешной отправки — одним запросом на все объекты."""
+    if not rows:
+        return
+    execute_values(cur, f"""
+        UPDATE {SCHEMA}.youla_item_status AS t SET sent_hash = v.h, sent_at = NOW()
+        FROM (VALUES %s) AS v(listing_id, h) WHERE t.listing_id = v.listing_id::int
+    """, rows)
+    conn.commit()
 
 
 def _youla_status_row(listing_id, product):
@@ -1409,7 +1453,7 @@ def _youla_fetch_stats(cur, conn, token):
     from concurrent.futures import ThreadPoolExecutor
     skipped_budget = 0
     stat_rows = []
-    with ThreadPoolExecutor(max_workers=6) as ex:
+    with ThreadPoolExecutor(max_workers=YOULA_PARALLEL) as ex:
         futures = []
         for row in rows:
             if _over_budget(start_ts, YOULA_STATS_TIME_BUDGET_SEC):
@@ -1455,6 +1499,7 @@ def _youla_read_from_db(cur):
                l.title, l.city, l.category, l.deal
         FROM {SCHEMA}.youla_item_status s
         JOIN {SCHEMA}.listings l ON l.id = s.listing_id
+        WHERE l.export_youla = TRUE
         ORDER BY s.checked_at DESC
     """)
     items = []
@@ -2199,6 +2244,25 @@ def handler(event, context):
             if method == 'POST' and action == 'youla_webhook':
                 # Публичный вебхук Юлы (без подписи). Старый адрес xml-feeds пересылает сюда.
                 return _youla_webhook(cur, conn, event)
+
+            if method == 'POST' and action == 'youla_unexport_removed':
+                # «Снять с выгрузки удалённые на Юле»: снимаем галочку «Юла» с объектов, чьи
+                # объявления на Юле удалены (вручную или модерацией), и забываем старые номера.
+                # Если галочку поставить снова — объект будет опубликован новым объявлением.
+                user = _get_user(cur, _auth_token(event, params))
+                if not user or user['role'] not in ('admin', 'director'):
+                    return _json({'error': 'Нет прав'}, 403)
+                cur.execute(
+                    f"SELECT s.listing_id FROM {SCHEMA}.youla_item_status s JOIN {SCHEMA}.listings l ON l.id = s.listing_id "
+                    f"WHERE s.is_removed = TRUE AND s.recreate_requested IS NOT TRUE AND l.export_youla = TRUE"
+                )
+                ids = [r['listing_id'] for r in cur.fetchall()]
+                if ids:
+                    cur.execute(f"UPDATE {SCHEMA}.listings SET export_youla = FALSE, youla_ad_id = NULL WHERE id = ANY(%s)", (ids,))
+                    cur.execute(f"DELETE FROM {SCHEMA}.youla_create_claims WHERE listing_id = ANY(%s)", (ids,))
+                    cur.execute(f"DELETE FROM {SCHEMA}.youla_item_status WHERE listing_id = ANY(%s)", (ids,))
+                conn.commit()
+                return _json({'ok': True, 'unexported': len(ids), 'listing_ids': ids})
 
             if method == 'POST' and action in ('youla_recreate', 'youla_claim_reset'):
                 user = _get_user(cur, _auth_token(event, params))

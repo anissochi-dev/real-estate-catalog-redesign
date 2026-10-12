@@ -9,6 +9,7 @@ import BusyNotice from './BusyNotice';
 
 const DEAL_LABELS: Record<string, string> = { sale: 'Продажа', rent: 'Аренда' };
 const YOULA_RECREATE_URL = 'https://functions.poehali.dev/fd00362c-a377-4d94-816c-c5a4abf087cd?action=youla_recreate';
+const YOULA_UNEXPORT_URL = 'https://functions.poehali.dev/fd00362c-a377-4d94-816c-c5a4abf087cd?action=youla_unexport_removed';
 
 const isLive = (i: YoulaItemRow) => !i.is_removed && !i.is_blocked && !i.is_archived && !!i.is_published;
 
@@ -20,6 +21,28 @@ export default function YoulaCabinetTab() {
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [recreating, setRecreating] = useState(false);
+  const [unexporting, setUnexporting] = useState(false);
+
+  const unexportRemoved = async (count: number) => {
+    if (!confirm(`Снять галочку «Юла» с ${count} объектов, чьи объявления удалены на Юле? Если галочку поставить снова, объект опубликуется новым объявлением.`)) return;
+    setUnexporting(true);
+    try {
+      const token = getToken();
+      const r = await fetch(`${YOULA_UNEXPORT_URL}&token=${encodeURIComponent(token)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
+        body: '{}',
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Ошибка');
+      toast.success(`Снято с выгрузки: ${d.unexported}`);
+      load();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Не удалось');
+    } finally {
+      setUnexporting(false);
+    }
+  };
 
   const toggle = (id: number) => setSelected(prev => {
     const n = new Set(prev);
@@ -183,6 +206,22 @@ export default function YoulaCabinetTab() {
             </div>
           </div>
 
+          {items.some(i => i.is_removed && !i.recreate_requested) && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center justify-between gap-3 flex-wrap text-sm">
+              <div className="text-amber-900">
+                Удалено на Юле: {fmt(items.filter(i => i.is_removed && !i.recreate_requested).length)} объявл. Они не обновляются и только занимают место в выгрузке.
+              </div>
+              <button
+                onClick={() => unexportRemoved(items.filter(i => i.is_removed && !i.recreate_requested).length)}
+                disabled={unexporting}
+                className="px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-900 text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-amber-100 disabled:opacity-50"
+              >
+                <Icon name={unexporting ? 'Loader2' : 'EyeOff'} size={13} className={unexporting ? 'animate-spin' : ''} />
+                Снять с выгрузки удалённые на Юле
+              </button>
+            </div>
+          )}
+
           {sync_result?.publish && (
             <div className="bg-white rounded-2xl border border-border p-4">
               <h3 className="font-semibold text-sm flex items-center gap-2 mb-3">
@@ -196,6 +235,11 @@ export default function YoulaCabinetTab() {
                   <span className="px-2 py-1.5 rounded bg-emerald-50 text-emerald-700 text-center">Создано: {sync_result.publish.created}</span>
                   <span className="px-2 py-1.5 rounded bg-blue-50 text-blue-700 text-center">Обновлено: {sync_result.publish.updated}</span>
                   <span className="px-2 py-1.5 rounded bg-muted text-center">В архиве: {sync_result.publish.archived}</span>
+                  {sync_result.publish.sent !== undefined && (
+                    <span className="px-2 py-1.5 rounded bg-muted text-center">
+                      Отправлено: {sync_result.publish.sent} · без изменений: {sync_result.publish.skipped_unchanged ?? 0} · удалённых пропущено: {sync_result.publish.skipped_removed ?? 0}
+                    </span>
+                  )}
                   {sync_result.publish.failed > 0 && (
                     <span className="px-2 py-1.5 rounded bg-red-50 text-red-700 text-center">Ошибок: {sync_result.publish.failed}</span>
                   )}
