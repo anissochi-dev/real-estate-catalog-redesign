@@ -1,0 +1,1 @@
+UPDATE t_p71821556_real_estate_catalog_.listings SET export_youla = TRUE WHERE id = 216 AND export_youla = FALSE AND youla_channel IS NULL;

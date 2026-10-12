@@ -1,0 +1,5 @@
+ALTER TABLE t_p71821556_real_estate_catalog_.listings ADD COLUMN IF NOT EXISTS youla_channel VARCHAR(10);
+UPDATE t_p71821556_real_estate_catalog_.listings SET youla_channel = 'feed' WHERE youla_channel IS NULL AND id IN (264,263,262,261,260,259,258,257,256,255,254,253,252,251,248,247,246,245,244,239,238,237,236,233,232,231,230,229,228,227,226,225,219,218,217,214,206,51);
+UPDATE t_p71821556_real_estate_catalog_.listings SET youla_channel = 'api' WHERE youla_channel IS NULL AND id IN (297,298,299);
+CREATE UNIQUE INDEX IF NOT EXISTS listings_youla_ad_id_uniq ON t_p71821556_real_estate_catalog_.listings (youla_ad_id) WHERE youla_ad_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS youla_item_status_youla_id_uniq ON t_p71821556_real_estate_catalog_.youla_item_status (youla_id) WHERE youla_id IS NOT NULL;

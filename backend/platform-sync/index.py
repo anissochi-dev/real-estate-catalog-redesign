@@ -1201,10 +1201,18 @@ def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory
     if not category_id or not subcategory_id:
         return {'error': 'Не указаны ID категории/подкатегории Юлы в настройках площадки'}
 
+    # Гибрид: объект, впервые отмеченный для Юлы, получает канал «API» навсегда.
+    # Объекты канала «файл» (youla_channel='feed') публикует XML-фид — сюда не попадают.
+    cur.execute(f"""
+        UPDATE {SCHEMA}.listings SET youla_channel = 'api'
+        WHERE export_youla = TRUE AND youla_channel IS NULL
+    """)
+    conn.commit()
     cur.execute(f"""
         SELECT id, title, description, price, price_unit, area, city, district, address, lat, lng, images, image, youla_ad_id
         FROM {SCHEMA}.listings
-        WHERE export_youla = TRUE AND status = 'active' AND (is_visible IS NULL OR is_visible = TRUE)
+        WHERE export_youla = TRUE AND youla_channel = 'api'
+          AND status = 'active' AND (is_visible IS NULL OR is_visible = TRUE)
         ORDER BY id ASC
     """)
     listings = [dict(r) for r in cur.fetchall()]
@@ -1310,9 +1318,20 @@ def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory
 
     # ── 2. Создание новых (и пересоздание удалённых) — последовательно, с отметкой.
     to_create = [l for l in listings if not l.get('youla_ad_id')]
+    photo_conflicts = _youla_photo_conflicts(cur, [l['id'] for l in to_create]) if to_create else {}
+    skipped_photos = 0
     for l in to_create:
         if _over_budget(start_ts, YOULA_PUBLISH_TIME_BUDGET_SEC):
             skipped_budget += 1
+            continue
+        if photo_conflicts.get(l['id']):
+            # Юла отклоняет объявления с фото, которые уже есть в другом объявлении
+            # («Запрещено использовать одинаковые изображения»). Не создаём — показываем
+            # предупреждение в кабинете, пока фото не заменят.
+            skipped_photos += 1
+            _youla_save_status(cur, conn, [], [(l['id'], 'Не опубликовано: те же фото, что у объекта №' +
+                                                ', №'.join(str(x) for x in photo_conflicts[l['id']]) +
+                                                '. Юла отклонит такое объявление — замените фото.')])
             continue
         cur.execute(f"""
             INSERT INTO {SCHEMA}.youla_create_claims (listing_id, claimed_at, claimed_by)
@@ -1352,12 +1371,14 @@ def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory
 
     # ── 3. Архивация объектов, у которых сняли флаг export_youla.
     archived = 0
+    dups_archived = []
     if not _over_budget(start_ts, YOULA_PUBLISH_TIME_BUDGET_SEC):
         cur.execute(f"""
             SELECT s.listing_id, s.youla_id FROM {SCHEMA}.youla_item_status s
             JOIN {SCHEMA}.listings l ON l.id = s.listing_id
             WHERE s.youla_id IS NOT NULL AND s.is_archived IS NOT TRUE AND s.is_removed IS NOT TRUE
-              AND (l.export_youla = FALSE OR l.status != 'active')
+              AND (l.export_youla = FALSE OR l.status != 'active' OR l.youla_channel = 'feed'
+                   OR l.is_visible = FALSE)
         """)
         to_archive = [dict(r) for r in cur.fetchall()]
         if to_archive:
@@ -1365,6 +1386,9 @@ def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory
             _, err = _youla_request('POST', '/products/archive', token, {'product_ids': ids}, params={'user_id': owner_id})
             if not err:
                 cur.execute(f"UPDATE {SCHEMA}.youla_item_status SET is_archived = TRUE, checked_at = NOW() WHERE youla_id = ANY(%s)", (ids,))
+                dup_ids = [r['listing_id'] for r in to_archive]
+                cur.execute(f"SELECT id FROM {SCHEMA}.listings WHERE id = ANY(%s) AND youla_channel = 'feed' AND export_youla = TRUE", (dup_ids,))
+                dups_archived = [r['id'] for r in cur.fetchall()]
                 conn.commit()
                 archived = len(ids)
 
@@ -1373,6 +1397,7 @@ def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory
         'total': len(listings), 'skipped_budget': skipped_budget,
         'skipped_claimed': skipped_claimed, 'recreated': len(recreate_ids),
         'sent': len(to_update), 'skipped_removed': skipped_removed, 'skipped_unchanged': skipped_unchanged,
+        'skipped_photos': skipped_photos, 'duplicates_archived': dups_archived,
         'duration_sec': round(time.monotonic() - start_ts, 1),
     }
 
@@ -1395,6 +1420,37 @@ def _youla_save_sent(cur, conn, rows):
         FROM (VALUES %s) AS v(listing_id, h) WHERE t.listing_id = v.listing_id::int
     """, rows)
     conn.commit()
+
+
+def _youla_photo_conflicts(cur, listing_ids):
+    """Для каждого объекта из listing_ids — номера ДРУГИХ объектов, выгружаемых на Юлу
+    (любым каналом), у которых есть хотя бы одно такое же фото."""
+    cur.execute(f"""
+        WITH ph AS (
+            SELECT l.id, TRIM(u) AS u FROM {SCHEMA}.listings l,
+                 UNNEST(STRING_TO_ARRAY(COALESCE(NULLIF(l.images, ''), l.image, ''), '|')) AS u
+            WHERE l.export_youla = TRUE AND l.status = 'active' AND (l.is_visible IS NULL OR l.is_visible = TRUE)
+        )
+        SELECT a.id, ARRAY_AGG(DISTINCT b.id ORDER BY b.id) AS others
+        FROM ph a JOIN ph b ON a.u = b.u AND a.id <> b.id
+        WHERE a.u <> '' AND a.id = ANY(%s)
+        GROUP BY a.id
+    """, (list(listing_ids),))
+    return {r['id']: r['others'] for r in cur.fetchall()}
+
+
+def _youla_channel_audit(cur):
+    """Сверка каналов: объект канала «файл» не должен иметь живого API-объявления,
+    объект канала «API» не должен попадать в файл. Возвращает список нарушений."""
+    cur.execute(f"""
+        SELECT l.id, l.title, s.youla_id FROM {SCHEMA}.listings l
+        JOIN {SCHEMA}.youla_item_status s ON s.listing_id = l.id
+        WHERE l.youla_channel = 'feed' AND l.export_youla = TRUE
+          AND l.status = 'active' AND (l.is_visible IS NULL OR l.is_visible = TRUE)
+          AND s.youla_id IS NOT NULL AND s.is_removed IS NOT TRUE AND s.is_archived IS NOT TRUE
+        ORDER BY l.id
+    """)
+    return [dict(r) for r in cur.fetchall()]
 
 
 def _youla_status_row(listing_id, product):
@@ -1437,7 +1493,12 @@ def _youla_fetch_stats(cur, conn, token):
     """Запрашивает статистику показов/просмотров/контактов за 30 дней по каждому
     объявлению, у которого уже есть youla_id. Тайм-бюджет + commit после каждого
     объявления — та же защита от потери прогресса, что и в _youla_publish_listings."""
-    cur.execute(f"SELECT listing_id, youla_id FROM {SCHEMA}.youla_item_status WHERE youla_id IS NOT NULL AND is_removed IS NOT TRUE")
+    cur.execute(f"""
+        SELECT s.listing_id, s.youla_id FROM {SCHEMA}.youla_item_status s
+        JOIN {SCHEMA}.listings l ON l.id = s.listing_id
+        WHERE s.youla_id IS NOT NULL AND s.is_removed IS NOT TRUE AND s.is_archived IS NOT TRUE
+          AND l.youla_channel = 'api'
+    """)
     rows = [dict(r) for r in cur.fetchall()]
     if not rows:
         return {'skipped': True, 'reason': 'Нет объявлений с youla_id'}
@@ -1496,10 +1557,10 @@ def _youla_read_from_db(cur):
         SELECT s.listing_id, s.youla_id, s.url, s.is_published, s.is_archived, s.is_blocked,
                s.block_type_text, s.views, s.shows, s.contacts, s.unique_contacts, s.error, s.checked_at,
                s.is_removed, s.removed_at, s.recreate_requested,
-               l.title, l.city, l.category, l.deal
+               l.title, l.city, l.category, l.deal, l.youla_channel
         FROM {SCHEMA}.youla_item_status s
         JOIN {SCHEMA}.listings l ON l.id = s.listing_id
-        WHERE l.export_youla = TRUE
+        WHERE l.export_youla = TRUE AND l.youla_channel = 'api'
         ORDER BY s.checked_at DESC
     """)
     items = []
@@ -1509,11 +1570,36 @@ def _youla_read_from_db(cur):
         d['removed_at'] = d['removed_at'].isoformat() if d.get('removed_at') else None
         items.append(d)
 
+    cur.execute(f"""
+        SELECT youla_channel AS ch, COUNT(*) AS n FROM {SCHEMA}.listings
+        WHERE export_youla = TRUE AND status = 'active' AND (is_visible IS NULL OR is_visible = TRUE)
+        GROUP BY youla_channel
+    """)
+    channels = {(r['ch'] or 'api'): r['n'] for r in cur.fetchall()}
+    cur.execute(f"""
+        SELECT l.id, l.title FROM {SCHEMA}.listings l
+        WHERE l.export_youla = TRUE AND l.youla_channel = 'feed'
+          AND l.status = 'active' AND (l.is_visible IS NULL OR l.is_visible = TRUE)
+        ORDER BY l.id
+    """)
+    feed_items = [dict(r) for r in cur.fetchall()]
+    cur.execute(f"SELECT last_generated_at, is_active, cdn_url FROM {SCHEMA}.xml_feeds WHERE format = 'youla' ORDER BY id LIMIT 1")
+    fr = cur.fetchone()
+    feed = None
+    if fr:
+        feed = {'is_active': fr['is_active'], 'cdn_url': fr['cdn_url'],
+                'last_generated_at': fr['last_generated_at'].isoformat() if fr.get('last_generated_at') else None}
+    audit = _youla_channel_audit(cur)
+
     return {
         'ok': True,
         'connected': bool(last.get('owner_id')) and not last.get('error'),
         'last_sync': last,
         'items': items,
+        'channels': {'feed': channels.get('feed', 0), 'api': channels.get('api', 0)},
+        'feed_items': feed_items,
+        'feed': feed,
+        'channel_audit': {'ok': not audit, 'conflicts': audit, 'checked_at': datetime.now(timezone.utc).isoformat()},
     }
 
 
@@ -1988,6 +2074,24 @@ def _sync_health_check(cur):
     except Exception:
         pass
 
+    # Юла, сверка каналов: объект из файла с живым API-объявлением = дубль на Юле.
+    # Синхронизация сама отправляет такие объявления в архив; если не вышло — тревога.
+    try:
+        for r in _youla_channel_audit(cur):
+            failing.append({
+                'key': f"youla_dup_{r['id']}",
+                'label': f"Юла: дубль объекта №{r['id']}",
+                'errors': 0,
+                'last_error': (
+                    f"Объект выгружается файлом и одновременно имеет объявление через API ({r['youla_id']}). "
+                    f"Ближайшая синхронизация Юлы отправит API-объявление в архив; если тревога не уйдёт — "
+                    f"снимите его вручную в кабинете Юлы (в описании есть «Код объекта: {r['id']}»)."
+                ),
+                'last_attempt': None, 'paused_until': None, 'listing_id': r['id'],
+            })
+    except Exception:
+        pass
+
     return {'ok': True, 'stale': stale, 'failing': failing, 'checked_at': now.isoformat()}
 
 
@@ -2245,6 +2349,34 @@ def handler(event, context):
                 # Публичный вебхук Юлы (без подписи). Старый адрес xml-feeds пересылает сюда.
                 return _youla_webhook(cur, conn, event)
 
+            if method == 'POST' and action == 'youla_set_channel':
+                # Ручная смена канала Юлы у объекта (единственный способ сменить канал).
+                #  feed → api: объект уходит из файла (Юла снимет файловое объявление),
+                #              старые API-номера забываются — будет создано новое объявление;
+                #  api → feed: API-объявление уйдёт в архив при ближайшей синхронизации,
+                #              объект попадёт в файл при следующей сборке фидов.
+                user = _get_user(cur, _auth_token(event, params))
+                if not user or user['role'] not in ('admin', 'director'):
+                    return _json({'error': 'Нет прав'}, 403)
+                body = json.loads(event.get('body') or '{}')
+                lid = int(body.get('listing_id') or 0)
+                ch = body.get('channel')
+                if not lid or ch not in ('feed', 'api'):
+                    return _json({'error': 'Нужны listing_id и channel = feed|api'}, 400)
+                if ch == 'api':
+                    cur.execute(f"SELECT is_removed, is_archived, youla_id FROM {SCHEMA}.youla_item_status WHERE listing_id = %s", (lid,))
+                    st = cur.fetchone()
+                    if not st or st['is_removed'] or st['is_archived'] or not st['youla_id']:
+                        cur.execute(f"UPDATE {SCHEMA}.listings SET youla_ad_id = NULL WHERE id = %s", (lid,))
+                        cur.execute(f"DELETE FROM {SCHEMA}.youla_create_claims WHERE listing_id = %s", (lid,))
+                        cur.execute(f"DELETE FROM {SCHEMA}.youla_item_status WHERE listing_id = %s", (lid,))
+                cur.execute(f"UPDATE {SCHEMA}.listings SET youla_channel = %s WHERE id = %s RETURNING id", (ch, lid))
+                ok = cur.fetchone() is not None
+                conn.commit()
+                if not ok:
+                    return _json({'error': 'Объект не найден'}, 404)
+                return _json({'ok': True, 'listing_id': lid, 'channel': ch})
+
             if method == 'POST' and action == 'youla_unexport_removed':
                 # «Снять с выгрузки удалённые на Юле»: снимаем галочку «Юла» с объектов, чьи
                 # объявления на Юле удалены (вручную или модерацией), и забываем старые номера.
@@ -2254,7 +2386,8 @@ def handler(event, context):
                     return _json({'error': 'Нет прав'}, 403)
                 cur.execute(
                     f"SELECT s.listing_id FROM {SCHEMA}.youla_item_status s JOIN {SCHEMA}.listings l ON l.id = s.listing_id "
-                    f"WHERE s.is_removed = TRUE AND s.recreate_requested IS NOT TRUE AND l.export_youla = TRUE"
+                    f"WHERE s.is_removed = TRUE AND s.recreate_requested IS NOT TRUE AND l.export_youla = TRUE "
+                    f"AND l.youla_channel = 'api'"
                 )
                 ids = [r['listing_id'] for r in cur.fetchall()]
                 if ids:
@@ -2276,7 +2409,8 @@ def handler(event, context):
                         return _json({'error': 'Не выбраны объекты'}, 400)
                     cur.execute(
                         f"UPDATE {SCHEMA}.youla_item_status SET recreate_requested = TRUE "
-                        f"WHERE listing_id = ANY(%s) AND is_removed = TRUE AND is_blocked IS NOT TRUE", (ids,)
+                        f"WHERE listing_id = ANY(%s) AND is_removed = TRUE AND is_blocked IS NOT TRUE "
+                        f"AND listing_id IN (SELECT id FROM {SCHEMA}.listings WHERE youla_channel = 'api')", (ids,)
                     )
                     n = cur.rowcount
                     conn.commit()

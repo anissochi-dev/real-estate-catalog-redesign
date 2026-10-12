@@ -6,6 +6,7 @@ import { getToken } from '@/lib/adminApi';
 import { YOULA_API_URL, YoulaData, YoulaItemRow } from './types';
 import { platformFetch } from './platformFetch';
 import BusyNotice from './BusyNotice';
+import YoulaChannelsPanel, { SET_CHANNEL_URL } from './YoulaChannelsPanel';
 
 const DEAL_LABELS: Record<string, string> = { sale: 'Продажа', rent: 'Аренда' };
 const YOULA_RECREATE_URL = 'https://functions.poehali.dev/fd00362c-a377-4d94-816c-c5a4abf087cd?action=youla_recreate';
@@ -22,6 +23,24 @@ export default function YoulaCabinetTab() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [recreating, setRecreating] = useState(false);
   const [unexporting, setUnexporting] = useState(false);
+
+  const moveToFeed = async (id: number) => {
+    if (!confirm(`Перевести объект №${id} в XML-файл? API-объявление уйдёт в архив, объект попадёт в файл при следующей сборке фидов.`)) return;
+    try {
+      const token = getToken();
+      const r = await fetch(`${SET_CHANNEL_URL}&token=${encodeURIComponent(token)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
+        body: JSON.stringify({ listing_id: id, channel: 'feed' }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Ошибка');
+      toast.success('Объект переведён в файл');
+      load();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Не удалось');
+    }
+  };
 
   const unexportRemoved = async (count: number) => {
     if (!confirm(`Снять галочку «Юла» с ${count} объектов, чьи объявления удалены на Юле? Если галочку поставить снова, объект опубликуется новым объявлением.`)) return;
@@ -174,7 +193,7 @@ export default function YoulaCabinetTab() {
             </div>
             <div className="bg-white rounded-xl border border-border p-3">
               <div className="text-xl font-bold">{fmt(items.length)}</div>
-              <div className="text-xs text-muted-foreground">Объектов к выгрузке</div>
+              <div className="text-xs text-muted-foreground">Объектов через API</div>
             </div>
             <div className="bg-white rounded-xl border border-border p-3">
               <div className="text-xl font-bold text-emerald-700">{fmt(items.filter(isLive).length)}</div>
@@ -205,6 +224,8 @@ export default function YoulaCabinetTab() {
               <div className="text-xs text-muted-foreground">Уникальные контакты</div>
             </div>
           </div>
+
+          <YoulaChannelsPanel data={data} onChanged={load} />
 
           {items.some(i => i.is_removed && !i.recreate_requested) && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center justify-between gap-3 flex-wrap text-sm">
@@ -239,6 +260,12 @@ export default function YoulaCabinetTab() {
                     <span className="px-2 py-1.5 rounded bg-muted text-center">
                       Отправлено: {sync_result.publish.sent} · без изменений: {sync_result.publish.skipped_unchanged ?? 0} · удалённых пропущено: {sync_result.publish.skipped_removed ?? 0}
                     </span>
+                  )}
+                  {(sync_result.publish.skipped_photos ?? 0) > 0 && (
+                    <span className="px-2 py-1.5 rounded bg-amber-50 text-amber-800 text-center">Не создано из-за общих фото: {sync_result.publish.skipped_photos}</span>
+                  )}
+                  {(sync_result.publish.duplicates_archived?.length ?? 0) > 0 && (
+                    <span className="px-2 py-1.5 rounded bg-blue-50 text-blue-700 text-center">Дубли сняты: №{sync_result.publish.duplicates_archived?.join(', №')}</span>
                   )}
                   {sync_result.publish.failed > 0 && (
                     <span className="px-2 py-1.5 rounded bg-red-50 text-red-700 text-center">Ошибок: {sync_result.publish.failed}</span>
@@ -279,7 +306,7 @@ export default function YoulaCabinetTab() {
                     <th className="pb-2 pr-3 font-medium text-right">Просмотры</th>
                     <th className="pb-2 pr-3 font-medium text-right">Контакты</th>
                     <th className="pb-2 pr-3 font-medium text-right">Уник. контакты</th>
-                    <th className="pb-2 font-medium"></th>
+                    <th className="pb-2 font-medium whitespace-nowrap"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -325,6 +352,13 @@ export default function YoulaCabinetTab() {
                       <td className="py-2 pr-3 text-right">{item.contacts ?? '—'}</td>
                       <td className="py-2 pr-3 text-right">{item.unique_contacts ?? '—'}</td>
                       <td className="py-2">
+                        <button
+                          onClick={() => moveToFeed(item.listing_id)}
+                          className="mr-2 text-[11px] px-2 py-0.5 rounded border border-border hover:bg-muted"
+                          title="Перевести объект в XML-файл"
+                        >
+                          В файл
+                        </button>
                         {item.url && !item.is_removed && (
                           <a href={item.url.startsWith('http') ? item.url : `https://youla.ru${item.url}`} target="_blank" rel="noopener noreferrer" className="text-brand-blue hover:underline">
                             <Icon name="ExternalLink" size={13} />

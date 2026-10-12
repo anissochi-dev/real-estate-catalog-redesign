@@ -336,8 +336,14 @@ export interface YoulaItemRow {
 
 export interface YoulaSyncResult {
   sync?: { owner_id?: string; owner_name?: string; error?: string };
-  publish?: { created: number; updated: number; archived: number; failed: number; total: number; error?: string; sent?: number; skipped_removed?: number; skipped_unchanged?: number; duration_sec?: number };
+  publish?: { created: number; updated: number; archived: number; failed: number; total: number; error?: string; sent?: number; skipped_removed?: number; skipped_unchanged?: number; skipped_photos?: number; duplicates_archived?: number[]; duration_sec?: number };
   stats?: { updated: number; requested: number; skipped?: boolean; reason?: string };
+}
+
+export interface YoulaChannelConflict {
+  id: number;
+  title: string | null;
+  youla_id: string;
 }
 
 export interface YoulaData {
@@ -345,6 +351,10 @@ export interface YoulaData {
   connected: boolean;
   last_sync: YoulaLastSync | null;
   items?: YoulaItemRow[];
+  channels?: { feed: number; api: number };
+  feed_items?: { id: number; title: string | null }[];
+  feed?: { is_active: boolean; cdn_url: string | null; last_generated_at: string | null } | null;
+  channel_audit?: { ok: boolean; conflicts: YoulaChannelConflict[]; checked_at: string };
   synced_now?: boolean;
   sync_result?: YoulaSyncResult;
   error?: string;
