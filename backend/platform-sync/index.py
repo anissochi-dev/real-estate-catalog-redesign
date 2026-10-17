@@ -10,6 +10,7 @@ Returns: JSON
 import hashlib
 import json
 import os
+import re
 import time
 import traceback
 import urllib.error
@@ -2348,6 +2349,26 @@ def handler(event, context):
             if method == 'POST' and action == 'youla_webhook':
                 # Публичный вебхук Юлы (без подписи). Старый адрес xml-feeds пересылает сюда.
                 return _youla_webhook(cur, conn, event)
+
+            if method == 'GET' and action == 'youla_probe':
+                # Диагностика (только чтение): статистика Юлы по одному номеру объявления.
+                # Нужна, чтобы проверить, видит ли ключ объявления, созданные автозагрузкой (XML).
+                user = _get_user(cur, _auth_token(event, params))
+                if not user or user['role'] not in ('admin', 'director'):
+                    return _json({'error': 'Нет прав'}, 403)
+                pid = re.sub(r'[^0-9a-f]', '', (params.get('product_id') or '').lower())[:40]
+                if len(pid) != 24:
+                    return _json({'error': 'Нужен product_id (24 символа из ссылки объявления)'}, 400)
+                cur.execute(f"SELECT api_key FROM {SCHEMA}.ad_platform_keys WHERE platform = 'youla' LIMIT 1")
+                kr = cur.fetchone()
+                tok = ((kr or {}).get('api_key') or '').strip()
+                if not tok:
+                    return _json({'error': 'Ключ Юлы не задан'}, 400)
+                now_dt = datetime.now(timezone.utc)
+                prm = {'from': (now_dt - timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ'),
+                       'to': now_dt.strftime('%Y-%m-%dT%H:%M:%SZ')}
+                data, err = _youla_request('GET', f"/products/{pid}/statistic", tok, params=prm)
+                return _json({'ok': err is None, 'product_id': pid, 'statistic': data, 'error': err})
 
             if method == 'POST' and action == 'youla_set_channel':
                 # Ручная смена канала Юлы у объекта (единственный способ сменить канал).
