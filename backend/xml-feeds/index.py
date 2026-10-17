@@ -226,6 +226,28 @@ class FeedCache:
         return self._regions
 
 
+_LISTING_NUMBER_TAIL_RE = re.compile(r'Объект\s*№?\s*\d+\s*$', re.IGNORECASE)
+_FEED_DESC_MAX_LEN = {'cian': 3000, 'market': 3000, 'market_vk': 3000, 'avito': 7500}
+_FEED_DESC_DEFAULT_MAX_LEN = 5000
+
+
+def _append_listing_number(description, listing_id, fmt):
+    """Дописывает в конец описания пустую строку и «Объект № N» (только в выгрузку).
+    Номер не дублируется, если описание уже им заканчивается. Текст при необходимости
+    сокращается ДО добавления номера, чтобы номер не обрезался лимитом площадки.
+    ЦИАН удаляет символ № из описания — для него «Объект N»."""
+    label = f'Объект {listing_id}' if fmt == 'cian' else f'Объект № {listing_id}'
+    base = (description or '').rstrip()
+    if _LISTING_NUMBER_TAIL_RE.search(base):
+        return description
+    limit = _FEED_DESC_MAX_LEN.get(fmt, _FEED_DESC_DEFAULT_MAX_LEN)
+    tail = f'\n\n{label}' if base else label
+    if len(base) + len(tail) > limit:
+        base = base[:max(limit - len(tail), 0)].rstrip()
+        tail = f'\n\n{label}' if base else label
+    return base + tail
+
+
 def _build_feed_xml(cache, feed_slug, fmt, filter_category, filter_deal, market_category_map=None, use_jpg_photos=None, max_listings=None, custom_phone=None):
     """Собирает XML для одной площадки из текущего состояния БД.
     Набор объектов зависит от ФОРМАТА (fmt), а не от slug — так несколько фидов
@@ -291,7 +313,10 @@ def _build_feed_xml(cache, feed_slug, fmt, filter_category, filter_deal, market_
         listings = listings[:max_listings]
 
     _vri_map = cache.vri_map()
+    _append_number = (cache.company() or {}).get('feed_append_listing_number', True) is not False
     for l in listings:
+        if _append_number and l.get('id'):
+            l['description'] = _append_listing_number(l.get('description'), l['id'], fmt)
         for k in ('created_at', 'updated_at', 'feed_bump_at'):
             if l.get(k):
                 l[k] = l[k].isoformat()

@@ -4367,7 +4367,8 @@ def _settings(cur, conn, method, event, user):
                    'notify_telegram_enabled', 'notify_telegram_on_lead', 'notify_telegram_on_deal',
                    'notify_telegram_on_complaint',
                    'notify_max_enabled', 'notify_max_on_lead', 'notify_max_on_deal', 'notify_max_on_complaint',
-                   'ya_metrika_goals_enabled', 'max_autoreply_enabled', 'auto_faq_enabled'):
+                   'ya_metrika_goals_enabled', 'max_autoreply_enabled', 'auto_faq_enabled',
+                   'feed_append_listing_number'):
             if bf in body:
                 fields.append(f"{bf} = {_bool(body[bf])}")
         if 'role_permissions' in body:
