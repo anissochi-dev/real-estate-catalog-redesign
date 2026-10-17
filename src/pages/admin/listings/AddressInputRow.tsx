@@ -170,6 +170,20 @@ export default function AddressInputRow({
       </div>
 
       <div>
+        <label className="text-xs text-muted-foreground block mb-1">
+          Реальный адрес (необязательно, виден только сотрудникам)
+        </label>
+        <input
+          className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+          placeholder="напр. Северная, 247"
+          maxLength={255}
+          autoComplete="off"
+          value={editing.real_address || ''}
+          onChange={e => setEditing({ ...editing, real_address: e.target.value })}
+        />
+      </div>
+
+      <div>
         <label className="text-xs font-semibold block mb-1">
           Район <span className="text-red-500">*</span>
           {districtError && <span className="ml-2 text-red-500 font-normal">— обязательное поле</span>}

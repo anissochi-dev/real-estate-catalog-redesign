@@ -801,6 +801,7 @@ def handler(event: dict, context) -> dict:
                 d.pop('owner_name', None)
                 d.pop('owner_phone', None)
                 d.pop('owner_phone2', None)
+                d.pop('real_address', None)
                 return _ok({'listing': _serialize(d)}, cache='public, max-age=120, stale-while-revalidate=30')
 
             where = ["status = 'active'", "(is_visible IS NULL OR is_visible = TRUE)"]

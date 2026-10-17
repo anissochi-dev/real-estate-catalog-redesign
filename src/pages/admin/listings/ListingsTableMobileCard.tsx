@@ -5,6 +5,7 @@ import { listingSlug } from '@/lib/slug';
 import { useExitToPath } from '../AdminLayout';
 import ListingsTableExportBadges from './ListingsTableExportBadges';
 import ShareListingButton from './ShareListingButton';
+import RealAddressToggle from './RealAddressToggle';
 
 interface Props {
   it: Listing;
@@ -12,6 +13,7 @@ interface Props {
   canSelect: boolean;
   canEdit: boolean;
   showPhone: boolean;
+  canSeeFullDetails?: boolean;
   siteUrl?: string;
   onToggleSelect: (id: number) => void;
   onEdit: (it: Listing) => void;
@@ -22,7 +24,7 @@ interface Props {
 }
 
 export default function ListingsTableMobileCard({
-  it, isSelected, canSelect, canEdit, showPhone, siteUrl,
+  it, isSelected, canSelect, canEdit, showPhone, canSeeFullDetails, siteUrl,
   onToggleSelect, onEdit, onCopy, onHistory, onInternalCard, onShowMatching,
 }: Props) {
   const exitToPath = useExitToPath();
@@ -118,6 +120,7 @@ export default function ListingsTableMobileCard({
           <span className="text-xs text-muted-foreground truncate">
             {[it.city || 'Краснодар', it.district].filter(Boolean).join(' · ')}
           </span>
+          {canSeeFullDetails && <RealAddressToggle value={it.real_address} />}
         </div>
 
         {/* Строка 3: Тип сделки + Цена + Площадь */}

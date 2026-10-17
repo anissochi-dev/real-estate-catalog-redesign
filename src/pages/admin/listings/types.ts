@@ -30,6 +30,7 @@ export interface Listing {
   price: number;
   area: number;
   address: string;
+  real_address?: string | null;
   district: string;
   city: string;
   status: string;

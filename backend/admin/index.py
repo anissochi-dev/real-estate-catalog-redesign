@@ -2796,7 +2796,7 @@ def _listings(cur, conn, method, rid, event, user):
         main_city = _safe((_get_settings(cur).get('main_city') or 'Краснодар'), 100)
         list_cols = (
             "l.id, l.title, l.description, l.category, l.deal, l.price, l.price_per_m2, l.area, "
-            "l.payback, l.profit, l.floor, l.total_floors, l.address, l.district, l.city, "
+            "l.payback, l.profit, l.floor, l.total_floors, l.address, l.real_address, l.district, l.city, "
             "l.image, l.images, l.tags, l.is_hot, l.is_new, l.is_exclusive, l.is_urgent, "
             "l.status, l.owner_name, l.owner_phone, l.owner_phone2, l.price_unit, "
             "l.purpose, l.condition, l.parking, l.entrance, l.access_type, l.legal_address_provided, "
@@ -2962,6 +2962,8 @@ def _listings(cur, conn, method, rid, event, user):
         )
         cur.execute(sql)
         new_id = cur.fetchone()['id']
+        if (body.get('real_address') or '').strip():
+            cur.execute(f"UPDATE {SCHEMA}.listings SET real_address = {_str_or_null((body.get('real_address') or '').strip(), 255)} WHERE id = {new_id}")
         # Генерируем slug на основе title + id и сразу сохраняем
         new_slug = _make_slug(body.get('title') or '', new_id)
         cur.execute(
@@ -3011,7 +3013,7 @@ def _listings(cur, conn, method, rid, event, user):
         diff_cols = [
             'title', 'description', 'category', 'deal', 'price', 'price_per_m2',
             'area', 'payback', 'profit', 'floor', 'total_floors', 'rooms',
-            'address', 'district', 'city', 'image', 'images', 'tags', 'status',
+            'address', 'real_address', 'district', 'city', 'image', 'images', 'tags', 'status',
             'owner_name', 'owner_phone', 'owner_phone2', 'price_unit', 'purpose',
             'condition', 'parking', 'entrance', 'access_type', 'legal_address_provided', 'video_url', 'video_type',
             'tenant_name', 'monthly_rent', 'yearly_rent', 'finishing',
@@ -3069,7 +3071,7 @@ def _listings(cur, conn, method, rid, event, user):
             fields.append(f"slug = '{_safe(updated_slug, 120)}'")
 
         for f, length in [('title', 255), ('description', 5000), ('ai_notes', 2000), ('category', 50), ('deal', 20),
-                          ('address', 255), ('district', 100), ('city', 100), ('image', 500),
+                          ('address', 255), ('real_address', 255), ('district', 100), ('city', 100), ('image', 500),
                           ('images', 5000), ('tags', 1000), ('status', 20),
                           ('owner_name', 150), ('owner_phone', 30), ('owner_phone2', 30), ('price_unit', 10),
                           ('purpose', 500), ('condition', 50), ('parking', 20), ('entrance', 20), ('access_type', 20),

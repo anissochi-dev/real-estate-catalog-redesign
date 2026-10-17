@@ -54,7 +54,7 @@ const ACTION_LABELS: Record<string, { label: string; icon: string; color: string
 
 const FIELD_LABELS: Record<string, string> = {
   title: 'Название', description: 'Описание', category: 'Категория', deal: 'Тип сделки',
-  price: 'Цена', area: 'Площадь', address: 'Адрес', district: 'Район', city: 'Город',
+  price: 'Цена', area: 'Площадь', address: 'Адрес', real_address: 'Реальный адрес', district: 'Район', city: 'Город',
   status: 'Статус', owner_name: 'Имя собственника', owner_phone: 'Телефон собственника',
   owner_phone2: 'Доп. телефон', purpose: 'Назначение', condition: 'Состояние',
   floor: 'Этаж', total_floors: 'Этажей всего', rooms: 'Комнат',

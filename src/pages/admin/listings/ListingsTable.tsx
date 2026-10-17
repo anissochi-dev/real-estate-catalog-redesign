@@ -101,6 +101,7 @@ export default function ListingsTable({
                 canSelect={canSelect}
                 canEdit={canEdit}
                 showPhone={showPhone}
+                canSeeFullDetails={!!canSeeFullDetails}
                 siteUrl={siteUrl}
                 onToggleSelect={onToggleSelect}
                 onEdit={onEdit}

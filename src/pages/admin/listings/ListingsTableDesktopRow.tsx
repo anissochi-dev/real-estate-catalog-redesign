@@ -4,6 +4,7 @@ import { fmtListingId } from '@/lib/formatPrice';
 import { listingSlug } from '@/lib/slug';
 import { useExitToPath } from '../AdminLayout';
 import ListingsTableExportBadges from './ListingsTableExportBadges';
+import RealAddressToggle from './RealAddressToggle';
 import ShareListingButton from './ShareListingButton';
 
 interface Props {
@@ -207,6 +208,7 @@ export default function ListingsTableDesktopRow({
             {[it.city || 'Краснодар', it.district, canSeeFullDetails ? it.address : null]
               .filter(Boolean).join(' · ')}
           </span>
+          {canSeeFullDetails && <RealAddressToggle value={it.real_address} />}
         </div>
 
         {/* Строка 3: Сделка + Цена + Площадь + Экспорт */}
