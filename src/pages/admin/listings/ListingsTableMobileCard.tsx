@@ -6,7 +6,7 @@ import { useExitToPath } from '../AdminLayout';
 import ListingsTableExportBadges from './ListingsTableExportBadges';
 import ShareListingButton from './ShareListingButton';
 import RealAddressToggle from './RealAddressToggle';
-import MessengerLinks from './MessengerLinks';
+import MessengerLinks from '@/components/common/MessengerLinks';
 
 interface Props {
   it: Listing;

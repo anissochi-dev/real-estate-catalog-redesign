@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import MessengerLinks from '@/components/common/MessengerLinks';
 import Icon from '@/components/ui/icon';
 import { Lead, Comment, STATUSES, LEAD_TYPES, SOURCE_LABELS } from './leadsTypes';
 import { formatPhone } from '@/lib/phone';
@@ -45,6 +46,7 @@ export default function LeadDetail({
                      className={`font-mono hover:underline ${active.phone_hidden ? 'text-muted-foreground' : 'text-brand-blue'}`}>
                     {active.phone ? formatPhone(active.phone) : '—'}
                   </a>
+                  {!active.phone_hidden && <MessengerLinks phone={active.phone} size="md" />}
                   {active.phone_hidden && (
                     <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
                       <Icon name="EyeOff" size={10} /> Скрыт
@@ -71,10 +73,16 @@ export default function LeadDetail({
                     <Icon name="User" size={11} />
                     {c.name && <span>{c.name}</span>}
                     {c.phone && (
-                      <a href={`tel:${c.phone}`} className="font-mono text-brand-blue hover:underline">{formatPhone(c.phone)}</a>
+                      <>
+                        <a href={`tel:${c.phone}`} className="font-mono text-brand-blue hover:underline">{formatPhone(c.phone)}</a>
+                        <MessengerLinks phone={c.phone} />
+                      </>
                     )}
                     {c.phone2 && (
-                      <a href={`tel:${c.phone2}`} className="font-mono text-brand-blue hover:underline">{formatPhone(c.phone2)}</a>
+                      <>
+                        <a href={`tel:${c.phone2}`} className="font-mono text-brand-blue hover:underline">{formatPhone(c.phone2)}</a>
+                        <MessengerLinks phone={c.phone2} />
+                      </>
                     )}
                   </div>
                 ))}

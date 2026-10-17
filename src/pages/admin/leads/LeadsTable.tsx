@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import MessengerLinks from '@/components/common/MessengerLinks';
 import Icon from '@/components/ui/icon';
 import { Lead, STATUSES, SOURCE_LABELS, PROPERTY_TYPES_LEAD, PROPERTY_CATEGORIES_LEAD } from './leadsTypes';
 import { formatPhone } from '@/lib/phone';
@@ -190,10 +191,13 @@ export default function LeadsTable({ leads, onOpen, onArchive, onStatusChange, s
                   {/* Телефон */}
                   <td className="px-4 py-3 whitespace-nowrap" onClick={e => e.stopPropagation()}>
                     {canManage ? (
-                      <a href={`tel:${l.phone}`} className="flex items-center gap-1.5 text-foreground hover:text-brand-blue transition-colors text-[13px]">
-                        <Icon name="Phone" size={12} className="text-muted-foreground" />
-                        {l.phone ? formatPhone(l.phone) : '—'}
-                      </a>
+                      <div className="flex items-center gap-2">
+                        <a href={`tel:${l.phone}`} className="flex items-center gap-1.5 text-foreground hover:text-brand-blue transition-colors text-[13px]">
+                          <Icon name="Phone" size={12} className="text-muted-foreground" />
+                          {l.phone ? formatPhone(l.phone) : '—'}
+                        </a>
+                        {!l.phone_hidden && <MessengerLinks phone={l.phone} />}
+                      </div>
                     ) : (
                       <span className="flex items-center gap-1 text-[12px] text-muted-foreground">
                         <Icon name="Lock" size={11} /> Скрыт

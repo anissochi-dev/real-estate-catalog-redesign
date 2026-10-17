@@ -5,7 +5,7 @@ import { listingSlug } from '@/lib/slug';
 import { useExitToPath } from '../AdminLayout';
 import ListingsTableExportBadges from './ListingsTableExportBadges';
 import RealAddressToggle from './RealAddressToggle';
-import MessengerLinks from './MessengerLinks';
+import MessengerLinks from '@/components/common/MessengerLinks';
 import ShareListingButton from './ShareListingButton';
 
 interface Props {
