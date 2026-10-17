@@ -5,6 +5,7 @@ import { listingSlug } from '@/lib/slug';
 import { useExitToPath } from '../AdminLayout';
 import ListingsTableExportBadges from './ListingsTableExportBadges';
 import RealAddressToggle from './RealAddressToggle';
+import MessengerLinks from './MessengerLinks';
 import ShareListingButton from './ShareListingButton';
 
 interface Props {
@@ -321,6 +322,7 @@ export default function ListingsTableDesktopRow({
               )}
               {!it.owner_name && !it.owner_phone && '—'}
             </div>
+            {showPhone && <MessengerLinks phone={it.owner_phone} />}
           </div>
 
           {/* Доп. лицо (представитель) */}
@@ -340,6 +342,7 @@ export default function ListingsTableDesktopRow({
                     </span>
                   )}
                 </div>
+                {showPhone && <MessengerLinks phone={extra.phone} />}
               </div>
             );
           })()}

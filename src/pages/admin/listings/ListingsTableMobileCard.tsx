@@ -6,6 +6,7 @@ import { useExitToPath } from '../AdminLayout';
 import ListingsTableExportBadges from './ListingsTableExportBadges';
 import ShareListingButton from './ShareListingButton';
 import RealAddressToggle from './RealAddressToggle';
+import MessengerLinks from './MessengerLinks';
 
 interface Props {
   it: Listing;
@@ -205,6 +206,7 @@ export default function ListingsTableMobileCard({
               )}
               {!it.owner_name && !it.owner_phone && <span className="text-[11px] text-muted-foreground">—</span>}
             </div>
+            {showPhone && <MessengerLinks phone={it.owner_phone} size="md" />}
           </div>
           <span className="text-[10px] text-muted-foreground/60 flex-shrink-0">
             {fmtDate(it.created_at)}
@@ -226,6 +228,7 @@ export default function ListingsTableMobileCard({
                   </a>
                 )}
               </div>
+              {showPhone && <MessengerLinks phone={extra.phone} size="md" />}
             </div>
           );
         })()}
