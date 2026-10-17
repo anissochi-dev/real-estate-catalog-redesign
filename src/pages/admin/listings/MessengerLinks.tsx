@@ -1,5 +1,3 @@
-import Icon from '@/components/ui/icon';
-
 function normalizeRuMobile(phone?: string | null): string | null {
   const digits = (phone || '').replace(/\D/g, '');
   if (digits.length === 11 && (digits.startsWith('7') || digits.startsWith('8'))) {
@@ -20,11 +18,10 @@ export default function MessengerLinks({ phone, size = 'sm' }: Props) {
   if (!n) return null;
 
   const box = size === 'md' ? 'w-7 h-7' : 'w-5 h-5';
-  const ico = size === 'md' ? 15 : 11;
   const items = [
-    { key: 'max', title: 'Написать в MAX', href: `https://max.ru/chat?phone=${n}`, icon: 'MessagesSquare', cls: 'bg-violet-600' },
-    { key: 'wa', title: 'Написать в WhatsApp', href: `https://wa.me/${n}`, icon: 'MessageCircle', cls: 'bg-emerald-500' },
-    { key: 'tg', title: 'Написать в Telegram', href: `https://t.me/+${n}`, icon: 'Send', cls: 'bg-sky-500' },
+    { key: 'max', title: 'Написать в MAX', href: `https://max.ru/chat?phone=${n}`, img: '/messengers/max.png' },
+    { key: 'wa', title: 'Написать в WhatsApp', href: `https://wa.me/${n}`, img: '/messengers/wa.png' },
+    { key: 'tg', title: 'Написать в Telegram', href: `https://t.me/+${n}`, img: '/messengers/tg.png' },
   ];
 
   return (
@@ -38,9 +35,9 @@ export default function MessengerLinks({ phone, size = 'sm' }: Props) {
           title={i.title}
           aria-label={i.title}
           onClick={e => e.stopPropagation()}
-          className={`${box} ${i.cls} text-white rounded-full inline-flex items-center justify-center hover:opacity-85 transition-opacity`}
+          className={`${box} rounded-full inline-block flex-shrink-0 hover:opacity-85 hover:scale-110 transition`}
         >
-          <Icon name={i.icon} size={ico} />
+          <img src={i.img} alt={i.title} width={64} height={64} className="w-full h-full rounded-full block" />
         </a>
       ))}
     </span>
