@@ -1202,10 +1202,11 @@ def _youla_publish_listings(cur, conn, token, owner_id, category_id, subcategory
     if not category_id or not subcategory_id:
         return {'error': 'Не указаны ID категории/подкатегории Юлы в настройках площадки'}
 
-    # Гибрид: объект, впервые отмеченный для Юлы, получает канал «API» навсегда.
-    # Объекты канала «файл» (youla_channel='feed') публикует XML-фид — сюда не попадают.
+    # Выгрузка объектов — только XML-файлом: объект, впервые отмеченный для Юлы, получает
+    # канал «файл». Через API Юла больше ничего не создаёт и не обновляет; этот цикл лишь
+    # архивирует остатки API-объявлений у объектов канала «файл» (защита от дублей).
     cur.execute(f"""
-        UPDATE {SCHEMA}.listings SET youla_channel = 'api'
+        UPDATE {SCHEMA}.listings SET youla_channel = 'feed'
         WHERE export_youla = TRUE AND youla_channel IS NULL
     """)
     conn.commit()
@@ -2369,6 +2370,9 @@ def handler(event, context):
                        'to': now_dt.strftime('%Y-%m-%dT%H:%M:%SZ')}
                 data, err = _youla_request('GET', f"/products/{pid}/statistic", tok, params=prm)
                 return _json({'ok': err is None, 'product_id': pid, 'statistic': data, 'error': err})
+
+            if method == 'POST' and action == 'youla_set_channel' and (json.loads(event.get('body') or '{}').get('channel') == 'api'):
+                return _json({'error': 'Выгрузка на Юлу идёт только через XML-файл'}, 400)
 
             if method == 'POST' and action == 'youla_set_channel':
                 # Ручная смена канала Юлы у объекта (единственный способ сменить канал).

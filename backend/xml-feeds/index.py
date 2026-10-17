@@ -245,10 +245,17 @@ def _build_feed_xml(cache, feed_slug, fmt, filter_category, filter_deal, market_
     elif fmt == 'youla':
         # Юла — отдельная платная площадка со своим независимым флагом на объекте
         # (как у Я/А/Ц), формат XML использует ту же yandex-схему.
-        # Гибрид: в файл идут только объекты канала «файл» (youla_channel='feed').
-        # Объекты канала «API» публикует platform-sync — один объект = один канал.
+        # Выгрузка на Юлу — только файлом: в фид идут все объекты с галочкой «Юла».
+        # Исключение — объекты с устаревшим каналом «api» (живое API-объявление ещё
+        # не заархивировано): их в файл не берём, чтобы не создать дубль.
         where.append("export_youla = TRUE")
-        where.append("youla_channel = 'feed'")
+        where.append("youla_channel IS DISTINCT FROM 'api'")
+        # Пока у объекта есть живое API-объявление, в файл его не берём — иначе дубль.
+        # Синхронизация Юлы архивирует такое объявление, после этого объект войдёт в файл.
+        where.append(
+            f"NOT EXISTS (SELECT 1 FROM {SCHEMA}.youla_item_status ys WHERE ys.listing_id = listings.id "
+            f"AND ys.youla_id IS NOT NULL AND ys.is_archived IS NOT TRUE AND ys.is_removed IS NOT TRUE)"
+        )
     elif fmt == 'domclick':
         # ДомКлик — свой независимый флаг на объекте (ручной выбор, как у Авито),
         # формат XML использует ту же yandex-схему, выгружается от лица агентства.
