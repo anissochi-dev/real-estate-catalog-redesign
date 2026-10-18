@@ -3254,6 +3254,8 @@ def _apply_phone_visibility(lead: dict, user: dict) -> dict:
     masked = dict(lead)
     masked['phone'] = _mask_phone(lead.get('phone') or '')
     masked['phone_hidden'] = True
+    if masked.get('phone2'):
+        masked['phone2'] = _mask_phone(masked['phone2'])
     if masked.get('extra_contacts'):
         masked['extra_contacts'] = [
             {**c, 'phone': _mask_phone(c.get('phone') or ''), 'phone2': _mask_phone(c.get('phone2') or '')}
@@ -3353,11 +3355,13 @@ def _leads(cur, conn, method, rid, action, event, user):
             broker_id_val = _int_or_null(body.get('broker_id'))
         # Доп. контакты заявки — линковка будет доделана после получения new_lead_id
         lead_extra_contacts = _process_lead_extra_contacts(cur, body.get('extra_contacts'), user['id'] if user else None)
+        lead_phone2 = (body.get('phone2') or '').strip()
+        lead_phone2_cid = _upsert_phone_contact(cur, lead_phone2, name, user['id'] if user else None) if lead_phone2 else None
         cur.execute(
             f"INSERT INTO {SCHEMA}.leads (name, phone, email, message, listing_id, status, source, "
             f"is_network_tenant, budget, budget_to, show_on_main, company, lead_type, "
             f"area_from, area_to, property_type, property_category, utilities, "
-            f"budget_per_sqm_from, budget_per_sqm_to, district_ids, broker_id, extra_contacts) VALUES ("
+            f"budget_per_sqm_from, budget_per_sqm_to, district_ids, broker_id, extra_contacts, phone2, phone2_contact_id) VALUES ("
             f"'{name}', '{phone}', {_str_or_null(body.get('email'), 100)}, "
             f"{_str_or_null(body.get('message'), 2000)}, {_int_or_null(body.get('listing_id'))}, "
             f"{_str_or_null(body.get('status') or 'new', 20)}, "
@@ -3371,9 +3375,12 @@ def _leads(cur, conn, method, rid, action, event, user):
             f"{_str_or_null(body.get('utilities'), 500)}, "
             f"{_int_or_null(body.get('budget_per_sqm_from'))}, {_int_or_null(body.get('budget_per_sqm_to'))}, "
             f"{district_ids_val}, {broker_id_val}, "
-            f"{_jsonb_or_null(lead_extra_contacts) if lead_extra_contacts else 'NULL'}) RETURNING id"
+            f"{_jsonb_or_null(lead_extra_contacts) if lead_extra_contacts else 'NULL'}, "
+            f"{_str_or_null(lead_phone2, 30)}, {lead_phone2_cid if lead_phone2_cid else 'NULL'}) RETURNING id"
         )
         new_lead_id = cur.fetchone()['id']
+        if lead_phone2_cid:
+            _link_phone_to_lead(cur, lead_phone2_cid, new_lead_id, 'lead_extra')
         # Слаг для страницы /request/{slug} — генерируем сразу, иначе заявка
         # не будет открываться на сайте до ручного заполнения type/category.
         new_slug = _make_lead_slug(body.get('property_type'), body.get('property_category'), new_lead_id)
@@ -3450,6 +3457,13 @@ def _leads(cur, conn, method, rid, action, event, user):
             raw_dids = body['district_ids']
             dids_val = 'ARRAY[' + ','.join(str(int(x)) for x in raw_dids) + ']::integer[]' if raw_dids else "'{}'"
             fields.append(f"district_ids = {dids_val}")
+        if 'phone2' in body:
+            upd_phone2 = (body.get('phone2') or '').strip()
+            upd_cid = _upsert_phone_contact(cur, upd_phone2, body.get('name'), user['id'] if user else None) if upd_phone2 else None
+            fields.append(f"phone2 = {_str_or_null(upd_phone2, 30)}")
+            fields.append(f"phone2_contact_id = {upd_cid if upd_cid else 'NULL'}")
+            if upd_cid:
+                _link_phone_to_lead(cur, upd_cid, int(rid), 'lead_extra')
         if 'extra_contacts' in body:
             lead_extra_contacts = _process_lead_extra_contacts(cur, body.get('extra_contacts'), user['id'] if user else None, int(rid))
             fields.append(f"extra_contacts = {_jsonb_or_null(lead_extra_contacts) if lead_extra_contacts else 'NULL'}")

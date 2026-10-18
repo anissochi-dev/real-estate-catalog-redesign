@@ -47,6 +47,15 @@ export default function LeadDetail({
                     {active.phone ? formatPhone(active.phone) : '—'}
                   </a>
                   {!active.phone_hidden && <MessengerLinks phone={active.phone} size="md" />}
+                  {active.phone2 && (
+                    <>
+                      <a href={`tel:${active.phone2}`}
+                         className={`font-mono hover:underline ${active.phone_hidden ? 'text-muted-foreground' : 'text-brand-blue'}`}>
+                        {formatPhone(active.phone2)}
+                      </a>
+                      {!active.phone_hidden && <MessengerLinks phone={active.phone2} size="md" />}
+                    </>
+                  )}
                   {active.phone_hidden && (
                     <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
                       <Icon name="EyeOff" size={10} /> Скрыт

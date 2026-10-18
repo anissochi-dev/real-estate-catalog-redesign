@@ -207,6 +207,15 @@ export default function LeadEditModal({
               />
             </div>
           </div>
+          <div>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <span className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0"><Icon name="PhonePlus" size={11} className="text-slate-500" /></span>Доп. телефон
+            </label>
+            <PhonePickerInput
+              value={editing.phone2 || ''}
+              onChange={phone => setEditing({ ...editing, phone2: phone })}
+            />
+          </div>
           <input className="w-full px-3 py-2 border rounded-lg" placeholder="Email (необязательно)"
             value={editing.email || ''} onChange={e => setEditing({ ...editing, email: e.target.value })} />
           <input className="w-full px-3 py-2 border rounded-lg" placeholder="Компания (для сетевых)"

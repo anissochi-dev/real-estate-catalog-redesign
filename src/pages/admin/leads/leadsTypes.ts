@@ -10,6 +10,7 @@ export interface Lead {
   id: number;
   name: string;
   phone: string;
+  phone2?: string | null;
   email: string | null;
   message: string | null;
   listing_id: number | null;

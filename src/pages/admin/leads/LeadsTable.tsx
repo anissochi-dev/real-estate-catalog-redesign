@@ -191,12 +191,23 @@ export default function LeadsTable({ leads, onOpen, onArchive, onStatusChange, s
                   {/* Телефон */}
                   <td className="px-4 py-3 whitespace-nowrap" onClick={e => e.stopPropagation()}>
                     {canManage ? (
+                      <div>
                       <div className="flex items-center gap-2">
                         <a href={`tel:${l.phone}`} className="flex items-center gap-1.5 text-foreground hover:text-brand-blue transition-colors text-[13px]">
                           <Icon name="Phone" size={12} className="text-muted-foreground" />
                           {l.phone ? formatPhone(l.phone) : '—'}
                         </a>
                         {!l.phone_hidden && <MessengerLinks phone={l.phone} />}
+                      </div>
+                      {l.phone2 && (
+                        <div className="flex items-center gap-2 mt-1">
+                          <a href={`tel:${l.phone2}`} className="flex items-center gap-1.5 text-foreground hover:text-brand-blue transition-colors text-[13px]">
+                            <Icon name="PhonePlus" size={12} className="text-muted-foreground" />
+                            {formatPhone(l.phone2)}
+                          </a>
+                          {!l.phone_hidden && <MessengerLinks phone={l.phone2} />}
+                        </div>
+                      )}
                       </div>
                     ) : (
                       <span className="flex items-center gap-1 text-[12px] text-muted-foreground">
