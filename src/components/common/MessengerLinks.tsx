@@ -8,6 +8,22 @@ function normalizeRuMobile(phone?: string | null): string | null {
   return null;
 }
 
+function openInApp(e: React.MouseEvent, appUrl: string, webUrl: string) {
+  e.preventDefault();
+  e.stopPropagation();
+  let left = false;
+  const onLeave = () => { left = true; };
+  const onVisibility = () => { if (document.hidden) left = true; };
+  window.addEventListener('blur', onLeave);
+  document.addEventListener('visibilitychange', onVisibility);
+  window.location.href = appUrl;
+  window.setTimeout(() => {
+    window.removeEventListener('blur', onLeave);
+    document.removeEventListener('visibilitychange', onVisibility);
+    if (!left) window.open(webUrl, '_blank', 'noopener,noreferrer');
+  }, 1500);
+}
+
 interface Props {
   phone?: string | null;
   size?: 'sm' | 'md';
@@ -19,9 +35,9 @@ export default function MessengerLinks({ phone, size = 'sm' }: Props) {
 
   const box = size === 'md' ? 'w-7 h-7' : 'w-5 h-5';
   const items = [
-    { key: 'max', title: 'Написать в MAX', href: `https://max.ru/chat?phone=${n}`, img: '/messengers/max.png' },
-    { key: 'wa', title: 'Написать в WhatsApp', href: `https://wa.me/${n}`, img: '/messengers/wa.png' },
-    { key: 'tg', title: 'Написать в Telegram', href: `https://t.me/+${n}`, img: '/messengers/tg.png' },
+    { key: 'max', title: 'Написать в MAX', href: `https://max.ru/chat?phone=${n}`, app: null as string | null, img: '/messengers/max.png' },
+    { key: 'wa', title: 'Написать в WhatsApp (откроется в приложении)', href: `https://wa.me/${n}`, app: `whatsapp://send?phone=${n}`, img: '/messengers/wa.png' },
+    { key: 'tg', title: 'Написать в Telegram (откроется в приложении)', href: `https://t.me/+${n}`, app: `tg://resolve?phone=${n}`, img: '/messengers/tg.png' },
   ];
 
   return (
@@ -34,7 +50,7 @@ export default function MessengerLinks({ phone, size = 'sm' }: Props) {
           rel="noopener noreferrer"
           title={i.title}
           aria-label={i.title}
-          onClick={e => e.stopPropagation()}
+          onClick={e => (i.app ? openInApp(e, i.app, i.href) : e.stopPropagation())}
           className={`${box} rounded-full inline-block flex-shrink-0 hover:opacity-85 hover:scale-110 transition`}
         >
           <img src={i.img} alt={i.title} width={64} height={64} className="w-full h-full rounded-full block" />
