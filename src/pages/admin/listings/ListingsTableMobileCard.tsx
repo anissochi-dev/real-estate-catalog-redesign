@@ -205,8 +205,10 @@ export default function ListingsTableMobileCard({
                 </a>
               )}
               {!it.owner_name && !it.owner_phone && <span className="text-[11px] text-muted-foreground">—</span>}
+              {showPhone && it.owner_phone && (
+                <div className="mt-1"><MessengerLinks phone={it.owner_phone} size="md" /></div>
+              )}
             </div>
-            {showPhone && <MessengerLinks phone={it.owner_phone} size="md" />}
           </div>
           <span className="text-[10px] text-muted-foreground/60 flex-shrink-0">
             {fmtDate(it.created_at)}
@@ -218,7 +220,7 @@ export default function ListingsTableMobileCard({
           const extra = (it.owner_extra_contacts || []).find(c => c.name || c.phone);
           if (!extra) return null;
           return (
-            <div className="flex items-center gap-1 mt-1" title="Доп. лицо">
+            <div className="flex items-start gap-1 mt-2" title="Доп. лицо">
               <Icon name="UserPlus" size={11} className="text-muted-foreground/50 flex-shrink-0" />
               <div className="flex flex-col min-w-0">
                 {extra.name && <span className="text-[11px] font-medium text-foreground">{extra.name}</span>}
@@ -227,8 +229,10 @@ export default function ListingsTableMobileCard({
                     {extra.phone}
                   </a>
                 )}
+                {showPhone && extra.phone && (
+                  <div className="mt-1"><MessengerLinks phone={extra.phone} size="md" /></div>
+                )}
               </div>
-              {showPhone && <MessengerLinks phone={extra.phone} size="md" />}
             </div>
           );
         })()}
