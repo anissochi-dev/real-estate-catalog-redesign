@@ -10,7 +10,7 @@ import {
 export function OsmPanel({
   osmError, osmMeta, osmCurrentBatch, osmQueue, osmAdding, osmRunAll, osmLoading,
   osmAddedTotal, osmSkippedTotal, osmProgress,
-  onLoadForce, onAddBatch, onRunAll, onStop, onClose, stopRef,
+  onLoadForce, onAddBatch, onRunAll, onStop, onClose,
 }: {
   osmError: string | null; osmMeta: OsmMeta | null;
   osmCurrentBatch: StreetItem[]; osmQueue: StreetItem[];

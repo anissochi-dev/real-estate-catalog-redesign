@@ -66,7 +66,7 @@ export default function SeoAuditScore({
     return true;
   });
 
-  const openEdit = (id: number, p: typeof data.top_problems[0]) => {
+  const openEdit = (id: number, _p: typeof data.top_problems[0]) => {
     setEditing(prev => ({
       ...prev,
       [id]: prev[id] ?? { seo_title: '', seo_desc: '', description: '', saving: false, saved: false },

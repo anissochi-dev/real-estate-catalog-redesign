@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
 import { District, ADMIN_URL, buildHeaders } from './DistrictsTypes';

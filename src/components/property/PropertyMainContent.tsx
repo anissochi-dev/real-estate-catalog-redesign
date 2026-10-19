@@ -61,7 +61,6 @@ export default function PropertyMainContent({
   const h2 = clip(item.seoH2 || `${dealLabel} · ${typeLabel} · ${item.area} м²`, 60);
   const h3params = item.seoH3 ? clip(item.seoH3, 50) : null;
   const h4comms = item.seoH4 ? clip(item.seoH4, 50) : null;
-  const h5price = item.seoH5 ? clip(item.seoH5, 50) : null;
 
   return (
     <>

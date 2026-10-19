@@ -1,4 +1,4 @@
-export type PropertyType = 'office' | 'retail' | 'warehouse' | 'restaurant' | 'business' | 'production' | 'hotel' | 'gab';
+export type PropertyType = 'office' | 'retail' | 'warehouse' | 'restaurant' | 'business' | 'production' | 'hotel' | 'gab' | 'land';
 export type DealType = 'sale' | 'rent' | 'business';
 
 export interface Property {
@@ -39,8 +39,14 @@ export interface Property {
   lastEditedAt?: string;
   ownerPhone?: string;
   image_thumb?: string;
-  brokerPhone?: string;
+  brokerPhone?: string | null;
   siblingsCount?: number;
+  landArea?: number | null;
+  rooms?: number | null;
+  propertyRights?: string;
+  hasFurniture?: boolean | null;
+  hasEquipment?: boolean | null;
+  rentIndexPct?: number | null;
 }
 
 export type Page = 'home' | 'catalog' | 'map' | 'favorites' | 'compare' | 'network-tenants' | 'news' | 'leads';

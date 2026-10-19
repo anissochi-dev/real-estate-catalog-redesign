@@ -84,7 +84,7 @@ export default function AppRoutes({
       <Route path="/compare" element={
         <ComparePage
           properties={compareProperties}
-          onRemove={id => toggleCompare(id)}
+          onRemove={(id: number) => toggleCompare(id)}
           onNavigate={setCurrentPage}
         />
       } />

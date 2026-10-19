@@ -25,7 +25,7 @@ const INFRA_LAYERS = [
 declare global {
   interface Window {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ymaps: any;
+    ymaps?: any;
   }
 }
 

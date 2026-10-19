@@ -12,7 +12,7 @@ interface TextareaProps extends BaseProps, TextareaHTMLAttributes<HTMLTextAreaEl
   rows?: number;
 }
 
-interface InputProps extends BaseProps, InputHTMLAttributes<HTMLInputElement> {
+interface InputProps extends BaseProps, Omit<InputHTMLAttributes<HTMLInputElement>, 'max'> {
   as: 'input';
 }
 
@@ -27,7 +27,6 @@ const CharCount = forwardRef<HTMLTextAreaElement | HTMLInputElement, Props>(
     const displayValue = max != null ? value.slice(0, max) : value;
     const len = displayValue.length;
     const isWarn = warnAt != null && len >= warnAt;
-    const isOver = false; // никогда не превышает — обрезаем
 
     const countColor = isWarn ? 'text-amber-500' : 'text-muted-foreground';
 

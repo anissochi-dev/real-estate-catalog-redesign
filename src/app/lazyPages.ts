@@ -1,5 +1,5 @@
 import { lazy } from 'react';
-import type { ComponentType } from 'react';
+import type { ComponentType, LazyExoticComponent } from 'react';
 
 function _isChunkError(err: unknown): boolean {
   const msg = String((err as Error)?.message || err || '');
@@ -12,7 +12,7 @@ function _hardReload() {
     const last = Number(sessionStorage.getItem(key) || '0');
     if (Date.now() - last > 20000) {
       sessionStorage.setItem(key, String(Date.now()));
-      if ('caches' in window) {
+      if (typeof caches !== 'undefined') {
         caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).finally(() => window.location.reload());
       } else {
         window.location.reload();
@@ -23,11 +23,12 @@ function _hardReload() {
   }
 }
 
-export function lazyWithRetry<T extends { default: ComponentType<Record<string, unknown>> }>(
-  factory: () => Promise<T>,
+export function lazyWithRetry<P extends object>(
+  factory: () => Promise<{ default: ComponentType<P> }>,
   retries = 3,
   delay = 400,
-) {
+): LazyExoticComponent<ComponentType<P>> {
+  type T = { default: ComponentType<P> };
   return lazy(() => {
     let attempt = 0;
     const tryLoad = (): Promise<T> =>
@@ -79,8 +80,10 @@ export const CategoryPage       = lazyWithRetry(importers.category);
 export const DistrictPage       = lazyWithRetry(importers.district);
 export const NotFoundPage       = lazyWithRetry(importers.notFound);
 export const DeclinedPage       = lazyWithRetry(importers.declined);
-export const NewsListPage       = lazyWithRetry(() => importers.news().then(m => ({ default: m.NewsListPage })));
-export const NewsArticlePage    = lazyWithRetry(() => importers.news().then(m => ({ default: m.NewsArticlePage })));
+const importNewsList = () => importers.news().then(m => ({ default: m.NewsListPage }));
+const importNewsArticle = () => importers.news().then(m => ({ default: m.NewsArticlePage }));
+export const NewsListPage       = lazyWithRetry(importNewsList);
+export const NewsArticlePage    = lazyWithRetry(importNewsArticle);
 export const LeadsListPage      = lazyWithRetry(importers.leads);
 export const LeadDetailPage     = lazyWithRetry(importers.leadDetail);
 

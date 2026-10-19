@@ -27,7 +27,6 @@ interface Props {
 
 export default function AiChat({
   onClose,
-  initialAction = 'agent',
   initialPrompt = '',
   contextData,
   onResult,

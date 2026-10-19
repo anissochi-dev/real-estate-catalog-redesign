@@ -107,7 +107,7 @@ export function TabAi({ listing }: { listing: Listing }) {
     setApplying(field);
     try {
       await adminApi.updateListing(listing.id, { [field]: value });
-      await adminApi.addListingHistory(listing.id, 'updated', { [field]: [(listing as Record<string, unknown>)[field], value] });
+      await adminApi.addListingHistory(listing.id, 'updated', { [field]: [(listing as unknown as Record<string, unknown>)[field], value] });
       setMessages(m => [...m, { role: 'ai', text: `Поле "${field === 'title' ? 'название' : 'описание'}" успешно обновлено.` }]);
     } catch {
       setMessages(m => [...m, { role: 'ai', text: 'Не удалось применить изменение.' }]);

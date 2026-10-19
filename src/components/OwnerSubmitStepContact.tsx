@@ -22,7 +22,7 @@ interface Props {
 
 export default function OwnerSubmitStepContact({
   ownerName, setOwnerName,
-  ownerPhone, setOwnerPhone,
+  setOwnerPhone,
   phoneDisplay, setPhoneDisplay,
   ownerEmail, setOwnerEmail,
   honeypot, setHoneypot,

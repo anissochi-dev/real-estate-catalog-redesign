@@ -147,8 +147,6 @@ export default function CrmDashboard({ setSection }: { setSection?: (s: string) 
   const dealsList: { id: number; title: string; amount: number; commission: number; stage_name: string; stage_color: string; is_win: boolean; manager_name: string; created_at: string }[] = d.deals_list ?? [];
   const upcomingList: { id: number; title: string; starts_at: string; event_type: string; assignee_name: string; deal_id: number; deal_title: string }[] = d.upcoming_list ?? [];
 
-  const Skeleton = () => <div className="h-6 w-14 bg-muted rounded animate-pulse" />;
-
   return (
     <div className="space-y-4">
 

@@ -116,7 +116,7 @@ interface EditorPanelProps {
 }
 
 export function EditorPanel({
-  canvasProps, bannerW, bannerH, previewScale,
+  canvasProps, previewScale,
   previewH, numCmW, numCmH,
   selected, selectedEl, onResetPositions, onUpdateSize, onDeselect,
 }: EditorPanelProps) {

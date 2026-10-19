@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
@@ -41,12 +41,12 @@ function InnResultCard({ data }: { data: Record<string, unknown> }) {
       </div>
       <div className={`text-xs font-semibold ${statusColor}`}>{status}</div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs mt-1">
-        {data.ogrn && <div><span className="text-muted-foreground">ОГРН:</span> {String(data.ogrn)}</div>}
-        {data._type && <div><span className="text-muted-foreground">Тип:</span> {data._type === 'ip' ? 'ИП' : 'Юрлицо'}</div>}
-        {data.reg_date && <div><span className="text-muted-foreground">Рег.:</span> {String(data.reg_date)}</div>}
-        {data.director && <div><span className="text-muted-foreground">Рук.:</span> {String(data.director)}</div>}
-        {data.address && <div className="col-span-2"><span className="text-muted-foreground">Адрес:</span> {String(data.address)}</div>}
-        {data.okved && <div className="col-span-2"><span className="text-muted-foreground">ОКВЭД:</span> {String(data.okved)}{data.okved_name ? ` — ${String(data.okved_name)}` : ''}</div>}
+        {(data.ogrn as ReactNode) && <div><span className="text-muted-foreground">ОГРН:</span> {String(data.ogrn)}</div>}
+        {(data._type as ReactNode) && <div><span className="text-muted-foreground">Тип:</span> {data._type === 'ip' ? 'ИП' : 'Юрлицо'}</div>}
+        {(data.reg_date as ReactNode) && <div><span className="text-muted-foreground">Рег.:</span> {String(data.reg_date)}</div>}
+        {(data.director as ReactNode) && <div><span className="text-muted-foreground">Рук.:</span> {String(data.director)}</div>}
+        {(data.address as ReactNode) && <div className="col-span-2"><span className="text-muted-foreground">Адрес:</span> {String(data.address)}</div>}
+        {(data.okved as ReactNode) && <div className="col-span-2"><span className="text-muted-foreground">ОКВЭД:</span> {String(data.okved)}{data.okved_name ? ` — ${String(data.okved_name)}` : ''}</div>}
       </div>
     </div>
   );

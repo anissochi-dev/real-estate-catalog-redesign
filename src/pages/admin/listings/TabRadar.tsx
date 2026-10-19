@@ -136,8 +136,8 @@ export function TabRadar({ listingId, listing }: { listingId: number; listing: L
     !!listing.seo_description,
     !!listing.title,
     !!listing.description,
-    !!(listing as Record<string, unknown>).lat && !!(listing as Record<string, unknown>).lng,
-    listing.images && (listing.images as string[]).length > 0,
+    !!(listing as unknown as Record<string, unknown>).lat && !!(listing as unknown as Record<string, unknown>).lng,
+    listing.images && (listing.images as unknown as string[]).length > 0,
   ];
   const seoPoints = seoScore.filter(Boolean).length;
   const seoColor = seoPoints >= 5 ? 'text-emerald-600' : seoPoints >= 3 ? 'text-amber-500' : 'text-red-500';
@@ -259,8 +259,8 @@ export function TabRadar({ listingId, listing }: { listingId: number; listing: L
               { label: 'SEO-описание',     ok: !!listing.seo_description },
               { label: 'Название',         ok: !!listing.title },
               { label: 'Описание',         ok: !!listing.description },
-              { label: 'Координаты',       ok: !!(listing as Record<string, unknown>).lat },
-              { label: 'Фотографии',       ok: !!(listing.images && (listing.images as string[]).length > 0) },
+              { label: 'Координаты',       ok: !!(listing as unknown as Record<string, unknown>).lat },
+              { label: 'Фотографии',       ok: !!(listing.images && (listing.images as unknown as string[]).length > 0) },
             ].map(item => (
               <div key={item.label} className="flex items-center gap-2 text-xs">
                 <Icon
@@ -329,7 +329,7 @@ export function TabRadar({ listingId, listing }: { listingId: number; listing: L
           <RadarBlock icon="Globe" title="Публикация на площадках">
             <div className="space-y-2">
               {platforms.map(p => {
-                const active = !!(listing as Record<string, unknown>)[p.key];
+                const active = !!(listing as unknown as Record<string, unknown>)[p.key];
                 return (
                   <div key={p.key} className={`flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-medium ${
                     active ? p.color : 'bg-muted/30 border-border text-muted-foreground'

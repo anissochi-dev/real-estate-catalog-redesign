@@ -50,7 +50,7 @@ function parseLinks(raw: string): { label: string; href: string }[] {
     .filter(Boolean) as { label: string; href: string }[];
 }
 
-export default function Footer({ onLogin, setCurrentPage }: Props) {
+export default function Footer({ onLogin }: Props) {
   const { settings } = useSettings();
   const [modal, setModal] = useState<{ title: string; content: string } | null>(null);
   const [districts, setDistricts] = useState<District[]>([]);
@@ -67,8 +67,6 @@ export default function Footer({ onLogin, setCurrentPage }: Props) {
   }, []);
 
   const company = settings.company_name || 'Бизнес. Маркетинг. Недвижимость.';
-  const phone = settings.company_phone;
-  const email = settings.company_email;
   const city = settings.main_city || 'Краснодар';
   const description = settings.footer_description || `Коммерческая недвижимость и готовый бизнес ${city}а.`;
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { adminApi } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
 import { Listing } from './types';
-import { StatData, fmt } from './internalCardTypes';
+import { StatData } from './internalCardTypes';
 import { Spinner } from './TabOverview';
 
 export function TabStats({ listingId, listing }: { listingId: number; listing: Listing }) {
@@ -45,11 +45,11 @@ export function TabStats({ listingId, listing }: { listingId: number; listing: L
             { key: 'export_cian', label: 'ЦИАН', color: 'text-blue-700 bg-blue-50 border-blue-200' },
           ].map(p => (
             <div key={p.key} className={`flex items-center justify-between px-4 py-2 rounded-xl border text-sm ${
-              (listing as Record<string, unknown>)[p.key] ? p.color : 'bg-muted/30 border-border text-muted-foreground'
+              (listing as unknown as Record<string, unknown>)[p.key] ? p.color : 'bg-muted/30 border-border text-muted-foreground'
             }`}>
               <span className="font-medium">{p.label}</span>
               <span className="text-xs">
-                {(listing as Record<string, unknown>)[p.key] ? 'Размещён' : 'Не размещён'}
+                {(listing as unknown as Record<string, unknown>)[p.key] ? 'Размещён' : 'Не размещён'}
               </span>
             </div>
           ))}

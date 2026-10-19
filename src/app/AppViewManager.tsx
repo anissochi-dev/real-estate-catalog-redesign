@@ -1,11 +1,11 @@
-import React, { Suspense } from 'react';
+import { Suspense } from 'react';
 import { LoginPage, lazyWithRetry } from './lazyPages';
 import ChunkErrorBoundary from './ChunkErrorBoundary';
 import SeoHead from '../components/SeoHead';
 import { type AppView } from './appTypes';
 import ClientDashboard from '../pages/client/ClientDashboard';
 
-const AdminPage = lazyWithRetry(() => import('../pages/AdminPage') as Promise<{ default: React.ComponentType<Record<string, unknown>> }>);
+const AdminPage = lazyWithRetry(() => import('../pages/AdminPage'));
 
 const pageFallback = (
   <div className="min-h-screen flex items-center justify-center">

@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
 import { Lead } from './leadsTypes';
-import { crmUrl, CRM_URL } from '@/lib/adminApi';
+import { crmUrl } from '@/lib/adminApi';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { useListingsSearch } from '../crm/createDeal/createDealHooks';

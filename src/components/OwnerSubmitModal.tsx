@@ -92,7 +92,7 @@ export default function OwnerSubmitModal({ onClose }: Props) {
 
   // Шаг 3 — фото
   const [photos,       setPhotos]       = useState<string[]>([]);
-  const [photoNames,   setPhotoNames]   = useState<string[]>([]);
+  const [,             setPhotoNames]   = useState<string[]>([]);
   const [videoUrl,     setVideoUrl]     = useState('');
   const [photoLoading, setPhotoLoading] = useState(false);
 

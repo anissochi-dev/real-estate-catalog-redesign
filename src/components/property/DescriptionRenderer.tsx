@@ -1,4 +1,3 @@
-import React from 'react';
 
 const SECTION_HEADERS = [
   'Представитель собственника',

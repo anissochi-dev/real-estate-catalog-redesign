@@ -40,7 +40,6 @@ export function Badge({ value, check }: { value: string; check: CheckState }) {
 }
 
 const PRERENDER_URL = 'https://functions.poehali.dev/1111ba70-a6c3-4c58-b8b0-2519af14b7ff';
-const SITE_URL = 'https://bmn.su';
 
 // Страницы которые всегда генерируем + пропускаем
 const PRERENDER_STATIC = ['/', '/catalog', '/news', '/map', '/network-tenants', '/leads'];

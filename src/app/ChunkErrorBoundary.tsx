@@ -13,7 +13,7 @@ export default class ChunkErrorBoundary extends Component<{ children: ReactNode;
         const last = Number(sessionStorage.getItem('__chunk_reload_at__') || '0');
         if (Date.now() - last > 15000) {
           sessionStorage.setItem('__chunk_reload_at__', String(Date.now()));
-          if ('caches' in window) caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).finally(() => window.location.reload());
+          if (typeof caches !== 'undefined') caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).finally(() => window.location.reload());
           else window.location.reload();
         }
       } catch { window.location.reload(); }

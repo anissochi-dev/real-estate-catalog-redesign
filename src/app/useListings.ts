@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { type Property } from './appTypes';
-import { fetchListings, mapApiListing } from '../lib/api';
+import { fetchListings, mapApiListing, type ApiListing } from '../lib/api';
 
 type PrefetchData = {
-  listings: Property[]; total: number;
+  listings: ApiListing[]; total: number;
   settings: Record<string, unknown>; stats: unknown; leadsCount: number;
 };
 

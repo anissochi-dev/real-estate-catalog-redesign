@@ -5,7 +5,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
 import { Listing, CATS, DEALS } from './types';
 import { TabId, TABS } from './internalCardTypes';
-import { Spinner, TabOverview, TabPriceHistory, TabStats, TabLeads, TabComments, TabRadar } from './InternalCardTabs1';
+import { TabOverview, TabPriceHistory, TabStats, TabLeads, TabComments, TabRadar } from './InternalCardTabs1';
 import { fmtListingId } from '@/lib/formatPrice';
 import { TabAi, TabDocuments, TabBroker, TabQrBanner, TabExport } from './InternalCardTabs2';
 import TabPhotos from './TabPhotos';
@@ -52,7 +52,7 @@ export default function ListingInternalCard({ listingId, onClose, onBrokerChange
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const copyId = (id: number) => {
+  const copyId = (id: number | string) => {
     navigator.clipboard?.writeText(String(id)).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
@@ -75,7 +75,7 @@ export default function ListingInternalCard({ listingId, onClose, onBrokerChange
   const isAdminOrDirector = user && ['admin', 'director'].includes(user.role);
   const isOwnBroker = user?.role === 'broker' && (
     listing.broker_id === user.id ||
-    (listing as Record<string, unknown>).author_id === user.id
+    (listing as unknown as Record<string, unknown>).author_id === user.id
   );
   const isForeignBroker = user?.role === 'broker' && !isOwnBroker;
   const canManageBroker = isAdminOrDirector;

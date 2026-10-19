@@ -9,7 +9,7 @@ export function TabBroker({ listing, onSaved, currentUserId }: { listing: Listin
   const { user } = useAuth();
   const [users, setUsers] = useState<BrokerUser[]>([]);
   const [selected, setSelected] = useState<number | null>(
-    (listing as Record<string, unknown>).broker_id as number | null ?? null
+    (listing as unknown as Record<string, unknown>).broker_id as number | null ?? null
   );
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -39,8 +39,8 @@ export function TabBroker({ listing, onSaved, currentUserId }: { listing: Listin
     }
   };
 
-  const authorName = (listing as Record<string, unknown>).broker_name as string | null
-    || (listing as Record<string, unknown>).author_name as string | null;
+  const authorName = (listing as unknown as Record<string, unknown>).broker_name as string | null
+    || (listing as unknown as Record<string, unknown>).author_name as string | null;
 
   return (
     <div className="p-6 space-y-5">

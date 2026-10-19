@@ -27,6 +27,7 @@ interface NewsItem {
   seo_h3?: string | null;
   seo_h4?: string | null;
   seo_h5?: string | null;
+  source_url?: string | null;
 }
 
 function fmtDate(s?: string | null) {

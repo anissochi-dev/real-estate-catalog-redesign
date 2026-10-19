@@ -43,7 +43,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [aiQuery, setAiQuery] = useState('');
+  const [aiQuery] = useState('');
   const [aiOpen, setAiOpen] = useState(false);
   const [faq, setFaq] = useState<{ question: string; answer: string }[]>([]);
   const [faqLoading, setFaqLoading] = useState(false);

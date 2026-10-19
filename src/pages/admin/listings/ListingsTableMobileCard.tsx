@@ -25,7 +25,7 @@ interface Props {
 }
 
 export default function ListingsTableMobileCard({
-  it, isSelected, canSelect, canEdit, showPhone, canSeeFullDetails, siteUrl,
+  it, isSelected, canSelect, canEdit, showPhone, canSeeFullDetails,
   onToggleSelect, onEdit, onCopy, onHistory, onInternalCard, onShowMatching,
 }: Props) {
   const exitToPath = useExitToPath();
@@ -141,19 +141,19 @@ export default function ListingsTableMobileCard({
               {it.area} м²
             </span>
           ) : null}
-          {(it as Record<string,unknown>).rooms ? (
+          {(it as unknown as Record<string,unknown>).rooms ? (
             <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
               <Icon name="LayoutGrid" size={10} className="opacity-60" />
-              {String((it as Record<string,unknown>).rooms)} комн.
+              {String((it as unknown as Record<string,unknown>).rooms)} комн.
             </span>
           ) : null}
-          {(it as Record<string,unknown>).has_furniture && (
+          {it.has_furniture && (
             <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
               <Icon name="Sofa" size={10} className="text-orange-400 opacity-80" />
               Мебель
             </span>
           )}
-          {(it as Record<string,unknown>).has_equipment && (
+          {it.has_equipment && (
             <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
               <Icon name="Settings2" size={10} className="text-slate-500 opacity-80" />
               Оборуд.

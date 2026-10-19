@@ -12,7 +12,7 @@ interface MapPoint {
   title: string;
   caption: string;
   type: string;
-  isHot: boolean;
+  isHot?: boolean;
 }
 
 interface CatalogMapSectionProps {

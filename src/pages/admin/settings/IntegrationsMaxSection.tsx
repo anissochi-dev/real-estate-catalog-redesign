@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import Icon from '@/components/ui/icon';
-import { S, PingState } from './types';
-import { adminApi } from '@/lib/adminApi';
+import { S } from './types';
 
 interface Props {
   s: Partial<S>;

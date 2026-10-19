@@ -3,15 +3,6 @@ import Icon from '@/components/ui/icon';
 
 const MARKET_IMPORT_URL = 'https://functions.poehali.dev/debf4d7f-d8d8-4317-b617-1d5dbc519978';
 
-const SOURCES = [
-  { value: 'cian', label: 'ЦИАН' },
-  { value: 'avito', label: 'Авито' },
-  { value: 'yandex', label: 'Яндекс.Недвижимость' },
-  { value: 'arrpro', label: 'АРРпро' },
-  { value: 'ayax', label: 'АЯКС' },
-  { value: 'manual', label: 'Ручная выгрузка' },
-];
-
 const CAT_LABELS: Record<string, string> = {
   office: 'Офис', retail: 'Торговое', free_purpose: 'ПСН',
   warehouse: 'Склад', building: 'Здание', hotel: 'Гостиница',
@@ -47,7 +38,7 @@ interface StatsRow {
 
 export default function MarketImportAdmin() {
   const [fileUrl, setFileUrl] = useState('');
-  const [source, setSource] = useState('cian');
+  const [source] = useState('cian');
   const [replace, setReplace] = useState(false);
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<PreviewResult | null>(null);

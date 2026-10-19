@@ -26,10 +26,9 @@ interface Props {
 }
 
 export default function ListingsTable({
-  items, onEdit, onCopy, onArchive, onHistory, onPhotoDownload, onInternalCard, onModerate, onShowMatching,
+  items, onEdit, onCopy, onArchive, onHistory, onInternalCard, onModerate, onShowMatching,
   selected, onToggleSelect, onSelectAll, onDeselectAll,
   siteUrl,
-  onBulk, onBulkDelete, bulkLoading = false, isAdmin = false,
 }: Props) {
   const { user } = useAuth();
   const isBrokerRole = user?.role === 'broker';

@@ -136,6 +136,7 @@ export interface Listing {
   egrn_objects?: EgrnStoredObject[] | null;
   egrn_zip_url?: string | null;
   rent_index_pct?: number | null;
+  faq?: { question: string; answer: string }[] | null;
   // Сводная статистика — приходит вместе со списком объектов
   stats_views?: number | null;
   stats_calls?: number | null;

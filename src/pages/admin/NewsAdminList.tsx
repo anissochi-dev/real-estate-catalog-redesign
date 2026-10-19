@@ -14,8 +14,7 @@ interface Props {
 }
 
 export function NewsAdminList({ news, loading, headers, onNewsChange, maxNewsAgeDays = 14 }: Props) {
-  const { settings } = useSettings();
-  const siteOrigin = (settings.site_url || '').replace(/\/$/, '') || window.location.origin;
+  useSettings();
   const [report, setReport] = useState<NewsItem | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState({ title: '', summary: '', content: '', source_url: '', source_name: '' });

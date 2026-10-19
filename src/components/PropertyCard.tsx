@@ -60,15 +60,6 @@ export function formatPrice(price: number, deal: string): string {
   return `${(price / 1000).toFixed(0)} тыс ₽`;
 }
 
-const ASSESS_STYLES: Record<string, string> = {
-  emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  green:   'bg-green-50 text-green-700 border-green-200',
-  blue:    'bg-blue-50 text-blue-700 border-blue-200',
-  amber:   'bg-amber-50 text-amber-700 border-amber-200',
-  red:     'bg-red-50 text-red-600 border-red-200',
-  gray:    'bg-slate-50 text-slate-500 border-slate-200',
-};
-
 interface PredictHint {
   price_assessment: { label: string; color: string; delta_pct: number };
 }
@@ -202,7 +193,7 @@ export default function PropertyCard({
   const isCompact = variant === 'compact';
   const href = `/object/${listingSlug(property.title, property.id)}`;
   const navigate = useNavigate();
-  const { hint, rootRef } = usePredictHint(property.id);
+  const { rootRef } = usePredictHint(property.id);
 
   const cover = getCoverImage(property);
 
@@ -211,8 +202,6 @@ export default function PropertyCard({
     : property.area > 0 ? Math.round(property.price / property.area) : null;
 
   const publicId = fmtListingId(property.id, property.createdAt);
-  const assessCls = hint?.price_assessment
-    ? (ASSESS_STYLES[hint.price_assessment.color] ?? ASSESS_STYLES.gray) : null;
 
   const addressLine = [property.district, property.address].filter(Boolean).join(', ') || null;
 
@@ -236,14 +225,13 @@ export default function PropertyCard({
     <>
       <div
         ref={rootRef}
-        onMouseEnter={handlePrefetch}
         onTouchStart={handlePrefetch}
         onClick={e => {
           if ((e.target as HTMLElement).closest('a, button')) return;
           navigate(href);
         }}
         className={`property-card group bg-white rounded-2xl overflow-hidden border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up flex flex-col cursor-pointer ${isHome ? 'sm:grid sm:grid-cols-[300px_1fr]' : ''} ${isCompact ? 'rounded-xl' : ''} ${highlighted ? 'border-brand-blue ring-2 ring-brand-blue/30 shadow-md -translate-y-0.5' : 'border-border'}`}
-        onMouseEnter={() => onHover?.(property.id)}
+        onMouseEnter={() => { handlePrefetch(); onHover?.(property.id); }}
         onMouseLeave={() => onHover?.(null)}
         style={style}
       >

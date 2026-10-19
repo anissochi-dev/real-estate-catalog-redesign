@@ -3,7 +3,7 @@ import type { Property } from '@/App';
 const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
 const LEADS_URL = 'https://functions.poehali.dev/45673fe4-a39d-4193-b529-174d4c8c8f97';
 
-interface ApiListing {
+export interface ApiListing {
   id: number;
   title: string;
   description: string;

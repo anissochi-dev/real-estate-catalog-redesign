@@ -73,7 +73,7 @@ export default function ImageUploader({
   const safeValue: string[] = Array.isArray(value)
     ? value.filter((v): v is string => typeof v === 'string' && v.length > 0)
     : typeof value === 'string' && value
-      ? String(value).split(value.includes('|') ? '|' : ',').map(s => s.trim()).filter(Boolean)
+      ? String(value).split(String(value).includes('|') ? '|' : ',').map(s => s.trim()).filter(Boolean)
       : [];
   value = safeValue;
 

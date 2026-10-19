@@ -1,7 +1,7 @@
 import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
 import {
-  ADMIN_URL, UTM_SOURCES, UTM_MEDIUMS, UTM_CAMPAIGNS_PRESET, SOURCE_ICONS,
+  UTM_SOURCES, UTM_MEDIUMS, UTM_CAMPAIGNS_PRESET, SOURCE_ICONS,
   adminUrl,
 } from './utmTypes';
 

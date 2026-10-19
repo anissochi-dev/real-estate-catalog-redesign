@@ -5,7 +5,7 @@
 
 declare global {
   interface Window {
-    ym?: (id: number, event: string, goal: string, params?: Record<string, unknown>) => void;
+    ym?: (id: number, method: string, ...args: unknown[]) => void;
     VK?: { Goal?: (goal: string) => void };
     dataLayer?: unknown[];
     gtag?: (...args: unknown[]) => void;
@@ -54,7 +54,7 @@ export function fireLeadConversion(params?: { listing_id?: number; source?: stri
       if (metrikaScript) {
         const ymIdMatch = metrikaScript.src.match(/\/(\d+)\//);
         const ymIdFromSrc = ymIdMatch ? Number(ymIdMatch[1]) : null;
-        const ymIdFromCounter = (window as Record<string, unknown>).__ymCounterId as number | undefined;
+        const ymIdFromCounter = (window as unknown as Record<string, unknown>).__ymCounterId as number | undefined;
         const ymId = ymIdFromCounter || ymIdFromSrc;
         if (ymId) {
           window.ym(ymId, 'reachGoal', 'lead_form', params as Record<string, unknown>);

@@ -182,7 +182,7 @@ export default function ConsentBanner({ onAccept }: Props) {
     });
   };
 
-  const docs: LegalDoc[] = [
+  const docs: LegalDoc[] = ([
     {
       key: 'privacy',
       label: 'Политика конфиденциальности',
@@ -201,7 +201,7 @@ export default function ConsentBanner({ onAccept }: Props) {
       short: 'Согласие на рассылки',
       content: settings.legal_marketing_consent || '',
     },
-  ].filter(d => d.content.trim().length > 0);
+  ] as LegalDoc[]).filter(d => d.content.trim().length > 0);
 
   const handleAccept = () => {
     saveConsent();

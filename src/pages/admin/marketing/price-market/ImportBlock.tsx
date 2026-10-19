@@ -61,7 +61,7 @@ export default function ImportBlock() {
 
   // Цепочка батчей: вызываем import_market_continue пока done не true
   // Пауза 3 сек между батчами — избегаем rate limit платформы
-  const runBatchChain = useCallback(async (jobId: number, startFrom = 0) => {
+  const runBatchChain = useCallback(async (jobId: number, _startFrom = 0) => {
     if (runningRef.current) return;
     runningRef.current = true;
 

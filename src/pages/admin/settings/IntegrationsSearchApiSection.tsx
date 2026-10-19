@@ -7,7 +7,7 @@ interface Props {
   s: Partial<S>;
   setS: (v: Partial<S>) => void;
   saved: boolean;
-  save: () => Promise<void>;
+  save: () => void | Promise<void>;
 }
 
 type St = 'idle' | 'loading' | 'ok' | 'err';

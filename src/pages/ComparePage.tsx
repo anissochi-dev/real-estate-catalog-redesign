@@ -203,7 +203,7 @@ export default function ComparePage({ properties, onRemove, onNavigate }: Compar
 
               {/* Values */}
               <div className="flex gap-4 flex-1">
-                {properties.map((property, i) => (
+                {properties.map((property) => (
                   <div
                     key={property.id}
                     className={`w-72 flex-shrink-0 flex items-center px-4 py-3 border border-t-0 border-border

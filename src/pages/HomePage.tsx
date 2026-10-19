@@ -45,7 +45,7 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
   type Pf = { stats?: PublicStats; leadsCount?: number };
   const pf = (window as Window & { __PREFETCH__?: Pf }).__PREFETCH__;
   const [stats, setStats] = useState<PublicStats>(pf?.stats ?? { total: 0, main_city: 'Краснодар' });
-  const [leadsCount, setLeadsCount] = useState(pf?.leadsCount ?? 0);
+  const [, setLeadsCount] = useState(pf?.leadsCount ?? 0);
 
   const [aiOpen, setAiOpen] = useState(false);
   const [ownerOpen, setOwnerOpen] = useState(false);

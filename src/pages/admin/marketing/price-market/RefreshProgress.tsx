@@ -120,7 +120,6 @@ export default function RefreshProgress({ state, onStart }: Props) {
           {BATCH_STEPS.map((step, idx) => {
             const isDone = completedBatches.includes(step.key);
             const isCurrent = running && currentBatch === idx;
-            const isPending = !isDone && !isCurrent;
             return (
               <div key={step.key} className="flex flex-col items-center gap-1">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${

@@ -12,6 +12,7 @@ export interface ListingResult {
   title: string;
   owner_name: string;
   owner_phone: string;
+  address?: string;
 }
 
 export function useBrokers(enabled: boolean) {
@@ -35,12 +36,12 @@ export function useListingsSearch(listingSearch: string) {
     queryFn: async () => {
       if (listingSearch.length < 2) return [];
       const d = await adminApi.listListings();
-      const all: { id: number; title: string; owner_name?: string; owner_phone?: string }[] = d.listings || [];
+      const all: { id: number; title: string; owner_name?: string; owner_phone?: string; address?: string }[] = d.listings || [];
       const lower = listingSearch.toLowerCase();
       return all
         .filter(l => l.title?.toLowerCase().includes(lower) || String(l.id) === listingSearch)
         .slice(0, 8)
-        .map(l => ({ id: l.id, title: l.title, owner_name: l.owner_name || '', owner_phone: l.owner_phone || '' }));
+        .map(l => ({ id: l.id, title: l.title, owner_name: l.owner_name || '', owner_phone: l.owner_phone || '', address: l.address || '' }));
     },
     enabled: listingSearch.length >= 2,
     staleTime: 60_000,

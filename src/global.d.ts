@@ -7,7 +7,7 @@ export {};
 declare global {
   interface Window {
     ymaps?: any;
-    ym?: (...args: unknown[]) => void;
+    ym?: (id: number, method: string, ...args: unknown[]) => void;
     gtag?: (...args: unknown[]) => void;
     dataLayer?: unknown[];
   }
@@ -18,5 +18,8 @@ declare global {
 declare module 'react' {
   interface HTMLAttributes<T> {
     elementtiming?: string;
+  }
+  interface ImgHTMLAttributes<T> {
+    fetchpriority?: 'high' | 'low' | 'auto' | string;
   }
 }

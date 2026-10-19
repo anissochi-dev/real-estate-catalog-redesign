@@ -114,7 +114,7 @@ interface Props {
   setQuery: (v: string) => void;
   selectedSources: string[];
   toggleSource: (s: string) => void;
-  serviceStatus: Record<string, boolean>;
+  serviceStatus: Record<string, unknown>;
   results: Record<string, CheckResult> | null;
   isPending: boolean;
   onRun: () => void;
@@ -124,8 +124,8 @@ interface Props {
 }
 
 export default function ChecksSearchTab({
-  checkType, setCheckType, query, setQuery,
-  selectedSources, toggleSource, serviceStatus,
+  checkType, query, setQuery,
+  selectedSources,
   results, isPending, onRun,
   searchMode = 'cadastral', setSearchMode,
   onCheckOwner,
@@ -196,9 +196,9 @@ export default function ChecksSearchTab({
       </div>
 
       {/* Результат поиска по адресу — список объектов для выбора */}
-      {isAddressMode && results?.egrn?.data && (
+      {isAddressMode && (results?.egrn?.data as React.ReactNode) && (
         <AddressSearchResult
-          data={results.egrn.data as AddressSearchData}
+          data={results!.egrn.data as AddressSearchData}
           onSelect={(num) => {
             setQuery(num);
             if (setSearchMode) setSearchMode('cadastral');
@@ -218,7 +218,7 @@ export default function ChecksSearchTab({
                   </span>
                   {res.from_cache && <Badge variant="outline" className="text-xs">Из кэша</Badge>}
                 </div>
-                {src === 'zachestny' && res.data && !(res.data as Record<string, unknown>).error && (
+                {src === 'zachestny' && (res.data as React.ReactNode) && !(res.data as Record<string, unknown>).error && (
                   <a
                     href={`https://zachestnyibiznes.ru/company/ul/${(res.data as Record<string, unknown>).ogrn || (res.data as Record<string, unknown>).inn}`}
                     target="_blank" rel="noopener noreferrer"

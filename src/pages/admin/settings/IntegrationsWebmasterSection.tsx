@@ -6,7 +6,7 @@ interface Props {
   save: () => void;
 }
 
-export default function IntegrationsWebmasterSection({ saved, save }: Props) {
+export default function IntegrationsWebmasterSection(_props: Props) {
   const { settings } = useSettings();
   const yandexOk = !!settings.yandex_webmaster_verification;
   const googleOk = !!settings.google_search_console_verification;

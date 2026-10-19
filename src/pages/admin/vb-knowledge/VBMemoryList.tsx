@@ -28,7 +28,7 @@ interface Props {
 }
 
 export default function VBMemoryList({
-  loading, error, filtered, filter, items, grouped,
+  loading, error, filtered, filter,
   trainOpen, trainingNews, selectedSources,
   editing, saving,
   onLoad, onToggleSource, onTrainOpen, onTrainSubmit,

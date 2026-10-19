@@ -4,7 +4,7 @@ import { Listing, City } from './types';
 /* ── Яндекс.Карты типы ── */
 declare global {
   interface Window {
-    ymaps: any;
+    ymaps?: any;
   }
 }
 

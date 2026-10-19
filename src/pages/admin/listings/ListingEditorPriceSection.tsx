@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import Icon from '@/components/ui/icon';
-import { Listing, PARKING, ENTRANCE, ACCESS_TYPES, perM2 } from './types';
+import { Listing, PARKING, ENTRANCE, ACCESS_TYPES } from './types';
 
 function formatPriceDisplay(val: number | string | undefined): string {
   if (!val && val !== 0) return '';
@@ -35,8 +35,8 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
 
   // При смене единицы — пересчитываем цену чтобы она сохранила смысл
   const handleUnitChange = (newUnit: string) => {
-    const price = +editing.price || 0;
-    const area = +editing.area || 0;
+    const price = +(editing.price ?? 0) || 0;
+    const area = +(editing.area ?? 0) || 0;
     let newPrice = price;
     if (area > 0 && price > 0) {
       if (unit === 'total' && newUnit === 'm2') {
@@ -62,8 +62,8 @@ export default function ListingEditorPriceSection({ editing, setEditing, errors 
   };
 
   // Вычисляем производное значение для показа
-  const price = +editing.price || 0;
-  const area = +editing.area || 0;
+  const price = +(editing.price ?? 0) || 0;
+  const area = +(editing.area ?? 0) || 0;
   const derivedTotal = unit === 'm2' && price > 0 && area > 0 ? Math.round(price * area) : null;
   const derivedPerM2 = unit === 'total' && price > 0 && area > 0 ? Math.round(price / area) : null;
   const derivedSotka = unit === 'total' && price > 0 && area > 0 ? Math.round(price / (area / 100)) : null;

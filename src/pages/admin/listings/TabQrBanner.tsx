@@ -3,7 +3,6 @@ import QRCode from 'qrcode';
 import { jsPDF } from 'jspdf';
 import { adminApi, uploadFileEx } from '@/lib/adminApi';
 import { Listing } from './types';
-import { BannerCanvas } from './QrBannerCanvas';
 import type { CanvasProps } from './QrBannerCanvas';
 import { ColorPicker, SizePanel, EditorPanel, TextPanel, ImagesPanel, DownloadPanel } from './QrBannerControls';
 import {
@@ -72,7 +71,6 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   // вычитаем p-4 (16px × 2 = 32px) и ещё 16px запаса чтобы гарантированно не вылезало
   const availableW = Math.max(60, containerW - 48);
   const previewScale = Math.min(availableW / bannerW, MAX_PREVIEW_H / bannerH, 1);
-  const scaledW = Math.round(bannerW * previewScale);
   const scaledH = Math.round(bannerH * previewScale);
   const previewH = Math.max(80, scaledH + 16);
 
@@ -142,16 +140,16 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   useEffect(() => {
     adminApi.listUsers().then(r => {
       const all: BrokerInfo[] = r.users || [];
-      const brokerId = (listing as Record<string, unknown>).broker_id as number | null;
+      const brokerId = (listing as unknown as Record<string, unknown>).broker_id as number | null;
       if (brokerId) { const f = all.find(u => u.id === brokerId); if (f) { setBroker(f); return; } }
-      const authorId = (listing as Record<string, unknown>).author_id as number | null;
+      const authorId = (listing as unknown as Record<string, unknown>).author_id as number | null;
       if (authorId) { const f = all.find(u => u.id === authorId); if (f) setBroker(f); }
     });
   }, [listing]);
 
   useEffect(() => { setDealText(listing.deal === 'rent' ? 'СДАЮ' : 'ПРОДАЮ'); }, [listing.deal]);
   useEffect(() => {
-    const p = broker?.phone || (listing as Record<string, unknown>).owner_phone as string || '';
+    const p = broker?.phone || (listing as unknown as Record<string, unknown>).owner_phone as string || '';
     setPhoneText(p);
   }, [broker, listing]);
 

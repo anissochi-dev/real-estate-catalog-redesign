@@ -235,19 +235,19 @@ export default function ListingsTableDesktopRow({
               {it.area} м²
             </span>
           ) : null}
-          {(it as Record<string,unknown>).rooms ? (
+          {(it as unknown as Record<string,unknown>).rooms ? (
             <span className="flex items-center gap-1 text-xs text-muted-foreground" title="Комнат">
               <Icon name="LayoutGrid" size={11} className="opacity-60" />
-              {String((it as Record<string,unknown>).rooms)} комн.
+              {String((it as unknown as Record<string,unknown>).rooms)} комн.
             </span>
           ) : null}
-          {(it as Record<string,unknown>).has_furniture ? (
+          {(it as unknown as Record<string,unknown>).has_furniture ? (
             <span className="flex items-center gap-1 text-xs text-muted-foreground" title="Мебель есть">
               <Icon name="Sofa" size={11} className="text-orange-400 opacity-80" />
               Мебель
             </span>
           ) : null}
-          {(it as Record<string,unknown>).has_equipment ? (
+          {(it as unknown as Record<string,unknown>).has_equipment ? (
             <span className="flex items-center gap-1 text-xs text-muted-foreground" title="Оборудование есть">
               <Icon name="Settings2" size={11} className="text-slate-500 opacity-80" />
               Оборуд.

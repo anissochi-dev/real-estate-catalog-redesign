@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
@@ -233,7 +233,7 @@ export default function NewDbTab({ newdbConnected }: { newdbConnected: boolean }
   const headers = { 'Content-Type': 'application/json', 'X-Auth-Token': token || '' };
 
   const mutation = useMutation({
-    mutationFn: async (force = false) => {
+    mutationFn: async (force: boolean = false) => {
       const required = selectedMethod.fields.filter(f => f.required);
       const missing = required.filter(f => !fields[f.key]?.trim());
       if (missing.length) throw new Error(`Заполните: ${missing.map(f => f.label).join(', ')}`);
@@ -355,7 +355,7 @@ export default function NewDbTab({ newdbConnected }: { newdbConnected: boolean }
                   ? <><Icon name="Loader2" size={15} className="animate-spin" />Проверяю...</>
                   : <><Icon name="Search" size={15} />Проверить</>}
               </button>
-              {result && (
+              {(result as ReactNode) && (
                 <button
                   onClick={() => mutation.mutate(true)}
                   disabled={mutation.isPending}
@@ -369,7 +369,7 @@ export default function NewDbTab({ newdbConnected }: { newdbConnected: boolean }
           </div>
 
           {/* Результат */}
-          {result && (
+          {(result as ReactNode) && (
             <div className="bg-white rounded-2xl border border-border overflow-hidden">
               <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-muted/30">
                 <div className="flex items-center gap-2">

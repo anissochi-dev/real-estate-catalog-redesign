@@ -1,6 +1,5 @@
-import React, { useEffect, useState, useMemo, Suspense } from 'react';
+import { useEffect, useState, useMemo, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { lazyWithRetry } from './app/lazyPages';
 
 // Префетч AdminPage чанка в фоне — только если в браузере есть токен
 // (т.е. это залогиненный сотрудник). Запускается через 3с после монтирования,
@@ -25,7 +24,6 @@ import { useListings } from './app/useListings';
 import { useCrons } from './app/useCrons';
 import { useConsentBanner } from './app/useConsentBanner';
 import {
-  type Property,
   type Page,
   type AppView,
   PATH_BY_PAGE,
@@ -90,7 +88,7 @@ export default function App() {
   const [favorites, setFavorites] = useState<number[]>([]);
   const [compareList, setCompareList] = useState<number[]>([]);
 
-  const { properties, setProperties: _setProperties, allLoaded, setAllLoaded: _setAllLoaded, loading, error } = useListings();
+  const { properties, setProperties: _setProperties, allLoaded, setAllLoaded: _setAllLoaded, error } = useListings();
 
   const currentPage: Page = pageFromPath(location.pathname);
   const setCurrentPage = (p: Page) => navigate(PATH_BY_PAGE[p]);
@@ -176,12 +174,6 @@ export default function App() {
   const favoriteProperties = useMemo(
     () => properties.filter(p => favorites.includes(p.id)),
     [properties, favorites],
-  );
-
-  const pageFallback = (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="w-8 h-8 rounded-full border-4 border-brand-blue/20 border-t-brand-blue animate-spin" />
-    </div>
   );
 
   // login / admin views
