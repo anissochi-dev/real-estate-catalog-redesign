@@ -33,6 +33,7 @@ export function useDistrictsState() {
     } finally { setLoading(false); }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, []);
 
   const handleAdd = async (form: FormState) => {

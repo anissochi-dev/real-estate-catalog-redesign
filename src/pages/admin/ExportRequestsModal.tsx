@@ -79,6 +79,7 @@ export default function ExportRequestsModal({
     adminApi.getSettings()
       .then(d => setPricingNotes(parsePricingNotes(d.settings?.export_pricing_notes || '')))
       .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

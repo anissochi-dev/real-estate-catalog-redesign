@@ -60,6 +60,7 @@ export default function SocialSourcesPanel({
     } finally { setLoading(false); }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [filterPlatform]);
 
   const handleAdd = async () => {

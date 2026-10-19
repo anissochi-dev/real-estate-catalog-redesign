@@ -190,6 +190,7 @@ export default function VBKnowledgeAdmin() {
     toast.success('Удалено');
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); loadSchedule(); loadStopWords(); loadLearnSources(); }, []);
 
   const filtered = items.filter(it => {

@@ -48,6 +48,7 @@ export default function SocialQueuePanel({
     } finally { setLoading(false); }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [filterPlatform, filterStatus]);
 
   const openApprove = (p: SocialPost, route: 'leads' | 'listings' | 'market') => {

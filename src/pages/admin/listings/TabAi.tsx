@@ -70,6 +70,7 @@ export function TabAi({ listing }: { listing: Listing }) {
       })
       .catch(() => {})
       .finally(() => setMarketLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listing.id]);
 
   const ask = async (text: string) => {
@@ -94,6 +95,7 @@ export function TabAi({ listing }: { listing: Listing }) {
 
   useEffect(() => {
     if (!asked) { setAsked(true); ask('__auto__'); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const send = () => {

@@ -133,7 +133,7 @@ export default function ImageUploader({
     setGhostPos({ x: e.clientX, y: e.clientY });
     const over = getIdxAt(e.clientX, e.clientY);
     setDragOverIdx(over !== null && over !== dragFromIdx.current ? over : null);
-  }, [multiple]);
+  }, []);
 
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
     if (dragFromIdx.current === null) return;

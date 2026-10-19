@@ -41,7 +41,9 @@ export default function AiPanel({ onImported, onClose }: Props) {
   const [enrichError, setEnrichError] = useState('');
   const enrichSel = useSelectable(enrichResult);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (aiResult.length) aiSel.selectAll(); }, [aiResult]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (enrichResult.length) enrichSel.selectAll(); }, [enrichResult]);
 
   const handleAiSuggest = async () => {

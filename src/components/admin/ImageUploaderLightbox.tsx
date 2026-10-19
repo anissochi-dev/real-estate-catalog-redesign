@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 
 interface Props {
@@ -12,11 +12,11 @@ export default function ImageUploaderLightbox({ urls, startIdx, onClose }: Props
   const prev = () => setIdx(i => (i - 1 + urls.length) % urls.length);
   const next = () => setIdx(i => (i + 1) % urls.length);
 
-  const onKey = useCallback((e: React.KeyboardEvent) => {
+  const onKey = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowLeft') prev();
     else if (e.key === 'ArrowRight') next();
     else if (e.key === 'Escape') onClose();
-  }, []);
+  };
 
   return (
     <div

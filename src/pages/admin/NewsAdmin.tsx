@@ -32,6 +32,7 @@ export default function NewsAdmin() {
       .catch(() => {});
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadNews(); loadSchedule(); }, []);
 
   const handleSchedSave = () => {

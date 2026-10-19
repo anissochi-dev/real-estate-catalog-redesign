@@ -67,12 +67,14 @@ export function useAdminPolling(section: AdminSection) {
 
   useEffect(() => {
     loadNavAndPerms();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.role]);
 
   useEffect(() => {
     const handler = () => loadNavAndPerms();
     window.addEventListener('admin:nav-order-updated', handler);
     return () => window.removeEventListener('admin:nav-order-updated', handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.role]);
 
   // Единый polling — все три счётчика одним интервалом раз в 2 минуты

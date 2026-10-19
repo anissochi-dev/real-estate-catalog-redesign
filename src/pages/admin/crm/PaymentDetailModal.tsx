@@ -70,6 +70,7 @@ export default function PaymentDetailModal({ payment: initial, onClose, listings
 
   useEffect(() => {
     loadHistory();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [payment.id]);
 
   const save = async () => {

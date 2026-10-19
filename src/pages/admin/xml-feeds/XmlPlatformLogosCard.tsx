@@ -38,7 +38,9 @@ export default function XmlPlatformLogosCard() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { if (canManage) load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  useEffect(() => {
+    if (canManage) load();
+  }, [canManage]);
 
   // Загрузка логотипов — только admin/director (ad_platform_keys содержит секреты,
   // поэтому этот эндпоинт им недоступен; остальные видят лого через platform_logos).

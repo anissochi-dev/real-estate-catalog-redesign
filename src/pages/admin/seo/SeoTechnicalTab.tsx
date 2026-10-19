@@ -69,6 +69,7 @@ export default function SeoTechnicalTab() {
   useEffect(() => {
     adminApi.getSettings().then(d => setS(d.settings || {}));
     loadSeoStatus();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const sitemapCall = async (action: string) => {

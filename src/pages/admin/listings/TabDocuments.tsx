@@ -39,6 +39,7 @@ export function TabDocuments({ listingId }: { listingId: number }) {
     }).finally(() => setLoading(false));
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadDocs(); }, [listingId]);
 
   // Массовая загрузка: каждый файл грузится независимо, ошибка одного

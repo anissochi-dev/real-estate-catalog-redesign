@@ -101,6 +101,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
       .then(d => { if (d?.faq?.length) setFaq(d.faq); })
       .catch(() => {})
       .finally(() => setFaqLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item?.id]);
 
   const FALLBACK_OG = 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/og-image-1779575751349.png';

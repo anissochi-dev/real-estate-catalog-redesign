@@ -48,7 +48,10 @@ export function TabExport({ listing }: { listing: Listing }) {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [listing.id]);
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listing.id]);
 
   const alreadyExported = PLATFORMS.filter(p => (listing as unknown as Record<string, boolean>)[`export_${p.id}`]);
   const hasPending = history.some(h => h.status === 'pending');

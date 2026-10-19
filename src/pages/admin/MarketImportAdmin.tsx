@@ -103,6 +103,7 @@ export default function MarketImportAdmin() {
     runningRef.current = false;
     setLoading(false);
     loadStats();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleImport() {

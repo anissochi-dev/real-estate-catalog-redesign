@@ -84,6 +84,7 @@ export default function SeoAdmin() {
     setGptOk(!!data.gpt_configured);
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadStatus(); }, []);
 
   const saveSchedule = async () => {

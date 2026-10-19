@@ -50,7 +50,7 @@ export function NewsListPage() {
       .then(r => r.json())
       .then(d => { setNews(d.news || []); setTotal(d.total || 0); })
       .finally(() => setLoading(false));
-  }, [page]);
+  }, [page, LIMIT]);
 
   const siteUrl = getSiteUrl(settings.site_url);
 

@@ -94,6 +94,7 @@ export default function PhoneCardModal({ contactId, onClose, onUpdate, onOpenLis
   useEffect(() => {
     load();
     loadHistory();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contactId]);
 
   const save = async () => {

@@ -54,6 +54,7 @@ export default function SocialParserTab() {
         }
       })
       .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleRunAll = async () => {

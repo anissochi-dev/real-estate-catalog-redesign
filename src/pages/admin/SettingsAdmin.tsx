@@ -200,7 +200,6 @@ export default function SettingsAdmin() {
       setS(settings);
     }).catch(() => {});
     loadCities();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasFullSettingsAccess]);
 
   useEffect(() => {

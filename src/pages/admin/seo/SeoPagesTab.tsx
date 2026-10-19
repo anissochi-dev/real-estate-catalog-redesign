@@ -108,6 +108,7 @@ export default function SeoPagesTab({ token: _token, gptOk }: Props) {
     setLoading(false);
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, []);
 
   const updateCurrent = (patch: Partial<SeoPage>) => {

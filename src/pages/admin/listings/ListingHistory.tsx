@@ -175,6 +175,7 @@ export default function ListingHistory({ listingId, listingTitle, onClose }: Pro
     }).finally(() => setLoading(false));
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadAll(); }, [listingId]);
 
   const handleAddStat = async () => {

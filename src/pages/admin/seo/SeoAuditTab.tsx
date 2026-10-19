@@ -157,6 +157,7 @@ export default function SeoAuditTab() {
     await load();
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, []);
 
   const filteredFaqListings = useMemo(() => {

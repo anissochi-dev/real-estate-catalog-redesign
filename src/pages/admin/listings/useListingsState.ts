@@ -144,6 +144,7 @@ export function useListingsState() {
     }, 400);
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => load(true, 'active', isBroker ? true : false), []);
 
   useEffect(() => {
