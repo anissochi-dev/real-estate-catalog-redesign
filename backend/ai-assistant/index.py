@@ -4747,6 +4747,7 @@ def handler(event, context):
                     f"l.is_network_tenant, l.district_ids "
                     f"FROM {SCHEMA}.leads l "
                     f"WHERE l.show_on_main = TRUE AND l.status IN ('new','in_progress') "
+                    f"AND l.is_public = TRUE AND l.is_archived IS NOT TRUE "
                     f"ORDER BY l.updated_at DESC NULLS LAST LIMIT 100"
                 )
                 leads_rows = cur.fetchall()

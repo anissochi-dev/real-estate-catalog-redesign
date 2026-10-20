@@ -175,7 +175,7 @@ def _build_sitemap_xml(cur) -> tuple:
         f"SELECT slug, COALESCE(updated_at, created_at) as last_upd "
         f"FROM {SCHEMA}.leads "
         f"WHERE show_on_main = TRUE AND status IN ('new','in_progress') "
-        f"AND is_public = TRUE AND slug IS NOT NULL AND slug != '' "
+        f"AND is_public = TRUE AND is_archived IS NOT TRUE AND slug IS NOT NULL AND slug != '' "
         f"ORDER BY last_upd DESC NULLS LAST LIMIT 3000"
     )
     for r in cur.fetchall():

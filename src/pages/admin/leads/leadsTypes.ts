@@ -24,6 +24,8 @@ export interface Lead {
   is_network_tenant: boolean;
   show_on_main: boolean;
   object_url?: string | null;
+  listing_title?: string | null;
+  listing_slug?: string | null;
   broker_id?: number | null;
   /** true — телефон замаскирован сервером (нет прав видеть полностью) */
   phone_hidden?: boolean;

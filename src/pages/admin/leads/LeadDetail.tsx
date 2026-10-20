@@ -106,6 +106,23 @@ export default function LeadDetail({
                 </a>
               </div>
             )}
+            {active.listing_id && (
+              <div className="mt-2 flex items-center gap-2 flex-wrap bg-brand-blue/5 border border-brand-blue/20 rounded-lg px-2.5 py-1.5 max-w-md">
+                <Icon name="Building2" size={14} className="text-brand-blue flex-shrink-0" />
+                <div className="min-w-0 flex-1 text-xs">
+                  <div className="text-muted-foreground">Объект №{active.listing_id}</div>
+                  <div className="font-semibold text-foreground truncate">
+                    {active.listing_title || 'Объект удалён или недоступен'}
+                  </div>
+                </div>
+                {active.listing_slug && (
+                  <a href={`/object/${active.listing_slug}`} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-xs font-semibold text-brand-blue hover:underline flex-shrink-0">
+                    На сайте <Icon name="ExternalLink" size={11} />
+                  </a>
+                )}
+              </div>
+            )}
             {active.source && (
               <div className="mt-1 text-xs text-muted-foreground flex items-center gap-1">
                 Источник:{' '}

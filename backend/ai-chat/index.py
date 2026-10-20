@@ -158,9 +158,9 @@ def _create_lead(cur, conn, listing_id, name: str, phone: str,
     broker_sql = str(broker_id) if broker_id else 'NULL'
     cur.execute(
         f"INSERT INTO {SCHEMA}.leads "
-        f"(name, phone, message, listing_id, source, status, phone_contact_id, broker_id) "
+        f"(name, phone, message, listing_id, source, status, phone_contact_id, broker_id, show_on_main) "
         f"VALUES ('{safe(name)}', '{safe(phone)}', '{safe(ai_summary)}', "
-        f"{listing_id if listing_id else 'NULL'}, 'ai-chat', 'new', {pc_id}, {broker_sql}) "
+        f"{listing_id if listing_id else 'NULL'}, 'ai-chat', 'pending', {pc_id}, {broker_sql}, FALSE) "
         f"RETURNING id"
     )
     lead_id = cur.fetchone()['id']

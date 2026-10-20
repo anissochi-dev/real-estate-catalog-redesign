@@ -184,6 +184,12 @@ export default function LeadsTable({ leads, onOpen, onArchive, onStatusChange, s
                         {l.source && SOURCE_LABELS[l.source] && (
                           <div className="text-[11px] text-muted-foreground/60">{SOURCE_LABELS[l.source]}</div>
                         )}
+                        {l.listing_id && (
+                          <div className="text-[11px] text-brand-blue flex items-center gap-0.5 truncate max-w-[140px]" title={l.listing_title || ''}>
+                            <Icon name="Building2" size={10} className="flex-shrink-0" />
+                            Объект №{l.listing_id}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </td>

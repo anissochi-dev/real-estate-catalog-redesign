@@ -159,10 +159,13 @@ def handler(event: dict, context) -> dict:
     if len(norm_phone) == 11 and norm_phone.startswith('8'):
         norm_phone = '7' + norm_phone[1:]
 
-    # Лиды с сайта проходят модерацию: статус 'pending'
-    # Внутренние лиды (created_by_admin, crm и др.) сразу 'new'
-    SITE_SOURCES = ('site', 'property-page', 'offer-to-lead', 'callback', 'hero', 'catalog', 'leads-page', 'price-drop', 'partner-carousel')
-    initial_status = 'pending' if source in SITE_SOURCES else 'new'
+    # Функция публичная (без авторизации), поэтому любая заявка отсюда —
+    # с сайта и обязана пройти модерацию, независимо от присланного source.
+    initial_status = 'pending'
+    # Заявки по конкретному объекту — это интерес к нашему объекту, а не спрос:
+    # в публичную ленту не попадают, пока админ сам не включит показ.
+    OBJECT_SOURCES = ('property-page', 'price-drop')
+    show_on_main = not (source in OBJECT_SOURCES or listing_id)
 
     # listing_id — только целое число
     lid = None
@@ -214,9 +217,9 @@ def handler(event: dict, context) -> dict:
             # Параметризованный INSERT — защита от SQL-инъекций
             cur.execute(
                 f"INSERT INTO {SCHEMA_LEADS}.leads "
-                "(name, phone, email, message, listing_id, source, status, phone_contact_id, partner_id, company) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
-                (name, phone, email, message, lid, source, initial_status, pc_id, pid, partner_company)
+                "(name, phone, email, message, listing_id, source, status, phone_contact_id, partner_id, company, show_on_main) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                (name, phone, email, message, lid, source, initial_status, pc_id, pid, partner_company, show_on_main)
             )
             lead_id = cur.fetchone()[0]
 

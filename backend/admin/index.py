@@ -3272,7 +3272,11 @@ def _apply_phone_visibility(lead: dict, user: dict) -> dict:
 def _leads(cur, conn, method, rid, action, event, user):
     if method == 'GET':
         if rid:
-            cur.execute(f"SELECT * FROM {SCHEMA}.leads WHERE id = {int(rid)}")
+            cur.execute(
+                f"SELECT ld.*, lst.title AS listing_title, lst.slug AS listing_slug "
+                f"FROM {SCHEMA}.leads ld LEFT JOIN {SCHEMA}.listings lst ON lst.id = ld.listing_id "
+                f"WHERE ld.id = {int(rid)}"
+            )
             lead = cur.fetchone()
             if not lead:
                 return _err(404, 'Не найдено')
@@ -3286,8 +3290,10 @@ def _leads(cur, conn, method, rid, action, event, user):
 
         main_city = _safe((_get_settings(cur).get('main_city') or 'Краснодар'), 100)
         cur.execute(
-            f"SELECT ld.*, COALESCE(mm.matching_listings_count, 0) AS matching_listings_count "
+            f"SELECT ld.*, COALESCE(mm.matching_listings_count, 0) AS matching_listings_count, "
+            f"lst.title AS listing_title, lst.slug AS listing_slug "
             f"FROM {SCHEMA}.leads ld "
+            f"LEFT JOIN {SCHEMA}.listings lst ON lst.id = ld.listing_id "
             f"LEFT JOIN LATERAL ("
             f"  SELECT COUNT(*) AS matching_listings_count FROM {SCHEMA}.listings l "
             f"  WHERE l.status = 'active' AND l.is_visible = TRUE "

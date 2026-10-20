@@ -281,7 +281,7 @@ def handler(event: dict, context) -> dict:
                     "SELECT id, name, message, budget, company, created_at "
                     "FROM t_p71821556_real_estate_catalog_.leads "
                     "WHERE show_on_main = TRUE AND status IN ('new','in_progress') "
-                    "AND is_archived IS NOT TRUE "
+                    "AND is_public = TRUE AND is_archived IS NOT TRUE "
                     "ORDER BY created_at DESC LIMIT 12"
                 )
                 rows = []
@@ -305,7 +305,7 @@ def handler(event: dict, context) -> dict:
                     limit = 24
                 offset = (page - 1) * limit
 
-                where = ["show_on_main = TRUE", "status IN ('new','in_progress')", "is_archived IS NOT TRUE"]
+                where = ["show_on_main = TRUE", "status IN ('new','in_progress')", "is_public = TRUE", "is_archived IS NOT TRUE"]
                 # Поиск по message/name/company
                 q = (params.get('search') or '').strip()
                 if q:
@@ -456,6 +456,7 @@ def handler(event: dict, context) -> dict:
                     "SELECT id, message, budget, company, request_category, created_at "
                     "FROM t_p71821556_real_estate_catalog_.leads "
                     "WHERE is_network_tenant = TRUE AND is_archived IS NOT TRUE "
+                    "AND show_on_main = TRUE AND is_public = TRUE AND status IN ('new','in_progress') "
                     "ORDER BY created_at DESC"
                 )
                 rows = []
@@ -667,7 +668,8 @@ def handler(event: dict, context) -> dict:
                 by_deal = {r['deal']: r['c'] for r in cur.fetchall()}
                 cur.execute(
                     "SELECT COUNT(*) AS c FROM t_p71821556_real_estate_catalog_.leads "
-                    "WHERE show_on_main = TRUE AND status IN ('new','in_progress') AND is_archived IS NOT TRUE"
+                    "WHERE show_on_main = TRUE AND status IN ('new','in_progress') "
+                    "AND is_public = TRUE AND is_archived IS NOT TRUE"
                 )
                 leads_total = int(cur.fetchone()['c'] or 0)
                 return _ok({

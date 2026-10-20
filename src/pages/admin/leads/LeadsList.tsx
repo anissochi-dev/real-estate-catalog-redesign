@@ -41,6 +41,12 @@ export default function LeadsList({ filtered, active, onOpen }: Props) {
               )}
               <div className="flex items-center justify-between mt-1.5 gap-2">
                 <div className="flex items-center gap-1.5">
+                  {l.listing_id && (
+                    <span className="text-[10px] text-brand-blue flex items-center gap-0.5">
+                      <Icon name="Building2" size={9} />
+                      Объект №{l.listing_id}
+                    </span>
+                  )}
                   {l.object_url && (
                     <span className="text-[10px] text-brand-blue flex items-center gap-0.5">
                       <Icon name="Link" size={9} />
