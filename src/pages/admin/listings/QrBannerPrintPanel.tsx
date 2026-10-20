@@ -1,0 +1,188 @@
+import { useState } from 'react';
+import Icon from '@/components/ui/icon';
+import { generatePrintBanner, PrintBannerResult } from '@/lib/adminApi';
+
+type Material = 'paper' | 'fabric' | 'none';
+
+const MATERIALS: { id: Material; label: string; bleed: number; hint: string }[] = [
+  { id: 'paper',  label: 'Бумага / плёнка', bleed: 3,  hint: 'вылеты 3 мм' },
+  { id: 'fabric', label: 'Баннерная ткань', bleed: 50, hint: 'запас 50 мм под люверсы' },
+  { id: 'none',   label: 'Без вылетов',     bleed: 0,  hint: 'точно в размер' },
+];
+
+const MAX_MP = 150;
+
+function autoDpi(wCm: number, hCm: number) {
+  const longest = Math.max(wCm, hCm);
+  return longest <= 100 ? 150 : longest <= 300 ? 100 : 72;
+}
+
+const fmt = (n: number) => String(Math.round(n * 10) / 10).replace('.', ',');
+const mb = (b: number) => `${fmt(b / 1048576)} МБ`;
+
+function CmykInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <input value={value} onChange={e => onChange(e.target.value)} placeholder="авто"
+      className="w-full px-2 py-1.5 border border-border rounded-lg text-xs font-mono focus:border-brand-blue outline-none" />
+  );
+}
+
+function parseCmyk(v: string): number[] | null {
+  const parts = v.split(/[\s,;/]+/).filter(Boolean).map(Number);
+  if (parts.length !== 4 || parts.some(n => !Number.isFinite(n) || n < 0 || n > 100)) return null;
+  return parts;
+}
+
+interface Props {
+  widthCm: number;
+  heightCm: number;
+  disabled: boolean;
+  buildParams: () => Record<string, unknown>;
+  issuesCount: number;
+}
+
+export function PrintPanel({ widthCm, heightCm, disabled, buildParams, issuesCount }: Props) {
+  const [material, setMaterial] = useState<Material>('paper');
+  const [dpiMode, setDpiMode] = useState<'auto' | number>('auto');
+  const [bgCmyk, setBgCmyk] = useState('');
+  const [textCmyk, setTextCmyk] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState<PrintBannerResult | null>(null);
+
+  const bleed = MATERIALS.find(m => m.id === material)!.bleed;
+  const dpi = dpiMode === 'auto' ? autoDpi(widthCm, heightCm) : dpiMode;
+  const fullW = widthCm + bleed / 5;
+  const fullH = heightCm + bleed / 5;
+  const pxW = Math.round((fullW / 2.54) * dpi);
+  const pxH = Math.round((fullH / 2.54) * dpi);
+  const mp = (pxW * pxH) / 1e6;
+  const tooBig = mp > MAX_MP;
+  const bgBad = bgCmyk.trim() !== '' && !parseCmyk(bgCmyk);
+  const textBad = textCmyk.trim() !== '' && !parseCmyk(textCmyk);
+
+  const generate = async () => {
+    setBusy(true); setError(''); setResult(null);
+    try {
+      const params = {
+        ...buildParams(),
+        bleed_mm: bleed,
+        dpi,
+        ...(parseCmyk(bgCmyk) ? { bg_cmyk: parseCmyk(bgCmyk) } : {}),
+        ...(parseCmyk(textCmyk) ? { text_cmyk: parseCmyk(textCmyk) } : {}),
+      };
+      setResult(await generatePrintBanner(params));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Ошибка генерации');
+    } finally { setBusy(false); }
+  };
+
+  const copy = (url: string) => { navigator.clipboard?.writeText(url).catch(() => {}); };
+
+  return (
+    <div className="border-2 border-emerald-500/30 bg-emerald-50/40 rounded-xl p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Icon name="Printer" size={15} className="text-emerald-700" />
+        <span className="text-sm font-semibold text-emerald-800">Файл для печати (TIFF, CMYK)</span>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        {MATERIALS.map(m => (
+          <button key={m.id} onClick={() => setMaterial(m.id)}
+            className={`px-2.5 py-1.5 rounded-lg border text-xs transition-all text-left ${
+              material === m.id ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white border-border text-muted-foreground hover:border-emerald-500'
+            }`}
+          >
+            <div className="font-semibold">{m.label}</div>
+            <div className="opacity-75">{m.hint}</div>
+          </button>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap text-xs">
+        <span className="text-muted-foreground">Разрешение:</span>
+        {(['auto', 72, 100, 150, 300] as const).map(v => (
+          <button key={String(v)} onClick={() => setDpiMode(v)}
+            className={`px-2 py-1 rounded-md border ${
+              dpiMode === v ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white border-border text-muted-foreground hover:border-emerald-500'
+            }`}
+          >{v === 'auto' ? `Авто (${autoDpi(widthCm, heightCm)})` : `${v} dpi`}</button>
+        ))}
+      </div>
+
+      <details className="text-xs">
+        <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Точные цвета в CMYK (необязательно)</summary>
+        <div className="grid grid-cols-2 gap-2 mt-2">
+          <div>
+            <div className="text-muted-foreground mb-1">Фон, C M Y K %</div>
+            <CmykInput value={bgCmyk} onChange={setBgCmyk} />
+            {bgBad && <div className="text-red-600 mt-0.5">4 числа от 0 до 100</div>}
+          </div>
+          <div>
+            <div className="text-muted-foreground mb-1">Текст и QR, C M Y K %</div>
+            <CmykInput value={textCmyk} onChange={setTextCmyk} />
+            {textBad && <div className="text-red-600 mt-0.5">4 числа от 0 до 100</div>}
+          </div>
+        </div>
+        <div className="text-muted-foreground mt-1">Пусто — цвет переводится автоматически по профилю ISO Coated v2 (FOGRA39).</div>
+      </details>
+
+      <div className={`text-xs rounded-lg px-3 py-2 ${tooBig ? 'bg-red-50 text-red-700' : 'bg-white text-muted-foreground'} border border-border`}>
+        Готовый размер <b className="text-foreground">{fmt(widthCm)} × {fmt(heightCm)} см</b>
+        {bleed > 0 && <> · с вылетами <b className="text-foreground">{fmt(fullW)} × {fmt(fullH)} см</b></>}
+        {' '}· {pxW.toLocaleString('ru')} × {pxH.toLocaleString('ru')} px · {dpi} dpi
+        {tooBig && <div className="mt-1 font-semibold">Слишком большой файл ({fmt(mp)} Мп, максимум {MAX_MP}) — выберите меньшее разрешение.</div>}
+      </div>
+
+      {issuesCount > 0 && (
+        <div className="text-xs text-amber-700 flex items-center gap-1.5">
+          <Icon name="TriangleAlert" size={12} />Есть элементы у края баннера — проверьте предупреждения в редакторе
+        </div>
+      )}
+
+      <button onClick={generate} disabled={disabled || busy || tooBig || bgBad || textBad}
+        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 transition"
+      >
+        {busy
+          ? <><Icon name="Loader2" size={15} className="animate-spin" />Готовлю файл{mp > 30 ? ' (до 20 сек)' : ''}…</>
+          : <><Icon name="FileDown" size={15} />Подготовить TIFF для типографии</>}
+      </button>
+
+      {error && <div className="text-xs text-red-600">{error}</div>}
+
+      {result && (
+        <div className="bg-white border border-emerald-200 rounded-lg p-3 space-y-2 text-xs">
+          <div className="flex gap-3">
+            <img src={result.preview_url} alt="Пробный оттиск" className="w-32 h-auto rounded border border-border flex-shrink-0 self-start" />
+            <div className="space-y-1 min-w-0">
+              <div className="font-semibold text-emerald-800 flex items-center gap-1.5">
+                <Icon name="CircleCheck" size={13} />Файл готов{result.cached ? ' (макет не менялся — тот же файл)' : ''}
+              </div>
+              <div className="text-muted-foreground">
+                {result.info.px_w.toLocaleString('ru')} × {result.info.px_h.toLocaleString('ru')} px · {result.info.dpi} dpi · {mb(result.size)}
+              </div>
+              <div className="text-muted-foreground">CMYK · профиль ISO Coated v2 (FOGRA39) · сжатие LZW</div>
+              {result.info.qr_side_cm && (
+                <div className="text-muted-foreground">QR-код {fmt(result.info.qr_side_cm)} см, модуль {fmt(result.info.qr_module_mm ?? 0)} мм</div>
+              )}
+              {result.info.bg_cmyk && (
+                <div className="text-muted-foreground">Фон CMYK {result.info.bg_cmyk.join('/')} · текст {result.info.text_cmyk?.join('/')}</div>
+              )}
+              <div className="text-amber-700">Ссылка действует до {new Date(result.expires_at).toLocaleDateString('ru')}</div>
+            </div>
+          </div>
+          {result.info.warnings?.map(w => <div key={w} className="text-amber-700">{w}</div>)}
+          <div className="text-muted-foreground">Слева — пробный оттиск: так цвета будут выглядеть на печати.</div>
+          <div className="flex gap-2">
+            <a href={result.url} download
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700"
+            ><Icon name="Download" size={13} />Скачать TIFF</a>
+            <button onClick={() => copy(result.url)}
+              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-border hover:border-emerald-500"
+            ><Icon name="Link" size={13} />Ссылка для агентства</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

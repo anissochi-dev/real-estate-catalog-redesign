@@ -540,6 +540,41 @@ export async function uploadFileEx(
   throw lastErr;
 }
 
+export interface PrintBannerInfo {
+  width_cm: number; height_cm: number; dpi: number; bleed_mm: number;
+  full_width_cm: number; full_height_cm: number;
+  px_w: number; px_h: number; megapixels: number; too_big: boolean; max_mp: number;
+  size_bytes?: number; qr_side_cm?: number; qr_module_mm?: number;
+  bg_cmyk?: number[]; text_cmyk?: number[]; warnings?: string[];
+}
+
+export interface PrintBannerResult {
+  url: string; preview_url: string; size: number; expires_at: string; cached: boolean; info: PrintBannerInfo;
+}
+
+/** Файл для типографии: CMYK TIFF, генерируется на сервере, хранится 7 дней. */
+export async function generatePrintBanner(params: Record<string, unknown>): Promise<PrintBannerResult> {
+  const token = getToken();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(token ? { 'X-Auth-Token': token } : {}) };
+  const body = JSON.stringify({ kind: 'print_banner', params });
+  let lastErr = 'Ошибка генерации';
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, 2000));
+    let res: Response;
+    try {
+      res = await fetch(UPLOADS_URL, { method: 'POST', headers, body });
+    } catch {
+      lastErr = 'Сеть недоступна';
+      continue;
+    }
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) return data as PrintBannerResult;
+    lastErr = (data as Record<string, string>).error || `HTTP ${res.status}`;
+    if (res.status !== 502 && res.status !== 503) break;
+  }
+  throw new Error(lastErr);
+}
+
 /** Обратно-совместимая загрузка — возвращает только URL (с ВЗ если есть, иначе оригинал) */
 export async function uploadFile(
   file: File,

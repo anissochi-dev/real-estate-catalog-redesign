@@ -11,6 +11,7 @@ GET               → последние 5 прогонов из s3_orphans_log
 GET ?action=dry_run → показывает орфанов без удаления (требует admin-токен)
 GET ?action=run     → реальное удаление (требует admin-токен)
 Крон-вызов без токена: action=run разрешён без авторизации (доверенный вызов по расписанию).
+Дополнительно: удаляет файлы для печати (print_files, QR-баннеры TIFF) старше 7 дней.
 """
 import json
 import os
@@ -67,6 +68,40 @@ def _save_log(conn, total_s3, used_s3, orphan_s3, removed_s3,
     conn.commit()
 
 
+def _cleanup_print_files(conn, limit: int = 200) -> dict:
+    """Удаляет из S3 файлы для печати с истёкшим сроком (7 дней) и отмечает их removed_at."""
+    with conn.cursor() as cur:
+        cur.execute(
+            f"SELECT id, s3_key, preview_key, size_bytes FROM {SCHEMA}.print_files "
+            f"WHERE removed_at IS NULL AND expires_at < NOW() ORDER BY expires_at LIMIT {int(limit)}"
+        )
+        rows = cur.fetchall()
+    if not rows:
+        return {'removed': 0, 'freed_mb': 0}
+    s3_client = _s3()
+    done_ids, freed, failed = [], 0, 0
+    for rid, key, prev_key, size in rows:
+        try:
+            s3_client.delete_object(Bucket=BUCKET, Key=key)
+            if prev_key:
+                s3_client.delete_object(Bucket=BUCKET, Key=prev_key)
+            done_ids.append(rid)
+            freed += size or 0
+        except Exception as e:
+            failed += 1
+            print(f'[print-cleanup] {key}: {e}')
+    if done_ids:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"UPDATE {SCHEMA}.print_files SET removed_at = NOW() "
+                f"WHERE id IN ({', '.join(str(i) for i in done_ids)})"
+            )
+        conn.commit()
+    res = {'removed': len(done_ids), 'failed': failed, 'freed_mb': round(freed / 1048576, 1)}
+    print(f'[print-cleanup] {res}')
+    return res
+
+
 def handler(event: dict, context) -> dict:
     """Очистка сиротских фото через s3_photo_refs. Работает без листинга S3."""
     if event.get('httpMethod') == 'OPTIONS':
@@ -95,6 +130,12 @@ def handler(event: dict, context) -> dict:
             conn.close()
             return _err(403, 'Только для администратора')
 
+    # Файлы для печати (QR-баннеры TIFF) живут 7 дней — удаляем просроченные при каждом
+    # вызове по расписанию (крон приходит без action) и при ручном run.
+    print_cleanup = None
+    if action in ('', 'run'):
+        print_cleanup = _cleanup_print_files(conn)
+
     # Без action — возвращаем последние прогоны
     if not action:
         with conn.cursor() as cur:
@@ -106,7 +147,7 @@ def handler(event: dict, context) -> dict:
             cols = [d[0] for d in cur.description]
             rows = [dict(zip(cols, r)) for r in cur.fetchall()]
         conn.close()
-        return _ok({'last_runs': rows})
+        return _ok({'last_runs': rows, 'print_cleanup': print_cleanup})
 
     # Получаем орфанов из БД (старше MIN_AGE_HOURS)
     cutoff = datetime.now(timezone.utc) - timedelta(hours=MIN_AGE_HOURS)
@@ -145,7 +186,7 @@ def handler(event: dict, context) -> dict:
     if not orphan_keys:
         _save_log(conn, total_s3, used_s3, 0, 0, 0, 0, [], [], status='completed')
         conn.close()
-        return _ok({'mode': 'run', 'removed': 0, 'message': 'Нет сиротских фото старше 24 часов'})
+        return _ok({'mode': 'run', 'removed': 0, 'message': 'Нет сиротских фото старше 24 часов', 'print_cleanup': print_cleanup})
 
     s3_client = _s3()
     removed_keys = []
@@ -187,4 +228,5 @@ def handler(event: dict, context) -> dict:
         'removed': len(removed_keys),
         'failed': len(failed_keys),
         'errors': failed_keys[:5],
+        'print_cleanup': print_cleanup,
     })

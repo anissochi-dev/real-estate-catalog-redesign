@@ -5,9 +5,11 @@ import { adminApi, uploadFileEx } from '@/lib/adminApi';
 import { Listing } from './types';
 import type { CanvasProps } from './QrBannerCanvas';
 import { ColorPicker, SizePanel, EditorPanel, TextPanel, ImagesPanel, DownloadPanel } from './QrBannerControls';
+import { PrintPanel } from './QrBannerPrintPanel';
 import {
-  BrokerInfo, BannerElement, ElementId, Pos,
-  PX_PER_CM, makeElements,
+  BrokerInfo, BannerElement, ElementId, Pos, ManualSizes,
+  PX_PER_CM, layoutElements, elementIssue, sizeFromCm, qrPadPx, sizeLabelMetrics,
+  FONT_FAMILY, BASELINE, DEAL_WEIGHT, PHONE_WEIGHT, LABEL_WEIGHT, DEAL_LS, PHONE_LS, PHONE_PLACEHOLDER,
 } from './QrBannerTypes';
 
 interface Props { listing: Listing; siteUrl?: string }
@@ -74,55 +76,64 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   const scaledH = Math.round(bannerH * previewScale);
   const previewH = Math.max(80, scaledH + 16);
 
-  // ── элементы ──────────────────────────────────────────────────────────────
-  const prevElsRef = useRef<BannerElement[]>([]);
+  // ── элементы: авто-раскладка в долях от размера баннера ──────────────────
+  const [manual, setManual] = useState<ManualSizes>({});
+  const [fontsReady, setFontsReady] = useState(0);
+  const movedRef = useRef<Set<ElementId>>(new Set());
+  const dimsRef = useRef<{ w: number; h: number } | null>(null);
 
   useEffect(() => {
-    setElements(prev => {
-      const next = makeElements(bannerW, bannerH, prev, dealText, phoneText);
-      prevElsRef.current = next;
-      return next;
-    });
-    setSelected(null);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bannerW, bannerH]);
+    if (!document.fonts) return;
+    Promise.all([
+      document.fonts.load(`${DEAL_WEIGHT} 100px Montserrat`),
+      document.fonts.load(`${PHONE_WEIGHT} 100px Montserrat`),
+      document.fonts.load(`${LABEL_WEIGHT} 100px Montserrat`),
+    ]).then(() => setFontsReady(v => v + 1)).catch(() => {});
+  }, []);
 
-  // пересчитываем шрифты при изменении текста (только если пользователь не двигал элементы)
   useEffect(() => {
+    const prevDims = dimsRef.current;
+    const sizeChanged = !prevDims || prevDims.w !== bannerW || prevDims.h !== bannerH;
+    dimsRef.current = { w: bannerW, h: bannerH };
+    if (sizeChanged) movedRef.current = new Set();
+    const moved = movedRef.current;
     setElements(prev => {
-      // проверяем: позиции совпадают с дефолтными — значит пользователь не трогал
-      const def = makeElements(bannerW, bannerH, prev, dealText, phoneText);
-      return prev.map(el => {
-        const d = def.find(e => e.id === el.id);
-        if (!d) return el;
-        // обновляем только fontSize/imgSize, позицию не трогаем
-        return { ...el, fontSize: d.fontSize ?? el.fontSize, imgSize: d.imgSize ?? el.imgSize };
+      const next = layoutElements(bannerW, bannerH, { dealText, phoneText }, manual, prev, prevDims ?? undefined);
+      if (sizeChanged) return next;
+      return next.map(n => {
+        if (!moved.has(n.id)) return n;
+        const p = prev.find(e => e.id === n.id);
+        return p ? { ...n, pos: p.pos } : n;
       });
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dealText, phoneText]);
+    if (sizeChanged) setSelected(null);
+  }, [bannerW, bannerH, dealText, phoneText, manual, fontsReady]);
 
   const resetPositions = () => {
-    setElements(prev => makeElements(bannerW, bannerH, prev, dealText, phoneText));
+    movedRef.current = new Set();
+    setManual({});
+    setElements(prev => layoutElements(bannerW, bannerH, { dealText, phoneText }, {}, prev));
     setSelected(null);
   };
 
-  const addLogoElement = (url: string) => {
-    setLogoUrl(url);
-    setElements(prev => [...prev.filter(e => e.id !== 'logo'), { id: 'logo', pos: { x: 16, y: 16 }, imgSize: Math.round(bannerH * 0.28) }]);
+  const addImageElement = (id: 'logo' | 'photo') => {
+    const m = Math.round(Math.min(bannerW, bannerH) * 0.07);
+    const size = Math.round(bannerH * (id === 'logo' ? 0.28 : 0.4));
+    const pos = id === 'logo' ? { x: m, y: m } : { x: m, y: bannerH - size - m };
+    movedRef.current.add(id);
+    setManual(prev => { const n = { ...prev }; delete n[id]; return n; });
+    setElements(prev => [...prev.filter(e => e.id !== id), { id, pos, imgSize: size }]);
   };
-  const removeLogoElement = () => {
-    setLogoUrl(''); setElements(prev => prev.filter(e => e.id !== 'logo'));
-    if (selected === 'logo') setSelected(null);
+  const removeImageElement = (id: 'logo' | 'photo') => {
+    setElements(prev => prev.filter(e => e.id !== id));
+    setManual(prev => { const n = { ...prev }; delete n[id]; return n; });
+    if (selected === id) setSelected(null);
   };
-  const addPhotoElement = (url: string) => {
-    setPhotoUrl(url);
-    setElements(prev => [...prev.filter(e => e.id !== 'photo'), { id: 'photo', pos: { x: 16, y: bannerH - Math.round(bannerH * 0.45) - 16 }, imgSize: Math.round(bannerH * 0.4) }]);
-  };
-  const removePhotoElement = () => {
-    setPhotoUrl(''); setElements(prev => prev.filter(e => e.id !== 'photo'));
-    if (selected === 'photo') setSelected(null);
-  };
+
+  const addLogoElement = (url: string) => { setLogoUrl(url); addImageElement('logo'); };
+  const removeLogoElement = () => { setLogoUrl(''); removeImageElement('logo'); };
+  const addPhotoElement = (url: string) => { setPhotoUrl(url); addImageElement('photo'); };
+  const removePhotoElement = () => { setPhotoUrl(''); removeImageElement('photo'); };
 
   const uploadLogo = async (file: File) => {
     setUploadingLogo(true);
@@ -154,35 +165,57 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   }, [broker, listing]);
 
   // ── QR ────────────────────────────────────────────────────────────────────
+  const qrBase = publicUrl || `${window.location.origin}/object/${listing.id}`;
+  const qrUrl = `${qrBase}${qrBase.includes('?') ? '&' : '?'}from=qr`;
+
   const generateQr = useCallback(async () => {
-    const base = publicUrl || `${window.location.origin}/object/${listing.id}`;
-    const url = `${base}${base.includes('?') ? '&' : '?'}from=qr`;
+    const url = qrUrl;
     try {
       const dataUrl = await QRCode.toDataURL(url, { width: 300, margin: 1, color: { dark: textColor, light: '#00000000' } });
       setQrDataUrl(dataUrl);
     } catch { setQrDataUrl(''); }
-  }, [publicUrl, listing.id, textColor]);
+  }, [qrUrl, textColor]);
 
   useEffect(() => { generateQr(); }, [generateQr]);
 
+  const buildPrintParams = () => ({
+    listing_id: listing.id,
+    width_cm: numCmW, height_cm: numCmH,
+    bg_color: bgColor, text_color: textColor,
+    deal_text: dealText, phone_text: phoneText,
+    qr_url: qrUrl,
+    photo_url: photoUrl || undefined, logo_url: logoUrl || undefined,
+    show_size: showSize,
+    size_label_w: numCmW, size_label_h: numCmH,
+    elements: elements
+      .filter(e => (e.id !== 'logo' || logoUrl) && (e.id !== 'photo' || photoUrl))
+      .map(e => ({ id: e.id, pos: { x: Math.round(e.pos.x * 100) / 100, y: Math.round(e.pos.y * 100) / 100 }, fontSize: e.fontSize, imgSize: e.imgSize })),
+  });
+
   // ── редактор ──────────────────────────────────────────────────────────────
-  const updatePos = (id: ElementId, pos: Pos) =>
+  const updatePos = (id: ElementId, pos: Pos) => {
+    movedRef.current.add(id);
     setElements(prev => prev.map(e => e.id === id ? { ...e, pos } : e));
+  };
 
   const selectedEl = elements.find(e => e.id === selected);
 
-  const updateSize = (delta: number) => {
+  const setSelectedCm = (cm: number) => {
     if (!selected) return;
-    if (selected === 'deal' || selected === 'phone') {
-      setElements(prev => prev.map(e =>
-        e.id === selected ? { ...e, fontSize: Math.max(8, Math.min(500, (e.fontSize ?? 20) + delta)) } : e
-      ));
-    } else {
-      setElements(prev => prev.map(e =>
-        e.id === selected ? { ...e, imgSize: Math.max(20, Math.min(600, (e.imgSize ?? 60) + delta)) } : e
-      ));
-    }
+    const maxSide = Math.max(bannerW, bannerH) * 2;
+    const v = Math.max(4, Math.min(maxSide, sizeFromCm(selected, cm)));
+    setManual(prev => ({ ...prev, [selected]: v }));
   };
+  const setSelectedAuto = () => {
+    if (!selected) return;
+    setManual(prev => { const n = { ...prev }; delete n[selected]; return n; });
+  };
+
+  const textOpts = { dealText, phoneText };
+  const issues = elements
+    .filter(e => (e.id !== 'logo' || logoUrl) && (e.id !== 'photo' || photoUrl))
+    .map(e => ({ id: e.id, kind: elementIssue(e, bannerW, bannerH, textOpts) }))
+    .filter((i): i is { id: ElementId; kind: 'out' | 'edge' } => i.kind !== null);
 
   const applyPreset = (w: number, h: number) => { setCmW(String(w)); setCmH(String(h)); };
 
@@ -190,7 +223,7 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   const download = async () => {
     setDownloading(true);
     try {
-      const SCALE = 4;
+      const SCALE = Math.max(1, Math.min(4, Math.sqrt(16_000_000 / (bannerW * bannerH)), 8000 / Math.max(bannerW, bannerH)));
       const W = bannerW * SCALE;
       const H = bannerH * SCALE;
       const cv = document.createElement('canvas');
@@ -228,22 +261,21 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
       }
 
       // надпись сделки
-      const dealEl = elements.find(e => e.id === 'deal');
-      if (dealEl) {
+      const drawText = (text: string, weight: number, ls: number, el: BannerElement) => {
+        const fs = el.fontSize ?? 20;
         ctx.fillStyle = textColor;
-        ctx.font = `900 ${dealEl.fontSize ?? 20}px Arial, sans-serif`;
-        ctx.letterSpacing = '3px';
-        ctx.fillText(dealText, dealEl.pos.x + 4, dealEl.pos.y + (dealEl.fontSize ?? 20));
-      }
+        ctx.font = `${weight} ${fs}px ${FONT_FAMILY}`;
+        ctx.letterSpacing = `${ls * fs}px`;
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(text, el.pos.x, el.pos.y + fs * BASELINE);
+        ctx.letterSpacing = '0px';
+      };
 
-      // телефон
+      const dealEl = elements.find(e => e.id === 'deal');
+      if (dealEl) drawText(dealText, DEAL_WEIGHT, DEAL_LS, dealEl);
+
       const phoneEl = elements.find(e => e.id === 'phone');
-      if (phoneEl) {
-        ctx.fillStyle = textColor;
-        ctx.font = `800 ${phoneEl.fontSize ?? 20}px Arial, sans-serif`;
-        ctx.letterSpacing = '1px';
-        ctx.fillText(phoneText || '+7 ─── ─── ────', phoneEl.pos.x + 4, phoneEl.pos.y + (phoneEl.fontSize ?? 20));
-      }
+      if (phoneEl) drawText(phoneText || PHONE_PLACEHOLDER, PHONE_WEIGHT, PHONE_LS, phoneEl);
 
       // QR-код
       const qrEl = elements.find(e => e.id === 'qr');
@@ -251,15 +283,17 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
         try {
           const img = await loadImg(qrDataUrl);
           const sz = qrEl.imgSize ?? 80;
+          const pad = qrPadPx(sz);
           ctx.save();
           ctx.globalAlpha = 0.15;
           ctx.fillStyle = '#ffffff';
           ctx.beginPath();
-          ctx.roundRect(qrEl.pos.x, qrEl.pos.y, sz + 10, sz + 10, 10);
+          ctx.roundRect(qrEl.pos.x, qrEl.pos.y, sz + 2 * pad, sz + 2 * pad, pad * 2);
           ctx.fill();
-          ctx.globalAlpha = 1;
           ctx.restore();
-          ctx.drawImage(img, qrEl.pos.x + 5, qrEl.pos.y + 5, sz, sz);
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(img, qrEl.pos.x + pad, qrEl.pos.y + pad, sz, sz);
+          ctx.imageSmoothingEnabled = true;
         } catch { /* пропускаем */ }
       }
 
@@ -276,12 +310,12 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
       // подпись размера
       if (showSize) {
         const label = `${numCmW} см × ${numCmH} см`;
-        const fs = Math.max(10, bannerH * 0.065);
+        const { fontSize: fs, offset } = sizeLabelMetrics(bannerW, bannerH);
         ctx.fillStyle = textColor;
         ctx.globalAlpha = 0.55;
-        ctx.font = `700 ${fs}px Arial, sans-serif`;
-        ctx.letterSpacing = '0.5px';
-        ctx.fillText(label, bannerW - ctx.measureText(label).width - 10, bannerH - 8);
+        ctx.font = `${LABEL_WEIGHT} ${fs}px ${FONT_FAMILY}`;
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(label, bannerW - ctx.measureText(label).width - offset, bannerH - offset - fs * (1 - BASELINE));
         ctx.globalAlpha = 1;
       }
 
@@ -379,8 +413,11 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
         numCmW={numCmW} numCmH={numCmH}
         selected={selected}
         selectedEl={selectedEl}
+        selectedManual={!!selected && manual[selected] !== undefined}
+        issues={issues}
         onResetPositions={resetPositions}
-        onUpdateSize={updateSize}
+        onSetCm={setSelectedCm}
+        onSetAuto={setSelectedAuto}
         onDeselect={() => setSelected(null)}
       />
 
@@ -410,7 +447,15 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
         onUseListingPhoto={useListingPhoto}
       />
 
-      {/* 6. Скачать */}
+      {/* 6. Файл для типографии */}
+      <PrintPanel
+        widthCm={numCmW} heightCm={numCmH}
+        disabled={!qrUrl}
+        buildParams={buildPrintParams}
+        issuesCount={issues.length}
+      />
+
+      {/* 7. Скачать */}
       <DownloadPanel
         downloadFormat={downloadFormat} setDownloadFormat={setDownloadFormat}
         downloading={downloading} qrDataUrl={qrDataUrl}

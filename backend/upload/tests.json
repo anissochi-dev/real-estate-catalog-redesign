@@ -6,6 +6,13 @@
       "path": "/",
       "body": {"file_base64": "x", "filename": "t.jpg", "kind": "photo"},
       "expectedStatus": 401
+    },
+    {
+      "name": "Файл для печати без авторизации",
+      "method": "POST",
+      "path": "/",
+      "body": {"kind": "print_plan", "params": {"width_cm": 100, "height_cm": 50}},
+      "expectedStatus": 401
     }
   ]
 }

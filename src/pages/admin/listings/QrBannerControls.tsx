@@ -1,5 +1,9 @@
+import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
-import { BannerElement, BG_COLORS, ElementId, EL_LABEL, getSizeInfo, SIZE_PRESETS, TEXT_COLORS } from './QrBannerTypes';
+import {
+  BannerElement, BG_COLORS, ElementId, EL_LABEL, SIZE_PRESETS, TEXT_COLORS,
+  elementCm, isTextEl, qrReadDistanceM,
+} from './QrBannerTypes';
 import { BannerCanvas, CanvasProps, ImageUploadBtn, Swatch } from './QrBannerCanvas';
 
 // ─── ColorPicker ──────────────────────────────────────────────────────────────
@@ -102,6 +106,33 @@ export function SizePanel({ cmW, setCmW, cmH, setCmH, numCmW, numCmH, sqM, showS
 
 // ─── EditorPanel ──────────────────────────────────────────────────────────────
 
+const fmtCm = (v: number) => String(Math.round(v * 10) / 10).replace('.', ',');
+
+function CmInput({ value, onCommit }: { value: number; onCommit: (cm: number) => void }) {
+  const [draft, setDraft] = useState(fmtCm(value));
+  const [focused, setFocused] = useState(false);
+  useEffect(() => { if (!focused) setDraft(fmtCm(value)); }, [value, focused]);
+  const commit = (s: string) => {
+    const n = parseFloat(s.replace(',', '.'));
+    if (Number.isFinite(n) && n > 0) onCommit(Math.min(1000, n));
+  };
+  return (
+    <input
+      inputMode="decimal" value={draft}
+      onFocus={() => setFocused(true)}
+      onBlur={() => { setFocused(false); commit(draft); }}
+      onChange={e => { setDraft(e.target.value); commit(e.target.value); }}
+      onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+      className="w-20 px-2 py-1.5 border-2 border-border rounded-lg text-sm font-bold text-center focus:border-brand-blue outline-none"
+    />
+  );
+}
+
+const ISSUE_TEXT = {
+  out: 'выходит за край баннера — уменьшите размер или передвиньте',
+  edge: 'ближе 5 мм к краю — может попасть под обрез',
+};
+
 interface EditorPanelProps {
   canvasProps: Omit<CanvasProps, 'bannerRef' | 'exportMode'>;
   bannerW: number; bannerH: number;
@@ -110,15 +141,18 @@ interface EditorPanelProps {
   numCmW: number; numCmH: number;
   selected: ElementId | null;
   selectedEl: BannerElement | undefined;
+  selectedManual: boolean;
+  issues: { id: ElementId; kind: 'out' | 'edge' }[];
   onResetPositions: () => void;
-  onUpdateSize: (delta: number) => void;
+  onSetCm: (cm: number) => void;
+  onSetAuto: () => void;
   onDeselect: () => void;
 }
 
 export function EditorPanel({
   canvasProps, previewScale,
   previewH, numCmW, numCmH,
-  selected, selectedEl, onResetPositions, onUpdateSize, onDeselect,
+  selected, selectedEl, selectedManual, issues, onResetPositions, onSetCm, onSetAuto, onDeselect,
 }: EditorPanelProps) {
   return (
     <div className="space-y-2">
@@ -128,7 +162,7 @@ export function EditorPanel({
           <button onClick={onResetPositions}
             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
-            <Icon name="RotateCcw" size={12} />Сбросить
+            <Icon name="RotateCcw" size={12} />Вернуть авто
           </button>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Icon name="Move" size={12} />Перетащи
@@ -165,29 +199,68 @@ export function EditorPanel({
         </div>
       </div>
 
-      {selected && selectedEl && (
-        <div className="bg-muted/50 rounded-xl px-4 py-2.5 text-sm">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <Icon name={
-                selected === 'qr' ? 'QrCode' : selected === 'deal' ? 'Type' :
-                selected === 'phone' ? 'Phone' : selected === 'logo' ? 'Building2' : 'Image'
-              } size={14} className="text-muted-foreground flex-shrink-0" />
-              <span className="text-muted-foreground truncate">{EL_LABEL[selected]}</span>
-              <span className="text-muted-foreground flex-shrink-0">· {getSizeInfo(selectedEl).label}</span>
+      {selected && selectedEl && (() => {
+        const cm = elementCm(selectedEl);
+        const step = cm >= 20 ? 1 : 0.5;
+        const issue = issues.find(i => i.id === selected);
+        const canAuto = selected === 'deal' || selected === 'phone' || selected === 'qr';
+        return (
+          <div className="bg-muted/50 rounded-xl px-4 py-2.5 text-sm space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Icon name={
+                  selected === 'qr' ? 'QrCode' : selected === 'deal' ? 'Type' :
+                  selected === 'phone' ? 'Phone' : selected === 'logo' ? 'Building2' : 'Image'
+                } size={14} className="text-muted-foreground flex-shrink-0" />
+                <span className="font-semibold truncate">{EL_LABEL[selected]}</span>
+                {canAuto && (
+                  <div className="flex rounded-lg border border-border overflow-hidden text-xs flex-shrink-0">
+                    <button onClick={onSetAuto}
+                      className={`px-2 py-0.5 ${!selectedManual ? 'bg-brand-blue text-white' : 'bg-white text-muted-foreground hover:text-foreground'}`}
+                    >Авто</button>
+                    <button onClick={() => onSetCm(cm)}
+                      className={`px-2 py-0.5 ${selectedManual ? 'bg-brand-blue text-white' : 'bg-white text-muted-foreground hover:text-foreground'}`}
+                    >Вручную</button>
+                  </div>
+                )}
+              </div>
+              <button onClick={onDeselect} className="text-xs text-muted-foreground hover:text-foreground flex-shrink-0">✕ Снять</button>
             </div>
-            <button onClick={onDeselect} className="text-xs text-muted-foreground hover:text-foreground flex-shrink-0">✕ Снять</button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-muted-foreground w-28">
+                {isTextEl(selected) ? 'Высота букв, см' : 'Сторона, см'}
+              </span>
+              <button onClick={() => onSetCm(Math.max(0.5, cm - step))} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted border border-border bg-white">
+                <Icon name="Minus" size={14} />
+              </button>
+              <CmInput value={cm} onCommit={onSetCm} />
+              <button onClick={() => onSetCm(cm + step)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted border border-border bg-white">
+                <Icon name="Plus" size={14} />
+              </button>
+            </div>
+            {selected === 'qr' && (
+              <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <Icon name="ScanLine" size={12} />
+                Считывается телефоном с расстояния до ~{fmtCm(qrReadDistanceM(selectedEl.imgSize ?? 60))} м
+              </div>
+            )}
+            {issue && (
+              <div className={`text-xs flex items-center gap-1.5 ${issue.kind === 'out' ? 'text-red-600' : 'text-amber-600'}`}>
+                <Icon name="TriangleAlert" size={12} />{ISSUE_TEXT[issue.kind]}
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-3 mt-2">
-            <button onClick={() => onUpdateSize(-2)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted border border-border">
-              <Icon name="Minus" size={14} />
-            </button>
-            <span className="font-bold w-10 text-center text-base">{getSizeInfo(selectedEl).value}</span>
-            <button onClick={() => onUpdateSize(2)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted border border-border">
-              <Icon name="Plus" size={14} />
-            </button>
-          </div>
+        );
+      })()}
+
+      {!selected && issues.length > 0 && (
+        <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-start gap-1.5">
+          <Icon name="TriangleAlert" size={12} className="mt-0.5 flex-shrink-0" />
+          <span>{issues.map(i => `${EL_LABEL[i.id]}: ${ISSUE_TEXT[i.kind]}`).join('; ')}</span>
         </div>
+      )}
+      {!selected && issues.length === 0 && (
+        <div className="text-xs text-muted-foreground">Нажмите на элемент, чтобы задать его размер в сантиметрах</div>
       )}
     </div>
   );

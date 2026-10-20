@@ -1,6 +1,9 @@
 import { useRef } from 'react';
 import Icon from '@/components/ui/icon';
-import { BannerElement, ElementId, Pos } from './QrBannerTypes';
+import {
+  BannerElement, ElementId, Pos, FONT_FAMILY, DEAL_WEIGHT, PHONE_WEIGHT, LABEL_WEIGHT,
+  DEAL_LS, PHONE_LS, PHONE_PLACEHOLDER, qrPadPx, sizeLabelMetrics,
+} from './QrBannerTypes';
 
 // ─── BannerCanvas ─────────────────────────────────────────────────────────────
 
@@ -69,7 +72,9 @@ export function BannerCanvas({
   const qrEl    = getEl('qr');
   const logoEl  = getEl('logo');
   const photoEl = getEl('photo');
-  const sizeLabel = Math.max(10, bannerH * 0.065);
+  const sizeLabel = sizeLabelMetrics(bannerW, bannerH);
+  const qrSz = qrEl?.imgSize ?? 80;
+  const qrPad = qrPadPx(qrSz);
 
   return (
     <div
@@ -81,7 +86,7 @@ export function BannerCanvas({
       style={{
         position: 'relative', width: bannerW, height: bannerH, background: bg,
         borderRadius: exportMode ? 0 : 12, overflow: 'hidden',
-        userSelect: 'none', fontFamily: 'Arial, Helvetica, sans-serif', touchAction: 'none',
+        userSelect: 'none', fontFamily: FONT_FAMILY, touchAction: 'none',
       }}
     >
       {photoEl && photoUrl && (
@@ -98,31 +103,31 @@ export function BannerCanvas({
       {dealEl && (
         <div onPointerDown={e => onPointerDown(e, 'deal')} style={{
           position: 'absolute', left: dealEl.pos.x, top: dealEl.pos.y,
-          fontSize: dealEl.fontSize, fontWeight: 900, color: textColor,
-          letterSpacing: 3, lineHeight: 1, cursor: exportMode ? 'default' : 'grab',
-          whiteSpace: 'nowrap', padding: 4, ...selStyle('deal'),
+          fontSize: dealEl.fontSize, fontWeight: DEAL_WEIGHT, color: textColor,
+          letterSpacing: `${DEAL_LS}em`, lineHeight: 1, cursor: exportMode ? 'default' : 'grab',
+          whiteSpace: 'nowrap', ...selStyle('deal'),
         }}>{dealText}</div>
       )}
 
       {phoneEl && (
         <div onPointerDown={e => onPointerDown(e, 'phone')} style={{
           position: 'absolute', left: phoneEl.pos.x, top: phoneEl.pos.y,
-          fontSize: phoneEl.fontSize, fontWeight: 800, color: textColor,
-          letterSpacing: 1, lineHeight: 1, cursor: exportMode ? 'default' : 'grab',
-          whiteSpace: 'nowrap', padding: 4, ...selStyle('phone'),
-        }}>{phoneText || '+7 ─── ─── ────'}</div>
+          fontSize: phoneEl.fontSize, fontWeight: PHONE_WEIGHT, color: textColor,
+          letterSpacing: `${PHONE_LS}em`, lineHeight: 1, cursor: exportMode ? 'default' : 'grab',
+          whiteSpace: 'nowrap', ...selStyle('phone'),
+        }}>{phoneText || PHONE_PLACEHOLDER}</div>
       )}
 
       {qrEl && (
         <div onPointerDown={e => onPointerDown(e, 'qr')} style={{
           position: 'absolute', left: qrEl.pos.x, top: qrEl.pos.y,
-          width: (qrEl.imgSize ?? 80) + 10, height: (qrEl.imgSize ?? 80) + 10,
-          background: 'rgba(255,255,255,0.15)', borderRadius: 10, padding: 5,
+          width: qrSz + 2 * qrPad, height: qrSz + 2 * qrPad, boxSizing: 'border-box',
+          background: 'rgba(255,255,255,0.15)', borderRadius: qrPad * 2, padding: qrPad,
           cursor: exportMode ? 'default' : 'grab', ...selStyle('qr'),
         }}>
           {qrDataUrl
-            ? <img src={qrDataUrl} alt="QR" style={{ width: qrEl.imgSize ?? 80, height: qrEl.imgSize ?? 80, display: 'block' }} />
-            : <div style={{ width: qrEl.imgSize ?? 80, height: qrEl.imgSize ?? 80, opacity: 0.25, border: `2px dashed ${textColor}`, borderRadius: 6 }} />
+            ? <img src={qrDataUrl} alt="QR" style={{ width: qrSz, height: qrSz, display: 'block' }} />
+            : <div style={{ width: qrSz, height: qrSz, opacity: 0.25, border: `2px dashed ${textColor}`, borderRadius: 6 }} />
           }
         </div>
       )}
@@ -139,9 +144,9 @@ export function BannerCanvas({
 
       {showSize && (
         <div style={{
-          position: 'absolute', bottom: 8, right: 10,
-          fontSize: sizeLabel, fontWeight: 700,
-          color: textColor, opacity: 0.55, letterSpacing: 0.5, whiteSpace: 'nowrap',
+          position: 'absolute', bottom: sizeLabel.offset, right: sizeLabel.offset,
+          fontSize: sizeLabel.fontSize, fontWeight: LABEL_WEIGHT, lineHeight: 1,
+          color: textColor, opacity: 0.55, whiteSpace: 'nowrap',
         }}>
           {cmW} см × {cmH} см
         </div>

@@ -175,6 +175,86 @@ def _apply_watermark(image_bytes, settings):
         return image_bytes
 
 
+PRINT_TTL_DAYS = 7
+
+
+def _handle_print_banner(cur, conn, user, body):
+    """kind=print_plan — расчёт размеров файла; kind=print_banner — генерация CMYK TIFF.
+    Одинаковый макет в течение 7 дней отдаётся из уже готового файла (по отпечатку)."""
+    import print_banner as pb
+
+    params = body.get('params') or {}
+    try:
+        info = pb.plan(params)
+    except (KeyError, TypeError, ValueError) as e:
+        return _err(400, str(e) or 'Неверные параметры')
+    if body.get('kind') == 'print_plan':
+        return _ok({'success': True, 'plan': info})
+    if info['too_big']:
+        return _err(400, f"Слишком большой файл: {info['megapixels']} Мп при {info['dpi']} dpi. "
+                         f"Уменьшите разрешение (максимум {info['max_mp']} Мп)")
+
+    layout_hash = hashlib.sha256(
+        json.dumps(params, sort_keys=True, ensure_ascii=False).encode()
+    ).hexdigest()
+
+    cur.execute(
+        f"SELECT cdn_url, preview_url, size_bytes, params, expires_at FROM {SCHEMA}.print_files "
+        f"WHERE layout_hash = %s AND removed_at IS NULL AND expires_at > NOW() + INTERVAL '1 hour' "
+        f"ORDER BY created_at DESC LIMIT 1",
+        (layout_hash,),
+    )
+    cached = cur.fetchone()
+    if cached:
+        meta = cached.get('params') or {}
+        return _ok({
+            'success': True, 'cached': True, 'url': cached['cdn_url'], 'preview_url': cached['preview_url'],
+            'size': cached['size_bytes'], 'expires_at': cached['expires_at'].isoformat(),
+            'info': meta.get('info') or info,
+        })
+
+    try:
+        tiff, preview, info = pb.render(params)
+    except ValueError as e:
+        return _err(400, str(e))
+
+    listing_id = params.get('listing_id')
+    try:
+        listing_id = int(listing_id) if listing_id is not None else None
+    except (TypeError, ValueError):
+        listing_id = None
+
+    s3 = boto3.client(
+        's3', endpoint_url='https://bucket.poehali.dev',
+        aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+        aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+    )
+    w_lbl = f"{info['width_cm']:g}x{info['height_cm']:g}cm"
+    base = f"print-banners/banner-{listing_id or 'x'}-{w_lbl}-{info['dpi']}dpi-{layout_hash[:10]}"
+    tiff_key, prev_key = f'{base}.tif', f'{base}-proof.jpg'
+    s3.put_object(Bucket='files', Key=tiff_key, Body=tiff, ContentType='image/tiff',
+                  ContentDisposition=f'attachment; filename="{base.split("/")[-1]}.tif"',
+                  CacheControl='private, max-age=604800')
+    del tiff
+    s3.put_object(Bucket='files', Key=prev_key, Body=preview, ContentType='image/jpeg',
+                  CacheControl='private, max-age=604800')
+    cdn_base = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/"
+
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.print_files "
+        f"(listing_id, layout_hash, s3_key, cdn_url, preview_key, preview_url, size_bytes, params, created_by, expires_at) "
+        f"VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW() + INTERVAL '{PRINT_TTL_DAYS} days') RETURNING expires_at",
+        (listing_id, layout_hash, tiff_key, cdn_base + tiff_key, prev_key, cdn_base + prev_key,
+         info['size_bytes'], json.dumps({'info': info}, ensure_ascii=False), user['id']),
+    )
+    expires_at = cur.fetchone()['expires_at']
+    conn.commit()
+    return _ok({
+        'success': True, 'cached': False, 'url': cdn_base + tiff_key, 'preview_url': cdn_base + prev_key,
+        'size': info['size_bytes'], 'expires_at': expires_at.isoformat(), 'info': info,
+    })
+
+
 def handler(event, context):
     method = event.get('httpMethod', 'POST')
 
@@ -355,6 +435,8 @@ def handler(event, context):
                 return _err(403, 'Нет прав')
 
             body = json.loads(event.get('body') or '{}')
+            if body.get('kind') in ('print_banner', 'print_plan'):
+                return _handle_print_banner(cur, conn, user, body)
             file_b64 = body.get('file_base64', '')
             filename = body.get('filename', 'file.jpg')
             kind = body.get('kind', 'photo')
