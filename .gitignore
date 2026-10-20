@@ -26,3 +26,7 @@ builds
 
 # warmup/handoff артефакты
 tmp/
+
+# Python cache
+__pycache__/
+*.pyc
