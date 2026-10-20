@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import {
-  BannerElement, BG_COLORS, ElementId, EL_LABEL, SIZE_PRESETS, TEXT_COLORS,
+  BannerElement, BG_COLORS, ElementId, EL_LABEL, TEXT_COLORS,
   elementCm, isTextEl, qrReadDistanceM,
 } from './QrBannerTypes';
 import { BannerCanvas, CanvasProps, ImageUploadBtn, Swatch } from './QrBannerCanvas';
@@ -50,10 +50,9 @@ interface SizePanelProps {
   numCmW: number; numCmH: number;
   sqM: string;
   showSize: boolean; setShowSize: (v: boolean) => void;
-  applyPreset: (w: number, h: number) => void;
 }
 
-export function SizePanel({ cmW, setCmW, cmH, setCmH, numCmW, numCmH, sqM, showSize, setShowSize, applyPreset }: SizePanelProps) {
+export function SizePanel({ cmW, setCmW, cmH, setCmH, sqM, showSize, setShowSize }: SizePanelProps) {
   return (
     <div className="border-2 border-brand-blue/30 bg-brand-blue/5 rounded-xl p-4 space-y-3">
       <div className="flex items-center justify-between">
@@ -69,19 +68,6 @@ export function SizePanel({ cmW, setCmW, cmH, setCmH, numCmW, numCmH, sqM, showS
           <Icon name={showSize ? 'Eye' : 'EyeOff'} size={12} />
           {showSize ? 'На баннере: вкл' : 'Показать на баннере'}
         </button>
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        {SIZE_PRESETS.map(p => (
-          <button key={p.label} onClick={() => applyPreset(p.w, p.h)}
-            className={`px-2.5 py-1 rounded-lg border text-xs transition-all ${
-              numCmW === p.w && numCmH === p.h
-                ? 'bg-brand-blue text-white border-brand-blue'
-                : 'border-border text-muted-foreground hover:border-brand-blue hover:text-foreground'
-            }`}
-          >
-            {p.label} <span className="opacity-60">{p.w}×{p.h}</span>
-          </button>
-        ))}
       </div>
       <div className="flex items-center gap-3 flex-wrap">
         <div>

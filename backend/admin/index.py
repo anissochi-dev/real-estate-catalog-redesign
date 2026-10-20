@@ -247,7 +247,10 @@ STAFF_ROLES = ('admin', 'director', 'manager', 'editor', 'broker', 'office_manag
 STAFF_READ_RESOURCES = (
     'stats', 'listing_comments', 'listing_history', 'listing_stats',
     'listing_documents', 'ai_inpaint', 'matching', 'platform_logos',
+    'qr_banner_templates',
 )
+
+QR_TEMPLATE_MANAGERS = ('admin', 'director')
 
 # Встроенные права по умолчанию (fallback если role_permissions не настроены в БД)
 FALLBACK_PERMS = {
@@ -464,6 +467,8 @@ def handler(event, context):
                 return _export_requests(cur, conn, method, rid, event, user)
             if resource == 'matching':
                 return _matching(cur, event, user)
+            if resource == 'qr_banner_templates':
+                return _qr_banner_templates(cur, conn, method, rid, event, user)
 
             return _err(400, 'Неизвестный ресурс')
     finally:
@@ -6168,6 +6173,94 @@ def _ad_platform_keys(cur, conn, method, rid, event, user):
             fields.append(f"extra = '{extra_json}'::jsonb")
         fields.append("updated_at = NOW()")
         cur.execute(f"UPDATE {SCHEMA}.ad_platform_keys SET {', '.join(fields)} WHERE id = {int(rid)}")
+        conn.commit()
+        return _ok({'success': True})
+
+    return _err(400, 'Bad request')
+
+QR_ELEMENT_IDS = ('deal', 'phone', 'qr', 'logo', 'photo')
+
+
+def _qr_num(v, lo, hi):
+    try:
+        n = float(v)
+    except (TypeError, ValueError):
+        return None
+    if n != n or n < lo or n > hi:
+        return None
+    return round(n, 2)
+
+
+def _qr_color(v):
+    s = str(v or '')
+    return s if len(s) == 7 and s.startswith('#') and all(c in '0123456789abcdefABCDEF' for c in s[1:]) else None
+
+
+def _qr_template_config(body, w_cm, h_cm):
+    """Нормализует конфиг шаблона: позиции и размеры элементов в см."""
+    elements = []
+    for e in (body.get('elements') or [])[:10]:
+        if not isinstance(e, dict) or e.get('id') not in QR_ELEMENT_IDS:
+            continue
+        x = _qr_num(e.get('x_cm'), -w_cm, w_cm * 2)
+        y = _qr_num(e.get('y_cm'), -h_cm, h_cm * 2)
+        size = _qr_num(e.get('size_cm'), 0.1, 2000)
+        if x is None or y is None or size is None:
+            continue
+        elements.append({'id': e['id'], 'x_cm': x, 'y_cm': y, 'size_cm': size, 'manual': bool(e.get('manual'))})
+    logo = str(body.get('logo_url') or '')
+    return {
+        'bg_color': _qr_color(body.get('bg_color')) or '#facc15',
+        'text_color': _qr_color(body.get('text_color')) or '#dc2626',
+        'show_size': bool(body.get('show_size', True)),
+        'logo_url': logo[:500] if logo.startswith('https://') else '',
+        'elements': elements,
+    }
+
+
+def _qr_banner_templates(cur, conn, method, rid, event, user):
+    """Шаблоны QR-баннера: читать могут все сотрудники, создавать и удалять — админ и директор."""
+    if method == 'GET':
+        cur.execute(
+            f"SELECT id, name, width_cm, height_cm, config, created_by_name, created_at "
+            f"FROM {SCHEMA}.qr_banner_templates WHERE archived = FALSE ORDER BY created_at DESC"
+        )
+        items = []
+        for r in cur.fetchall():
+            d = dict(r)
+            d['width_cm'] = float(d['width_cm'])
+            d['height_cm'] = float(d['height_cm'])
+            items.append(d)
+        return _ok({'templates': items, 'can_manage': user['role'] in QR_TEMPLATE_MANAGERS})
+
+    if user['role'] not in QR_TEMPLATE_MANAGERS:
+        return _err(403, 'Сохранять и удалять шаблоны может только админ или директор')
+
+    if method == 'POST':
+        body = json.loads(event.get('body') or '{}')
+        name = _safe((body.get('name') or '').strip(), 100)
+        if not name:
+            return _err(400, 'Укажите название шаблона')
+        w_cm = _qr_num(body.get('width_cm'), 1, 10000)
+        h_cm = _qr_num(body.get('height_cm'), 1, 10000)
+        if w_cm is None or h_cm is None:
+            return _err(400, 'Некорректный размер баннера')
+        config = _qr_template_config(body, w_cm, h_cm)
+        uname = _safe(user.get('name') or '', 150)
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.qr_banner_templates (name, width_cm, height_cm, config, created_by, created_by_name) "
+            f"VALUES ('{name}', {w_cm}, {h_cm}, {_jsonb_or_null(config)}, {int(user['id'])}, '{uname}') RETURNING id"
+        )
+        new_id = cur.fetchone()['id']
+        conn.commit()
+        return _ok({'id': new_id, 'success': True})
+
+    if method == 'DELETE':
+        if not rid or not str(rid).isdigit():
+            return _err(400, 'Не указан шаблон')
+        cur.execute(f"UPDATE {SCHEMA}.qr_banner_templates SET archived = TRUE WHERE id = {int(rid)} AND archived = FALSE")
+        if cur.rowcount == 0:
+            return _err(404, 'Шаблон не найден')
         conn.commit()
         return _ok({'success': True})
 

@@ -17,7 +17,9 @@
         "userAgent": "Mozilla/5.0"
       },
       "expectedStatus": 200,
-      "expectedBody": {"sent": false},
+      "expectedBody": {
+        "sent": false
+      },
       "bodyMatcher": "partial"
     },
     {
@@ -30,6 +32,29 @@
       "name": "Заявки на выгрузку без токена",
       "method": "GET",
       "path": "/?resource=export_requests",
+      "expectedStatus": 401
+    },
+    {
+      "name": "Шаблоны баннера без токена",
+      "method": "GET",
+      "path": "/?resource=qr_banner_templates",
+      "expectedStatus": 401
+    },
+    {
+      "name": "Создание шаблона без токена",
+      "method": "POST",
+      "path": "/?resource=qr_banner_templates",
+      "body": {
+        "name": "x",
+        "width_cm": 100,
+        "height_cm": 40
+      },
+      "expectedStatus": 401
+    },
+    {
+      "name": "Удаление шаблона без токена",
+      "method": "DELETE",
+      "path": "/?resource=qr_banner_templates&id=1",
       "expectedStatus": 401
     }
   ]

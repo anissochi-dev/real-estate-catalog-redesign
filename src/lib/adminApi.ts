@@ -291,6 +291,13 @@ export const adminApi = {
   matchListingsForLead: (leadId: number) =>
     req(`${ADMIN_URL}?resource=matching&type=listings_for_lead&id=${leadId}`),
 
+  // шаблоны QR-баннера
+  listQrTemplates: () => req(`${ADMIN_URL}?resource=qr_banner_templates`),
+  createQrTemplate: (data: Record<string, unknown>) =>
+    req(`${ADMIN_URL}?resource=qr_banner_templates`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteQrTemplate: (id: number) =>
+    req(`${ADMIN_URL}?resource=qr_banner_templates&id=${id}`, { method: 'DELETE' }),
+
   // leads
   listLeads: () => req(`${ADMIN_URL}?resource=leads`),
   getLead: (id: number) => req(`${ADMIN_URL}?resource=leads&id=${id}`),

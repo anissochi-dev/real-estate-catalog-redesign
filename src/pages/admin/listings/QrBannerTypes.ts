@@ -20,15 +20,6 @@ export const PREVIEW_MAX_W = 520;
 export const PREVIEW_MAX_H = 460;
 export const PREVIEW_PAD   = 40;
 
-export const SIZE_PRESETS = [
-  { label: 'Широкий баннер', w: 30,   h: 9    },
-  { label: 'Горизонтальный', w: 21,   h: 10   },
-  { label: 'Вертикальный',   w: 10,   h: 20   },
-  { label: 'Квадрат',        w: 15,   h: 15   },
-  { label: 'А4',             w: 29.7, h: 21   },
-  { label: 'А3',             w: 42,   h: 29.7 },
-];
-
 // ── Типографика: одинакова для редактора, скачивания и серверного TIFF ──────
 export const FONT_FAMILY = 'Montserrat, Arial, sans-serif';
 export const CAP_HEIGHT = 0.7;      // высота заглавной буквы Montserrat в долях кегля

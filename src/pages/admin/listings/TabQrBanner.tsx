@@ -6,6 +6,7 @@ import { Listing } from './types';
 import type { CanvasProps } from './QrBannerCanvas';
 import { ColorPicker, SizePanel, EditorPanel, TextPanel, ImagesPanel, DownloadPanel } from './QrBannerControls';
 import { PrintPanel } from './QrBannerPrintPanel';
+import { TemplatesPanel, QrTemplate } from './QrBannerTemplates';
 import {
   BrokerInfo, BannerElement, ElementId, Pos, ManualSizes,
   PX_PER_CM, layoutElements, elementIssue, sizeFromCm, qrPadPx, sizeLabelMetrics,
@@ -13,6 +14,8 @@ import {
 } from './QrBannerTypes';
 
 interface Props { listing: Listing; siteUrl?: string }
+
+const isTextId = (id: ElementId) => id === 'deal' || id === 'phone';
 
 export function TabQrBanner({ listing, siteUrl }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -52,8 +55,8 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
 
   const [selected, setSelected] = useState<ElementId | null>(null);
   const [showSize, setShowSize] = useState(true);
-  const [cmW, setCmW] = useState('30');
-  const [cmH, setCmH] = useState('9');
+  const [cmW, setCmW] = useState('100');
+  const [cmH, setCmH] = useState('40');
 
   const [downloading, setDownloading] = useState(false);
   const [downloadFormat, setDownloadFormat] = useState<'png' | 'jpg' | 'pdf'>('png');
@@ -81,6 +84,7 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   const [fontsReady, setFontsReady] = useState(0);
   const movedRef = useRef<Set<ElementId>>(new Set());
   const dimsRef = useRef<{ w: number; h: number } | null>(null);
+  const pendingTplRef = useRef<{ w: number; h: number; els: BannerElement[] } | null>(null);
 
   useEffect(() => {
     if (!document.fonts) return;
@@ -97,6 +101,23 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
     dimsRef.current = { w: bannerW, h: bannerH };
     if (sizeChanged) movedRef.current = new Set();
     const moved = movedRef.current;
+    const tpl = pendingTplRef.current;
+    if (tpl && tpl.w === bannerW && tpl.h === bannerH) {
+      pendingTplRef.current = null;
+      setElements(prev => {
+        const next = layoutElements(bannerW, bannerH, { dealText, phoneText }, manual, prev, prevDims ?? undefined)
+          .filter(n => !tpl.els.some(t => t.id === n.id) || n.id === 'deal' || n.id === 'phone' || n.id === 'qr');
+        const merged = next.map(n => {
+          const t = tpl.els.find(e => e.id === n.id);
+          return t ? { ...n, pos: t.pos } : n;
+        });
+        const extras = tpl.els.filter(t => !merged.some(m => m.id === t.id));
+        tpl.els.forEach(t => moved.add(t.id));
+        return [...merged, ...extras];
+      });
+      setSelected(null);
+      return;
+    }
     setElements(prev => {
       const next = layoutElements(bannerW, bannerH, { dealText, phoneText }, manual, prev, prevDims ?? undefined);
       if (sizeChanged) return next;
@@ -217,7 +238,47 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
     .map(e => ({ id: e.id, kind: elementIssue(e, bannerW, bannerH, textOpts) }))
     .filter((i): i is { id: ElementId; kind: 'out' | 'edge' } => i.kind !== null);
 
-  const applyPreset = (w: number, h: number) => { setCmW(String(w)); setCmH(String(h)); };
+  // ── шаблоны ───────────────────────────────────────────────────────────────
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  const buildTemplate = () => ({
+    width_cm: numCmW, height_cm: numCmH,
+    bg_color: bgColor, text_color: textColor, show_size: showSize,
+    logo_url: logoUrl,
+    elements: elements
+      .filter(e => (e.id !== 'logo' || logoUrl) && (e.id !== 'photo' || photoUrl))
+      .map(e => ({
+        id: e.id,
+        x_cm: r2(e.pos.x / PX_PER_CM), y_cm: r2(e.pos.y / PX_PER_CM),
+        size_cm: r2(((isTextId(e.id) ? e.fontSize : e.imgSize) ?? 20) / PX_PER_CM),
+        manual: manual[e.id] !== undefined || e.id === 'logo' || e.id === 'photo',
+      })),
+  });
+
+  const applyTemplate = (t: QrTemplate) => {
+    const w = Math.round(t.width_cm * PX_PER_CM);
+    const h = Math.round(t.height_cm * PX_PER_CM);
+    const c = t.config || ({} as QrTemplate['config']);
+    const tplLogo = c.logo_url || '';
+    const els: BannerElement[] = [];
+    const nextManual: ManualSizes = {};
+    for (const e of c.elements || []) {
+      if (e.id === 'logo' && !tplLogo && !logoUrl) continue;
+      if (e.id === 'photo' && !photoUrl) continue;
+      const size = Math.max(4, Math.round(e.size_cm * PX_PER_CM));
+      const el: BannerElement = { id: e.id, pos: { x: e.x_cm * PX_PER_CM, y: e.y_cm * PX_PER_CM } };
+      if (isTextId(e.id)) el.fontSize = size; else el.imgSize = size;
+      nextManual[e.id] = size;
+      els.push(el);
+    }
+    if (c.bg_color) setBgColor(c.bg_color);
+    if (c.text_color) setTextColor(c.text_color);
+    setShowSize(c.show_size !== false);
+    if (tplLogo) setLogoUrl(tplLogo);
+    pendingTplRef.current = { w, h, els };
+    setCmW(String(t.width_cm));
+    setCmH(String(t.height_cm));
+    setManual(nextManual);
+  };
 
   // ── скачивание через Canvas API (без html2canvas) ─────────────────────────
   const download = async () => {
@@ -434,7 +495,13 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
         numCmW={numCmW} numCmH={numCmH}
         sqM={sqM}
         showSize={showSize} setShowSize={setShowSize}
-        applyPreset={applyPreset}
+      />
+
+      {/* 4a. Шаблоны */}
+      <TemplatesPanel
+        onApply={applyTemplate}
+        buildTemplate={buildTemplate}
+        widthCm={numCmW} heightCm={numCmH}
       />
 
       {/* 5. Изображения */}
