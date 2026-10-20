@@ -25,6 +25,7 @@ import base64
 import json
 import os
 import re
+import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -308,19 +309,34 @@ def _filter_fresh(items: list, max_age_days: int) -> list:
     return [i for i in (items or []) if _is_fresh(i, max_age_days)]
 
 
-def _rss_items(rss_url: str, limit: int, max_age_days: int, strip_source: bool) -> list:
+def _rss_items(rss_url: str, limit: int, max_age_days: int, strip_source: bool, timeout: int = 6) -> list:
     req = urllib.request.Request(rss_url, headers={'User-Agent': 'Mozilla/5.0'})
-    with urllib.request.urlopen(req, timeout=10) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         rss_data = resp.read().decode('utf-8', errors='replace')
-    root = ET.fromstring(rss_data)
+    try:
+        root = ET.fromstring(rss_data)
+        items_iter = list(root.iter('item'))
+        channel_title = (root.findtext('channel/title') or '').strip()
+    except ET.ParseError:
+        # Некоторые ленты (kubnews) отдают XML с битыми символами — разбираем каждую новость отдельно.
+        items_iter = []
+        for chunk in re.findall(r'<item[\s>].*?</item>', rss_data, re.DOTALL):
+            chunk = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\ufffd]', '', chunk)
+            chunk = re.sub(r'&(?!(?:[a-zA-Z]+|#\d+|#x[0-9a-fA-F]+);)', '&amp;', chunk)
+            try:
+                items_iter.append(ET.fromstring(chunk))
+            except ET.ParseError:
+                continue
+        m_title = re.search(r'<channel>.*?<title>(.*?)</title>', rss_data, re.DOTALL)
+        channel_title = re.sub(r'<!\[CDATA\[|\]\]>', '', m_title.group(1)).strip() if m_title else ''
     results = []
-    for item in root.iter('item'):
-        title = item.findtext('title') or ''
-        import html as _html
+    import html as _html
+    for item in items_iter:
+        title = _html.unescape(item.findtext('title') or '').strip()
         snippet = _html.unescape(re.sub(r'<[^>]+>', ' ', item.findtext('description') or '')).replace('\xa0', ' ')
         snippet = re.sub(r'\s+', ' ', snippet).strip()
-        link = item.findtext('link') or ''
-        src_name = (item.findtext('source') or '').strip()
+        link = (item.findtext('link') or '').strip()
+        src_name = (item.findtext('source') or '').strip() or channel_title
         if strip_source:
             title = re.sub(r'\s+-\s+[^-]+$', '', title).strip()
         pub = _parse_pub_date(item.findtext('pubDate') or '')
@@ -335,85 +351,161 @@ def _rss_items(rss_url: str, limit: int, max_age_days: int, strip_source: bool) 
     return results
 
 
+# Региональные ленты: отвечают с серверов в РФ и содержат свежие новости (проверено 20.10.2026).
+# Google News с российских серверов перестал отвечать с ~13.10.2026 — оставлен последним резервом.
+REGIONAL_RSS = (
+    ('93ru', 'https://93.ru/rss-feeds/rss.xml'),
+    ('kubantoday', 'https://kubantoday.ru/feed/'),
+    ('yugopolis', 'https://www.yugopolis.ru/feed/'),
+    ('kubnews', 'https://kubnews.ru/rss/'),
+    ('kommersant', 'https://www.kommersant.ru/rss/news.xml'),
+    ('vedomosti_realty', 'https://www.vedomosti.ru/rss/rubric/realty'),
+)
+# Федеральные ленты: берём только новости с упоминанием Кубани/Краснодара.
+FEDERAL_RSS = ('kommersant', 'vedomosti_realty')
+
+# Слова, по которым из общих региональных лент отбираются новости о бизнесе и недвижимости.
+BIZ_WORDS = (
+    'недвижим', 'аренд', 'офис', 'склад', 'торгов', 'ритейл', 'магазин', 'тц ', 'торговый центр',
+    'бизнес', 'предприним', 'инвест', 'застрой', 'строител', 'девелоп', 'земельн', 'участк',
+    'гостиниц', 'отел', 'ресторан', 'общепит', 'производств', 'завод', 'промышлен', 'индустриальн',
+    'банкрот', 'аукцион', 'ставк', 'кредит', 'ипотек', 'налог', 'малый бизнес', 'мсп', 'компани',
+    'ввод', 'кадастр', 'помещени', 'здани', 'коммерческ', 'логистик', 'рынок', 'цены', 'экономик',
+)
+REGION_WORDS = ('краснодар', 'кубан', 'сочи', 'новороссийск', 'анап', 'геленджик', 'армавир')
+
+
+def _query_words(query: str) -> list:
+    stop = {'краснодар', 'краснодара', 'краснодаре', 'новости', 'сегодня', 'края', 'край', 'краснодарский',
+            'краснодарского', 'и', 'в', 'на', 'по', 'для', 'что', 'как', 'или', 'под'}
+    words = re.findall(r'[а-яёa-z]{4,}', (query or '').lower())
+    return [w[:6] for w in words if w not in stop]
+
+
+def _score_regional(item: dict, qwords: list, need_region: bool) -> int:
+    text = f"{item.get('title', '')} {item.get('snippet', '')}".lower()
+    if need_region and not any(w in text for w in REGION_WORDS):
+        return 0
+    biz = sum(1 for w in BIZ_WORDS if w in text)
+    if not biz:
+        return 0
+    return biz + 3 * sum(1 for w in qwords if w in text)
+
+
+def _regional_rss_snippets(query: str, limit: int, max_age_days: int) -> list:
+    """Новости о бизнесе/недвижимости из региональных лент, самые близкие к запросу — первыми."""
+    qwords = _query_words(query)
+    scored = []
+    seen = set()
+    for name, url in REGIONAL_RSS:
+        try:
+            items = _rss_items(url, 500, max_age_days, strip_source=False, timeout=5)
+        except Exception as e:
+            print(f'[news] RSS {name} недоступен: {str(e)[:150]}')
+            continue
+        need_region = name in FEDERAL_RSS
+        for it in items:
+            key = it.get('url') or it.get('title')
+            if key in seen:
+                continue
+            sc = _score_regional(it, qwords, need_region)
+            if sc > 0:
+                seen.add(key)
+                scored.append((sc, it.get('published_at') or '', it))
+    scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    return [it for _, _, it in scored[:limit]]
+
+
+def _search_api_v2(query: str, limit: int, max_age_days: int) -> list:
+    """Yandex Search API v2 (AI Studio). Тот же способ, что работает в ИИ-помощнике."""
+    key = os.environ.get('YANDEX_SEARCH_API_KEY', '')
+    folder = os.environ.get('YANDEX_FOLDER_ID', '')
+    if not key or not folder:
+        raise RuntimeError('YANDEX_SEARCH_API_KEY / YANDEX_FOLDER_ID не настроены')
+    payload = json.dumps({
+        'query': {'searchType': 'SEARCH_TYPE_RU', 'queryText': query, 'familyMode': 'FAMILY_MODE_MODERATE'},
+        'sortSpec': {'sortMode': 'SORT_MODE_BY_TIME', 'sortOrder': 'SORT_ORDER_DESC'},
+        'groupSpec': {'groupMode': 'GROUP_MODE_FLAT', 'groupsOnPage': str(min(50, limit * 3)), 'docsInGroup': '1'},
+        'maxPassages': '2', 'region': '35', 'l10n': 'LOCALIZATION_RU', 'folderId': folder,
+        'responseFormat': 'FORMAT_XML',
+    }, ensure_ascii=False).encode()
+    req = urllib.request.Request(
+        'https://searchapi.api.cloud.yandex.net/v2/web/search', data=payload, method='POST',
+        headers={'Authorization': f'Api-Key {key}', 'Content-Type': 'application/json', 'x-folder-id': folder},
+    )
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        raw = json.loads(resp.read().decode())
+    raw_data = raw.get('rawData') or ''
+    if not raw_data:
+        return []
+    root = ET.fromstring(base64.b64decode(raw_data).decode('utf-8', errors='replace'))
+    err = root.find('.//error')
+    if err is not None:
+        raise RuntimeError(f"Search API: {''.join(err.itertext())[:200]}")
+    results = []
+    for doc in root.iter('doc'):
+        title_el = doc.find('title')
+        title = re.sub(r'\s+', ' ', ''.join(title_el.itertext()) if title_el is not None else '').strip()
+        snippet = ' '.join(''.join(p.itertext()) for p in doc.iter('passage'))
+        snippet = re.sub(r'\s+', ' ', snippet).strip()
+        pub = _parse_pub_date(doc.findtext('modtime') or '')
+        row = {'title': title[:150], 'snippet': snippet[:400], 'url': (doc.findtext('url') or '')[:300],
+               'published_at': pub.isoformat() if pub else None, 'source': (doc.findtext('domain') or '')[:80]}
+        if title and _is_fresh(row, max_age_days):
+            results.append(row)
+        if len(results) >= limit:
+            break
+    return results
+
+
 def _google_news_url(query: str, max_age_days: int) -> str:
-    # when:Nd — фильтр свежести на стороне Google News (проверено: без него до 80%
-    # выдачи старше 14 дней, вплоть до новостей 3-летней давности).
     q_enc = urllib.parse.quote(f'{query} when:{int(max_age_days)}d')
     return f'https://news.google.com/rss/search?q={q_enc}&hl=ru&gl=RU&ceid=RU:ru'
 
 
+def _note_search_error(src: str, e: Exception):
+    msg = _http_error_text(e) if isinstance(e, urllib.error.HTTPError) else f'{type(e).__name__}: {str(e)[:200]}'
+    print(f'[news] источник {src}: {msg}')
+    errs = os.environ.get('_SEARCH_LAST_ERROR', '')
+    os.environ['_SEARCH_LAST_ERROR'] = (f'{errs}; ' if errs else '') + f'{src}: {msg[:150]}'
+
+
 def _fetch_news_snippets(query: str, limit: int = 8, max_age_days: int = DEFAULT_MAX_NEWS_AGE_DAYS) -> tuple[list[dict], str]:
     """
-    Ищет свежие новости (не старше max_age_days по дате публикации в источнике).
-    Возвращает (список {'title','snippet','url','published_at','source'}, источник).
-    Новости без даты публикации отбрасываются.
+    Ищет свежие новости (не старше max_age_days по дате публикации).
+    Порядок: Яндекс Search API v2 → региональные RSS-ленты → Google News (короткий таймаут).
+    Каждый источник ограничен по времени, чтобы шаг укладывался в лимит функции.
     """
-    # ── Метод 1: Яндекс XML Search API ───────────────────────────────────
-    search_user = os.environ.get('YANDEX_SEARCH_USER', '')
-    search_key = os.environ.get('YANDEX_SEARCH_API_KEY', '')
-    if search_user and search_key:
+    os.environ['_SEARCH_LAST_ERROR'] = ''
+    if os.environ.get('YANDEX_SEARCH_API_KEY') and os.environ.get('YANDEX_FOLDER_ID'):
         try:
-            params = urllib.parse.urlencode({
-                'user': search_user,
-                'key': search_key,
-                'query': query,
-                'lr': '35',
-                'l10n': 'ru',
-                'sortby': 'tm.order=descending',
-                'filter': 'none',
-                'maxpassages': '3',
-                'groupby': f'attr=d.mode=flat.groups-on-page={limit * 2}.docs-in-group=1',
-            })
-            url = f'https://yandex.ru/search/xml?{params}'
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=8) as resp:
-                xml_data = resp.read().decode('utf-8', errors='replace')
-            if '<error' in xml_data.lower():
-                err_m = re.search(r'<message>(.*?)</message>', xml_data)
-                raise Exception(f'Яндекс XML: {err_m.group(1) if err_m else xml_data[:200]}')
-            root = ET.fromstring(xml_data)
-            results = []
-            for doc in root.iter('doc'):
-                title_el = doc.find('title')
-                snippet_el = doc.find('passages/passage') or doc.find('headline') or doc.find('snippet')
-                title = re.sub(r'<[^>]+>', '', ''.join(title_el.itertext()) if title_el is not None else '').strip()
-                snippet = re.sub(r'<[^>]+>', '', ''.join(snippet_el.itertext()) if snippet_el is not None else '').strip()
-                url_s = doc.findtext('url') or ''
-                pub = _parse_pub_date(doc.findtext('modtime') or '')
-                row = {'title': title[:150], 'snippet': snippet[:400], 'url': url_s[:300],
-                       'published_at': pub.isoformat() if pub else None, 'source': (doc.findtext('domain') or '')[:80]}
-                if title and _is_fresh(row, max_age_days):
-                    results.append(row)
-                if len(results) >= limit:
-                    break
-            if results:
-                return results, 'yandex_xml'
+            res = _search_api_v2(query, limit, max_age_days)
+            if res:
+                return res, 'yandex_search_api'
         except Exception as e:
-            os.environ['_SEARCH_LAST_ERROR'] = str(e)[:300]
+            _note_search_error('yandex', e)
 
-    # ── Метод 2: Google News RSS (без ключа), фильтр свежести when:Nd ────
     try:
-        results2 = _rss_items(_google_news_url(query, max_age_days), limit, max_age_days, strip_source=True)
-        if results2:
-            return results2, 'google_news_rss'
-    except Exception:
-        pass
+        res = _regional_rss_snippets(query, limit, max_age_days)
+        if res:
+            return res, 'regional_rss'
+    except Exception as e:
+        _note_search_error('regional_rss', e)
 
-    # Яндекс Новости RSS (news.yandex.ru/search.rss) убран: сервис больше не отвечает —
-    # запрос висел ~40 с (проверено 09.10.2026) и обрывал функцию по таймауту 30 с.
+    try:
+        res = _rss_items(_google_news_url(query, max_age_days), limit, max_age_days, strip_source=True, timeout=4)
+        if res:
+            return res, 'google_news_rss'
+    except Exception as e:
+        _note_search_error('google', e)
 
     return [], 'none'
 
 
 def _fetch_local_news_snippets(query: str, limit: int = 3, max_age_days: int = DEFAULT_MAX_NEWS_AGE_DAYS) -> list[dict]:
-    """
-    Ищет новости только на локальных СМИ Краснодарского края (Юга.ру, MK Кубань)
-    через Google News RSS с оператором site: — точечно, без замены основного поиска.
-    Только свежие (не старше max_age_days).
-    """
+    """Дополнительные новости из региональных СМИ Кубани по теме."""
     try:
-        return _rss_items(_google_news_url(f'{query} (site:yuga.ru OR site:kuban.mk.ru)', max_age_days),
-                          limit, max_age_days, strip_source=True)
+        return _regional_rss_snippets(query, limit, max_age_days)
     except Exception:
         return []
 
@@ -1075,7 +1167,7 @@ def _advance_job(cur, conn, job: dict, api_key: str, folder_id: str) -> dict:
         seen = {s['url'] for s in snippets}
         combined = snippets + [s for s in local_news if s['url'] not in seen]
         if not combined:
-            _job_set(cur, conn, jid, status='error', error=f'Нет новостей по этой теме за последние {max_age} дн.')
+            _job_set(cur, conn, jid, status='error', error=_no_news_error(f'Нет новостей по этой теме за последние {max_age} дн.'))
             return _job_get(cur, jid)
         _job_set(cur, conn, jid, status='pending', snippets_raw=combined[:8])
         return _job_get(cur, jid)
@@ -1172,7 +1264,7 @@ def _advance_job(cur, conn, job: dict, api_key: str, folder_id: str) -> dict:
         seen = {s['url'] for s in snippets}
         combined = snippets + [s for s in daily_news if s['url'] not in seen]
         if not combined:
-            _job_set(cur, conn, jid, status='error', error=f'Нет новостей за последние {max_age} дн. ни по одной теме')
+            _job_set(cur, conn, jid, status='error', error=_no_news_error(f'Нет новостей за последние {max_age} дн. ни по одной теме'))
             return _job_get(cur, jid)
         _job_set(cur, conn, jid, status='pending', snippets_raw=combined[:8])
         return _job_get(cur, jid)
@@ -1194,7 +1286,9 @@ def _advance_job(cur, conn, job: dict, api_key: str, folder_id: str) -> dict:
             op_id = chat_async_start(system_prompt, user_text, api_key, folder_id,
                                       temperature=0.3, max_tokens=3500, timeout=15)
         except Exception as e:
-            _job_set(cur, conn, jid, status='error', error=str(e)[:300])
+            err = _http_error_text(e) if isinstance(e, urllib.error.HTTPError) else str(e)
+            print(f'[news] джоб #{jid} ({status}): {err}')
+            _job_set(cur, conn, jid, status='error', error=f'Нейросеть: {err}'[:300])
             return _job_get(cur, jid)
         if not op_id:
             _job_set(cur, conn, jid, status='error', error='Не удалось запустить генерацию статьи')
@@ -1206,7 +1300,9 @@ def _advance_job(cur, conn, job: dict, api_key: str, folder_id: str) -> dict:
         try:
             poll = chat_async_poll(job.get('operation_id') or '', api_key, folder_id, timeout=15)
         except Exception as e:
-            _job_set(cur, conn, jid, status='error', error=str(e)[:300])
+            err = _http_error_text(e) if isinstance(e, urllib.error.HTTPError) else str(e)
+            print(f'[news] джоб #{jid} ({status}): {err}')
+            _job_set(cur, conn, jid, status='error', error=f'Нейросеть: {err}'[:300])
             return _job_get(cur, jid)
         if not poll['done']:
             return job
@@ -1235,6 +1331,51 @@ def _advance_job(cur, conn, job: dict, api_key: str, folder_id: str) -> dict:
         return _job_get(cur, jid)
 
     return job  # done/error — терминальные состояния, дальше продвигать нечего
+
+
+def _no_news_error(base: str) -> str:
+    detail = os.environ.get('_SEARCH_LAST_ERROR', '')
+    return (f'{base}. Источники: {detail}' if detail else base)[:500]
+
+
+def _http_error_text(e) -> str:
+    """Текст ошибки вместе с телом ответа сервиса (urllib прячет его в HTTPError)."""
+    body = ''
+    try:
+        body = e.read().decode('utf-8', errors='replace')[:300]
+    except Exception:
+        pass
+    return f'{e} {body}'.strip()[:400]
+
+
+def _diag_sources(cur) -> dict:
+    """Проверка каждого источника новостей и нейросети. Ключи в ответ не попадают."""
+    import time as _t
+    out = {}
+    max_age = _max_news_age_days(cur)
+
+    def run(name, fn):
+        t0 = _t.time()
+        try:
+            out[name] = {'ok': True, 'result': fn()}
+        except urllib.error.HTTPError as e:
+            out[name] = {'ok': False, 'error': _http_error_text(e)}
+        except Exception as e:
+            out[name] = {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:250]}'}
+        out[name]['sec'] = round(_t.time() - t0, 1)
+
+    out['env'] = {k: bool(os.environ.get(k)) for k in
+                  ('YANDEX_SEARCH_USER', 'YANDEX_SEARCH_API_KEY', 'AISTUDIO_API_KEY', 'YANDEX_API_KEY', 'YANDEX_FOLDER_ID')}
+    run('search_api_v2', lambda: len(_search_api_v2('коммерческая недвижимость Краснодар', 10, max_age)))
+    for name, url in REGIONAL_RSS:
+        run(f'rss_{name}', lambda url=url: len(_rss_items(url, 50, max_age, strip_source=False, timeout=6)))
+    run('google_news', lambda: len(_rss_items(_google_news_url('недвижимость Краснодар', max_age), 5, max_age, True, timeout=4)))
+    api_key, folder_id = _load_gpt_keys(cur)
+    run('gpt_sync', lambda: (chat_simple('Ответь одним словом.', 'Скажи: ок', api_key, folder_id,
+                                         max_tokens=10, timeout=15) or '')[:20])
+    run('gpt_async_start', lambda: bool(chat_async_start('Ответь одним словом.', 'Скажи: ок', api_key, folder_id,
+                                                         max_tokens=10, timeout=10)))
+    return out
 
 
 def _row_to_dict(r):
@@ -1292,6 +1433,9 @@ def handler(event: dict, context) -> dict:
     conn = psycopg2.connect(dsn)
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+
+            if action == 'diag_sources':
+                return _ok(_diag_sources(cur))
 
             # ── КРОН-ПИНГ (публичный, как auto-seo.ping) ────────────────────
             # Вызывается с любой страницы сайта при загрузке, не чаще раза в 10 мин
