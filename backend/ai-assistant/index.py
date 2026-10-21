@@ -1927,7 +1927,7 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         district = params.get('district', '')
         interval = "INTERVAL '7 days'" if period == 'week' else ("INTERVAL '30 days'" if period == 'month' else None)
         where_period = f" AND created_at > NOW() - {interval}" if interval else ""
-        where_district = f" AND district ILIKE '%{_sanitize_text(district, 100)}%'" if district else ""
+        where_district = f" AND district COLLATE \"ru_RU.utf8\" ILIKE '%{_sanitize_text(district, 100)}%'" if district else ""
         cur.execute(
             f"SELECT COUNT(*) AS total, "
             f"COUNT(*) FILTER (WHERE status='active') AS active, "
@@ -1991,7 +1991,7 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
             f"SELECT created_at, action, LEFT(prompt, 100) AS prompt_snippet, LEFT(response, 200) AS response_snippet "
             f"FROM {SCHEMA}.ai_logs "
             f"WHERE created_at > NOW() - INTERVAL '7 days' "
-            f"AND (LOWER(response) LIKE '%ошибк%' OR LOWER(response) LIKE '%error%' OR LOWER(response) LIKE '%fail%') "
+            f"AND (response COLLATE \"ru_RU.utf8\" ILIKE '%ошибк%' OR LOWER(response) LIKE '%error%' OR LOWER(response) LIKE '%fail%') "
             f"ORDER BY created_at DESC LIMIT {limit_val}"
         )
         errors = [dict(r) for r in cur.fetchall()]
@@ -2006,13 +2006,14 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         district = params.get('district', '')
         where = ["status = 'active'"]
         if query:
-            where.append(f"(LOWER(title) LIKE '%{query.lower()}%' OR LOWER(description) LIKE '%{query.lower()}%')")
+            _q = _sanitize_text(str(query), 100)
+            where.append(f"(title COLLATE \"ru_RU.utf8\" ILIKE '%{_q}%' OR description COLLATE \"ru_RU.utf8\" ILIKE '%{_q}%')")
         if category:
             where.append(f"category = '{_sanitize_text(str(category), 50)}'")
         if deal:
             where.append(f"deal = '{_sanitize_text(str(deal), 50)}'")
         if district:
-            where.append(f"district ILIKE '%{_sanitize_text(district, 100)}%'")
+            where.append(f"district COLLATE \"ru_RU.utf8\" ILIKE '%{_sanitize_text(district, 100)}%'")
         if max_price:
             try:
                 where.append(f"price <= {int(max_price)}")
@@ -2879,7 +2880,7 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         for t in terms:
             t_safe = t.replace("'", "''")
             where_parts.append(
-                f"(LOWER(key) LIKE '%{t_safe}%' OR LOWER(value) LIKE '%{t_safe}%')"
+                f"(key COLLATE \"ru_RU.utf8\" ILIKE '%{t_safe}%' OR value COLLATE \"ru_RU.utf8\" ILIKE '%{t_safe}%')"
             )
         where_sql = ' AND '.join(where_parts) if where_parts else '1=1'
         cur.execute(
@@ -2912,7 +2913,7 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
             name_safe = broker_name.replace("'", "''")
             cur.execute(
                 f"SELECT id, name FROM {SCHEMA}.users "
-                f"WHERE is_active = TRUE AND LOWER(name) LIKE '%{name_safe.lower()}%' "
+                f"WHERE is_active = TRUE AND name COLLATE \"ru_RU.utf8\" ILIKE '%{name_safe}%' "
                 f"AND role IN ('admin','director','broker','manager','office_manager') LIMIT 1"
             )
             broker_row = cur.fetchone()
@@ -2989,7 +2990,7 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
                 name_safe = employee_name.replace("'", "''")
                 cur.execute(
                     f"SELECT email, name FROM {SCHEMA}.users "
-                    f"WHERE is_active = TRUE AND LOWER(name) LIKE '%{name_safe.lower()}%' LIMIT 1"
+                    f"WHERE is_active = TRUE AND name COLLATE \"ru_RU.utf8\" ILIKE '%{name_safe}%' LIMIT 1"
                 )
             else:
                 return {'error': 'Укажите имя, id или email сотрудника'}
@@ -3856,7 +3857,7 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         if not rows:
             words = [w for w in query.split()[:3] if len(w) > 2]
             if words:
-                like_parts = [f"content ILIKE '%{_sanitize_text(w, 50)}%'" for w in words]
+                like_parts = [f"content COLLATE \"ru_RU.utf8\" ILIKE '%{_sanitize_text(w, 50)}%'" for w in words]
                 like_sql = ' OR '.join(like_parts)
                 cur.execute(
                     f"SELECT id, source_type, source_id, title, "
@@ -4246,7 +4247,7 @@ def _collect_agent_context(cur) -> dict:
             f"SELECT created_at, action, LEFT(response, 200) AS snippet "
             f"FROM {SCHEMA}.ai_logs "
             f"WHERE created_at > NOW() - INTERVAL '24 hours' "
-            f"AND (LOWER(response) LIKE '%ошибк%' OR LOWER(response) LIKE '%error%') "
+            f"AND (response COLLATE \"ru_RU.utf8\" ILIKE '%ошибк%' OR LOWER(response) LIKE '%error%') "
             f"ORDER BY created_at DESC LIMIT 5"
         )
         ctx['recent_errors'] = [dict(r) for r in cur.fetchall()]
@@ -4665,12 +4666,12 @@ def handler(event, context):
                         for tok in tokens[:10]:
                             st = tok.replace("'", "''")
                             like_parts.append(
-                                f"(LOWER(title) LIKE LOWER('%{st}%') OR "
-                                f"LOWER(COALESCE(district,'')) LIKE LOWER('%{st}%') OR "
-                                f"LOWER(COALESCE(address,'')) LIKE LOWER('%{st}%') OR "
-                                f"LOWER(COALESCE(purpose,'')) LIKE LOWER('%{st}%') OR "
-                                f"LOWER(COALESCE(utilities,'')) LIKE LOWER('%{st}%') OR "
-                                f"LOWER(COALESCE(description,'')) LIKE LOWER('%{st}%'))"
+                                f"(title COLLATE \"ru_RU.utf8\" ILIKE '%{st}%' OR "
+                                f"COALESCE(district,'') COLLATE \"ru_RU.utf8\" ILIKE '%{st}%' OR "
+                                f"COALESCE(address,'') COLLATE \"ru_RU.utf8\" ILIKE '%{st}%' OR "
+                                f"COALESCE(purpose,'') COLLATE \"ru_RU.utf8\" ILIKE '%{st}%' OR "
+                                f"COALESCE(utilities,'') COLLATE \"ru_RU.utf8\" ILIKE '%{st}%' OR "
+                                f"COALESCE(description,'') COLLATE \"ru_RU.utf8\" ILIKE '%{st}%')"
                             )
                         where_kw = ' OR '.join(like_parts)
                         cur.execute(

@@ -483,7 +483,7 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
             where = ''
             params = []
             if search:
-                where = "WHERE o.name ILIKE %s OR o.phone ILIKE %s OR o.company ILIKE %s"
+                where = 'WHERE o.name COLLATE "ru_RU.utf8" ILIKE %s OR o.phone ILIKE %s OR o.company COLLATE "ru_RU.utf8" ILIKE %s'
                 params = [f'%{search}%', f'%{search}%', f'%{search}%']
             cur.execute(f"""
                 SELECT o.id, COALESCE(NULLIF(pc.name, ''), o.name) as name,
@@ -627,7 +627,7 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
                 where_parts.append('d.assigned_to = %s')
                 params.append(int(assigned))
             if search:
-                where_parts.append('(d.title ILIKE %s OR o.name ILIKE %s OR l.title ILIKE %s)')
+                where_parts.append('(d.title COLLATE "ru_RU.utf8" ILIKE %s OR o.name COLLATE "ru_RU.utf8" ILIKE %s OR l.title COLLATE "ru_RU.utf8" ILIKE %s)')
                 pat = f'%{search}%'
                 params.extend([pat, pat, pat])
             if user['role'] == 'broker':
@@ -1031,7 +1031,7 @@ def dispatch(conn, user, method, resource, resource_id, sub, qs, body):
                 pattern = f'%{search[:100]}%'
                 cur.execute(
                     "SELECT id, name, phone, status FROM t_p71821556_real_estate_catalog_.leads "
-                    "WHERE (name ILIKE %s OR phone ILIKE %s) "
+                    'WHERE (name COLLATE "ru_RU.utf8" ILIKE %s OR phone ILIKE %s) '
                     "ORDER BY created_at DESC LIMIT %s",
                     (pattern, pattern, limit)
                 )

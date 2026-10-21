@@ -6,6 +6,7 @@ Returns: HTTP-ответ с JSON массивом объектов или одн
 
 import json
 import os
+import re
 import time
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -311,10 +312,10 @@ def handler(event: dict, context) -> dict:
                 if q:
                     q_safe = q.replace("'", "''").lower()
                     where.append(
-                        f"(LOWER(COALESCE(message,'')) LIKE '%{q_safe}%' "
-                        f"OR LOWER(COALESCE(name,'')) LIKE '%{q_safe}%' "
-                        f"OR LOWER(COALESCE(company,'')) LIKE '%{q_safe}%' "
-                        f"OR LOWER(COALESCE(request_category,'')) LIKE '%{q_safe}%')"
+                        f"(COALESCE(message,'') COLLATE \"ru_RU.utf8\" ILIKE '%{q_safe}%' "
+                        f"OR COALESCE(name,'') COLLATE \"ru_RU.utf8\" ILIKE '%{q_safe}%' "
+                        f"OR COALESCE(company,'') COLLATE \"ru_RU.utf8\" ILIKE '%{q_safe}%' "
+                        f"OR COALESCE(request_category,'') COLLATE \"ru_RU.utf8\" ILIKE '%{q_safe}%')"
                     )
                 # Фильтр по бюджету
                 try:
@@ -822,10 +823,11 @@ def handler(event: dict, context) -> dict:
                 deal_safe = deal.replace("'", "''")
                 where.append(f"deal = '{deal_safe}'")
             if search:
-                s = search.replace("'", "''").lower()
-                where.append(
-                    f"(LOWER(title) LIKE '%{s}%' OR LOWER(address) LIKE '%{s}%' OR LOWER(district) LIKE '%{s}%')"
-                )
+                for w in re.findall(r'[0-9a-zа-яё]+', search.lower())[:8]:
+                    w = w.replace('ё', 'е')
+                    where.append(
+                        f"REPLACE(CONCAT_WS(' ', title, address, district), 'ё', 'е') COLLATE \"ru_RU.utf8\" ILIKE '%{w}%'"
+                    )
             if min_area:
                 try:
                     where.append(f"area >= {int(min_area)}")

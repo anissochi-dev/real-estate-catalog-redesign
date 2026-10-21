@@ -23,13 +23,9 @@ export function useListingsSearchReal(q: string) {
     queryKey: ['listings-search-real', q],
     queryFn: async () => {
       if (q.length < 2) return [];
-      const data = await adminApi.listListings();
+      const data = await adminApi.listListings(0, 8, 'active', false, q);
       const all: { id: number; title: string; address?: string }[] = data.listings || [];
-      const lower = q.toLowerCase();
-      return all
-        .filter(l => l.title?.toLowerCase().includes(lower) || l.address?.toLowerCase().includes(lower))
-        .slice(0, 8)
-        .map(l => ({ id: l.id, label: l.title, sub: l.address }));
+      return all.map(l => ({ id: l.id, label: l.title, sub: l.address }));
     },
     enabled: q.length >= 2,
     staleTime: 60_000,

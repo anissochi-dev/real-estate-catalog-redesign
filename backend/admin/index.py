@@ -2376,7 +2376,7 @@ def _normalize_district(cur, district: str) -> str:
         # Нечёткое: ищем по вхождению в обе стороны
         cur.execute(
             f"SELECT name FROM {SCHEMA}.districts "
-            f"WHERE is_active = TRUE AND (name ILIKE %s OR %s ILIKE '%%' || name || '%%') "
+            f"WHERE is_active = TRUE AND (name COLLATE \"ru_RU.utf8\" ILIKE %s OR %s COLLATE \"ru_RU.utf8\" ILIKE '%%' || name || '%%') "
             f"ORDER BY LENGTH(name) DESC LIMIT 1",
             (f'%{d}%', d)
         )
@@ -4977,7 +4977,7 @@ def _districts(cur, conn, method, rid, event, user):
         cur.execute(
             f"SELECT d.*, "
             f"(SELECT COUNT(*) FROM {SCHEMA}.listings l "
-            f" WHERE l.status='active' AND l.district ILIKE '%' || d.name || '%') AS listings_count "
+            f" WHERE l.status='active' AND l.district COLLATE \"ru_RU.utf8\" ILIKE '%' || d.name || '%') AS listings_count "
             f"FROM {SCHEMA}.districts d ORDER BY d.sort_order ASC, d.name ASC"
         )
         return _ok({'districts': [dict(r) for r in cur.fetchall()]})
@@ -5691,7 +5691,7 @@ def _phones(cur, conn, method, rid, action, event, user):
                 f"  (SELECT COUNT(*) FROM {SCHEMA}.phone_listing_links WHERE phone_contact_id = pc.id) AS listings_count, "
                 f"  (SELECT COUNT(*) FROM {SCHEMA}.phone_lead_links WHERE phone_contact_id = pc.id) AS leads_count "
                 f"FROM {SCHEMA}.phone_contacts pc "
-                f"WHERE pc.phone_normalized LIKE '%{q_norm}%' OR pc.name ILIKE '%{_safe(q, 100)}%' "
+                f"WHERE pc.phone_normalized LIKE '%{q_norm}%' OR pc.name COLLATE \"ru_RU.utf8\" ILIKE '%{_safe(q, 100)}%' "
                 f"ORDER BY pc.updated_at DESC LIMIT 50"
             )
             rows = [_ser_phone(dict(r)) for r in cur.fetchall()]

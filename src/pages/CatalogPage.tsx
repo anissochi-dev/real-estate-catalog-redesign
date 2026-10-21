@@ -15,6 +15,7 @@ import CatalogMap from './catalog/CatalogMap';
 import CatalogResults from './catalog/CatalogResults';
 import { buildCatalogH1 } from './catalog/catalogH1';
 import { listingSlug } from '@/lib/slug';
+import { filterBySearch } from '@/lib/propertySearch';
 
 interface CatalogPageProps {
   properties: Property[];
@@ -93,14 +94,7 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
   const filtered = useMemo(() => {
     let result = [...properties];
 
-    if (search) {
-      const q = search.toLowerCase();
-      result = result.filter(p =>
-        p.title.toLowerCase().includes(q) ||
-        (p.address || '').toLowerCase().includes(q) ||
-        (p.district || '').toLowerCase().includes(q)
-      );
-    }
+    if (search) result = filterBySearch(result, search);
 
     if (dealFilter !== 'all') result = result.filter(p => String(p.deal) === dealFilter);
     if (typeFilter !== 'all') result = result.filter(p => String(p.type) === typeFilter);

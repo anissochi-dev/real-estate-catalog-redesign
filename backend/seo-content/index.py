@@ -138,7 +138,7 @@ def _get_district_desc(cur, district: str) -> str:
     try:
         cur.execute(
             f"SELECT description FROM {SCHEMA}districts "
-            "WHERE is_active = TRUE AND (name ILIKE %s OR name ILIKE %s) LIMIT 1",
+            'WHERE is_active = TRUE AND (name COLLATE "ru_RU.utf8" ILIKE %s OR name COLLATE "ru_RU.utf8" ILIKE %s) LIMIT 1',
             (f'%{district}%', district),
         )
         row = cur.fetchone()
@@ -213,12 +213,12 @@ def handler(event: dict, context) -> dict:
             elif district:
                 cur.execute(
                     f"SELECT COUNT(*) AS c, AVG(price) AS avg_p FROM {SCHEMA}listings "
-                    f"WHERE status = 'active' AND district ILIKE %s",
+                    f'WHERE status = \'active\' AND district COLLATE "ru_RU.utf8" ILIKE %s',
                     (f'%{district}%',),
                 )
                 agg = cur.fetchone() or {}
                 cur.execute(
-                    f"SELECT category FROM {SCHEMA}listings WHERE status = 'active' AND district ILIKE %s "
+                    f'SELECT category FROM {SCHEMA}listings WHERE status = \'active\' AND district COLLATE "ru_RU.utf8" ILIKE %s '
                     "GROUP BY category ORDER BY COUNT(*) DESC LIMIT 5",
                     (f'%{district}%',),
                 )

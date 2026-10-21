@@ -1044,7 +1044,7 @@ def run_check(conn, user, method, qs, body, check_keys=None):
             params.append(check_type_filter)
         # Поиск по результату (JSON text)
         if search:
-            where_parts.append("c.result::text ILIKE %s")
+            where_parts.append('c.result::text COLLATE "ru_RU.utf8" ILIKE %s')
             params.append(f'%{search}%')
 
         where_sql = 'WHERE ' + ' AND '.join(where_parts)
