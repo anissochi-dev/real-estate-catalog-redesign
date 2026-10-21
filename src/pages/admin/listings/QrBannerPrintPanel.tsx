@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
+import { copyText } from '@/lib/clipboard';
 import { generatePrintBanner, PrintBannerResult } from '@/lib/adminApi';
 
 type Material = 'paper' | 'fabric' | 'none';
@@ -49,6 +51,10 @@ export function PrintPanel({ widthCm, heightCm, disabled, buildParams, issuesCou
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<PrintBannerResult | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [showLink, setShowLink] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const linkRef = useRef<HTMLInputElement>(null);
 
   const bleed = MATERIALS.find(m => m.id === material)!.bleed;
   const dpi = dpiMode === 'auto' ? autoDpi(widthCm, heightCm) : dpiMode;
@@ -62,7 +68,7 @@ export function PrintPanel({ widthCm, heightCm, disabled, buildParams, issuesCou
   const textBad = textCmyk.trim() !== '' && !parseCmyk(textCmyk);
 
   const generate = async () => {
-    setBusy(true); setError(''); setResult(null);
+    setBusy(true); setError(''); setResult(null); setCopied(false); setShowLink(false);
     try {
       const params = {
         ...buildParams(),
@@ -77,10 +83,30 @@ export function PrintPanel({ widthCm, heightCm, disabled, buildParams, issuesCou
     } finally { setBusy(false); }
   };
 
-  const copy = (url: string) => { navigator.clipboard?.writeText(url).catch(() => {}); };
+  const copy = async (url: string) => {
+    const ok = await copyText(url, rootRef.current);
+    if (ok) {
+      setCopied(true);
+      toast.success('Ссылка скопирована — отправьте её в типографию');
+      setTimeout(() => setCopied(false), 2500);
+    } else {
+      setShowLink(true);
+      toast.info('Браузер запретил копирование — скопируйте ссылку из поля ниже');
+      setTimeout(() => linkRef.current?.select(), 50);
+    }
+  };
+
+  const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+  const share = async (url: string) => {
+    try {
+      await navigator.share({ title: 'Файл баннера для печати (TIFF)', url });
+    } catch (e) {
+      if ((e as Error)?.name !== 'AbortError') copy(url);
+    }
+  };
 
   return (
-    <div className="border-2 border-emerald-500/30 bg-emerald-50/40 rounded-xl p-4 space-y-3">
+    <div ref={rootRef} className="border-2 border-emerald-500/30 bg-emerald-50/40 rounded-xl p-4 space-y-3">
       <div className="flex items-center gap-2">
         <Icon name="Printer" size={15} className="text-emerald-700" />
         <span className="text-sm font-semibold text-emerald-800">Файл для печати (TIFF, CMYK)</span>
@@ -177,10 +203,21 @@ export function PrintPanel({ widthCm, heightCm, disabled, buildParams, issuesCou
             <a href={result.url} download
               className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700"
             ><Icon name="Download" size={13} />Скачать TIFF</a>
-            <button onClick={() => copy(result.url)}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-border hover:border-emerald-500"
-            ><Icon name="Link" size={13} />Ссылка для агентства</button>
+            <button type="button" onClick={() => copy(result.url)}
+              className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border transition ${
+                copied ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-border hover:border-emerald-500'
+              }`}
+            ><Icon name={copied ? 'Check' : 'Link'} size={13} />{copied ? 'Скопировано' : 'Ссылка для агентства'}</button>
+            {canShare && (
+              <button type="button" onClick={() => share(result.url)} title="Отправить"
+                className="flex items-center justify-center px-3 py-2 rounded-lg border border-border hover:border-emerald-500"
+              ><Icon name="Share2" size={13} /></button>
+            )}
           </div>
+          {showLink && (
+            <input ref={linkRef} readOnly value={result.url} onFocus={e => e.currentTarget.select()}
+              className="w-full px-2 py-1.5 border border-emerald-300 rounded-lg text-xs font-mono bg-emerald-50/50" />
+          )}
         </div>
       )}
     </div>
