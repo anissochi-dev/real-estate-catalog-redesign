@@ -127,7 +127,7 @@ export default function ListingsToolbar({
           <Icon name="Search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
           <input
             className="w-full pl-9 pr-3 py-2.5 border border-border rounded-xl text-sm"
-            placeholder="Поиск по названию, адресу, телефону, ID..."
+            placeholder="Адрес, название, ID, телефон, цена, «240 м2», «до 5 млн»..."
             value={search}
             onChange={e => setSearch(e.target.value)}
           />

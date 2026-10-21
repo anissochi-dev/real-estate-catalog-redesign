@@ -12,6 +12,8 @@ from datetime import datetime
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
+from listing_search import build_search_condition
+
 SCHEMA = 't_p71821556_real_estate_catalog_'
 
 
@@ -2769,22 +2771,10 @@ def _listings(cur, conn, method, rid, event, user):
         if my_only and user and user.get('role') == 'broker':
             uid = int(user['id'])
             tab_where += f" AND (l.broker_id = {uid} OR l.author_id = {uid})"
-        # Серверный поиск по title, address, owner_name, owner_phone, id
-        if search_q:
-            sq = search_q.lower().replace("'", "''")
-            sq_digits = ''.join(c for c in search_q if c.isdigit())
-            if sq_digits and sq_digits.startswith('8'):
-                sq_digits = '7' + sq_digits[1:]
-            phone_cond = f"OR REGEXP_REPLACE(COALESCE(l.owner_phone,''), '[^0-9]', '', 'g') LIKE '%{sq_digits}%'" if sq_digits else ''
-            id_cond = f"OR CAST(l.id AS TEXT) = '{sq_digits}'" if sq_digits else ''
-            tab_where += (
-                f" AND (LOWER(COALESCE(l.title,'')) LIKE '%{sq}%'"
-                f" OR LOWER(COALESCE(l.address,'')) LIKE '%{sq}%'"
-                f" OR LOWER(COALESCE(l.district,'')) LIKE '%{sq}%'"
-                f" OR LOWER(COALESCE(l.owner_name,'')) LIKE '%{sq}%'"
-                f" OR LOWER(COALESCE(pc.name,'')) LIKE '%{sq}%'"
-                f" {phone_cond} {id_cond})"
-            )
+        # Серверный поиск: текст без учёта регистра, ID, телефоны, цена, площадь, цена за м²
+        search_cond = build_search_condition(search_q) if search_q else ''
+        if search_cond:
+            tab_where += f" AND {search_cond}"
         # COUNT с учётом фильтра my_only
         is_broker = user and user.get('role') == 'broker'
         broker_uid = user.get('id') if is_broker else None
