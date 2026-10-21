@@ -41,9 +41,11 @@ interface Props {
   disabled: boolean;
   buildParams: () => Record<string, unknown>;
   issuesCount: number;
+  listingId?: number;
+  listingTitle?: string;
 }
 
-export function PrintPanel({ widthCm, heightCm, disabled, buildParams, issuesCount }: Props) {
+export function PrintPanel({ widthCm, heightCm, disabled, buildParams, issuesCount, listingId, listingTitle }: Props) {
   const [material, setMaterial] = useState<Material>('paper');
   const [dpiMode, setDpiMode] = useState<'auto' | number>('auto');
   const [bgCmyk, setBgCmyk] = useState('');
@@ -51,10 +53,11 @@ export function PrintPanel({ widthCm, heightCm, disabled, buildParams, issuesCou
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<PrintBannerResult | null>(null);
+  const [sentMaterial, setSentMaterial] = useState<Material>('paper');
   const [copied, setCopied] = useState(false);
-  const [showLink, setShowLink] = useState(false);
+  const [showText, setShowText] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const linkRef = useRef<HTMLInputElement>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
 
   const bleed = MATERIALS.find(m => m.id === material)!.bleed;
   const dpi = dpiMode === 'auto' ? autoDpi(widthCm, heightCm) : dpiMode;
@@ -68,7 +71,7 @@ export function PrintPanel({ widthCm, heightCm, disabled, buildParams, issuesCou
   const textBad = textCmyk.trim() !== '' && !parseCmyk(textCmyk);
 
   const generate = async () => {
-    setBusy(true); setError(''); setResult(null); setCopied(false); setShowLink(false);
+    setBusy(true); setError(''); setResult(null); setCopied(false); setShowText(false); setSentMaterial(material);
     try {
       const params = {
         ...buildParams(),
@@ -83,26 +86,58 @@ export function PrintPanel({ widthCm, heightCm, disabled, buildParams, issuesCou
     } finally { setBusy(false); }
   };
 
-  const copy = async (url: string) => {
-    const ok = await copyText(url, rootRef.current);
+  const fileName = (url: string) => decodeURIComponent(url.split('/').pop() || 'banner.tif');
+
+  const buildMessage = (r: PrintBannerResult) => {
+    const i = r.info;
+    const m = MATERIALS.find(x => x.id === sentMaterial)!;
+    const lines = [
+      'Заказ печати баннера',
+      '',
+      listingId ? `Объект: №${listingId}${listingTitle ? ` — ${listingTitle}` : ''}` : '',
+      `Готовый размер: ${fmt(i.width_cm)} × ${fmt(i.height_cm)} см`,
+      i.bleed_mm > 0 ? `Размер с вылетами: ${fmt(i.full_width_cm)} × ${fmt(i.full_height_cm)} см (вылеты ${i.bleed_mm} мм)` : 'Вылеты: нет, точно в размер',
+      m.id === 'none' ? '' : `Материал: ${m.label}${m.id === 'fabric' ? ' (запас 50 мм под люверсы)' : ''}`,
+      '',
+      `Формат файла: TIFF, CMYK, профиль ISO Coated v2 (FOGRA39), сжатие LZW`,
+      `Разрешение: ${i.dpi} dpi`,
+      `Размер в пикселях: ${i.px_w.toLocaleString('ru')} × ${i.px_h.toLocaleString('ru')} px`,
+      `Вес файла: ${mb(r.size)}`,
+      `Имя файла: ${fileName(r.url)}`,
+      i.bg_cmyk ? `Цвет фона CMYK: ${i.bg_cmyk.join('/')}` : '',
+      i.text_cmyk ? `Цвет текста и QR CMYK: ${i.text_cmyk.join('/')}` : '',
+      i.qr_side_cm ? `QR-код: ${fmt(i.qr_side_cm)} см, модуль ${fmt(i.qr_module_mm ?? 0)} мм — не масштабировать и не обрезать, иначе код может не считаться` : '',
+      '',
+      `Скачать файл: ${r.url}`,
+      `Ссылка действует до ${new Date(r.expires_at).toLocaleDateString('ru')}`,
+    ];
+    return lines.filter((l, idx) => l !== '' || (idx > 0 && lines[idx - 1] !== '')).join('\n').trim();
+  };
+
+  const copyMessage = async (text: string) => {
+    const ok = await copyText(text, rootRef.current);
     if (ok) {
       setCopied(true);
-      toast.success('Ссылка скопирована — отправьте её в типографию');
+      toast.success('Текст заказа скопирован — вставьте его в мессенджер или письмо типографии');
       setTimeout(() => setCopied(false), 2500);
     } else {
-      setShowLink(true);
-      toast.info('Браузер запретил копирование — скопируйте ссылку из поля ниже');
-      setTimeout(() => linkRef.current?.select(), 50);
+      setShowText(true);
+      toast.info('Браузер запретил копирование — скопируйте текст из поля ниже');
+      setTimeout(() => textRef.current?.select(), 50);
     }
   };
 
-  const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
-  const share = async (url: string) => {
-    try {
-      await navigator.share({ title: 'Файл баннера для печати (TIFF)', url });
-    } catch (e) {
-      if ((e as Error)?.name !== 'AbortError') copy(url);
+  const sendToPrint = async (r: PrintBannerResult) => {
+    const text = buildMessage(r);
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title: `Баннер для печати${listingId ? ` — объект №${listingId}` : ''}`, text });
+        return;
+      } catch (e) {
+        if ((e as Error)?.name === 'AbortError') return;
+      }
     }
+    copyMessage(text);
   };
 
   return (
@@ -184,8 +219,12 @@ export function PrintPanel({ widthCm, heightCm, disabled, buildParams, issuesCou
               <div className="font-semibold text-emerald-800 flex items-center gap-1.5">
                 <Icon name="CircleCheck" size={13} />Файл готов{result.cached ? ' (макет не менялся — тот же файл)' : ''}
               </div>
+              {listingId && <div className="text-muted-foreground">Объект <b className="text-foreground">№{listingId}</b></div>}
               <div className="text-muted-foreground">
-                {result.info.px_w.toLocaleString('ru')} × {result.info.px_h.toLocaleString('ru')} px · {result.info.dpi} dpi · {mb(result.size)}
+                Формат <b className="text-foreground">TIFF</b> · вес <b className="text-foreground">{mb(result.size)}</b> · <b className="text-foreground">{result.info.dpi} dpi</b>
+              </div>
+              <div className="text-muted-foreground">
+                Размер <b className="text-foreground">{result.info.px_w.toLocaleString('ru')} × {result.info.px_h.toLocaleString('ru')} px</b> · {fmt(result.info.full_width_cm)} × {fmt(result.info.full_height_cm)} см
               </div>
               <div className="text-muted-foreground">CMYK · профиль ISO Coated v2 (FOGRA39) · сжатие LZW</div>
               {result.info.qr_side_cm && (
@@ -203,19 +242,14 @@ export function PrintPanel({ widthCm, heightCm, disabled, buildParams, issuesCou
             <a href={result.url} download
               className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700"
             ><Icon name="Download" size={13} />Скачать TIFF</a>
-            <button type="button" onClick={() => copy(result.url)}
-              className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border transition ${
-                copied ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-border hover:border-emerald-500'
+            <button type="button" onClick={() => sendToPrint(result)}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border font-semibold transition ${
+                copied ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-emerald-600 text-emerald-700 bg-white hover:bg-emerald-50'
               }`}
-            ><Icon name={copied ? 'Check' : 'Link'} size={13} />{copied ? 'Скопировано' : 'Ссылка для агентства'}</button>
-            {canShare && (
-              <button type="button" onClick={() => share(result.url)} title="Отправить"
-                className="flex items-center justify-center px-3 py-2 rounded-lg border border-border hover:border-emerald-500"
-              ><Icon name="Share2" size={13} /></button>
-            )}
+            ><Icon name={copied ? 'Check' : 'Send'} size={13} />{copied ? 'Текст скопирован' : 'Отправить в типографию'}</button>
           </div>
-          {showLink && (
-            <input ref={linkRef} readOnly value={result.url} onFocus={e => e.currentTarget.select()}
+          {showText && (
+            <textarea ref={textRef} readOnly value={buildMessage(result)} rows={10} onFocus={e => e.currentTarget.select()}
               className="w-full px-2 py-1.5 border border-emerald-300 rounded-lg text-xs font-mono bg-emerald-50/50" />
           )}
         </div>
