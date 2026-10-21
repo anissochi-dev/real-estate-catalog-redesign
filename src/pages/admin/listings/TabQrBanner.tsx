@@ -266,7 +266,6 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
         buildParams={buildPrintParams}
         issuesCount={issues.length}
         listingId={listing.id}
-        listingTitle={listing.title}
       />
 
       {/* 7. Скачать */}

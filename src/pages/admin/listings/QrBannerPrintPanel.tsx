@@ -42,10 +42,9 @@ interface Props {
   buildParams: () => Record<string, unknown>;
   issuesCount: number;
   listingId?: number;
-  listingTitle?: string;
 }
 
-export function PrintPanel({ widthCm, heightCm, disabled, buildParams, issuesCount, listingId, listingTitle }: Props) {
+export function PrintPanel({ widthCm, heightCm, disabled, buildParams, issuesCount, listingId }: Props) {
   const [material, setMaterial] = useState<Material>('paper');
   const [dpiMode, setDpiMode] = useState<'auto' | number>('auto');
   const [bgCmyk, setBgCmyk] = useState('');
@@ -94,7 +93,7 @@ export function PrintPanel({ widthCm, heightCm, disabled, buildParams, issuesCou
     const lines = [
       'Заказ печати баннера',
       '',
-      listingId ? `Объект: №${listingId}${listingTitle ? ` — ${listingTitle}` : ''}` : '',
+      listingId ? `Объект: №${listingId}` : '',
       `Готовый размер: ${fmt(i.width_cm)} × ${fmt(i.height_cm)} см`,
       i.bleed_mm > 0 ? `Размер с вылетами: ${fmt(i.full_width_cm)} × ${fmt(i.full_height_cm)} см (вылеты ${i.bleed_mm} мм)` : 'Вылеты: нет, точно в размер',
       m.id === 'none' ? '' : `Материал: ${m.label}${m.id === 'fabric' ? ' (запас 50 мм под люверсы)' : ''}`,
