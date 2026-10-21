@@ -45,14 +45,14 @@ interface Props {
 }
 
 export function PrintPanel({ widthCm, heightCm, disabled, buildParams, issuesCount, listingId }: Props) {
-  const [material, setMaterial] = useState<Material>('paper');
+  const [material, setMaterial] = useState<Material>('none');
   const [dpiMode, setDpiMode] = useState<'auto' | number>('auto');
   const [bgCmyk, setBgCmyk] = useState('');
   const [textCmyk, setTextCmyk] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<PrintBannerResult | null>(null);
-  const [sentMaterial, setSentMaterial] = useState<Material>('paper');
+  const [sentMaterial, setSentMaterial] = useState<Material>('none');
   const [copied, setCopied] = useState(false);
   const [showText, setShowText] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
