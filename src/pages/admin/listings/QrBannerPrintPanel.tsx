@@ -46,7 +46,7 @@ interface Props {
 
 export function PrintPanel({ widthCm, heightCm, disabled, buildParams, issuesCount, listingId }: Props) {
   const [material, setMaterial] = useState<Material>('none');
-  const [dpiMode, setDpiMode] = useState<'auto' | number>('auto');
+  const [dpiMode, setDpiMode] = useState<'auto' | number>(300);
   const [bgCmyk, setBgCmyk] = useState('');
   const [textCmyk, setTextCmyk] = useState('');
   const [busy, setBusy] = useState(false);
