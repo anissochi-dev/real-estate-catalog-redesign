@@ -35,7 +35,7 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const [selected, setSelected] = useState<ElementId | null>(null);
-  const [showSize, setShowSize] = useState(true);
+  const [showSize, setShowSize] = useState(false);
   const [cmW, setCmW] = useState('100');
   const [cmH, setCmH] = useState('40');
 
@@ -170,7 +170,7 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
     }
     if (c.bg_color) setBgColor(c.bg_color);
     if (c.text_color) setTextColor(c.text_color);
-    setShowSize(c.show_size !== false);
+    setShowSize(c.show_size === true);
     if (tplLogo) setLogoUrl(tplLogo);
     pendingTplRef.current = { w, h, els };
     setCmW(String(t.width_cm));
