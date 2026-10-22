@@ -5,6 +5,7 @@ import { AVITO_API_URL, AvitoData, CIAN_API_URL, CianData, DOMCLICK_API_URL, Dom
 import { BUSY_TEXT, platformFetch } from './platformFetch';
 import { useSyncHealth } from './useSyncHealth';
 import SyncHealthBanner from './SyncHealthBanner';
+import { loadPlatformState, PlatformStateRow } from './platformState';
 
 interface Props {
   onOpenPlatform: (key: string) => void;
@@ -29,8 +30,26 @@ function MiniStat({ value, label }: { value: ReactNode; label: string }) {
   );
 }
 
-function PlatformCardView({ card, onClick }: { card: PlatformCard; onClick: () => void }) {
+function PlatformCardView({ card, onClick, off }: { card: PlatformCard; onClick: () => void; off?: PlatformStateRow }) {
   const meta = PLATFORM_META[card.key];
+  if (off?.off) {
+    return (
+      <div onClick={onClick} className="bg-muted/40 rounded-2xl border border-dashed border-border p-4 flex flex-col gap-2 cursor-pointer hover:border-red-300 transition">
+        <div className="flex items-center gap-2.5 opacity-60">
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden ${meta.color}`}>
+            <PlatformIcon platform={card.key} icon={meta.icon} size={18} />
+          </div>
+          <div className="font-semibold text-sm">{meta.label}</div>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          Запросов нет, объявления сняты{off.last_change?.turned_off ? ` · ${off.last_change.user_name || '—'}, ${new Date(off.last_change.at).toLocaleString('ru')}` : ''}
+        </div>
+        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit bg-red-100 text-red-700">
+          <Icon name="PowerOff" size={10} /> Выключена
+        </span>
+      </div>
+    );
+  }
   const statusMeta = {
     active: { label: card.key === 'youla' ? 'Активен · XML' : 'Активен', cls: 'bg-emerald-100 text-emerald-700' },
     paused: card.key === 'youla'
@@ -240,6 +259,7 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
   const [syncing, setSyncing] = useState(false);
   const [busy, setBusy] = useState(false);
   const { stale: staleSyncPlatforms } = useSyncHealth(true);
+  const [offState, setOffState] = useState<Record<string, PlatformStateRow>>({});
 
   const load = (sync = false) => {
     if (sync) setSyncing(true); else setLoading(true);
@@ -252,18 +272,21 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
     type Err = { error?: string };
     const net = { error: 'network' };
     (async () => {
-      const cianData = await platformFetch<CianData & Err>(cianUrl, undefined, setBusy).catch(() => net as CianData & Err);
+      const st = await loadPlatformState(true);
+      setOffState(st);
+      const isOff = (k: string) => !!st[k]?.off;
+      const cianData = await platformFetch<CianData & Err>(isOff('cian') ? CIAN_API_URL : cianUrl, undefined, setBusy).catch(() => net as CianData & Err);
       if (cianData.error) { setError(cianData.error); setCian(null); }
       else { setCian(cianData); setError(null); }
-      const yandexData = await platformFetch<YandexCallsData & Err>(yandexUrl, undefined, setBusy).catch(() => net as YandexCallsData & Err);
+      const yandexData = await platformFetch<YandexCallsData & Err>(isOff('yandex_realty') ? YANDEX_CALLS_API_URL : yandexUrl, undefined, setBusy).catch(() => net as YandexCallsData & Err);
       setYandex(yandexData.error ? null : yandexData);
-      const avitoData = await platformFetch<AvitoData & Err>(avitoUrl, undefined, setBusy).catch(() => net as AvitoData & Err);
+      const avitoData = await platformFetch<AvitoData & Err>(isOff('avito') ? AVITO_API_URL : avitoUrl, undefined, setBusy).catch(() => net as AvitoData & Err);
       setAvito(avitoData.error ? null : avitoData);
       const otherData = await platformFetch<Parameters<typeof normalizeOtherPlatforms>[0]>(OTHER_PLATFORMS_API_URL, undefined, setBusy).catch(() => ({ platforms: [] }));
       setOtherPlatforms(normalizeOtherPlatforms(otherData));
       const youlaData = await platformFetch<YoulaFeedSummary & Err>(YOULA_FEED_API_URL, undefined, setBusy).catch(() => net as YoulaFeedSummary & Err);
       setYoulaFeed(youlaData.error ? null : youlaData);
-      const domclickData = await platformFetch<DomclickData & Err>(domclickUrl, undefined, setBusy).catch(() => net as DomclickData & Err);
+      const domclickData = await platformFetch<DomclickData & Err>(isOff('domclick') ? DOMCLICK_API_URL : domclickUrl, undefined, setBusy).catch(() => net as DomclickData & Err);
       setDomclick(domclickData.error ? null : domclickData);
     })().finally(() => { setLoading(false); setSyncing(false); setBusy(false); });
   };
@@ -443,7 +466,7 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {platforms.map(p => (
-                <PlatformCardView key={p.key} card={p} onClick={() => onOpenPlatform(p.key)} />
+                <PlatformCardView key={p.key} card={p} off={offState[p.key]} onClick={() => onOpenPlatform(p.key)} />
               ))}
               <OtherPlatformCardView platforms={otherPlatforms} onClick={() => onOpenPlatform('other')} />
             </div>

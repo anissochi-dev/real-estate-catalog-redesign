@@ -2012,9 +2012,9 @@ def _sync_health_check(cur):
     ]
 
     for platform_key, label, log_table in platform_checks:
-        cur.execute(f"SELECT is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = '{platform_key}' LIMIT 1")
+        cur.execute(f"SELECT is_active, platform_off FROM {SCHEMA}.ad_platform_keys WHERE platform = '{platform_key}' LIMIT 1")
         row = cur.fetchone()
-        if not row or not row.get('is_active'):
+        if not row or not row.get('is_active') or row.get('platform_off'):
             continue  # площадка не подключена — не считаем это сбоем синхронизации
 
         cur.execute(f"SELECT MAX(synced_at) AS last_sync FROM {SCHEMA}.{log_table}")
@@ -2188,7 +2188,7 @@ def _run_next_platform_sync(cur, conn):
     и всё время вызова уходит на фиды. Состояние — в platform_sync_state."""
     now = datetime.now(timezone.utc)
     cur.execute(f"SELECT platform, is_active FROM {SCHEMA}.ad_platform_keys")
-    active = {r['platform'] for r in cur.fetchall() if r.get('is_active')}
+    active = {r['platform'] for r in cur.fetchall() if r.get('is_active')} - _off_platforms(cur)
     cur.execute(f"SELECT * FROM {SCHEMA}.platform_sync_state")
     state = {r['platform']: dict(r) for r in cur.fetchall()}
 
@@ -2292,6 +2292,99 @@ PLATFORM_ACTIONS = {
 }
 
 
+PLATFORM_FEED_FORMAT = {'cian': 'cian', 'yandex_realty': 'yandex', 'avito': 'avito', 'youla': 'youla', 'domclick': 'domclick'}
+PLATFORM_EXPORT_FLAG = {'cian': 'export_cian', 'yandex_realty': 'export_yandex', 'avito': 'export_avito', 'youla': 'export_youla', 'domclick': 'export_domclick'}
+PLATFORM_LABELS = {'cian': 'ЦИАН', 'yandex_realty': 'Яндекс.Недвижимость', 'avito': 'Авито', 'youla': 'Юла', 'domclick': 'ДомКлик'}
+
+
+def _off_platforms(cur):
+    """Площадки, выключенные целиком (platform_off): к ним нет запросов, их файл пустой."""
+    cur.execute(f"SELECT platform FROM {SCHEMA}.ad_platform_keys WHERE platform_off = TRUE")
+    return {r['platform'] for r in cur.fetchall()}
+
+
+def _platform_state(cur):
+    """Состояние площадок для панели управления: выключена ли, объекты, файл, журнал."""
+    off = _off_platforms(cur)
+    cur.execute(f"SELECT format, is_active, cdn_url, last_generated_at FROM {SCHEMA}.xml_feeds WHERE format IN ('cian','yandex','avito','youla','domclick') ORDER BY id")
+    feeds = {}
+    for r in cur.fetchall():
+        feeds.setdefault(r['format'], dict(r))
+    cur.execute(f"""
+        SELECT COUNT(*) FILTER (WHERE export_cian) AS cian, COUNT(*) FILTER (WHERE export_yandex) AS yandex_realty,
+               COUNT(*) FILTER (WHERE export_avito) AS avito, COUNT(*) FILTER (WHERE export_youla) AS youla,
+               COUNT(*) FILTER (WHERE export_domclick) AS domclick
+        FROM {SCHEMA}.listings WHERE status = 'active' AND (is_visible IS NULL OR is_visible = TRUE)
+    """)
+    counts = dict(cur.fetchone() or {})
+    cur.execute(f"""
+        SELECT DISTINCT ON (platform) platform, turned_off, user_name, listings_count, created_at
+        FROM {SCHEMA}.platform_toggle_log ORDER BY platform, created_at DESC
+    """)
+    last_log = {r['platform']: r for r in cur.fetchall()}
+    result = {}
+    for key, fmt in PLATFORM_FEED_FORMAT.items():
+        f = feeds.get(fmt) or {}
+        gen = f.get('last_generated_at')
+        lg = last_log.get(key)
+        result[key] = {
+            'off': key in off,
+            'listings_count': counts.get(key) or 0,
+            'feed_url': f.get('cdn_url'),
+            'feed_generated_at': gen.isoformat() if gen else None,
+            'last_change': {
+                'turned_off': lg['turned_off'], 'user_name': lg['user_name'],
+                'listings_count': lg['listings_count'], 'at': lg['created_at'].isoformat(),
+            } if lg else None,
+        }
+    return {'ok': True, 'platforms': result}
+
+
+def _platform_history(cur, key):
+    cur.execute(
+        f"SELECT turned_off, user_name, listings_count, created_at FROM {SCHEMA}.platform_toggle_log "
+        f"WHERE platform = %s ORDER BY created_at DESC LIMIT 20", (key,)
+    )
+    return [{**dict(r), 'created_at': r['created_at'].isoformat()} for r in cur.fetchall()]
+
+
+def _platform_toggle(cur, conn, event, params):
+    """Включает/выключает площадку целиком. Выключение: прекращаются все запросы к площадке,
+    её XML-файл пересобирается пустым — площадка снимает все объявления. Пишется журнал."""
+    user = _get_user(cur, _auth_token(event, params))
+    if not user or user['role'] not in ('admin', 'director'):
+        return _json({'error': 'Включать и выключать площадки могут только администратор и директор'}, 403)
+    body = json.loads(event.get('body') or '{}')
+    key = str(body.get('platform') or '')
+    if key not in PLATFORM_FEED_FORMAT:
+        return _json({'error': 'Неизвестная площадка'}, 400)
+    turn_off = bool(body.get('off'))
+    cur.execute(f"SELECT name, email FROM {SCHEMA}.users WHERE id = %s", (int(user['id']),))
+    ur = cur.fetchone() or {}
+    user_name = ur.get('name') or ur.get('email') or f"#{user['id']}"
+    cur.execute(
+        f"SELECT COUNT(*) AS n FROM {SCHEMA}.listings WHERE {PLATFORM_EXPORT_FLAG[key]} = TRUE "
+        f"AND status = 'active' AND (is_visible IS NULL OR is_visible = TRUE)"
+    )
+    count = (cur.fetchone() or {}).get('n') or 0
+    cur.execute(
+        f"UPDATE {SCHEMA}.ad_platform_keys SET platform_off = %s, updated_at = NOW() WHERE platform = %s RETURNING id",
+        (turn_off, key)
+    )
+    if not cur.fetchone():
+        return _json({'error': 'Площадка не найдена в настройках'}, 404)
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.platform_toggle_log (platform, turned_off, user_id, user_name, listings_count) "
+        f"VALUES (%s, %s, %s, %s, %s)", (key, turn_off, int(user['id']), user_name[:200], count)
+    )
+    cur.execute(
+        f"UPDATE {SCHEMA}.xml_feeds SET last_generated_at = NULL, content_hash = NULL WHERE format = %s",
+        (PLATFORM_FEED_FORMAT[key],)
+    )
+    conn.commit()
+    return _json({'ok': True, 'platform': key, 'off': turn_off, 'listings_count': count})
+
+
 def _cron_turn(cur, conn, rid, source):
     """Автоматический запуск: блокировка от параллельных вызовов + ОДНА площадка."""
     cur.execute(
@@ -2352,7 +2445,24 @@ def handler(event, context):
             if method == 'GET':
                 for key, acts in PLATFORM_ACTIONS.items():
                     if action in acts:
+                        if key in _off_platforms(cur):
+                            if action == acts[2]:
+                                return _json({'ok': True, 'skipped': True, 'reason': 'Площадка выключена'})
+                            params = {k: v for k, v in params.items() if k != 'sync'}
+                            params['action'] = acts[0]
                         return _platform_handler(key)(cur, conn, params)
+
+            if method == 'GET' and action == 'platform_state':
+                return _json(_platform_state(cur))
+
+            if method == 'GET' and action == 'platform_history':
+                key = params.get('platform') or ''
+                if key not in PLATFORM_FEED_FORMAT:
+                    return _json({'error': 'Неизвестная площадка'}, 400)
+                return _json({'ok': True, 'items': _platform_history(cur, key)})
+
+            if method == 'POST' and action == 'platform_toggle':
+                return _platform_toggle(cur, conn, event, params)
 
             if method == 'GET' and action == 'sync_health':
                 return _json(_sync_health_check(cur))

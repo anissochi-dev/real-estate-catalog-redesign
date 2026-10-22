@@ -13,6 +13,7 @@ import YoulaCabinetTab from '@/pages/admin/ad-cabinet/YoulaCabinetTab';
 import DomclickCabinetTab from '@/pages/admin/ad-cabinet/DomclickCabinetTab';
 import OtherPlatformsTab from '@/pages/admin/ad-cabinet/OtherPlatformsTab';
 import ExportPricingTab from '@/pages/admin/marketing/ExportPricingTab';
+import PlatformControlPanel from '@/pages/admin/ad-cabinet/PlatformControlPanel';
 
 type Tab = 'ad-cabinet' | 'dashboard' | 'pricing' | 'utm' | 'social' | 'vk-ads' | 'export-pricing';
 
@@ -55,6 +56,7 @@ export default function MarketingAdmin() {
             >
               <Icon name="ArrowLeft" size={14} /> Назад к дашборду
             </button>
+            {adPlatform !== 'other' && <PlatformControlPanel platform={adPlatform} />}
             {adPlatform === 'cian' ? <CianCabinetTab />
               : adPlatform === 'yandex_realty' ? <YandexCallsTab />
               : adPlatform === 'avito' ? <AvitoCabinetTab />

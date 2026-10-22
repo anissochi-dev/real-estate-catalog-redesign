@@ -33,6 +33,26 @@
       "bodyMatcher": "partial"
     },
     {
+      "name": "Состояние площадок",
+      "method": "GET",
+      "path": "/?action=platform_state",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "ok": true
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Выключение площадки без прав",
+      "method": "POST",
+      "path": "/?action=platform_toggle",
+      "body": {
+        "platform": "youla",
+        "off": true
+      },
+      "expectedStatus": 403
+    },
+    {
       "name": "Неизвестное действие",
       "method": "GET",
       "path": "/?action=nope",

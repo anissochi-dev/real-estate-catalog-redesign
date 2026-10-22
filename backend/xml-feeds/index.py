@@ -199,6 +199,7 @@ class FeedCache:
         self._company = None
         self._vri = None
         self._regions = None
+        self._off = None
 
     def listings(self, where_sql):
         if where_sql not in self._listings:
@@ -206,6 +207,15 @@ class FeedCache:
             self._listings[where_sql] = [dict(r) for r in self.cur.fetchall()]
         # Свежие копии строк на каждый фид — генераторы форматов меняют поля объекта.
         return [dict(r) for r in self._listings[where_sql]]
+
+    def off_formats(self):
+        """Форматы фидов площадок, выключенных целиком: их файл собирается пустым,
+        чтобы площадка сняла все объявления."""
+        if self._off is None:
+            fmt_by_platform = {'cian': 'cian', 'yandex_realty': 'yandex', 'avito': 'avito', 'youla': 'youla', 'domclick': 'domclick'}
+            self.cur.execute(f"SELECT platform FROM {SCHEMA}.ad_platform_keys WHERE platform_off = TRUE")
+            self._off = {fmt_by_platform[r['platform']] for r in self.cur.fetchall() if r['platform'] in fmt_by_platform}
+        return self._off
 
     def company(self):
         if self._company is None:
@@ -297,6 +307,8 @@ def _build_feed_xml(cache, feed_slug, fmt, filter_category, filter_deal, market_
     # самые свежие (недавно добавленные на сайт) объекты всегда идут первыми в фиде.
     # Одинаковая выборка (например у 43 фидов «Разное») читается из БД один раз за вызов.
     listings = cache.listings(' AND '.join(where))
+    if fmt in cache.off_formats():
+        listings = []
 
     # dnr.red принимает только объекты в аренду (единственная категория площадки —
     # id=339) — фильтруем ДО среза max_listings, иначе лимит отрезал бы самые свежие
