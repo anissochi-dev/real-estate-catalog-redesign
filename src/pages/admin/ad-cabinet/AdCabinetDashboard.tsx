@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import PlatformIcon from '@/components/admin/PlatformIcon';
-import { AVITO_API_URL, AvitoData, CIAN_API_URL, CianData, DOMCLICK_API_URL, DomclickData, normalizeOtherPlatforms, OTHER_PLATFORMS_API_URL, OtherPlatformRow, PlatformCard, SERVICE_TYPE_LABELS, YANDEX_CALLS_API_URL, YandexCallsData, YOULA_API_URL, YoulaData } from './types';
+import { AVITO_API_URL, AvitoData, CIAN_API_URL, CianData, DOMCLICK_API_URL, DomclickData, normalizeOtherPlatforms, OTHER_PLATFORMS_API_URL, OtherPlatformRow, PlatformCard, SERVICE_TYPE_LABELS, YANDEX_CALLS_API_URL, YandexCallsData, YOULA_FEED_API_URL, YoulaFeedSummary } from './types';
 import { BUSY_TEXT, platformFetch } from './platformFetch';
 import { useSyncHealth } from './useSyncHealth';
 import SyncHealthBanner from './SyncHealthBanner';
@@ -32,8 +32,10 @@ function MiniStat({ value, label }: { value: ReactNode; label: string }) {
 function PlatformCardView({ card, onClick }: { card: PlatformCard; onClick: () => void }) {
   const meta = PLATFORM_META[card.key];
   const statusMeta = {
-    active: { label: 'Активен', cls: 'bg-emerald-100 text-emerald-700' },
-    paused: { label: 'Пауза', cls: 'bg-amber-100 text-amber-700' },
+    active: { label: card.key === 'youla' ? 'Активен · XML' : 'Активен', cls: 'bg-emerald-100 text-emerald-700' },
+    paused: card.key === 'youla'
+      ? { label: 'Проблема с файлом', cls: 'bg-red-100 text-red-700' }
+      : { label: 'Пауза', cls: 'bg-amber-100 text-amber-700' },
     not_connected: { label: 'Не подключено', cls: 'bg-muted text-muted-foreground' },
   }[card.status];
 
@@ -55,7 +57,9 @@ function PlatformCardView({ card, onClick }: { card: PlatformCard; onClick: () =
           <div className="text-xs text-muted-foreground">
             {card.key === 'yandex_realty'
               ? `${card.callsCount || 0} звонков за 30 дней`
-              : `${card.offersCount} объявл.${card.balance !== null ? ` · ${card.balance.toLocaleString('ru')} ₽` : ''}`}
+              : card.key === 'youla'
+                ? `${card.offersCount} объектов в файле`
+                : `${card.offersCount} объявл.${card.balance !== null ? ` · ${card.balance.toLocaleString('ru')} ₽` : ''}`}
           </div>
 
           {card.key === 'cian' && card.cianExtra && (
@@ -100,13 +104,19 @@ function PlatformCardView({ card, onClick }: { card: PlatformCard; onClick: () =
             </div>
           )}
 
-          {card.key === 'youla' && card.youlaExtra && (
-            <div className="grid grid-cols-2 gap-1.5 mt-0.5">
-              <MiniStat value={card.youlaExtra.totalShows.toLocaleString('ru')} label="Показы" />
-              <MiniStat value={card.youlaExtra.totalViews.toLocaleString('ru')} label="Просмотры" />
-              <MiniStat value={card.youlaExtra.totalContacts.toLocaleString('ru')} label="Контакты" />
-              <MiniStat value={card.youlaExtra.totalUniqueContacts.toLocaleString('ru')} label="Уник. контакты" />
-              <MiniStat value={card.youlaExtra.publishedCount.toLocaleString('ru')} label="Видны на Юле" />
+          {card.key === 'youla' && card.youlaFeed && (
+            <div className={`rounded-lg px-2.5 py-2 text-xs ${card.youlaFeed.stale || !card.youlaFeed.feed_active ? 'bg-red-50 text-red-700' : 'bg-violet-50 text-violet-700'}`}>
+              <div className="font-semibold flex items-center gap-1">
+                <Icon name="FileCode2" size={12} /> Выгрузка XML-файлом
+              </div>
+              <div className="mt-0.5">
+                {!card.youlaFeed.feed_active
+                  ? 'Файл выключен — объекты на Юлу не уходят'
+                  : card.youlaFeed.stale
+                    ? 'Файл не обновлялся больше суток'
+                    : 'Файл обновляется автоматически'}
+              </div>
+              <div className="text-[10px] opacity-80 mt-0.5">Статистику по объявлениям из файла Юла не отдаёт</div>
             </div>
           )}
 
@@ -152,9 +162,9 @@ function PlatformCardView({ card, onClick }: { card: PlatformCard; onClick: () =
             </div>
           )}
 
-          {card.key === 'youla' && card.youlaExtra?.syncedAt && (
+          {card.key === 'youla' && card.youlaFeed?.last_generated_at && (
             <div className="text-[10px] text-muted-foreground/70">
-              Обновлено {new Date(card.youlaExtra.syncedAt).toLocaleString('ru')}
+              Файл обновлён {new Date(card.youlaFeed.last_generated_at).toLocaleString('ru')}
             </div>
           )}
 
@@ -222,7 +232,7 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
   const [cian, setCian] = useState<CianData | null>(null);
   const [yandex, setYandex] = useState<YandexCallsData | null>(null);
   const [avito, setAvito] = useState<AvitoData | null>(null);
-  const [youla, setYoula] = useState<YoulaData | null>(null);
+  const [youlaFeed, setYoulaFeed] = useState<YoulaFeedSummary | null>(null);
   const [domclick, setDomclick] = useState<DomclickData | null>(null);
   const [otherPlatforms, setOtherPlatforms] = useState<OtherPlatformRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -236,7 +246,6 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
     const cianUrl = sync ? `${CIAN_API_URL}&sync=1` : CIAN_API_URL;
     const yandexUrl = sync ? `${YANDEX_CALLS_API_URL}&sync=1` : YANDEX_CALLS_API_URL;
     const avitoUrl = sync ? `${AVITO_API_URL}&sync=1` : AVITO_API_URL;
-    const youlaUrl = sync ? `${YOULA_API_URL}&sync=1` : YOULA_API_URL;
     const domclickUrl = sync ? `${DOMCLICK_API_URL}&sync=1` : DOMCLICK_API_URL;
     // Площадки — строго по очереди (очередь внутри platformFetch): одновременные запросы
     // ко всем 6 площадкам давали всплеск нагрузки на БД («rate limit exceeded»).
@@ -252,8 +261,8 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
       setAvito(avitoData.error ? null : avitoData);
       const otherData = await platformFetch<Parameters<typeof normalizeOtherPlatforms>[0]>(OTHER_PLATFORMS_API_URL, undefined, setBusy).catch(() => ({ platforms: [] }));
       setOtherPlatforms(normalizeOtherPlatforms(otherData));
-      const youlaData = await platformFetch<YoulaData & Err>(youlaUrl, undefined, setBusy).catch(() => net as YoulaData & Err);
-      setYoula(youlaData.error ? null : youlaData);
+      const youlaData = await platformFetch<YoulaFeedSummary & Err>(YOULA_FEED_API_URL, undefined, setBusy).catch(() => net as YoulaFeedSummary & Err);
+      setYoulaFeed(youlaData.error ? null : youlaData);
       const domclickData = await platformFetch<DomclickData & Err>(domclickUrl, undefined, setBusy).catch(() => net as DomclickData & Err);
       setDomclick(domclickData.error ? null : domclickData);
     })().finally(() => { setLoading(false); setSyncing(false); setBusy(false); });
@@ -331,26 +340,15 @@ export default function AdCabinetDashboard({ onOpenPlatform }: Props) {
         } : undefined,
       };
     }
-    if (key === 'youla' && youla) {
-      const connected = youla.connected && !youla.last_sync?.error;
-      const items = youla.items || [];
-      const publishedCount = items.filter(i => i.is_published && !i.is_removed && !i.is_blocked && !i.is_archived).length;
+    if (key === 'youla' && youlaFeed) {
       return {
         key, label: 'Юла', icon: '', color: '',
-        connected,
-        offersCount: items.length,
+        connected: true,
+        offersCount: youlaFeed.listings_count,
         balance: null,
-        status: connected ? (publishedCount > 0 ? 'active' : 'paused') : 'not_connected',
+        status: youlaFeed.feed_active && !youlaFeed.stale ? 'active' : 'paused',
         services: [],
-        errorReason: !connected ? youla.last_sync?.error : null,
-        youlaExtra: connected ? {
-          publishedCount,
-          totalShows: items.reduce((a, i) => a + (i.shows || 0), 0),
-          totalViews: items.reduce((a, i) => a + (i.views || 0), 0),
-          totalContacts: items.reduce((a, i) => a + (i.contacts || 0), 0),
-          totalUniqueContacts: items.reduce((a, i) => a + (i.unique_contacts || 0), 0),
-          syncedAt: youla.last_sync?.synced_at || null,
-        } : undefined,
+        youlaFeed,
       };
     }
     if (key === 'domclick' && domclick) {

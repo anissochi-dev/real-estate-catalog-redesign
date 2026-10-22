@@ -1605,6 +1605,33 @@ def _youla_read_from_db(cur):
     }
 
 
+def _youla_feed_summary(cur):
+    """Лёгкая сводка по XML-файлу Юлы для карточки рекламного кабинета: без запросов к API Юлы."""
+    cur.execute(f"""
+        SELECT COUNT(*) AS n FROM {SCHEMA}.listings
+        WHERE export_youla = TRUE AND status = 'active' AND (is_visible IS NULL OR is_visible = TRUE)
+    """)
+    count = (cur.fetchone() or {}).get('n') or 0
+    cur.execute(f"SELECT is_active, cdn_url, last_generated_at FROM {SCHEMA}.xml_feeds WHERE format = 'youla' ORDER BY id LIMIT 1")
+    fr = cur.fetchone()
+    cur.execute(f"SELECT is_active FROM {SCHEMA}.ad_platform_keys WHERE platform = 'youla' LIMIT 1")
+    kr = cur.fetchone()
+    gen = fr.get('last_generated_at') if fr else None
+    if gen is not None and gen.tzinfo is None:
+        gen = gen.replace(tzinfo=timezone.utc)
+    hours = round((datetime.now(timezone.utc) - gen).total_seconds() / 3600, 1) if gen else None
+    return {
+        'ok': True,
+        'listings_count': count,
+        'feed_active': bool(fr and fr.get('is_active')),
+        'cdn_url': fr.get('cdn_url') if fr else None,
+        'last_generated_at': gen.isoformat() if gen else None,
+        'hours_since': hours,
+        'stale': hours is None or hours > 24,
+        'api_active': bool(kr and kr.get('is_active')),
+    }
+
+
 def _youla_full_sync(cur, conn, token, owner_id, category_id, subcategory_id):
     """Полная синхронизация: проверка заполненности настроек → публикация/архивация
     объектов через /products → статистика через /products/{id}/statistic."""
@@ -1700,6 +1727,9 @@ def _youla_handle(cur, conn, params):
 
     if not token or not owner_id:
         return _json({'error': 'Юла не настроена: заполните Токен и ID профиля в Настройках → Интеграции → Площадки'}, 400)
+
+    if (action == 'youla_cron' or force_sync) and not is_active:
+        return _json({**_youla_read_from_db(cur), 'skipped': True, 'reason': 'Прямое подключение выключено — выгрузка XML-файлом'})
 
     if action == 'youla_cron' or force_sync:
         if action == 'youla_cron':
@@ -2346,6 +2376,9 @@ def handler(event, context):
                     f['listings_count'] = len(shared_listings)
                     f['stats'] = None
                 return _json({'platforms': feeds, 'listings': shared_listings})
+
+            if method == 'GET' and action == 'youla_feed':
+                return _json(_youla_feed_summary(cur))
 
             if method == 'POST' and action == 'youla_webhook':
                 # Публичный вебхук Юлы (без подписи). Старый адрес xml-feeds пересылает сюда.

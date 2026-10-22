@@ -10,6 +10,18 @@ export function normalizeOtherPlatforms(d: { platforms?: OtherPlatformRow[]; lis
   return (d.platforms || []).map(p => ({ ...p, listings: p.listings || shared }));
 }
 export const YOULA_API_URL = 'https://functions.poehali.dev/fd00362c-a377-4d94-816c-c5a4abf087cd?action=youla_stats';
+export const YOULA_FEED_API_URL = 'https://functions.poehali.dev/fd00362c-a377-4d94-816c-c5a4abf087cd?action=youla_feed';
+
+export interface YoulaFeedSummary {
+  ok: boolean;
+  listings_count: number;
+  feed_active: boolean;
+  cdn_url: string | null;
+  last_generated_at: string | null;
+  hours_since: number | null;
+  stale: boolean;
+  api_active: boolean;
+}
 export const DOMCLICK_API_URL = 'https://functions.poehali.dev/fd00362c-a377-4d94-816c-c5a4abf087cd?action=domclick_stats';
 export const SYNC_HEALTH_API_URL = 'https://functions.poehali.dev/fd00362c-a377-4d94-816c-c5a4abf087cd?action=sync_health';
 
@@ -118,6 +130,7 @@ export interface PlatformCard {
     syncedAt: string | null;
   };
   /** Расширенная сводка Юлы — показы, просмотры, контакты по объявлениям. */
+  youlaFeed?: YoulaFeedSummary;
   youlaExtra?: {
     publishedCount: number;
     totalShows: number;
