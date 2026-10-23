@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { adminApi } from '@/lib/adminApi';
 import { fetchPublicSettings } from '@/lib/api';
 import { buildShareListingText } from '@/lib/shareListingText';
-import { buildSocialPostText, TELEGRAM_CAPTION_LIMIT, VK_POST_LIMIT, SocialPostCompany } from '@/lib/socialPostText';
+import { buildSocialPostText, boldToHtml, stripBold, TELEGRAM_CAPTION_LIMIT, VK_POST_LIMIT, SocialPostCompany } from '@/lib/socialPostText';
 import { copyText, useSharePresentation } from '@/hooks/useSharePresentation';
 import { Listing } from './types';
 
@@ -15,6 +15,22 @@ interface Props {
 }
 
 type Mode = 'social' | 'messenger';
+
+async function copyRich(text: string): Promise<boolean> {
+  const plain = stripBold(text);
+  try {
+    if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+      await navigator.clipboard.write([new ClipboardItem({
+        'text/html': new Blob([boldToHtml(text)], { type: 'text/html' }),
+        'text/plain': new Blob([plain], { type: 'text/plain' }),
+      })]);
+      return true;
+    }
+  } catch {
+    // запасной способ ниже
+  }
+  return copyText(plain);
+}
 
 function loadCompany(): Promise<SocialPostCompany> {
   return fetchPublicSettings()
@@ -54,11 +70,12 @@ export default function SocialPostDialog({ open, onOpenChange, listing }: Props)
   }, [generated, edited]);
 
   const text = texts[mode];
-  const len = text.length;
+  const plain = stripBold(text);
+  const len = plain.length;
   const tgOver = len > TELEGRAM_CAPTION_LIMIT;
 
   const doCopy = async () => {
-    if (await copyText(text)) {
+    if (await copyRich(text)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } else {
@@ -101,6 +118,17 @@ export default function SocialPostDialog({ open, onOpenChange, listing }: Props)
             className="w-full px-3 py-2.5 border border-border rounded-xl text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
           />
         )}
+        {mode === 'social' && company && (
+          <div className="-mt-1 space-y-1">
+            <div className="text-[11px] text-muted-foreground">
+              Так пост будет выглядеть в Телеграме. Текст между <b>**звёздочками**</b> выделяется жирным.
+            </div>
+            <div
+              className="max-h-56 overflow-y-auto px-3 py-2.5 rounded-xl bg-muted/50 text-sm leading-relaxed whitespace-pre-wrap break-words"
+              dangerouslySetInnerHTML={{ __html: boldToHtml(text).replace(/<br>/g, '\n') }}
+            />
+          </div>
+        )}
 
         <div className="flex items-center justify-between gap-2 flex-wrap text-[11px]">
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -126,16 +154,17 @@ export default function SocialPostDialog({ open, onOpenChange, listing }: Props)
         <div className="grid grid-cols-2 gap-2">
           <button type="button" onClick={doCopy} disabled={!text}
             className="inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold bg-brand-blue text-white hover:opacity-90 transition disabled:opacity-50">
-            <Icon name={copied ? 'Check' : 'Copy'} size={15} /> {copied ? 'Скопировано' : 'Скопировать текст'}
+            <Icon name={copied ? 'Check' : 'Copy'} size={15} /> {copied ? 'Скопировано' : 'Скопировать с жирным'}
           </button>
-          <button type="button" onClick={() => listing.id && share(listing.id, text)} disabled={sharing || !text}
+          <button type="button" onClick={() => listing.id && share(listing.id, plain)} disabled={sharing || !text}
             className="inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold border border-border hover:bg-muted/50 transition disabled:opacity-50">
             <Icon name={sharing ? 'Loader2' : 'Image'} size={15} className={sharing ? 'animate-spin' : ''} />
             {sharing ? 'Готовлю…' : 'Фото + текст'}
           </button>
         </div>
         <p className="text-[11px] text-muted-foreground -mt-1">
-          «Фото + текст»: на телефоне откроется меню «Поделиться», на компьютере скачается презентация, а текст скопируется.
+          Жирный сохраняется при вставке в Телеграм. В ВК и других соцсетях текст вставится обычным, без звёздочек.
+          «Фото + текст»: на телефоне откроется меню «Поделиться», на компьютере скачается презентация, а текст скопируется (без жирного).
           Ник и строку «Партнёрам» можно изменить в Настройки → Основные → Контакты.
         </p>
       </DialogContent>

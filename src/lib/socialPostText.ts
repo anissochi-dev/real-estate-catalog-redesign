@@ -1,4 +1,3 @@
-import { formatPhone } from '@/lib/phone';
 
 export interface SocialPostListing {
   id?: number;
@@ -47,6 +46,28 @@ const CATEGORY: Record<string, { emoji: string; rent: string; sale: string; word
   gab: { emoji: '📈', rent: 'Готовый арендный бизнес', sale: 'Продажа готового арендного бизнеса', word: 'ГАБ' },
 };
 
+const b = (t: string) => `**${t}**`;
+
+/** Телефон в формате 8-918-33-52-888. */
+export function formatPostPhone(raw: string): string {
+  let d = raw.replace(/\D/g, '');
+  if (d.length === 11 && (d[0] === '7' || d[0] === '8')) d = d.slice(1);
+  if (d.length !== 10) return raw;
+  return `8-${d.slice(0, 3)}-${d.slice(3, 5)}-${d.slice(5, 7)}-${d.slice(7)}`;
+}
+
+/** Убирает разметку **жирный** — для соцсетей без форматирования. */
+export function stripBold(text: string): string {
+  return text.replace(/\*\*(.+?)\*\*/gs, '$1');
+}
+
+const escHtml = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** HTML с <b> — при вставке в Телеграм жирный сохраняется. */
+export function boldToHtml(text: string): string {
+  return escHtml(text).replace(/\*\*(.+?)\*\*/gs, '<b>$1</b>').replace(/\n/g, '<br>');
+}
+
 const nf = (n: number) => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(n);
 
 function parseUtilities(raw?: string | null): Record<string, string> {
@@ -83,10 +104,10 @@ export function buildSocialPostText(l: SocialPostListing, company: SocialPostCom
   const lines: string[] = [];
   const push = (emoji: string, text?: string | null | false) => { if (text) lines.push(`${emoji} ${text}`); };
 
-  push(cat.emoji, cat[deal]);
+  push(cat.emoji, b(cat[deal]));
   if (l.id) push('🆔', `ID объекта — ${l.id}`);
   push('📍', [l.city, l.district].filter(Boolean).join(', ') || l.address);
-  if (l.area) push('📐', `Общая площадь — ${nf(Number(l.area))} м²`);
+  if (l.area) push('📐', b(`Общая площадь — ${nf(Number(l.area))} м²`));
   if (l.land_area && l.category !== 'land') push('🌳', `Участок — ${nf(Number(l.land_area))} сот.`);
   if (l.floor || l.total_floors) {
     push('🏬', l.floor && l.total_floors ? `${l.floor}-й этаж из ${l.total_floors}` : l.floor ? `${l.floor}-й этаж` : `Этажей в здании — ${l.total_floors}`);
@@ -117,11 +138,12 @@ export function buildSocialPostText(l: SocialPostListing, company: SocialPostCom
   const purposes = (l.purpose || '').split(/[|,]/).map(s => s.trim()).filter(Boolean).slice(0, 5);
   if (purposes.length) push('✅', `Подойдёт: ${purposes.map(lower).join(', ')}`);
 
-  if (l.price) push('💰', `Стоимость — ${priceLine(Number(l.price), deal, l.price_unit)}`);
+  if (l.price) push('💰', b(`Стоимость — ${priceLine(Number(l.price), deal, l.price_unit)}`));
 
   lines.push('');
   push('✉️', `Напишите в ЛС «${cat.word}» — пришлю фото, планировку и организую просмотр`);
-  const contact = [company.nick?.trim(), company.phone ? formatPhone(company.phone) : ''].filter(Boolean).join(' / ');
+  const phone = company.phone ? formatPostPhone(company.phone) : '';
+  const contact = [company.nick?.trim(), phone ? b(phone) : ''].filter(Boolean).join(' / ');
   if (contact) push('📞', `Контакт: ${contact}`);
   if (link) push('🔗', link);
   if (company.partnerText?.trim()) {
