@@ -30,9 +30,9 @@ export default function ShareListingButton({ listing, compact }: Props) {
           type="button"
           onClick={handleClick}
           title="Поделиться в соцсети и мессенджеры"
-          className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-brand-blue/10 hover:text-brand-blue transition-colors"
+          className="w-9 h-9 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-brand-blue/10 hover:text-brand-blue active:bg-brand-blue/10 transition-colors"
         >
-          <Icon name="Share2" size={13} />
+          <Icon name="Share2" size={15} />
         </button>
       ) : (
         <button
