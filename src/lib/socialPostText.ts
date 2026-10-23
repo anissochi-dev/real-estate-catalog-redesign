@@ -141,7 +141,7 @@ export function buildSocialPostText(l: SocialPostListing, company: SocialPostCom
   if (l.price) push('💰', b(`Стоимость — ${priceLine(Number(l.price), deal, l.price_unit)}`));
 
   lines.push('');
-  push('✉️', `Напишите в ЛС «${cat.word}» — пришлю фото, планировку и организую просмотр`);
+  push('✉️', `Напишите в ЛС «${cat.word}${l.id ? ` ${l.id}` : ''}» — пришлю фото, планировку и организую просмотр`);
   const phone = company.phone ? formatPostPhone(company.phone) : '';
   const contact = [company.nick?.trim(), phone ? b(phone) : ''].filter(Boolean).join(' / ');
   if (contact) push('📞', `Контакт: ${contact}`);
