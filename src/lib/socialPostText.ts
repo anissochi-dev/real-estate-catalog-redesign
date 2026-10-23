@@ -53,7 +53,12 @@ export function formatPostPhone(raw: string): string {
   let d = raw.replace(/\D/g, '');
   if (d.length === 11 && (d[0] === '7' || d[0] === '8')) d = d.slice(1);
   if (d.length !== 10) return raw;
-  return `8-${d.slice(0, 3)}-${d.slice(3, 5)}-${d.slice(5, 7)}-${d.slice(7)}`;
+  return `+7 ${d.slice(0, 3)} ${d.slice(3, 6)}-${d.slice(6, 8)}-${d.slice(8)}`;
+}
+
+/** Число цифрами-смайлами: 550000 → 5️⃣5️⃣0️⃣0️⃣0️⃣0️⃣ */
+export function emojiDigits(n: number): string {
+  return String(Math.round(n)).replace(/\d/g, d => `${d}\uFE0F\u20E3`);
 }
 
 /** Убирает разметку **жирный** — для соцсетей без форматирования. */
@@ -93,9 +98,10 @@ function plural(v: string) {
 }
 
 function priceLine(price: number, deal: string, unit?: string | null) {
-  if (unit === 'm2') return deal === 'rent' ? `${nf(price)} ₽/м² в мес` : `${nf(price)} ₽/м²`;
-  if (unit === 'sotka') return `${nf(price)} ₽/сотка`;
-  return deal === 'rent' ? `${nf(price)} ₽/мес` : `${nf(price)} ₽`;
+  const p = emojiDigits(price);
+  if (unit === 'm2') return deal === 'rent' ? `${p} ₽/м² в мес` : `${p} ₽/м²`;
+  if (unit === 'sotka') return `${p} ₽/сотка`;
+  return deal === 'rent' ? `${p} ₽/мес` : `${p} ₽`;
 }
 
 export function buildSocialPostText(l: SocialPostListing, company: SocialPostCompany, link?: string): string {
@@ -138,13 +144,12 @@ export function buildSocialPostText(l: SocialPostListing, company: SocialPostCom
   const purposes = (l.purpose || '').split(/[|,]/).map(s => s.trim()).filter(Boolean).slice(0, 5);
   if (purposes.length) push('✅', `Подойдёт: ${purposes.map(lower).join(', ')}`);
 
-  if (l.price) push('💰', b(`Стоимость — ${priceLine(Number(l.price), deal, l.price_unit)}`));
+  if (l.price) push('💰', priceLine(Number(l.price), deal, l.price_unit));
 
   lines.push('');
   push('✉️', `Напишите в ЛС «${cat.word}${l.id ? ` ${l.id}` : ''}» — пришлю фото, планировку и организую просмотр`);
   const phone = company.phone ? formatPostPhone(company.phone) : '';
-  const contact = [company.nick?.trim(), phone ? b(phone) : ''].filter(Boolean).join(' / ');
-  if (contact) push('📞', `Контакт: ${contact}`);
+  if (phone) push('📞', `Контакт: ${b(phone)}`);
   if (link) push('🔗', link);
   if (company.partnerText?.trim()) {
     const t = company.partnerText.trim();
