@@ -184,6 +184,33 @@ def _text_layer(color, text, size, weight, ls_em, x, y, opacity=1.0):
     return ('solid', color, mask, round(x + ox), round(y + size * BASELINE + oy))
 
 
+QR_LABEL_MAX_SHARE = 0.28
+
+
+def _qr_label_layers(fg, label, side, n, qx, qy):
+    """Белая плашка с названием сайта в центре QR (код создаётся с коррекцией H — 30%)."""
+    max_w = side * QR_LABEL_MAX_SHARE
+    fs = max(4, int(max_w / 2))
+    while fs > 4 and _font(800, fs).getlength(label) + fs * 0.7 > max_w:
+        fs -= 1
+    if fs < 4:
+        return []
+    tw = _font(800, fs).getlength(label)
+    box_w = round(min(max_w, tw + fs * 0.7))
+    box_h = round(fs * 1.6)
+    cx, cy = qx + side / 2, qy + side / 2
+    radius = round(min(box_h / 3, 2 * side / n))
+    plate = Image.new('L', (box_w, box_h), 0)
+    ImageDraw.Draw(plate).rounded_rectangle([0, 0, box_w - 1, box_h - 1], radius=radius, fill=255)
+    white = Image.new('CMYK', (box_w, box_h), (0, 0, 0, 0))
+    layers = [('img', white, plate, round(cx - box_w / 2), round(cy - box_h / 2))]
+    text = _text_layer(fg, label, fs, 800, 0, 0, 0)
+    if text[0] == 'solid':
+        _, color, mask, _x, _y = text
+        layers.append(('solid', color, mask, round(cx - mask.width / 2), round(cy - mask.height / 2)))
+    return layers
+
+
 def _build_layers(p, info, k, bleed_px, fg, fetched, warnings):
     """Слои макета в координатах итогового холста. Каждый слой рисуется в любую полосу."""
     els = {e.get('id'): e for e in (p.get('elements') or [])}
@@ -226,6 +253,10 @@ def _build_layers(p, info, k, bleed_px, fg, fetched, warnings):
         small = Image.new('L', (n, n), 0)
         small.putdata([255 if c else 0 for row in matrix for c in row])
         layers.append(('qr', fg, small, round(X(qr['pos']['x'] + pad_u)), round(X(qr['pos']['y'] + pad_u)), side))
+        label = (p.get('qr_label') or '').strip()[:40]
+        if label:
+            layers.extend(_qr_label_layers(fg, label, side, n,
+                                           round(X(qr['pos']['x'] + pad_u)), round(X(qr['pos']['y'] + pad_u))))
         info['qr_side_cm'] = round(side / px_per_cm, 1)
         info['qr_module_mm'] = round(side / n / px_per_cm * 10, 2)
         if side / n / px_per_cm * 10 < 1.5:

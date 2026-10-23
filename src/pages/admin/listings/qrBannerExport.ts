@@ -1,4 +1,4 @@
-import QRCode from 'qrcode';
+import { makeQrWithLabel } from './qrWithLabel';
 import { jsPDF } from 'jspdf';
 import {
   BannerElement, qrPadPx, sizeLabelMetrics,
@@ -15,6 +15,8 @@ export interface BannerExportParams {
   dealText: string;
   phoneText: string;
   qrDataUrl: string;
+  qrText?: string;
+  qrLabel?: string;
   logoUrl: string;
   photoUrl: string;
   showSize: boolean;
@@ -27,7 +29,7 @@ export interface BannerExportParams {
 export async function renderBannerDownload(p: BannerExportParams) {
   const {
     listingId, bannerW, bannerH, bgColor, textColor, elements, dealText, phoneText,
-    qrDataUrl, logoUrl, photoUrl, showSize, numCmW, numCmH, downloadFormat,
+    qrDataUrl, qrText, qrLabel, logoUrl, photoUrl, showSize, numCmW, numCmH, downloadFormat,
   } = p;
   const SCALE = Math.max(1, Math.min(4, Math.sqrt(16_000_000 / (bannerW * bannerH)), 8000 / Math.max(bannerW, bannerH)));
   const W = bannerW * SCALE;
@@ -87,8 +89,11 @@ export async function renderBannerDownload(p: BannerExportParams) {
   const qrEl = elements.find(e => e.id === 'qr');
   if (qrEl && qrDataUrl) {
     try {
-      const img = await loadImg(qrDataUrl);
       const sz = qrEl.imgSize ?? 80;
+      const crisp = qrText
+        ? await makeQrWithLabel(qrText, { size: Math.ceil(sz * SCALE), margin: 1, dark: textColor, label: qrLabel }).catch(() => qrDataUrl)
+        : qrDataUrl;
+      const img = await loadImg(crisp);
       const pad = qrPadPx(sz);
       ctx.save();
       ctx.globalAlpha = 0.15;
@@ -142,7 +147,7 @@ export async function renderBannerDownload(p: BannerExportParams) {
   }
 }
 
-export async function downloadQrHiRes(qrDataUrl: string, publicUrl: string | null, listingId: number, textColor: string) {
+export async function downloadQrHiRes(qrDataUrl: string, publicUrl: string | null, listingId: number, textColor: string, label?: string) {
   if (!qrDataUrl) return;
   // 3м × 2м при 150 DPI = 1772 × 1181 px — стандарт для крупной печати
   const PX_W = 1772;
@@ -150,11 +155,12 @@ export async function downloadQrHiRes(qrDataUrl: string, publicUrl: string | nul
   const url = publicUrl || `${window.location.origin}/object/${listingId}`;
   try {
     // Генерируем QR в нужном разрешении
-    const hiResQr = await QRCode.toDataURL(url, {
-      width: Math.min(PX_W, PX_H) - 80,
+    const hiResQr = await makeQrWithLabel(url, {
+      size: Math.min(PX_W, PX_H) - 80,
       margin: 2,
-      color: { dark: textColor, light: '#ffffff' },
-      errorCorrectionLevel: 'H',
+      dark: textColor,
+      light: '#ffffff',
+      label,
     });
     const cv = document.createElement('canvas');
     cv.width = PX_W;

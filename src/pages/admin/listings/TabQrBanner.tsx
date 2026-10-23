@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import QRCode from 'qrcode';
+import { makeQrWithLabel, siteLabelFromUrl } from './qrWithLabel';
 import { adminApi, uploadFileEx } from '@/lib/adminApi';
 import { Listing } from './types';
 import type { CanvasProps } from './QrBannerCanvas';
@@ -103,14 +103,15 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
   // ── QR ────────────────────────────────────────────────────────────────────
   const qrBase = publicUrl || `${window.location.origin}/object/${listing.id}`;
   const qrUrl = `${qrBase}${qrBase.includes('?') ? '&' : '?'}from=qr`;
+  const qrLabel = siteLabelFromUrl(siteUrl || window.location.origin);
 
   const generateQr = useCallback(async () => {
     const url = qrUrl;
     try {
-      const dataUrl = await QRCode.toDataURL(url, { width: 300, margin: 1, color: { dark: textColor, light: '#00000000' } });
+      const dataUrl = await makeQrWithLabel(url, { size: 600, margin: 1, dark: textColor, label: qrLabel });
       setQrDataUrl(dataUrl);
     } catch { setQrDataUrl(''); }
-  }, [qrUrl, textColor]);
+  }, [qrUrl, textColor, qrLabel]);
 
   useEffect(() => { generateQr(); }, [generateQr]);
 
@@ -120,6 +121,7 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
     bg_color: bgColor, text_color: textColor,
     deal_text: dealText, phone_text: phoneText,
     qr_url: qrUrl,
+    qr_label: qrLabel || undefined,
     photo_url: photoUrl || undefined, logo_url: logoUrl || undefined,
     show_size: showSize,
     size_label_w: numCmW, size_label_h: numCmH,
@@ -184,12 +186,12 @@ export function TabQrBanner({ listing, siteUrl }: Props) {
     try {
       await renderBannerDownload({
         listingId: listing.id, bannerW, bannerH, bgColor, textColor, elements, dealText, phoneText,
-        qrDataUrl, logoUrl, photoUrl, showSize, numCmW, numCmH, downloadFormat,
+        qrDataUrl, qrText: qrUrl, qrLabel, logoUrl, photoUrl, showSize, numCmW, numCmH, downloadFormat,
       });
     } catch { alert('Ошибка при скачивании'); } finally { setDownloading(false); }
   };
 
-  const downloadQr = () => downloadQrHiRes(qrDataUrl, publicUrl, listing.id, textColor);
+  const downloadQr = () => downloadQrHiRes(qrDataUrl, publicUrl, listing.id, textColor, qrLabel);
 
   // ── сборка ────────────────────────────────────────────────────────────────
   const canvasProps: Omit<CanvasProps, 'bannerRef' | 'exportMode'> = {
