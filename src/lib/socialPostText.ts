@@ -56,9 +56,11 @@ export function formatPostPhone(raw: string): string {
   return `+7 ${d.slice(0, 3)} ${d.slice(3, 6)}-${d.slice(6, 8)}-${d.slice(8)}`;
 }
 
-/** Число цифрами-смайлами: 550000 → 5️⃣5️⃣0️⃣0️⃣0️⃣0️⃣ */
+/** Число цифрами-смайлами с разбивкой по тысячам: 550000 → 5️⃣5️⃣0️⃣ 0️⃣0️⃣0️⃣ */
 export function emojiDigits(n: number): string {
-  return String(Math.round(n)).replace(/\d/g, d => `${d}\uFE0F\u20E3`);
+  return String(Math.round(n))
+    .replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+    .replace(/\d/g, d => `${d}\uFE0F\u20E3`);
 }
 
 /** Убирает разметку **жирный** — для соцсетей без форматирования. */
