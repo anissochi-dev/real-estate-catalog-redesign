@@ -336,6 +336,8 @@ export interface PublicSettings {
   google_analytics_id?: string;
   company_since_year?: number;
   site_url?: string;
+  share_contact_nick?: string;
+  share_partner_text?: string;
   seo_keywords?: string;
   seo_description?: string;
   legal_personal_data?: string;

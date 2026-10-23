@@ -67,6 +67,8 @@ export default function GeneralTab({ tab, s, setS, cities, saved, save }: Props)
           {field('company_phone', 'Телефон')}
           {field('company_email', 'Email')}
           {field('company_address', 'Адрес')}
+          {field('share_contact_nick', 'Ник для постов в соцсетях (например @BMN_SU)')}
+          {field('share_partner_text', 'Строка «Партнёрам» в постах', true, 3)}
           <div>
             <label className="text-sm font-semibold block mb-1">Основной город</label>
             <select className="w-full px-3 py-2 border rounded-lg" value={s.main_city || 'Краснодар'}

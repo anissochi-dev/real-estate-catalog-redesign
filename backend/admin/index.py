@@ -4332,6 +4332,7 @@ def _settings(cur, conn, method, event, user):
                           ('yookassa_shop_id', 100), ('yookassa_secret_key', 500),
                           ('legal_personal_data', 10000), ('legal_privacy_policy', 10000),
                           ('legal_marketing_consent', 10000),
+                          ('share_contact_nick', 100), ('share_partner_text', 1000),
                           ('footer_description', 1000), ('footer_catalog_links', 3000),
                           ('footer_extra_links', 3000), ('footer_legal_info', 2000),
                           # Бренд-кит
