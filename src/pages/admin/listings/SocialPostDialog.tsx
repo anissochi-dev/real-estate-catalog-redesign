@@ -7,6 +7,7 @@ import { buildSocialPostText, boldToHtml, stripBold, TELEGRAM_CAPTION_LIMIT, VK_
 import { copyText } from '@/hooks/useSharePresentation';
 import { buildPhotoCollage, parseListingImages, COLLAGE_MAX } from '@/lib/photoCollage';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { listingSlug } from '@/lib/slug';
 import { Listing } from './types';
 
 interface Props {
@@ -17,6 +18,9 @@ interface Props {
 
 type Flash = 'text' | 'all' | 'photo' | 'tg' | 'vk' | null;
 type PicMode = 'photos' | 'card';
+type LinkSrc = 'telegram' | 'vk' | 'social';
+const LINK_SRC_LABEL: Record<LinkSrc, string> = { telegram: 'Телеграм', vk: 'ВК', social: 'Другие' };
+const LINK_PREF_KEY = 'social_post_link_on';
 type Pic = { blob: Blob; png: Blob | null; url: string };
 type PicState = 'loading' | 'ready' | 'error';
 
@@ -46,15 +50,17 @@ async function toPng(blob: Blob): Promise<Blob> {
   return new Promise((res, rej) => cv.toBlob(b => (b ? res(b) : rej(new Error('png'))), 'image/png'));
 }
 
-function loadCompany(): Promise<SocialPostCompany & { logo?: string }> {
+function loadCompany(): Promise<SocialPostCompany & { logo?: string; site?: string }> {
   return fetchPublicSettings()
-    .then(st => ({ phone: st.company_phone, nick: st.share_contact_nick, partnerText: st.share_partner_text, logo: st.logo_url }))
+    .then(st => ({ phone: st.company_phone, nick: st.share_contact_nick, partnerText: st.share_partner_text, logo: st.logo_url, site: st.site_url }))
     .catch(() => ({}));
 }
 
 export default function SocialPostDialog({ open, onOpenChange, listing }: Props) {
   const [full, setFull] = useState<Partial<Listing>>(listing);
-  const [company, setCompany] = useState<(SocialPostCompany & { logo?: string }) | null>(null);
+  const [company, setCompany] = useState<(SocialPostCompany & { logo?: string; site?: string }) | null>(null);
+  const [linkOn, setLinkOn] = useState(() => { try { return localStorage.getItem(LINK_PREF_KEY) === '1'; } catch { return false; } });
+  const [linkSrc, setLinkSrc] = useState<LinkSrc>('telegram');
   const [text, setText] = useState('');
   const [edited, setEdited] = useState(false);
   const [flash, setFlash] = useState<Flash>(null);
@@ -150,7 +156,23 @@ export default function SocialPostDialog({ open, onOpenChange, listing }: Props)
   const generated = useMemo(() => (company ? buildSocialPostText(full, company) : ''), [full, company]);
   useEffect(() => { if (!edited) setText(generated); }, [generated, edited]);
 
-  const plain = stripBold(text);
+  const toggleLink = (v: boolean) => {
+    setLinkOn(v);
+    try { localStorage.setItem(LINK_PREF_KEY, v ? '1' : '0'); } catch { /* ignore */ }
+  };
+
+  const objectUrl = (src: LinkSrc) => {
+    if (!listing.id) return '';
+    const base = (company?.site || window.location.origin).replace(/\/+$/, '');
+    const slug = listingSlug(full.title || '', listing.id);
+    const qs = new URLSearchParams({ utm_source: src, utm_medium: 'social_post', utm_campaign: `object_${listing.id}` });
+    return `${base}/object/${slug}?${qs.toString()}`;
+  };
+
+  const withLink = (src: LinkSrc = linkSrc) => (linkOn && text ? `${text.trimEnd()}\n\n🔗 Подробнее: ${objectUrl(src)}` : text);
+
+  const finalText = withLink();
+  const plain = stripBold(finalText);
   const len = plain.length;
   const tgOver = len > TELEGRAM_CAPTION_LIMIT;
   const fileName = `obekt-${listing.id}-${picMode === 'photos' ? 'foto' : 'kartochka'}.jpg`;
@@ -158,7 +180,7 @@ export default function SocialPostDialog({ open, onOpenChange, listing }: Props)
   const showFlash = (f: Flash) => { setFlash(f); setTimeout(() => setFlash(null), 2500); };
 
   const copyPostText = async () => {
-    if (await copyRich(text)) showFlash('text');
+    if (await copyRich(finalText)) showFlash('text');
     else alert('Не удалось скопировать. Выделите текст и скопируйте вручную.');
   };
 
@@ -174,11 +196,12 @@ export default function SocialPostDialog({ open, onOpenChange, listing }: Props)
 
   const copyAll = async () => {
     if (!photo?.png) return;
+    const t = withLink(linkSrc);
     try {
       await navigator.clipboard.write([new ClipboardItem({
         'image/png': photo.png,
-        'text/html': new Blob([boldToHtml(text)], { type: 'text/html' }),
-        'text/plain': new Blob([plain], { type: 'text/plain' }),
+        'text/html': new Blob([boldToHtml(t)], { type: 'text/html' }),
+        'text/plain': new Blob([stripBold(t)], { type: 'text/plain' }),
       })]);
       showFlash('all');
     } catch {
@@ -187,7 +210,7 @@ export default function SocialPostDialog({ open, onOpenChange, listing }: Props)
         alert('Фото скопировано. Текст браузер вместе с фото скопировать не дал — после вставки фото нажмите «Скопировать текст».');
       } catch {
         downloadPhoto();
-        await copyRich(text);
+        await copyRich(t);
         alert('Браузер не разрешил копировать фото — карточка скачана, а текст скопирован.');
       }
     }
@@ -203,7 +226,7 @@ export default function SocialPostDialog({ open, onOpenChange, listing }: Props)
         await navigator.share({ files: [file], text: plain });
       } else {
         downloadPhoto();
-        await copyRich(text);
+        await copyRich(finalText);
         showFlash('text');
       }
     } catch (e) {
@@ -218,9 +241,10 @@ export default function SocialPostDialog({ open, onOpenChange, listing }: Props)
   const picReady = photoState === 'ready' && !!photo;
 
   const openApp = async (app: 'tg' | 'vk') => {
-    await copyRich(text);
+    const t = withLink(app === 'tg' ? 'telegram' : 'vk');
+    await copyRich(t);
     showFlash(app);
-    if (app === 'tg') window.location.href = `tg://msg?text=${encodeURIComponent(plain)}`;
+    if (app === 'tg') window.location.href = `tg://msg?text=${encodeURIComponent(stripBold(t))}`;
     else window.open('https://vk.com/feed', '_blank', 'noopener');
   };
 
@@ -305,7 +329,7 @@ export default function SocialPostDialog({ open, onOpenChange, listing }: Props)
   const previewBox = (
     <div
       className="px-3 py-2.5 rounded-xl bg-muted/50 text-[15px] sm:text-sm leading-relaxed whitespace-pre-wrap break-words md:max-h-44 md:overflow-y-auto"
-      dangerouslySetInnerHTML={{ __html: boldToHtml(text).replace(/<br>/g, '\n') }}
+      dangerouslySetInnerHTML={{ __html: boldToHtml(finalText).replace(/<br>/g, '\n') }}
     />
   );
 
@@ -316,6 +340,37 @@ export default function SocialPostDialog({ open, onOpenChange, listing }: Props)
       rows={isMobile ? 14 : 8}
       className="w-full px-3 py-2.5 border border-border rounded-xl text-base sm:text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
     />
+  );
+
+  const linkControl = company && (
+    <div className="rounded-xl border border-border px-3 py-2.5 space-y-2">
+      <label className="flex items-center justify-between gap-3 cursor-pointer select-none">
+        <span className="flex items-center gap-2 text-sm font-semibold">
+          <Icon name="Link" size={15} className="text-brand-blue" /> Ссылка на объект
+        </span>
+        <button type="button" role="switch" aria-checked={linkOn} onClick={() => toggleLink(!linkOn)}
+          className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${linkOn ? 'bg-brand-blue' : 'bg-muted-foreground/30'}`}>
+          <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${linkOn ? 'translate-x-5' : ''}`} />
+        </button>
+      </label>
+      {linkOn && (
+        <>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs sm:text-[11px] text-muted-foreground">Метка источника:</span>
+            {(Object.keys(LINK_SRC_LABEL) as LinkSrc[]).map(src => (
+              <button key={src} type="button" onClick={() => setLinkSrc(src)}
+                className={`px-2.5 py-1 rounded-full text-xs sm:text-[11px] font-semibold transition ${
+                  linkSrc === src ? 'bg-brand-blue text-white' : 'bg-muted text-muted-foreground hover:text-foreground'}`}>
+                {LINK_SRC_LABEL[src]}
+              </button>
+            ))}
+          </div>
+          <div className="text-[11px] text-muted-foreground leading-snug">
+            Ссылка добавится в конец поста. Кнопки «Телеграм» и «ВК» сами ставят свою метку — переходы видны в Яндекс Метрике (Источники → Метки UTM).
+          </div>
+        </>
+      )}
+    </div>
   );
 
   const counters = (
@@ -357,6 +412,7 @@ export default function SocialPostDialog({ open, onOpenChange, listing }: Props)
         ))}
       </div>
       {textTab === 'preview' ? previewBox : editor}
+      {linkControl}
       {textTab === 'edit' && (
         <div className="text-xs text-muted-foreground">Текст между <b>**звёздочками**</b> будет жирным в Телеграме.</div>
       )}
@@ -369,6 +425,7 @@ export default function SocialPostDialog({ open, onOpenChange, listing }: Props)
         Так подпись будет выглядеть в Телеграме. Текст между <b>**звёздочками**</b> выделяется жирным.
       </div>
       {previewBox}
+      {linkControl}
       {counters}
     </div>
   );
