@@ -338,6 +338,7 @@ export interface PublicSettings {
   site_url?: string;
   share_contact_nick?: string;
   share_partner_text?: string;
+  hidden_ui?: string;
   seo_keywords?: string;
   seo_description?: string;
   legal_personal_data?: string;

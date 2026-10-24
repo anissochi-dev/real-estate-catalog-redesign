@@ -4,6 +4,7 @@ export interface S {
   company_email: string;
   share_contact_nick?: string;
   share_partner_text?: string;
+  hidden_ui?: string;
   company_address: string;
   hero_title: string;
   hero_subtitle: string;

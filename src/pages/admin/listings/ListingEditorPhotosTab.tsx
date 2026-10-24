@@ -1,5 +1,6 @@
 import ImageUploader from '@/components/admin/ImageUploader';
 import { Listing, detectVideoType } from './types';
+import { useIsHidden } from '@/lib/hiddenUi';
 
 interface Props {
   editing: Partial<Listing>;
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export default function ListingEditorPhotosTab({ editing, setEditing, photos, setPhotos, errors, setErrors }: Props) {
+  const labelsHidden = useIsHidden('listing-editor.labels');
   const errWrap = (field: string) => errors[field] ? { 'data-field-error': 'true' as const } : {};
 
   return (
@@ -32,8 +34,8 @@ export default function ListingEditorPhotosTab({ editing, setEditing, photos, se
         )}
       </div>
 
-      {/* 2. Метки и оформление */}
-      <div className="border border-border rounded-xl px-4 py-3 space-y-2">
+      {/* 2. Метки и оформление (можно скрыть: Настройки → Администрирование → Скрытые) */}
+      {!labelsHidden && <div className="border border-border rounded-xl px-4 py-3 space-y-2">
         <div className="text-sm font-semibold">Метки и оформление</div>
         <div className="flex flex-wrap gap-x-4 gap-y-2">
           <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -63,7 +65,7 @@ export default function ListingEditorPhotosTab({ editing, setEditing, photos, se
           </label>
         </div>
         <div className="text-xs text-muted-foreground">Эксклюзив и Срочно отображаются бейджами на фото в каталоге.</div>
-      </div>
+      </div>}
 
       {/* 3. Фотографии — внизу */}
       <div {...errWrap('photos')}>

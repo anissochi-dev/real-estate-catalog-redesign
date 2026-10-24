@@ -22,6 +22,7 @@ import BrandKitTab from './settings/BrandKitTab';
 import NotificationsTab from './settings/NotificationsTab';
 import SiteHealthTab from './settings/SiteHealthTab';
 import VerificationTab from './settings/VerificationTab';
+import HiddenUiTab from './settings/HiddenUiTab';
 import SettingsSearch from './settings/SettingsSearch';
 import { useSettingsAnchorListener } from './settings/settingsAnchor';
 import VBKnowledgeAdmin from './VBKnowledgeAdmin';
@@ -43,7 +44,7 @@ export default function SettingsAdmin() {
   const [cityAdding, setCityAdding] = useState(false);
   type TabId = 'general' | 'watermark' | 'brand-kit' | 'footer' | 'legal'
     | 'integrations' | 'ad-platforms' | 'autoposting' | 'feeds' | 'notifications'
-    | 'cities' | 'purposes' | 'land-vri' | 'partners' | 'pages' | 'roles' | 'migration' | 'photo-optimize' | 'site-health' | 'verification'
+    | 'cities' | 'purposes' | 'land-vri' | 'partners' | 'pages' | 'roles' | 'migration' | 'photo-optimize' | 'site-health' | 'verification' | 'hidden-ui'
     | 'vb-knowledge' | 'users' | 'phones' | 'seo' | 'districts' | 'category-texts';
 
   // Есть ли доступ к «обычным» настройкам (компания/сайт/интеграции/администрирование/база знаний)
@@ -292,6 +293,7 @@ export default function SettingsAdmin() {
         ['migration', 'Экспорт/импорт', 'DatabaseBackup'],
         ['photo-optimize', 'Сжатие фото', 'ImageDown'],
         ['site-health', 'Диагностика', 'HeartPulse'],
+        ['hidden-ui', 'Скрытые', 'EyeOff'],
       ],
     },
     {
@@ -403,6 +405,7 @@ export default function SettingsAdmin() {
       {tab === 'migration' && <MigrationTab />}
       {tab === 'photo-optimize' && <PhotoOptimizeTab />}
       {tab === 'site-health' && <SiteHealthTab />}
+      {tab === 'hidden-ui' && <HiddenUiTab s={s} setS={setS} />}
       {tab === 'verification' && (
         <VerificationTab
           siteUrl={s.site_url as string | undefined}

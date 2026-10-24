@@ -4367,6 +4367,8 @@ def _settings(cur, conn, method, event, user):
             fields.append(f"company_since_year = {_int_or_null(body['company_since_year'])}")
         if 'watermark_enabled' in body:
             fields.append(f"watermark_enabled = {_bool(body['watermark_enabled'])}")
+        if 'hidden_ui' in body:
+            fields.append(f"hidden_ui = '{_safe(str(body['hidden_ui'] or ''), 2000)}'")
         if 'watermark_opacity' in body:
             fields.append(f"watermark_opacity = {_int_or_null(body['watermark_opacity'])}")
         if 'smtp_port' in body:

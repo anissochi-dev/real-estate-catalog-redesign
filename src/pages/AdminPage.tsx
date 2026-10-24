@@ -64,6 +64,15 @@ export default function AdminPage({ onExit, onExitToPath, initialSection }: Prop
     return () => window.removeEventListener('admin:open-listing', handler);
   }, []);
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const s = (e as CustomEvent<string>).detail;
+      if (s) setSection(s as AdminSection);
+    };
+    window.addEventListener('admin:open-section', handler);
+    return () => window.removeEventListener('admin:open-section', handler);
+  }, []);
+
   // Переключение на Заявки + открытие конкретной заявки (например из подбора совпадений)
   useEffect(() => {
     const handler = (e: Event) => {
