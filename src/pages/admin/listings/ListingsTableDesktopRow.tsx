@@ -322,7 +322,7 @@ export default function ListingsTableDesktopRow({
               )}
               {!it.owner_name && !it.owner_phone && '—'}
             </div>
-            {showPhone && <MessengerLinks phone={it.owner_phone} />}
+            {showPhone && <MessengerLinks phone={it.owner_phone} size="xs" />}
           </div>
 
           {/* Доп. лицо (представитель) */}
@@ -342,7 +342,7 @@ export default function ListingsTableDesktopRow({
                     </span>
                   )}
                 </div>
-                {showPhone && <MessengerLinks phone={extra.phone} />}
+                {showPhone && <MessengerLinks phone={extra.phone} size="xs" />}
               </div>
             );
           })()}

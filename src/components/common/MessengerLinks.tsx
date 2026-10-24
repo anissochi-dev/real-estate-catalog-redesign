@@ -26,14 +26,14 @@ function openInApp(e: React.MouseEvent, appUrl: string, webUrl: string) {
 
 interface Props {
   phone?: string | null;
-  size?: 'sm' | 'md';
+  size?: 'xs' | 'sm' | 'md';
 }
 
 export default function MessengerLinks({ phone, size = 'sm' }: Props) {
   const n = normalizeRuMobile(phone);
   if (!n) return null;
 
-  const box = size === 'md' ? 'w-7 h-7' : 'w-5 h-5';
+  const box = size === 'md' ? 'w-7 h-7' : size === 'xs' ? 'w-3.5 h-3.5' : 'w-5 h-5';
   const items = [
     { key: 'max', title: 'Написать в MAX', href: `https://max.ru/chat?phone=${n}`, app: null as string | null, img: '/messengers/max.png' },
     { key: 'wa', title: 'Написать в WhatsApp (откроется в приложении)', href: `https://wa.me/${n}`, app: `whatsapp://send?phone=${n}`, img: '/messengers/wa.png' },
@@ -41,7 +41,7 @@ export default function MessengerLinks({ phone, size = 'sm' }: Props) {
   ];
 
   return (
-    <span className="inline-flex items-center gap-1 flex-shrink-0">
+    <span className={`inline-flex items-center ${size === 'xs' ? 'gap-0.5' : 'gap-1'} flex-shrink-0`}>
       {items.map(i => (
         <a
           key={i.key}
