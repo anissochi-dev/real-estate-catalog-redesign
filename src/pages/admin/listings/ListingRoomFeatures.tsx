@@ -66,7 +66,7 @@ export default function ListingRoomFeatures({ editing, setEditing, landVri = [],
               </div>
             </>
           )}
-          <div className="sm:col-span-3">
+          <div className="col-span-2 sm:col-span-3">
             <div className="flex flex-wrap gap-4 mb-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={!!editing.has_furniture}
@@ -113,11 +113,11 @@ export default function ListingRoomFeatures({ editing, setEditing, landVri = [],
                     <div className={`w-6 h-6 rounded-full ${bg} flex items-center justify-center flex-shrink-0`}>
                       <Icon name={icon} size={13} className={color} />
                     </div>
-                    <span className="text-xs font-medium w-[70px] sm:w-[110px] flex-shrink-0 truncate">{label}</span>
+                    <span className="text-xs font-medium w-[100px] sm:w-[110px] flex-shrink-0 truncate">{label}</span>
                     <select
                       value={selected}
                       onChange={e => handleChange(e.target.value)}
-                      className="flex-1 min-w-0 text-xs px-2 py-1 border border-border rounded-md bg-white outline-none"
+                      className="flex-1 min-w-0 text-sm sm:text-xs h-9 sm:h-auto px-2 py-1 border border-border rounded-md bg-white outline-none"
                     >
                       <option value="">— Не указано —</option>
                       {options.map(o => <option key={o} value={o}>{o}</option>)}
