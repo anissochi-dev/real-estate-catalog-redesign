@@ -2,7 +2,7 @@ import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import { adminApi } from '@/lib/adminApi';
 import { useSettings } from '@/contexts/SettingsContext';
-import { HIDDEN_UI_REGISTRY, HiddenUiItem, parseHiddenUi, serializeHiddenUi } from '@/lib/hiddenUi';
+import { HIDDEN_UI_REGISTRY, HiddenUiItem, parseHiddenUi, serializeHiddenUi, setHiddenUi } from '@/lib/hiddenUi';
 import { S } from './types';
 
 interface Props {
@@ -22,6 +22,7 @@ export default function HiddenUiTab({ s, setS }: Props) {
     try {
       await adminApi.updateSettings({ hidden_ui: next });
       setS(prev => ({ ...prev, hidden_ui: next }));
+      setHiddenUi(next);
       await reload();
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Не удалось сохранить');
