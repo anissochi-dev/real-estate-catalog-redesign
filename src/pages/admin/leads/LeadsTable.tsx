@@ -203,7 +203,7 @@ export default function LeadsTable({ leads, onOpen, onArchive, onStatusChange, s
                           <Icon name="Phone" size={12} className="text-muted-foreground" />
                           {l.phone ? formatPhone(l.phone) : '—'}
                         </a>
-                        {!l.phone_hidden && <MessengerLinks phone={l.phone} />}
+                        {!l.phone_hidden && <MessengerLinks phone={l.phone} size="xs" />}
                       </div>
                       {l.phone2 && (
                         <div className="flex items-center gap-2 mt-1">
@@ -211,7 +211,7 @@ export default function LeadsTable({ leads, onOpen, onArchive, onStatusChange, s
                             <Icon name="PhonePlus" size={12} className="text-muted-foreground" />
                             {formatPhone(l.phone2)}
                           </a>
-                          {!l.phone_hidden && <MessengerLinks phone={l.phone2} />}
+                          {!l.phone_hidden && <MessengerLinks phone={l.phone2} size="xs" />}
                         </div>
                       )}
                       </div>

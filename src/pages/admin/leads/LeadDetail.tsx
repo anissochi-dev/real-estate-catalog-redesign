@@ -46,14 +46,14 @@ export default function LeadDetail({
                      className={`font-mono hover:underline ${active.phone_hidden ? 'text-muted-foreground' : 'text-brand-blue'}`}>
                     {active.phone ? formatPhone(active.phone) : '—'}
                   </a>
-                  {!active.phone_hidden && <MessengerLinks phone={active.phone} size="md" />}
+                  {!active.phone_hidden && <MessengerLinks phone={active.phone} size="sm" />}
                   {active.phone2 && (
                     <>
                       <a href={`tel:${active.phone2}`}
                          className={`font-mono hover:underline ${active.phone_hidden ? 'text-muted-foreground' : 'text-brand-blue'}`}>
                         {formatPhone(active.phone2)}
                       </a>
-                      {!active.phone_hidden && <MessengerLinks phone={active.phone2} size="md" />}
+                      {!active.phone_hidden && <MessengerLinks phone={active.phone2} size="sm" />}
                     </>
                   )}
                   {active.phone_hidden && (
@@ -84,13 +84,13 @@ export default function LeadDetail({
                     {c.phone && (
                       <>
                         <a href={`tel:${c.phone}`} className="font-mono text-brand-blue hover:underline">{formatPhone(c.phone)}</a>
-                        <MessengerLinks phone={c.phone} />
+                        <MessengerLinks phone={c.phone} size="xs" />
                       </>
                     )}
                     {c.phone2 && (
                       <>
                         <a href={`tel:${c.phone2}`} className="font-mono text-brand-blue hover:underline">{formatPhone(c.phone2)}</a>
-                        <MessengerLinks phone={c.phone2} />
+                        <MessengerLinks phone={c.phone2} size="xs" />
                       </>
                     )}
                   </div>

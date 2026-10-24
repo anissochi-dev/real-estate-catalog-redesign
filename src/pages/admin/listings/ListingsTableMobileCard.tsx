@@ -206,7 +206,7 @@ export default function ListingsTableMobileCard({
               )}
               {!it.owner_name && !it.owner_phone && <span className="text-[11px] text-muted-foreground">—</span>}
               {showPhone && it.owner_phone && (
-                <div className="mt-1"><MessengerLinks phone={it.owner_phone} size="md" /></div>
+                <div className="mt-1"><MessengerLinks phone={it.owner_phone} size="xs" /></div>
               )}
             </div>
           </div>
@@ -230,7 +230,7 @@ export default function ListingsTableMobileCard({
                   </a>
                 )}
                 {showPhone && extra.phone && (
-                  <div className="mt-1"><MessengerLinks phone={extra.phone} size="md" /></div>
+                  <div className="mt-1"><MessengerLinks phone={extra.phone} size="xs" /></div>
                 )}
               </div>
             </div>
