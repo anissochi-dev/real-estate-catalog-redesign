@@ -1,9 +1,9 @@
 import { useEffect } from 'react';
 
 /**
- * Фоновые крон-пинги: SEO, news, retrain, FAQ-batch.
- * Запускаются один раз после загрузки страницы через requestIdleCallback/setTimeout.
- * Каждый пинг троттлится через localStorage — не чаще раза в час (или 10 мин для news).
+ * Фоновые задачи сайта через дирижёр: браузер раз в 2 мин спрашивает «что пора запустить?»
+ * и запускает ОДНУ задачу, которую выдал сервер. Очередь, приоритеты и паузы между
+ * задачами решает дирижёр (backend/cron-conductor) — так задачи не накладываются.
  */
 const BOT_UA = /bot|crawl|spider|slurp|lighthouse|headless|pagespeed|preview|reflection|gtmetrix|pingdom|phantom|puppeteer|playwright|selenium/i;
 
@@ -38,46 +38,28 @@ export function useCrons() {
       fetch(url, { ...opts, keepalive: true }).catch(() => {});
     };
 
-    const runCrons = () => {
-      const SEO_CRON_URL = 'https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d';
-      const NEWS_CRON_URL = 'https://functions.poehali.dev/984cad3a-0783-4408-a614-52ed36f8c77f';
-      const THROTTLE_MS = 60 * 60 * 1000;
+    const CONDUCTOR_URL = 'https://functions.poehali.dev/1b16aa78-568a-43fe-a121-6caa4639e71c';
+    const TICK_THROTTLE_MS = 2 * 60 * 1000;
+
+    const runCrons = async () => {
       try {
-        const seoLast = parseInt(localStorage.getItem('seo_cron_last_ping') || '0', 10);
-        if (Date.now() - seoLast > THROTTLE_MS) {
-          localStorage.setItem('seo_cron_last_ping', String(Date.now()));
-          fireCron(SEO_CRON_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ping' }) });
-        }
-        const newsLast = parseInt(localStorage.getItem('news_cron_last_ping') || '0', 10);
-        if (Date.now() - newsLast > 10 * 60 * 1000) {
-          localStorage.setItem('news_cron_last_ping', String(Date.now()));
-          fireLongCron(`${NEWS_CRON_URL}?action=ping_cron`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-        }
-        const retrainLast = parseInt(localStorage.getItem('retrain_cron_last_ping') || '0', 10);
-        if (Date.now() - retrainLast > THROTTLE_MS) {
-          localStorage.setItem('retrain_cron_last_ping', String(Date.now()));
-          fireCron('https://functions.poehali.dev/e2f1d357-fb83-4fbb-8d8b-6fb063357afc?action=cron');
-        }
-        const faqToken = localStorage.getItem('biznest_token') || '';
-        if (faqToken) {
-          const faqLast = parseInt(localStorage.getItem('faq_batch_cron_last_ping') || '0', 10);
-          if (Date.now() - faqLast > THROTTLE_MS) {
-            localStorage.setItem('faq_batch_cron_last_ping', String(Date.now()));
-            fireCron('https://functions.poehali.dev/282b9c5f-29fa-41ea-bc42-0793bdf8950d', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Auth-Token': faqToken },
-              body: JSON.stringify({ action: 'batch', limit: 5 }),
-            });
-          }
-        }
-        // Раз в 10 мин: одна порция сборки XML-фидов (до 10 фидов) и синхронизация одной
-        // площадки — две независимые функции, каждый вызов укладывается в 25 с.
-        const xmlFeedsLast = parseInt(localStorage.getItem('xml_feeds_cron_last_ping') || '0', 10);
-        if (Date.now() - xmlFeedsLast > 10 * 60 * 1000) {
-          localStorage.setItem('xml_feeds_cron_last_ping', String(Date.now()));
-          fireLongCron('https://functions.poehali.dev/7c55dfb4-7ede-46fb-be64-dea578da5eb7?action=cron');
-          fireLongCron('https://functions.poehali.dev/fd00362c-a377-4d94-816c-c5a4abf087cd?action=cron');
-        }
+        const last = parseInt(localStorage.getItem('cron_conductor_last_tick') || '0', 10);
+        if (Date.now() - last < TICK_THROTTLE_MS) return;
+        localStorage.setItem('cron_conductor_last_tick', String(Date.now()));
+        const token = localStorage.getItem('biznest_token') || '';
+        const ac = new AbortController();
+        setTimeout(() => ac.abort(), 6000);
+        const r = await fetch(`${CONDUCTOR_URL}?action=tick${token ? '&auth=1' : ''}`, { signal: ac.signal });
+        const d = await r.json();
+        const task = d?.task as { url: string; method: string; body?: unknown; needs_auth?: boolean; long?: boolean } | null;
+        if (!task) return;
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (task.needs_auth && token) headers['X-Auth-Token'] = token;
+        const opts: RequestInit = task.method === 'POST'
+          ? { method: 'POST', headers, body: JSON.stringify(task.body ?? {}) }
+          : { method: 'GET', headers: task.needs_auth && token ? { 'X-Auth-Token': token } : undefined };
+        if (task.long) fireLongCron(task.url, opts);
+        else fireCron(task.url, opts);
       } catch { /* ignore */ }
     };
 

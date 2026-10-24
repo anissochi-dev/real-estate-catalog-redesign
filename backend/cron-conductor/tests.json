@@ -1,0 +1,4 @@
+{"tests": [
+  {"name": "Статус задач", "method": "GET", "path": "/?action=status", "expectedStatus": 200, "expectedBody": {"ok": true}, "bodyMatcher": "partial"},
+  {"name": "Неизвестное действие", "method": "GET", "path": "/?action=unknown", "expectedStatus": 400, "expectedBody": {}, "bodyMatcher": "partial"}
+]}

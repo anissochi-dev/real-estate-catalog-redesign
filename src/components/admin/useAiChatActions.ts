@@ -1,31 +1,7 @@
 import { useEffect } from 'react';
 import { toast } from 'sonner';
-import { aiApi, getToken, AiAction } from '@/lib/adminApi';
+import { aiApi, AiAction } from '@/lib/adminApi';
 
-const DEVOPS_URL = 'https://functions.poehali.dev/8dc0ef1b-de31-4ede-94b2-c1779c324922';
-const SMART_RUN_URL = 'https://functions.poehali.dev/880b61c2-dbe7-491a-a147-ffd926b3fe73';
-
-const devopsApi = {
-  call: (action: string, params: Record<string, unknown> = {}) =>
-    fetch(DEVOPS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Auth-Token': getToken() },
-      body: JSON.stringify({ action, params }),
-    }).then(r => r.json()) as Promise<{ ok: boolean; message?: string; error?: string; [key: string]: unknown }>,
-};
-
-const smartRunApi = {
-  run: () =>
-    fetch(SMART_RUN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Auth-Token': getToken() },
-      body: JSON.stringify({}),
-    }).then(async res => {
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Ошибка Smart Run');
-      return data as { ok: boolean; severity: string; steps: Record<string, unknown>; totals: Record<string, number>; message: string };
-    }),
-};
 import {
   Msg, Suggestion, QuickCmd,
   isAutoApplicableAction,
@@ -277,12 +253,6 @@ export function useAiChatActions({
     }
   };
 
-  const DEVOPS_ACTIONS = new Set([
-    'devops_check_github', 'devops_get_commits', 'devops_get_issues',
-    'devops_create_issue', 'devops_get_workflows', 'devops_analyze_errors',
-    'devops_get_repo_stats',
-  ]);
-
   /** Выполняет действие напрямую по объекту action — без чтения из messages (нет stale closure). */
   const execActionByData = async (sourceMsg: Msg, actIdx: number) => {
     const target = sourceMsg.agentActions?.[actIdx];
@@ -295,13 +265,7 @@ export function useAiChatActions({
     ));
     try {
       let r: { ok?: boolean; message?: string; error?: string } & Record<string, unknown>;
-      if (target.type === 'dispatcher_smart_run') {
-        const res = await smartRunApi.run();
-        r = { ok: res.ok, message: res.message };
-      } else if (DEVOPS_ACTIONS.has(target.type)) {
-        const res = await devopsApi.call(target.type.replace('devops_', ''), target.params as Record<string, unknown>);
-        r = { ok: !!res.ok, message: res.message as string, error: res.error as string };
-      } else {
+      {
         const res = await aiApi.execute([{ type: target.type, title: target.title, description: target.description, risk: target.risk, params: target.params }]);
         r = res.results?.[0]?.result || {};
       }
@@ -357,13 +321,7 @@ export function useAiChatActions({
       : x));
     try {
       let r: { ok?: boolean; message?: string; error?: string } & Record<string, unknown>;
-      if (t.type === 'dispatcher_smart_run') {
-        const res = await smartRunApi.run();
-        r = { ok: res.ok, message: res.message };
-      } else if (DEVOPS_ACTIONS.has(t.type)) {
-        const res = await devopsApi.call(t.type.replace('devops_', ''), t.params as Record<string, unknown>);
-        r = { ok: !!res.ok, message: res.message as string, error: res.error as string };
-      } else {
+      {
         const res = await aiApi.execute([{ type: t.type, title: t.title, description: t.description, risk: t.risk, params: t.params }]);
         r = res.results?.[0]?.result || {};
       }

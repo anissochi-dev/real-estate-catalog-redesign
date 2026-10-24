@@ -2054,11 +2054,35 @@ def _sync_health_check(cur):
     labels = {k: lbl for k, lbl, _ in platform_checks}
     try:
         cur.execute(
-            f"SELECT platform, consecutive_errors, last_error, last_attempt_at, last_success_at, paused_until "
-            f"FROM {SCHEMA}.platform_sync_state WHERE consecutive_errors > 0"
+            f"SELECT platform, consecutive_errors, last_error, last_attempt_at, last_success_at, paused_until, "
+            f"last_busy_at, busy_count "
+            f"FROM {SCHEMA}.platform_sync_state WHERE consecutive_errors > 0 OR busy_count > 0"
         )
         log_tables = {k: t for k, _, t in platform_checks}
         for r in cur.fetchall():
+            if not r['consecutive_errors']:
+                # Только перегрузка базы: тревожим, если из-за неё нет успеха дольше BUSY_ALERT_HOURS.
+                ok_at = r.get('last_success_at')
+                tbl = log_tables.get(r['platform'])
+                if tbl:
+                    cur.execute(f"SELECT MAX(synced_at) AS m FROM {SCHEMA}.{tbl} WHERE error IS NULL OR error = ''")
+                    m = (cur.fetchone() or {}).get('m')
+                    if m and (not ok_at or m > ok_at):
+                        ok_at = m
+                if ok_at and (now - ok_at) < timedelta(hours=BUSY_ALERT_HOURS):
+                    continue
+                hours = round((now - ok_at).total_seconds() / 3600, 1) if ok_at else None
+                failing.append({
+                    'key': r['platform'], 'label': labels.get(r['platform'], r['platform']),
+                    'errors': 0, 'kind': 'busy', 'busy_count': r.get('busy_count') or 0,
+                    'last_error': (
+                        f"Не удаётся синхронизировать {('уже ' + str(int(hours)) + ' ч') if hours else 'с момента подключения'}: "
+                        f"база данных сайта перегружена. Повторяем автоматически каждые {PLATFORM_BUSY_RETRY_MINUTES} мин."
+                    ),
+                    'last_attempt': r['last_attempt_at'].isoformat() if r.get('last_attempt_at') else None,
+                    'paused_until': None,
+                })
+                continue
             # Если после неудачной попытки крона площадка успешно синхронизировалась
             # другим путём (кнопка «Синхронизировать» в рекламном кабинете) — это уже
             # не проблема, не показываем ложную тревогу в колокольчике.
@@ -2072,7 +2096,8 @@ def _sync_health_check(cur):
                     continue
             failing.append({
                 'key': r['platform'], 'label': labels.get(r['platform'], r['platform']),
-                'errors': r['consecutive_errors'], 'last_error': (r.get('last_error') or '')[:300],
+                'errors': r['consecutive_errors'], 'kind': 'error',
+                'last_error': _humanize_sync_error(r.get('last_error') or ''),
                 'last_attempt': r['last_attempt_at'].isoformat() if r.get('last_attempt_at') else None,
                 'paused_until': r['paused_until'].isoformat() if r.get('paused_until') else None,
             })
@@ -2128,6 +2153,8 @@ def _sync_health_check(cur):
 
 
 PLATFORM_RETRY_MINUTES = 20
+PLATFORM_BUSY_RETRY_MINUTES = 5
+BUSY_ALERT_HOURS = 2
 
 
 PLATFORM_MAX_ERRORS = 3
@@ -2157,6 +2184,25 @@ def _platform_handler(key):
         'youla': _youla_handle,
         'domclick': _domclick_handle,
     }[key]
+
+
+def _humanize_sync_error(err):
+    """Переводит техническую ошибку синхронизации в понятный текст для колокольчика."""
+    s = (err or '').strip()
+    low = s.lower()
+    rules = [
+        (('401', 'unauthorized', 'invalid token', 'token expired', 'неверный токен', 'invalid_grant'),
+         'Площадка не принимает ключ доступа — проверьте ключ в рекламном кабинете'),
+        (('403', 'forbidden', 'access denied'), 'Площадка запретила доступ — проверьте права ключа'),
+        (('429', 'too many requests'), 'Площадка временно ограничила число запросов — повторим позже'),
+        (('timeout', 'timed out', 'тайм-аут'), 'Площадка долго не отвечала — повторим позже'),
+        (('500', '502', '503', '504', 'bad gateway', 'service unavailable'), 'Сбой на стороне площадки — повторим позже'),
+        (('connection', 'name or service', 'urlopen error'), 'Нет связи с площадкой — повторим позже'),
+    ]
+    for keys, text in rules:
+        if any(k in low for k in keys):
+            return f'{text}. Подробности: {s[:150]}'
+    return s[:300]
 
 
 def _extract_sync_error(body):
@@ -2199,7 +2245,10 @@ def _run_next_platform_sync(cur, conn):
         st = state.get(key) or {}
         if st.get('paused_until') and st['paused_until'] > now:
             continue
-        if st.get('last_attempt_at') and (now - st['last_attempt_at']) < timedelta(minutes=PLATFORM_RETRY_MINUTES):
+        retry_min = PLATFORM_RETRY_MINUTES
+        if st.get('last_busy_at') and st.get('last_attempt_at') and st['last_busy_at'] >= st['last_attempt_at']:
+            retry_min = PLATFORM_BUSY_RETRY_MINUTES
+        if st.get('last_attempt_at') and (now - st['last_attempt_at']) < timedelta(minutes=retry_min):
             continue
         cur.execute(f"SELECT MAX(synced_at) AS m FROM {SCHEMA}.{log_table} WHERE error IS NULL OR error = ''")
         last_ok = (cur.fetchone() or {}).get('m')
@@ -2234,7 +2283,14 @@ def _run_next_platform_sync(cur, conn):
         body = {'error': err}
         print(f'[xml-feeds cron] {key} failed: {err}')
 
-    if err:
+    if err and is_rate_limit(err):
+        # Перегрузка НАШЕЙ базы, а не ошибка площадки: не считаем в «N подряд»,
+        # не ставим на паузу — дирижёр повторит через PLATFORM_BUSY_RETRY_MINUTES.
+        _state_write(cur, conn,
+            f"UPDATE {SCHEMA}.platform_sync_state SET last_busy_at = NOW(), busy_count = busy_count + 1, "
+            f"updated_at = NOW() WHERE platform = '{key}'"
+        )
+    elif err:
         _state_write(cur, conn,
             f"UPDATE {SCHEMA}.platform_sync_state SET "
             f"consecutive_errors = consecutive_errors + 1, last_error = %s, "
@@ -2245,7 +2301,7 @@ def _run_next_platform_sync(cur, conn):
         )
     else:
         _state_write(cur, conn,
-            f"UPDATE {SCHEMA}.platform_sync_state SET consecutive_errors = 0, last_error = NULL, "
+            f"UPDATE {SCHEMA}.platform_sync_state SET consecutive_errors = 0, last_error = NULL, busy_count = 0, "
             f"paused_until = NULL, last_success_at = NOW(), updated_at = NOW() WHERE platform = '{key}'"
         )
     return key, body

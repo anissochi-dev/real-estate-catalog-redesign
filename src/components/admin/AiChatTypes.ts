@@ -28,10 +28,9 @@ export const RESULT_INJECT_ACTIONS = new Set([
   'copywriter_get_topics',
   'dispatcher_get_status',
   'knowledge_stats',
-  'devops_check_github',
-  'devops_get_commits',
-  'devops_get_issues',
-  'devops_analyze_errors',
+  'ops_platforms_status',
+  'ops_cron_status',
+  'ops_daily_digest',
   'search_listings_without_images',
   'search_listings_without_description',
   'search_listings_without_seo',
@@ -66,7 +65,8 @@ export interface QuickCmd {
 }
 
 export const QUICK_CMDS: QuickCmd[] = [
-  { id: 'smart_run', label: '⚡ Smart Run', icon: 'Workflow', action: 'agent', prompt: 'Запусти полную умную проверку сайта через dispatcher_smart_run: безопасность с авто-блокировкой угроз, SEO-аудит с авто-исправлением, проверка опечаток. Покажи итоговую сводку.' },
+  { id: 'ops_platforms', label: '📡 Площадки', icon: 'Radio', action: 'agent', prompt: 'Проверь состояние площадок через ops_platforms_status и фоновых задач через ops_cron_status. Объясни простым языком, всё ли в порядке, и если площадка в ошибке или задерживается — предложи ops_platform_resync.' },
+  { id: 'ops_digest', label: '🗞️ Сводка дня', icon: 'Newspaper', action: 'agent', prompt: 'Покажи последнюю ежедневную сводку через ops_daily_digest и коротко скажи, что требует моего внимания.' },
   { id: 'what_to_do', label: 'Что сделать?', icon: 'Sparkles', action: 'agent', prompt: 'Проанализируй текущее состояние сайта: каталог, лиды, SEO, данные. Предложи самые важные действия прямо сейчас — по приоритету.' },
   { id: 'edit_site', label: 'Улучшить объекты', icon: 'Pencil', action: 'agent', prompt: 'Найди объекты с пустыми описаниями, плохим SEO или некорректными данными. Предложи конкретные улучшения для каждого и выполни их.' },
   { id: 'shorten_titles', label: 'Сократить названия', icon: 'Scissors', action: 'agent', prompt: 'Найди все активные объекты с длинными названиями (более 70 символов) и перепиши их через bulk_shorten_titles в короткие SEO-заголовки 50-65 символов. Сначала запусти scan_long_titles, затем bulk_shorten_titles с первыми 15-20 id.' },
@@ -83,7 +83,6 @@ export const QUICK_CMDS: QuickCmd[] = [
   { id: 'inspector', label: '🔍 Инспектор', icon: 'ClipboardList', action: 'agent', prompt: 'Запусти полный аудит сайта: SEO, битые данные, дубли, устаревшие объекты, необработанные лиды. Используй inspector_full_audit.' },
   { id: 'copywriter', label: '✍️ Копирайтер', icon: 'PenLine', action: 'agent', prompt: 'Предложи темы для статей блога на основе каталога и запросов клиентов. Используй copywriter_get_topics, затем предложи написать статью через copywriter_write_article.' },
   { id: 'dispatcher', label: '🎛️ Диспетчер', icon: 'Zap', action: 'agent', prompt: 'Покажи статус всех модулей (dispatcher_get_status), затем запусти все включённые модули через dispatcher_run_all.' },
-  { id: 'devops', label: '🛠️ DevOps', icon: 'Github', action: 'agent', prompt: 'Проверь GitHub: подключение, последние коммиты, открытые issues, статус Actions. Используй devops_check_github, затем devops_get_commits и devops_get_issues.' },
   { id: 'knowledge', label: '🧠 База знаний', icon: 'Database', action: 'agent', prompt: 'Покажи статистику базы знаний (knowledge_stats), затем проиндексируй все источники (knowledge_index с source_type:"all").' },
 ];
 
@@ -150,19 +149,15 @@ export const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
   copywriter_rewrite_tov: { label: 'Переписать под TOV', icon: 'RefreshCw' },
   copywriter_get_topics: { label: 'Темы для блога', icon: 'Lightbulb' },
   // 🎛️ Диспетчер
-  dispatcher_smart_run: { label: '⚡ Smart Run', icon: 'Workflow' },
   dispatcher_run_module: { label: 'Запустить модуль', icon: 'Play' },
   dispatcher_run_all: { label: 'Запустить все модули', icon: 'Zap' },
   dispatcher_get_status: { label: 'Статус модулей', icon: 'LayoutDashboard' },
   dispatcher_toggle_module: { label: 'Вкл/выкл модуль', icon: 'ToggleLeft' },
-  // 🛠️ DevOps
-  devops_check_github: { label: 'GitHub: статус', icon: 'Github' },
-  devops_get_commits: { label: 'Последние коммиты', icon: 'GitCommit' },
-  devops_get_issues: { label: 'Issues / баги', icon: 'GitPullRequest' },
-  devops_create_issue: { label: 'Создать issue', icon: 'FilePlus' },
-  devops_get_workflows: { label: 'GitHub Actions', icon: 'Workflow' },
-  devops_analyze_errors: { label: 'Анализ ошибок', icon: 'Bug' },
-  devops_get_repo_stats: { label: 'Статистика репо', icon: 'BarChart2' },
+  // 📡 Пульт наблюдения
+  ops_platforms_status: { label: 'Состояние площадок', icon: 'Radio' },
+  ops_cron_status: { label: 'Фоновые задачи', icon: 'Timer' },
+  ops_platform_resync: { label: 'Перезапустить синхронизацию', icon: 'RefreshCw' },
+  ops_daily_digest: { label: 'Сводка дня', icon: 'Newspaper' },
   // 🌐 Поиск в интернете
   web_search: { label: 'Поиск в интернете', icon: 'Globe' },
   // 🧠 База знаний
@@ -208,13 +203,10 @@ export const AUTO_APPLY_ACTIONS = new Set([
   'dispatcher_run_module',
   'dispatcher_run_all',
   'dispatcher_get_status',
-  // DevOps
-  'devops_check_github',
-  'devops_get_commits',
-  'devops_get_issues',
-  'devops_get_workflows',
-  'devops_analyze_errors',
-  'devops_get_repo_stats',
+  // Пульт наблюдения
+  'ops_platforms_status',
+  'ops_cron_status',
+  'ops_daily_digest',
   // Поиск в интернете
   'web_search',
   // База знаний

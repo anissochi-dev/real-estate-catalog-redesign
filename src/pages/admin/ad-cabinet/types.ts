@@ -40,6 +40,8 @@ export interface FailingPlatform {
   last_attempt: string | null;
   paused_until: string | null;
   listing_id?: number;
+  kind?: 'error' | 'busy';
+  busy_count?: number;
 }
 
 export interface SyncHealthData {

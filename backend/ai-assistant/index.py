@@ -15,6 +15,7 @@ import boto3
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from ai_client import load_keys, chat_with_history, CHAT_MODEL, CHAT_MODEL_FAST
+import ops_monitor
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
 
@@ -572,24 +573,16 @@ SYSTEM_PROMPTS = {
         '- copywriter_get_topics: {} risk:low — предложить темы для статей на основе каталога и лидов\n'
         '\n'
         '🎛️ ДИСПЕТЧЕР (Orchestrator):\n'
-        '- dispatcher_smart_run: {} risk:medium — УМНЫЙ WORKFLOW: запускает все 3 шага с условной логикой:\n'
-        '  1) guardian_full_scan → авто-блокирует найденные спам-телефоны и инъекции\n'
-        '  2) inspector_full_audit → авто-генерирует SEO для объектов без мета через GPT\n'
-        '  3) inspector_check_typos → находит опечатки и сохраняет в отчёт\n'
-        '  Возвращает итоговую сводку с числами. Используй при «проверь всё», «полная проверка», «запусти умный анализ»\n'
         '- dispatcher_run_module: {"module":"guardian|inspector|copywriter"} risk:low — запустить один модуль\n'
         '- dispatcher_run_all: {} risk:low — запустить все модули (Страж + Инспектор). Используй при «запусти всё», «полная проверка»\n'
         '- dispatcher_get_status: {} risk:low — статус всех модулей: включён, последний запуск, последний отчёт\n'
         '- dispatcher_toggle_module: {"module":str,"enabled":bool} risk:medium — включить/выключить модуль\n'
         '\n'
-        '🛠️ DEVOPS-АССИСТЕНТ:\n'
-        '- devops_check_github: {} risk:low — проверить подключение к GitHub, список репозиториев. Используй при «проверь GitHub», «что с репозиторием»\n'
-        '- devops_get_commits: {"repo":"owner/repo"?,"branch":"main"?,"limit":10?} risk:low — последние коммиты репо\n'
-        '- devops_get_issues: {"repo":"owner/repo"?,"state":"open|closed"?} risk:low — список issues/багов\n'
-        '- devops_create_issue: {"repo":"owner/repo","title":str,"body":str?,"labels":[str]?} risk:medium — создать issue/баг-репорт\n'
-        '- devops_get_workflows: {"repo":"owner/repo"?} risk:low — статус GitHub Actions, упавшие сборки\n'
-        '- devops_analyze_errors: {"hours":24?} risk:low — анализ ошибок из логов системы + GPT-рекомендации\n'
-        '- devops_get_repo_stats: {"repo":"owner/repo"?} risk:low — статистика репо: языки, контрибьюторы, релизы\n'
+        '📡 ПУЛЬТ НАБЛЮДЕНИЯ (фоновые задачи и площадки):\n'
+        '- ops_platforms_status: {} risk:low — состояние площадок ЦИАН/Яндекс/Авито/Юла/ДомКлик: в норме, ошибка, пауза, задержка из-за перегрузки базы, время последней успешной синхронизации. Используй при «что с площадками», «почему не обновился ЦИАН», «проверь выгрузку»\n'
+        '- ops_cron_status: {} risk:low — состояние фоновых задач сайта (синхронизация, фиды, новости, SEO, переобучение): когда запускались, сколько раз за сутки, какие отстают. Используй при «что с фоновыми задачами», «работает ли автоматика»\n'
+        '- ops_platform_resync: {"platform":"cian|yandex|avito|youla|domclick"} risk:medium — запустить синхронизацию площадки прямо сейчас. Предлагай только после ops_platforms_status, если площадка в ошибке или задерживается\n'
+        '- ops_daily_digest: {} risk:low — последняя ежедневная сводка о работе сайта\n'
         '\n'
         '🌐 ПОИСК В ИНТЕРНЕТЕ (Yandex Search API):\n'
         '- web_search: {"query":str,"limit":5?} risk:low — поиск в интернете через Яндекс. Используй при «найди в интернете», «что пишут про», «новости рынка», «актуальная цена», «найди информацию о», «поищи». Возвращает заголовки, сниппеты и ссылки.\n'
@@ -642,7 +635,7 @@ SYSTEM_PROMPTS = {
         '- Если в данных listings_no_desc > 0 → bulk_generate_descriptions. Если listings_no_seo > 0 → bulk_seo_optimize.\n'
         '- Если listings_long_titles > 0 → bulk_shorten_titles с params: {"items":[{"id":N},...все id из long_titles_sample], "max_len":65}.\n'
         '- Запрос общий → начни с get_listings_summary + get_leads_summary (low, авто).\n'
-        '- «Проверь всё» / «полная проверка» → dispatcher_smart_run.\n'
+        '- «Проверь всё» / «полная проверка» → dispatcher_run_all и ops_platforms_status.\n'
         '- После bulk-операций → следующим действием get_listings_summary (low, авто) для подтверждения.\n'
         'ПРАВИЛА ДЛЯ ДЕЙСТВИЙ ПОСЛЕ inspector_full_audit:\n'
         '- broken_data.items → fix_data_quality: {"issue_type":"wrong_price","ids":[точные id из broken_data ids:]}\n'
@@ -3722,9 +3715,27 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
 
     # Smart Run вынесен в отдельную функцию backend/smart-run
 
-    if act_type == 'dispatcher_smart_run':
-        # Выполняется через отдельную функцию smart-run (см. backend/smart-run/index.py)
-        return {'error': 'Smart Run выполняется через отдельный эндпоинт. Используй кнопку ⚡ Smart Run в чате.'}
+    if act_type == 'ops_platforms_status':
+        return ops_monitor.platforms_status(cur)
+
+    if act_type == 'ops_cron_status':
+        return ops_monitor.cron_status(cur)
+
+    if act_type == 'ops_platform_resync':
+        if user['role'] not in ('admin', 'director'):
+            return {'error': 'Перезапуск синхронизации доступен только администратору и директору'}
+        return ops_monitor.platform_resync(cur, params)
+
+    if act_type == 'ops_daily_digest':
+        cur.execute(
+            f"SELECT summary, severity, created_at FROM {SCHEMA}.agent_reports "
+            f"WHERE module = 'vb_digest' ORDER BY created_at DESC LIMIT 1"
+        )
+        r = cur.fetchone()
+        if not r:
+            return {'ok': True, 'message': 'Ежедневных сводок пока нет — первая появится утром после 9:00 МСК'}
+        return {'ok': True, 'message': f"Сводка от {r['created_at'].astimezone(ops_monitor.MSK).strftime('%d.%m %H:%M')}:\n{r['summary']}",
+                'severity': r['severity']}
 
     # ════════════════════════════════════════════════════════════════════
     # 🌐  ПОИСК В ИНТЕРНЕТЕ (Yandex Search API)
@@ -4086,6 +4097,41 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
     return {'error': f'Неизвестное действие: {act_type}'}
 
 
+def _run_vb_digest(cur, conn) -> dict:
+    """Ежедневная сводка ВБ: не чаще раза в календарные сутки по МСК (защита от повторов),
+    факты собираются из БД, ИИ только пересказывает их понятным языком."""
+    cur.execute(
+        f"SELECT 1 FROM {SCHEMA}.agent_reports WHERE module = 'vb_digest' "
+        f"AND (created_at AT TIME ZONE 'Europe/Moscow')::date = (NOW() AT TIME ZONE 'Europe/Moscow')::date LIMIT 1"
+    )
+    if cur.fetchone():
+        return {'ok': True, 'skipped': True, 'reason': 'Сводка уже есть за сегодня'}
+    facts = ops_monitor.collect_digest_facts(cur)
+    fallback = ops_monitor.digest_fallback_text(facts)
+    severity = ops_monitor.digest_severity(facts)
+    text = fallback
+    api_key, folder_id = _load_keys_from_db(cur)
+    if api_key or os.environ.get('AISTUDIO_API_KEY') or os.environ.get('YANDEX_API_KEY'):
+        res = _call_yandex_gpt(
+            'Ты — ВБ, ИИ-помощник агентства коммерческой недвижимости. Составь короткую утреннюю сводку '
+            'для руководителя (5-8 строк, по-русски, без технических терминов). Структура: '
+            '1) главное, что требует внимания (если ничего — так и скажи); 2) площадки; 3) заявки и объекты. '
+            'Цифры по заявкам и объектам бери из блока «для_сводки» дословно по смыслу ключей. Используй ТОЛЬКО факты из данных, ничего не придумывай. «Перегрузка базы» — это временная задержка, '
+            'которая решается автоматически, не пугай ей.',
+            'Данные за сутки:\n' + json.dumps(facts, ensure_ascii=False, default=str)[:6000],
+            api_key, folder_id, temperature=0.3, max_tokens=800, model='short',
+        )
+        if res.get('text'):
+            text = res['text'].strip()
+    data_json = json.dumps(facts, ensure_ascii=False, default=str).replace("'", "''")
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.agent_reports (module, report_type, summary, data, severity) "
+        f"VALUES ('vb_digest', 'daily', '{_sanitize_text(text, 4000)}', '{data_json}'::jsonb, '{severity}')"
+    )
+    conn.commit()
+    return {'ok': True, 'severity': severity, 'summary': text}
+
+
 def _build_pulse_context(cur) -> str:
     """Пульс сайта для admin-промпта: метрики + id проблемных объектов."""
     lines = []
@@ -4308,6 +4354,9 @@ def handler(event, context):
     conn = psycopg2.connect(dsn)
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            if action == 'vb_digest':
+                return _ok(_run_vb_digest(cur, conn))
+
             is_public = action in ('match', 'search_leads', 'analyze_property')
             is_search_leads = action == 'search_leads'
             user = None

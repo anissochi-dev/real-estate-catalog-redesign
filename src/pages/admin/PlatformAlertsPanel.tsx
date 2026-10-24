@@ -62,7 +62,18 @@ export default function PlatformAlertsPanel({ stale, failing, onOpenAdCabinet }:
 
   return (
     <div className="space-y-3">
-      {visibleFailing.map(f => (
+      {visibleFailing.filter(f => f.kind === 'busy').map(f => (
+        <div key={`b-${f.key}`} className="border border-amber-200 bg-amber-50 rounded-xl p-3.5 space-y-1.5">
+          <div className="flex items-center gap-2 font-semibold text-sm text-amber-800">
+            <Icon name="Hourglass" size={16} />
+            {f.label}: синхронизация задерживается
+          </div>
+          <div className="text-xs text-amber-700 break-words">{f.last_error}</div>
+          <div className="text-xs text-amber-700/80">Последняя попытка: {fmtDate(f.last_attempt)}</div>
+        </div>
+      ))}
+
+      {visibleFailing.filter(f => f.kind !== 'busy').map(f => (
         <div key={`f-${f.key}`} className="border border-red-200 bg-red-50 rounded-xl p-3.5 space-y-1.5">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 font-semibold text-sm text-red-800">
