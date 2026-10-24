@@ -56,6 +56,7 @@ interface Props {
 
 export default function PhoneCardModal({ contactId, onClose, onUpdate, onOpenListing, onOpenLead }: Props) {
   const { user } = useAuth();
+  const canUnlink = !!user?.role && ['admin', 'director'].includes(user.role);
   const [contact, setContact] = useState<PhoneContact | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [tab, setTab] = useState<Tab>('info');
@@ -337,10 +338,12 @@ export default function PhoneCardModal({ contactId, onClose, onUpdate, onOpenLis
                             <Icon name="ExternalLink" size={14} />
                           </button>
                         )}
-                        <button onClick={() => unlink('listing', l.id)}
-                          className="text-red-500 hover:text-red-700 p-1 shrink-0" title="Отвязать">
-                          <Icon name="Unlink" size={14} />
-                        </button>
+                        {canUnlink && (
+                          <button onClick={() => unlink('listing', l.id)}
+                            className="text-red-500 hover:text-red-700 p-1 shrink-0" title="Отвязать">
+                            <Icon name="Unlink" size={14} />
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -370,10 +373,12 @@ export default function PhoneCardModal({ contactId, onClose, onUpdate, onOpenLis
                             <Icon name="ExternalLink" size={14} />
                           </button>
                         )}
-                        <button onClick={() => unlink('lead', l.id)}
-                          className="text-red-500 hover:text-red-700 p-1 shrink-0" title="Отвязать">
-                          <Icon name="Unlink" size={14} />
-                        </button>
+                        {canUnlink && (
+                          <button onClick={() => unlink('lead', l.id)}
+                            className="text-red-500 hover:text-red-700 p-1 shrink-0" title="Отвязать">
+                            <Icon name="Unlink" size={14} />
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>

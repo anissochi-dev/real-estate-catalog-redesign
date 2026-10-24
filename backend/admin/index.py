@@ -5771,6 +5771,8 @@ def _phones(cur, conn, method, rid, action, event, user):
         return _ok({'success': True})
 
     if method == 'POST' and action == 'unlink':
+        if user['role'] not in ('admin', 'director'):
+            return _err(403, 'Отвязать может только администратор или директор')
         cid = int(rid)
         listing_id = body.get('listing_id')
         lead_id = body.get('lead_id')
