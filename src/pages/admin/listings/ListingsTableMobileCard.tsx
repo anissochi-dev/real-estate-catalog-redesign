@@ -84,65 +84,72 @@ export default function ListingsTableMobileCard({
       </div>
 
       {/* ── Мобильный контент — под фото ── */}
-      <div className="sm:hidden flex flex-col py-2.5 px-3 gap-0">
+      <div className="sm:hidden flex flex-col py-3 px-3 gap-0">
 
-        {/* Строка 1: Название + кнопки действий */}
-        <div className="flex items-start justify-between gap-2">
-          <button
-            onClick={() => onInternalCard?.(it)}
-            className="font-semibold text-[14px] leading-snug text-left hover:text-brand-blue transition-colors line-clamp-2 flex-1 min-w-0"
-          >
-            {it.title}
-          </button>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue">
-              #{fmtListingId(it.id, it.created_at)}
-            </span>
-            <button onClick={() => onHistory(it)} title="История" className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-brand-blue transition-colors">
-              <Icon name="BarChart2" size={13} />
+        {/* Название — на всю ширину */}
+        <button
+          onClick={() => onInternalCard?.(it)}
+          className="font-semibold text-[15px] leading-snug text-left hover:text-brand-blue transition-colors line-clamp-3 break-words w-full"
+        >
+          {it.title}
+        </button>
+
+        {/* Номер + кнопки действий */}
+        <div className="flex items-center justify-between gap-2 mt-2">
+          <span className="text-[11px] font-mono font-bold px-2 py-1 rounded-md bg-brand-blue/10 text-brand-blue">
+            #{fmtListingId(it.id, it.created_at)}
+          </span>
+          <div className="flex items-center gap-1">
+            <button onClick={() => onHistory(it)} title="История" className="w-9 h-9 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-brand-blue transition-colors">
+              <Icon name="BarChart2" size={16} />
             </button>
             <ShareListingButton listing={it} compact />
             {canEdit && (
-              <button onClick={() => onEdit(it)} title="Редактировать" className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-brand-blue/10 hover:text-brand-blue transition-colors">
-                <Icon name="Pencil" size={13} />
+              <button onClick={() => onEdit(it)} title="Редактировать" className="w-9 h-9 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-brand-blue/10 hover:text-brand-blue transition-colors">
+                <Icon name="Pencil" size={16} />
               </button>
             )}
             {canEdit && onCopy && (
-              <button onClick={() => onCopy(it)} title={it.deal === 'rent' ? 'Копировать как продажу' : 'Копировать как аренду'} className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-emerald-50 hover:text-emerald-600 transition-colors">
-                <Icon name="Copy" size={13} />
+              <button onClick={() => onCopy(it)} title={it.deal === 'rent' ? 'Копировать как продажу' : 'Копировать как аренду'} className="w-9 h-9 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-emerald-50 hover:text-emerald-600 transition-colors">
+                <Icon name="Copy" size={16} />
               </button>
             )}
           </div>
         </div>
 
-        {/* Строка 2: Адрес */}
-        <div className="flex items-center gap-1 mt-1">
-          <Icon name="MapPin" size={11} className="text-muted-foreground/60 flex-shrink-0" />
-          <span className="text-xs text-muted-foreground truncate">
-            {[it.city || 'Краснодар', it.district].filter(Boolean).join(' · ')}
+        {/* Адрес — с переносом, без обрезки */}
+        <div className="flex items-start gap-1.5 mt-2">
+          <Icon name="MapPin" size={13} className="text-muted-foreground/60 flex-shrink-0 mt-0.5" />
+          <span className="text-xs text-muted-foreground break-words min-w-0 leading-relaxed">
+            {[it.city || 'Краснодар', it.district, canSeeFullDetails ? it.address : null]
+              .filter(Boolean).join(' · ')}
           </span>
-          {canSeeFullDetails && <RealAddressToggle value={it.real_address} />}
         </div>
+        {canSeeFullDetails && it.real_address && (
+          <div className="mt-1.5 pl-5">
+            <RealAddressToggle value={it.real_address} wrap />
+          </div>
+        )}
 
-        {/* Строка 3: Тип сделки + Цена + Площадь */}
-        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+        {/* Тип сделки + Цена + Площадь */}
+        <div className="flex items-center gap-x-2 gap-y-1 mt-2 flex-wrap">
           {dm && (
             <span className={`text-xs px-2 py-0.5 rounded-lg font-semibold ${dm[2]}`}>{dm[1]}</span>
           )}
-          <span className="text-sm font-bold text-foreground leading-none">
+          <span className="text-sm font-bold text-foreground leading-none whitespace-nowrap">
             {totalPrice.toLocaleString('ru')} ₽
           </span>
           {m2 > 0 && (
-            <span className="text-xs text-muted-foreground">{m2.toLocaleString('ru')} ₽/м²</span>
+            <span className="text-xs text-muted-foreground whitespace-nowrap">{m2.toLocaleString('ru')} ₽/м²</span>
           )}
           {it.area ? (
-            <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+            <span className="flex items-center gap-0.5 text-xs text-muted-foreground whitespace-nowrap">
               <Icon name="Maximize" size={10} className="opacity-60" />
               {it.area} м²
             </span>
           ) : null}
           {(it as unknown as Record<string,unknown>).rooms ? (
-            <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+            <span className="flex items-center gap-0.5 text-xs text-muted-foreground whitespace-nowrap">
               <Icon name="LayoutGrid" size={10} className="opacity-60" />
               {String((it as unknown as Record<string,unknown>).rooms)} комн.
             </span>
@@ -159,60 +166,66 @@ export default function ListingsTableMobileCard({
               Оборуд.
             </span>
           )}
+        </div>
+        <div className="mt-1.5">
           <ListingsTableExportBadges it={it} />
         </div>
 
-        {/* Строка 4: Статистика + Собственник */}
-        <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-border/50">
-          <button onClick={() => onInternalCard?.(it)} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Icon name="Eye" size={12} className="text-brand-blue" />
-              {(it.stats_views ?? 0).toLocaleString('ru')}
-            </span>
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Icon name="Phone" size={12} className="text-emerald-500" />
-              {(it.stats_calls ?? 0).toLocaleString('ru')}
-            </span>
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Icon name="Inbox" size={12} className="text-brand-orange" />
-              {(it.stats_leads ?? 0).toLocaleString('ru')}
-            </span>
-          </button>
-          {onShowMatching && (
-            <button
-              onClick={e => { e.stopPropagation(); onShowMatching(it.id); }}
-              title={(it.matching_leads_count ?? 0) > 0 ? `Подходящие заявки: ${it.matching_leads_count}` : 'Подходящих заявок не найдено'}
-              className={[
-                'flex items-center gap-1 text-[11px] font-semibold px-1.5 py-0.5 rounded-lg transition-colors shrink-0 ml-1',
-                (it.matching_leads_count ?? 0) > 0
-                  ? 'bg-emerald-100 text-emerald-700'
-                  : 'bg-red-100 text-red-600',
-              ].join(' ')}
-            >
-              <Icon name="Users" size={11} />
-              {(it.matching_leads_count ?? 0) > 0 ? it.matching_leads_count : ''}
+        {/* Статистика + подходящие заявки + дата */}
+        <div className="flex items-center justify-between gap-2 mt-2.5 pt-2.5 border-t border-border/50">
+          <div className="flex items-center gap-3">
+            <button onClick={() => onInternalCard?.(it)} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Icon name="Eye" size={13} className="text-brand-blue" />
+                {(it.stats_views ?? 0).toLocaleString('ru')}
+              </span>
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Icon name="Phone" size={13} className="text-emerald-500" />
+                {(it.stats_calls ?? 0).toLocaleString('ru')}
+              </span>
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Icon name="Inbox" size={13} className="text-brand-orange" />
+                {(it.stats_leads ?? 0).toLocaleString('ru')}
+              </span>
             </button>
-          )}
-          <div className="flex items-center gap-1 min-w-0 flex-1">
-            <Icon name="User" size={11} className="text-muted-foreground/50 flex-shrink-0" />
-            <div className="flex flex-col min-w-0">
-              {it.owner_name && (
-                <span className="text-[11px] font-medium text-foreground">{it.owner_name}</span>
-              )}
-              {it.owner_phone && showPhone && (
-                <a href={`tel:${it.owner_phone}`} className="text-[10px] text-brand-blue hover:underline whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                  {it.owner_phone}
-                </a>
-              )}
-              {!it.owner_name && !it.owner_phone && <span className="text-[11px] text-muted-foreground">—</span>}
-              {showPhone && it.owner_phone && (
-                <div className="mt-1"><MessengerLinks phone={it.owner_phone} size="xs" /></div>
-              )}
-            </div>
+            {onShowMatching && (
+              <button
+                onClick={e => { e.stopPropagation(); onShowMatching(it.id); }}
+                title={(it.matching_leads_count ?? 0) > 0 ? `Подходящие заявки: ${it.matching_leads_count}` : 'Подходящих заявок не найдено'}
+                className={[
+                  'flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-lg transition-colors shrink-0',
+                  (it.matching_leads_count ?? 0) > 0
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : 'bg-red-100 text-red-600',
+                ].join(' ')}
+              >
+                <Icon name="Users" size={12} />
+                {(it.matching_leads_count ?? 0) > 0 ? it.matching_leads_count : ''}
+              </button>
+            )}
           </div>
-          <span className="text-[10px] text-muted-foreground/60 flex-shrink-0">
+          <span className="text-[11px] text-muted-foreground/70 flex-shrink-0">
             {fmtDate(it.created_at)}
           </span>
+        </div>
+
+        {/* Собственник — на всю ширину */}
+        <div className="flex items-start gap-1.5 mt-2.5" title="Собственник">
+          <Icon name="User" size={13} className="text-muted-foreground/50 flex-shrink-0 mt-0.5" />
+          <div className="flex flex-col min-w-0">
+            {it.owner_name && (
+              <span className="text-xs font-medium text-foreground break-words">{it.owner_name}</span>
+            )}
+            {it.owner_phone && showPhone && (
+              <a href={`tel:${it.owner_phone}`} className="text-xs text-brand-blue hover:underline whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                {it.owner_phone}
+              </a>
+            )}
+            {!it.owner_name && !it.owner_phone && <span className="text-xs text-muted-foreground">—</span>}
+            {showPhone && it.owner_phone && (
+              <div className="mt-1"><MessengerLinks phone={it.owner_phone} size="xs" /></div>
+            )}
+          </div>
         </div>
 
         {/* Доп. лицо (представитель) */}
@@ -220,12 +233,12 @@ export default function ListingsTableMobileCard({
           const extra = (it.owner_extra_contacts || []).find(c => c.name || c.phone);
           if (!extra) return null;
           return (
-            <div className="flex items-start gap-1 mt-2" title="Доп. лицо">
-              <Icon name="UserPlus" size={11} className="text-muted-foreground/50 flex-shrink-0" />
+            <div className="flex items-start gap-1.5 mt-2.5" title="Доп. лицо">
+              <Icon name="UserPlus" size={13} className="text-muted-foreground/50 flex-shrink-0 mt-0.5" />
               <div className="flex flex-col min-w-0">
-                {extra.name && <span className="text-[11px] font-medium text-foreground">{extra.name}</span>}
+                {extra.name && <span className="text-xs font-medium text-foreground break-words">{extra.name}</span>}
                 {extra.phone && showPhone && (
-                  <a href={`tel:${extra.phone}`} className="text-[10px] text-brand-blue hover:underline whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                  <a href={`tel:${extra.phone}`} className="text-xs text-brand-blue hover:underline whitespace-nowrap" onClick={e => e.stopPropagation()}>
                     {extra.phone}
                   </a>
                 )}
