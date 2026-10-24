@@ -574,6 +574,17 @@ def handler(event: dict, context) -> dict:
                     (norm_phone,)
                 )
                 row = cur.fetchone()
+                if row:
+                    cur.execute(
+                        f"UPDATE {SCHEMA}.phone_contacts SET trashed_at = NULL, trashed_by = NULL, updated_at = NOW() "
+                        f"WHERE id = %s AND trashed_at IS NOT NULL RETURNING id", (row['id'],)
+                    )
+                    if cur.fetchone():
+                        cur.execute(
+                            f"INSERT INTO {SCHEMA}.phone_contact_history (phone_contact_id, field_name, new_value) "
+                            f"VALUES (%s, 'auto_restore', %s)",
+                            (row['id'], 'Восстановлен из корзины автоматически: собственник подал объект')
+                        )
                 if not row:
                     cur.execute(
                         f"INSERT INTO {SCHEMA}.phone_contacts (phone, phone_normalized, name) "

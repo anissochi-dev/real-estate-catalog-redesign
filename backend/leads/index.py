@@ -56,6 +56,16 @@ def _upsert_phone_contact(cur, phone, name=None):
     row = cur.fetchone()
     if row:
         pid, existing_name = row[0], row[1]
+        cur.execute(
+            f"UPDATE {SCHEMA_LEADS}.phone_contacts SET trashed_at = NULL, trashed_by = NULL, updated_at = NOW() "
+            f"WHERE id = %s AND trashed_at IS NOT NULL RETURNING id", (pid,)
+        )
+        if cur.fetchone():
+            cur.execute(
+                f"INSERT INTO {SCHEMA_LEADS}.phone_contact_history (phone_contact_id, field_name, new_value) "
+                f"VALUES (%s, 'auto_restore', %s)",
+                (pid, 'Восстановлен из корзины автоматически: новая заявка с сайта')
+            )
         if (not existing_name or not str(existing_name).strip()) and name and str(name).strip():
             cur.execute(
                 f"UPDATE {SCHEMA_LEADS}.phone_contacts SET name = %s, updated_at = NOW() WHERE id = %s",

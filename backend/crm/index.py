@@ -134,6 +134,16 @@ def upsert_phone_contact(conn, phone: str, name: str = '', user_id: int = None):
     row = cur.fetchone()
     if row:
         pid, existing_name = row[0], row[1]
+        cur.execute(
+            "UPDATE phone_contacts SET trashed_at = NULL, trashed_by = NULL, updated_at = NOW() "
+            "WHERE id = %s AND trashed_at IS NOT NULL RETURNING id", (pid,)
+        )
+        if cur.fetchone():
+            cur.execute(
+                "INSERT INTO phone_contact_history (phone_contact_id, changed_by, field_name, new_value) "
+                "VALUES (%s, %s, 'auto_restore', %s)",
+                (pid, user_id, 'Восстановлен из корзины автоматически: номер указан в CRM')
+            )
         # Если имя в базе пустое, а нам передали — обновим
         if (not existing_name or not existing_name.strip()) and name and name.strip():
             cur.execute(

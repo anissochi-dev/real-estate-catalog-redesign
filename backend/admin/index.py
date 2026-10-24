@@ -5539,6 +5539,26 @@ def _normalize_phone(phone):
     return digits
 
 
+def _phone_log(cur, cid, user_id, event, text=''):
+    """Пишет событие в историю контакта (привязка/отвязка/корзина/восстановление)."""
+    uid = str(int(user_id)) if user_id else 'NULL'
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.phone_contact_history "
+        f"(phone_contact_id, changed_by, field_name, old_value, new_value) "
+        f"VALUES ({int(cid)}, {uid}, '{_safe(event, 50)}', NULL, '{_safe(text, 500)}')"
+    )
+
+
+def _phone_auto_restore(cur, cid, user_id=None, source='новые данные'):
+    """Если номер лежит в корзине — возвращает его в базу и пишет в историю."""
+    cur.execute(
+        f"UPDATE {SCHEMA}.phone_contacts SET trashed_at = NULL, trashed_by = NULL, updated_at = NOW() "
+        f"WHERE id = {int(cid)} AND trashed_at IS NOT NULL RETURNING id"
+    )
+    if cur.fetchone():
+        _phone_log(cur, cid, user_id, 'auto_restore', f'Восстановлен из корзины автоматически: {source}')
+
+
 def _upsert_phone_contact(cur, phone, name=None, user_id=None):
     """
     Находит или создаёт запись в phone_contacts по нормализованному номеру.
@@ -5557,6 +5577,7 @@ def _upsert_phone_contact(cur, phone, name=None, user_id=None):
     if row:
         pid = row['id'] if isinstance(row, dict) else row[0]
         existing_name = row['name'] if isinstance(row, dict) else row[1]
+        _phone_auto_restore(cur, pid, user_id, 'номер снова указан в объекте или заявке')
         # Обновляем имя, если оно было пустое
         if (not existing_name or not str(existing_name).strip()) and name and str(name).strip():
             safe_name = _safe(name, 200)
@@ -5678,7 +5699,13 @@ def _process_lead_extra_contacts(cur, raw_contacts, user_id, lead_id=None):
 
 
 def _phones(cur, conn, method, rid, action, event, user):
+    is_boss = user['role'] in ('admin', 'director')
     if method == 'GET':
+        _qp = event.get('queryStringParameters') or {}
+        want_trash = _qp.get('trash') == '1'
+        if want_trash and not is_boss:
+            return _err(403, 'Удалённые номера видны только администратору и директору')
+        trash_sql = "pc.trashed_at IS NOT NULL" if want_trash else "pc.trashed_at IS NULL"
         if action == 'search':
             params = event.get('queryStringParameters') or {}
             q = _safe(params.get('q') or '', 100)
@@ -5694,13 +5721,15 @@ def _phones(cur, conn, method, rid, action, event, user):
                 f"  (SELECT COUNT(*) FROM {SCHEMA}.phone_listing_links WHERE phone_contact_id = pc.id) AS listings_count, "
                 f"  (SELECT COUNT(*) FROM {SCHEMA}.phone_lead_links WHERE phone_contact_id = pc.id) AS leads_count "
                 f"FROM {SCHEMA}.phone_contacts pc "
-                f"WHERE pc.phone_normalized LIKE '%{q_norm}%' OR pc.name COLLATE \"ru_RU.utf8\" ILIKE '%{_safe(q, 100)}%' "
+                f"WHERE {trash_sql} AND (pc.phone_normalized LIKE '%{q_norm}%' OR pc.name COLLATE \"ru_RU.utf8\" ILIKE '%{_safe(q, 100)}%') "
                 f"ORDER BY pc.updated_at DESC LIMIT 50"
             )
             rows = [_ser_phone(dict(r)) for r in cur.fetchall()]
             return _ok({'contacts': rows})
 
         if rid and action == 'history':
+            if not is_boss:
+                return _err(403, 'История доступна только администратору и директору')
             cur.execute(
                 f"SELECT pch.*, u.name AS changed_by_name "
                 f"FROM {SCHEMA}.phone_contact_history pch "
@@ -5723,8 +5752,11 @@ def _phones(cur, conn, method, rid, action, event, user):
                 f"   WHERE pll.phone_contact_id = pc.id) AS linked_listings, "
                 f"  (SELECT json_agg(json_build_object('id', ld.id, 'name', ld.name, 'status', ld.status, 'created_at', ld.created_at)) "
                 f"   FROM {SCHEMA}.phone_lead_links pldl JOIN {SCHEMA}.leads ld ON ld.id = pldl.lead_id "
-                f"   WHERE pldl.phone_contact_id = pc.id) AS linked_leads "
-                f"FROM {SCHEMA}.phone_contacts pc WHERE pc.id = {int(rid)}"
+                f"   WHERE pldl.phone_contact_id = pc.id) AS linked_leads, "
+                f"  tu.name AS trashed_by_name "
+                f"FROM {SCHEMA}.phone_contacts pc "
+                f"LEFT JOIN {SCHEMA}.users tu ON tu.id = pc.trashed_by "
+                f"WHERE pc.id = {int(rid)}"
             )
             row = cur.fetchone()
             if not row:
@@ -5735,16 +5767,23 @@ def _phones(cur, conn, method, rid, action, event, user):
         page = max(1, int(params.get('page') or 1))
         limit = 50
         offset = (page - 1) * limit
-        cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.phone_contacts")
+        cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.phone_contacts pc WHERE {trash_sql}")
         total = cur.fetchone()['c']
+        trash_count = 0
+        if is_boss:
+            cur.execute(f"SELECT COUNT(*) AS c FROM {SCHEMA}.phone_contacts WHERE trashed_at IS NOT NULL")
+            trash_count = cur.fetchone()['c']
+        order_sql = "pc.trashed_at DESC" if want_trash else "pc.updated_at DESC"
         cur.execute(
             f"SELECT pc.id, pc.phone, pc.phone_normalized, pc.name, pc.company, pc.notes, pc.tags, pc.created_at, pc.updated_at, "
+            f"  pc.trashed_at, tu.name AS trashed_by_name, "
             f"  (SELECT COUNT(*) FROM {SCHEMA}.phone_listing_links WHERE phone_contact_id = pc.id) AS listings_count, "
             f"  (SELECT COUNT(*) FROM {SCHEMA}.phone_lead_links WHERE phone_contact_id = pc.id) AS leads_count "
-            f"FROM {SCHEMA}.phone_contacts pc ORDER BY pc.updated_at DESC LIMIT {limit} OFFSET {offset}"
+            f"FROM {SCHEMA}.phone_contacts pc LEFT JOIN {SCHEMA}.users tu ON tu.id = pc.trashed_by "
+            f"WHERE {trash_sql} ORDER BY {order_sql} LIMIT {limit} OFFSET {offset}"
         )
         rows = [_ser_phone(dict(r)) for r in cur.fetchall()]
-        return _ok({'contacts': rows, 'total': total, 'page': page, 'pages': (total + limit - 1) // limit})
+        return _ok({'contacts': rows, 'total': total, 'page': page, 'pages': (total + limit - 1) // limit, 'trash_count': trash_count})
 
     body = json.loads(event.get('body') or '{}')
 
@@ -5760,13 +5799,17 @@ def _phones(cur, conn, method, rid, action, event, user):
         if listing_id:
             cur.execute(
                 f"INSERT INTO {SCHEMA}.phone_listing_links (phone_contact_id, listing_id, role) "
-                f"VALUES ({cid}, {int(listing_id)}, '{role}') ON CONFLICT DO NOTHING"
+                f"VALUES ({cid}, {int(listing_id)}, '{role}') ON CONFLICT DO NOTHING RETURNING phone_contact_id"
             )
+            if cur.fetchone():
+                _phone_log(cur, cid, user['id'], 'link_listing', _listing_label(cur, listing_id))
         if lead_id:
             cur.execute(
                 f"INSERT INTO {SCHEMA}.phone_lead_links (phone_contact_id, lead_id) "
-                f"VALUES ({cid}, {int(lead_id)}) ON CONFLICT DO NOTHING"
+                f"VALUES ({cid}, {int(lead_id)}) ON CONFLICT DO NOTHING RETURNING phone_contact_id"
             )
+            if cur.fetchone():
+                _phone_log(cur, cid, user['id'], 'link_lead', _lead_label(cur, lead_id))
         conn.commit()
         return _ok({'success': True})
 
@@ -5778,18 +5821,52 @@ def _phones(cur, conn, method, rid, action, event, user):
         lead_id = body.get('lead_id')
         if listing_id:
             cur.execute(
-                f"UPDATE {SCHEMA}.phone_listing_links SET role = role "
-                f"WHERE phone_contact_id = {cid} AND listing_id = {int(listing_id)}"
-            )
-            cur.execute(
                 f"DELETE FROM {SCHEMA}.phone_listing_links "
-                f"WHERE phone_contact_id = {cid} AND listing_id = {int(listing_id)}"
+                f"WHERE phone_contact_id = {cid} AND listing_id = {int(listing_id)} RETURNING listing_id"
             )
+            if cur.fetchone():
+                _phone_log(cur, cid, user['id'], 'unlink_listing', _listing_label(cur, listing_id))
         if lead_id:
             cur.execute(
                 f"DELETE FROM {SCHEMA}.phone_lead_links "
-                f"WHERE phone_contact_id = {cid} AND lead_id = {int(lead_id)}"
+                f"WHERE phone_contact_id = {cid} AND lead_id = {int(lead_id)} RETURNING lead_id"
             )
+            if cur.fetchone():
+                _phone_log(cur, cid, user['id'], 'unlink_lead', _lead_label(cur, lead_id))
+        conn.commit()
+        return _ok({'success': True})
+
+    if method == 'POST' and action == 'restore':
+        if not is_boss:
+            return _err(403, 'Восстановить может только администратор или директор')
+        cid = int(rid)
+        cur.execute(
+            f"UPDATE {SCHEMA}.phone_contacts SET trashed_at = NULL, trashed_by = NULL, updated_at = NOW() "
+            f"WHERE id = {cid} AND trashed_at IS NOT NULL RETURNING id"
+        )
+        if cur.fetchone():
+            _phone_log(cur, cid, user['id'], 'restore', 'Восстановлен из корзины')
+        conn.commit()
+        return _ok({'success': True})
+
+    if method == 'POST' and action == 'purge':
+        if not is_boss:
+            return _err(403, 'Удалить навсегда может только администратор или директор')
+        cid = int(rid)
+        cur.execute(f"SELECT trashed_at FROM {SCHEMA}.phone_contacts WHERE id = {cid}")
+        row = cur.fetchone()
+        if not row:
+            return _err(404, 'Не найдено')
+        if not row['trashed_at']:
+            return _err(400, 'Сначала переместите номер в корзину')
+        cur.execute(f"UPDATE {SCHEMA}.listings SET owner_phone_contact_id = NULL WHERE owner_phone_contact_id = {cid}")
+        cur.execute(f"UPDATE {SCHEMA}.listings SET owner_phone2_contact_id = NULL WHERE owner_phone2_contact_id = {cid}")
+        cur.execute(f"UPDATE {SCHEMA}.leads SET phone_contact_id = NULL WHERE phone_contact_id = {cid}")
+        cur.execute(f"UPDATE {SCHEMA}.crm_owners SET phone_contact_id = NULL WHERE phone_contact_id = {cid}")
+        cur.execute(f"DELETE FROM {SCHEMA}.phone_lead_links WHERE phone_contact_id = {cid}")
+        cur.execute(f"DELETE FROM {SCHEMA}.phone_listing_links WHERE phone_contact_id = {cid}")
+        cur.execute(f"DELETE FROM {SCHEMA}.phone_contact_history WHERE phone_contact_id = {cid}")
+        cur.execute(f"DELETE FROM {SCHEMA}.phone_contacts WHERE id = {cid}")
         conn.commit()
         return _ok({'success': True})
 
@@ -5798,8 +5875,12 @@ def _phones(cur, conn, method, rid, action, event, user):
         if not phone:
             return _err(400, 'Телефон обязателен')
         norm = _normalize_phone(phone)
-        cur.execute(f"SELECT id FROM {SCHEMA}.phone_contacts WHERE phone_normalized = '{norm}'")
+        cur.execute(f"SELECT id, trashed_at FROM {SCHEMA}.phone_contacts WHERE phone_normalized = '{norm}'")
         existing = cur.fetchone()
+        if existing and existing['trashed_at']:
+            _phone_auto_restore(cur, existing['id'], user['id'], 'номер добавлен вручную')
+            conn.commit()
+            return _ok({'id': existing['id'], 'success': True, 'restored': True})
         if existing:
             return _err(409, f'Номер уже существует с id={existing["id"]}')
         name = _safe(body.get('name') or '', 200)
@@ -5815,17 +5896,15 @@ def _phones(cur, conn, method, rid, action, event, user):
         return _ok({'id': new_id, 'success': True})
 
     if method == 'DELETE' and rid:
-        if user['role'] not in ('admin', 'director'):
+        if not is_boss:
             return _err(403, 'Нет прав на удаление')
         cid = int(rid)
-        cur.execute(f"UPDATE {SCHEMA}.listings SET owner_phone_contact_id = NULL WHERE owner_phone_contact_id = {cid}")
-        cur.execute(f"UPDATE {SCHEMA}.listings SET owner_phone2_contact_id = NULL WHERE owner_phone2_contact_id = {cid}")
-        cur.execute(f"UPDATE {SCHEMA}.leads SET phone_contact_id = NULL WHERE phone_contact_id = {cid}")
-        cur.execute(f"UPDATE {SCHEMA}.crm_owners SET phone_contact_id = NULL WHERE phone_contact_id = {cid}")
-        cur.execute(f"DELETE FROM {SCHEMA}.phone_lead_links WHERE phone_contact_id = {cid}")
-        cur.execute(f"DELETE FROM {SCHEMA}.phone_listing_links WHERE phone_contact_id = {cid}")
-        cur.execute(f"DELETE FROM {SCHEMA}.phone_contact_history WHERE phone_contact_id = {cid}")
-        cur.execute(f"DELETE FROM {SCHEMA}.phone_contacts WHERE id = {cid}")
+        cur.execute(
+            f"UPDATE {SCHEMA}.phone_contacts SET trashed_at = NOW(), trashed_by = {int(user['id'])} "
+            f"WHERE id = {cid} AND trashed_at IS NULL RETURNING id"
+        )
+        if cur.fetchone():
+            _phone_log(cur, cid, user['id'], 'trash', 'Перемещён в корзину')
         conn.commit()
         return _ok({'success': True})
 
@@ -5843,6 +5922,9 @@ def _phones(cur, conn, method, rid, action, event, user):
         for f, length in tracked:
             if f in body:
                 fields.append(f"{f} = {_str_or_null(body[f], length)}")
+        if 'phone' in body and _normalize_phone(body.get('phone') or '') != (old_data.get('phone_normalized') or ''):
+            if not is_boss:
+                return _err(403, 'Менять номер может только администратор или директор')
         if 'phone' in body:
             new_phone = _safe(body['phone'], 30)
             new_norm = _normalize_phone(new_phone)
@@ -5932,8 +6014,20 @@ def _sync_phones(cur, conn):
     return synced
 
 
+def _listing_label(cur, listing_id):
+    cur.execute(f"SELECT title FROM {SCHEMA}.listings WHERE id = {int(listing_id)}")
+    r = cur.fetchone()
+    return f"Объект №{int(listing_id)}" + (f" — {r['title']}" if r and r.get('title') else '')
+
+
+def _lead_label(cur, lead_id):
+    cur.execute(f"SELECT name FROM {SCHEMA}.leads WHERE id = {int(lead_id)}")
+    r = cur.fetchone()
+    return f"Лид №{int(lead_id)}" + (f" — {r['name']}" if r and r.get('name') else '')
+
+
 def _ser_phone(row):
-    for k in ('created_at', 'updated_at'):
+    for k in ('created_at', 'updated_at', 'trashed_at'):
         if row.get(k) is not None:
             row[k] = row[k].isoformat()
     return row

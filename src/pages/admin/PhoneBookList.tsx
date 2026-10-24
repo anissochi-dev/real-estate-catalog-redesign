@@ -19,6 +19,8 @@ interface PhoneContact {
   leads_count?: number;
   linked_listings?: { id: number; title: string; status: string; role: string; image?: string }[] | null;
   linked_leads?: { id: number; name: string; status: string; created_at: string }[] | null;
+  trashed_at?: string | null;
+  trashed_by_name?: string | null;
 }
 
 function fmtDate(s: string) {
@@ -90,7 +92,9 @@ export default function PhoneBookList({
                   </div>
                 )}
                 {flag && <div className="mt-1"><PhoneFlagBadge flag={flag} size="sm" /></div>}
-                <div className="text-xs text-muted-foreground mt-0.5">{fmtDate(c.created_at)}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {c.trashed_at ? <span className="text-red-600">Удалён {fmtDate(c.trashed_at)}{c.trashed_by_name ? ` · ${c.trashed_by_name}` : ''}</span> : fmtDate(c.created_at)}
+                </div>
               </div>
               {canManageFlags && (
                 <button onClick={() => onFlagPhone(c.phone)}
@@ -116,7 +120,7 @@ export default function PhoneBookList({
               <th className="px-4 py-3 text-center">Объекты</th>
               <th className="px-4 py-3 text-center">Лиды</th>
               <th className="px-4 py-3 hidden md:table-cell">Метка</th>
-              <th className="px-4 py-3 hidden md:table-cell">Добавлен</th>
+              <th className="px-4 py-3 hidden md:table-cell">{contacts[0]?.trashed_at ? 'Удалён' : 'Добавлен'}</th>
             </tr>
           </thead>
           <tbody>
@@ -169,7 +173,11 @@ export default function PhoneBookList({
                       {!flag && !canManageFlags && <span className="text-muted-foreground">—</span>}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground hidden md:table-cell">{fmtDate(c.created_at)}</td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground hidden md:table-cell">
+                    {c.trashed_at
+                      ? <span className="text-red-600">{fmtDate(c.trashed_at)}{c.trashed_by_name ? <span className="block text-muted-foreground">{c.trashed_by_name}</span> : null}</span>
+                      : fmtDate(c.created_at)}
+                  </td>
                 </tr>
               );
             })}

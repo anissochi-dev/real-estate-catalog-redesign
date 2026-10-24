@@ -148,6 +148,15 @@ def _create_lead(cur, conn, listing_id, name: str, phone: str,
     row = cur.fetchone()
     if row:
         pc_id = row['id']
+        cur.execute(
+            f"UPDATE {SCHEMA}.phone_contacts SET trashed_at = NULL, trashed_by = NULL, updated_at = NOW() "
+            f"WHERE id = {int(pc_id)} AND trashed_at IS NOT NULL RETURNING id"
+        )
+        if cur.fetchone():
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.phone_contact_history (phone_contact_id, field_name, new_value) "
+                f"VALUES ({int(pc_id)}, 'auto_restore', 'Восстановлен из корзины автоматически: заявка из чат-бота')"
+            )
     else:
         cur.execute(
             f"INSERT INTO {SCHEMA}.phone_contacts (phone, phone_normalized, name) "

@@ -17,6 +17,8 @@ interface PhoneContact {
   updated_at: string;
   linked_listings?: { id: number; title: string; status: string; role: string; image?: string }[] | null;
   linked_leads?: { id: number; name: string; status: string; created_at: string }[] | null;
+  trashed_at?: string | null;
+  trashed_by_name?: string | null;
 }
 
 interface HistoryEntry {
@@ -31,6 +33,16 @@ interface HistoryEntry {
 const FIELD_LABELS: Record<string, string> = {
   name: 'ФИО', company: 'Компания', notes: 'Заметки',
   tags: 'Теги', inn: 'ИНН', phone: 'Телефон', photo_url: 'Фото',
+};
+
+const EVENT_LABELS: Record<string, { label: string; icon: string; cls: string }> = {
+  link_listing: { label: 'Привязан к объекту', icon: 'Link', cls: 'text-emerald-700 bg-emerald-50' },
+  link_lead: { label: 'Привязан к лиду', icon: 'Link', cls: 'text-emerald-700 bg-emerald-50' },
+  unlink_listing: { label: 'Отвязан от объекта', icon: 'Unlink', cls: 'text-red-700 bg-red-50' },
+  unlink_lead: { label: 'Отвязан от лида', icon: 'Unlink', cls: 'text-red-700 bg-red-50' },
+  trash: { label: 'Удалён в корзину', icon: 'Trash2', cls: 'text-red-700 bg-red-50' },
+  restore: { label: 'Восстановлен', icon: 'RotateCcw', cls: 'text-emerald-700 bg-emerald-50' },
+  auto_restore: { label: 'Восстановлен автоматически', icon: 'RotateCcw', cls: 'text-emerald-700 bg-emerald-50' },
 };
 
 const LEAD_STATUS_LABELS: Record<string, string> = {
@@ -57,6 +69,7 @@ interface Props {
 export default function PhoneCardModal({ contactId, onClose, onUpdate, onOpenListing, onOpenLead }: Props) {
   const { user } = useAuth();
   const canUnlink = !!user?.role && ['admin', 'director'].includes(user.role);
+  const isBoss = canUnlink;
   const [contact, setContact] = useState<PhoneContact | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [tab, setTab] = useState<Tab>('info');
@@ -89,7 +102,8 @@ export default function PhoneCardModal({ contactId, onClose, onUpdate, onOpenLis
   };
 
   const loadHistory = () => {
-    adminApi.getPhoneHistory(contactId).then(r => setHistory(r.history || []));
+    if (!isBoss) return;
+    adminApi.getPhoneHistory(contactId).then(r => setHistory(r.history || [])).catch(() => {});
   };
 
   useEffect(() => {
@@ -127,12 +141,27 @@ export default function PhoneCardModal({ contactId, onClose, onUpdate, onOpenLis
     if (type === 'listing') await adminApi.unlinkPhone(contactId, { listing_id: id });
     else await adminApi.unlinkPhone(contactId, { lead_id: id });
     load();
+    loadHistory();
     onUpdate?.();
   };
 
   const deleteContact = async () => {
-    if (!confirm('Удалить этот номер из базы? Действие необратимо.')) return;
+    if (!confirm('Переместить номер в корзину? Связи сохранятся, номер можно будет восстановить в «Удалённых».')) return;
     await adminApi.deletePhone(contactId);
+    onUpdate?.();
+    onClose();
+  };
+
+  const restoreContact = async () => {
+    await adminApi.restorePhone(contactId);
+    load();
+    loadHistory();
+    onUpdate?.();
+  };
+
+  const purgeContact = async () => {
+    if (!confirm('Удалить номер НАВСЕГДА? История и все связи будут стёрты, восстановить будет нельзя.')) return;
+    await adminApi.purgePhone(contactId);
     onUpdate?.();
     onClose();
   };
@@ -180,8 +209,8 @@ export default function PhoneCardModal({ contactId, onClose, onUpdate, onOpenLis
               Добавлен {fmtDt(contact.created_at)}
             </div>
           </div>
-          {user?.role && ['admin', 'director'].includes(user.role) && (
-            <button onClick={deleteContact} title="Удалить из базы"
+          {isBoss && !contact.trashed_at && (
+            <button onClick={deleteContact} title="Удалить в корзину"
               className="p-2 rounded-lg hover:bg-red-50 text-red-500 shrink-0">
               <Icon name="Trash2" size={16} />
             </button>
@@ -191,9 +220,28 @@ export default function PhoneCardModal({ contactId, onClose, onUpdate, onOpenLis
           </button>
         </div>
 
+        {contact.trashed_at && (
+          <div className="flex flex-wrap items-center gap-2 px-5 py-2.5 bg-red-50 border-b border-red-100 text-sm">
+            <Icon name="Trash2" size={14} className="text-red-600" />
+            <span className="flex-1 min-w-0 text-red-800">
+              В корзине с {fmtDt(contact.trashed_at)}{contact.trashed_by_name ? ` · удалил ${contact.trashed_by_name}` : ''}
+            </span>
+            {isBoss && (
+              <>
+                <button onClick={restoreContact} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-brand-blue text-white text-xs font-semibold">
+                  <Icon name="RotateCcw" size={12} /> Восстановить
+                </button>
+                <button onClick={purgeContact} className="px-3 py-1.5 rounded-lg border border-red-300 text-red-700 text-xs font-semibold hover:bg-red-100">
+                  Удалить навсегда
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="flex border-b border-border px-5">
-          {([['info', 'Карточка', 'User'], ['links', 'Связи', 'Link'], ['history', 'История', 'Clock']] as [Tab, string, string][]).map(([id, label, icon]) => (
+          {([['info', 'Карточка', 'User'], ['links', 'Связи', 'Link'], ...(isBoss ? [['history', 'История', 'Clock']] : [])] as [Tab, string, string][]).map(([id, label, icon]) => (
             <button
               key={id}
               onClick={() => setTab(id)}
@@ -390,13 +438,26 @@ export default function PhoneCardModal({ contactId, onClose, onUpdate, onOpenLis
           )}
 
           {/* === HISTORY TAB === */}
-          {tab === 'history' && (
+          {tab === 'history' && isBoss && (
             <div className="p-5">
               {history.length === 0 ? (
                 <div className="text-sm text-muted-foreground">История изменений пуста</div>
               ) : (
                 <div className="space-y-2">
-                  {history.map(h => (
+                  {history.map(h => EVENT_LABELS[h.field_name] ? (
+                    <div key={h.id} className="p-3 rounded-xl border border-border bg-white">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full ${EVENT_LABELS[h.field_name].cls}`}>
+                          <Icon name={EVENT_LABELS[h.field_name].icon} size={12} />
+                          {EVENT_LABELS[h.field_name].label}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {fmtDt(h.changed_at)}{h.changed_by_name ? ` · ${h.changed_by_name}` : ''}
+                        </span>
+                      </div>
+                      {h.new_value && <div className="text-xs mt-1.5 break-words">{h.new_value}</div>}
+                    </div>
+                  ) : (
                     <div key={h.id} className="p-3 rounded-xl border border-border bg-white">
                       <div className="flex items-center justify-between gap-2 mb-1.5">
                         <span className="text-xs font-semibold text-brand-blue">

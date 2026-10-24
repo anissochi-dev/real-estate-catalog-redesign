@@ -43,15 +43,24 @@ export default function PhoneBook() {
   const [flags, setFlags] = useState<Record<string, PhoneFlag>>({});
   const [flagPhone, setFlagPhone] = useState<string | null>(null);
   const canManageFlags = user?.role === 'admin' || user?.role === 'director';
+  const [trash, setTrash] = useState(false);
+  const [trashCount, setTrashCount] = useState(0);
+  const trashRef = useRef(false);
   const tokenRef = useRef<string>(token);
 
   const load = useCallback((p = 1, q = '') => {
     setLoading(true);
-    const promise = q.length >= 2
+    const inTrash = trashRef.current;
+    const promise = q.length >= 2 && !inTrash
       ? adminApi.searchPhones(q)
-      : adminApi.listPhones(p);
+      : adminApi.listPhones(p, inTrash);
     promise.then(async r => {
-      const list: PhoneContact[] = r.contacts || [];
+      let list: PhoneContact[] = r.contacts || [];
+      if (inTrash && q.length >= 2) {
+        const ql = q.toLowerCase(); const qd = q.replace(/\D/g, '');
+        list = list.filter(c => (qd && c.phone_normalized?.includes(qd)) || (c.name || '').toLowerCase().includes(ql));
+      }
+      if (typeof r.trash_count === 'number') setTrashCount(r.trash_count);
       setContacts(list);
       setTotal(r.total ?? list.length ?? 0);
       setPages(r.pages ?? 1);
@@ -72,7 +81,7 @@ export default function PhoneBook() {
     setFlags(f);
   };
 
-  useEffect(() => { load(1, search); }, [search, load]);
+  useEffect(() => { trashRef.current = trash; load(1, search); }, [search, load, trash]);
 
   const sync = async () => {
     setSyncing(true);
@@ -102,8 +111,18 @@ export default function PhoneBook() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="text-sm text-muted-foreground">Контактов: {total}</div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-3">
+          <div className="text-sm text-muted-foreground">{trash ? 'В корзине' : 'Контактов'}: {total}</div>
+          {canManageFlags && (trash || trashCount > 0) && (
+            <button onClick={() => setTrash(t => !t)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                trash ? 'bg-red-600 text-white' : 'border border-border text-red-600 hover:bg-red-50'}`}>
+              <Icon name={trash ? 'ArrowLeft' : 'Trash2'} size={13} />
+              {trash ? 'Вернуться к базе' : `Удалённые (${trashCount})`}
+            </button>
+          )}
+        </div>
+        <div className={`flex gap-2 ${trash ? 'hidden' : ''}`}>
           <button onClick={sync} disabled={syncing}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-border text-sm font-semibold hover:bg-muted">
             <Icon name="RefreshCw" size={15} className={syncing ? 'animate-spin' : ''} />

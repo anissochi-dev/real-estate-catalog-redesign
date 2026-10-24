@@ -412,7 +412,7 @@ export const adminApi = {
     }),
 
   // phones
-  listPhones: (page = 1) => req(`${ADMIN_URL}?resource=phones&page=${page}`),
+  listPhones: (page = 1, trash = false) => req(`${ADMIN_URL}?resource=phones&page=${page}${trash ? '&trash=1' : ''}`),
   searchPhones: (q: string) => req(`${ADMIN_URL}?resource=phones&action=search&q=${encodeURIComponent(q)}`),
   getPhone: (id: number) => req(`${ADMIN_URL}?resource=phones&id=${id}`),
   createPhone: (data: Record<string, unknown>) =>
@@ -426,6 +426,10 @@ export const adminApi = {
   unlinkPhone: (id: number, data: { listing_id?: number; lead_id?: number }) =>
     req(`${ADMIN_URL}?resource=phones&id=${id}&action=unlink`, { method: 'POST', body: JSON.stringify(data) }),
   getPhoneHistory: (id: number) => req(`${ADMIN_URL}?resource=phones&id=${id}&action=history`),
+  restorePhone: (id: number) =>
+    req(`${ADMIN_URL}?resource=phones&id=${id}&action=restore`, { method: 'POST', body: '{}' }),
+  purgePhone: (id: number) =>
+    req(`${ADMIN_URL}?resource=phones&id=${id}&action=purge`, { method: 'POST', body: '{}' }),
   deletePhone: (id: number) =>
     req(`${ADMIN_URL}?resource=phones&id=${id}`, { method: 'DELETE', body: '{}' }),
 
