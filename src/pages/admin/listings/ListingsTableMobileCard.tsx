@@ -209,43 +209,30 @@ export default function ListingsTableMobileCard({
           </span>
         </div>
 
-        {/* Собственник — на всю ширину */}
-        <div className="flex items-start gap-1.5 mt-2.5" title="Собственник">
-          <Icon name="User" size={13} className="text-muted-foreground/50 flex-shrink-0 mt-0.5" />
-          <div className="flex flex-col min-w-0">
-            {it.owner_name && (
-              <span className="text-xs font-medium text-foreground break-words">{it.owner_name}</span>
-            )}
-            {it.owner_phone && showPhone && (
-              <a href={`tel:${it.owner_phone}`} className="text-xs text-brand-blue hover:underline whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                {it.owner_phone}
-              </a>
-            )}
-            {!it.owner_name && !it.owner_phone && <span className="text-xs text-muted-foreground">—</span>}
-            {showPhone && it.owner_phone && (
-              <div className="mt-1"><MessengerLinks phone={it.owner_phone} size="xs" /></div>
-            )}
-          </div>
-        </div>
-
-        {/* Доп. лицо (представитель) */}
+        {/* Собственник и доп. лицо — в 2 колонки */}
         {(() => {
           const extra = (it.owner_extra_contacts || []).find(c => c.name || c.phone);
-          if (!extra) return null;
-          return (
-            <div className="flex items-start gap-1.5 mt-2.5" title="Доп. лицо">
-              <Icon name="UserPlus" size={13} className="text-muted-foreground/50 flex-shrink-0 mt-0.5" />
+          const person = (icon: string, title: string, name?: string | null, phone?: string | null) => (
+            <div className="flex items-start gap-1.5 min-w-0" title={title}>
+              <Icon name={icon} size={13} className="text-muted-foreground/50 flex-shrink-0 mt-0.5" />
               <div className="flex flex-col min-w-0">
-                {extra.name && <span className="text-xs font-medium text-foreground break-words">{extra.name}</span>}
-                {extra.phone && showPhone && (
-                  <a href={`tel:${extra.phone}`} className="text-xs text-brand-blue hover:underline whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                    {extra.phone}
+                {name && <span className="text-xs font-medium text-foreground break-words">{name}</span>}
+                {phone && showPhone && (
+                  <a href={`tel:${phone}`} className="text-[11px] min-[380px]:text-xs text-brand-blue hover:underline whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                    {phone}
                   </a>
                 )}
-                {showPhone && extra.phone && (
-                  <div className="mt-1"><MessengerLinks phone={extra.phone} size="xs" /></div>
+                {!name && !(phone && showPhone) && <span className="text-xs text-muted-foreground">—</span>}
+                {showPhone && phone && (
+                  <div className="mt-1"><MessengerLinks phone={phone} size="xs" /></div>
                 )}
               </div>
+            </div>
+          );
+          return (
+            <div className={`grid gap-3 mt-2.5 ${extra ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              {person('User', 'Собственник', it.owner_name, it.owner_phone)}
+              {extra && person('UserPlus', 'Доп. лицо', extra.name, extra.phone)}
             </div>
           );
         })()}
