@@ -50,6 +50,8 @@ const ACTION_LABELS: Record<string, { label: string; icon: string; color: string
   price_changed: { label: 'Цена изменена', icon: 'TrendingDown', color: 'text-amber-600 bg-amber-50' },
   status_changed: { label: 'Статус изменён', icon: 'RefreshCw', color: 'text-violet-600 bg-violet-50' },
   broker_changed: { label: 'Брокер изменён', icon: 'UserCheck', color: 'text-indigo-600 bg-indigo-50' },
+  shown: { label: 'Показан на сайте', icon: 'Eye', color: 'text-emerald-600 bg-emerald-50' },
+  hidden: { label: 'Скрыт с сайта', icon: 'EyeOff', color: 'text-red-600 bg-red-50' },
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -94,10 +96,16 @@ const FIELD_FMT: Record<string, (v: unknown) => string> = {
   deal: v => ({ sale: 'Продажа', rent: 'Аренда', business: 'Бизнес' } as Record<string, string>)[String(v)] || String(v ?? '—'),
 };
 
+const EMPTY = 'Не указано';
+
 const fmtVal = (field: string, val: unknown): string => {
   const f = FIELD_FMT[field];
-  if (f) return f(val);
-  if (val === null || val === undefined || val === '') return '—';
+  if (f) {
+    const r = f(val);
+    return r === '—' ? EMPTY : r;
+  }
+  if (val === null || val === undefined || val === '') return EMPTY;
+  if (typeof val === 'boolean' || val === 'true' || val === 'false') return val === true || val === 'true' ? 'Да' : 'Нет';
   if (typeof val === 'string' && val.length > 80) return val.slice(0, 80) + '…';
   return String(val);
 };
@@ -134,6 +142,38 @@ const EVENT_LABELS_FALLBACK: Record<string, string> = {
   view_other: 'Просмотры', call: 'Звонки', lead: 'Заявки',
   favorite: 'В избранном', manual: 'Прочее', qr_scan: 'Переходы по QR-коду',
 };
+
+const isEmptyChanges = (c: ChangesMap | null) => !c || Object.keys(c).length === 0;
+
+const GROUP_WINDOW_MS = 10 * 60 * 1000;
+
+function groupHistory(items: HistoryItem[]): HistoryItem[] {
+  const visible = items.filter(h => !(h.action === 'updated' && isEmptyChanges(h.changes)));
+  const result: HistoryItem[] = [];
+  for (const h of visible) {
+    const prev = result[result.length - 1];
+    if (
+      prev && prev.action === 'updated' && h.action === 'updated' &&
+      prev.user_name === h.user_name &&
+      Math.abs(new Date(prev.created_at).getTime() - new Date(h.created_at).getTime()) <= GROUP_WINDOW_MS
+    ) {
+      const merged: ChangesMap = { ...(h.changes || {}) };
+      for (const [field, raw] of Object.entries(prev.changes || {})) {
+        if (field in merged) {
+          const older = extractOldNew(merged[field]);
+          const newer = extractOldNew(raw);
+          merged[field] = { old: older.old, new: newer.new };
+        } else {
+          merged[field] = raw;
+        }
+      }
+      result[result.length - 1] = { ...prev, changes: merged };
+    } else {
+      result.push(h);
+    }
+  }
+  return result;
+}
 
 function fmtDt(s: string) {
   return new Date(s).toLocaleString('ru', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -405,10 +445,10 @@ export default function ListingHistory({ listingId, listingTitle, onClose }: Pro
           ) : (
             // История изменений
             <div className="space-y-2">
-              {history.length === 0 ? (
+              {groupHistory(history).length === 0 ? (
                 <div className="text-center text-muted-foreground text-sm py-8">История пуста</div>
               ) : (
-                history.map(h => {
+                groupHistory(history).map(h => {
                   const meta = ACTION_LABELS[h.action] || { label: h.action, icon: 'Activity', color: 'text-slate-600 bg-slate-50' };
                   return (
                     <div key={h.id} className="flex gap-3 p-3 rounded-xl hover:bg-muted/30">

@@ -356,7 +356,6 @@ export function useListingsState() {
     try {
       if (editing.id) {
         await adminApi.updateListing(editing.id, data);
-        await adminApi.addListingHistory(editing.id, 'updated', {});
       } else {
         const res = await adminApi.createListing(data);
         if (res.id) await adminApi.addListingHistory(res.id, 'created', {});
