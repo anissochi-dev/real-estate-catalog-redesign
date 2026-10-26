@@ -1,101 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
-import PhonePickerInput from '@/components/admin/PhonePickerInput';
-import CharCount from '@/components/ui/CharCount';
-import { Lead, LeadExtraContact, Listing, STATUSES, PROPERTY_TYPES_LEAD, PROPERTY_CATEGORIES_LEAD } from './leadsTypes';
-import SeoHeadingsBlock, { SeoHeadings } from '@/components/admin/SeoHeadingsBlock';
+import { Lead, Listing } from './leadsTypes';
 import { District } from '../districts/DistrictsTypes';
-
-const MAX_LEAD_EXTRA_CONTACTS = 3;
-
-function DistrictDropdown({ districts, selected, onChange, error }: {
-  districts: District[];
-  selected: number[];
-  onChange: (ids: number[]) => void;
-  error?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, []);
-
-  const toggle = (id: number) =>
-    onChange(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id]);
-
-  const label = selected.length === 0
-    ? 'Выберите районы...'
-    : selected.length === 1
-      ? districts.find(d => d.id === selected[0])?.name || '1 район'
-      : `${selected.length} района(ов)`;
-
-  return (
-    <div ref={ref} className="relative">
-      <label className="text-xs text-muted-foreground mb-1 block">
-        Желаемые районы <span className="text-red-500">*</span>
-        {error && <span className="ml-2 text-red-500 font-normal">— обязательное поле</span>}
-      </label>
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        className={`w-full flex items-center justify-between px-3 py-2 border rounded-lg text-sm bg-white transition-colors ${error ? 'border-red-400 bg-red-50' : 'hover:border-brand-blue'}`}
-      >
-        <span className={selected.length === 0 ? 'text-muted-foreground' : 'text-foreground'}>
-          {label}
-        </span>
-        <Icon name={open ? 'ChevronUp' : 'ChevronDown'} size={14} className="text-muted-foreground shrink-0" />
-      </button>
-
-      {open && (
-        <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-border rounded-xl shadow-lg max-h-56 overflow-y-auto">
-          {selected.length > 0 && (
-            <button
-              type="button"
-              onClick={() => onChange([])}
-              className="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-muted border-b border-border"
-            >
-              Очистить выбор
-            </button>
-          )}
-          {districts.map(d => (
-            <label key={d.id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted cursor-pointer">
-              <input
-                type="checkbox"
-                checked={selected.includes(d.id)}
-                onChange={() => toggle(d.id)}
-                className="accent-brand-blue"
-              />
-              <span className="text-sm">{d.name}</span>
-            </label>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function generateLeadHeadings(lead: Partial<Lead>): SeoHeadings {
-  const name = lead.name || 'Клиент';
-  const budget = lead.budget
-    ? `бюджет ${(lead.budget / 1_000_000).toFixed(lead.budget >= 10_000_000 ? 0 : 1)} млн ₽`
-    : '';
-  const company = lead.company ? ` — ${lead.company}` : '';
-  return {
-    h1: `Заявка от ${name}${company}`,
-    h2: budget
-      ? `Подбор коммерческой недвижимости — ${budget}`
-      : 'Подбор коммерческой недвижимости в Краснодаре',
-    h3: lead.message
-      ? lead.message.slice(0, 80)
-      : 'Запрос на аренду или покупку объекта',
-    h4: budget || 'Бюджет уточняется',
-    h5: `Контакт: ${name}`,
-  };
-}
+import LeadEditContactsSection from './LeadEditContactsSection';
+import LeadEditRequestSection from './LeadEditRequestSection';
+import LeadEditLinkSection from './LeadEditLinkSection';
 
 interface Props {
   editing: Partial<Lead>;
@@ -118,38 +28,8 @@ export default function LeadEditModal({
   listingDropOpen, setListingDropOpen,
   onSave, lockContactFields = false,
 }: Props) {
-  const listingDropRef = useRef<HTMLDivElement>(null);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const contactLocked = lockContactFields && !!editing.id && !!editing.name && !!editing.phone;
-
-  const filteredListings = listings.filter(l =>
-    listingSearch.length < 1 ? true :
-    l.title.toLowerCase().includes(listingSearch.toLowerCase()) ||
-    String(l.id).includes(listingSearch)
-  ).slice(0, 10);
-
-  const extraContacts: LeadExtraContact[] = editing.extra_contacts || [];
-  const updateExtraContact = (idx: number, patch: Partial<LeadExtraContact>) => {
-    const next = extraContacts.map((c, i) => (i === idx ? { ...c, ...patch } : c));
-    setEditing({ ...editing, extra_contacts: next });
-  };
-  const addExtraContact = () => {
-    if (extraContacts.length >= MAX_LEAD_EXTRA_CONTACTS) return;
-    setEditing({ ...editing, extra_contacts: [...extraContacts, { name: '', phone: '', phone2: '' }] });
-  };
-  const removeExtraContact = (idx: number) => {
-    setEditing({ ...editing, extra_contacts: extraContacts.filter((_, i) => i !== idx) });
-  };
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (listingDropRef.current && !listingDropRef.current.contains(e.target as Node)) {
-        setListingDropOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [setListingDropOpen]);
 
   const validate = (): boolean => {
     const e: Record<string, boolean> = {};
@@ -181,274 +61,28 @@ export default function LeadEditModal({
           <button onClick={() => setEditing(null)}><Icon name="X" size={20} /></button>
         </div>
         <div className="p-5 space-y-3 overflow-y-auto flex-1">
-          <div className="relative">
-            <input className={`w-full px-3 py-2 border rounded-lg pr-16 ${errors.name ? 'border-red-400 bg-red-50' : ''} ${contactLocked ? 'bg-muted/50 text-muted-foreground cursor-not-allowed' : ''}`} placeholder="Имя клиента"
-              maxLength={60}
-              value={editing.name || ''}
-              readOnly={contactLocked}
-              onChange={e => !contactLocked && setEditing({ ...editing, name: e.target.value })} />
-            <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs tabular-nums ${
-              (editing.name?.length || 0) >= 55 ? 'text-red-500' : 'text-muted-foreground'
-            }`}>
-              {editing.name?.length || 0}/60
-            </span>
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">
-              Телефон
-              {contactLocked && <span className="ml-1.5 text-[10px] text-muted-foreground">(изменён быть не может)</span>}
-            </label>
-            <div className={errors.phone ? 'rounded-lg ring-1 ring-red-400 bg-red-50' : ''}>
-              <PhonePickerInput
-                value={editing.phone || ''}
-                onChange={(phone, name) => setEditing({ ...editing, phone, ...(name && !editing.name ? { name } : {}) })}
-                onNameChange={name => { if (!editing.name) setEditing({ ...editing, name }); }}
-                readOnly={contactLocked}
-              />
-            </div>
-          </div>
-          <div>
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-              <span className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0"><Icon name="PhonePlus" size={11} className="text-slate-500" /></span>Доп. телефон
-            </label>
-            <PhonePickerInput
-              value={editing.phone2 || ''}
-              onChange={phone => setEditing({ ...editing, phone2: phone })}
-            />
-          </div>
-          <input className="w-full px-3 py-2 border rounded-lg" placeholder="Email (необязательно)"
-            value={editing.email || ''} onChange={e => setEditing({ ...editing, email: e.target.value })} />
-          <input className="w-full px-3 py-2 border rounded-lg" placeholder="Компания (для сетевых)"
-            value={editing.company || ''} onChange={e => setEditing({ ...editing, company: e.target.value })} />
+          <LeadEditContactsSection
+            editing={editing}
+            setEditing={setEditing}
+            errors={errors}
+            contactLocked={contactLocked}
+          />
 
-          {/* Доп. контакты заявки */}
-          {!contactLocked && (
-            <div className="space-y-3">
-              {extraContacts.map((contact, idx) => (
-                <div key={idx} className="grid grid-cols-1 sm:grid-cols-2 gap-3 border border-dashed border-border rounded-lg p-3 relative">
-                  <button
-                    type="button"
-                    onClick={() => removeExtraContact(idx)}
-                    className="absolute top-2 right-2 text-muted-foreground hover:text-red-500"
-                    title="Удалить контакт"
-                  >
-                    <Icon name="X" size={14} />
-                  </button>
-                  <div>
-                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-                      <span className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0"><Icon name="User" size={11} className="text-brand-blue" /></span>Имя
-                    </label>
-                    <input
-                      className="w-full px-3 py-2 border rounded-lg"
-                      value={contact.name || ''}
-                      onChange={e => updateExtraContact(idx, { name: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-                      <span className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0"><Icon name="Phone" size={11} className="text-emerald-600" /></span>Телефон
-                    </label>
-                    <PhonePickerInput
-                      value={contact.phone || ''}
-                      onChange={(phone, name) => updateExtraContact(idx, { phone, ...(name && !contact.name ? { name } : {}) })}
-                    />
-                  </div>
-                  <div className="sm:col-start-2">
-                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-                      <span className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0"><Icon name="PhonePlus" size={11} className="text-slate-500" /></span>Доп. телефон
-                    </label>
-                    <PhonePickerInput
-                      value={contact.phone2 || ''}
-                      onChange={phone => updateExtraContact(idx, { phone2: phone })}
-                    />
-                  </div>
-                </div>
-              ))}
-              {extraContacts.length < MAX_LEAD_EXTRA_CONTACTS && (
-                <button
-                  type="button"
-                  onClick={addExtraContact}
-                  className="inline-flex items-center gap-1.5 text-sm text-brand-blue hover:underline"
-                >
-                  <Icon name="Plus" size={14} />
-                  Добавить контакты
-                </button>
-              )}
-            </div>
-          )}
+          <LeadEditRequestSection
+            editing={editing}
+            setEditing={setEditing}
+            districts={districts}
+            errors={errors}
+          />
 
-          {/* Тип сделки и категория объекта */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">
-                Тип сделки <span className="text-red-500">*</span>
-                {errors.property_type && <span className="ml-1 text-red-500 font-normal">— обязательно</span>}
-              </label>
-              <select className={`w-full px-3 py-2 border rounded-lg text-sm ${errors.property_type ? 'border-red-400 bg-red-50' : ''}`}
-                value={editing.property_type || ''}
-                onChange={e => setEditing({ ...editing, property_type: e.target.value || null })}>
-                <option value="">— Выберите —</option>
-                {PROPERTY_TYPES_LEAD.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">
-                Категория объекта <span className="text-red-500">*</span>
-                {errors.property_category && <span className="ml-1 text-red-500 font-normal">— обязательно</span>}
-              </label>
-              <select className={`w-full px-3 py-2 border rounded-lg text-sm ${errors.property_category ? 'border-red-400 bg-red-50' : ''}`}
-                value={editing.property_category || ''}
-                onChange={e => setEditing({ ...editing, property_category: e.target.value || null })}>
-                <option value="">— Выберите —</option>
-                {PROPERTY_CATEGORIES_LEAD.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* Бюджет от/до */}
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">
-              Бюджет, ₽ — до <span className="text-red-500">*</span>
-              {errors.budget_to && <span className="ml-1 text-red-500 font-normal">— обязательно</span>}
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <input type="number" className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-full px-3 py-2 border rounded-lg text-sm" placeholder="от (необязательно)"
-                value={editing.budget ?? ''}
-                onChange={e => setEditing({ ...editing, budget: e.target.value === '' ? null : +e.target.value })} />
-              <input type="number" className={`[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-full px-3 py-2 border rounded-lg text-sm ${errors.budget_to ? 'border-red-400 bg-red-50' : ''}`} placeholder="до"
-                value={editing.budget_to ?? ''}
-                onChange={e => setEditing({ ...editing, budget_to: e.target.value === '' ? null : +e.target.value })} />
-            </div>
-          </div>
-
-          {/* Площадь от/до */}
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">
-              Площадь, м² — до <span className="text-red-500">*</span>
-              {errors.area_to && <span className="ml-1 text-red-500 font-normal">— обязательно</span>}
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <input type="number" className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-full px-3 py-2 border rounded-lg text-sm" placeholder="от (необязательно)"
-                value={editing.area_from ?? ''}
-                onChange={e => setEditing({ ...editing, area_from: e.target.value === '' ? null : +e.target.value })} />
-              <input type="number" className={`[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-full px-3 py-2 border rounded-lg text-sm ${errors.area_to ? 'border-red-400 bg-red-50' : ''}`} placeholder="до"
-                value={editing.area_to ?? ''}
-                onChange={e => setEditing({ ...editing, area_to: e.target.value === '' ? null : +e.target.value })} />
-            </div>
-          </div>
-
-          {/* Коммуникации */}
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Коммуникации (эл. энергия, газ, вода и т.д.)</label>
-            <input className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Эл. энергия 15 кВт, газ, вода"
-              value={editing.utilities || ''}
-              onChange={e => setEditing({ ...editing, utilities: e.target.value || null })} />
-          </div>
-
-          {/* Районы */}
-          {districts.length > 0 && (
-            <DistrictDropdown
-              districts={districts}
-              selected={editing.district_ids || []}
-              onChange={ids => setEditing({ ...editing, district_ids: ids })}
-              error={errors.district_ids}
-            />
-          )}
-
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">
-              Текст запроса <span className="text-red-500">*</span>
-              {errors.message && <span className="ml-1 text-red-500 font-normal">— обязательно</span>}
-            </label>
-            <CharCount as="textarea" rows={5} max={1500} warnAt={1300} placeholder="Опишите запрос клиента"
-              className={errors.message ? 'border-red-400 bg-red-50' : ''}
-              value={editing.message || ''}
-              onChange={e => setEditing({ ...editing, message: (e.target as HTMLTextAreaElement).value })} />
-          </div>
-
-          <div ref={listingDropRef} className="relative">
-            <label className="text-xs text-muted-foreground">Привязка к объекту (необязательно)</label>
-            {editing.listing_id ? (
-              <div className="flex items-center justify-between px-3 py-2 border border-brand-blue/40 rounded-lg bg-brand-blue/5 text-sm">
-                <span className="text-brand-blue font-medium truncate">
-                  {listings.find(l => l.id === editing.listing_id)
-                    ? `#${editing.listing_id} ${listings.find(l => l.id === editing.listing_id)?.title}`
-                    : `#${editing.listing_id}`}
-                </span>
-                <button type="button"
-                  onClick={() => { setEditing({ ...editing, listing_id: null }); setListingSearch(''); }}
-                  className="ml-2 shrink-0 text-muted-foreground hover:text-red-500">
-                  <Icon name="X" size={14} />
-                </button>
-              </div>
-            ) : (
-              <div className="relative">
-                <input
-                  value={listingSearch}
-                  onChange={e => { setListingSearch(e.target.value); setListingDropOpen(true); }}
-                  onFocus={() => setListingDropOpen(true)}
-                  placeholder="Поиск объекта по названию или ID..."
-                  className="w-full px-3 py-2 border rounded-lg text-sm pr-8"
-                />
-                <Icon name="Search" size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                {listingDropOpen && listingSearch.length >= 1 && (
-                  <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-border rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                    <button type="button"
-                      className="w-full text-left px-3 py-2 hover:bg-muted text-sm text-muted-foreground"
-                      onMouseDown={() => { setEditing({ ...editing, listing_id: null }); setListingDropOpen(false); setListingSearch(''); }}>
-                      — Без привязки —
-                    </button>
-                    {filteredListings.map(l => (
-                      <button key={l.id} type="button"
-                        className="w-full text-left px-3 py-2 hover:bg-muted text-sm"
-                        onMouseDown={() => { setEditing({ ...editing, listing_id: l.id }); setListingDropOpen(false); setListingSearch(''); }}>
-                        <span className="text-muted-foreground text-xs mr-1">#{l.id}</span>{l.title}
-                      </button>
-                    ))}
-                    {filteredListings.length === 0 && (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">Не найдено</div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label className="text-xs text-muted-foreground">Статус</label>
-            <select className="w-full px-3 py-2 border rounded-lg" value={editing.status || 'new'}
-              onChange={e => setEditing({ ...editing, status: e.target.value })}>
-              {STATUSES.map(s => <option key={s[0]} value={s[0]}>{s[1]}</option>)}
-            </select>
-          </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={!!editing.is_network_tenant}
-              onChange={e => setEditing({ ...editing, is_network_tenant: e.target.checked })} />
-            Сетевой арендатор
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={editing.show_on_main !== false}
-              onChange={e => setEditing({ ...editing, show_on_main: e.target.checked })} />
-            Показывать на главной странице
-          </label>
-
-          <SeoHeadingsBlock
-            generated={generateLeadHeadings(editing)}
-            value={{
-              h1: editing.seo_h1 || undefined,
-              h2: editing.seo_h2 || undefined,
-              h3: editing.seo_h3 || undefined,
-              h4: editing.seo_h4 || undefined,
-              h5: editing.seo_h5 || undefined,
-            }}
-            onChange={(v: Partial<SeoHeadings>) => setEditing({
-              ...editing,
-              seo_h1: v.h1 || null,
-              seo_h2: v.h2 || null,
-              seo_h3: v.h3 || null,
-              seo_h4: v.h4 || null,
-              seo_h5: v.h5 || null,
-            })}
+          <LeadEditLinkSection
+            editing={editing}
+            setEditing={setEditing}
+            listings={listings}
+            listingSearch={listingSearch}
+            setListingSearch={setListingSearch}
+            listingDropOpen={listingDropOpen}
+            setListingDropOpen={setListingDropOpen}
           />
         </div>
         <div className="p-5 border-t border-border flex justify-end gap-3 flex-shrink-0 bg-white rounded-b-2xl">
