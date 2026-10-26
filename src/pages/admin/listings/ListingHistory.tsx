@@ -1,183 +1,10 @@
 import { useEffect, useState } from 'react';
 import { adminApi, getToken } from '@/lib/adminApi';
 import Icon from '@/components/ui/icon';
-import PlatformIcon from '@/components/admin/PlatformIcon';
-
-const STATS_URL = 'https://functions.poehali.dev/1d84bd40-ef8c-4bd3-82c3-af294b1ec0b1';
-
-type ChangeValue = unknown;
-type ChangesMap = Record<string, [ChangeValue, ChangeValue] | { old?: ChangeValue; new?: ChangeValue } | ChangeValue>;
-
-interface HistoryItem {
-  id: number;
-  listing_id: number;
-  user_name: string;
-  action: string;
-  changes: ChangesMap | null;
-  created_at: string;
-}
-
-interface OldStats {
-  total_views: number;
-  views_30d: number;
-  views_7d: number;
-  leads_total: number;
-  leads_30d: number;
-  daily: { stat_date: string; views_count: number; leads_count: number }[];
-}
-
-interface AggRow { event_type: string; source: string; total: number; last_at: string }
-interface HistoryRow { id: number; event_type: string; source: string; count: number; note: string | null; recorded_at: string; user_name: string | null }
-
-interface MultiStats {
-  listing_id: number;
-  views_site: number;
-  aggregated: AggRow[];
-  source_totals: Record<string, number>;
-  event_totals: Record<string, number>;
-  source_labels: Record<string, string>;
-  event_labels: Record<string, string>;
-  history: HistoryRow[];
-}
-
-const ACTION_LABELS: Record<string, { label: string; icon: string; color: string }> = {
-  created: { label: 'Создан', icon: 'Plus', color: 'text-emerald-600 bg-emerald-50' },
-  updated: { label: 'Изменён', icon: 'Pencil', color: 'text-blue-600 bg-blue-50' },
-  archived: { label: 'Архивирован', icon: 'Archive', color: 'text-orange-600 bg-orange-50' },
-  restored: { label: 'Восстановлен', icon: 'RotateCcw', color: 'text-violet-600 bg-violet-50' },
-  photo_added: { label: 'Фото добавлено', icon: 'Image', color: 'text-sky-600 bg-sky-50' },
-  photo_removed: { label: 'Фото удалено', icon: 'ImageOff', color: 'text-red-600 bg-red-50' },
-  price_changed: { label: 'Цена изменена', icon: 'TrendingDown', color: 'text-amber-600 bg-amber-50' },
-  status_changed: { label: 'Статус изменён', icon: 'RefreshCw', color: 'text-violet-600 bg-violet-50' },
-  broker_changed: { label: 'Брокер изменён', icon: 'UserCheck', color: 'text-indigo-600 bg-indigo-50' },
-  shown: { label: 'Показан на сайте', icon: 'Eye', color: 'text-emerald-600 bg-emerald-50' },
-  hidden: { label: 'Скрыт с сайта', icon: 'EyeOff', color: 'text-red-600 bg-red-50' },
-};
-
-const FIELD_LABELS: Record<string, string> = {
-  title: 'Название', description: 'Описание', category: 'Категория', deal: 'Тип сделки',
-  price: 'Цена', area: 'Площадь', address: 'Адрес', real_address: 'Реальный адрес', district: 'Район', city: 'Город',
-  status: 'Статус', owner_name: 'Имя собственника', owner_phone: 'Телефон собственника',
-  owner_phone2: 'Доп. телефон', purpose: 'Назначение', condition: 'Состояние',
-  floor: 'Этаж', total_floors: 'Этажей всего', rooms: 'Комнат',
-  parking: 'Парковка', entrance: 'Вход', access_type: 'Доступ', legal_address_provided: 'Юр. адрес предоставляется',
-  video_url: 'Видео', video_type: 'Тип видео',
-  is_hot: 'Горячее', is_new: 'Новинка', is_exclusive: 'Эксклюзив',
-  is_urgent: 'Срочно', is_visible: 'Видимость на сайте',
-  use_watermark: 'Водяной знак', export_yandex: 'Яндекс',
-  export_avito: 'Авито', export_cian: 'ЦИАН', export_youla: 'Юла', tenant_name: 'Арендатор',
-  monthly_rent: 'Аренда в мес.', yearly_rent: 'Аренда в год', finishing: 'Отделка',
-  ceiling_height: 'Высота потолков', electricity_kw: 'Электричество',
-  utilities: 'Коммунальные', road_line: 'Линия', payback: 'Окупаемость', profit: 'Прибыль',
-  price_per_m2: 'Цена за м²', slug: 'Слаг', seo_title: 'SEO заголовок',
-  seo_description: 'SEO описание', image: 'Фото', images: 'Фотографии', tags: 'Теги',
-  lat: 'Широта', lng: 'Долгота', broker_id: 'Брокер',
-  broker_commission: 'Комиссия брокера', price_unit: 'Единица цены',
-};
-
-const FIELD_FMT: Record<string, (v: unknown) => string> = {
-  price: v => v == null || v === '' ? '—' : `${Number(v).toLocaleString('ru')} ₽`,
-  monthly_rent: v => v == null || v === '' ? '—' : `${Number(v).toLocaleString('ru')} ₽/мес`,
-  yearly_rent: v => v == null || v === '' ? '—' : `${Number(v).toLocaleString('ru')} ₽/год`,
-  profit: v => v == null || v === '' ? '—' : `${Number(v).toLocaleString('ru')} ₽/мес`,
-  price_per_m2: v => v == null || v === '' ? '—' : `${Number(v).toLocaleString('ru')} ₽/м²`,
-  area: v => v == null || v === '' ? '—' : `${v} м²`,
-  is_hot: v => v ? 'Да' : 'Нет',
-  is_new: v => v ? 'Да' : 'Нет',
-  is_exclusive: v => v ? 'Да' : 'Нет',
-  is_urgent: v => v ? 'Да' : 'Нет',
-  is_visible: v => v ? 'Виден' : 'Скрыт',
-  use_watermark: v => v ? 'Вкл' : 'Выкл',
-  export_yandex: v => v ? 'Вкл' : 'Выкл',
-  export_avito: v => v ? 'Вкл' : 'Выкл',
-  export_cian: v => v ? 'Вкл' : 'Выкл',
-  export_youla: v => v ? 'Вкл' : 'Выкл',
-  status: v => ({ active: 'Активен', archived: 'В архиве', draft: 'Черновик', moderation: 'На модерации' } as Record<string, string>)[String(v)] || String(v ?? '—'),
-  deal: v => ({ sale: 'Продажа', rent: 'Аренда', business: 'Бизнес' } as Record<string, string>)[String(v)] || String(v ?? '—'),
-};
-
-const EMPTY = 'Не указано';
-
-const fmtVal = (field: string, val: unknown): string => {
-  const f = FIELD_FMT[field];
-  if (f) {
-    const r = f(val);
-    return r === '—' ? EMPTY : r;
-  }
-  if (val === null || val === undefined || val === '') return EMPTY;
-  if (typeof val === 'boolean' || val === 'true' || val === 'false') return val === true || val === 'true' ? 'Да' : 'Нет';
-  if (typeof val === 'string' && val.length > 80) return val.slice(0, 80) + '…';
-  return String(val);
-};
-
-const extractOldNew = (raw: ChangesMap[string]): { old: ChangeValue; new: ChangeValue } => {
-  if (Array.isArray(raw) && raw.length >= 2) return { old: raw[0], new: raw[1] };
-  if (raw && typeof raw === 'object' && ('old' in raw || 'new' in raw)) {
-    const r = raw as { old?: ChangeValue; new?: ChangeValue };
-    return { old: r.old, new: r.new };
-  }
-  return { old: undefined, new: raw };
-};
-
-const SOURCES = [
-  { value: 'avito', label: 'Авито', icon: 'ShoppingBag', color: 'text-green-600' },
-  { value: 'cian', label: 'ЦИАН', icon: 'Building2', color: 'text-blue-600' },
-  { value: 'yandex', label: 'Яндекс Недвижимость', icon: 'Home', color: 'text-red-500' },
-  { value: 'domclick', label: 'Домклик', icon: 'MousePointer', color: 'text-emerald-600' },
-  { value: 'xml', label: 'XML-выгрузка', icon: 'FileCode', color: 'text-slate-500' },
-  { value: 'other', label: 'Другое', icon: 'Globe', color: 'text-muted-foreground' },
-];
-
-const EVENT_TYPES = [
-  { value: 'view_avito', label: 'Просмотры' },
-  { value: 'call', label: 'Звонки' },
-  { value: 'lead', label: 'Заявки' },
-  { value: 'favorite', label: 'В избранном' },
-  { value: 'manual', label: 'Прочее' },
-];
-
-const EVENT_LABELS_FALLBACK: Record<string, string> = {
-  view_avito: 'Просмотры', view_cian: 'Просмотры', view_yandex: 'Просмотры',
-  view_domclick: 'Просмотры', view_xml: 'Просмотры', view_site: 'Просмотры сайта',
-  view_other: 'Просмотры', call: 'Звонки', lead: 'Заявки',
-  favorite: 'В избранном', manual: 'Прочее', qr_scan: 'Переходы по QR-коду',
-};
-
-const isEmptyChanges = (c: ChangesMap | null) => !c || Object.keys(c).length === 0;
-
-const GROUP_WINDOW_MS = 10 * 60 * 1000;
-
-function groupHistory(items: HistoryItem[]): HistoryItem[] {
-  const visible = items.filter(h => !(h.action === 'updated' && isEmptyChanges(h.changes)));
-  const result: HistoryItem[] = [];
-  for (const h of visible) {
-    const prev = result[result.length - 1];
-    if (
-      prev && prev.action === 'updated' && h.action === 'updated' &&
-      prev.user_name === h.user_name &&
-      Math.abs(new Date(prev.created_at).getTime() - new Date(h.created_at).getTime()) <= GROUP_WINDOW_MS
-    ) {
-      const merged: ChangesMap = { ...(h.changes || {}) };
-      for (const [field, raw] of Object.entries(prev.changes || {})) {
-        if (field in merged) {
-          const older = extractOldNew(merged[field]);
-          const newer = extractOldNew(raw);
-          merged[field] = { old: older.old, new: newer.new };
-        } else {
-          merged[field] = raw;
-        }
-      }
-      result[result.length - 1] = { ...prev, changes: merged };
-    } else {
-      result.push(h);
-    }
-  }
-  return result;
-}
-
-function fmtDt(s: string) {
-  return new Date(s).toLocaleString('ru', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
-}
+import { STATS_URL, HistoryItem, OldStats, MultiStats } from './listingHistoryUtils';
+import { ListingHistorySummaryTab, ListingHistoryPlatformsTab } from './ListingHistoryStatsTabs';
+import ListingHistoryAddTab from './ListingHistoryAddTab';
+import ListingHistoryChangesTab from './ListingHistoryChangesTab';
 
 interface Props {
   listingId: number;
@@ -294,235 +121,35 @@ export default function ListingHistory({ listingId, listingTitle, onClose }: Pro
           {loading ? (
             <div className="text-center text-muted-foreground py-8">Загрузка...</div>
           ) : tab === 'stats' ? (
-            <div className="space-y-4">
-              {/* Сводные карточки */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <StatCard label="Просмотров всего" value={totalViews} icon="Eye" color="from-brand-blue to-indigo-600" />
-                <StatCard label="Наш сайт" value={multiStats?.views_site || oldStats?.total_views || 0} icon="Monitor" color="from-sky-500 to-sky-700" />
-                <StatCard label="Звонков" value={totalCalls} icon="Phone" color="from-emerald-500 to-emerald-700" />
-                <StatCard label="Заявок" value={totalLeads} icon="Inbox" color="from-brand-orange to-orange-600" />
-              </div>
-
-              {/* Просмотры по дням (старая статистика сайта) */}
-              {oldStats?.daily && oldStats.daily.length > 0 && (
-                <div className="bg-muted/30 rounded-xl p-3">
-                  <div className="text-xs font-semibold text-muted-foreground mb-2">Просмотры на сайте по дням</div>
-                  <div className="space-y-1 max-h-40 overflow-y-auto">
-                    {[...oldStats.daily].reverse().map(d => (
-                      <div key={d.stat_date} className="flex items-center justify-between text-xs py-1 border-b border-border last:border-0">
-                        <span className="text-muted-foreground">{d.stat_date}</span>
-                        <div className="flex gap-3">
-                          <span><Icon name="Eye" size={11} className="inline mr-0.5" />{d.views_count}</span>
-                          <span><Icon name="Inbox" size={11} className="inline mr-0.5" />{d.leads_count}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {totalViews === 0 && totalLeads === 0 && (
-                <div className="text-center text-muted-foreground text-sm py-6">
-                  Пока нет данных.<br />
-                  <span className="text-xs">Просмотры на сайте накапливаются автоматически. Данные с площадок вводите вручную.</span>
-                </div>
-              )}
-            </div>
-
+            <ListingHistorySummaryTab
+              oldStats={oldStats}
+              multiStats={multiStats}
+              totalViews={totalViews}
+              totalCalls={totalCalls}
+              totalLeads={totalLeads}
+            />
           ) : tab === 'platforms' ? (
-            <div className="space-y-3">
-              {/* Наш сайт */}
-              <div className="border border-brand-blue/20 rounded-xl p-4 bg-brand-blue/[0.03]">
-                <div className="flex items-center gap-2 mb-3">
-                  <Icon name="Monitor" size={16} className="text-brand-blue" />
-                  <span className="font-semibold text-sm">Наш сайт</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <MiniStat label="Просмотры" value={multiStats?.views_site || oldStats?.total_views || 0} />
-                  <MiniStat label="Заявки" value={oldStats?.leads_total || 0} />
-                </div>
-              </div>
-
-              {/* Внешние площадки */}
-              {SOURCES.map(src => {
-                const data = bySource[src.value] || {};
-                const hasData = Object.values(data).some(v => v > 0);
-                return (
-                  <div key={src.value} className={`border rounded-xl p-4 ${hasData ? 'border-border' : 'border-dashed border-border opacity-60'}`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <PlatformIcon platform={src.value} icon={src.icon} size={15} className={src.color} />
-                        <span className="font-semibold text-sm">{src.label}</span>
-                      </div>
-                      {!hasData && <span className="text-[11px] text-muted-foreground">нет данных</span>}
-                    </div>
-                    {hasData && (
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        {Object.entries(data).map(([ev, val]) => (
-                          <MiniStat key={ev} label={multiStats?.event_labels?.[ev] || EVENT_LABELS_FALLBACK[ev] || ev} value={val} />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-
-              {Object.keys(bySource).length === 0 && (
-                <div className="text-center text-sm text-muted-foreground py-6">
-                  Данных с площадок нет.<br />
-                  <span className="text-xs">Добавьте их вручную на вкладке «Добавить данные»</span>
-                </div>
-              )}
-            </div>
-
+            <ListingHistoryPlatformsTab oldStats={oldStats} multiStats={multiStats} bySource={bySource} />
           ) : tab === 'add' ? (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Вручную вносите показатели с Авито, ЦИАН, Яндекс Недвижимости и других площадок.
-                Эти данные отобразятся в сводке и по площадкам.
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground block mb-1">Площадка</label>
-                  <select className="w-full px-3 py-2 border rounded-lg text-sm"
-                    value={addSource} onChange={e => setAddSource(e.target.value)}>
-                    {SOURCES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground block mb-1">Тип события</label>
-                  <select className="w-full px-3 py-2 border rounded-lg text-sm"
-                    value={addEvent} onChange={e => setAddEvent(e.target.value)}>
-                    {EVENT_TYPES.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground block mb-1">Количество</label>
-                <input type="number" min="1" className="w-full px-3 py-2 border rounded-lg text-sm"
-                  value={addCount} onChange={e => setAddCount(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground block mb-1">Комментарий (необязательно)</label>
-                <input className="w-full px-3 py-2 border rounded-lg text-sm"
-                  placeholder="Например: данные за май 2026"
-                  value={addNote} onChange={e => setAddNote(e.target.value)} />
-              </div>
-              <button onClick={handleAddStat} disabled={addLoading}
-                className="w-full btn-blue text-white py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50">
-                {addLoading ? <><Icon name="Loader2" size={15} className="animate-spin" /> Сохранение...</> : <><Icon name="Plus" size={15} /> Добавить запись</>}
-              </button>
-              {addOk && (
-                <div className="flex items-center gap-2 text-sm text-emerald-600 bg-emerald-50 rounded-lg px-3 py-2">
-                  <Icon name="CheckCircle2" size={15} />
-                  Данные сохранены
-                </div>
-              )}
-
-              {/* История ручных записей */}
-              {multiStats?.history && multiStats.history.length > 0 && (
-                <div>
-                  <div className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Последние записи</div>
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                    {multiStats.history.filter(h => h.event_type !== 'view_site').slice(0, 20).map(h => (
-                      <div key={h.id} className="flex items-center justify-between text-xs px-3 py-2 rounded-lg bg-muted/40">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-semibold">{multiStats.source_labels?.[h.source] || SOURCES.find(s => s.value === h.source)?.label || h.source}</span>
-                          <span className="text-muted-foreground">{multiStats.event_labels?.[h.event_type] || EVENT_LABELS_FALLBACK[h.event_type] || h.event_type}</span>
-                          {h.note && <span className="text-muted-foreground truncate">— {h.note}</span>}
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0 ml-2">
-                          <span className="font-700 text-brand-blue">+{h.count}</span>
-                          <span className="text-muted-foreground">{fmtDt(h.recorded_at)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
+            <ListingHistoryAddTab
+              multiStats={multiStats}
+              addSource={addSource}
+              setAddSource={setAddSource}
+              addEvent={addEvent}
+              setAddEvent={setAddEvent}
+              addCount={addCount}
+              setAddCount={setAddCount}
+              addNote={addNote}
+              setAddNote={setAddNote}
+              addLoading={addLoading}
+              addOk={addOk}
+              handleAddStat={handleAddStat}
+            />
           ) : (
-            // История изменений
-            <div className="space-y-2">
-              {groupHistory(history).length === 0 ? (
-                <div className="text-center text-muted-foreground text-sm py-8">История пуста</div>
-              ) : (
-                groupHistory(history).map(h => {
-                  const meta = ACTION_LABELS[h.action] || { label: h.action, icon: 'Activity', color: 'text-slate-600 bg-slate-50' };
-                  return (
-                    <div key={h.id} className="flex gap-3 p-3 rounded-xl hover:bg-muted/30">
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${meta.color}`}>
-                        <Icon name={meta.icon} size={13} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-semibold">{meta.label}</span>
-                          <span className="text-xs text-muted-foreground">{h.user_name}</span>
-                          <span className="text-xs text-muted-foreground ml-auto">{fmtDt(h.created_at)}</span>
-                        </div>
-                        {h.changes && Object.keys(h.changes).length > 0 && (
-                          <div className="mt-1.5 space-y-1">
-                            {Object.entries(h.changes).slice(0, 10).map(([field, raw]) => {
-                              const { old: oldV, new: newV } = extractOldNew(raw);
-                              const oldStr = fmtVal(field, oldV);
-                              const newStr = fmtVal(field, newV);
-                              const isDescr = field === 'description';
-                              const isImages = field === 'images';
-                              return (
-                                <div key={field} className="text-xs flex items-start gap-1.5 flex-wrap">
-                                  <span className="font-semibold text-foreground">{FIELD_LABELS[field] || field}:</span>{' '}
-                                  {isDescr || isImages ? (
-                                    <span className="text-muted-foreground italic">
-                                      {isImages
-                                        ? `обновлены (было ${String(oldV ?? '').split(/[|,]/).filter(Boolean).length} → стало ${String(newV ?? '').split(/[|,]/).filter(Boolean).length} фото)`
-                                        : `описание изменено (было ${String(oldV ?? '').length} симв. → стало ${String(newV ?? '').length} симв.)`}
-                                    </span>
-                                  ) : (
-                                    <>
-                                      <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-700 line-through opacity-80 break-all">{oldStr}</span>
-                                      <Icon name="ArrowRight" size={11} className="text-muted-foreground mt-0.5" />
-                                      <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium break-all">{newStr}</span>
-                                    </>
-                                  )}
-                                </div>
-                              );
-                            })}
-                            {Object.keys(h.changes).length > 10 && (
-                              <div className="text-[11px] text-muted-foreground italic">
-                                и ещё {Object.keys(h.changes).length - 10} изменений…
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+            <ListingHistoryChangesTab history={history} />
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function StatCard({ label, value, icon, color }: { label: string; value: number; icon: string; color: string }) {
-  return (
-    <div className={`rounded-xl p-3 bg-gradient-to-br ${color} text-white`}>
-      <Icon name={icon} size={16} className="mb-1.5 opacity-80" />
-      <div className="text-2xl font-display font-700">{value}</div>
-      <div className="text-[11px] opacity-90 mt-0.5 leading-tight">{label}</div>
-    </div>
-  );
-}
-
-function MiniStat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="bg-muted/40 rounded-lg px-3 py-2">
-      <div className="text-[10px] text-muted-foreground leading-none">{label}</div>
-      <div className="font-display font-700 text-base mt-0.5">{value}</div>
     </div>
   );
 }
