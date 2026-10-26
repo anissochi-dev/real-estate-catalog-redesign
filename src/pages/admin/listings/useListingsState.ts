@@ -3,28 +3,19 @@ import { adminApi, aiApi } from '@/lib/adminApi';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
-import { Listing, City, Purpose, LandVri, empty, detectVideoType, splitImages, CATS, ROAD_LINES } from './types';
+import { Listing, City, Purpose, LandVri, empty, detectVideoType, splitImages } from './types';
+import { loadDraft, clearDraft, useDraftAutosave } from './listingsDraft';
+import { buildTagsContext, buildSeoContext, parseTags, parseSeoTitle, buildSeoHeadings } from './listingAiContext';
+import { useListingAi } from './useListingAi';
+import { useListingsBulk } from './useListingsBulk';
+
+export { DRAFT_KEY, loadDraft, saveDraft, clearDraft } from './listingsDraft';
 
 function toThumbUrl(src: string): string {
   if (!src || !src.includes('cdn.poehali.dev')) return src;
   if (!src.includes('/photos/')) return src;
   if (src.includes('_thumb.webp')) return src;
   return src.replace(/(_wm)?\.(webp|jpe?g|png)$/i, '_thumb.webp');
-}
-
-export const DRAFT_KEY = 'biznest_listing_draft';
-
-export function loadDraft(): { editing: Partial<Listing>; photos: string[] } | null {
-  try {
-    const raw = localStorage.getItem(DRAFT_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
-export function saveDraft(editing: Partial<Listing>, photos: string[]) {
-  try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ editing, photos })); } catch { /* ignore */ }
-}
-export function clearDraft() {
-  try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
 }
 
 export type StatusFilter = 'active' | 'archived' | 'hidden' | 'all' | 'moderation';
@@ -49,20 +40,13 @@ export function useListingsState() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [historyListing, setHistoryListing] = useState<Listing | null>(null);
   const [photoPickListing, setPhotoPickListing] = useState<Listing | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiTitleLoading, setAiTitleLoading] = useState(false);
-  const [aiTagsLoading, setAiTagsLoading] = useState(false);
-  const [aiSeoLoading, setAiSeoLoading] = useState(false);
-  const [aiAllLoading, setAiAllLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<number>>(new Set());
-  const [bulkLoading, setBulkLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('');
   const [hasDraft, setHasDraft] = useState(() => !!loadDraft());
-  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRef = useRef('');
 
@@ -147,15 +131,10 @@ export function useListingsState() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => load(true, 'active', isBroker ? true : false), []);
 
-  useEffect(() => {
-    if (!editing || editing.id) return;
-    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
-    draftTimerRef.current = setTimeout(() => {
-      saveDraft(editing, photos);
-      setHasDraft(true);
-    }, 1500);
-    return () => { if (draftTimerRef.current) clearTimeout(draftTimerRef.current); };
-  }, [editing, photos]);
+  useDraftAutosave(editing, photos, setHasDraft);
+
+  const ai = useListingAi(editing, setEditing);
+  const bulk = useListingsBulk(selected, setSelected, () => load(true));
 
   const switchTab = (tab: StatusFilter) => {
     setStatusFilter(tab);
@@ -278,31 +257,6 @@ export function useListingsState() {
     setEditing(prev => prev ? { ...prev, egrn_objects: objects } : prev);
   };
 
-  // Генерация H1-H5 из данных объекта (без ИИ, по шаблону)
-  const _buildHeadings = (e: Partial<Listing>) => {
-    const DEAL: Record<string, string> = { sale: 'Продажа', rent: 'Аренда', business: 'Готовый бизнес' };
-    const TYPE: Record<string, string> = {
-      office: 'офиса', retail: 'торгового помещения', warehouse: 'склада',
-      restaurant: 'помещения под общепит', hotel: 'гостиницы', business: 'готового бизнеса',
-      gab: 'готового арендного бизнеса', production: 'производственного помещения',
-      land: 'земельного участка', building: 'здания', free_purpose: 'помещения',
-      car_service: 'помещения под автосервис',
-    };
-    const city = e.city || 'Краснодар';
-    const deal = DEAL[e.deal || ''] || 'Аренда';
-    const type = TYPE[e.category || ''] || 'объекта';
-    const area = e.area ? `${e.area} м²` : '';
-    const addr = e.district || e.address || city;
-    const price = e.price ? `${(e.price / 1_000_000).toFixed(e.price >= 10_000_000 ? 0 : 1)} млн ₽` : '';
-    return {
-      h1: e.title || `${deal} ${type} в ${city}`,
-      h2: [deal, type, area, `в ${city}`].filter(Boolean).join(' '),
-      h3: addr ? `${deal} ${type} — ${addr}` : `${deal} ${type} в ${city}`,
-      h4: [area, price].filter(Boolean).join(' · ') || `Параметры ${type}`,
-      h5: price ? `Стоимость: ${price}` : `Цена по запросу — ${city}`,
-    };
-  };
-
   const save = async (override?: Partial<Listing>) => {
     if (!editing || saving) return;
     setSaving(true);
@@ -320,27 +274,22 @@ export function useListingsState() {
 
     // При создании нового объекта — автогенерация SEO, тегов и H1-H5 через ИИ
     if (isNew) {
-      setAiAllLoading(true);
+      ai.setAiAllLoading(true);
       try {
-        const dealLabel = merged.deal === 'rent' ? 'аренда' : merged.deal === 'business' ? 'готовый бизнес' : 'продажа';
-        const tagsCtx = `Название: ${merged.title}, категория: ${merged.category}, назначение: ${(merged as Record<string, unknown>).purpose || ''}, состояние: ${merged.condition || ''}, парковка: ${merged.parking || ''}, описание: ${merged.description || ''}`;
-        const seoCtx = `Название: ${merged.title || ''}. Тип: ${merged.category || ''}. Сделка: ${dealLabel}. Город: ${merged.city || 'Краснодар'}. Район: ${merged.district || ''}. Адрес: ${merged.address || ''}. Площадь: ${merged.area || 0} м². Цена: ${merged.price || 0} ₽. Описание: ${merged.description || ''}`;
-
+        const description = merged.description || '';
         const [tagsRes, seoRes] = await Promise.all([
-          aiApi.ask('auto_tags', tagsCtx).catch(() => ({ text: '' })),
-          aiApi.ask('seo_listing', seoCtx).catch(() => ({ text: '' })),
+          aiApi.ask('auto_tags', buildTagsContext(merged, description)).catch(() => ({ text: '' })),
+          aiApi.ask('seo_listing', buildSeoContext(merged, description)).catch(() => ({ text: '' })),
         ]);
 
         // Теги
-        data.tags = (tagsRes.text || '').replace(/\n/g, ',').replace(/\s+,/g, ',');
+        data.tags = parseTags(tagsRes.text);
 
         // SEO title
-        const txt = seoRes.text || '';
-        const titleMatch = txt.match(/TITLE:\s*(.+)/i);
-        data.seo_title = (titleMatch ? titleMatch[1] : '').trim().replace(/^["«]|["»]$/g, '').slice(0, 70);
+        data.seo_title = parseSeoTitle(seoRes.text).slice(0, 70);
 
         // H1-H5 по шаблону
-        const h = _buildHeadings(merged);
+        const h = buildSeoHeadings(merged);
         data.seo_h1 = h.h1;
         data.seo_h2 = h.h2;
         data.seo_h3 = h.h3;
@@ -349,7 +298,7 @@ export function useListingsState() {
       } catch {
         // Не блокируем сохранение если ИИ недоступен
       } finally {
-        setAiAllLoading(false);
+        ai.setAiAllLoading(false);
       }
     }
 
@@ -387,241 +336,6 @@ export function useListingsState() {
     load(true);
   };
 
-  const runBulk = async (op: string, value?: unknown) => {
-    const ids = Array.from(selected);
-    if (!ids.length) return;
-    setBulkLoading(true);
-    try {
-      await adminApi.bulkListings(ids, op, value);
-      setSelected(new Set());
-      load(true);
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Ошибка');
-    } finally {
-      setBulkLoading(false);
-    }
-  };
-
-  const bulkDelete = async () => {
-    const ids = Array.from(selected);
-    if (!ids.length) return;
-    if (!confirm(`ПОЛНОСТЬЮ УДАЛИТЬ ${ids.length} объект(ов) без возможности восстановления?`)) return;
-    setBulkLoading(true);
-    try {
-      await adminApi.bulkListings(ids, 'delete');
-      setSelected(new Set());
-      load(true);
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Ошибка');
-    } finally {
-      setBulkLoading(false);
-    }
-  };
-
-  const toggleSelect = (id: number) => {
-    setSelected(prev => {
-      const s = new Set(prev);
-      if (s.has(id)) { s.delete(id); } else { s.add(id); }
-      return s;
-    });
-  };
-
-  // Собирает все заполненные поля объекта в текст для ИИ.
-  // Пустые поля пропускаются. Цену для описания НЕ передаём (по требованию).
-  const buildListingContext = (e: Partial<Listing>, includePrice: boolean): string => {
-    // Тип сделки: 'business' («готовый бизнес») в проекте неактуален — не выбирается
-    // ни в одном интерфейсе (только sale/rent), поэтому явно не обрабатывается,
-    // как и раньше по умолчанию попадает в ветку «Продажа».
-    const dealLabel = e.deal === 'rent' ? 'Аренда (сдаю, сдаётся)' : 'Продажа (продам, продаю)';
-    const parkingLabel: Record<string, string> = { none: 'нет', street: 'на улице', building: 'в здании' };
-    // Категорию передаём человекочитаемым русским названием (по словарю CATS),
-    // а не техническим кодом из БД — иначе код (например "free_purpose", "gab")
-    // может дословно попасть в текст, сгенерированный ИИ.
-    const categoryLabel = CATS.find(c => c[0] === e.category)?.[1] || e.category;
-    const parts: string[] = [];
-    if (e.deal) parts.push(`Тип сделки: ${dealLabel}`);
-    if (e.category) parts.push(`Категория: ${categoryLabel}`);
-    if (e.city) parts.push(`Город: ${e.city}`);
-    if (e.district) parts.push(`Район: ${e.district}`);
-    if (e.address) parts.push(`Адрес: ${e.address}`);
-    if (e.area) parts.push(`Площадь: ${e.area} м²`);
-    if (e.land_area) parts.push(`Площадь участка: ${e.land_area} сот.`);
-    if (e.floor) parts.push(`Этаж: ${e.floor}${e.total_floors ? ` из ${e.total_floors}` : ''}`);
-    if (e.ceiling_height) parts.push(`Высота потолков: ${e.ceiling_height} м`);
-    if (e.condition) parts.push(`Состояние: ${e.condition}`);
-    if (e.finishing) parts.push(`Отделка: ${e.finishing}`);
-    if (e.electricity_kw) parts.push(`Электричество: ${e.electricity_kw} кВт`);
-    if (e.utilities) parts.push(`Коммуникации: ${e.utilities}`);
-    if (e.parking) parts.push(`Парковка: ${parkingLabel[e.parking] || e.parking}`);
-    if (e.road_line) parts.push(`Линия расположения: ${ROAD_LINES.find(r => r[0] === e.road_line)?.[1] || e.road_line}`);
-    if (e.purpose) parts.push(`Назначение (направления использования): ${e.purpose}`);
-    // Доходность — важно для аренды/готового бизнеса
-    if (e.monthly_rent) parts.push(`Доход в месяц: ${e.monthly_rent} ₽`);
-    if (e.yearly_rent) parts.push(`Доход в год: ${e.yearly_rent} ₽`);
-    if (e.profit) parts.push(`Чистая прибыль: ${e.profit} ₽`);
-    if (e.payback) parts.push(`Окупаемость: ${e.payback} мес.`);
-    if (e.deposit_amount) parts.push(`Залог: ${e.deposit_amount} ₽`);
-    // Действующий арендатор — вместе с monthly_rent/yearly_rent триггерит блок
-    // «Финансовые перспективы и доходность» в промпте generate-описания
-    if (e.tenant_name) parts.push(`Действующий арендатор: ${e.tenant_name}`);
-    if (e.rented_out) parts.push(`Помещение уже сдано в аренду`);
-    if (e.contract_end_date) parts.push(`Договор аренды действует до: ${e.contract_end_date}`);
-    if (includePrice && e.price) parts.push(`Цена: ${e.price} ₽`);
-    if (e.ai_notes) parts.push(`Особые пожелания к описанию (обязательно учесть): ${e.ai_notes}`);
-    return parts.join('; ');
-  };
-
-  // Проверка обязательных полей перед генерацией ИИ
-  const checkRequiredForAi = (e: Partial<Listing>): string | null => {
-    const missing: string[] = [];
-    if (!e.deal) missing.push('Тип сделки');
-    if (!e.category) missing.push('Категория объекта');
-    if (!e.address && !e.district) missing.push('Адрес или район');
-    if (!e.area) missing.push('Площадь');
-    if (missing.length > 0) {
-      return `Для генерации ИИ необходимо заполнить:\n• ${missing.join('\n• ')}`;
-    }
-    return null;
-  };
-
-  const aiDescribe = async () => {
-    if (!editing) return;
-    const err = checkRequiredForAi(editing);
-    if (err) { alert(err); return; }
-    setAiLoading(true);
-    try {
-      // Цену в описание НЕ передаём — по требованию её не должно быть в тексте
-      const prompt = buildListingContext(editing, false);
-      const r = await aiApi.ask('describe', prompt);
-      setEditing({ ...editing, description: (r.text || '').slice(0, 3000) });
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Ошибка ИИ');
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  const aiTitle = async () => {
-    if (!editing) return;
-    const err = checkRequiredForAi(editing);
-    if (err) { alert(err); return; }
-    setAiTitleLoading(true);
-    try {
-      const prompt = buildListingContext(editing, false);
-
-      const normalize = (raw: string): string => {
-        let title = (raw || '').split('\n')[0].trim().replace(/^["«]|["»]$/g, '');
-        // Запятые в заголовке запрещены — если ИИ всё же вставил их, убираем
-        // (запятую и один пробел после неё заменяем одним пробелом), лишние пробелы схлопываем.
-        title = title.replace(/\s*,\s*/g, ' ').replace(/\s{2,}/g, ' ').trim();
-        // Если длиннее 70 — обрезаем ТОЛЬКО по границе слова (никогда не разрубаем слово).
-        if (title.length > 70) {
-          const cut = title.slice(0, 70);
-          const lastSpace = cut.lastIndexOf(' ');
-          title = (lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trim();
-        }
-        return title;
-      };
-
-      const r = await aiApi.ask('title', prompt);
-      const title = normalize(r.text || '');
-      setEditing({ ...editing, title });
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Ошибка ИИ');
-    } finally {
-      setAiTitleLoading(false);
-    }
-  };
-
-  const generateTags = async () => {
-    if (!editing) return;
-    setAiTagsLoading(true);
-    try {
-      const ctx = `Название: ${editing.title}, категория: ${editing.category}, назначение: ${editing.purpose || ''}, состояние: ${editing.condition || ''}, парковка: ${editing.parking || ''}, описание: ${editing.description || ''}`;
-      const r = await aiApi.ask('auto_tags', ctx);
-      setEditing({ ...editing, tags: r.text.replace(/\n/g, ',').replace(/\s+,/g, ',') });
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Ошибка');
-    } finally {
-      setAiTagsLoading(false);
-    }
-  };
-
-  const generateSeo = async () => {
-    if (!editing) return;
-    setAiSeoLoading(true);
-    try {
-      const dealLabel = editing.deal === 'rent' ? 'аренда' : editing.deal === 'business' ? 'готовый бизнес' : 'продажа';
-      const ctx = `Название: ${editing.title || ''}. Тип: ${editing.category || ''}. Сделка: ${dealLabel}. Город: ${editing.city || 'Краснодар'}. Район: ${editing.district || ''}. Адрес: ${editing.address || ''}. Площадь: ${editing.area || 0} м². Цена: ${editing.price || 0} ₽. Описание: ${editing.description || ''}`;
-      const r = await aiApi.ask('seo_listing', ctx);
-      const txt = r.text || '';
-      const titleMatch = txt.match(/TITLE:\s*(.+)/i);
-      const seo_title = (titleMatch ? titleMatch[1] : '').trim().replace(/^["«]|["»]$/g, '');
-      setEditing({ ...editing, seo_title });
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Ошибка');
-    } finally {
-      setAiSeoLoading(false);
-    }
-  };
-
-  const generateAll = async () => {
-    if (!editing) return;
-    setAiAllLoading(true);
-    try {
-      const dealLabel = editing.deal === 'rent' ? 'аренда' : editing.deal === 'business' ? 'готовый бизнес' : 'продажа';
-      const descPrompt = buildListingContext(editing, false);
-      const descRes = await aiApi.ask('describe', descPrompt);
-      const description = (descRes.text || editing.description || '').slice(0, 3000);
-      const tagsCtx = `Название: ${editing.title}, категория: ${editing.category}, назначение: ${editing.purpose || ''}, состояние: ${editing.condition || ''}, парковка: ${editing.parking || ''}, описание: ${description}`;
-      const tagsRes = await aiApi.ask('auto_tags', tagsCtx);
-      const tags = (tagsRes.text || '').replace(/\n/g, ',').replace(/\s+,/g, ',');
-      const seoCtx = `Название: ${editing.title || ''}. Тип: ${editing.category || ''}. Сделка: ${dealLabel}. Город: ${editing.city || 'Краснодар'}. Район: ${editing.district || ''}. Адрес: ${editing.address || ''}. Площадь: ${editing.area || 0} м². Цена: ${editing.price || 0} ₽. Описание: ${description}`;
-      const seoRes = await aiApi.ask('seo_listing', seoCtx);
-      const txt = seoRes.text || '';
-      const titleMatch = txt.match(/TITLE:\s*(.+)/i);
-      const seo_title = (titleMatch ? titleMatch[1] : '').trim().replace(/^["«]|["»]$/g, '');
-      setEditing({ ...editing, description, tags, seo_title });
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Ошибка ИИ');
-    } finally {
-      setAiAllLoading(false);
-    }
-  };
-
-  const [aiImproveLoading, setAiImproveLoading] = useState(false);
-
-  const improveWithAi = async (fields: string[]) => {
-    if (!editing?.id) return;
-    setAiImproveLoading(true);
-    try {
-      let tok = '';
-      try { tok = localStorage.getItem('biznest_token') || ''; } catch { /* ignore */ }
-      const SEO_BASE = 'https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d';
-      const url = tok ? `${SEO_BASE}?auth_token=${encodeURIComponent(tok)}` : SEO_BASE;
-      const r = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(tok ? { 'X-Auth-Token': tok } : {}) },
-        // dry_run: true — ИИ только генерирует текст и возвращает его в ответе,
-        // но НЕ пишет в базу данных. Результат подставляется в форму, а фактически
-        // сохраняется только по нажатию «Сохранить», как и все остальные поля формы.
-        body: JSON.stringify({ action: 'improve_listing', listing_id: editing.id, fields, auth_token: tok, dry_run: true }),
-      });
-      const data = await r.json();
-      if (data.error) { toast.error(data.error); return; }
-      const patch: Partial<typeof editing> = {};
-      if (data.seo_title) patch.seo_title = data.seo_title;
-      if (data.seo_description) patch.seo_description = data.seo_description;
-      if (data.faq) patch.faq = data.faq;
-      setEditing({ ...editing, ...patch });
-      toast.success(`ИИ улучшил: ${fields.join(', ')}. Не забудьте нажать «Сохранить»`);
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Ошибка ИИ');
-    } finally {
-      setAiImproveLoading(false);
-    }
-  };
-
   return {
     // data
     items, filtered, cities, purposes, landVri, loading, total, counts,
@@ -631,10 +345,11 @@ export function useListingsState() {
     historyListing, setHistoryListing,
     photoPickListing, setPhotoPickListing,
     // ai
-    aiLoading, aiTitleLoading, aiTagsLoading, aiSeoLoading, aiAllLoading, aiImproveLoading,
+    aiLoading: ai.aiLoading, aiTitleLoading: ai.aiTitleLoading, aiTagsLoading: ai.aiTagsLoading,
+    aiSeoLoading: ai.aiSeoLoading, aiAllLoading: ai.aiAllLoading, aiImproveLoading: ai.aiImproveLoading,
     saving,
     // bulk
-    selected, setSelected, bulkLoading,
+    selected, setSelected, bulkLoading: bulk.bulkLoading,
     // filters
     statusFilter, setStatusFilter, search, setSearch: setSearchDebounced, catFilter, setCatFilter,
     // draft
@@ -644,8 +359,10 @@ export function useListingsState() {
     canCreate: !['office_manager', 'client'].includes(user?.role || ''),
     myOnly, toggleMyOnly,
     // actions
-    load, loadMore, switchTab, openEdit, copyAsNew, save, archive, runBulk, bulkDelete, toggleSelect,
-    aiDescribe, aiTitle, generateTags, generateSeo, generateAll, improveWithAi,
+    load, loadMore, switchTab, openEdit, copyAsNew, save, archive,
+    runBulk: bulk.runBulk, bulkDelete: bulk.bulkDelete, toggleSelect: bulk.toggleSelect,
+    aiDescribe: ai.aiDescribe, aiTitle: ai.aiTitle, generateTags: ai.generateTags,
+    generateSeo: ai.generateSeo, generateAll: ai.generateAll, improveWithAi: ai.improveWithAi,
     setEgrnObjects,
   };
 }
