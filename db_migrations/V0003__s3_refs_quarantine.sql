@@ -1,0 +1,2 @@
+ALTER TABLE t_p71821556_real_estate_catalog_.s3_photo_refs ADD COLUMN IF NOT EXISTS orphan_since TIMESTAMPTZ NULL;
+ALTER TABLE t_p71821556_real_estate_catalog_.s3_orphans_log ADD COLUMN IF NOT EXISTS quarantine_s3 INTEGER NULL;

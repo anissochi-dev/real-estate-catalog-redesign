@@ -4001,24 +4001,25 @@ def _attach_photos_to_listing(cur, listing_id: int, images_str: str, image_str: 
     aws_key = os.environ.get('AWS_ACCESS_KEY_ID', '')
     cdn_prefix = f'https://cdn.poehali.dev/projects/{aws_key}/bucket/'
     all_urls = _re.split(r'[|,]', (images_str or '') + '|' + (image_str or ''))
-    keys = []
+    # Отмечаем ВСЕ версии фото (оригинал, водяная, средняя, миниатюра) — иначе
+    # оригиналы и копии числились «ничейными» и попадали под очистку хранилища.
+    bases = set()
     for url in all_urls:
         url = url.strip()
         if url.startswith(cdn_prefix):
             key = url[len(cdn_prefix):]
-            if key.startswith('photos/'):
-                keys.append(key)
-    if not keys:
+            m = _re.fullmatch(r'photos/([A-Za-z0-9_-]+?)(?:_wm|_thumb|_medium)?\.[A-Za-z0-9]+', key)
+            if m:
+                bases.add(m.group(1))
+    if not bases:
         return
-    escaped = [k for k in keys if "'" not in k]
-    if not escaped:
-        return
-    keys_sql = ', '.join(f"'{k}'" for k in escaped)
+    regex = '^photos/(' + '|'.join(sorted(bases)) + r')(_wm|_thumb|_medium)?\.[A-Za-z0-9]+$'
     try:
         cur.execute(
             f"UPDATE {SCHEMA}.s3_photo_refs "
-            f"SET is_orphan = FALSE, listing_id = {int(listing_id)}, attached_at = NOW() "
-            f"WHERE s3_key IN ({keys_sql})"
+            f"SET is_orphan = FALSE, orphan_since = NULL, listing_id = {int(listing_id)}, "
+            f"attached_at = COALESCE(attached_at, NOW()) "
+            f"WHERE s3_key ~ '{regex}'"
         )
     except Exception as e:
         print(f'[admin] _attach_photos_to_listing error: {e}')

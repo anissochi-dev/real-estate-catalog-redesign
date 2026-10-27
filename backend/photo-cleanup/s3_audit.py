@@ -50,35 +50,34 @@ def handler(event: dict, context) -> dict:
             return _err(403, 'Только для администратора')
 
         with conn.cursor() as cur:
-            # Статистика из s3_photo_refs
             cur.execute(f"""
                 SELECT
-                    COUNT(*) as total_tracked,
-                    COUNT(CASE WHEN is_orphan = FALSE THEN 1 END) as attached,
-                    COUNT(CASE WHEN is_orphan = TRUE THEN 1 END) as orphan_total,
-                    COUNT(CASE WHEN is_orphan = TRUE AND uploaded_at < NOW() - INTERVAL '24 hours' THEN 1 END) as orphan_ready,
-                    COUNT(CASE WHEN is_orphan = TRUE AND uploaded_at >= NOW() - INTERVAL '24 hours' THEN 1 END) as orphan_fresh
+                    COUNT(*) AS total_tracked,
+                    COUNT(*) FILTER (WHERE is_orphan = FALSE) AS attached,
+                    COUNT(*) FILTER (WHERE orphan_since IS NOT NULL AND orphan_since >= NOW() - INTERVAL '7 days') AS in_quarantine,
+                    COUNT(*) FILTER (WHERE orphan_since IS NOT NULL AND orphan_since < NOW() - INTERVAL '7 days') AS ready_to_delete,
+                    COUNT(*) FILTER (WHERE is_orphan = TRUE AND orphan_since IS NULL) AS unchecked,
+                    MIN(orphan_since + INTERVAL '7 days') FILTER (WHERE orphan_since IS NOT NULL) AS next_delete_at
                 FROM {SCHEMA}.s3_photo_refs
             """)
             ref_cols = [d[0] for d in cur.description]
             photo_refs = dict(zip(ref_cols, cur.fetchone() or []))
 
-            # Свежие орфаны (топ-5)
             cur.execute(f"""
-                SELECT s3_key, cdn_url, uploaded_at
+                SELECT s3_key, cdn_url, orphan_since
                 FROM {SCHEMA}.s3_photo_refs
-                WHERE is_orphan = TRUE
-                ORDER BY uploaded_at DESC LIMIT 5
+                WHERE orphan_since IS NOT NULL
+                ORDER BY orphan_since LIMIT 5
             """)
-            fresh_orphans = [
-                {'s3_key': r[0], 'cdn_url': r[1], 'uploaded_at': str(r[2])}
+            quarantine_sample = [
+                {'s3_key': r[0], 'cdn_url': r[1], 'orphan_since': str(r[2])}
                 for r in cur.fetchall()
             ]
 
             # История прогонов очистки
             cur.execute(f"""
-                SELECT run_at, total_s3, used_s3, orphan_s3, removed_s3,
-                       orphan_size_mb, removed_size_mb, status, error_msg
+                SELECT run_at, total_s3, used_s3, orphan_s3, removed_s3, quarantine_s3,
+                       status, error_msg
                 FROM {SCHEMA}.s3_orphans_log ORDER BY run_at DESC LIMIT 5
             """)
             hist_cols = [d[0] for d in cur.description]
@@ -89,7 +88,6 @@ def handler(event: dict, context) -> dict:
 
     return _ok({
         'photo_refs': photo_refs,
-        'fresh_orphans_sample': fresh_orphans,
+        'quarantine_sample': quarantine_sample,
         'cleanup_history': history,
-        'hint': 'GET /photo-cleanup?action=dry_run — найти сиротских; ?action=run — удалить',
     })

@@ -35,14 +35,10 @@
       "expectedStatus": 401
     },
     {
-      "name": "Очистка файлов для печати",
+      "name": "Неизвестное действие — 400",
       "method": "GET",
-      "path": "/?action=print_cleanup",
-      "expectedStatus": 200,
-      "expectedBody": {
-        "mode": "print_cleanup"
-      },
-      "bodyMatcher": "partial"
+      "path": "/?action=zzz",
+      "expectedStatus": 400
     }
   ]
 }
