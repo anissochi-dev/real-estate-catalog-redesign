@@ -17,6 +17,19 @@
       "method": "GET",
       "path": "/?action=feed_clean_photos_batch&offset=0&batch_size=1",
       "expectedStatus": 401
+    },
+    {
+      "name": "ИИ-аудит фото: GET — 405",
+      "method": "GET",
+      "path": "/?module=photo_audit",
+      "expectedStatus": 405
+    },
+    {
+      "name": "ИИ-аудит фото: пустой POST — 400",
+      "method": "POST",
+      "path": "/?module=photo_audit",
+      "body": {},
+      "expectedStatus": 400
     }
   ]
 }

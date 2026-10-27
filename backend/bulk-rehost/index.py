@@ -263,8 +263,19 @@ def _erase_regions(image_bytes: bytes, regions: list, sensitivity: float) -> byt
         return image_bytes
 
 
+def _route_module(event: dict, context):
+    module = ((event.get('queryStringParameters') or {}).get('module') or '').strip()
+    if module != 'photo_audit':
+        return None
+    from photo_audit import handler as h
+    return h(event, context)
+
+
 def handler(event: dict, context) -> dict:
-    """Пакетная перезаливка фото и удаление водяных знаков через Яндекс Vision."""
+    """Фото объектов: перезаливка, водяные знаки и ИИ-аудит фото (module=photo_audit)."""
+    routed = _route_module(event, context)
+    if routed is not None:
+        return routed
     method = event.get('httpMethod', 'GET')
 
     if method == 'OPTIONS':

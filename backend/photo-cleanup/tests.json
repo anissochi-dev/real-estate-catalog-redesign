@@ -6,7 +6,6 @@
       "path": "/",
       "expectedStatus": 200,
       "expectedBody": {},
-
       "bodyMatcher": "partial"
     },
     {
@@ -14,7 +13,19 @@
       "method": "GET",
       "path": "/?action=dry_run",
       "expectedStatus": 401,
-      "expectedBody": {"error": "string"},
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Сводка без авторизации — 401",
+      "method": "GET",
+      "path": "/?action=summary",
+      "expectedStatus": 401,
+      "expectedBody": {
+        "error": "string"
+      },
       "bodyMatcher": "partial"
     }
   ]

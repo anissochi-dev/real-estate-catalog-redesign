@@ -2,7 +2,6 @@ import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import { getToken } from '@/lib/adminApi';
 
-const S3_AUDIT_URL = 'https://functions.poehali.dev/771d2935-3c3b-42d7-b305-9cd609c5d832';
 const PHOTO_CLEANUP_URL = 'https://functions.poehali.dev/98a2eda7-410c-4378-91b9-a2f195cc0dc2';
 
 interface PhotoRefsStats {
@@ -28,7 +27,7 @@ export default function S3OrphanAudit() {
     setAuditLoading(true);
     try {
       const token = getToken();
-      const res = await fetch(`${S3_AUDIT_URL}/?token=${encodeURIComponent(token)}`);
+      const res = await fetch(`${PHOTO_CLEANUP_URL}/?action=summary&token=${encodeURIComponent(token)}`);
       const d = await res.json();
       if (!d.error) setAudit(d);
     } catch { /* ignore */ }

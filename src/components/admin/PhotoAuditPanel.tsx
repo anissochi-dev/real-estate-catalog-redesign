@@ -2,8 +2,9 @@ import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import { CONDITIONS, BUILDING_CLASSES, FINISHING } from '@/pages/admin/listings/types';
 import type { Listing } from '@/pages/admin/listings/types';
+import { REMOVE_WM_URL } from '@/lib/adminApi';
 
-const PHOTO_AUDIT_URL = 'https://functions.poehali.dev/ccf52d36-5d2e-4b2a-8a40-e747dc90080f';
+const PHOTO_AUDIT_URL = `${REMOVE_WM_URL}?module=photo_audit`;
 
 interface AuditResult {
   score: number;

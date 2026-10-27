@@ -8,6 +8,7 @@
   4. Пишет результат в s3_orphans_log
 
 GET               → последние 5 прогонов из s3_orphans_log
+GET ?action=summary → сводка по фото для админки (бывшая функция s3-audit, требует admin-токен)
 GET ?action=dry_run → показывает орфанов без удаления (требует admin-токен)
 GET ?action=run     → реальное удаление (требует admin-токен)
 Крон-вызов без токена: action=run разрешён без авторизации (доверенный вызов по расписанию).
@@ -109,6 +110,9 @@ def handler(event: dict, context) -> dict:
 
     params = event.get('queryStringParameters') or {}
     action = params.get('action', '')
+    if action == 'summary':
+        from s3_audit import handler as summary_handler
+        return summary_handler(event, context)
     token_raw = params.get('token', '') or (event.get('headers') or {}).get('x-authorization', '').replace('Bearer ', '').strip()
 
     dsn = os.environ['DATABASE_URL']
