@@ -1587,7 +1587,7 @@ def handler(event: dict, context) -> dict:
                 vk_ads_result = None
                 try:
                     _vk_req = urllib.request.Request(
-                        'https://functions.poehali.dev/d995fba6-2780-433f-bc4f-a430321d60d8?action=cron',
+                        'https://functions.poehali.dev/00319010-cbca-43bf-ae81-3431d4d8de20?module=ads&action=cron',
                         method='GET',
                     )
                     with urllib.request.urlopen(_vk_req, timeout=25) as _vk_resp:

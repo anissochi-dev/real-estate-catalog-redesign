@@ -11,8 +11,35 @@
       "method": "GET",
       "path": "/",
       "expectedStatus": 400,
-      "expectedBody": { "error": "listing_id обязателен" },
+      "expectedBody": {
+        "error": "listing_id обязателен"
+      },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Телефоны: без параметров — 400",
+      "method": "GET",
+      "path": "/?module=phone_flags",
+      "expectedStatus": 400
+    },
+    {
+      "name": "Телефоны: проверка номера",
+      "method": "GET",
+      "path": "/?module=phone_flags&phones=79999999999",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Телефоны: POST без входа — 401",
+      "method": "POST",
+      "path": "/?module=phone_flags",
+      "body": {},
+      "expectedStatus": 401
+    },
+    {
+      "name": "Умный бюджет",
+      "method": "GET",
+      "path": "/?module=smart_budget",
+      "expectedStatus": 200
     }
   ]
 }

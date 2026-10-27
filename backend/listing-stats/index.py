@@ -65,8 +65,22 @@ def _get_user(event, cur):
     return dict(row) if row else None
 
 
+def _route_module(event, context):
+    module = ((event.get('queryStringParameters') or {}).get('module') or '').strip()
+    if module == 'phone_flags':
+        from phone_flags import handler as h
+        return h(event, context)
+    if module == 'smart_budget':
+        from smart_budget import handler as h
+        return h(event, context)
+    return None
+
+
 def handler(event: dict, context) -> dict:
     """Статистика по объектам: запись и чтение просмотров, звонков, заявок с разных площадок."""
+    routed = _route_module(event, context)
+    if routed is not None:
+        return routed
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
 

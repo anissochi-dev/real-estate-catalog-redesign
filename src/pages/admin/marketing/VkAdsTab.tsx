@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
 
-const VK_ADS_URL = 'https://functions.poehali.dev/d995fba6-2780-433f-bc4f-a430321d60d8';
+const VK_ADS_URL = 'https://functions.poehali.dev/00319010-cbca-43bf-ae81-3431d4d8de20?module=ads';
 
 interface AdPlan {
   id: number; name: string; status: string;
@@ -103,7 +103,7 @@ export default function VkAdsTab() {
 
   const load = (sync = false) => {
     if (sync) setSyncing(true); else setLoading(true);
-    const url = sync ? `${VK_ADS_URL}?sync=1` : VK_ADS_URL;
+    const url = sync ? `${VK_ADS_URL}&sync=1` : VK_ADS_URL;
     fetch(url)
       .then(r => r.json())
       .then(d => {

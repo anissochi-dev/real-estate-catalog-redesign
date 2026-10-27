@@ -11,7 +11,7 @@ export interface PhoneFlag {
   created_at: string;
 }
 
-const BASE = 'https://functions.poehali.dev/254609bc-df6e-4209-be01-2223b26c1665';
+const BASE = 'https://functions.poehali.dev/1d84bd40-ef8c-4bd3-82c3-af294b1ec0b1?module=phone_flags';
 
 /** Нормализует в формат 7XXXXXXXXXX (без плюса) — как хранит бэкенд */
 function norm(phone: string): string {
@@ -21,7 +21,7 @@ function norm(phone: string): string {
 export async function fetchPhoneFlags(phones: string[]): Promise<Record<string, PhoneFlag>> {
   const normalized = phones.map(norm).filter(p => p.length >= 10);
   if (!normalized.length) return {};
-  const res = await fetch(`${BASE}?phones=${normalized.join(',')}`);
+  const res = await fetch(`${BASE}&phones=${normalized.join(',')}`);
   if (!res.ok) return {};
   const data = await res.json();
   // Индексируем по обоим форматам: "79..." и "+79..."
@@ -49,7 +49,7 @@ export async function setPhoneFlag(
 
 export async function removePhoneFlag(phone: string, token: string): Promise<void> {
   const n = normalizePhone(phone);
-  await fetch(`${BASE}?phone=${n}`, {
+  await fetch(`${BASE}&phone=${n}`, {
     method: 'DELETE',
     headers: { 'X-Auth-Token': token },
   });

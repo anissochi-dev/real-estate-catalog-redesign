@@ -10,7 +10,7 @@ import RadarBudgetSeoRow from './RadarBudgetSeoRow';
 import RadarPricePlatformsRow from './RadarPricePlatformsRow';
 import { RadarLeadsDealsRow, RadarRecentChanges } from './RadarActivityBlocks';
 
-const SMART_BUDGET_URL = 'https://functions.poehali.dev/3e599d66-bb63-498f-bf23-4069c3a06660';
+const SMART_BUDGET_URL = 'https://functions.poehali.dev/1d84bd40-ef8c-4bd3-82c3-af294b1ec0b1?module=smart_budget';
 const STATS_URL = 'https://functions.poehali.dev/1d84bd40-ef8c-4bd3-82c3-af294b1ec0b1';
 
 export function TabRadar({ listingId, listing }: { listingId: number; listing: Listing }) {

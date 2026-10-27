@@ -11,6 +11,27 @@
       "method": "GET",
       "path": "/?action=status",
       "expectedStatus": 200
+    },
+    {
+      "name": "Маркет: status без feed_id — 400",
+      "method": "GET",
+      "path": "/?module=market&action=status",
+      "expectedStatus": 400
+    },
+    {
+      "name": "Маркет: POST без прав — 403",
+      "method": "POST",
+      "path": "/?module=market",
+      "body": {
+        "feed_id": 1
+      },
+      "expectedStatus": 403
+    },
+    {
+      "name": "Реклама: OPTIONS",
+      "method": "OPTIONS",
+      "path": "/?module=ads",
+      "expectedStatus": 200
     }
   ]
 }

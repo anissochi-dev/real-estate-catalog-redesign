@@ -8,7 +8,7 @@ import MarketingOverviewSection from './dashboard/MarketingOverviewSection';
 import MarketingSourcesSection from './dashboard/MarketingSourcesSection';
 import { MarketingObjectsSection, MarketingSmartBudgetSection } from './dashboard/MarketingBudgetSection';
 
-const SMART_BUDGET_URL = 'https://functions.poehali.dev/3e599d66-bb63-498f-bf23-4069c3a06660';
+const SMART_BUDGET_URL = 'https://functions.poehali.dev/1d84bd40-ef8c-4bd3-82c3-af294b1ec0b1?module=smart_budget';
 
 type Period = '7' | '30' | '90' | 'all';
 

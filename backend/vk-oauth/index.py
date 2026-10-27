@@ -85,7 +85,21 @@ def _html_error(msg):
     return {'statusCode': 200, 'headers': {**CORS, 'Content-Type': 'text/html; charset=utf-8'}, 'body': body}
 
 
+def _route_module(event, context):
+    module = ((event.get('queryStringParameters') or {}).get('module') or '').strip()
+    if module == 'ads':
+        from vk_ads import handler as h
+        return h(event, context)
+    if module == 'market':
+        from vk_market import handler as h
+        return h(event, context)
+    return None
+
+
 def handler(event, context):
+    routed = _route_module(event, context)
+    if routed is not None:
+        return routed
     method = event.get('httpMethod', 'GET')
     params = event.get('queryStringParameters') or {}
 
