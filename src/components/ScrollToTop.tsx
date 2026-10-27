@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
-import { useLocation, useNavigationType } from 'react-router-dom';
+import { useLocation, useNavigationType } from "@/lib/router-compat";
 
 const STORE_KEY = 'scroll_positions_v1';
 

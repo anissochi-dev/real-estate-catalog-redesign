@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from "@/lib/router-compat";
 import Icon from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { fetchPublicLeads, PublicLead } from '@/lib/api';

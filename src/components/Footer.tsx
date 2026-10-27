@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from "@/lib/router-compat";
 import { useSettings } from '@/contexts/SettingsContext';
 import Icon from '@/components/ui/icon';
-import { Page } from '@/App';
+import { Page } from '@/app/appTypes';
 import { fetchDistricts, District } from '@/lib/api';
 import { groupByOkrug } from '@/lib/districts';
 import { CATALOG_CATEGORIES, catalogCategoryUrl } from '@/lib/categories';

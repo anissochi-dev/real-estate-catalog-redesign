@@ -27,8 +27,9 @@ function writeCache(data: PublicSettings) {
   } catch { /* ignore */ }
 }
 
-export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<PublicSettings>(() => readCache() ?? {});
+/** initial — настройки, загруженные на сервере (loader корневого маршрута). */
+export function SettingsProvider({ children, initial }: { children: ReactNode; initial?: PublicSettings }) {
+  const [settings, setSettings] = useState<PublicSettings>(() => initial ?? {});
 
   const reload = async () => {
     const s = await fetchPublicSettings();
@@ -37,9 +38,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // Свежие настройки уже пришли с сервера — кладём в кэш, запрос не нужен
+    if (initial && Object.keys(initial).length > 0) {
+      writeCache(initial);
+      return;
+    }
     // Если кэш валиден — не делаем запрос при монтировании
-    if (readCache()) return;
+    const cached = readCache();
+    if (cached) { setSettings(cached); return; }
     reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return <SettingsCtx.Provider value={{ settings, reload }}>{children}</SettingsCtx.Provider>;

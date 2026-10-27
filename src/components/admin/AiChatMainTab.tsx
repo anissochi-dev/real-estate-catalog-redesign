@@ -7,7 +7,7 @@ import AiChatMessage from './AiChatMessage';
 import AiChatInput from './AiChatInput';
 
 interface Props {
-  scrollRef: RefObject<HTMLDivElement>;
+  scrollRef: RefObject<HTMLDivElement | null>;
   messages: Msg[];
   loading: boolean;
   action: AiAction;

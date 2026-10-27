@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Property } from '@/App';
+import { useSearchParams } from "@/lib/router-compat";
+import { Property } from '@/app/appTypes';
 import MaxSubscribeWidget from '@/components/MaxSubscribeWidget';
 import SeoHead, { useSeoH1 } from '@/components/SeoHead';
 import AIMatchModal from '@/components/AIMatchModal';
@@ -36,7 +36,8 @@ export default function CatalogPage({ properties, favorites, compareList, onTogg
   const [dealFilter, setDealFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
-  const [showFilters, setShowFilters] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024);
+  const [showFilters, setShowFilters] = useState(false);
+  useEffect(() => { if (window.innerWidth >= 1024) setShowFilters(true); }, []);
   const [minArea, setMinArea] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [districtFilter, setDistrictFilter] = useState('all');

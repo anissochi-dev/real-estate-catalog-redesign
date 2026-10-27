@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Property } from '@/App';
+import { Link } from "@/lib/router-compat";
+import { Property } from '@/app/appTypes';
 import { listingSlug } from '@/lib/slug';
 import { formatPrice } from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';

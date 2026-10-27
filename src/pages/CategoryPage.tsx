@@ -1,6 +1,6 @@
 import { useMemo, useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import type { Property } from '@/App';
+import { useParams, useNavigate } from "@/lib/router-compat";
+import type { Property } from '@/app/appTypes';
 import PropertyCard from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';

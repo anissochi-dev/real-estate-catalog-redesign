@@ -1,1 +1,0 @@
-UPDATE t_p71821556_real_estate_catalog_.listings SET district = NULL WHERE district = '-';

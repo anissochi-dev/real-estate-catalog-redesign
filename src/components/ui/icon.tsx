@@ -5,23 +5,24 @@ import { LucideProps } from 'lucide-react';
 interface IconProps extends LucideProps {
   name: string;
   fallback?: string;
-  title?: string;
 }
 
-const Icon: React.FC<IconProps> = ({ name, fallback = 'CircleAlert', 'aria-label': ariaLabel, ...props }) => {
+const Icon: React.FC<IconProps> = ({ name, fallback = 'CircleAlert', ...props }) => {
   const IconComponent = (LucideIcons as unknown as Record<string, React.FC<LucideProps>>)[name];
 
-  const a11yProps = ariaLabel
-    ? { 'aria-label': ariaLabel, role: 'img' as const }
-    : { 'aria-hidden': true as const };
-
   if (!IconComponent) {
+    // Если иконка не найдена, используем fallback иконку
     const FallbackIcon = (LucideIcons as unknown as Record<string, React.FC<LucideProps>>)[fallback];
-    if (!FallbackIcon) return <span className="text-xs text-gray-400">[icon]</span>;
-    return <FallbackIcon {...a11yProps} {...props} />;
+
+    // Если даже fallback не найден, возвращаем пустой span
+    if (!FallbackIcon) {
+      return <span className="text-xs text-gray-400">[icon]</span>;
+    }
+
+    return <FallbackIcon {...props} />;
   }
 
-  return <IconComponent {...a11yProps} {...props} />;
+  return <IconComponent {...props} />;
 };
 
 export default Icon;

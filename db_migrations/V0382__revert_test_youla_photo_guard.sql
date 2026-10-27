@@ -1,2 +1,0 @@
-UPDATE t_p71821556_real_estate_catalog_.listings SET export_youla = FALSE, youla_channel = NULL WHERE id = 216 AND youla_ad_id IS NULL;
-UPDATE t_p71821556_real_estate_catalog_.youla_item_status SET error = NULL WHERE listing_id = 216 AND youla_id IS NULL;

@@ -21,8 +21,8 @@ interface Props {
   setShowSuggestions: (v: boolean) => void;
   highlightIdx: number;
   setHighlightIdx: (v: number | ((prev: number) => number)) => void;
-  inputRef: React.RefObject<HTMLInputElement>;
-  dropdownRef: React.RefObject<HTMLDivElement>;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  dropdownRef: React.RefObject<HTMLDivElement | null>;
   onCoordsManualChange?: (manual: boolean) => void;
   fetchSuggestions: (query: string) => void;
   pickSuggestion: (s: Suggestion) => void;

@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from "@/lib/router-compat";
 import { catalogCategoryUrl } from '@/lib/categories';
 import { CATEGORY_META, CategoryMetaItem } from './categoryMeta';
 import ExpandableText from '@/components/ExpandableText';

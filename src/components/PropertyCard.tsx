@@ -1,6 +1,6 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from "@/lib/router-compat";
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Property } from '@/App';
+import { Property } from '@/app/appTypes';
 import Icon from '@/components/ui/icon';
 import { listingSlug } from '@/lib/slug';
 import { prefetchListingById } from '@/lib/api';
@@ -244,7 +244,7 @@ export default function PropertyCard({
               width={400}
               height={300}
               loading={index < 4 ? 'eager' : 'lazy'}
-              fetchpriority={index === 0 ? 'high' : 'auto'}
+              fetchPriority={index === 0 ? 'high' : 'auto'}
               decoding={index === 0 ? 'sync' : 'async'}
               className="absolute inset-0 w-full h-full object-cover"
             />

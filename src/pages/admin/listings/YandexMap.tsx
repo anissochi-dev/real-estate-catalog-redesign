@@ -24,7 +24,7 @@ interface Props {
   onCoordsManualChange?: (manual: boolean) => void;
   ymapInstance: React.MutableRefObject<any>;
   markerRef: React.MutableRefObject<any>;
-  mapRef: React.RefObject<HTMLDivElement>;
+  mapRef: React.RefObject<HTMLDivElement | null>;
   onMapReady: (ready: boolean) => void;
   parseYmapsGeoObject: (obj: any, coords: [number, number], streetOverride?: string) => void;
   parseReverseResult: (data: ReverseResult, coords: [number, number]) => void;

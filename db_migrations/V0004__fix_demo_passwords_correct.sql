@@ -1,1 +1,0 @@
-UPDATE t_p71821556_real_estate_catalog_.users SET password_hash = '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9' WHERE email IN ('admin@biznest.ru', 'editor@biznest.ru', 'manager@biznest.ru', 'client@biznest.ru');

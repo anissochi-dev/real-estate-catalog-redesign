@@ -1,2 +1,0 @@
-ALTER TABLE t_p71821556_real_estate_catalog_.youla_item_status ADD COLUMN IF NOT EXISTS is_removed BOOLEAN;
-ALTER TABLE t_p71821556_real_estate_catalog_.youla_item_status ADD COLUMN IF NOT EXISTS removed_at TIMESTAMPTZ;

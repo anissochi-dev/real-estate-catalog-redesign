@@ -1,5 +1,0 @@
-ALTER TABLE t_p71821556_real_estate_catalog_.leads
-  ADD COLUMN IF NOT EXISTS phone2 VARCHAR(30) DEFAULT NULL;
-
-ALTER TABLE t_p71821556_real_estate_catalog_.leads
-  ADD COLUMN IF NOT EXISTS phone2_contact_id INTEGER DEFAULT NULL;

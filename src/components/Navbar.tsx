@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Page } from '@/App';
+import { Page } from '@/app/appTypes';
 import Icon from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';

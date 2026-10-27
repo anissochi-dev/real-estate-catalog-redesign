@@ -6,7 +6,7 @@ interface Props {
   messages: AiMsg[];
   loading: boolean;
   marketLoading: boolean;
-  bottomRef: RefObject<HTMLDivElement>;
+  bottomRef: RefObject<HTMLDivElement | null>;
   lastAiText: string;
   applying: string | null;
   applyChange: (field: 'title' | 'description', value: string) => void;

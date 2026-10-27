@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from "@/lib/router-compat";
 import { toast } from 'sonner';
 import Icon from '@/components/ui/icon';
 import PageTopBar from '@/components/common/PageTopBar';

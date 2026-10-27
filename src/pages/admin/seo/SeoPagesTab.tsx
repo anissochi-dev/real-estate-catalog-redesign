@@ -199,7 +199,7 @@ export default function SeoPagesTab({ token: _token, gptOk }: Props) {
                 />
                 <span className="truncate font-mono text-xs flex-1">{p.path}</span>
                 {p.noindex && (
-                  <Icon name="EyeOff" size={11} className="text-muted-foreground/50 shrink-0" title="noindex" />
+                  <span title="noindex" className="contents"><Icon name="EyeOff" size={11} className="text-muted-foreground/50 shrink-0" /></span>
                 )}
                 {p.auto_generated && (
                   <Icon name="Sparkles" size={11} className="text-amber-500 shrink-0" />

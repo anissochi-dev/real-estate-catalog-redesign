@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from "@/lib/router-compat";
 import Icon from '@/components/ui/icon';
 import { aiMatch, AiMatchResult } from '@/lib/api';
 import { listingSlug } from '@/lib/slug';

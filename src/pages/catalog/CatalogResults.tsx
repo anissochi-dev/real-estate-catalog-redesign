@@ -1,4 +1,4 @@
-import { Property } from '@/App';
+import { Property } from '@/app/appTypes';
 import PropertyCard from '@/components/PropertyCard';
 import Breadcrumbs, { Crumb } from '@/components/Breadcrumbs';
 import SchemaOrg from '@/components/SchemaOrg';

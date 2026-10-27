@@ -1,1 +1,0 @@
-UPDATE t_p71821556_real_estate_catalog_.listings SET price = 150001 WHERE id = 264 AND price = 150000;

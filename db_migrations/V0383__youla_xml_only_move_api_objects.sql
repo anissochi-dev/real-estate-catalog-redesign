@@ -1,1 +1,0 @@
-UPDATE t_p71821556_real_estate_catalog_.listings SET youla_channel = 'feed' WHERE id IN (297,298,299) AND youla_channel = 'api';

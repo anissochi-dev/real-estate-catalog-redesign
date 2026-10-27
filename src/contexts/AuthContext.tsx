@@ -16,9 +16,10 @@ export const AuthCtxInstance = createContext<AuthCtx | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tokenState, setTokenState] = useState<string>(() => getToken() || '');
+  const [tokenState, setTokenState] = useState<string>('');
 
   useEffect(() => {
+    setTokenState(getToken() || '');
     if (!getToken()) {
       setLoading(false);
       return;

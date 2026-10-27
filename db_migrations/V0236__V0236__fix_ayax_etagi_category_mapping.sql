@@ -1,1 +1,0 @@
-UPDATE t_p71821556_real_estate_catalog_.market_listings SET category = 'standalone' WHERE category = 'building' AND source IN ('ayax.ru', 'etagi.com');

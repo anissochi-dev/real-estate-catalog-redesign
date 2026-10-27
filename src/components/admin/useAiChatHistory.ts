@@ -19,7 +19,7 @@ import {
 export function useAiChatHistory(
   messages: Msg[],
   setMessages: React.Dispatch<React.SetStateAction<Msg[]>>,
-  scrollRef: React.RefObject<HTMLDivElement>,
+  scrollRef: React.RefObject<HTMLDivElement | null>,
 ) {
   const [historyLimit, setHistoryLimitState] = useState<number>(() => getHistoryLimit());
   const [limitModalOpen, setLimitModalOpen] = useState(false);

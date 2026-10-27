@@ -115,7 +115,7 @@ export function GalleryLightbox({ imgs, activeImg, setActiveImg, onClose, title 
           alt={title}
           draggable={false}
           loading="eager"
-          fetchpriority="high"
+          fetchPriority="high"
           decoding="async"
           onClick={e => {
             e.stopPropagation();

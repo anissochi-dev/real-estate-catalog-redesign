@@ -66,7 +66,7 @@ export default function PhoneCardModal({ contactId, onClose, onUpdate, onOpenLis
   const save = async () => {
     setSaving(true);
     try {
-      await adminApi.updatePhone(contactId, form);
+      await adminApi.updatePhone(contactId, { ...form });
       setEditing(false);
       load();
       loadHistory();

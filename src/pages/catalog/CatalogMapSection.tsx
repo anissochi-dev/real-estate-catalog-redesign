@@ -1,4 +1,4 @@
-import { Property } from '@/App';
+import { Property } from '@/app/appTypes';
 import { District } from '@/lib/api';
 import DistrictOptions from '@/components/DistrictOptions';
 import CatalogMap from './CatalogMap';

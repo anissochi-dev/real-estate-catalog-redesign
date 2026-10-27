@@ -8,11 +8,11 @@ import { hasConsent, checkConsentByIp } from '../components/ConsentBanner';
  *   или страховочно через 5 сек.
  */
 export function useConsentBanner() {
-  const [consentGiven, setConsentGiven] = useState<boolean>(() => hasConsent());
+  const [consentGiven, setConsentGiven] = useState<boolean>(false);
   const [consentVisible, setConsentVisible] = useState(false);
 
   useEffect(() => {
-    if (hasConsent()) return;
+    if (hasConsent()) { setConsentGiven(true); return; }
 
     let cancelled = false;
     let shown = false;

@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from "@/lib/router-compat";
 import Icon from '@/components/ui/icon';
 import DistrictOptions from '@/components/DistrictOptions';
 import { District } from '@/lib/api';

@@ -48,7 +48,8 @@ export default function SmartCaptcha({ onVerify, fieldCount = 3 }: Props) {
 
   const [verified, setVerified] = useState(false);
   const [showChallenge, setShowChallenge] = useState(false);
-  const [challenge] = useState(() => CHALLENGES[Math.floor(Math.random() * CHALLENGES.length)]);
+  const [challenge, setChallenge] = useState(() => CHALLENGES[0]);
+  useEffect(() => { setChallenge(CHALLENGES[Math.floor(Math.random() * CHALLENGES.length)]); }, []);
   const [answer, setAnswer] = useState('');
   const [error, setError] = useState('');
   const [checking, setChecking] = useState(false);

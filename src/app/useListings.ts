@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from "@/lib/router-compat";
 import { type Property } from './appTypes';
 import { fetchListings, mapApiListing, type ApiListing } from '../lib/api';
 
@@ -9,12 +9,13 @@ type PrefetchData = {
 };
 
 /**
- * Загрузка объектов: prefetch из window.__PREFETCH__, fallback — прямой fetch.
+ * Загрузка объектов: первые объекты приходят с сервера (loader корневого маршрута),
+ * fallback — prefetch из window.__PREFETCH__ или прямой fetch.
  * Управляет preload LCP-изображения и ленивой догрузкой полного списка.
  */
-export function useListings() {
+export function useListings(initial?: { listings: Property[]; total: number }) {
   const location = useLocation();
-  const [properties, setProperties] = useState<Property[]>([]);
+  const [properties, setProperties] = useState<Property[]>(() => initial?.listings ?? []);
   const [allLoaded, setAllLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +67,12 @@ export function useListings() {
       }
     }
 
+    // Первые объекты уже пришли с сервера (loader корневого маршрута)
+    if (initial && initial.listings.length > 0) {
+      applyListings(initial.listings, initial.total);
+      return;
+    }
+
     if (w.__PREFETCH__) {
       applyListings(w.__PREFETCH__.listings.map(mapApiListing), w.__PREFETCH__.total);
       return;
@@ -85,6 +92,7 @@ export function useListings() {
     fetchListings(8, 0)
       .then(({ listings, total }) => applyListings(listings, total))
       .catch(err => { console.error(err); setError('Не удалось загрузить объекты.'); setLoading(false); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Страховка от «вечного колеса»

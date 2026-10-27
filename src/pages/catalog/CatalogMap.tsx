@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import { Property } from '@/App';
+import { Property } from '@/app/appTypes';
 import Icon from '@/components/ui/icon';
 import YandexMap from '@/components/YandexMap';
 

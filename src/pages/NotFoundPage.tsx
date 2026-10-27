@@ -1,4 +1,4 @@
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from "@/lib/router-compat";
 import { useEffect } from 'react';
 import Icon from '@/components/ui/icon';
 import SeoHead from '@/components/SeoHead';

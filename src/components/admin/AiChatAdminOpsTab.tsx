@@ -22,7 +22,7 @@ export interface MemoryData {
 }
 
 interface Props {
-  opsScrollRef: RefObject<HTMLDivElement>;
+  opsScrollRef: RefObject<HTMLDivElement | null>;
   opsMessages: Msg[];
   opsLoading: boolean;
   opsInput: string;

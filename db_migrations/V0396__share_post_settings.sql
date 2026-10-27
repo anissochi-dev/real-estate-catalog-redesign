@@ -1,4 +1,0 @@
-ALTER TABLE t_p71821556_real_estate_catalog_.settings ADD COLUMN IF NOT EXISTS share_contact_nick VARCHAR(100) DEFAULT '@BMN_SU';
-ALTER TABLE t_p71821556_real_estate_catalog_.settings ADD COLUMN IF NOT EXISTS share_partner_text VARCHAR(1000) DEFAULT '🤝 Партнёрам: сотрудничаем, вознаграждение — до 50% в стоимости, условия в ЛС. Также размещаем объекты партнёров на 40+ сайтах.';
-UPDATE t_p71821556_real_estate_catalog_.settings SET share_contact_nick = '@BMN_SU' WHERE share_contact_nick IS NULL;
-UPDATE t_p71821556_real_estate_catalog_.settings SET share_partner_text = '🤝 Партнёрам: сотрудничаем, вознаграждение — до 50% в стоимости, условия в ЛС. Также размещаем объекты партнёров на 40+ сайтах.' WHERE share_partner_text IS NULL;

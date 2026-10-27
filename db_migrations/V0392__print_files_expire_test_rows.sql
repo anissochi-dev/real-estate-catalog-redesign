@@ -1,1 +1,0 @@
-UPDATE t_p71821556_real_estate_catalog_.print_files SET expires_at = NOW() - INTERVAL '1 minute' WHERE listing_id = 0 AND removed_at IS NULL;

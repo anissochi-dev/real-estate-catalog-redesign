@@ -21,7 +21,7 @@ export interface CanvasProps {
   selected: ElementId | null;
   onSelect: (id: ElementId | null) => void;
   onDragMove: (id: ElementId, pos: Pos) => void;
-  bannerRef: React.RefObject<HTMLDivElement>;
+  bannerRef: React.RefObject<HTMLDivElement | null>;
   exportMode?: boolean;
   showSize: boolean;
   cmW: number;

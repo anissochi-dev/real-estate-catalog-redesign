@@ -1,5 +1,5 @@
-import { Link } from 'react-router-dom';
-import { Property } from '@/App';
+import { Link } from "@/lib/router-compat";
+import { Property } from '@/app/appTypes';
 import PropertyCard from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';

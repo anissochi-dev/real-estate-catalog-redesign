@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
-import { Link } from 'react-router-dom';
-import { Property } from '@/App';
+import { Link } from "@/lib/router-compat";
+import { Property } from '@/app/appTypes';
 import Icon from '@/components/ui/icon';
 import { useSettings } from '@/contexts/SettingsContext';
 import { NEWS_URL } from '@/lib/adminApi';
@@ -18,7 +18,7 @@ const ClientLeadsSection = lazy(() => import('@/components/ClientLeadsSection'))
 const AIMatchModal = lazy(() => import('@/components/AIMatchModal'));
 const OwnerSubmitModal = lazy(() => import('@/components/OwnerSubmitModal'));
 
-interface PublicStats {
+export interface PublicStats {
   total: number;
   main_city: string;
   by_category?: Record<string, number>;
@@ -31,21 +31,22 @@ interface HomePageProps {
   compareList: number[];
   onToggleFavorite: (id: number) => void;
   onToggleCompare: (id: number) => void;
+  /** Статистика, загруженная на сервере (loader главной). */
+  initialStats?: PublicStats;
 }
 
 const LISTINGS_URL = 'https://functions.poehali.dev/590f7088-530b-4bfb-994e-1047674672fa';
 
 const CATEGORIES = CATALOG_CATEGORIES;
 
-export default function HomePage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare }: HomePageProps) {
+export default function HomePage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare, initialStats }: HomePageProps) {
   const { settings } = useSettings();
   const [searchQuery, setSearchQuery] = useState('');
 
   // Инициализируем из prefetch если уже готово — нулевого мигания не будет
   type Pf = { stats?: PublicStats; leadsCount?: number };
-  const pf = (window as Window & { __PREFETCH__?: Pf }).__PREFETCH__;
-  const [stats, setStats] = useState<PublicStats>(pf?.stats ?? { total: 0, main_city: 'Краснодар' });
-  const [, setLeadsCount] = useState(pf?.leadsCount ?? 0);
+  const [stats, setStats] = useState<PublicStats>(initialStats ?? { total: 0, main_city: 'Краснодар' });
+  const [, setLeadsCount] = useState(0);
 
   const [aiOpen, setAiOpen] = useState(false);
   const [ownerOpen, setOwnerOpen] = useState(false);
@@ -55,7 +56,10 @@ export default function HomePage({ properties, favorites, compareList, onToggleF
 
   // Загружаем статистику — только если prefetch не принёс данные
   useEffect(() => {
+    if (initialStats) return;
     const cached = (window as Window & { __PREFETCH__?: Pf }).__PREFETCH__;
+    if (cached?.stats) setStats(cached.stats);
+    if (typeof cached?.leadsCount === 'number') setLeadsCount(cached.leadsCount);
     if (cached?.stats && cached?.leadsCount) return;
     fetch(`${LISTINGS_URL}?resource=public_home_data`)
       .then(r => r.json())

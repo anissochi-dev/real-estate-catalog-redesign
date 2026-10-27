@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from "@/lib/router-compat";
 import { fetchListingById, ListingDetail, sendLead, fetchAgents, Agent } from '@/lib/api';
 import { fireLeadConversion, trackListingCall } from '@/lib/analytics';
 import { CaptchaResult } from '@/components/SmartCaptcha';
@@ -57,7 +57,8 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   const [priceDropCaptcha, setPriceDropCaptcha] = useState<CaptchaResult | null>(null);
   const [priceDropCaptchaKey, setPriceDropCaptchaKey] = useState(0);
 
-  const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
+  const [shareUrl, setShareUrl] = useState('');
+  useEffect(() => { setShareUrl(window.location.href); }, [slug]);
 
   useEffect(() => {
     const id = extractIdFromSlug(slug || '');

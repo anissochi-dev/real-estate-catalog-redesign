@@ -82,7 +82,7 @@ interface UseAiChatActionsParams {
   setOpsMessages: React.Dispatch<React.SetStateAction<Msg[]>>;
   opsLoading: boolean;
   setOpsLoading: React.Dispatch<React.SetStateAction<boolean>>;
-  opsScrollRef: React.RefObject<HTMLDivElement>;
+  opsScrollRef: React.RefObject<HTMLDivElement | null>;
   // База знаний (quick-look панель)
   setShowMemory: React.Dispatch<React.SetStateAction<boolean>>;
   setMemoryData: React.Dispatch<React.SetStateAction<MemoryData | null>>;

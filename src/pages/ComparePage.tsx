@@ -1,5 +1,5 @@
-import { useNavigate } from 'react-router-dom';
-import { Property, Page } from '@/App';
+import { useNavigate } from "@/lib/router-compat";
+import { Property, Page } from '@/app/appTypes';
 import { formatPrice } from '@/components/PropertyCard';
 import Icon from '@/components/ui/icon';
 import { listingSlug } from '@/lib/slug';

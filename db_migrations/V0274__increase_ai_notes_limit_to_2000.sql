@@ -1,1 +1,0 @@
-ALTER TABLE t_p71821556_real_estate_catalog_.listings ALTER COLUMN ai_notes TYPE VARCHAR(2000);

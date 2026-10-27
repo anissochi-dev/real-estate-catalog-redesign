@@ -1,7 +1,0 @@
-ALTER TABLE t_p71821556_real_estate_catalog_.crm_payments
-  ADD COLUMN IF NOT EXISTS payment_type VARCHAR(50) DEFAULT 'service',
-  ADD COLUMN IF NOT EXISTS buyer_email VARCHAR(255),
-  ADD COLUMN IF NOT EXISTS buyer_phone VARCHAR(30),
-  ADD COLUMN IF NOT EXISTS refund_id TEXT,
-  ADD COLUMN IF NOT EXISTS refund_status TEXT,
-  ADD COLUMN IF NOT EXISTS metadata JSONB;
