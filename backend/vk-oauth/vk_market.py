@@ -158,16 +158,24 @@ def _refresh_admin_token(cur, conn, group_id, refresh_token, device_id):
     }
     if client_secret:
         payload['client_secret'] = client_secret
+    service_token = os.environ.get('VK_SERVICE_TOKEN')
+    if service_token:
+        payload['service_token'] = service_token
     data = urllib.parse.urlencode(payload).encode()
     req = urllib.request.Request(VK_ID_TOKEN, data=data, method='POST')
     req.add_header('Content-Type', 'application/x-www-form-urlencoded')
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
             resp = json.loads(r.read().decode())
-    except Exception:
+    except urllib.error.HTTPError as e:
+        print(f'[vk-market] refresh_token HTTP {e.code}: {e.read().decode(errors="replace")[:300]}')
+        return None
+    except Exception as e:
+        print(f'[vk-market] refresh_token error: {e}')
         return None
     new_access = resp.get('access_token')
     if not new_access:
+        print(f'[vk-market] refresh_token без access_token: {json.dumps(resp, ensure_ascii=False)[:300]}')
         return None
     new_refresh = resp.get('refresh_token') or refresh_token
     expires_in = resp.get('expires_in')
@@ -284,6 +292,20 @@ def _sync_feed(cur, conn, feed, group_id):
         )
         conn.commit()
         return {'added': 0, 'edited': 0, 'deleted': 0, 'skipped_no_category': 0, 'errors': 1, 'pending': 0}
+
+    # Проверяем доступ одним лёгким запросом, прежде чем перебирать все объекты:
+    # если вход администратора «привязан» к другому адресу или истёк, синхронизация
+    # всё равно не пройдёт — сообщаем понятную причину и не тратим вызовы.
+    _probe, probe_err = _vk_call('market.get', {'owner_id': f'-{group_id}', 'count': 1}, admin_token)
+    if probe_err and ('VK 5:' in probe_err or 'authorization failed' in probe_err.lower()):
+        cur.execute(
+            f"UPDATE {SCHEMA}.xml_feeds SET vk_last_sync_at = NOW(), vk_last_sync_result = %s WHERE id = %s",
+            (json.dumps({'added': 0, 'edited': 0, 'deleted': 0, 'skipped_no_category': 0, 'errors': 1, 'pending': 0,
+                         'error': 'ВКонтакте не принимает вход администратора группы. Нажмите «Войти через VK» в настройках фида и войдите заново.',
+                         'vk_error': probe_err[:200]}, ensure_ascii=False), feed_id)
+        )
+        conn.commit()
+        return {'added': 0, 'edited': 0, 'deleted': 0, 'skipped_no_category': 0, 'errors': 1, 'pending': 0, 'auth_error': True}
 
     listings = _get_sync_listings(cur, feed)
     target_ids = {l['id'] for l in listings}

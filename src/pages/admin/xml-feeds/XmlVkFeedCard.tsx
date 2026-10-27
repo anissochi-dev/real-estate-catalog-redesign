@@ -6,7 +6,7 @@ import { F, timeAgo } from './shared';
 interface VkSyncStatus {
   vk_api_mode: boolean;
   last_sync_at: string | null;
-  last_sync_result: { added: number; edited: number; deleted: number; skipped_no_category: number; errors: number; pending: number } | null;
+  last_sync_result: { added: number; edited: number; deleted: number; skipped_no_category: number; errors: number; pending: number; error?: string } | null;
   counts: Record<string, number>;
   recent_errors: { listing_id: number; error_message: string }[];
   admin_connected: boolean;
@@ -342,6 +342,13 @@ function VkFeedRow({ feed, load, regenerating, regenerateNow, copy }: {
                 {syncStatus.last_sync_result.pending > 0 && (
                   <span className="px-2 py-1 rounded bg-muted">Ждут след. запуска: {syncStatus.last_sync_result.pending}</span>
                 )}
+              </div>
+            )}
+
+            {syncStatus?.last_sync_result?.error && (
+              <div className="text-xs bg-red-50 text-red-700 rounded-lg px-3 py-2 flex items-start gap-1.5">
+                <Icon name="AlertTriangle" size={13} className="shrink-0 mt-0.5" />
+                <span>{syncStatus.last_sync_result.error}</span>
               </div>
             )}
 
