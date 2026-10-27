@@ -351,10 +351,10 @@ def handler(event: dict, context) -> dict:
                 # (updated_at, с фолбэком на created_at).
                 sort = (params.get('sort') or 'newest').strip()
                 order = {
-                    'newest': 'COALESCE(updated_at, created_at) DESC NULLS LAST, id DESC',
-                    'budget_desc': 'budget DESC NULLS LAST, COALESCE(updated_at, created_at) DESC',
-                    'budget_asc': 'budget ASC NULLS LAST, COALESCE(updated_at, created_at) DESC',
-                }.get(sort, 'COALESCE(updated_at, created_at) DESC NULLS LAST, id DESC')
+                    'newest': 'COALESCE(content_updated_at, created_at) DESC NULLS LAST, id DESC',
+                    'budget_desc': 'budget DESC NULLS LAST, COALESCE(content_updated_at, created_at) DESC',
+                    'budget_asc': 'budget ASC NULLS LAST, COALESCE(content_updated_at, created_at) DESC',
+                }.get(sort, 'COALESCE(content_updated_at, created_at) DESC NULLS LAST, id DESC')
 
                 cur.execute(
                     f"SELECT COUNT(*) AS c FROM t_p71821556_real_estate_catalog_.leads WHERE {where_sql}"
@@ -366,7 +366,7 @@ def handler(event: dict, context) -> dict:
                 cur.execute(
                     f"SELECT id, slug, message, budget, budget_to, company, request_category, "
                     f"lead_type, property_type, property_category, area_from, area_to, utilities, district_ids, "
-                    f"is_network_tenant, created_at, updated_at "
+                    f"is_network_tenant, created_at, content_updated_at AS updated_at "
                     f"FROM t_p71821556_real_estate_catalog_.leads WHERE {where_sql} "
                     f"ORDER BY {order} LIMIT {limit} OFFSET {offset}"
                 )
@@ -405,7 +405,7 @@ def handler(event: dict, context) -> dict:
                 cur.execute(
                     f"SELECT id, slug, message, budget, budget_to, company, request_category, "
                     f"lead_type, property_type, property_category, area_from, area_to, utilities, district_ids, "
-                    f"is_network_tenant, created_at, updated_at "
+                    f"is_network_tenant, created_at, content_updated_at AS updated_at "
                     f"FROM t_p71821556_real_estate_catalog_.leads "
                     f"WHERE slug = '{slug_safe}' AND show_on_main = TRUE AND status IN ('new','in_progress') "
                     f"AND is_public = TRUE AND is_archived IS NOT TRUE"
@@ -438,7 +438,7 @@ def handler(event: dict, context) -> dict:
                         f"WHERE property_category = '{pc_safe}' AND id != {int(d['id'])} "
                         f"AND show_on_main = TRUE AND status IN ('new','in_progress') AND is_public = TRUE "
                         f"AND is_archived IS NOT TRUE "
-                        f"ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 4"
+                        f"ORDER BY COALESCE(content_updated_at, created_at) DESC LIMIT 4"
                     )
                     for r in cur.fetchall():
                         sd = dict(r)

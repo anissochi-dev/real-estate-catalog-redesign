@@ -56,6 +56,39 @@ _LEAD_CATEGORY_WORDS = {
     'free_purpose': 'svobodnogo-naznacheniya', 'car_service': 'avtoservis',
 }
 
+LEAD_CONTENT_FIELDS = (
+    'message', 'company', 'utilities', 'lead_type', 'property_type', 'property_category',
+    'budget', 'budget_to', 'budget_per_sqm_from', 'budget_per_sqm_to',
+    'area_from', 'area_to', 'district_ids',
+)
+
+
+def _norm_lead_val(v):
+    if v is None:
+        return None
+    if isinstance(v, (list, tuple)):
+        return sorted(int(x) for x in v if str(x).strip().lstrip('-').isdigit()) or None
+    s = str(v).strip()
+    if s == '':
+        return None
+    try:
+        f = float(s)
+        return int(f) if f == int(f) else f
+    except ValueError:
+        return s
+
+
+def _lead_content_changed(cur, lead_id: int, body: dict) -> bool:
+    """Изменилось ли содержание заявки (текст, бюджет, площадь, районы, тип)."""
+    keys = [k for k in LEAD_CONTENT_FIELDS if k in body]
+    if not keys:
+        return False
+    cur.execute(f"SELECT {', '.join(keys)} FROM {SCHEMA}.leads WHERE id = {int(lead_id)}")
+    row = cur.fetchone()
+    if not row:
+        return False
+    return any(_norm_lead_val(row.get(k)) != _norm_lead_val(body.get(k)) for k in keys)
+
 
 def _make_lead_slug(property_type, property_category, lead_id: int) -> str:
     parts = []
@@ -3296,7 +3329,7 @@ def _leads(cur, conn, method, rid, action, event, user):
             f"      (SELECT d.city FROM {SCHEMA}.districts d WHERE d.id = ANY(ld.district_ids) LIMIT 1), '{main_city}'"
             f"    )"
             f") mm ON ld.property_type IS NOT NULL AND ld.property_category IS NOT NULL "
-            f"ORDER BY ld.created_at DESC LIMIT 300"
+            f"ORDER BY COALESCE(ld.content_updated_at, ld.created_at) DESC, ld.id DESC LIMIT 300"
         )
         leads_list = [_apply_phone_visibility(dict(r), user) for r in cur.fetchall()]
         return _ok({'leads': leads_list})
@@ -3472,8 +3505,11 @@ def _leads(cur, conn, method, rid, action, event, user):
             fields.append(f"slug = '{new_slug}'")
         if not fields:
             return _err(400, 'Нет полей')
-        # Помечаем заявку как «недавно отредактированную» — для сортировки на сайте
         fields.append('updated_at = NOW()')
+        # Заявка поднимается наверх (в админке и на сайте) только если изменилось
+        # её содержание — статус, ответственный, архив и т.п. порядок не меняют.
+        if _lead_content_changed(cur, int(rid), body):
+            fields.append('content_updated_at = NOW()')
         cur.execute(f"UPDATE {SCHEMA}.leads SET {', '.join(fields)} WHERE id = {int(rid)}")
         # Инвалидируем кэш sitemap если изменилась публичная видимость заявки
         if 'show_on_main' in body or 'status' in body:

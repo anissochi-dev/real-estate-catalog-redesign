@@ -18,6 +18,8 @@ export interface Lead {
   source: string;
   lead_type: string | null;
   created_at: string;
+  /** Когда последний раз менялось содержание заявки — по нему заявка поднимается наверх */
+  content_updated_at?: string | null;
   budget: number | null;
   budget_to?: number | null;
   company: string | null;

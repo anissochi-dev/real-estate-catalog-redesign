@@ -1743,8 +1743,10 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
             v = str(fields.get('status') or '').lower()
             if v and v not in allowed:
                 return {'error': f'Недопустимый status лида: {v}'}
+        content_keys = {'message', 'company', 'request_category', 'lead_type', 'budget'}
+        bump = ', content_updated_at=NOW()' if content_keys & set(changed) else ''
         cur.execute(
-            f"UPDATE {SCHEMA}.leads SET {', '.join(sets)}, updated_at=NOW() WHERE id={lead_id}"
+            f"UPDATE {SCHEMA}.leads SET {', '.join(sets)}, updated_at=NOW(){bump} WHERE id={lead_id}"
         )
         return {'ok': True, 'message': f'Лид #{lead_id}: обновлено — {", ".join(changed[:6])}', 'changed': changed}
 

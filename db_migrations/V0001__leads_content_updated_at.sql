@@ -1,0 +1,2 @@
+ALTER TABLE t_p71821556_real_estate_catalog_.leads ADD COLUMN IF NOT EXISTS content_updated_at TIMESTAMPTZ NULL;
+UPDATE t_p71821556_real_estate_catalog_.leads SET content_updated_at = updated_at WHERE content_updated_at IS NULL AND updated_at IS NOT NULL AND updated_at > created_at + INTERVAL '1 minute';

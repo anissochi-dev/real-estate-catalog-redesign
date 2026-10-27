@@ -83,7 +83,7 @@ export default function LeadsTable({ leads, onOpen, onArchive, onStatusChange, s
     return [...leads].sort((a, b) => {
       let cmp = 0;
       if (sortKey === 'name') cmp = a.name.localeCompare(b.name, 'ru');
-      else if (sortKey === 'date') cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      else if (sortKey === 'date') cmp = new Date(a.content_updated_at || a.created_at).getTime() - new Date(b.content_updated_at || b.created_at).getTime();
       else if (sortKey === 'budget') cmp = (a.budget ?? 0) - (b.budget ?? 0);
       else if (sortKey === 'status') cmp = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9);
       return sortDir === 'asc' ? cmp : -cmp;
@@ -228,6 +228,11 @@ export default function LeadsTable({ leads, onOpen, onArchive, onStatusChange, s
                       <Icon name="Clock" size={12} />
                       {fmtDate(l.created_at)}
                     </span>
+                    {l.content_updated_at && (
+                      <span className="block text-[11px] text-brand-blue mt-0.5" title="Последнее изменение содержания">
+                        изм. {fmtDate(l.content_updated_at)}
+                      </span>
+                    )}
                   </td>
 
                   {/* Тип / Категория */}
