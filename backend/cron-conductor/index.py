@@ -29,6 +29,7 @@ JOB_TARGETS = {
     'auto_seo': {'url': 'https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d', 'method': 'POST', 'body': {'action': 'ping'}},
     'ai_retrain': {'url': 'https://functions.poehali.dev/e2f1d357-fb83-4fbb-8d8b-6fb063357afc?action=cron', 'method': 'GET'},
     'listing_faq': {'url': 'https://functions.poehali.dev/282b9c5f-29fa-41ea-bc42-0793bdf8950d', 'method': 'POST', 'body': {'action': 'batch', 'limit': 5}},
+    'storage_cleanup': {'url': 'https://functions.poehali.dev/98a2eda7-410c-4378-91b9-a2f195cc0dc2/?action=print_cleanup', 'method': 'GET'},
     'vb_digest': {'url': 'https://functions.poehali.dev/34bfc4a2-89b9-4c89-bcbc-d82314730aef', 'method': 'POST', 'body': {'action': 'vb_digest'}, 'long': True},
 }
 

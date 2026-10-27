@@ -27,6 +27,22 @@
         "error": "string"
       },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Удаление фото без токена — 401",
+      "method": "GET",
+      "path": "/?action=run",
+      "expectedStatus": 401
+    },
+    {
+      "name": "Очистка файлов для печати",
+      "method": "GET",
+      "path": "/?action=print_cleanup",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "mode": "print_cleanup"
+      },
+      "bodyMatcher": "partial"
     }
   ]
 }

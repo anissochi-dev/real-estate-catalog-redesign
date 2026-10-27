@@ -32,6 +32,7 @@ def handler(event: dict, context) -> dict:
 
     params = event.get('queryStringParameters') or {}
     token_raw = params.get('token', '') or (event.get('headers') or {}).get('x-authorization', '').replace('Bearer ', '').strip()
+    token_raw = token_raw.replace("'", "''")[:200]
     if not token_raw:
         return _err(401, 'Требуется авторизация')
 

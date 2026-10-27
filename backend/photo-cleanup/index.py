@@ -11,7 +11,7 @@ GET               → последние 5 прогонов из s3_orphans_log
 GET ?action=summary → сводка по фото для админки (бывшая функция s3-audit, требует admin-токен)
 GET ?action=dry_run → показывает орфанов без удаления (требует admin-токен)
 GET ?action=run     → реальное удаление (требует admin-токен)
-Крон-вызов без токена: action=run разрешён без авторизации (доверенный вызов по расписанию).
+GET ?action=print_cleanup → удаление просроченных файлов для печати (без токена, вызывает очередь фоновых задач).
 Дополнительно: удаляет файлы для печати (print_files, QR-баннеры TIFF) старше 7 дней.
 """
 import json
@@ -114,12 +114,13 @@ def handler(event: dict, context) -> dict:
         from s3_audit import handler as summary_handler
         return summary_handler(event, context)
     token_raw = params.get('token', '') or (event.get('headers') or {}).get('x-authorization', '').replace('Bearer ', '').strip()
+    token_raw = token_raw.replace("'", "''")[:200]
 
     dsn = os.environ['DATABASE_URL']
     conn = psycopg2.connect(dsn)
 
-    # dry_run требует токен; run разрешён и без токена (крон-вызов)
-    if action == 'dry_run':
+    # dry_run и run (удаление сиротских фото) — только администратор
+    if action in ('dry_run', 'run'):
         if not token_raw:
             conn.close()
             return _err(401, 'Требуется авторизация')
@@ -133,6 +134,13 @@ def handler(event: dict, context) -> dict:
         if not row or row[0] != 'admin':
             conn.close()
             return _err(403, 'Только для администратора')
+
+    # Только удаление просроченных файлов для печати — безопасно без токена:
+    # трогает лишь файлы с истёкшим сроком. Вызывается очередью фоновых задач раз в сутки.
+    if action == 'print_cleanup':
+        res = _cleanup_print_files(conn)
+        conn.close()
+        return _ok({'mode': 'print_cleanup', 'print_cleanup': res})
 
     # Файлы для печати (QR-баннеры TIFF) живут 7 дней — удаляем просроченные при каждом
     # вызове по расписанию (крон приходит без action) и при ручном run.
