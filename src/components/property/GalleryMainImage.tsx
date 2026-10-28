@@ -71,6 +71,7 @@ export function GalleryMainImage({
           >
             <img
               key={fadeKey}
+              ref={el => { if (el && el.complete && el.naturalWidth > 0 && !imgLoaded) onImgLoad(); }}
               src={photoMediums[photoActiveIdx] || mainImg}
               alt={item.title}
               loading="eager"

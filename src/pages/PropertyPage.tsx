@@ -21,8 +21,10 @@ import AIChatWidget from '@/components/property/AIChatWidget';
 import SchemaOrg, { makeRealEstateSchema, makeVideoObjectSchema, makeFaqSchema } from '@/components/SchemaOrg';
 import { useBreadcrumbs } from '@/hooks/useBreadcrumbs';
 import SeoHead from '@/components/SeoHead';
+import { listingPageTitle } from '@/lib/ssrData';
 
 interface Props {
+  initialItem?: ListingDetail | null;
   onToggleFavorite: (id: number) => void;
   onToggleCompare: (id: number) => void;
   favorites: number[];
@@ -31,12 +33,12 @@ interface Props {
 
 const FAQ_URL = 'https://functions.poehali.dev/282b9c5f-29fa-41ea-bc42-0793bdf8950d';
 
-export default function PropertyPage({ onToggleFavorite, onToggleCompare, favorites, compareList }: Props) {
+export default function PropertyPage({ initialItem = null, onToggleFavorite, onToggleCompare, favorites, compareList }: Props) {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { settings } = useSettings();
-  const [item, setItem] = useState<ListingDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [item, setItem] = useState<ListingDetail | null>(initialItem);
+  const [loading, setLoading] = useState(!initialItem);
   const [activeImg, setActiveImg] = useState(0);
   const [lightbox, setLightbox] = useState(false);
   const [form, setForm] = useState({ name: '', phone: '', message: '' });
@@ -63,10 +65,11 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
   useEffect(() => {
     const id = extractIdFromSlug(slug || '');
     if (!id) { setLoading(false); return; }
-    setLoading(true);
-    const fromQr = typeof window !== 'undefined'
-      && new URLSearchParams(window.location.search).get('from') === 'qr';
-    fetchListingById(id).then(d => {
+    const fromQr = new URLSearchParams(window.location.search).get('from') === 'qr';
+    // Объект уже пришёл с сервера (loader) — не запрашиваем повторно, только статистика.
+    const ready = initialItem && initialItem.id === id ? Promise.resolve(initialItem) : null;
+    if (!ready) setLoading(true);
+    (ready || fetchListingById(id)).then(d => {
       setItem(d);
       if (d) {
         recordView(d);
@@ -78,7 +81,8 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
         Promise.all(statReqs).catch(() => {});
       }
     }).finally(() => setLoading(false));
-  }, [slug]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, initialItem?.id]);
 
   useEffect(() => {
     fetchAgents().then(setAgents).catch(() => {});
@@ -107,7 +111,7 @@ export default function PropertyPage({ onToggleFavorite, onToggleCompare, favori
 
   const FALLBACK_OG = 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/og-image-1779575751349.png';
   const mainImage = item ? ((item.images && item.images[0]) || item.image || FALLBACK_OG) : undefined;
-  const seoTitle = item ? (item.seoTitle || `${item.title} — ${item.city || 'Краснодар'}`) : undefined;
+  const seoTitle = item ? listingPageTitle(item) : undefined;
   const seoDesc = item ? (item.seoDescription || (item.description || '')).slice(0, 160) : undefined;
 
   // Хук вызывается безусловно, до early return ниже (loading / !item) — того требуют

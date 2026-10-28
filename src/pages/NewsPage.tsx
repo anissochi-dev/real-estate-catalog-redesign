@@ -32,7 +32,7 @@ interface NewsItem {
 
 function fmtDate(s?: string | null) {
   if (!s) return '';
-  return new Date(s).toLocaleDateString('ru', { day: 'numeric', month: 'long', year: 'numeric' });
+  return new Date(s).toLocaleDateString('ru', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Moscow' });
 }
 
 export function NewsListPage() {
@@ -172,21 +172,27 @@ export function NewsListPage() {
   );
 }
 
-export function NewsArticlePage() {
+export function NewsArticlePage({ initialArticle = null }: { initialArticle?: NewsItem | null } = {}) {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { settings } = useSettings();
-  const [article, setArticle] = useState<NewsItem | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [article, setArticle] = useState<NewsItem | null>(initialArticle);
+  const [loading, setLoading] = useState(!initialArticle);
+  const [shareUrl, setShareUrl] = useState('');
+
+  useEffect(() => { setShareUrl(window.location.href); }, [slug]);
 
   useEffect(() => {
     if (!slug) return;
+    // Статья уже пришла с сервера (loader) — повторно не запрашиваем.
+    if (initialArticle && initialArticle.slug === slug) { setArticle(initialArticle); setLoading(false); return; }
     setLoading(true);
     fetch(`${NEWS_URL}?action=get&slug=${encodeURIComponent(slug)}`)
       .then(r => r.json())
       .then(d => setArticle(d.article || null))
       .finally(() => setLoading(false));
-  }, [slug]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, initialArticle?.slug]);
 
   const articleTitle = article ? article.title : undefined;
   const articleDesc = article ? (article.summary || article.content || '').slice(0, 160) : undefined;
@@ -251,7 +257,7 @@ export function NewsArticlePage() {
       <div className="mb-3">
         <PageTopBar
           itemTitle={article.title}
-          shareUrl={typeof window !== 'undefined' ? window.location.href : ''}
+          shareUrl={shareUrl}
           breadcrumbs={articleBreadcrumbs}
           fallbackTo="/news"
         />

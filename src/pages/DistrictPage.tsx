@@ -13,6 +13,7 @@ import DistrictHero from './district/DistrictHero';
 import DistrictStatsBar from './district/DistrictStatsBar';
 import DistrictSeoBlock from './district/DistrictSeoBlock';
 import SeoHead from '@/components/SeoHead';
+import { districtSeo } from '@/lib/ssrData';
 import CatalogMap from './catalog/CatalogMap';
 
 const DISTRICT_SEO_URL = 'https://functions.poehali.dev/4f6d05ce-e38c-4e10-8a8b-f282e1ed2ddd';
@@ -20,13 +21,18 @@ const PAGE_SIZE = 21;
 
 interface Props {
   properties: Property[];
+  initialDistrict?: District | null;
+  initialAllDistricts?: District[];
+  /** Объекты района с сервера (loader) — показываются, пока в браузере не загружен полный каталог. */
+  initialItems?: Property[] | null;
+  allLoaded?: boolean;
   favorites: number[];
   compareList: number[];
   onToggleFavorite: (id: number) => void;
   onToggleCompare: (id: number) => void;
 }
 
-export default function DistrictPage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare }: Props) {
+export default function DistrictPage({ properties, initialDistrict = null, initialAllDistricts = [], initialItems = null, allLoaded = false, favorites, compareList, onToggleFavorite, onToggleCompare }: Props) {
   const { district } = useParams<{ district: string }>();
   const navigate = useNavigate();
   const { settings } = useSettings();
@@ -39,17 +45,23 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
   const [mapFullscreen, setMapFullscreen] = useState(false);
 
   const districtName = district ? decodeURIComponent(district) : '';
-  const [districtData, setDistrictData] = useState<District | null>(null);
-  const [allDistricts, setAllDistricts] = useState<District[]>([]);
+  const [districtData, setDistrictData] = useState<District | null>(initialDistrict);
+  const [allDistricts, setAllDistricts] = useState<District[]>(initialAllDistricts);
 
   useEffect(() => {
     if (!district) return;
+    if (initialDistrict && initialDistrict.slug === district) {
+      setDistrictData(initialDistrict);
+      setAllDistricts(initialAllDistricts);
+      return;
+    }
     fetchDistricts().then(list => {
       setAllDistricts(list);
       const found = list.find(d => d.slug === district);
       setDistrictData(found || null);
     });
-  }, [district]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [district, initialDistrict?.slug]);
 
   const isOkrug = !!districtData?.is_okrug;
   // Названия районов, входящих в округ (для фильтрации объектов и текстов)
@@ -61,16 +73,6 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
   const placeLabel = isOkrug ? 'округ' : 'район';
 
   const placeName = districtData?.name || districtName;
-  const seoTitle = districtName
-    ? (isOkrug
-        ? `Коммерческая недвижимость в ${placeName}, ${city}`
-        : `Коммерческая недвижимость в районе ${placeName}, ${city}`)
-    : '';
-  const seoDescription = districtName
-    ? (isOkrug
-        ? `Аренда и продажа коммерческой недвижимости в ${placeName} (${city}). Офисы, склады, торговые площади и другие объекты во всех районах округа.`
-        : `Аренда и продажа коммерческой недвижимости в районе ${placeName}, ${city}. Офисы, склады, торговые площади и другие объекты.`)
-    : '';
   const seoKeywords = districtName
     ? `коммерческая недвижимость ${placeName}, аренда ${placeName}, ${placeName} ${city}, офис ${placeName}, склад ${placeName}`
     : '';
@@ -96,8 +98,16 @@ export default function DistrictPage({ properties, favorites, compareList, onTog
     // Для округа — объекты всех его районов, для района — по его названию
     const names = isOkrug ? okrugChildNames : [exactName];
     if (names.length === 0) return [];
+    // Пока полный каталог не загружен в браузере — показываем объекты, пришедшие с сервера.
+    if (!allLoaded && initialItems && initialDistrict?.slug === district) return initialItems;
     return properties.filter(p => matchesDistrictNames(p.district, p.address, names));
-  }, [properties, districtData, districtName, isOkrug, okrugChildNames]);
+  }, [properties, districtData, districtName, isOkrug, okrugChildNames, allLoaded, initialItems, initialDistrict, district]);
+
+  // Тот же title/description, что отдаёт сервер в head() маршрута
+  const seoReady = !!districtData && (allLoaded || !!initialItems);
+  const { title: seoTitle, description: seoDescription } = districtName
+    ? districtSeo(districtData || { name: placeName, is_okrug: isOkrug }, seoReady ? items.length : null, city)
+    : { title: '', description: '' };
 
   const totalPages = Math.ceil(items.length / PAGE_SIZE);
   const pageItems = items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);

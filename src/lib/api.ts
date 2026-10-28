@@ -200,6 +200,59 @@ export interface ListingDetail extends Property {
   seoFaq?: { question: string; answer: string }[] | null;
 }
 
+/** Разбор ответа API в ListingDetail — общий для браузера и серверного loader'а. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function mapListingDetail(it: any): ListingDetail {
+  const base = mapApiListing(it);
+  const imgs: string[] = (() => {
+    if (Array.isArray(it.images)) return it.images;
+    if (typeof it.images === 'string' && it.images) {
+      const sep = it.images.includes('|') ? '|' : ',';
+      return it.images.split(sep).map((s: string) => s.trim()).filter(Boolean);
+    }
+    return base.image ? [base.image] : [];
+  })();
+  return {
+    ...base,
+    images: imgs,
+    city: it.city || 'Краснодар',
+    priceUnit: it.price_unit,
+    purpose: it.purpose,
+    condition: it.condition,
+    parking: it.parking,
+    entrance: it.entrance,
+    propertyRights: it.property_rights,
+    hasFurniture: it.has_furniture ?? null,
+    hasEquipment: it.has_equipment ?? null,
+    rentIndexPct: it.rent_index_pct ?? null,
+    landStatus: it.land_status,
+    landArea: it.land_area ?? null,
+    landVri: it.land_vri,
+    videoUrl: it.video_url,
+    videoType: it.video_type,
+    ownerName: it.owner_name,
+    ownerPhone: it.owner_phone,
+    brokerId: it.broker_id ?? null,
+    brokerPhone: it.broker_phone ?? null,
+    brokerName: it.broker_name ?? null,
+    brokerAvatar: it.broker_avatar ?? null,
+    seoTitle: it.seo_title,
+    seoDescription: it.seo_description,
+    rooms: it.rooms ?? null,
+    seoH1: it.seo_h1 ?? null,
+    seoH2: it.seo_h2 ?? null,
+    seoH3: it.seo_h3 ?? null,
+    seoH4: it.seo_h4 ?? null,
+    seoH5: it.seo_h5 ?? null,
+    seoFaq: (() => {
+      const raw = it.seo_faq;
+      if (!raw) return null;
+      if (Array.isArray(raw)) return raw;
+      try { return JSON.parse(raw); } catch { return null; }
+    })(),
+  };
+}
+
 // Кэш деталей объекта — заполняется при префетче (наведение на карточку),
 // чтобы страница объекта открывалась мгновенно без ожидания сети.
 const listingDetailCache = new Map<number, ListingDetail | null>();
@@ -224,54 +277,7 @@ export async function fetchListingById(id: number): Promise<ListingDetail | null
       const data = await res.json();
       const it = data.listing;
       if (!it) return null;
-      const base = mapApiListing(it);
-      const imgs: string[] = (() => {
-        if (Array.isArray(it.images)) return it.images;
-        if (typeof it.images === 'string' && it.images) {
-          const sep = it.images.includes('|') ? '|' : ',';
-          return it.images.split(sep).map((s: string) => s.trim()).filter(Boolean);
-        }
-        return base.image ? [base.image] : [];
-      })();
-      return {
-        ...base,
-        images: imgs,
-        city: it.city || 'Краснодар',
-        priceUnit: it.price_unit,
-        purpose: it.purpose,
-        condition: it.condition,
-        parking: it.parking,
-        entrance: it.entrance,
-        propertyRights: it.property_rights,
-        hasFurniture: it.has_furniture ?? null,
-        hasEquipment: it.has_equipment ?? null,
-        rentIndexPct: it.rent_index_pct ?? null,
-        landStatus: it.land_status,
-        landArea: it.land_area ?? null,
-        landVri: it.land_vri,
-        videoUrl: it.video_url,
-        videoType: it.video_type,
-        ownerName: it.owner_name,
-        ownerPhone: it.owner_phone,
-        brokerId: it.broker_id ?? null,
-        brokerPhone: it.broker_phone ?? null,
-        brokerName: it.broker_name ?? null,
-        brokerAvatar: it.broker_avatar ?? null,
-        seoTitle: it.seo_title,
-        seoDescription: it.seo_description,
-        rooms: it.rooms ?? null,
-        seoH1: it.seo_h1 ?? null,
-        seoH2: it.seo_h2 ?? null,
-        seoH3: it.seo_h3 ?? null,
-        seoH4: it.seo_h4 ?? null,
-        seoH5: it.seo_h5 ?? null,
-        seoFaq: (() => {
-          const raw = it.seo_faq;
-          if (!raw) return null;
-          if (Array.isArray(raw)) return raw;
-          try { return JSON.parse(raw); } catch { return null; }
-        })(),
-      };
+      return mapListingDetail(it);
     } catch {
       return null;
     }
