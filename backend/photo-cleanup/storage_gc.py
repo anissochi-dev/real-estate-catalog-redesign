@@ -81,15 +81,16 @@ def scan(conn) -> dict:
         cur.execute(
             f"SELECT id, s3_key, is_orphan, orphan_since, "
             f"uploaded_at < NOW() - INTERVAL '{MIN_AGE_HOURS} hours' AS old_enough, "
-            f"orphan_since IS NOT NULL AND orphan_since < NOW() - INTERVAL '{QUARANTINE_DAYS} days' AS quarantine_over "
+            f"orphan_since IS NOT NULL AND orphan_since < NOW() - INTERVAL '{QUARANTINE_DAYS} days' AS quarantine_over, "
+            f"keep_forever "
             f"FROM {SCHEMA}.s3_photo_refs WHERE split_part(s3_key, '/', 1) IN ({folders_sql})"
         )
         rows = cur.fetchall()
 
     to_attach, to_quarantine, to_release, ready = [], [], [], []
     in_quarantine = used_count = fresh_count = 0
-    for rid, key, is_orphan, orphan_since, old_enough, quarantine_over in rows:
-        if base_of(key) in used:
+    for rid, key, is_orphan, orphan_since, old_enough, quarantine_over, keep_forever in rows:
+        if keep_forever or base_of(key) in used:
             used_count += 1
             if is_orphan:
                 to_attach.append(rid)

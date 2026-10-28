@@ -72,7 +72,7 @@ export default function S3OrphanAudit() {
             <Icon name="Ghost" size={15} className="text-amber-500" /> Очистка хранилища
           </div>
           <p className="text-xs text-muted-foreground mt-0.5 max-w-xl">
-            Файлы, которые нигде на сайте не используются (например, фото удалённых объектов), сначала 7 дней лежат в карантине, затем удаляются автоматически каждую ночь.
+            Файлы, которые нигде на сайте не используются (например, фото удалённых объектов), сначала 7 дней лежат в карантине, затем ждут вашего подтверждения: раз в месяц в колокольчике появится напоминание с кнопкой «Удалить». Без подтверждения ничего не удаляется.
           </p>
         </div>
         <button onClick={loadAudit} disabled={auditLoading}
@@ -107,7 +107,7 @@ export default function S3OrphanAudit() {
           {audit.photo_refs.in_quarantine > 0 && audit.photo_refs.next_delete_at && (
             <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center gap-2">
               <Icon name="Clock" size={13} className="shrink-0" />
-              Первые файлы из карантина станут доступны для удаления {fmt(audit.photo_refs.next_delete_at)}. Если файл снова начнёт использоваться, он автоматически выйдет из карантина.
+              Первые файлы из карантина можно будет удалить (после вашего подтверждения) {fmt(audit.photo_refs.next_delete_at)}. Если файл снова начнёт использоваться, он автоматически выйдет из карантина.
             </div>
           )}
 

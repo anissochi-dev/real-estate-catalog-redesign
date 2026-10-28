@@ -8,13 +8,17 @@ GET                        → последние 5 прогонов
 GET ?action=summary        → сводка для админки (только администратор)
 GET ?action=dry_run        → пересчёт учёта без удаления (только администратор)
 GET ?action=run            → пересчёт + удаление отлежавших карантин (только администратор)
-GET ?action=print_cleanup  → ночная задача: файлы для печати + пересчёт + удаление (без токена)
+GET ?action=print_cleanup  → ночная задача: файлы для печати + пересчёт карантина (ничейные НЕ удаляет)
+GET ?action=pending        → сколько файлов ждут подтверждения удаления + нужно ли напомнить (администратор)
+GET ?action=confirm        → удалить очередную пачку отлежавших карантин (администратор)
+GET ?action=snooze         → отложить напоминание на месяц (администратор)
+GET ?action=keep&key=...   → «Сохранить»: файл никогда не попадёт под очистку (администратор)
 """
 import json
 import os
 import psycopg2
 import boto3
-from storage_gc import scan, delete_ready, save_log
+from storage_gc import scan, delete_ready, save_log, QUARANTINE_DAYS
 
 SCHEMA = 't_p71821556_real_estate_catalog_'
 BUCKET = 'files'
@@ -115,6 +119,77 @@ def _gc(conn, delete: bool, status_label: str) -> dict:
     }
 
 
+REMIND_DAYS = 30
+SAMPLE_SIZE = 30
+
+
+def _pending_info(conn) -> dict:
+    """Файлы, отлежавшие карантин и ждущие подтверждения администратора."""
+    ready_sql = (
+        f"FROM {SCHEMA}.s3_photo_refs WHERE keep_forever = FALSE AND orphan_since IS NOT NULL "
+        f"AND orphan_since < NOW() - INTERVAL '{QUARANTINE_DAYS} days' "
+        f"AND split_part(s3_key, '/', 1) IN ('photos', 'logos', 'watermarks', 'documents')"
+    )
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT COUNT(*) {ready_sql}")
+        count = cur.fetchone()[0]
+        cur.execute(f"SELECT s3_key, cdn_url, orphan_since {ready_sql} ORDER BY orphan_since, id LIMIT {SAMPLE_SIZE}")
+        sample = [{'key': r[0], 'url': r[1], 'orphan_since': r[2]} for r in cur.fetchall()]
+        cur.execute(
+            f"SELECT storage_cleanup_next_at, storage_cleanup_last_at, "
+            f"storage_cleanup_next_at IS NULL OR storage_cleanup_next_at <= NOW() "
+            f"FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1"
+        )
+        s = cur.fetchone() or (None, None, True)
+    return {
+        'ready': count,
+        'sample': sample,
+        'next_reminder_at': s[0],
+        'last_cleanup_at': s[1],
+        'notify': bool(count > 0 and s[2]),
+    }
+
+
+def _set_next_reminder(conn, cleaned: bool):
+    with conn.cursor() as cur:
+        extra = ", storage_cleanup_last_at = NOW()" if cleaned else ""
+        cur.execute(
+            f"UPDATE {SCHEMA}.settings SET storage_cleanup_next_at = NOW() + INTERVAL '{REMIND_DAYS} days'{extra} "
+            f"WHERE id = (SELECT id FROM {SCHEMA}.settings ORDER BY id ASC LIMIT 1)"
+        )
+    conn.commit()
+
+
+def _confirm_actions(conn, action: str, params: dict) -> dict:
+    if action == 'pending':
+        return _ok(_pending_info(conn))
+
+    if action == 'snooze':
+        _set_next_reminder(conn, cleaned=False)
+        return _ok({'ok': True, **_pending_info(conn)})
+
+    if action == 'keep':
+        key = (params.get('key') or '').strip()
+        if not key or len(key) > 500:
+            return _err(400, 'Не указан файл')
+        with conn.cursor() as cur:
+            cur.execute(
+                f"UPDATE {SCHEMA}.s3_photo_refs SET keep_forever = TRUE, is_orphan = FALSE, orphan_since = NULL "
+                f"WHERE s3_key = %s",
+                (key,)
+            )
+            updated = cur.rowcount
+        conn.commit()
+        if not updated:
+            return _err(404, 'Файл не найден')
+        return _ok({'ok': True, 'kept': key, **_pending_info(conn)})
+
+    res = _gc(conn, delete=True, status_label='completed')
+    if res['left'] == 0 and res['failed'] == 0:
+        _set_next_reminder(conn, cleaned=True)
+    return _ok({'mode': 'confirm', **res, 'done': res['left'] == 0})
+
+
 def handler(event: dict, context) -> dict:
     """Очистка хранилища: просроченные файлы для печати и ничейные файлы после 7 дней карантина."""
     if event.get('httpMethod') == 'OPTIONS':
@@ -138,9 +213,16 @@ def handler(event: dict, context) -> dict:
             res = _gc(conn, delete=(action == 'run'), status_label='dry_run')
             return _ok({'mode': action, **res})
 
+        if action in ('pending', 'confirm', 'snooze', 'keep'):
+            if not token_raw:
+                return _err(401, 'Требуется авторизация')
+            if not _is_admin(conn, token_raw):
+                return _err(403, 'Только для администратора')
+            return _confirm_actions(conn, action, params)
+
         if action == 'print_cleanup':
             print_res = _cleanup_print_files(conn)
-            gc_res = _gc(conn, delete=True, status_label='completed')
+            gc_res = _gc(conn, delete=False, status_label='scan')
             print(f'[storage-gc] {json.dumps({k: v for k, v in gc_res.items() if k not in ("sample_ready", "errors")})}')
             return _ok({'mode': 'print_cleanup', 'print_cleanup': print_res, 'storage': gc_res})
 

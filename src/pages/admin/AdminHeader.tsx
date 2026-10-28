@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/icon';
 import type { AdminSection } from './AdminLayout';
 import ExportRequestsModal from './ExportRequestsModal';
 import PlatformAlertsPanel from './PlatformAlertsPanel';
+import StorageCleanupPanel from './storage/StorageCleanupPanel';
+import { storageCleanupApi, PendingInfo } from './storage/storageCleanupApi';
 import type { FailingPlatform, StalePlatform } from './ad-cabinet/types';
 
 interface NavItem {
@@ -43,6 +45,13 @@ export default function AdminHeader({
   const { user, logout } = useAuth();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [storageInfo, setStorageInfo] = useState<PendingInfo | null>(null);
+  const isAdmin = user?.role === 'admin';
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    storageCleanupApi.pending().then(setStorageInfo).catch(() => {});
+  }, [isAdmin]);
 
   if (!user) return null;
 
@@ -51,8 +60,9 @@ export default function AdminHeader({
   const platformAlertsCount = canSeePlatformAlerts
     ? new Set([...failingSyncPlatforms.map(f => f.key), ...staleSyncPlatforms.map(s => s.key)]).size
     : 0;
-  const bellCount = (canReviewExports ? newExportRequestsCount : 0) + platformAlertsCount;
-  const showBell = canReviewExports || canSeePlatformAlerts;
+  const storageAlert = isAdmin && !!storageInfo?.notify;
+  const bellCount = (canReviewExports ? newExportRequestsCount : 0) + platformAlertsCount + (storageAlert ? 1 : 0);
+  const showBell = canReviewExports || canSeePlatformAlerts || isAdmin;
 
   return (
     <header className="bg-white border-b border-border px-4 lg:px-8 py-4 flex items-center justify-between sticky top-0 z-30">
@@ -144,7 +154,13 @@ export default function AdminHeader({
             />
           ) : undefined}
           platformAlertsCount={platformAlertsCount}
-          initialTab={canSeePlatformAlerts && platformAlertsCount > 0 && newExportRequestsCount === 0 ? 'platforms' : undefined}
+          storagePanel={isAdmin ? <StorageCleanupPanel onChanged={setStorageInfo} /> : undefined}
+          storageBadge={storageAlert ? storageInfo?.ready || 0 : 0}
+          initialTab={
+            canSeePlatformAlerts && platformAlertsCount > 0 && newExportRequestsCount === 0 ? 'platforms'
+            : storageAlert && newExportRequestsCount === 0 ? 'storage'
+            : undefined
+          }
           onClose={() => setExportModalOpen(false)}
           onHandled={() => setNewExportRequestsCount?.(Math.max(0, newExportRequestsCount - 1))}
           onOpenListing={id => {

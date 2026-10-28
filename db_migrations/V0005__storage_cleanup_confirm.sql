@@ -1,0 +1,2 @@
+ALTER TABLE t_p71821556_real_estate_catalog_.settings ADD COLUMN IF NOT EXISTS storage_cleanup_next_at TIMESTAMPTZ NULL;
+ALTER TABLE t_p71821556_real_estate_catalog_.settings ADD COLUMN IF NOT EXISTS storage_cleanup_last_at TIMESTAMPTZ NULL;

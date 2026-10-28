@@ -39,6 +39,24 @@
       "method": "GET",
       "path": "/?action=zzz",
       "expectedStatus": 400
+    },
+    {
+      "name": "Ожидающие удаления без токена — 401",
+      "method": "GET",
+      "path": "/?action=pending",
+      "expectedStatus": 401
+    },
+    {
+      "name": "Подтверждение без токена — 401",
+      "method": "GET",
+      "path": "/?action=confirm",
+      "expectedStatus": 401
+    },
+    {
+      "name": "Сохранить файл без токена — 401",
+      "method": "GET",
+      "path": "/?action=keep&key=photos/x.jpg",
+      "expectedStatus": 401
     }
   ]
 }

@@ -47,16 +47,20 @@ interface Props {
   showExports?: boolean;
   platformAlerts?: ReactNode;
   platformAlertsCount?: number;
-  initialTab?: 'exports' | 'platforms';
+  initialTab?: 'exports' | 'platforms' | 'storage';
+  storagePanel?: ReactNode;
+  storageBadge?: number;
 }
 
 export default function ExportRequestsModal({
   onClose, onHandled, onOpenListing,
   showExports = true, platformAlerts, platformAlertsCount = 0, initialTab,
+  storagePanel, storageBadge = 0,
 }: Props) {
-  const hasPlatforms = platformAlerts !== undefined;
-  const [tab, setTab] = useState<'exports' | 'platforms'>(
-    initialTab || (!showExports ? 'platforms' : 'exports')
+  const hasStorage = storagePanel !== undefined;
+  const hasPlatforms = platformAlerts !== undefined || hasStorage;
+  const [tab, setTab] = useState<'exports' | 'platforms' | 'storage'>(
+    initialTab || (!showExports ? (platformAlerts !== undefined ? 'platforms' : 'storage') : 'exports')
   );
   const [items, setItems] = useState<ExportRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -141,6 +145,7 @@ export default function ExportRequestsModal({
                 Платная выгрузка{!loading && items.length > 0 && <span className="ml-1.5 opacity-80">{items.length}</span>}
               </button>
             )}
+            {platformAlerts !== undefined && (
             <button
               onClick={() => setTab('platforms')}
               className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition inline-flex items-center gap-1.5 ${tab === 'platforms' ? 'bg-brand-blue text-white' : 'bg-muted text-foreground hover:bg-muted/70'}`}
@@ -152,11 +157,25 @@ export default function ExportRequestsModal({
                 </span>
               )}
             </button>
+            )}
+            {hasStorage && (
+              <button
+                onClick={() => setTab('storage')}
+                className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition inline-flex items-center gap-1.5 ${tab === 'storage' ? 'bg-brand-blue text-white' : 'bg-muted text-foreground hover:bg-muted/70'}`}
+              >
+                Хранилище
+                {storageBadge > 0 && (
+                  <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold inline-flex items-center justify-center">
+                    {storageBadge > 999 ? '999+' : storageBadge}
+                  </span>
+                )}
+              </button>
+            )}
           </div>
         )}
 
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {hasPlatforms && tab === 'platforms' ? platformAlerts : loading ? (
+          {hasStorage && tab === 'storage' ? storagePanel : hasPlatforms && tab === 'platforms' ? platformAlerts : loading ? (
             <div className="flex items-center justify-center py-12 text-muted-foreground">
               <Icon name="Loader2" size={22} className="animate-spin" />
             </div>
