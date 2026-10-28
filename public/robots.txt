@@ -6,6 +6,12 @@ Disallow: /auth
 Disallow: /signin
 Disallow: /api/
 Disallow: /private/
+Disallow: /_serverFn/
+Disallow: /favorites
+Disallow: /compare
+Disallow: /declined
+Disallow: /*?search=
+Disallow: /*&search=
 Allow: /
 
 User-agent: Yandex
@@ -16,9 +22,16 @@ Disallow: /auth
 Disallow: /signin
 Disallow: /api/
 Disallow: /private/
+Disallow: /_serverFn/
+Disallow: /favorites
+Disallow: /compare
+Disallow: /declined
+Disallow: /*?search=
+Disallow: /*&search=
 Allow: /
 Crawl-delay: 1
 Clean-param: utm_source&utm_medium&utm_campaign&utm_term&utm_content&utm_referrer&yclid&gclid&fbclid&_escaped_fragment_
 Host: bmn.su
 
+Sitemap: https://bmn.su/sitemap-all.xml
 Sitemap: https://bmn.su/sitemap.xml

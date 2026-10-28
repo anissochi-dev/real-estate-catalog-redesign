@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useMemo } from 'react';
 
 interface SchemaOrgProps {
   schema: Record<string, unknown> | Record<string, unknown>[];
@@ -6,38 +6,19 @@ interface SchemaOrgProps {
 }
 
 /**
- * Инжектирует JSON-LD Schema.org в <head>.
- * При unmount — удаляет тег. При изменении schema — обновляет.
+ * JSON-LD Schema.org прямо в разметке страницы — попадает в HTML с сервера,
+ * поисковики видят его без выполнения JavaScript.
  */
 export default function SchemaOrg({ schema, id }: SchemaOrgProps) {
-  const scriptRef = useRef<HTMLScriptElement | null>(null);
-  const scriptId = id ? `schema-org-${id}` : undefined;
-  const schemaJson = useMemo(() => JSON.stringify(schema, null, 0), [schema]);
-
-  useEffect(() => {
-    let script = scriptId
-      ? (document.getElementById(scriptId) as HTMLScriptElement | null)
-      : null;
-
-    if (!script) {
-      script = document.createElement('script');
-      script.type = 'application/ld+json';
-      if (scriptId) script.id = scriptId;
-      document.head.appendChild(script);
-    }
-
-    script.textContent = schemaJson;
-    scriptRef.current = script;
-
-    return () => {
-      if (scriptRef.current && document.head.contains(scriptRef.current)) {
-        document.head.removeChild(scriptRef.current);
-        scriptRef.current = null;
-      }
-    };
-  }, [schemaJson, scriptId]);
-
-  return null;
+  const json = useMemo(() => JSON.stringify(schema).replace(/</g, '\\u003c'), [schema]);
+  return (
+    <script
+      type="application/ld+json"
+      id={id ? `schema-org-${id}` : undefined}
+      suppressHydrationWarning
+      dangerouslySetInnerHTML={{ __html: json }}
+    />
+  );
 }
 
 /* ───────── Фабрики схем ───────── */

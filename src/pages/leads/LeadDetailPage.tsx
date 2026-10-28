@@ -15,16 +15,40 @@ import { useBreadcrumbs } from '@/hooks/useBreadcrumbs';
 
 const OG_IMAGE = 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/bucket/f8de2a72-faf3-4f8b-aaa2-0ee00c7e16dc.png';
 
-export default function LeadDetailPage() {
+export interface LeadPageInitial {
+  lead: PublicLead | null;
+  similar: PublicLead[];
+  districts: District[];
+}
+
+/** Заголовок заявки — общий для страницы и head() маршрута. */
+export function leadHeading(lead: PublicLead, districts: District[]) {
+  const typeLabel = lead.property_type === 'sale' ? 'Продажа' : lead.property_type === 'rent' ? 'Аренда' : '';
+  const cat = lead.property_category || lead.request_category;
+  const catLabel = cat ? CATEGORY_LABELS[cat] || cat : '';
+  const districtNames = (lead.district_ids || [])
+    .map(id => districts.find(d => d.id === id)?.name)
+    .filter(Boolean) as string[];
+  const parts = [typeLabel, catLabel, districtNames[0]].filter(Boolean);
+  const h1 = parts.length > 0 ? `${parts.join(' · ')} — заявка клиента` : `Заявка клиента №${lead.id}`;
+  const descParts = [typeLabel, catLabel].filter(Boolean).join(' · ');
+  const description = `${descParts ? descParts + '. ' : ''}${(lead.message || '').slice(0, 140)}`.slice(0, 160);
+  return { typeLabel, catLabel, districtNames, h1, title: `${h1} в Краснодаре`, description };
+}
+
+export default function LeadDetailPage({ initial }: { initial?: LeadPageInitial } = {}) {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { settings } = useSettings();
   const SITE_URL = getSiteUrl(settings.site_url);
-  const [lead, setLead] = useState<PublicLead | null>(null);
-  const [similar, setSimilar] = useState<PublicLead[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [lead, setLead] = useState<PublicLead | null>(initial?.lead ?? null);
+  const [similar, setSimilar] = useState<PublicLead[]>(initial?.similar ?? []);
+  const [loading, setLoading] = useState(!initial?.lead);
   const [notFound, setNotFound] = useState(false);
-  const [districts, setDistricts] = useState<District[]>([]);
+  const [districts, setDistricts] = useState<District[]>(initial?.districts ?? []);
+  const [shareUrl, setShareUrl] = useState('');
+
+  useEffect(() => { setShareUrl(window.location.href); }, [slug]);
 
   const [contactOpen, setContactOpen] = useState(false);
   const [form, setForm] = useState({ name: '', phone: '', message: '' });
@@ -35,6 +59,11 @@ export default function LeadDetailPage() {
 
   useEffect(() => {
     if (!slug) { setLoading(false); setNotFound(true); return; }
+    // Заявка уже пришла с сервера (loader) — повторно не запрашиваем.
+    if (initial?.lead && initial.lead.slug === slug) {
+      setLead(initial.lead); setSimilar(initial.similar); setNotFound(false); setLoading(false);
+      return;
+    }
     setLoading(true);
     setNotFound(false);
     fetchPublicLeadBySlug(slug)
@@ -45,12 +74,15 @@ export default function LeadDetailPage() {
       })
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
-  }, [slug]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, initial?.lead?.slug]);
 
   useEffect(() => {
+    if (initial?.districts?.length) return;
     // Брокеры в CRM выбирают округа (is_okrug=true), поэтому список НЕ фильтруем —
     // иначе название района заявки не находится и не отображается на карточке.
     fetchDistricts().then(list => setDistricts(list)).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const openContact = () => {
@@ -79,7 +111,7 @@ export default function LeadDetailPage() {
         phone: form.phone,
         message: form.message,
         source: 'lead-detail-page',
-        object_url: typeof window !== 'undefined' ? window.location.href : '',
+        object_url: window.location.href,
         captcha_token: captcha?.token,
       });
       setSent(true);
@@ -88,17 +120,11 @@ export default function LeadDetailPage() {
     }
   };
 
-  const typeLabel = lead?.property_type === 'sale' ? 'Продажа' : lead?.property_type === 'rent' ? 'Аренда' : '';
-  const cat = lead?.property_category || lead?.request_category;
-  const catLabel = cat ? CATEGORY_LABELS[cat] || cat : '';
-  const districtNames = (lead?.district_ids || [])
-    .map(id => districts.find(d => d.id === id)?.name)
-    .filter(Boolean) as string[];
-
-  const titleParts = [typeLabel, catLabel, districtNames[0]].filter(Boolean);
-  const h1 = lead ? (titleParts.length > 0
-    ? `${titleParts.join(' · ')} — заявка клиента`
-    : `Заявка клиента №${lead.id}`) : '';
+  const heading = lead ? leadHeading(lead, districts) : null;
+  const typeLabel = heading?.typeLabel || '';
+  const catLabel = heading?.catLabel || '';
+  const districtNames = heading?.districtNames || [];
+  const h1 = heading?.h1 || '';
 
   // Хук вызывается безусловно, до early return ниже (loading / notFound) — того требуют
   // Rules of Hooks. Пока lead ещё не загружен, крошки просто без последнего элемента.
@@ -139,9 +165,8 @@ export default function LeadDetailPage() {
   const isUpdated = lead.updated_at && lead.updated_at !== lead.created_at;
   const displayDate = fmtDate(isUpdated ? lead.updated_at! : lead.created_at);
 
-  const seoTitle = `${h1} в Краснодаре`;
-  const seoDescParts = [typeLabel, catLabel].filter(Boolean).join(' · ');
-  const seoDesc = `${seoDescParts ? seoDescParts + '. ' : ''}${(lead.message || '').slice(0, 140)}`.slice(0, 160);
+  const seoTitle = heading?.title || '';
+  const seoDesc = heading?.description || '';
   const pageUrl = `${SITE_URL}/request/${lead.slug || slug}`;
 
   const serviceSchema = makeServiceSchema({
@@ -167,7 +192,7 @@ export default function LeadDetailPage() {
       <div className="container mx-auto px-4 py-6 max-w-3xl">
         <PageTopBar
           itemTitle={h1}
-          shareUrl={typeof window !== 'undefined' ? window.location.href : ''}
+          shareUrl={shareUrl}
           breadcrumbs={breadcrumbs}
           fallbackTo="/leads"
         />

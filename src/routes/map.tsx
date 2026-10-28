@@ -1,8 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { buildPageHead } from '@/lib/ssrData';
 import MapPage from '@/pages/MapPage';
 import { useAppState } from '@/app/AppStateContext';
 
 export const Route = createFileRoute('/map')({
+  head: () => buildPageHead('/map', null, { title: 'Карта коммерческой недвижимости Краснодара', noindex: true }),
   component: RoutePage,
 });
 

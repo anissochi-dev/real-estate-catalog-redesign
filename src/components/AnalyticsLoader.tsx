@@ -13,9 +13,9 @@ export default function AnalyticsLoader() {
   const gaId = settings.google_analytics_id;
   const ymVerify = settings.yandex_webmaster_verification;
   const gsVerify = settings.google_search_console_verification;
-  const vkPixelId = (settings as Record<string, unknown>).vk_pixel_id as string | undefined;
-  const calltouchId = (settings as Record<string, unknown>).calltouch_id as string | undefined;
-  const tgAdsPixel = (settings as Record<string, unknown>).telegram_ads_pixel as string | undefined;
+  const vkPixelId = settings.vk_pixel_id;
+  const calltouchId = settings.calltouch_id;
+  const tgAdsPixel = settings.telegram_ads_pixel;
   const [ready, setReady] = useState(false);
 
   // Откладываем загрузку аналитики до после LCP
@@ -38,7 +38,7 @@ export default function AnalyticsLoader() {
       tag.name = 'yandex-verification';
       document.head.appendChild(tag);
     }
-    tag.content = ymVerify || '';
+    if (ymVerify) tag.content = ymVerify;
   }, [ymVerify]);
 
   // Google Search Console
@@ -49,7 +49,7 @@ export default function AnalyticsLoader() {
       tag.name = 'google-site-verification';
       document.head.appendChild(tag);
     }
-    tag.content = gsVerify || '';
+    if (gsVerify) tag.content = gsVerify;
   }, [gsVerify]);
 
   // Яндекс.Метрика — только после ready

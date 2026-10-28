@@ -15,7 +15,8 @@ SCHEMA = 't_p71821556_real_estate_catalog_'
 
 ROBOTS_DISALLOW = [
     '/admin', '/admin/', '/login', '/auth', '/signin',
-    '/api/', '/private/',
+    '/api/', '/private/', '/_serverFn/', '/favorites', '/compare', '/declined',
+    '/*?search=', '/*&search=',
 ]
 
 CORS = {
@@ -359,6 +360,7 @@ def _build_robots_txt(cur) -> str:
     lines.append(f'Host: {host}')
     lines.append('')
 
+    lines.append(f'Sitemap: {base}/sitemap-all.xml')
     lines.append(f'Sitemap: {base}/sitemap.xml')
     return '\n'.join(lines) + '\n'
 

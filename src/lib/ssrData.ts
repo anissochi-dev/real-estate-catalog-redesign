@@ -1,4 +1,4 @@
-import { LISTINGS_URL, mapApiListing, mapListingDetail, type ApiListing, type PublicSettings, type ListingDetail, type District } from '@/lib/api';
+import { LISTINGS_URL, mapApiListing, mapListingDetail, type ApiListing, type PublicSettings, type ListingDetail, type District, type PublicLead } from '@/lib/api';
 import { NEWS_URL } from '@/lib/adminApi';
 import { getOkrugChildNames, matchesDistrictNames } from '@/lib/districts';
 import type { Property } from '@/app/appTypes';
@@ -179,4 +179,81 @@ export function districtSeo(d: { name: string; is_okrug?: boolean }, count: numb
     ? `${countLabel(count)} коммерческой недвижимости — ${place}: аренда и продажа офисов, складов, торговых площадей. Актуальные цены и фото.`
     : `Аренда и продажа коммерческой недвижимости — ${place}. Офисы, склады, торговые площади и другие объекты.`;
   return { title, description };
+}
+
+// ── SEO-тексты страниц из админки (раздел «SEO → страницы», таблица seo_pages) ──
+const SEO_PAGES_URL = 'https://functions.poehali.dev/068e7fac-cea4-46c6-9ad2-a02f1f5e250d';
+
+export interface PageSeo {
+  title?: string | null;
+  description?: string | null;
+  h1?: string | null;
+  keywords?: string | null;
+  og_image?: string | null;
+  noindex?: boolean | null;
+}
+
+/** SEO страницы по пути — тот же источник, что и у SeoHead в браузере. При сбое — null. */
+export async function loadPageSeo(path: string): Promise<PageSeo | null> {
+  const d = await getJson(`${SEO_PAGES_URL}?action=get_page_seo&path=${encodeURIComponent(path)}`, 3000);
+  const p = d.page as PageSeo | null | undefined;
+  if (!p) return null;
+  return plain({
+    title: p.title || null,
+    description: p.description || null,
+    h1: p.h1 || null,
+    keywords: p.keywords || null,
+    og_image: p.og_image || null,
+    noindex: !!p.noindex,
+  });
+}
+
+type HeadMeta = Record<string, string>;
+
+/** head() для страницы: приоритет у текстов из админки, затем запасные из кода.
+ *  Возвращает title, description, keywords, robots, og/twitter-теги и canonical. */
+export function buildPageHead(
+  path: string,
+  seo: PageSeo | null | undefined,
+  fallback: { title: string; description?: string; image?: string; noindex?: boolean; keywords?: string },
+) {
+  const title = clipText(seo?.title || fallback.title, 120);
+  const description = clipText(seo?.description || fallback.description || '', 160);
+  const image = seo?.og_image || fallback.image || '';
+  const keywords = seo?.keywords || fallback.keywords || '';
+  const noindex = !!(seo?.noindex || fallback.noindex);
+  const url = `${SITE_ORIGIN}${path === '/' ? '/' : path}`;
+  const meta: HeadMeta[] = [
+    { title },
+    { property: 'og:title', content: title },
+    { name: 'twitter:title', content: title },
+    { property: 'og:url', content: url },
+    { name: 'robots', content: noindex ? 'noindex, nofollow' : 'index, follow' },
+  ];
+  if (description) {
+    meta.push(
+      { name: 'description', content: description },
+      { property: 'og:description', content: description },
+      { name: 'twitter:description', content: description },
+    );
+  }
+  if (keywords) meta.push({ name: 'keywords', content: keywords });
+  if (image) meta.push({ property: 'og:image', content: image }, { name: 'twitter:image', content: image });
+  return { meta, links: noindex ? [] : [{ rel: 'canonical', href: url }] };
+}
+
+/** Публичная заявка по slug + похожие + районы (для названия района в заголовке). */
+export async function loadLeadPage(slug: string): Promise<{
+  lead: PublicLead | null; similar: PublicLead[]; districts: District[]; notFound: boolean;
+}> {
+  const [l, d] = await Promise.all([
+    getJsonStatus(`${LISTINGS_URL}?resource=public_lead_detail&slug=${encodeURIComponent(slug)}`),
+    getJsonStatus(`${LISTINGS_URL}?resource=districts`),
+  ]);
+  const districts = d.ok && Array.isArray(d.data.districts) ? plain(d.data.districts as District[]) : [];
+  if (!l.ok) return { lead: null, similar: [], districts, notFound: l.notFound };
+  const lead = l.data.lead as PublicLead | undefined;
+  if (!lead) return { lead: null, similar: [], districts, notFound: true };
+  const similar = Array.isArray(l.data.similar) ? (l.data.similar as PublicLead[]) : [];
+  return { lead: plain(lead), similar: plain(similar), districts, notFound: false };
 }

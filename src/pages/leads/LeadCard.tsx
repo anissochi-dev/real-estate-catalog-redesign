@@ -27,7 +27,7 @@ export function fmtArea(from: number | null, to: number | null): string {
 export function fmtDate(s: string | null): string {
   if (!s) return '';
   try {
-    return new Date(s).toLocaleDateString('ru', { day: '2-digit', month: 'long', year: 'numeric' });
+    return new Date(s).toLocaleDateString('ru', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Europe/Moscow' });
   } catch {
     return s;
   }

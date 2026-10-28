@@ -79,10 +79,9 @@ function setMeta(name: string, content: string | null | undefined, useProperty =
   const attr = useProperty ? 'property' : 'name';
   const head = document.head;
   let tag = head.querySelector<HTMLMetaElement>(`meta[${attr}="${name}"]`);
-  if (!content) {
-    if (tag) tag.remove();
-    return;
-  }
+  // Теги из серверного HTML принадлежат React (HeadContent) — не удаляем их,
+  // иначе React падает при следующем обновлении шапки (removeChild of null).
+  if (!content) return;
   if (!tag) {
     tag = document.createElement('meta');
     tag.setAttribute(attr, name);
@@ -122,11 +121,12 @@ export default function SeoHead({
   useEffect(() => {
     // SEO-лимиты: title ≤ 68 символов, meta description ≤ 160 символов
     const clip = (s: string, max: number) => (s && s.length > max ? s.slice(0, max - 1).trimEnd() + '…' : s);
-    const rawTitle = title || remote?.title || h1 || remote?.h1 || document.title;
+    // Тот же приоритет, что и в head() маршрутов на сервере: тексты из админки → значения страницы.
+    const rawTitle = remote?.title || title || h1 || remote?.h1 || document.title;
     const finalTitle = clip(String(rawTitle || ''), 68);
-    const finalDesc = clip(description ?? remote?.description ?? '', 160);
-    const finalKw = keywords ?? remote?.keywords ?? '';
-    const finalOg = ogImage ?? remote?.og_image ?? settings.og_image_url ?? '';
+    const finalDesc = clip(remote?.description || description || '', 160);
+    const finalKw = remote?.keywords || keywords || '';
+    const finalOg = remote?.og_image || ogImage || settings.og_image_url || '';
     const finalNoindex = noindex || !!remote?.noindex;
 
     if (finalTitle) document.title = String(finalTitle);

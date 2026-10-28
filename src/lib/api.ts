@@ -372,6 +372,9 @@ export interface PublicSettings {
   favicon_url?: string;
   apple_touch_icon_url?: string;
   og_image_url?: string;
+  vk_pixel_id?: string;
+  calltouch_id?: string;
+  telegram_ads_pixel?: string;
 }
 
 export async function fetchPublicSettings(): Promise<PublicSettings> {

@@ -14,8 +14,11 @@ import { Route as CompareRouteImport } from './routes/compare'
 import { Route as DeclinedRouteImport } from './routes/declined'
 import { Route as FavoritesRouteImport } from './routes/favorites'
 import { Route as LeadsRouteImport } from './routes/leads'
+import { Route as MailruDomain6dS7udsVWBpJx77ORouteImport } from './routes/mailru-domain6dS7udsVWBpJx77O'
 import { Route as MapRouteImport } from './routes/map'
+import { Route as MarketIndexRouteImport } from './routes/market-index'
 import { Route as NetworkTenantsRouteImport } from './routes/network-tenants'
+import { Route as SitemapAllDotxmlRouteImport } from './routes/sitemap-all[.]xml'
 import { Route as CatalogIndexRouteImport } from './routes/catalog.index'
 import { Route as CatalogTypeRouteImport } from './routes/catalog.$type'
 import { Route as DistrictDistrictRouteImport } from './routes/district.$district'
@@ -49,14 +52,30 @@ const LeadsRoute = LeadsRouteImport.update({
   path: '/leads',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MailruDomain6dS7udsVWBpJx77ORoute =
+  MailruDomain6dS7udsVWBpJx77ORouteImport.update({
+    id: '/mailru-domain6dS7udsVWBpJx77O',
+    path: '/mailru-domain6dS7udsVWBpJx77O',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const MapRoute = MapRouteImport.update({
   id: '/map',
   path: '/map',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MarketIndexRoute = MarketIndexRouteImport.update({
+  id: '/market-index',
+  path: '/market-index',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const NetworkTenantsRoute = NetworkTenantsRouteImport.update({
   id: '/network-tenants',
   path: '/network-tenants',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapAllDotxmlRoute = SitemapAllDotxmlRouteImport.update({
+  id: '/sitemap-all.xml',
+  path: '/sitemap-all.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CatalogIndexRoute = CatalogIndexRouteImport.update({
@@ -101,8 +120,11 @@ export interface FileRoutesByFullPath {
   '/declined': typeof DeclinedRoute
   '/favorites': typeof FavoritesRoute
   '/leads': typeof LeadsRoute
+  '/mailru-domain6dS7udsVWBpJx77O': typeof MailruDomain6dS7udsVWBpJx77ORoute
   '/map': typeof MapRoute
+  '/market-index': typeof MarketIndexRoute
   '/network-tenants': typeof NetworkTenantsRoute
+  '/sitemap-all.xml': typeof SitemapAllDotxmlRoute
   '/catalog/$type': typeof CatalogTypeRoute
   '/district/$district': typeof DistrictDistrictRoute
   '/news/$slug': typeof NewsSlugRoute
@@ -117,8 +139,11 @@ export interface FileRoutesByTo {
   '/declined': typeof DeclinedRoute
   '/favorites': typeof FavoritesRoute
   '/leads': typeof LeadsRoute
+  '/mailru-domain6dS7udsVWBpJx77O': typeof MailruDomain6dS7udsVWBpJx77ORoute
   '/map': typeof MapRoute
+  '/market-index': typeof MarketIndexRoute
   '/network-tenants': typeof NetworkTenantsRoute
+  '/sitemap-all.xml': typeof SitemapAllDotxmlRoute
   '/catalog/$type': typeof CatalogTypeRoute
   '/district/$district': typeof DistrictDistrictRoute
   '/news/$slug': typeof NewsSlugRoute
@@ -134,8 +159,11 @@ export interface FileRoutesById {
   '/declined': typeof DeclinedRoute
   '/favorites': typeof FavoritesRoute
   '/leads': typeof LeadsRoute
+  '/mailru-domain6dS7udsVWBpJx77O': typeof MailruDomain6dS7udsVWBpJx77ORoute
   '/map': typeof MapRoute
+  '/market-index': typeof MarketIndexRoute
   '/network-tenants': typeof NetworkTenantsRoute
+  '/sitemap-all.xml': typeof SitemapAllDotxmlRoute
   '/catalog/$type': typeof CatalogTypeRoute
   '/district/$district': typeof DistrictDistrictRoute
   '/news/$slug': typeof NewsSlugRoute
@@ -152,8 +180,11 @@ export interface FileRouteTypes {
     | '/declined'
     | '/favorites'
     | '/leads'
+    | '/mailru-domain6dS7udsVWBpJx77O'
     | '/map'
+    | '/market-index'
     | '/network-tenants'
+    | '/sitemap-all.xml'
     | '/catalog/$type'
     | '/district/$district'
     | '/news/$slug'
@@ -168,8 +199,11 @@ export interface FileRouteTypes {
     | '/declined'
     | '/favorites'
     | '/leads'
+    | '/mailru-domain6dS7udsVWBpJx77O'
     | '/map'
+    | '/market-index'
     | '/network-tenants'
+    | '/sitemap-all.xml'
     | '/catalog/$type'
     | '/district/$district'
     | '/news/$slug'
@@ -184,8 +218,11 @@ export interface FileRouteTypes {
     | '/declined'
     | '/favorites'
     | '/leads'
+    | '/mailru-domain6dS7udsVWBpJx77O'
     | '/map'
+    | '/market-index'
     | '/network-tenants'
+    | '/sitemap-all.xml'
     | '/catalog/$type'
     | '/district/$district'
     | '/news/$slug'
@@ -201,8 +238,11 @@ export interface RootRouteChildren {
   DeclinedRoute: typeof DeclinedRoute
   FavoritesRoute: typeof FavoritesRoute
   LeadsRoute: typeof LeadsRoute
+  MailruDomain6dS7udsVWBpJx77ORoute: typeof MailruDomain6dS7udsVWBpJx77ORoute
   MapRoute: typeof MapRoute
+  MarketIndexRoute: typeof MarketIndexRoute
   NetworkTenantsRoute: typeof NetworkTenantsRoute
+  SitemapAllDotxmlRoute: typeof SitemapAllDotxmlRoute
   CatalogTypeRoute: typeof CatalogTypeRoute
   DistrictDistrictRoute: typeof DistrictDistrictRoute
   NewsSlugRoute: typeof NewsSlugRoute
@@ -249,6 +289,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LeadsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/mailru-domain6dS7udsVWBpJx77O': {
+      id: '/mailru-domain6dS7udsVWBpJx77O'
+      path: '/mailru-domain6dS7udsVWBpJx77O'
+      fullPath: '/mailru-domain6dS7udsVWBpJx77O'
+      preLoaderRoute: typeof MailruDomain6dS7udsVWBpJx77ORouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/map': {
       id: '/map'
       path: '/map'
@@ -256,11 +303,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MapRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/market-index': {
+      id: '/market-index'
+      path: '/market-index'
+      fullPath: '/market-index'
+      preLoaderRoute: typeof MarketIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/network-tenants': {
       id: '/network-tenants'
       path: '/network-tenants'
       fullPath: '/network-tenants'
       preLoaderRoute: typeof NetworkTenantsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap-all.xml': {
+      id: '/sitemap-all.xml'
+      path: '/sitemap-all.xml'
+      fullPath: '/sitemap-all.xml'
+      preLoaderRoute: typeof SitemapAllDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/catalog/': {
@@ -321,8 +382,11 @@ const rootRouteChildren: RootRouteChildren = {
   DeclinedRoute: DeclinedRoute,
   FavoritesRoute: FavoritesRoute,
   LeadsRoute: LeadsRoute,
+  MailruDomain6dS7udsVWBpJx77ORoute: MailruDomain6dS7udsVWBpJx77ORoute,
   MapRoute: MapRoute,
+  MarketIndexRoute: MarketIndexRoute,
   NetworkTenantsRoute: NetworkTenantsRoute,
+  SitemapAllDotxmlRoute: SitemapAllDotxmlRoute,
   CatalogTypeRoute: CatalogTypeRoute,
   DistrictDistrictRoute: DistrictDistrictRoute,
   NewsSlugRoute: NewsSlugRoute,

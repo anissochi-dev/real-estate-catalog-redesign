@@ -1,8 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { buildPageHead } from '@/lib/ssrData';
 import ComparePage from '@/pages/ComparePage';
 import { useAppState } from '@/app/AppStateContext';
 
 export const Route = createFileRoute('/compare')({
+  head: () => buildPageHead('/compare', null, { title: 'Сравнение объектов', noindex: true }),
   component: RoutePage,
 });
 

@@ -8,7 +8,7 @@ interface MarketIndexHeroProps {
 export default function MarketIndexHero({ updatedAt, totalAnalogs }: MarketIndexHeroProps) {
   const fmtFullDate = (s: string | null) => {
     if (!s) return null;
-    return new Date(s).toLocaleDateString('ru', { day: 'numeric', month: 'long', year: 'numeric' });
+    return new Date(s).toLocaleDateString('ru', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Moscow' });
   };
 
   return (

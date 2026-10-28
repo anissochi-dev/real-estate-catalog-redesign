@@ -101,7 +101,15 @@ export const Route = createRootRoute({
     loader: () => loadSiteData(),
     shouldReload: false,
     staleTime: Infinity,
-    head: () => ({
+    head: ({loaderData}) => {
+        const st = loaderData?.settings || {};
+        const ogImage = st.og_image_url || OG_IMAGE;
+        const favicon = st.favicon_url || FAVICON;
+        const appleIcon = st.apple_touch_icon_url || "/favicon.svg";
+        const ymVerify = (st.yandex_webmaster_verification || "7099028f3e2220eb").trim();
+        const gsVerify = (st.google_search_console_verification || "_wn0FH8jA1kMdfoNQIVxcMJ2KGd0C2hl2Bgc8nkMOGI").trim();
+        const siteName = st.company_name || "Бизнес. Маркетинг. Недвижимость.";
+        return {
         meta: [
             {charSet: "utf-8"},
             {name: "viewport", content: "width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover"},
@@ -112,32 +120,29 @@ export const Route = createRootRoute({
             {name: "mobile-web-app-capable", content: "yes"},
             {title: TITLE},
             {name: "description", content: DESCRIPTION},
-            {name: "keywords", content: "коммерческая недвижимость Краснодар, готовый бизнес, аренда офиса, продажа склада, торговая площадь, ресторан"},
+            {name: "keywords", content: st.seo_keywords || "коммерческая недвижимость Краснодар, готовый бизнес, аренда офиса, продажа склада, торговая площадь, ресторан"},
             {name: "robots", content: "index, follow"},
             {name: "mailru-domain", content: "6dS7udsVWBpJx77O"},
-            {name: "yandex-verification", content: "7099028f3e2220eb"},
-            {name: "google-site-verification", content: "_wn0FH8jA1kMdfoNQIVxcMJ2KGd0C2hl2Bgc8nkMOGI"},
+            {name: "yandex-verification", content: ymVerify},
+            {name: "google-site-verification", content: gsVerify},
             {property: "og:type", content: "website"},
-            {property: "og:site_name", content: "Бизнес. Маркетинг. Недвижимость."},
+            {property: "og:site_name", content: siteName},
             {property: "og:title", content: TITLE},
             {property: "og:description", content: DESCRIPTION},
             {property: "og:url", content: "https://bmn.su/"},
             {property: "og:locale", content: "ru_RU"},
-            {property: "og:image", content: OG_IMAGE},
-            {property: "og:image:width", content: "1200"},
-            {property: "og:image:height", content: "630"},
-            {property: "og:image:type", content: "image/png"},
+            {property: "og:image", content: ogImage},
             {name: "twitter:card", content: "summary_large_image"},
             {name: "twitter:title", content: TITLE},
             {name: "twitter:description", content: DESCRIPTION},
-            {name: "twitter:image", content: OG_IMAGE},
+            {name: "twitter:image", content: ogImage},
             {property: "vk:image", content: "https://cdn.poehali.dev/projects/***/files/favicon-1779381523505.png"},
             ...PLATFORM_META,
         ],
         links: [
             {rel: "stylesheet", href: appCss},
-            {rel: "apple-touch-icon", href: "/favicon.svg"},
-            {rel: "icon", type: "image/jpg", href: FAVICON},
+            {rel: "apple-touch-icon", href: appleIcon},
+            {rel: "icon", href: favicon},
             {rel: "sitemap", type: "application/xml", title: "Sitemap", href: "/sitemap.xml"},
             {rel: "preconnect", href: "https://cdn.poehali.dev"},
             {rel: "preconnect", href: "https://functions.poehali.dev"},
@@ -156,7 +161,8 @@ export const Route = createRootRoute({
             {children: CHUNK_RECOVERY},
             {children: IMG_PROTECT},
         ],
-    }),
+    };
+    },
     component: RootComponent,
     notFoundComponent: NotFoundPage,
 });

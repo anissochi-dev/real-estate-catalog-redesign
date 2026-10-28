@@ -5,59 +5,67 @@
 
 ## Каталог
 - [Каталог всех объектов](https://bmn.su/catalog): актуальные предложения коммерческой недвижимости, город Краснодар
-- [Здания](https://bmn.su/catalog/building): 54 объектов в категории «здания»
-- [Свободного назначения](https://bmn.su/catalog/free_purpose): 34 объектов в категории «свободного назначения»
+- [Здания](https://bmn.su/catalog/building): 55 объектов в категории «здания»
+- [Свободного назначения](https://bmn.su/catalog/free_purpose): 36 объектов в категории «свободного назначения»
 - [Офисы](https://bmn.su/catalog/office): 28 объектов в категории «офисы»
 - [Гостиницы](https://bmn.su/catalog/hotel): 12 объектов в категории «гостиницы»
 - [Торговые помещения](https://bmn.su/catalog/retail): 10 объектов в категории «торговые помещения»
 - [Склады](https://bmn.su/catalog/warehouse): 6 объектов в категории «склады»
-- [Готовый арендный бизнес](https://bmn.su/catalog/gab): 4 объектов в категории «готовый арендный бизнес»
 - [Готовый бизнес](https://bmn.su/catalog/business): 4 объектов в категории «готовый бизнес»
+- [Готовый арендный бизнес](https://bmn.su/catalog/gab): 4 объектов в категории «готовый арендный бизнес»
+- [Производство](https://bmn.su/catalog/production): 4 объектов в категории «производство»
 - [Рестораны](https://bmn.su/catalog/restaurant): 3 объектов в категории «рестораны»
-- [Производство](https://bmn.su/catalog/production): 3 объектов в категории «производство»
-- [Автосервисы](https://bmn.su/catalog/car_service): 1 объектов в категории «автосервисы»
+- [Автосервисы](https://bmn.su/catalog/car_service): 2 объектов в категории «автосервисы»
 
 ## Районы
-- [Центральный (ЦМР)](https://bmn.su/district/tsentralnyy-tsmr): 46 объектов
-- [Фестивальный (ФМР)](https://bmn.su/district/festivalnyy-fmr): 18 объектов
+- [Центральный (ЦМР)](https://bmn.su/district/tsentralnyy-tsmr): 47 объектов
+- [Фестивальный (ФМР)](https://bmn.su/district/festivalnyy-fmr): 17 объектов
 - [Краевая клиническая больница (ККБ)](https://bmn.su/district/kraevaya-klinicheskaya-bolnitsa-kkb): 6 объектов
+- [Ростовское шоссе](https://bmn.su/district/rostovskoe-shosse): 6 объектов
 - [Комсомольский (КМР)](https://bmn.su/district/komsomolskiy-kmr): 6 объектов
+- [Дубинка](https://bmn.su/district/dubinka): 6 объектов
 - [Гидростроителей (ГМР)](https://bmn.su/district/gidrostroiteley-gmr): 5 объектов
-- [Ростовское шоссе](https://bmn.su/district/rostovskoe-shosse): 5 объектов
-- [Дубинка](https://bmn.su/district/dubinka): 5 объектов
 - [Школьный (ШМР)](https://bmn.su/district/shkolnyy-shmr): 5 объектов
-- [Индустриальный п.](https://bmn.su/district/industrialnyy-p): 4 объектов
-- [Юбилейный (ЮМР)](https://bmn.su/district/yubileynyy-yumr): 4 объектов
+- [Музыкальный](https://bmn.su/district/muzykalnyy): 4 объектов
 - [Черёмушки (ЧМР)](https://bmn.su/district/cheremushki-chmr): 4 объектов
+- [Индустриальный п.](https://bmn.su/district/industrialnyy-p): 4 объектов
 - [40 лет Победы](https://bmn.su/district/40-let-pobedy): 4 объектов
-- [Музыкальный](https://bmn.su/district/muzykalnyy): 3 объектов
-- [Славянский (СМР)](https://bmn.su/district/slavyanskiy-smr): 3 объектов
+- [Юбилейный (ЮМР)](https://bmn.su/district/yubileynyy-yumr): 4 объектов
 - [Кожевенный завод (Кожзавод)](https://bmn.su/district/kozhevennyy-zavod-kozhzavod): 3 объектов
+- [Славянский (СМР)](https://bmn.su/district/slavyanskiy-smr): 3 объектов
 - [Российский п.](https://bmn.su/district/rossiyskiy-p): 3 объектов
-- [Табачная фабрика (Табачка)](https://bmn.su/district/tabachnaya-fabrika-tabachka): 2 объектов
 - [Восточно-Кругликовский](https://bmn.su/district/vostochno-kruglikovskiy): 2 объектов
-- [Микрохирургия глаза (МХГ)](https://bmn.su/district/mikrohirurgiya-glaza-mhg): 2 объектов
 - [Панорама (Стадион Краснодар)](https://bmn.su/district/panorama-stadion-krasnodar): 2 объектов
 - [Камвольно-суконный комбинат (КСК)](https://bmn.su/district/kamvolno-sukonnyy-kombinat-ksk): 2 объектов
-- [Московский](https://bmn.su/district/moskovskiy): 2 объектов
-- [Хлопчато-бумажный комбинат (ХБК)](https://bmn.su/district/hlopchato-bumazhnyy-kombinat-hbk): 2 объектов
 - [Завод измерительных приборов (ЗИП)](https://bmn.su/district/zavod-izmeritelnyh-priborov-zip): 2 объектов
+- [Табачная фабрика (Табачка)](https://bmn.su/district/tabachnaya-fabrika-tabachka): 2 объектов
+- [Микрохирургия глаза (МХГ)](https://bmn.su/district/mikrohirurgiya-glaza-mhg): 2 объектов
+- [Хлопчато-бумажный комбинат (ХБК)](https://bmn.su/district/hlopchato-bumazhnyy-kombinat-hbk): 2 объектов
+- [Московский](https://bmn.su/district/moskovskiy): 2 объектов
 - [Красная площадь](https://bmn.su/district/krasnaya-ploschad): 2 объектов
-- [Немецкая деревня](https://bmn.su/district/nemetskaya-derevnya): 1 объектов
-- [Северный п.](https://bmn.su/district/severnyy-p): 1 объектов
-- [Пашковский (ПМР)](https://bmn.su/district/pashkovskiy-pmr): 1 объектов
+- [Колосистый п.](https://bmn.su/district/kolosistyy-p): 1 объектов
 - [Образцово](https://bmn.su/district/obraztsovo): 1 объектов
 - [Покровка](https://bmn.su/district/pokrovka): 1 объектов
 - [Калинина сады](https://bmn.su/district/kalinina-sady): 1 объектов
-- [Колосистый п.](https://bmn.su/district/kolosistyy-p): 1 объектов
+- [Немецкая деревня](https://bmn.su/district/nemetskaya-derevnya): 1 объектов
 - [Елизаветинская ст.](https://bmn.su/district/elizavetinskaya-st): 1 объектов
 - [Сельскохозяйственный институт (СХИ)](https://bmn.su/district/selskohozyaystvennyy-institut-shi): 1 объектов
 - [Энка (Жукова)](https://bmn.su/district/enka-zhukova): 1 объектов
+- [Пашковский (ПМР)](https://bmn.su/district/pashkovskiy-pmr): 1 объектов
+- [Северный п.](https://bmn.su/district/severnyy-p): 1 объектов
 
 ## Объекты
 
 Последние актуальные объявления:
-- [Сдаю производственное помещение 200 м² на улице Лизы Чайкиной](https://bmn.su/object/sdayu-proizvodstvennoe-pomeshchenie-200-m-na-ulitse-lizy-chaykinoy-299)
+- [Сдаю 250 м² свободного помещения с зоной погрузки по ул. Брянской](https://bmn.su/object/sdayu-250-m-svobodnogo-pomeshcheniya-s-zonoy-pogruzki-po-ul-bryanskoy-305)
+- [Сдаю здание 230-460 м² в центре ул. Новокузнечная Краснодар](https://bmn.su/object/sdayu-zdanie-230-460-m-v-tsentre-ul-novokuznechnaya-krasnodar-304)
+- [Сдаю производственную базу 150 кВт и здание 240 м² по ул Лизы Чайкиной](https://bmn.su/object/sdayu-proizvodstvennuyu-bazu-150-kvt-i-zdanie-240-m-po-ul-lizy-chaykinoy-299)
+- [Сдаю 300 м² на Ростовском шоссе первая линия](https://bmn.su/object/sdayu-300-m-na-rostovskom-shosse-pervaya-liniya-303)
+- [Сдаю здание под офис 330 м² на Ростовском шоссе 22/2 с парковкой](https://bmn.su/object/sdayu-zdanie-pod-ofis-330-m-na-rostovskom-shosse-22-2-s-parkovkoy-237)
+- [Продам готовы бизнес лофт 60 м² евро-ремонта на Домбайской 10/2](https://bmn.su/object/prodam-gotovy-biznes-loft-60-m-evro-remonta-na-dombayskoy-10-2-206)
+- [Сдаю торговое помещение 100, 180, 280 м² Московская 130 первая линия](https://bmn.su/object/sdayu-torgovoe-pomeshchenie-100-180-280-m-moskovskaya-130-pervaya-liniya-302)
+- [Сдаю 2 бокса 55 м² под СТО или детейлинг на улице Маяковского 160](https://bmn.su/object/sdayu-2-boksa-55-m-pod-sto-ili-deteyling-na-ulitse-mayakovskogo-160-301)
+- [Продаю пром базу 12 соток и здание 240 м² по улице Лизы Чайкиной](https://bmn.su/object/prodayu-prom-bazu-12-sotok-i-zdanie-240-m-po-ulitse-lizy-chaykinoy-300)
 - [Сдаю производственное помещение от 200-500 м² на ул Лизы Чайкиной](https://bmn.su/object/sdayu-proizvodstvennoe-pomeshchenie-ot-200-500-m-na-ul-lizy-chaykinoy-298)
 - [Сдаю 621 м² на 2 этаже напротив стадиона Краснодар и парка Галицкого](https://bmn.su/object/sdayu-621-m-na-2-etazhe-naprotiv-stadiona-krasnodar-i-parka-galitskogo-297)
 - [Сдам помещение свободного назначения 400 м² в ЦМР на Ставропольской](https://bmn.su/object/sdam-pomeshchenie-svobodnogo-naznacheniya-400-m-v-tsmr-na-stavropolskoy-214)
@@ -69,19 +77,14 @@
 - [Сдаю здание 1000 м² под дом престарелых на улице Виктора Гришина 22](https://bmn.su/object/sdayu-zdanie-1000-m-pod-dom-prestarelykh-na-ulitse-viktora-grishina-22-261)
 - [Сдаю производственное помещение 3000 м² в Колосистом](https://bmn.su/object/sdayu-proizvodstvennoe-pomeshchenie-3000-m-v-kolosistom-260)
 - [Сдаю склад 250 м² с отоплением и деберкадером на Маяковского 160](https://bmn.su/object/sdayu-sklad-250-m-s-otopleniem-i-deberkaderom-na-mayakovskogo-160-258)
-- [Сдаю торговое помещение 67, 111 5, 179 и 260 м² ул. Народная/Солнечная](https://bmn.su/object/sdayu-torgovoe-pomeshchenie-67-111-5-179-i-260-m-ul-narodnaya-solnechnaya-259)
-- [Сдаю помещение от 280 до 730 м² возле парка Галицкого](https://bmn.su/object/sdayu-pomeshchenie-ot-280-do-730-m-vozle-parka-galitskogo-255)
-- [Сдаю офисы в БЦ Голд 430 м² на Северной 247 с парковкой](https://bmn.su/object/sdayu-ofisy-v-bts-gold-430-m-na-severnoy-247-s-parkovkoy-257)
-- [Сдаю офис 400 м² на улице Красных Партизан 249 у Дендрария](https://bmn.su/object/sdayu-ofis-400-m-na-ulitse-krasnykh-partizan-249-u-dendrariya-246)
-- [Сдаю 170 м² в Московском районе на улице Байбакова Н.К. 6 под кафе](https://bmn.su/object/sdayu-170-m-v-moskovskom-rayone-na-ulitse-baybakova-n-k-6-pod-kafe-239)
-- [Сдаю склад холодильник до минуса от 200 м² и более в п. Дружелюбный](https://bmn.su/object/sdayu-sklad-kholodilnik-do-minusa-ot-200-m-i-bolee-v-p-druzhelyubnyy-254)
-- [Сдаем офис 160 м² в ЦМР, Красная ул., 145](https://bmn.su/object/sdaem-ofis-160-m-v-tsmr-krasnaya-ul-145-204)
-- [Сдаю склад от 300 до 2800 м² с ЖД веткой Ростовское шоссе](https://bmn.su/object/sdayu-sklad-ot-300-do-2800-m-s-zhd-vetkoy-rostovskoe-shosse-230)
 
 ## Заявки
 - [Лента заявок на аренду и покупку](https://bmn.su/leads): актуальный спрос от арендаторов и покупателей коммерческой недвижимости
 
 ## Новости
+- [Подписание соглашения с Ассоциацией Европейского бизнеса в Краснодарском крае](https://bmn.su/news/podpisanie-soglasheniya-s-assotsiatsiey-evropeyskogo-biznesa-124): В Краснодарском крае состоялась встреча Александра Руппеля с генеральным директором Ассоциации Европейского бизнеса Тадзио Шиллингом, на кот…
+- [Инжиниринговый центр Краснодарского края поддерживает малый и средний бизнес](https://bmn.su/news/inzhiniringovyy-tsentr-krasnodarskogo-kraya-podderzhivaet-ma-123): За восемь лет работы Инжиниринговый центр Краснодарского края оказал более 2,5 тысяч услуг предприятиям малого и среднего бизнеса.
+- [Развитие образовательных кластеров в Краснодарском крае](https://bmn.su/news/razvitie-obrazovatelnyh-klasterov-v-krasnodarskom-krae-122): В Краснодарском крае планируется создание трёх новых образовательных кластеров. Сейчас в регионе уже функционирует девять подобных кластеров…
 - [Продажа помещений строительной компании-банкрота в Краснодаре](https://bmn.su/news/prodazha-pomescheniy-stroitelnoy-kompanii-bankrota-v-krasnod-119): В Краснодаре были проданы помещения обанкротившейся строительной компании за 32 млн рублей. Это событие может оказать влияние на рынок недви…
 - [Гостиничный бизнес России в 2026: что происходит с рынком](https://bmn.su/news/gostinichnyy-biznes-rossii-v-2026-chto-proishodit-s-rynkom-118)
 - [Тенденции в развитии производственных объектов на юге России](https://bmn.su/news/tendentsii-v-razvitii-proizvodstvennyh-obektov-na-yuge-rossi-117): Девелоперы на юге России переходят от строительства к созданию экосистем для бизнеса. Инвесторы промышленных парков откладывают, но не отмен…
@@ -89,9 +92,6 @@
 - [Запуск B2B-категории для строительства бизнес-объектов на онлайн-платформе в Краснодарском крае](https://bmn.su/news/zapusk-b2b-kategorii-dlya-stroitelstva-biznes-obektov-na-onl-115): На онлайн-платформе появилась новая B2B-категория, предназначенная для строительства бизнес-объектов в Краснодарском крае. Это событие может…
 - [Премия «Любимый малый бизнес» для предпринимателей Краснодарского края](https://bmn.su/news/premiya-lyubimyy-malyy-biznes-dlya-predprinimateley-krasnoda-114): Предприниматели юга России могут получить 1 млн рублей за победу в премии «Любимый малый бизнес».
 - [Тенденции на рынке недвижимости Краснодарского края](https://bmn.su/news/tendentsii-na-rynke-nedvizhimosti-krasnodarskogo-kraya-113): Жители Кубани меняют предпочтения на рынке недвижимости: спрос смещается в сторону более доступных вариантов. В Сочи наблюдается дефицит дос…
-- [Ольга Нарт заняла пост коммерческого директора в девелопере «Неометрия»](https://bmn.su/news/olga-nart-zanyala-post-kommercheskogo-direktora-v-developere-112): Ольга Нарт назначена коммерческим директором федерального девелопера «Неометрия».
-- [Новый склад в Краснодаре обещает решить проблемы с пробками и блэкаутами](https://bmn.su/news/novyy-sklad-v-krasnodare-obeschaet-reshit-problemy-s-probkam-111): В Краснодаре готовится к открытию новый склад, который может внести значительный вклад в решение проблем с пробками и перебоями электроснабж…
-- [Коммерческие помещения в ЖК как спасение для девелоперов](https://bmn.su/news/kommercheskie-pomescheniya-v-zhk-kak-spasenie-dlya-developer-110): В условиях современных рыночных вызовов девелоперы находят спасение в коммерческих помещениях, встроенных в жилые комплексы. Этот подход спо…
 
 ## Контакты
 - Сайт: https://bmn.su
