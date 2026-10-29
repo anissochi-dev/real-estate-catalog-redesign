@@ -1,4 +1,4 @@
-import { photoAlt } from '@/lib/photoAlt';
+import { photoAlt } from '@/lib/slug';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Icon from '@/components/ui/icon';
 

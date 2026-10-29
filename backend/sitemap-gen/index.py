@@ -7,6 +7,7 @@
 """
 
 import json
+import re
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -66,6 +67,56 @@ def _url_encode_path(path: str) -> str:
     return quote(path, safe='/:@!$&\'()*+,;=.-_~')
 
 
+MAX_SITEMAP_IMAGES = 10
+
+
+def _xml(s) -> str:
+    return (str(s or '').replace('&', '&amp;').replace('<', '&lt;')
+            .replace('>', '&gt;').replace('"', '&quot;'))
+
+
+def _photo_alt(title: str, address: str, city: str, index: int) -> str:
+    """Подпись фото — та же, что на сайте: «Название, адрес — фото N» (до 125 знаков)."""
+    name = re.sub(r'\s+', ' ', title or 'Объект').strip().rstrip(' .,;:!-')
+    city = city or 'Краснодар'
+    addr = re.sub(r'\s+', ' ', address or '').strip()
+    place = (addr if city.lower() in addr.lower() else f'{addr}, {city}') if addr else city
+    suffix = f' — фото {index + 1}'
+    base = f'{name}, {place}'
+    limit = 125 - len(suffix)
+    if len(base) > limit:
+        base = base[:limit - 1].rstrip() + '…'
+    return base + suffix
+
+
+def _listing_images(r: dict) -> list:
+    """До 10 фото объекта для карты сайта: [(url, подпись), ...]. Порядок как в галерее."""
+    raw = r.get('images')
+    items = []
+    if isinstance(raw, list):
+        items = raw
+    elif isinstance(raw, str) and raw.strip():
+        s = raw.strip()
+        if s.startswith('['):
+            try:
+                items = json.loads(s)
+            except Exception:
+                items = []
+        else:
+            items = [x.strip() for x in s.replace('|', ',').split(',')]
+    urls = []
+    for x in items:
+        u = x.get('url') if isinstance(x, dict) else x
+        if isinstance(u, str) and u.startswith('http') and u not in urls:
+            urls.append(u)
+    main = r.get('image')
+    if isinstance(main, str) and main.startswith('http') and main not in urls:
+        urls.insert(0, main)
+    urls = urls[:MAX_SITEMAP_IMAGES]
+    return [(u, _photo_alt(r.get('title') or '', r.get('address') or '', r.get('city') or '', i))
+            for i, u in enumerate(urls)]
+
+
 def _build_sitemap_xml(cur) -> tuple:
     """Возвращает (xml_string, urls_count).
     Источники: статические страницы, активные объекты, новости,
@@ -100,7 +151,7 @@ def _build_sitemap_xml(cur) -> tuple:
 
     # 2. Активные и видимые объекты — приоритет 1.0
     cur.execute(
-        f"SELECT id, slug, title, updated_at FROM {SCHEMA}.listings "
+        f"SELECT id, slug, title, address, city, image, images, updated_at FROM {SCHEMA}.listings "
         f"WHERE status = 'active' AND is_visible = TRUE "
         f"ORDER BY updated_at DESC NULLS LAST LIMIT 5000"
     )
@@ -108,7 +159,7 @@ def _build_sitemap_xml(cur) -> tuple:
         lid = r.get('id')
         slug = r.get('slug') or _make_slug(r.get('title') or '', lid)
         encoded = _url_encode_path(f"/object/{slug}")
-        urls.append((base + encoded, r.get('updated_at'), '1.0', 'daily'))
+        urls.append((base + encoded, r.get('updated_at'), '1.0', 'daily', _listing_images(r)))
 
     # 3. Опубликованные новости — lastmod по дате публикации
     cur.execute(
@@ -188,22 +239,31 @@ def _build_sitemap_xml(cur) -> tuple:
     parts = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
+        'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1" '
         'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
         'xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 '
         'http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">',
     ]
-    for u, upd, priority, changefreq in urls:
-        u_safe = u.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    for entry in urls:
+        u, upd, priority, changefreq = entry[:4]
+        images = entry[4] if len(entry) > 4 else []
+        u_safe = _xml(u)
         lastmod = ''
         if upd:
             try:
                 lastmod = f'<lastmod>{upd.strftime("%Y-%m-%d")}</lastmod>'
             except Exception:
                 lastmod = ''
+        img_xml = ''.join(
+            f'<image:image><image:loc>{_xml(src)}</image:loc>'
+            f'<image:caption>{_xml(cap)}</image:caption>'
+            f'<image:title>{_xml(cap)}</image:title></image:image>'
+            for src, cap in images
+        )
         parts.append(
             f'<url><loc>{u_safe}</loc>{lastmod}'
             f'<changefreq>{changefreq}</changefreq>'
-            f'<priority>{priority}</priority></url>'
+            f'<priority>{priority}</priority>{img_xml}</url>'
         )
     parts.append('</urlset>')
     return '\n'.join(parts), len(urls)
@@ -503,6 +563,7 @@ def handler(event: dict, context) -> dict:
                     or not row.get('content')
                     or int(row.get('urls_count') or 0) == 0
                     or (cache_age_minutes is not None and cache_age_minutes > 60)
+                    or 'xmlns:image' not in (row.get('content') or '')
                 )
                 if cache_stale:
                     _save_sitemap(cur, conn)

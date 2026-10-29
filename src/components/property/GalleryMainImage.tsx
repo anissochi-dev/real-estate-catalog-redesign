@@ -1,4 +1,4 @@
-import { photoAlt } from '@/lib/photoAlt';
+import { photoAlt } from '@/lib/slug';
 import type { ListingDetail } from '@/lib/api';
 import Icon from '@/components/ui/icon';
 import { VideoEmbed } from './VideoEmbed';

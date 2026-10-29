@@ -1,4 +1,4 @@
-import { photoAlt } from '@/lib/photoAlt';
+import { photoAlt } from '@/lib/slug';
 import { useRef, useEffect } from 'react';
 
 interface GalleryThumbsProps {

@@ -1,3 +1,4 @@
+import { photoAlt } from '@/lib/slug';
 import { useMemo } from 'react';
 
 interface SchemaOrgProps {
@@ -136,7 +137,14 @@ export function makeRealEstateSchema(opts: {
     '@type': 'RealEstateListing',
     name: opts.title,
     ...(opts.description ? { description: opts.description } : {}),
-    ...(opts.images.length ? { image: opts.images } : {}),
+    ...(opts.images.length ? {
+      image: opts.images.map((url, i) => ({
+        '@type': 'ImageObject',
+        url,
+        contentUrl: url,
+        caption: photoAlt({ title: opts.title, address: opts.address, city: opts.city }, i),
+      })),
+    } : {}),
     url: opts.url,
     category: opts.type,
     ...(opts.publicCode ? { productID: String(opts.publicCode) } : {}),
