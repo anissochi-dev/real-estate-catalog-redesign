@@ -26,9 +26,9 @@ export default function CategoryHero({ meta, breadcrumbs, aiQuery, setAiQuery, s
             <h1 className="font-display font-900 text-2xl md:text-3xl leading-tight mb-1">
               {meta.h1}
             </h1>
-            <h2 className="font-display font-600 text-base text-white/75 mb-2 leading-snug">
-              {meta.h2}
-            </h2>
+            <p className="font-display font-600 text-base text-white/75 mb-2 leading-snug">
+              {meta.h3}
+            </p>
             <p className="text-white/70 text-sm max-w-2xl leading-relaxed">
               {meta.description}
             </p>

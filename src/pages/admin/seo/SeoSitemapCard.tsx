@@ -37,8 +37,14 @@ export default function SeoSitemapCard({ seoErr, seoStatus, seoLoading, rebuildi
             seoStatus.robots_exists ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
           }`}>
             <Icon name={seoStatus.robots_exists ? 'CheckCircle2' : 'AlertCircle'} size={11} />
-            {seoStatus.robots_exists ? 'Файл существует' : 'Не создан'}
+            {seoStatus.robots_exists ? 'Работает' : 'Не создан'}
           </div>
+        )}
+        {seoStatus && (
+          <a href={(seoStatus.sitemap_url || '').replace('/sitemap-full', '/robots.txt')} target="_blank" rel="noopener noreferrer"
+            className="text-xs text-brand-blue hover:underline inline-flex items-center gap-1 ml-2">
+            <Icon name="ExternalLink" size={10} /> {(seoStatus.sitemap_url || '').replace('/sitemap-full', '/robots.txt')}
+          </a>
         )}
         {seoLoading && <div className="text-xs text-muted-foreground">Загрузка...</div>}
       </div>
@@ -47,10 +53,10 @@ export default function SeoSitemapCard({ seoErr, seoStatus, seoLoading, rebuildi
       <div className="rounded-xl border border-border p-4 space-y-3">
         <div className="flex items-center gap-2">
           <Icon name="Map" size={16} className="text-brand-blue" />
-          <span className="font-semibold text-sm">sitemap.xml</span>
+          <span className="font-semibold text-sm">Карта сайта (/sitemap-full)</span>
         </div>
         <div className="text-xs text-muted-foreground">
-          Карта сайта для поисковых систем. Включает объекты, новости и статические страницы.
+          Полная карта для Яндекс Вебмастера и Google: объекты, новости, районы, заявки и разделы. Обновляется автоматически.
         </div>
         {seoStatus && (
           <div className="space-y-2">
@@ -60,7 +66,7 @@ export default function SeoSitemapCard({ seoErr, seoStatus, seoLoading, rebuildi
             }`}>
               <Icon name={seoStatus.sitemap_exists ? 'CheckCircle2' : 'AlertCircle'} size={11} />
               {seoStatus.sitemap_exists
-                ? `В кэше: ${seoStatus.sitemap_urls_count ?? '?'} URL`
+                ? `В карте: ${seoStatus.sitemap_urls_count ?? '?'} страниц`
                 : 'Не создан — нажмите «Перестроить»'}
             </div>
             {/* Разбивка по источникам */}
@@ -100,7 +106,7 @@ export default function SeoSitemapCard({ seoErr, seoStatus, seoLoading, rebuildi
               seoStatus.sitemap_urls_count < seoStatus.breakdown.total_expected && (
               <div className="flex items-start gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
                 <Icon name="AlertCircle" size={11} className="mt-0.5 shrink-0" />
-                Кэш устарел: в БД {seoStatus.breakdown.total_expected} URL, в sitemap {seoStatus.sitemap_urls_count}. Нажмите «Перестроить».
+                В базе {seoStatus.breakdown.total_expected} страниц, в карте {seoStatus.sitemap_urls_count}. Нажмите «Перестроить».
               </div>
             )}
             {/* Дата обновления кэша */}
@@ -113,7 +119,7 @@ export default function SeoSitemapCard({ seoErr, seoStatus, seoLoading, rebuildi
             {seoStatus.sitemap_url && (
               <a href={seoStatus.sitemap_url} target="_blank" rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-[10px] text-brand-blue hover:underline">
-                <Icon name="ExternalLink" size={10} /> Открыть sitemap.xml
+                <Icon name="ExternalLink" size={10} /> {seoStatus.sitemap_url}
               </a>
             )}
           </div>

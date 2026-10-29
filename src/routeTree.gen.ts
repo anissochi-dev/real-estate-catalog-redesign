@@ -18,7 +18,7 @@ import { Route as MailruDomain6dS7udsVWBpJx77ORouteImport } from './routes/mailr
 import { Route as MapRouteImport } from './routes/map'
 import { Route as MarketIndexRouteImport } from './routes/market-index'
 import { Route as NetworkTenantsRouteImport } from './routes/network-tenants'
-import { Route as SitemapAllDotxmlRouteImport } from './routes/sitemap-all[.]xml'
+import { Route as SitemapFullRouteImport } from './routes/sitemap-full'
 import { Route as CatalogIndexRouteImport } from './routes/catalog.index'
 import { Route as CatalogTypeRouteImport } from './routes/catalog.$type'
 import { Route as DistrictDistrictRouteImport } from './routes/district.$district'
@@ -73,9 +73,9 @@ const NetworkTenantsRoute = NetworkTenantsRouteImport.update({
   path: '/network-tenants',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SitemapAllDotxmlRoute = SitemapAllDotxmlRouteImport.update({
-  id: '/sitemap-all.xml',
-  path: '/sitemap-all.xml',
+const SitemapFullRoute = SitemapFullRouteImport.update({
+  id: '/sitemap-full',
+  path: '/sitemap-full',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CatalogIndexRoute = CatalogIndexRouteImport.update({
@@ -124,7 +124,7 @@ export interface FileRoutesByFullPath {
   '/map': typeof MapRoute
   '/market-index': typeof MarketIndexRoute
   '/network-tenants': typeof NetworkTenantsRoute
-  '/sitemap-all.xml': typeof SitemapAllDotxmlRoute
+  '/sitemap-full': typeof SitemapFullRoute
   '/catalog/$type': typeof CatalogTypeRoute
   '/district/$district': typeof DistrictDistrictRoute
   '/news/$slug': typeof NewsSlugRoute
@@ -143,7 +143,7 @@ export interface FileRoutesByTo {
   '/map': typeof MapRoute
   '/market-index': typeof MarketIndexRoute
   '/network-tenants': typeof NetworkTenantsRoute
-  '/sitemap-all.xml': typeof SitemapAllDotxmlRoute
+  '/sitemap-full': typeof SitemapFullRoute
   '/catalog/$type': typeof CatalogTypeRoute
   '/district/$district': typeof DistrictDistrictRoute
   '/news/$slug': typeof NewsSlugRoute
@@ -163,7 +163,7 @@ export interface FileRoutesById {
   '/map': typeof MapRoute
   '/market-index': typeof MarketIndexRoute
   '/network-tenants': typeof NetworkTenantsRoute
-  '/sitemap-all.xml': typeof SitemapAllDotxmlRoute
+  '/sitemap-full': typeof SitemapFullRoute
   '/catalog/$type': typeof CatalogTypeRoute
   '/district/$district': typeof DistrictDistrictRoute
   '/news/$slug': typeof NewsSlugRoute
@@ -184,7 +184,7 @@ export interface FileRouteTypes {
     | '/map'
     | '/market-index'
     | '/network-tenants'
-    | '/sitemap-all.xml'
+    | '/sitemap-full'
     | '/catalog/$type'
     | '/district/$district'
     | '/news/$slug'
@@ -203,7 +203,7 @@ export interface FileRouteTypes {
     | '/map'
     | '/market-index'
     | '/network-tenants'
-    | '/sitemap-all.xml'
+    | '/sitemap-full'
     | '/catalog/$type'
     | '/district/$district'
     | '/news/$slug'
@@ -222,7 +222,7 @@ export interface FileRouteTypes {
     | '/map'
     | '/market-index'
     | '/network-tenants'
-    | '/sitemap-all.xml'
+    | '/sitemap-full'
     | '/catalog/$type'
     | '/district/$district'
     | '/news/$slug'
@@ -242,7 +242,7 @@ export interface RootRouteChildren {
   MapRoute: typeof MapRoute
   MarketIndexRoute: typeof MarketIndexRoute
   NetworkTenantsRoute: typeof NetworkTenantsRoute
-  SitemapAllDotxmlRoute: typeof SitemapAllDotxmlRoute
+  SitemapFullRoute: typeof SitemapFullRoute
   CatalogTypeRoute: typeof CatalogTypeRoute
   DistrictDistrictRoute: typeof DistrictDistrictRoute
   NewsSlugRoute: typeof NewsSlugRoute
@@ -317,11 +317,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NetworkTenantsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/sitemap-all.xml': {
-      id: '/sitemap-all.xml'
-      path: '/sitemap-all.xml'
-      fullPath: '/sitemap-all.xml'
-      preLoaderRoute: typeof SitemapAllDotxmlRouteImport
+    '/sitemap-full': {
+      id: '/sitemap-full'
+      path: '/sitemap-full'
+      fullPath: '/sitemap-full'
+      preLoaderRoute: typeof SitemapFullRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/catalog/': {
@@ -386,7 +386,7 @@ const rootRouteChildren: RootRouteChildren = {
   MapRoute: MapRoute,
   MarketIndexRoute: MarketIndexRoute,
   NetworkTenantsRoute: NetworkTenantsRoute,
-  SitemapAllDotxmlRoute: SitemapAllDotxmlRoute,
+  SitemapFullRoute: SitemapFullRoute,
   CatalogTypeRoute: CatalogTypeRoute,
   DistrictDistrictRoute: DistrictDistrictRoute,
   NewsSlugRoute: NewsSlugRoute,

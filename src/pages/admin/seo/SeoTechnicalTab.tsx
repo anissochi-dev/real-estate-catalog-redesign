@@ -5,16 +5,15 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { S } from '../settings/types';
 import { SeoStatus, SITEMAP_BASE } from './seoTypes';
-import { usePrerender } from './usePrerender';
 import SeoSitemapCard from './SeoSitemapCard';
-import SeoPrerenderCard from './SeoPrerenderCard';
+import SeoLiveCheckCard from './SeoLiveCheckCard';
 import SeoAnalyticsCard from './SeoAnalyticsCard';
 
 export { Badge, IDLE_STATE } from './SeoCheckBadge';
 export type { CheckStatus, CheckState } from './SeoCheckBadge';
 
 export default function SeoTechnicalTab() {
-  const { reload } = useSettings();
+  const { reload, settings } = useSettings();
   const { refreshToken } = useAuth();
   const [s, setS] = useState<Partial<S>>({});
   const [saved, setSaved] = useState(false);
@@ -23,7 +22,6 @@ export default function SeoTechnicalTab() {
   const [seoLoading, setSeoLoading] = useState(false);
   const [seoErr, setSeoErr] = useState('');
   const [rebuilding, setRebuilding] = useState(false);
-  const prerender = usePrerender();
 
   useEffect(() => {
     adminApi.getSettings().then(d => setS(d.settings || {}));
@@ -63,7 +61,7 @@ export default function SeoTechnicalTab() {
     const { data, error } = await sitemapCall('rebuild');
     setRebuilding(false);
     if (error) { toast.error(`Ошибка: ${error}`); return; }
-    toast.success(`Sitemap перестроен: ${data?.urls_count ?? '?'} URL в кэше БД. Изменения появятся после следующего деплоя.`);
+    toast.success(`Карта сайта перестроена: ${data?.urls_count ?? '?'} страниц. На сайте обновится в течение 30 минут.`);
     loadSeoStatus();
   };
 
@@ -85,7 +83,7 @@ export default function SeoTechnicalTab() {
         rebuildSitemap={rebuildSitemap}
       />
 
-      <SeoPrerenderCard {...prerender} />
+      <SeoLiveCheckCard siteUrl={s.site_url || settings.site_url || ''} />
 
       <SeoAnalyticsCard s={s} setS={setS} />
 

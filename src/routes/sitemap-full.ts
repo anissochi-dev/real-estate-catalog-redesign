@@ -1,11 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router';
 
 // Полная карта сайта (объекты, новости, районы, заявки) — из существующей функции генерации.
-// /sitemap.xml на домене отдаёт сама площадка, поэтому полная карта живёт по этому адресу
-// и указана в /sitemap_index.xml.
+// Адрес без «.xml»: запросы на *.xml хостинг ищет только среди готовых файлов
+// и до сайта не пропускает (404). Указан в robots.txt и /sitemap_index.xml.
 const SITEMAP_FN = 'https://functions.poehali.dev/7db3cce2-3ae0-4bbb-bece-5c6076691344?action=sitemap_xml';
 
-export const Route = createFileRoute('/sitemap-all.xml')({
+export const Route = createFileRoute('/sitemap-full')({
   server: {
     handlers: {
       GET: async () => {

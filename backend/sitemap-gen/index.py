@@ -360,8 +360,7 @@ def _build_robots_txt(cur) -> str:
     lines.append(f'Host: {host}')
     lines.append('')
 
-    lines.append(f'Sitemap: {base}/sitemap-all.xml')
-    lines.append(f'Sitemap: {base}/sitemap.xml')
+    lines.append(f'Sitemap: {base}/sitemap-full')
     return '\n'.join(lines) + '\n'
 
 
@@ -563,7 +562,7 @@ def handler(event: dict, context) -> dict:
                 total_expected = listings + news + static + categories + districts + 1
 
                 return _ok({
-                    'sitemap_url': f'{base}/sitemap.xml',
+                    'sitemap_url': f'{base}/sitemap-full',
                     'robots_url': f'{base}/robots.txt',
                     'sitemap_exists': sitemap_count > 0,
                     'robots_exists': True,

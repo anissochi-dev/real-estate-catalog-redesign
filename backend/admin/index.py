@@ -3210,7 +3210,7 @@ def _listings(cur, conn, method, rid, event, user):
         if do_faq or do_reindex or is_publishing:
             _trigger_post_save_tasks(
                 int(rid), body, '',
-                do_faq=do_faq, do_reindex=do_reindex, do_indexnow=is_publishing, do_prerender=is_publishing,
+                do_faq=do_faq, do_reindex=do_reindex, do_indexnow=is_publishing, do_prerender=False,
             )
         # Пересобираем XML-фиды сразу, если изменилось что-то, влияющее на площадки:
         # галочки экспорта, цена/единица цены, площадь, статус или видимость объекта

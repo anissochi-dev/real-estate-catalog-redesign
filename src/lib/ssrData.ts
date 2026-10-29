@@ -151,13 +151,22 @@ export function clipText(s: string, max: number): string {
   return t.length > max ? t.slice(0, max - 1).trimEnd() + '…' : t;
 }
 
-/** Заголовок карточки объекта: «Название — цена — район» (один и тот же на сервере и в браузере). */
-export function listingPageTitle(item: { title: string; price?: number; deal?: string; district?: string }): string {
+const TITLE_MAX = 70;
+
+/** Заголовок карточки объекта для поиска — до 70 знаков (столько видно в выдаче Яндекса).
+ *  Основа — название объекта, которое пишет брокер (точнее автогенерируемого seo_title):
+ *  «Название | цена», если влезает, иначе название. seo_title — только если названия нет.
+ *  Одинаков на сервере и в браузере. */
+export function listingPageTitle(item: { title: string; price?: number; deal?: string; district?: string; seoTitle?: string | null }): string {
+  const name = (item.title || '').replace(/\s+/g, ' ').trim().replace(/[\s.,;:!-]+$/, '');
+  if (!name) return clipText(item.seoTitle || '', TITLE_MAX);
   // Разряды пробелом вручную: toLocaleString на сервере и в браузере может дать разные пробелы.
   const price = item.price
     ? `${String(Math.round(item.price)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} ₽${item.deal === 'rent' ? '/мес' : ''}`
     : '';
-  return [item.title.trim(), price, item.district].filter(Boolean).join(' — ');
+  const withPrice = price ? `${name} | ${price}` : name;
+  if (withPrice.length <= TITLE_MAX) return withPrice;
+  return clipText(name, TITLE_MAX);
 }
 
 function countLabel(n: number): string {

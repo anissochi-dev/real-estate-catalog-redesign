@@ -33,5 +33,4 @@ Crawl-delay: 1
 Clean-param: utm_source&utm_medium&utm_campaign&utm_term&utm_content&utm_referrer&yclid&gclid&fbclid&_escaped_fragment_
 Host: bmn.su
 
-Sitemap: https://bmn.su/sitemap-all.xml
-Sitemap: https://bmn.su/sitemap.xml
+Sitemap: https://bmn.su/sitemap-full

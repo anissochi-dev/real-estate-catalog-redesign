@@ -57,8 +57,8 @@ def _load_yandex_keys(cur) -> tuple:
 
 def _check_seo_faq_column(cur) -> bool:
     """Проверяет наличие колонки seo_faq в таблице listings через information_schema."""
-    schema_name = SCHEMA.rstrip('_').rstrip('.')
-    safe = schema_name.replace("'", "''")
+    # Имя схемы заканчивается на «_» — это часть имени, обрезать нельзя.
+    safe = SCHEMA.rstrip('.').replace("'", "''")
     cur.execute(
         f"SELECT 1 FROM information_schema.columns "
         f"WHERE table_schema = '{safe}' AND table_name = 'listings' AND column_name = 'seo_faq'"
@@ -237,7 +237,8 @@ def handler(event: dict, context) -> dict:
                         f"UPDATE {SCHEMA}.listings SET seo_faq = '{safe_faq}', faq_updated_at = NOW() WHERE id = {int(listing_id)}"
                     )
                     conn.commit()
-                except Exception:
+                except Exception as e:
+                    print(f'[listing-faq] не удалось сохранить FAQ {listing_id}: {e}')
                     conn.rollback()
 
             return _json_resp(200, {'faq': faq, 'cached': False})

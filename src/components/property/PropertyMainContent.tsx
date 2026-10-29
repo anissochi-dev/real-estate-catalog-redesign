@@ -193,9 +193,9 @@ export default function PropertyMainContent({
 
       {/* Форма заявки — только мобильный */}
       <div className="lg:hidden bg-white rounded-2xl px-4 py-3 shadow-sm">
-        <h2 className="font-display font-700 text-base mb-3 flex items-center gap-2">
+        <div className="font-display font-700 text-base mb-3 flex items-center gap-2">
           <Icon name="CalendarCheck" size={16} className="text-brand-blue" /> Заказать просмотр
-        </h2>
+        </div>
         {sent ? (
           <div className="py-4 text-center">
             <Icon name="CheckCircle2" size={36} className="mx-auto mb-2 text-emerald-500" />
@@ -234,7 +234,7 @@ export default function PropertyMainContent({
       {/* Особенности */}
       {item.tags && item.tags.length > 0 && (
         <div className="bg-white rounded-2xl px-4 py-3 shadow-sm">
-          <h2 className="font-display font-700 text-base mb-2">Особенности</h2>
+          <h2 className="font-display font-700 text-base mb-2">Особенности объекта</h2>
           <div className="flex flex-wrap gap-1.5">
             {item.tags.map(t => (
               <span key={t} className="text-xs px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue font-medium">{t}</span>
