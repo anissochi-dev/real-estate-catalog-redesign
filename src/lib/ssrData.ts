@@ -1,4 +1,4 @@
-import { LISTINGS_URL, mapApiListing, mapListingDetail, type ApiListing, type PublicSettings, type ListingDetail, type District, type PublicLead } from '@/lib/api';
+import { LISTINGS_URL, mapApiListing, mapListingDetail, type ApiListing, type PublicSettings, type ListingDetail, type District, type PublicLead, type CategoryTextItem } from '@/lib/api';
 import { NEWS_URL } from '@/lib/adminApi';
 import { getOkrugChildNames, matchesDistrictNames } from '@/lib/districts';
 import type { Property } from '@/app/appTypes';
@@ -24,18 +24,27 @@ export interface SiteData {
   listings: Property[];
   total: number;
   settings: PublicSettings;
+  districts: District[];
 }
 
 export async function loadSiteData(): Promise<SiteData> {
-  const [l, s] = await Promise.all([
+  const [l, s, d] = await Promise.all([
     getJson(`${LISTINGS_URL}?limit=8&offset=0`),
     getJson(`${LISTINGS_URL}?resource=public_settings`),
+    getJson(`${LISTINGS_URL}?resource=districts`, 3000),
   ]);
   const raw = Array.isArray(l.listings) ? (l.listings as ApiListing[]) : [];
   return {
     listings: JSON.parse(JSON.stringify(raw.map(mapApiListing))) as Property[],
     total: typeof l.total === 'number' ? l.total : 0,
     settings: (s.settings as PublicSettings) || {},
+    // Районы для ссылок в подвале — попадают в HTML (перелинковка для поисковиков).
+    districts: Array.isArray(d.districts)
+      ? plain((d.districts as District[]).map(x => ({
+          id: x.id, name: x.name, slug: x.slug, is_okrug: x.is_okrug, parent_id: x.parent_id,
+          listings_count: x.listings_count, is_active: x.is_active,
+        })) as District[])
+      : [],
   };
 }
 
@@ -265,4 +274,102 @@ export async function loadLeadPage(slug: string): Promise<{
   if (!lead) return { lead: null, similar: [], districts, notFound: true };
   const similar = Array.isArray(l.data.similar) ? (l.data.similar as PublicLead[]) : [];
   return { lead: plain(lead), similar: plain(similar), districts, notFound: false };
+}
+
+// ── Раздел каталога: тексты из админки, SEO-текст и объекты — на сервере ──
+const SEO_CONTENT_URL = 'https://functions.poehali.dev/4f6d05ce-e38c-4e10-8a8b-f282e1ed2ddd';
+
+export interface CategoryPageData {
+  texts: CategoryTextItem | null;
+  seoText: string;
+  listings: Property[];
+  loaded: boolean;
+}
+
+export async function loadCategoryPage(type: string, city = 'Краснодар'): Promise<CategoryPageData> {
+  const [t, s, l] = await Promise.all([
+    getJson(`${LISTINGS_URL}?resource=category_texts`, 3000),
+    getJson(`${SEO_CONTENT_URL}?category=${encodeURIComponent(type)}&city=${encodeURIComponent(city)}`, 3000),
+    getJsonStatus(`${LISTINGS_URL}?category=${encodeURIComponent(type)}`, 6000),
+  ]);
+  const list = Array.isArray(t.category_texts) ? (t.category_texts as CategoryTextItem[]) : [];
+  const texts = list.find(x => x.category_type === type) || null;
+  const raw = l.ok && Array.isArray(l.data.listings) ? (l.data.listings as ApiListing[]) : [];
+  return plain({
+    texts,
+    seoText: typeof s.text === 'string' ? s.text : '',
+    listings: raw.map(mapApiListing).filter(p => String(p.type) === type),
+    loaded: l.ok,
+  });
+}
+
+/** SEO-текст района/округа (кешируется в функции seo-content). */
+export async function loadDistrictSeoText(name: string, city = 'Краснодар'): Promise<string> {
+  const d = await getJson(`${SEO_CONTENT_URL}?district=${encodeURIComponent(name)}&city=${encodeURIComponent(city)}`, 3000);
+  return typeof d.text === 'string' ? d.text : '';
+}
+
+const DEAL_WORD: Record<string, string> = { rent: 'Аренда', sale: 'Продажа', business: 'Продажа' };
+const TYPE_GEN: Record<string, string> = {
+  office: 'офиса', retail: 'торгового помещения', warehouse: 'склада', restaurant: 'помещения под общепит',
+  hotel: 'гостиницы', business: 'готового бизнеса', gab: 'ГАБ', production: 'производственного помещения',
+  land: 'земельного участка', building: 'здания', free_purpose: 'помещения свободного назначения', car_service: 'автосервиса',
+};
+
+/** Описание объекта для поиска (до 160 знаков): что, где, сколько + 1–3 факта.
+ *  Пример: «Аренда склада 375 м², Зиповская улица, 3, Краснодар — 250 000 ₽/мес. Потолки 6 м, 100 кВт. Просмотр в день обращения». */
+export function listingSeoDescription(item: {
+  type?: string; deal?: string; area?: number; price?: number; address?: string; district?: string;
+  ceilingHeight?: number; electricityKw?: number; roadLine?: string; parking?: string; entrance?: string;
+  finishing?: string; payback?: number; description?: string; title: string; city?: string;
+}): string {
+  const deal = DEAL_WORD[item.deal || ''] || '';
+  const what = TYPE_GEN[item.type || ''] || 'помещения';
+  const area = item.area ? ` ${String(item.area).replace('.', ',')} м²` : '';
+  const city = item.city || 'Краснодар';
+  const place = [item.address, item.address && item.address.includes(city) ? '' : city].filter(Boolean).join(', ');
+  const price = item.price
+    ? ` — ${String(Math.round(item.price)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} ₽${item.deal === 'rent' ? '/мес' : ''}`
+    : '';
+  const head = deal ? `${deal} ${what}${area}, ${place}${price}.` : `${item.title}${price}.`;
+  const facts: string[] = [];
+  if (item.ceilingHeight) facts.push(`потолки ${String(item.ceilingHeight).replace('.', ',')} м`);
+  if (item.electricityKw) facts.push(`${item.electricityKw} кВт`);
+  if (item.roadLine && /перв/i.test(item.roadLine)) facts.push('первая линия');
+  if (item.parking && !/нет/i.test(item.parking)) facts.push('парковка');
+  if (item.entrance && /отдельн/i.test(item.entrance)) facts.push('отдельный вход');
+  if (item.payback) facts.push(`окупаемость ${item.payback} мес.`);
+  let out = head;
+  if (facts.length) out += ` ${facts.slice(0, 3).join(', ').replace(/^./, c => c.toUpperCase())}.`;
+  const tail = ' Просмотр в день обращения.';
+  if ((out + tail).length <= 160) out += tail;
+  return clipText(out, 160);
+}
+
+export interface RelatedLinks {
+  similar: Property[];
+  districtSlug: string | null;
+  districtName: string | null;
+}
+
+/** Перелинковка карточки объекта: до 6 объектов того же раздела (сначала — в том же районе)
+ *  и ссылка на страницу района. */
+export async function loadRelated(item: { id: number; type: string; district?: string; address?: string }): Promise<RelatedLinks> {
+  const [l, d] = await Promise.all([
+    getJsonStatus(`${LISTINGS_URL}?category=${encodeURIComponent(item.type)}`, 4000),
+    getJsonStatus(`${LISTINGS_URL}?resource=districts`, 3000),
+  ]);
+  const all = (d.ok && Array.isArray(d.data.districts) ? d.data.districts : []) as District[];
+  const district = all.find(x => !x.is_okrug && x.slug && item.district && x.name === item.district)
+    || all.find(x => !x.is_okrug && x.slug && matchesDistrictNames(item.district, item.address, [x.name]))
+    || null;
+  const raw = l.ok && Array.isArray(l.data.listings) ? (l.data.listings as ApiListing[]) : [];
+  const pool = raw.map(mapApiListing).filter(p => p.id !== item.id && String(p.type) === item.type);
+  const same = district ? pool.filter(p => matchesDistrictNames(p.district, p.address, [district.name])) : [];
+  const rest = pool.filter(p => !same.includes(p));
+  return plain({
+    similar: [...same, ...rest].slice(0, 6),
+    districtSlug: district?.slug || null,
+    districtName: district?.name || null,
+  });
 }

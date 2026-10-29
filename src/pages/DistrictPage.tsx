@@ -1,3 +1,4 @@
+import { listingSlug } from '@/lib/slug';
 import { useMemo, useEffect, useState } from 'react';
 import { useParams, useNavigate } from "@/lib/router-compat";
 import type { Property } from '@/app/appTypes';
@@ -25,6 +26,7 @@ interface Props {
   initialAllDistricts?: District[];
   /** Объекты района с сервера (loader) — показываются, пока в браузере не загружен полный каталог. */
   initialItems?: Property[] | null;
+  initialSeoText?: string;
   allLoaded?: boolean;
   favorites: number[];
   compareList: number[];
@@ -32,13 +34,13 @@ interface Props {
   onToggleCompare: (id: number) => void;
 }
 
-export default function DistrictPage({ properties, initialDistrict = null, initialAllDistricts = [], initialItems = null, allLoaded = false, favorites, compareList, onToggleFavorite, onToggleCompare }: Props) {
+export default function DistrictPage({ properties, initialDistrict = null, initialAllDistricts = [], initialItems = null, initialSeoText = '', allLoaded = false, favorites, compareList, onToggleFavorite, onToggleCompare }: Props) {
   const { district } = useParams<{ district: string }>();
   const navigate = useNavigate();
   const { settings } = useSettings();
   const city = settings.main_city || 'Краснодар';
   const [page, setPage] = useState(1);
-  const [aiText, setAiText] = useState('');
+  const [aiText, setAiText] = useState(initialSeoText);
   const [aiLoading, setAiLoading] = useState(false);
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [mapSelected, setMapSelected] = useState<Property | null>(null);
@@ -81,6 +83,8 @@ export default function DistrictPage({ properties, initialDistrict = null, initi
   useEffect(() => {
     if (!districtName || !DISTRICT_SEO_URL || DISTRICT_SEO_URL.includes('PLACEHOLDER')) return;
     const nameForSeo = districtData?.name || districtName;
+    // Текст района уже пришёл с сервера — повторно не запрашиваем.
+    if (initialSeoText && initialDistrict && initialDistrict.slug === district) { setAiText(initialSeoText); return; }
     setAiText('');
     setAiLoading(true);
     fetch(`${DISTRICT_SEO_URL}?district=${encodeURIComponent(nameForSeo)}&city=${encodeURIComponent(city)}`)
@@ -88,6 +92,7 @@ export default function DistrictPage({ properties, initialDistrict = null, initi
       .then(d => { if (d?.text) setAiText(d.text); })
       .catch(() => {})
       .finally(() => setAiLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [districtName, districtData, city]);
 
   const items = useMemo(() => {
@@ -149,7 +154,7 @@ export default function DistrictPage({ properties, initialDistrict = null, initi
   const itemListSchema = makeItemListSchema(
     items.slice(0, 20).map(p => ({
       name: p.title,
-      url: `${siteUrl}/object/${p.id}`,
+      url: `${siteUrl}/object/${listingSlug(p.title, p.id)}`,
       image: p.image || undefined,
       description: p.description?.slice(0, 160),
     })),

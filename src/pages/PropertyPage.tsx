@@ -21,7 +21,8 @@ import AIChatWidget from '@/components/property/AIChatWidget';
 import SchemaOrg, { makeRealEstateSchema, makeVideoObjectSchema, makeFaqSchema } from '@/components/SchemaOrg';
 import { useBreadcrumbs } from '@/hooks/useBreadcrumbs';
 import SeoHead from '@/components/SeoHead';
-import { listingPageTitle } from '@/lib/ssrData';
+import { listingPageTitle, listingSeoDescription, type RelatedLinks } from '@/lib/ssrData';
+import PropertyRelated from '@/components/property/PropertyRelated';
 
 interface Props {
   initialItem?: ListingDetail | null;
@@ -29,11 +30,12 @@ interface Props {
   onToggleCompare: (id: number) => void;
   favorites: number[];
   compareList: number[];
+  related?: RelatedLinks;
 }
 
 const FAQ_URL = 'https://functions.poehali.dev/282b9c5f-29fa-41ea-bc42-0793bdf8950d';
 
-export default function PropertyPage({ initialItem = null, onToggleFavorite, onToggleCompare, favorites, compareList }: Props) {
+export default function PropertyPage({ initialItem = null, related, onToggleFavorite, onToggleCompare, favorites, compareList }: Props) {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { settings } = useSettings();
@@ -112,7 +114,7 @@ export default function PropertyPage({ initialItem = null, onToggleFavorite, onT
   const FALLBACK_OG = 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/og-image-1779575751349.png';
   const mainImage = item ? ((item.images && item.images[0]) || item.image || FALLBACK_OG) : undefined;
   const seoTitle = item ? listingPageTitle(item) : undefined;
-  const seoDesc = item ? (item.seoDescription || (item.description || '')).slice(0, 160) : undefined;
+  const seoDesc = item ? listingSeoDescription(item) : undefined;
 
   // Хук вызывается безусловно, до early return ниже (loading / !item) — того требуют
   // Rules of Hooks. Пока item ещё не загружен, крошки просто без последнего элемента.
@@ -391,6 +393,18 @@ export default function PropertyPage({ initialItem = null, onToggleFavorite, onT
 
         {/* FAQ — часто задаваемые вопросы */}
         <PropertyFaqSection faq={faq} faqLoading={faqLoading} />
+
+        {/* Перелинковка: похожие объекты, раздел и район */}
+        {related && item && related.similar.every(p => p.id !== item.id) && (
+          <div className="mt-6">
+            <PropertyRelated
+              type={String(item.type)}
+              similar={related.similar}
+              districtSlug={related.districtSlug}
+              districtName={related.districtName}
+            />
+          </div>
+        )}
       </div>
 
       <AIMatchModal

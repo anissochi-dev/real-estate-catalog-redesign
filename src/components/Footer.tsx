@@ -10,6 +10,7 @@ import { CATALOG_CATEGORIES, catalogCategoryUrl } from '@/lib/categories';
 interface Props {
   onLogin: () => void;
   setCurrentPage: (p: Page) => void;
+  initialDistricts?: District[];
 }
 
 function LegalModal({ title, content, onClose }: { title: string; content: string; onClose: () => void }) {
@@ -50,12 +51,14 @@ function parseLinks(raw: string): { label: string; href: string }[] {
     .filter(Boolean) as { label: string; href: string }[];
 }
 
-export default function Footer({ onLogin }: Props) {
+export default function Footer({ onLogin, initialDistricts }: Props) {
   const { settings } = useSettings();
   const [modal, setModal] = useState<{ title: string; content: string } | null>(null);
-  const [districts, setDistricts] = useState<District[]>([]);
+  const [districts, setDistricts] = useState<District[]>(initialDistricts ?? []);
 
   useEffect(() => {
+    // Районы уже пришли с сервера — повторно не запрашиваем.
+    if (initialDistricts && initialDistricts.length) return;
     // Футер внизу страницы — грузим районы в простое браузера после LCP
     const load = () => fetchDistricts().then(setDistricts).catch(() => undefined);
     if ('requestIdleCallback' in window) {
@@ -64,6 +67,7 @@ export default function Footer({ onLogin }: Props) {
     }
     const t = setTimeout(load, 2000);
     return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const company = settings.company_name || 'Бизнес. Маркетинг. Недвижимость.';

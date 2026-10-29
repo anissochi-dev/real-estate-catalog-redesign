@@ -179,7 +179,7 @@ function RootComponent() {
                 <SettingsProvider initial={data?.settings}>
                     <AuthProvider>
                         <TooltipProvider delayDuration={200}>
-                            <SiteShell initialListings={data}>
+                            <SiteShell initialListings={data} initialDistricts={data?.districts}>
                                 <Outlet/>
                             </SiteShell>
                             <Toaster position="top-right" richColors closeButton/>

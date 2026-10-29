@@ -11,6 +11,8 @@ interface PageCheck {
   noindex: boolean;
   faq: boolean;
   schema: number;
+  words: number;
+  links: number;
   issues: string[];
 }
 
@@ -22,7 +24,7 @@ interface FileCheck {
   ok: boolean;
 }
 
-const STATIC_PAGES = ['/', '/catalog', '/catalog/office', '/catalog/warehouse', '/news', '/leads', '/market-index'];
+const STATIC_PAGES = ['/', '/catalog', '/catalog/office', '/catalog/warehouse', '/catalog/business', '/catalog/gab', '/news', '/leads', '/market-index'];
 
 const text = (el: Element | null | undefined) => (el?.textContent || '').replace(/\s+/g, ' ').trim();
 
@@ -35,6 +37,9 @@ function analyze(path: string, status: number, html: string): PageCheck {
   const robots = doc.querySelector('meta[name="robots"]')?.getAttribute('content') || '';
   const ld = Array.from(doc.querySelectorAll('script[type="application/ld+json"]')).map(s => s.textContent || '');
   const faq = ld.some(j => j.includes('"FAQPage"'));
+  doc.querySelectorAll('script,style,noscript').forEach(n => n.remove());
+  const words = text(doc.body).split(' ').filter(Boolean).length;
+  const links = new Set(Array.from(doc.querySelectorAll('a[href^="/object/"]')).map(a => a.getAttribute('href'))).size;
   const issues: string[] = [];
   if (status !== 200) issues.push(`Код ответа ${status}`);
   if (!title) issues.push('Нет title');
@@ -46,8 +51,12 @@ function analyze(path: string, status: number, html: string): PageCheck {
   if (!canonical) issues.push('Нет canonical');
   if (doc.querySelectorAll('title').length > 1) issues.push('Несколько title');
   if (path.startsWith('/object/') && !faq) issues.push('Нет FAQ');
+  const isList = path.startsWith('/catalog') || path.startsWith('/district/');
+  if (isList && links === 0) issues.push('Нет ссылок на объекты');
+  if (isList && words < 400) issues.push(`Мало текста: ${words} слов`);
+  if (path.startsWith('/object/') && links === 0) issues.push('Нет ссылок на похожие объекты');
   return {
-    path, status, title, description, h1: text(h1s[0]), canonical,
+    path, status, title, description, h1: text(h1s[0]), canonical, words, links,
     noindex: robots.includes('noindex'), faq, schema: ld.length, issues,
   };
 }
@@ -192,6 +201,7 @@ export default function SeoLiveCheckCard({ siteUrl }: { siteUrl: string }) {
                 <th className="py-2 pr-2">Title / H1</th>
                 <th className="py-2 pr-2">FAQ</th>
                 <th className="py-2 pr-2">Разметка</th>
+                <th className="py-2 pr-2">Слов / ссылок</th>
                 <th className="py-2">Замечания</th>
               </tr>
             </thead>
@@ -208,6 +218,7 @@ export default function SeoLiveCheckCard({ siteUrl }: { siteUrl: string }) {
                   </td>
                   <td className="py-2 pr-2">{p.faq ? '✓' : '—'}</td>
                   <td className="py-2 pr-2">{p.schema}</td>
+                  <td className="py-2 pr-2 whitespace-nowrap">{p.words} / {p.links}</td>
                   <td className="py-2">
                     {p.issues.length === 0
                       ? <span className="text-emerald-700">OK{p.noindex ? ' · noindex' : ''}</span>

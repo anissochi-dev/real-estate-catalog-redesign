@@ -3,7 +3,7 @@ import PropertyPage from '@/pages/PropertyPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 import { extractIdFromSlug } from '@/lib/slug';
 import { useAppState } from '@/app/AppStateContext';
-import { loadListingPage, clipText, listingPageTitle, SITE_ORIGIN } from '@/lib/ssrData';
+import { loadListingPage, loadRelated, listingPageTitle, listingSeoDescription, SITE_ORIGIN } from '@/lib/ssrData';
 
 const FALLBACK_OG = 'https://cdn.poehali.dev/projects/***/files/og-image-1779575751349.png';
 
@@ -12,14 +12,15 @@ export const Route = createFileRoute('/object/$slug')({
     const id = extractIdFromSlug(params.slug);
     if (!id) throw notFound();
     const { item, notFound: missing } = await loadListingPage(id);
-    if (missing) throw notFound();
-    return { item };
+    if (missing || !item) throw notFound();
+    const related = await loadRelated(item);
+    return { item, related };
   },
   head: ({ loaderData, params }) => {
     const item = loaderData?.item;
     if (!item) return {};
     const title = listingPageTitle(item);
-    const description = clipText(item.seoDescription || item.description || item.title, 160);
+    const description = listingSeoDescription(item);
     const image = (item.images && item.images[0]) || item.image || FALLBACK_OG;
     const url = `${SITE_ORIGIN}/object/${params.slug}`;
     return {
@@ -44,10 +45,11 @@ export const Route = createFileRoute('/object/$slug')({
 
 function RoutePage() {
   const s = useAppState();
-  const { item } = Route.useLoaderData();
+  const { item, related } = Route.useLoaderData();
   return (
     <PropertyPage
       initialItem={item}
+      related={related}
       favorites={s.favorites}
       compareList={s.compareList}
       onToggleFavorite={s.toggleFavorite}

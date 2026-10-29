@@ -2,7 +2,7 @@ import { createFileRoute, notFound } from '@tanstack/react-router';
 import DistrictPage from '@/pages/DistrictPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 import { useAppState } from '@/app/AppStateContext';
-import { loadDistrictPage, districtSeo, SITE_ORIGIN } from '@/lib/ssrData';
+import { loadDistrictPage, loadDistrictSeoText, districtSeo, SITE_ORIGIN } from '@/lib/ssrData';
 
 const OG_IMAGE = 'https://cdn.poehali.dev/projects/***/files/og-image-1779575751349.png';
 const CITY = 'Краснодар';
@@ -11,7 +11,8 @@ export const Route = createFileRoute('/district/$district')({
   loader: async ({ params }) => {
     const data = await loadDistrictPage(params.district);
     if (data.notFound) throw notFound();
-    return { district: data.district, allDistricts: data.allDistricts, listings: data.listings, loaded: data.loaded };
+    const seoText = data.district ? await loadDistrictSeoText(data.district.name, CITY) : '';
+    return { district: data.district, allDistricts: data.allDistricts, listings: data.listings, loaded: data.loaded, seoText };
   },
   head: ({ loaderData, params }) => {
     const d = loaderData?.district;
@@ -46,6 +47,7 @@ function RoutePage() {
       initialDistrict={data.district}
       initialAllDistricts={data.allDistricts}
       initialItems={data.loaded ? data.listings : null}
+      initialSeoText={data.seoText}
       allLoaded={s.allLoaded}
       favorites={s.favorites}
       compareList={s.compareList}

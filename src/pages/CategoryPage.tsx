@@ -1,3 +1,5 @@
+import { listingSlug } from '@/lib/slug';
+import type { CategoryPageData } from '@/lib/ssrData';
 import { useMemo, useEffect, useState } from 'react';
 import { useParams, useNavigate } from "@/lib/router-compat";
 import type { Property } from '@/app/appTypes';
@@ -24,9 +26,10 @@ interface Props {
   compareList: number[];
   onToggleFavorite: (id: number) => void;
   onToggleCompare: (id: number) => void;
+  initial?: CategoryPageData;
 }
 
-export default function CategoryPage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare }: Props) {
+export default function CategoryPage({ properties, favorites, compareList, onToggleFavorite, onToggleCompare, initial }: Props) {
   const { type } = useParams<{ type: string }>();
   const navigate = useNavigate();
   const { settings } = useSettings();
@@ -35,7 +38,7 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
   const [aiOpen, setAiOpen] = useState(false);
   const [catPage, setCatPage] = useState(1);
   const CAT_PAGE_SIZE = settings.category_page_size ?? 21;
-  const [aiSeoText, setAiSeoText] = useState('');
+  const [aiSeoText, setAiSeoText] = useState(initial?.seoText || '');
   const [aiSeoLoading, setAiSeoLoading] = useState(false);
 
   // Фильтры прямо на странице категории (вариант А)
@@ -49,7 +52,9 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [mapSelected, setMapSelected] = useState<Property | null>(null);
   const [mapFullscreen, setMapFullscreen] = useState(false);
-  const [categoryTexts, setCategoryTexts] = useState<Record<string, CategoryTextItem>>({});
+  const [categoryTexts, setCategoryTexts] = useState<Record<string, CategoryTextItem>>(
+    initial?.texts ? { [initial.texts.category_type]: initial.texts } : {},
+  );
 
   useEffect(() => { fetchDistricts().then(setDistricts); }, []);
   useEffect(() => { fetchCategoryTexts().then(setCategoryTexts); }, []);
@@ -77,6 +82,8 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
   // Текст кешируется на сервере, поэтому GPT вызывается только при первом посещении.
   useEffect(() => {
     if (!type || !CATEGORY_SEO_URL) return;
+    // Текст уже пришёл с сервера для этого раздела — повторно не запрашиваем.
+    if (initial?.seoText && initial.listings.some(p => String(p.type) === type)) { setAiSeoText(initial.seoText); return; }
     setAiSeoText('');
     setAiSeoLoading(true);
     fetch(`${CATEGORY_SEO_URL}?category=${encodeURIComponent(type)}&city=${encodeURIComponent(city)}`)
@@ -84,11 +91,19 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
       .then(d => { if (d?.text) setAiSeoText(d.text); })
       .catch(() => {})
       .finally(() => setAiSeoLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, city]);
+
+  // Пока в браузере не загружен весь каталог — объекты раздела с сервера (их видит и поисковик).
+  const source = useMemo(() => {
+    const fromAll = properties.filter(p => String(p.type) === type);
+    const fromServer = (initial?.listings || []).filter(p => String(p.type) === type);
+    return fromAll.length >= fromServer.length ? fromAll : fromServer;
+  }, [properties, initial, type]);
 
   const items = useMemo(() => {
     if (!type) return [];
-    let result = properties.filter(p => String(p.type) === type);
+    let result = source;
 
     if (dealFilter !== 'all') result = result.filter(p => String(p.deal) === dealFilter);
 
@@ -118,7 +133,7 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
     }
 
     return result;
-  }, [properties, type, dealFilter, districtFilter, minArea, maxPrice, sortBy, districts]);
+  }, [source, type, dealFilter, districtFilter, minArea, maxPrice, sortBy, districts]);
 
   const totalPages = Math.ceil(items.length / CAT_PAGE_SIZE);
   const pagedItems = items.slice((catPage - 1) * CAT_PAGE_SIZE, catPage * CAT_PAGE_SIZE);
@@ -174,7 +189,7 @@ export default function CategoryPage({ properties, favorites, compareList, onTog
   const itemListSchema = makeItemListSchema(
     items.slice(0, 20).map(p => ({
       name: p.title,
-      url: `${siteUrl}/object/${p.id}`,
+      url: `${siteUrl}/object/${listingSlug(p.title, p.id)}`,
       image: p.image || undefined,
       description: p.description ? p.description.slice(0, 160) : undefined,
     })),

@@ -1,3 +1,4 @@
+import type { District } from '@/lib/api';
 import { useEffect, useState, useMemo, Suspense, type ReactNode } from 'react';
 import { useLocation, useNavigate } from "@/lib/router-compat";
 
@@ -73,7 +74,7 @@ function useBrowserBootstrap() {
 // Показ мягкого баннера согласия (без блокировки сайта).
 const SHOW_CONSENT_BANNER = true;
 
-export default function SiteShell({ children, initialListings }: { children: ReactNode; initialListings?: { listings: Property[]; total: number } }) {
+export default function SiteShell({ children, initialListings, initialDistricts }: { children: ReactNode; initialListings?: { listings: Property[]; total: number }; initialDistricts?: District[] }) {
   usePrefetchAdmin();
   useCrons();
   useBrowserBootstrap();
@@ -299,7 +300,7 @@ export default function SiteShell({ children, initialListings }: { children: Rea
         </ChunkErrorBoundary>
       </main>
 
-      <Footer onLogin={() => setView('login')} setCurrentPage={setCurrentPage} />
+      <Footer onLogin={() => setView('login')} setCurrentPage={setCurrentPage} initialDistricts={initialDistricts} />
 
       {compareList.length > 0 && currentPage !== 'compare' && (
         <CompareBar
