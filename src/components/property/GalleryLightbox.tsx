@@ -1,3 +1,4 @@
+import { photoAlt } from '@/lib/photoAlt';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Icon from '@/components/ui/icon';
 
@@ -7,9 +8,10 @@ interface LightboxProps {
   setActiveImg: (i: number | ((p: number) => number)) => void;
   onClose: () => void;
   title: string;
+  address?: string;
 }
 
-export function GalleryLightbox({ imgs, activeImg, setActiveImg, onClose, title }: LightboxProps) {
+export function GalleryLightbox({ imgs, activeImg, setActiveImg, onClose, title, address }: LightboxProps) {
   // Pinch-zoom state (mobile)
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -112,7 +114,7 @@ export function GalleryLightbox({ imgs, activeImg, setActiveImg, onClose, title 
       >
         <img
           src={imgs[activeImg]}
-          alt={title}
+          alt={photoAlt({ title, address }, activeImg)}
           draggable={false}
           loading="eager"
           fetchPriority="high"

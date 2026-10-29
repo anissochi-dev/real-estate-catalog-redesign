@@ -126,6 +126,7 @@ export default function PropertyMediaGallery({
           setActiveImg={setActiveImg}
           onClose={() => setLightbox(false)}
           title={item.title}
+          address={item.address}
         />
       )}
 
@@ -181,6 +182,7 @@ export default function PropertyMediaGallery({
           mediaTab={mediaTab}
           onSelect={handleThumbSelect}
           title={item.title}
+          address={item.address}
         />
       </div>
     </>

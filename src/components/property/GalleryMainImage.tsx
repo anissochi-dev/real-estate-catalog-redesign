@@ -1,3 +1,4 @@
+import { photoAlt } from '@/lib/photoAlt';
 import type { ListingDetail } from '@/lib/api';
 import Icon from '@/components/ui/icon';
 import { VideoEmbed } from './VideoEmbed';
@@ -73,7 +74,7 @@ export function GalleryMainImage({
               key={fadeKey}
               ref={el => { if (el && el.complete && el.naturalWidth > 0 && !imgLoaded) onImgLoad(); }}
               src={photoMediums[photoActiveIdx] || mainImg}
-              alt={item.title}
+              alt={photoAlt(item, photoActiveIdx)}
               loading="eager"
               fetchPriority="high"
               decoding="sync"

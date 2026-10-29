@@ -1,3 +1,4 @@
+import { photoAlt } from '@/lib/photoAlt';
 import { useRef, useEffect } from 'react';
 
 interface GalleryThumbsProps {
@@ -8,13 +9,14 @@ interface GalleryThumbsProps {
   mediaTab: 'photos' | 'video';
   onSelect: (mediaIdx: number, thumbIdx: number) => void;
   title?: string;
+  address?: string;
 }
 
 export function GalleryThumbs({
-  photoThumbs, activeImg, hasVideo, videoIndex, mediaTab, onSelect, title,
+  photoThumbs, activeImg, hasVideo, videoIndex, mediaTab, onSelect, title, address,
 }: GalleryThumbsProps) {
   // alt в пределах 125 символов: «Название — фото N»
-  const thumbAlt = (i: number) => (`${title || 'Объект'} — фото ${i + 1}`).slice(0, 125);
+  const thumbAlt = (i: number) => photoAlt({ title, address }, i);
   const desktopRef = useRef<HTMLDivElement>(null);
   const mobileRef = useRef<HTMLDivElement>(null);
 
