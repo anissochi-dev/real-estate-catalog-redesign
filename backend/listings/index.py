@@ -917,32 +917,20 @@ def handler(event: dict, context) -> dict:
         conn.close()
 
 
-_RU_MAP = {
-    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e',
-    'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
-    'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
-    'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
-    'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+_SLUG_MAP = {
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh', 'з': 'z',
+    'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r',
+    'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh',
+    'щ': 'shch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
 }
 
 
-def _make_slug(title: str, listing_id: int) -> str:
-    s = (title or '').lower()
-    out = []
-    for ch in s:
-        out.append(_RU_MAP.get(ch, ch))
-    s = ''.join(out)
-    clean = []
-    for ch in s:
-        if ch.isalnum():
-            clean.append(ch)
-        elif ch in (' ', '-', '_'):
-            clean.append('-')
-    s = ''.join(clean)
-    while '--' in s:
-        s = s.replace('--', '-')
-    s = s.strip('-')[:80].rstrip('-') or 'object'
-    return f"{s}-{listing_id}"
+def _make_slug(title: str, listing_id) -> str:
+    """Адрес объекта — те же правила, что admin _make_slug и listingSlug() на сайте."""
+    import re
+    s = ''.join(_SLUG_MAP.get(c, c) for c in (title or '').lower())
+    s = re.sub(r'[^a-z0-9]+', '-', s).strip('-')[:80]
+    return f"{s}-{listing_id}" if s else str(listing_id)
 
 
 def _normalize_price(row: dict) -> None:

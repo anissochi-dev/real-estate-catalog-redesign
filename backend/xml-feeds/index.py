@@ -22,6 +22,21 @@ from datetime import datetime, timezone
 import boto3
 from psycopg2.extras import execute_values
 
+
+_SLUG_MAP = {
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh', 'з': 'z',
+    'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r',
+    'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh',
+    'щ': 'shch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+}
+
+
+def _listing_slug(title: str, listing_id) -> str:
+    """Адрес объекта — те же правила, что admin _make_slug и listingSlug() на сайте."""
+    s = ''.join(_SLUG_MAP.get(c, c) for c in (title or '').lower())
+    s = re.sub(r'[^a-z0-9]+', '-', s).strip('-')[:80]
+    return f"{s}-{listing_id}" if s else str(listing_id)
+
 from feeds_common import (
     SCHEMA, _auth_token, _clean_title, _get_user, _json, _safe, _split_images, _total_price,
     busy_response, call_elapsed_ms, db_connect, is_rate_limit, start_call, time_left,
@@ -2557,6 +2572,15 @@ def handler(event, context):
                          subway_station, subway_distance, lat, lng)
                         VALUES %s
                     """, rows)
+                    # Адреса новых объектов — по тем же правилам, что на сайте и в админке
+                    cur.execute(
+                        f"SELECT id, title FROM {SCHEMA}.listings WHERE slug IS NULL OR slug = ''"
+                    )
+                    for lid, ltitle in cur.fetchall():
+                        cur.execute(
+                            f"UPDATE {SCHEMA}.listings SET slug = %s WHERE id = %s",
+                            (_listing_slug(ltitle, lid), lid),
+                        )
                 conn.commit()
                 return _json({
                     'imported': len(rows),

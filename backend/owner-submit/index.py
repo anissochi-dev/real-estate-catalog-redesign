@@ -26,6 +26,21 @@ import boto3
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
+
+_SLUG_MAP = {
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh', 'з': 'z',
+    'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r',
+    'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh',
+    'щ': 'shch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+}
+
+
+def _listing_slug(title: str, listing_id) -> str:
+    """Адрес объекта — те же правила, что admin _make_slug и listingSlug() на сайте."""
+    s = ''.join(_SLUG_MAP.get(c, c) for c in (title or '').lower())
+    s = re.sub(r'[^a-z0-9]+', '-', s).strip('-')[:80]
+    return f"{s}-{listing_id}" if s else str(listing_id)
+
 SCHEMA = 't_p71821556_real_estate_catalog_'
 
 CORS = {
@@ -566,6 +581,10 @@ def handler(event: dict, context) -> dict:
                 finishing, parking, entrance, video_url,
             ))
             listing_id = cur.fetchone()['id']
+            cur.execute(
+                f"UPDATE {SCHEMA}.listings SET slug = %s WHERE id = %s",
+                (_listing_slug(title, listing_id), listing_id),
+            )
 
             # ── Upsert phone_contacts ─────────────────────────────────────────
             if norm_phone:

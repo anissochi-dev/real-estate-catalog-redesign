@@ -17,6 +17,21 @@ from psycopg2.extras import RealDictCursor
 from ai_client import load_keys, chat_with_history, CHAT_MODEL, CHAT_MODEL_FAST
 import ops_monitor
 
+
+_SLUG_MAP = {
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh', 'з': 'z',
+    'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r',
+    'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh',
+    'щ': 'shch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+}
+
+
+def _listing_slug(title: str, listing_id) -> str:
+    """Адрес объекта — те же правила, что admin _make_slug и listingSlug() на сайте."""
+    s = ''.join(_SLUG_MAP.get(c, c) for c in (title or '').lower())
+    s = re.sub(r'[^a-z0-9]+', '-', s).strip('-')[:80]
+    return f"{s}-{listing_id}" if s else str(listing_id)
+
 SCHEMA = 't_p71821556_real_estate_catalog_'
 
 # Единый словарь перевода состояния/отделки объекта (должен соответствовать
@@ -1909,8 +1924,10 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
         cur.execute(
             f"INSERT INTO {SCHEMA}.listings ({extra_cols}) VALUES ({extra_vals}) RETURNING id"
         )
-        conn.commit()
         new_id = cur.fetchone()['id']
+        new_slug = _sanitize_text(_listing_slug(title, new_id), 120)
+        cur.execute(f"UPDATE {SCHEMA}.listings SET slug='{new_slug}' WHERE id={new_id}")
+        conn.commit()
         imgs_note = f", {len(images_str.split('|'))} фото" if images_str else ""
         return {'ok': True, 'id': new_id, 'message': f'Объект "{title}" создан в черновиках с ID #{new_id}{imgs_note}. Ссылка: /admin/listings/{new_id}'}
 
@@ -2363,8 +2380,9 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
                     if len(nt) > max_len + 20:
                         cut = nt[:max_len].rsplit(' ', 1)[0] or nt[:max_len]
                         nt = cut.rstrip(' .,;:-—')
+                    new_slug = _sanitize_text(_listing_slug(nt, lid), 120)
                     cur.execute(
-                        f"UPDATE {SCHEMA}.listings SET title='{nt}', updated_at=NOW() WHERE id={lid}"
+                        f"UPDATE {SCHEMA}.listings SET title='{nt}', slug='{new_slug}', updated_at=NOW() WHERE id={lid}"
                     )
                     updated += 1
                 except Exception:
@@ -2463,8 +2481,9 @@ def _exec_action(cur, user, act_type: str, params: dict) -> dict:
                     new_title = cut.rstrip(' .,;:-—')
                 try:
                     safe_title = _sanitize_text(new_title, 200)
+                    new_slug = _sanitize_text(_listing_slug(safe_title, lid), 120)
                     cur.execute(
-                        f"UPDATE {SCHEMA}.listings SET title='{safe_title}', updated_at=NOW() WHERE id={lid}"
+                        f"UPDATE {SCHEMA}.listings SET title='{safe_title}', slug='{new_slug}', updated_at=NOW() WHERE id={lid}"
                     )
                     updated += 1
                     results.append({'id': lid, 'old': old_title, 'new': new_title})
