@@ -27,7 +27,8 @@ export const Route = createFileRoute('/object/$slug')({
     if (!item) return {};
     const title = listingPageTitle(item);
     const description = listingSeoDescription(item);
-    const image = (item.images && item.images[0]) || item.image || FALLBACK_OG;
+    // Превью ссылки — облегчённая копия ~400 px (≈20 КБ), если её нет — главное фото.
+    const image = item.image_thumb || (item.images && item.images[0]) || item.image || FALLBACK_OG;
     const url = `${SITE_ORIGIN}/object/${item.slug || params.slug}`;
     return {
       meta: [
