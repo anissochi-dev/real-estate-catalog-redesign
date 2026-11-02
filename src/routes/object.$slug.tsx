@@ -1,7 +1,7 @@
-import { createFileRoute, notFound } from '@tanstack/react-router';
+import { createFileRoute, notFound, redirect } from '@tanstack/react-router';
 import PropertyPage from '@/pages/PropertyPage';
 import NotFoundPage from '@/pages/NotFoundPage';
-import { extractIdFromSlug } from '@/lib/slug';
+import { extractIdFromSlug, listingSlug } from '@/lib/slug';
 import { useAppState } from '@/app/AppStateContext';
 import { loadListingPage, loadRelated, listingPageTitle, listingSeoDescription, SITE_ORIGIN } from '@/lib/ssrData';
 
@@ -13,6 +13,12 @@ export const Route = createFileRoute('/object/$slug')({
     if (!id) throw notFound();
     const { item, notFound: missing } = await loadListingPage(id);
     if (missing || !item) throw notFound();
+    // Один адрес на объект — как в базе и карте сайта. Любой другой (старое название,
+    // другая транслитерация) → 301 на основной: без дублей, вес в поиске не делится.
+    const canonicalSlug = item.slug || listingSlug(item.title, item.id);
+    if (params.slug !== canonicalSlug) {
+      throw redirect({ to: '/object/$slug', params: { slug: canonicalSlug }, statusCode: 301 });
+    }
     const related = await loadRelated(item);
     return { item, related };
   },
@@ -22,7 +28,7 @@ export const Route = createFileRoute('/object/$slug')({
     const title = listingPageTitle(item);
     const description = listingSeoDescription(item);
     const image = (item.images && item.images[0]) || item.image || FALLBACK_OG;
-    const url = `${SITE_ORIGIN}/object/${params.slug}`;
+    const url = `${SITE_ORIGIN}/object/${item.slug || params.slug}`;
     return {
       meta: [
         { title },

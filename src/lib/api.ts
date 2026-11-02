@@ -167,6 +167,8 @@ export async function fetchSameAddressListings(id: number): Promise<Property[]> 
 }
 
 export interface ListingDetail extends Property {
+  /** Адрес страницы объекта из базы — основной (canonical). */
+  slug?: string;
   images?: string[];
   city?: string;
   priceUnit?: string;
@@ -236,6 +238,7 @@ export function mapListingDetail(it: any): ListingDetail {
     brokerPhone: it.broker_phone ?? null,
     brokerName: it.broker_name ?? null,
     brokerAvatar: it.broker_avatar ?? null,
+    slug: it.slug || undefined,
     seoTitle: it.seo_title,
     seoDescription: it.seo_description,
     rooms: it.rooms ?? null,
