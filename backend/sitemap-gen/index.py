@@ -420,6 +420,7 @@ def _build_robots_txt(cur) -> str:
     lines.append(f'Host: {host}')
     lines.append('')
 
+    lines.append(f'Sitemap: {base}/sitemap.xml')
     lines.append(f'Sitemap: {base}/sitemap-full')
     return '\n'.join(lines) + '\n'
 
