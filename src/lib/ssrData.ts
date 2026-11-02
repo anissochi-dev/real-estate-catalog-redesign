@@ -6,15 +6,27 @@ import type { Property } from '@/app/appTypes';
 // Публичные GET-данные для loader'ов: те же 3 запроса, что раньше делал
 // ранний prefetch-скрипт в index.html. Таймаут — чтобы зависший backend
 // не задерживал отдачу страницы: при ошибке страница догрузит данные в браузере.
+/** Короткая пауза перед повтором: база иногда на мгновение отвечает «лимит запросов» (502). */
+const pause = (ms: number) => new Promise(r => setTimeout(r, ms));
+
 async function getJson(url: string, timeoutMs = 4000): Promise<Record<string, unknown>> {
+  const first = await getJsonOnce(url, timeoutMs);
+  if (first !== null) return first;
+  await pause(250);
+  return (await getJsonOnce(url, timeoutMs)) ?? {};
+}
+
+/** null — временный сбой (5xx/сеть), стоит повторить; {} — ответ без данных (4xx). */
+async function getJsonOnce(url: string, timeoutMs: number): Promise<Record<string, unknown> | null> {
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), timeoutMs);
   try {
     const r = await fetch(url, { signal: ac.signal });
+    if (r.status >= 500) return null;
     if (!r.ok) return {};
     return (await r.json()) as Record<string, unknown>;
-  } catch {
-    return {};
+  } catch (e) {
+    return (e as Error)?.name === 'AbortError' ? {} : null;
   } finally {
     clearTimeout(t);
   }
@@ -73,15 +85,22 @@ export async function loadHomeStats(): Promise<HomeStats | null> {
 type Fetched = { ok: true; data: Record<string, unknown> } | { ok: false; notFound: boolean };
 
 async function getJsonStatus(url: string, timeoutMs = 5000): Promise<Fetched> {
+  const first = await getJsonStatusOnce(url, timeoutMs);
+  if (first.ok || first.notFound || !('retry' in first && first.retry)) return first;
+  await pause(250);
+  return getJsonStatusOnce(url, timeoutMs);
+}
+
+async function getJsonStatusOnce(url: string, timeoutMs: number): Promise<Fetched & { retry?: boolean }> {
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), timeoutMs);
   try {
     const r = await fetch(url, { signal: ac.signal });
     if (r.status === 404) return { ok: false, notFound: true };
-    if (!r.ok) return { ok: false, notFound: false };
+    if (!r.ok) return { ok: false, notFound: false, retry: r.status >= 500 };
     return { ok: true, data: (await r.json()) as Record<string, unknown> };
-  } catch {
-    return { ok: false, notFound: false };
+  } catch (e) {
+    return { ok: false, notFound: false, retry: (e as Error)?.name !== 'AbortError' };
   } finally {
     clearTimeout(t);
   }

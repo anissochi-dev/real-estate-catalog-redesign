@@ -47,9 +47,11 @@ TYPE_LABELS = {
 }
 
 
-def _ok(data):
-    return {'statusCode': 200, 'headers': {**CORS, 'Content-Type': 'application/json; charset=utf-8'},
-            'body': json.dumps(data, ensure_ascii=False)}
+def _ok(data, cache=False):
+    headers = {**CORS, 'Content-Type': 'application/json; charset=utf-8'}
+    if cache:
+        headers['Cache-Control'] = 'public, max-age=600'
+    return {'statusCode': 200, 'headers': headers, 'body': json.dumps(data, ensure_ascii=False)}
 
 
 def _err(msg, status=400):
@@ -181,10 +183,9 @@ def handler(event: dict, context) -> dict:
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            _ensure_table(cur)
-            conn.commit()
-
-            # Кеш
+            # Таблица кеша создана миграцией; CREATE TABLE на каждом чтении
+            # упирался в лимит запросов к БД и ронял тексты разделов (502).
+            # Кеш — одним SELECT, без записи.
             if not force:
                 cur.execute(
                     f"SELECT seo_text FROM {SCHEMA}category_seo_cache WHERE category = %s AND city = %s LIMIT 1",
@@ -192,7 +193,7 @@ def handler(event: dict, context) -> dict:
                 )
                 row = cur.fetchone()
                 if row and row['seo_text']:
-                    return _ok({'text': row['seo_text'], 'cached': True})
+                    return _ok({'text': row['seo_text'], 'cached': True}, cache=True)
 
             api_key, folder_id = _load_yandex_keys(cur)
             if not api_key or not folder_id:
@@ -242,6 +243,7 @@ def handler(event: dict, context) -> dict:
                 prompt = _prompt_market_index(city, stats)
 
             text = _yandex_gpt(prompt, system, api_key, folder_id)
+            _ensure_table(cur)
             if not text:
                 return _err('GPT вернул пустой ответ', 502)
 

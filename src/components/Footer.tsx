@@ -72,7 +72,7 @@ export default function Footer({ onLogin, initialDistricts }: Props) {
 
   const company = settings.company_name || 'Бизнес. Маркетинг. Недвижимость.';
   const city = settings.main_city || 'Краснодар';
-  const description = settings.footer_description || `Коммерческая недвижимость и готовый бизнес ${city}а.`;
+  const description = settings.footer_description || settings.about_text || `Коммерческая недвижимость и готовый бизнес ${city}а.`;
 
   const categoryLinks = settings.footer_extra_links
     ? parseLinks(settings.footer_extra_links)

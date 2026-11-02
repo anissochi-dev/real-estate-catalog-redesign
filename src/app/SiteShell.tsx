@@ -268,7 +268,7 @@ export default function SiteShell({ children, initialListings, initialDistricts 
           address: settings.company_address,
           city: settings.main_city || 'Краснодар',
           logo: settings.logo_url,
-          description: settings.seo_description,
+          description: settings.about_text || settings.seo_description,
           foundingYear: settings.company_since_year,
         })}
       />
