@@ -4,7 +4,7 @@ import NotFoundPage from '@/pages/NotFoundPage';
 import { useAppState } from '@/app/AppStateContext';
 import { loadDistrictPage, loadDistrictSeoText, districtSeo, SITE_ORIGIN } from '@/lib/ssrData';
 
-const OG_IMAGE = 'https://cdn.poehali.dev/projects/***/files/og-image-1779575751349.png';
+const OG_IMAGE = 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/og-image-1779575751349.png';
 const CITY = 'Краснодар';
 
 export const Route = createFileRoute('/district/$district')({

@@ -5,7 +5,7 @@ import { extractIdFromSlug, listingSlug } from '@/lib/slug';
 import { useAppState } from '@/app/AppStateContext';
 import { loadListingPage, loadRelated, listingPageTitle, listingSeoDescription, SITE_ORIGIN } from '@/lib/ssrData';
 
-const FALLBACK_OG = 'https://cdn.poehali.dev/projects/***/files/og-image-1779575751349.png';
+const FALLBACK_OG = 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/og-image-1779575751349.png';
 
 export const Route = createFileRoute('/object/$slug')({
   loader: async ({ params }) => {

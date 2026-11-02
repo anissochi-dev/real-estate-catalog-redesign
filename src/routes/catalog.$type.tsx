@@ -23,7 +23,7 @@ export const Route = createFileRoute('/catalog/$type')({
     return buildPageHead(`/catalog/${params.type}`, loaderData?.seo, {
       title: `${h1} — БМН`,
       description: texts?.description || meta.description,
-      image: 'https://cdn.poehali.dev/projects/***/files/og-image-1779575751349.png',
+      image: 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/og-image-1779575751349.png',
     });
   },
   notFoundComponent: NotFoundPage,

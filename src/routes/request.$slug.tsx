@@ -3,7 +3,7 @@ import LeadDetailPage, { leadHeading } from '@/pages/leads/LeadDetailPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 import { loadLeadPage, buildPageHead } from '@/lib/ssrData';
 
-const OG_IMAGE = 'https://cdn.poehali.dev/projects/***/bucket/f8de2a72-faf3-4f8b-aaa2-0ee00c7e16dc.png';
+const OG_IMAGE = 'https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/bucket/f8de2a72-faf3-4f8b-aaa2-0ee00c7e16dc.png';
 
 export const Route = createFileRoute('/request/$slug')({
   loader: async ({ params }) => {

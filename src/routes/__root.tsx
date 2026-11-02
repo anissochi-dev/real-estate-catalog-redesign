@@ -15,8 +15,8 @@ import appCss from "@/index.css?url";
 const TITLE = "Коммерческая недвижимость в Краснодаре — аренда и продажа";
 const DESCRIPTION =
     "Коммерческая недвижимость и готовый бизнес в Краснодаре с 2007 г. Офисы, торговые площади, склады, рестораны, гостиницы. Подбор за 2 минуты с ИИ.";
-const OG_IMAGE = "https://cdn.poehali.dev/projects/***/files/og-image-1784476153929.png";
-const FAVICON = "https://cdn.poehali.dev/projects/***/files/favicon-1787938597971.jpg";
+const OG_IMAGE = "https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/og-image-1784476153929.png";
+const FAVICON = "https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/favicon-1787938597971.jpg";
 const FONTS =
     "https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&family=IBM+Plex+Sans:wght@400;500&display=swap";
 
@@ -136,7 +136,7 @@ export const Route = createRootRoute({
             {name: "twitter:title", content: TITLE},
             {name: "twitter:description", content: DESCRIPTION},
             {name: "twitter:image", content: ogImage},
-            {property: "vk:image", content: "https://cdn.poehali.dev/projects/***/files/favicon-1779381523505.png"},
+            {property: "vk:image", content: "https://cdn.poehali.dev/projects/4bce74f4-4dd7-424e-85e7-ff08f8399357/files/favicon-1779381523505.png"},
             ...PLATFORM_META,
         ],
         links: [
